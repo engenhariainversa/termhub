@@ -4,6 +4,7 @@
 // only takes power away.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
+import { t } from '@/i18n';
 import type { TChatGrantListItem } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
@@ -31,7 +32,7 @@ export interface ChatGrantsState {
   revoke(id: string): Promise<void>;
 }
 
-const NETWORK_MSG = 'Não foi possível falar com o servidor. Tente de novo.';
+const networkMsg = () => t('Não foi possível falar com o servidor. Tente de novo.');
 
 export function createChatGrantsStore(deps: ChatGrantsDeps) {
   const { api, session } = deps;
@@ -41,7 +42,7 @@ export function createChatGrantsStore(deps: ChatGrantsDeps) {
   const store = create<ChatGrantsState>()((set, get) => {
     const fail = (gen: number, e: unknown) => {
       if (gen !== generation || session().handleApiError(e)) return;
-      set({ loading: false, loadingMore: false, error: e instanceof ApiError ? e.message : NETWORK_MSG });
+      set({ loading: false, loadingMore: false, error: e instanceof ApiError ? e.message : networkMsg() });
     };
     return {
       ...empty,

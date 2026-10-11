@@ -14,6 +14,7 @@ import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { hashEmail, newMobileToken, newPinSecret, newRequestSecret, newVerificationCode } from './codes.js';
 import { thumbprint } from './dpop.js';
 import { SlidingWindow } from './rate-limit.js';
+import { localeOf, t } from '../i18n/index.js';
 
 export const REQUEST_TTL_MS = 10 * 60_000;
 export const ACTIVATE_TTL_MS = 10 * 60_000;
@@ -126,13 +127,18 @@ export class EnrolmentService {
       background(repos.deviceEvents.record({ user_id: owner.id, request_id: row.id, kind: 'request_created', actor: 'user', ...ctx, meta: { model: row.model, platform: row.platform } }), 'device request event failed');
       if (review) background(repos.deviceEvents.record({ user_id: owner.id, request_id: row.id, kind: 'review_auto_approved', actor: 'system', ...ctx }), 'review auto-approval event failed');
       if (this.mailPerUser.take(owner.id)) {
-        const mail = deviceRequestMail(owner.email, {
-          deviceLabel: `${row.model} (${row.platform === 'ios' ? 'iOS' : 'Android'} ${row.os_version})`,
-          code,
-          place: [row.city, row.country].filter(Boolean).join(', ') || 'local desconhecido',
-          ip: row.ip,
-          appUrl: this.deps.appUrl,
-        });
+        const locale = localeOf(owner.locale);
+        const mail = deviceRequestMail(
+          owner.email,
+          {
+            deviceLabel: `${row.model} (${row.platform === 'ios' ? 'iOS' : 'Android'} ${row.os_version})`,
+            code,
+            place: [row.city, row.country].filter(Boolean).join(', ') || t(locale, 'local desconhecido'),
+            ip: row.ip,
+            appUrl: this.deps.appUrl,
+          },
+          locale,
+        );
         background(Promise.resolve().then(() => this.deps.mailer.send(mail)), 'device request mail failed');
       }
       const hook = this.deps.hooks?.onRequestCreated;

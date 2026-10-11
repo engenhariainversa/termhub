@@ -20,6 +20,8 @@ interface MonitorState {
   openTabsLoaded: boolean;
   /** a snapshot attempt failed and none has succeeded yet (the WS reconnect and the resync retry it) */
   openTabsFailed: boolean;
+  /** the card ref ("TER-123") of the automatic run working in a tab, by tab id (TER-1044); re-read on each `automation` frame */
+  autoRuns: ReadonlyMap<string, string>;
   /** monitor state of one tab (live), or undefined when it never reported */
   tabState: (tabId: string) => Tab | undefined;
   /** types the text into the tab (Enter included) and marks it working */
@@ -28,6 +30,8 @@ interface MonitorState {
   markSeen: (tabId: string) => Promise<void>;
   reload: () => Promise<void>;
   connected: boolean;
+  /** counts the `automation` frames received: a pause or resume somewhere re-reads the pause state */
+  automationSeq: number;
   /** subscribes to tabs that start needing you; returns the unsubscribe */
   onNeedsYou: (listener: NeedsYouListener) => () => void;
 }
@@ -37,6 +41,8 @@ const MonitorContext = createContext<MonitorState | null>(null);
 const RECONNECT_MS = 5_000;
 /** the snapshot is re-read on reconnect and every few minutes, in case a push was missed */
 const RESYNC_MS = 3 * 60_000;
+/** automation frames come in bursts (a run starting writes several events): one re-read per burst */
+const AUTO_RUNS_DEBOUNCE_MS = 1_000;
 
 /**
  * Snapshot over REST + pushes over /ws/monitor. Feeds the home "precisando de você" list and
@@ -49,6 +55,16 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
   const [openTabsFailed, setOpenTabsFailed] = useState(false);
   const openTabsRead = useRef(false);
   const [connected, setConnected] = useState(false);
+  const [automationSeq, setAutomationSeq] = useState(0);
+  const [autoRuns, setAutoRuns] = useState<ReadonlyMap<string, string>>(() => new Map());
+  const loadAutoRuns = useCallback(async () => {
+    try {
+      const { items: runs } = await api.monitor.autoRuns();
+      setAutoRuns(new Map(runs.map((r) => [r.tab_id, r.ref])));
+    } catch {
+      // keeps the last copy: only the dots' automatic ring depends on it, the next frame or resync retries
+    }
+  }, []);
   const itemsRef = useRef(items);
   itemsRef.current = items;
   const listeners = useRef(new Set<NeedsYouListener>());
@@ -74,6 +90,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
     const f = openFrames.current;
     const startedAt = f.seq;
     f.inFlight += 1;
+    void loadAutoRuns();
     try {
       // each snapshot on its own: a failure keeps that one's last copy; the next resync retries
       const [state, open] = await Promise.allSettled([api.monitor.tabs(), api.monitor.openTabs()]);
@@ -92,7 +109,14 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       f.inFlight -= 1;
       if (f.inFlight === 0) f.log = [];
     }
-  }, []);
+  }, [loadAutoRuns]);
+
+  // a run started, parked or ended somewhere: re-read which tabs are automatic, once per burst of frames
+  useEffect(() => {
+    if (automationSeq === 0) return;
+    const timer = setTimeout(() => void loadAutoRuns(), AUTO_RUNS_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [automationSeq, loadAutoRuns]);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
@@ -111,6 +135,11 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
         try {
           msg = JSON.parse(String(ev.data));
         } catch {
+          return;
+        }
+        // automation events (pauses, runs, PRs): only a tick, the pause switch re-reads its own state
+        if (msg.type === 'automation') {
+          setAutomationSeq((n) => n + 1);
           return;
         }
         // tabs opened, renamed and closed only move the open-tab list (the sidebar's agents)
@@ -169,6 +198,7 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       openTabs,
       openTabsLoaded,
       openTabsFailed,
+      autoRuns,
       tabState: (tabId) => itemsRef.current.find((i) => i.tab.id === tabId)?.tab,
       async reply(tabId, text) {
         const r = await api.tabs.input(tabId, text, true);
@@ -191,9 +221,10 @@ export function MonitorProvider({ children }: { children: ReactNode }) {
       },
       reload,
       connected,
+      automationSeq,
       onNeedsYou,
     }),
-    [items, openTabs, openTabsLoaded, openTabsFailed, reload, connected, onNeedsYou],
+    [items, openTabs, openTabsLoaded, openTabsFailed, autoRuns, reload, connected, automationSeq, onNeedsYou],
   );
 
   return <MonitorContext.Provider value={value}>{children}</MonitorContext.Provider>;

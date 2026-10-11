@@ -2,16 +2,22 @@ import type { ZodRawShape } from 'zod';
 import { newApiToken, type ApiTokenScope } from '../auth/api-tokens.js';
 import { ControlError } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 /**
  * Tab tokens (spec 2026-09-27 agent tab MCP): the `/mcp` token `start_agent` mints for one agent tab,
- * so the agent in it can search the termhub memory and propose lessons — and nothing else.
+ * so the agent in it can search the termhub memory, propose lessons and read the project's automation
+ * policy — and, only while its own tab runs automatic work (an active run, agentic board preflight F-8),
+ * read that run's card and report how the run ended. Nothing else: the narrowness is a security property.
  */
 
 /** The fixed allowlist of a tab token (D2): every other tool is absent from `tools/list` and refused on
- *  `tools/call`, whatever the scopes and grants say. `record_lesson` (TER-205) is listed by name ahead of
- *  time; it shows up on its own once that tool is registered. */
-export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson'] as const;
+ *  `tools/call`, whatever the scopes and grants say. `get_automation_policy` is read-only: the project's autonomy
+ *  level and what it covers, so the agent knows what happens after it opens a PR. `report_card` and `get_card`
+ *  are listed and callable only by a tab with an active automatic run (their `allowedIf`), and act on that
+ *  run's card only: the scopes stay `read`/`memory`. `report_card` also answers a tab whose latest run ended
+ *  `blocked` and may still be adopted (spike TER-1031 §5.4), for `done` with the PR the agent opened by hand. */
+export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card'] as const;
 
 /** Scopes of a tab token (D2). The allowlist narrows them further. */
 export const TAB_TOKEN_SCOPES: ApiTokenScope[] = ['read', 'memory'];
@@ -72,8 +78,16 @@ export function tabInputShape(shape: ZodRawShape): ZodRawShape {
   return out;
 }
 
+/** The tab tools that need an active automatic run in the tab (preflight F-8); `report_card` also takes a
+ *  tab whose run ended blocked within the adoption window, and every other tab gets this refusal. */
+const RUN_ONLY_TOOLS: readonly string[] = ['report_card', 'get_card'];
+
 /** pt-BR answer for a tools/call outside the allowlist (D2): naming a scope, as the ordinary refusal
- *  does, would mislead — no scope or grant unlocks it for a tab token. */
-export function tabRefusalMessage(name: string): string {
-  return `O token desta aba só usa as ferramentas de memória (${TAB_TOKEN_TOOLS.join(', ')}); ${name.slice(0, 64)} não está disponível aqui`;
+ *  does, would mislead — no scope or grant unlocks it for a tab token. A run-only tool called from a tab
+ *  without an active automatic run says that instead. */
+export function tabRefusalMessage(name: string, locale: Locale = DEFAULT_LOCALE): string {
+  const tool = name.slice(0, 64);
+  if (RUN_ONLY_TOOLS.includes(name)) return t(locale, '{{tool}} só está disponível numa aba com trabalho automático em andamento', { tool });
+  const tools = TAB_TOKEN_TOOLS.filter((x) => !RUN_ONLY_TOOLS.includes(x)).join(', ');
+  return t(locale, 'O token desta aba só usa as ferramentas permitidas ({{tools}}, e report_card e get_card numa aba com trabalho automático); {{tool}} não está disponível aqui', { tools, tool });
 }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from './attachments.js';
-import { tabQuestionSchema, type StandingGrantKind, type TAutoDecision } from './events.js';
+import { replyCardRef, tabQuestionSchema, type ReplyCardKind, type StandingGrantKind, type TAutoDecision } from './events.js';
 
 /** `POST chat/messages`: text, or attachments, or both (spec 2026-09-26 §5.5). An empty text with ids
  * is a message made of files alone; neither is refused before anything is stored. */
@@ -11,8 +11,11 @@ export const mobileMessageBody = z
     attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     /** The message this one answers (TER-447). */
     reply_to_id: z.string().min(1).max(64).optional(),
+    /** Or the card it answers (TER-849): never both. */
+    reply_to_card: replyCardRef.extend({ id: z.string().min(1).max(64) }).optional(),
   })
-  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] });
+  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] })
+  .refine((b) => b.reply_to_id === undefined || b.reply_to_card === undefined, { message: 'Responda a uma mensagem ou a um card, não aos dois', path: ['reply_to_card'] });
 /** How much of a quoted message a reply keeps and shows (TER-447). */
 export const REPLY_EXCERPT_MAX = 200;
 
@@ -38,6 +41,18 @@ export function replyExcerpt(text: string, attachmentNames: readonly string[] = 
   if (plain) return cutExcerpt(plain);
   const names = attachmentNames.join(', ').replace(/\s+/g, ' ').trim();
   return names ? cutExcerpt(`📎 ${names}`) : '';
+}
+
+/** What a quote of a card is labelled with, where a message's quote shows its author (TER-849). */
+export const REPLY_CARD_LABEL: Record<ReplyCardKind, string> = { action: 'Confirmação', tab_question: 'Pergunta da aba' };
+
+/** The words a tab question card asks, quoted by a reply to it (TER-849): every question of a choice
+ * card, or what a permission card asks for. Cut like any quote with `replyExcerpt`. */
+export function tabQuestionReplyText(
+  q: { kind: 'choice'; payload: { questions: readonly { question: string }[] } } | { kind: 'permission'; payload: { tool_name: string; question?: string } },
+): string {
+  if (q.kind === 'choice') return q.payload.questions.map((item) => item.question.trim()).filter(Boolean).join(' · ');
+  return q.payload.question?.trim() || `Permissão para usar ${q.payload.tool_name}`;
 }
 
 export const sendAccepted = z.object({ conversation_id: z.string(), user_message_id: z.string(), assistant_message_id: z.string() });
@@ -81,6 +96,21 @@ export const mobileBatchDecisionBody = z.object({
     .max(20)
     .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas')
     .refine((d) => d.every((x) => x.decision !== 'approve' || (x.challenge === undefined) === (x.pin_proof === undefined)), 'challenge e pin_proof vão juntos'),
+});
+
+/** One decision challenge per action of a grouped confirmation, issued in a single authenticated call
+ * (TER-530). Asking `session/challenge` once per action ran into that route's tight per-client budget
+ * (it is the anonymous entry point) as soon as a batch held more than a handful of approvals. Same cap
+ * as `mobileBatchDecisionBody`. */
+export const decisionChallengesBody = z.object({
+  action_ids: z
+    .array(z.string().min(1).max(64))
+    .min(1)
+    .max(20)
+    .refine((ids) => new Set(ids).size === ids.length, 'Ações repetidas'),
+});
+export const decisionChallengesResponse = z.object({
+  challenges: z.array(z.object({ action_id: z.string(), challenge: z.string(), expires_at: z.string() })),
 });
 
 /** Mirrors the server's `grantable` (apps/server/src/chat/gate.ts), which is the judge: only
@@ -154,7 +184,8 @@ export const hostOptionsResponse = z.object({
  * options, one of picked/typed); this is the shape the app sends. No PIN (spec 2026-09-25 §2). */
 export const tabQuestionAnswerBody = z.union([
   z.object({ answers: z.array(z.object({ selected: z.array(z.number().int().min(0).max(3)).max(4), text: z.string().max(2000).optional() })).min(1).max(4) }),
-  z.object({ allow: z.boolean(), text: z.string().max(2000).optional() }),
+  // `option` (TER-995): an option of the dialog on screen, by number and its text as read with the excerpt.
+  z.object({ allow: z.boolean(), text: z.string().max(2000).optional(), option: z.object({ number: z.number().int().min(1).max(9), label: z.string().min(1).max(2000) }).optional() }),
 ]);
 /** `POST chat/tab-questions/:id/auto-answer/cancel` (no body): "Cancelar" on a countdown (spec 2026-09-26
  * concierge memory §6). Answers the card, `auto_answer.status: 'cancelled'`, the proposed answer kept as
@@ -162,7 +193,19 @@ export const tabQuestionAnswerBody = z.union([
  * agora" is the ordinary answer route, which cancels the countdown itself. */
 export const tabQuestionAutoAnswerCancelResponse = z.object({ tab_question: tabQuestionSchema });
 /** `GET chat/tab-questions/:id/screen`: the last lines of the tab, live, for a permission card. */
-export const tabQuestionScreenResponse = z.object({ text: z.string() });
+/** An option of the permission dialog on screen (TER-995): one button each on the card. */
+export const permissionOptionSchema = z.object({
+  number: z.number().int(),
+  label: z.string(),
+  /** `label` shortened for a button. */
+  summary: z.string(),
+  /** False for the option that rejects ("No…"). */
+  allow: z.boolean(),
+  /** "Don't ask again", "always allow", "auto mode": shown in highlight. */
+  highlight: z.boolean(),
+});
+/** `options` is absent from an older server, and empty when the dialog on screen is not this card's. */
+export const tabQuestionScreenResponse = z.object({ text: z.string(), options: z.array(permissionOptionSchema).optional() });
 
 /** `POST chat/tab-suggestions/:id/send`: the text to type, as edited. The server is the judge of the rest
  * (one line, no control characters, no leading "!" or "/"). No PIN (spec 2026-09-25 tab suggestions §2). */
@@ -194,12 +237,28 @@ export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchem
  * (spec D8), whether embeddings are configured on this server at all (`available: false` hides both
  * switches rather than offering ones that can never do anything), how many decisions are remembered,
  * and how many concierge notes (spec D12) are. */
-export const chatMemoryResponse = z.object({ enabled: z.boolean(), autodecide: z.boolean(), codex_replies: z.boolean().default(false), available: z.boolean(), count: z.number().int(), notes: z.number().int() });
+/** The chat's context meter limit (TER-1038): the meter measures against this many tokens instead of the
+ *  model's window — someone who compacts at 200k on a 1M window. Bounded so a typo is refused. */
+export const CHAT_CONTEXT_LIMIT_MIN = 10_000;
+export const CHAT_CONTEXT_LIMIT_MAX = 10_000_000;
+export const chatContextLimit = z.number().int().min(CHAT_CONTEXT_LIMIT_MIN).max(CHAT_CONTEXT_LIMIT_MAX);
+/** `context_limit`: null = the model's window (the default); absent from a server before TER-1038,
+ *  which reads the same. */
+export const chatMemoryResponse = z.object({
+  enabled: z.boolean(),
+  autodecide: z.boolean(),
+  codex_replies: z.boolean().default(false),
+  context_limit: z.number().int().nullable().optional(),
+  available: z.boolean(),
+  count: z.number().int(),
+  notes: z.number().int(),
+});
 /** At least one of the switches, never none — an empty body is refused rather than a silent no-op.
- * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default). */
+ * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default); `context_limit` null
+ * goes back to the model's window. */
 export const chatMemoryPatchBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
  * `question` is the note's title; `decision`/`reason` are parsed back out of the stored text's

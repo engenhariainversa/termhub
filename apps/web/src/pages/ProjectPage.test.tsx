@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine, Project, User } from '../lib/types';
 
@@ -36,11 +37,27 @@ vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
 // API calls — and none of it is this task's concern. Stubbed out so only the header and the publish
 // control, which this test is about, render for real.
 vi.mock('../components/TerminalsView', () => ({ TerminalsView: () => null }));
-vi.mock('../components/TasksBoard', () => ({ TasksBoard: ({ openTaskId }: { openTaskId?: string }) => <div>board {openTaskId ?? ''}</div> }));
+const boardMounts = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../components/TasksBoard', () => ({
+  // counts its mounts and shows the card in the URL, with a way to open one as the board does
+  TasksBoard: ({ projectId }: { projectId: string }) => {
+    const [params, setParams] = useSearchParams();
+    useEffect(() => void (boardMounts.count += 1), []);
+    return (
+      <div>
+        board {projectId} {params.get('card') ?? ''}
+        <button onClick={() => setParams({ card: 'MEU-3' })}>abrir MEU-3</button>
+        <button onClick={() => setParams({})}>fechar card</button>
+      </div>
+    );
+  },
+}));
 vi.mock('../components/BacklogView', () => ({ BacklogView: () => null }));
 vi.mock('../components/ProgressPanel', () => ({ ProgressPanel: () => <div>progress-panel</div> }));
+vi.mock('../components/PauseAutomationButton', () => ({ PauseAutomationButton: () => null }));
 vi.mock('../components/TicketsView', () => ({ TicketsView: () => null }));
 vi.mock('../components/NotesEditor', () => ({ NotesEditor: () => null }));
+vi.mock('../components/RecentFiles', () => ({ RecentFiles: ({ projectId }: { projectId: string }) => <div>recent-files {projectId}</div> }));
 vi.mock('../components/ProjectSettings', () => ({ ProjectSettings: () => null }));
 
 import { ProjectPage } from './ProjectPage';
@@ -59,7 +76,7 @@ function machine(id: string, name: string): Machine {
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
-    claude_auto_swap: false,
+    claude_auto_swap: false, ai_usage_query: true,
     is_local: false,
     owner_id: 'u1',
     owner_name: 'pedro',
@@ -216,6 +233,7 @@ describe('ProjectPage header', () => {
       '/projects/p1/progress',
       '/projects/p1/tickets',
       '/projects/p1/notes',
+      '/projects/p1/files',
       '/projects/p1/settings',
     ]);
     expect(within(tabs).getByRole('link', { name: /Board/ }).textContent).toBe('Board3');
@@ -240,18 +258,41 @@ describe('ProjectPage progress section', () => {
   });
 });
 
-describe('ProjectPage with a card', () => {
-  it('shows the Board with that card open, whatever the URL is', () => {
+describe('ProjectPage files section', () => {
+  it('shows the recent Markdown files at their own route, with a nav link to it', () => {
     const proj = project();
     dataState.current = { ...dataState.current, projects: [proj] };
     render(
-      <MemoryRouter initialEntries={['/project/MEU-3']}>
+      <MemoryRouter initialEntries={[`/projects/${proj.id}/files`]}>
         <Routes>
-          <Route path="/project/:ref" element={<ProjectPage card={{ projectId: 'p1', taskId: 'k3' }} />} />
+          <Route path="/projects/:id/:section" element={<ProjectPage />} />
         </Routes>
       </MemoryRouter>,
     );
-    expect(screen.getByText('board k3')).toBeTruthy();
+    expect(screen.getByText('recent-files p1')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Arquivos' }).getAttribute('href')).toBe('/projects/p1/files');
+  });
+});
+
+// TER-976: opening a card used to change route (/project/:ref), which unmounted the whole page —
+// board and terminals — and showed "Carregando…" in between: the flash.
+describe('ProjectPage — a card opened on the Board', () => {
+  it('opening and closing ?card= keeps the same board mounted', () => {
+    dataState.current = { ...dataState.current, projects: [project()] };
+    boardMounts.count = 0;
+    render(
+      <MemoryRouter initialEntries={['/projects/p1/tasks']}>
+        <Routes>
+          <Route path="/projects/:id/:section" element={<ProjectPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'abrir MEU-3' }));
+    expect(screen.getByText('board p1 MEU-3')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'fechar card' }));
+    expect(screen.queryByText('board p1 MEU-3')).toBeNull();
+    expect(screen.queryByText('Carregando…')).toBeNull();
+    expect(boardMounts.count).toBe(1);
   });
 });
 

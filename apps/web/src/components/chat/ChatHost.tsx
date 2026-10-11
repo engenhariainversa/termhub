@@ -1,3 +1,4 @@
+import { i18n, useTranslation } from '../../i18n';
 import { Link } from 'react-router-dom';
 import type { ChatHostAccount, ChatHostAiAccount, ChatHostMachine, ChatHostState } from '../../lib/types';
 
@@ -7,19 +8,21 @@ import type { ChatHostAccount, ChatHostAiAccount, ChatHostMachine, ChatHostState
  * chosen account is not the one doing it.
  */
 function accountClause(account: ChatHostAccount): string {
-  if (account.kind === 'chosen' && account.via === 'project') return `na conta ${account.label}, definida pelo projeto`;
-  return account.kind === 'chosen' ? `na conta ${account.label}` : 'na conta padrão do Claude dela';
+  if (account.kind === 'chosen' && account.via === 'project') return i18n.t('na conta {{label}}, definida pelo projeto', { label: account.label });
+  return account.kind === 'chosen' ? i18n.t('na conta {{label}}', { label: account.label }) : i18n.t('na conta padrão do Claude dela');
 }
 
 /**
- * `(versão 0.4.9)`, or nothing when the agent never said which one it is — never an empty `(versão )`.
+ * "O agente da máquina X (versão 0.4.9) ainda não sabe…", without the note when the agent never said
+ * which version it is — never an empty `(versão )`.
  *
- * The same one-liner lives in `apps/server/src/chat/host.ts`, for the sentence a *send* fails with
+ * The same note lives in `apps/server/src/chat/host.ts`, for the sentence a *send* fails with
  * (`hostFailure`). Copied on purpose — one string across a process boundary, where a shared package
  * would cost more than it saves — so a change to the note's shape has to be made in both places, and
  * nothing will complain if one is missed.
  */
-const versionNote = (version: string): string => (version ? ` (versão ${version})` : '');
+const agentTooOldText = (name: string, version: string): string =>
+  version ? i18n.t('O agente da máquina {{name}} (versão {{version}}) ainda não sabe rodar o chat.', { name, version }) : i18n.t('O agente da máquina {{name}} ainda não sabe rodar o chat.', { name });
 
 /** The option key that stands for "no account": the machine's own default Claude login. Never a real
  *  account id — the server takes ids of at least one character — so it cannot collide with one. */
@@ -63,7 +66,7 @@ export interface ChatHostProps {
   picking: boolean;
   /** A host change is in flight: every choice is refused until it lands. */
   changing: boolean;
-  /** What the last host change failed with, in the server's own pt-BR. */
+  /** What the last host change failed with, in the server's own words. */
   error: string | null;
   onPick: () => void;
   onCancelPick: () => void;
@@ -87,12 +90,13 @@ export interface ChatHostProps {
  * always read before the change happens, never after.
  */
 export function ChatHost({ host, machines, accounts, accountsError, accountId, viewingAs, picking, changing, error, onPick, onCancelPick, onChoose, onChooseAccount }: ChatHostProps) {
+  const { t } = useTranslation();
   // Which machine is the host right now, so the picker never offers to change to it.
   const current = host.kind === 'ready' || host.kind === 'offline' || host.kind === 'agent_too_old' ? host.machine : null;
   // The machine's own default login first, then its registered Claude accounts: the default is an
   // option and not the absence of one, which is what makes "go back to the default login" something a
   // person can actually choose instead of a state they can only leave.
-  const accountOptions: Choice[] = [{ key: DEFAULT_ACCOUNT, name: 'conta padrão da máquina' }, ...(accounts ?? []).map((a) => ({ key: a.id, name: a.label }))];
+  const accountOptions: Choice[] = [{ key: DEFAULT_ACCOUNT, name: t('conta padrão da máquina') }, ...(accounts ?? []).map((a) => ({ key: a.id, name: a.label }))];
   const currentAccountKey = accountId ?? DEFAULT_ACCOUNT;
   // What the picker can actually change to. Counted, because a picker that warns about a change and
   // then offers nothing but the current pair and Cancelar is a dead end dressed as a choice.
@@ -103,12 +107,10 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
   return (
     // `section`, named, so a screen reader can reach "where is this running" without walking the
     // thread, and so the tests read this region rather than the whole page.
-    <section aria-label="Máquina do chat" className="pt-2 text-xs">
+    <section aria-label={t('Máquina do chat')} className="pt-2 text-xs">
       {host.kind === 'ready' ? (
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-fg-dim">
-          <p>
-            Esta conversa roda na máquina {host.machine.name}, {accountClause(host.account)}.
-          </p>
+          <p>{t('Esta conversa roda na máquina {{name}}, {{account}}.', { name: host.machine.name, account: accountClause(host.account) })}</p>
           <ChangeButton onPick={onPick} picking={picking} />
         </div>
       ) : (
@@ -118,44 +120,41 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
         <div className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm text-fg">
           {host.kind === 'no_machine' && (
             <>
-              <p>O chat roda em uma máquina sua, e você ainda não cadastrou nenhuma.</p>
-              <p className="mt-1 text-fg-dim">Cadastre uma máquina com o agente do termhub e o concierge passa a rodar nela.</p>
+              <p>{t('O chat roda em uma máquina sua, e você ainda não cadastrou nenhuma.')}</p>
+              <p className="mt-1 text-fg-dim">{t('Cadastre uma máquina com o agente do termhub e o concierge passa a rodar nela.')}</p>
               {/* The enrolment itself lives in the app's sidebar (the "Nova máquina" form), so this is
                   the honest path to it: back to the app, where that button is. */}
               <Link to="/" className="mt-2 inline-block text-accent hover:underline">
-                Cadastrar máquina
+                {t('Cadastrar máquina')}
               </Link>
             </>
           )}
           {host.kind === 'not_chosen' && (
             <>
-              <p>Você tem mais de uma máquina: escolha em qual o chat vai rodar.</p>
+              <p>{t('Você tem mais de uma máquina: escolha em qual o chat vai rodar.')}</p>
               {/* Only when there really is a session to lose (`sessionAtStake`): this conversation ran
                   on a machine it no longer names, so any other machine starts the model's memory over.
                   A first pick has nothing to lose and is not warned about — a warning that is usually
                   false is one nobody reads, and then the one that matters is invisible too. */}
-              {host.sessionAtStake && <p className="mt-1 text-fg">Esta conversa já tem uma sessão numa máquina que não está mais escolhida. Se você escolher outra, o histórico fica, mas a memória do modelo começa de novo.</p>}
+              {host.sessionAtStake && <p className="mt-1 text-fg">{t('Esta conversa já tem uma sessão numa máquina que não está mais escolhida. Se você escolher outra, o histórico fica, mas a memória do modelo começa de novo.')}</p>}
               <ChoiceList options={host.machines.map((m) => ({ key: m.id, name: m.name }))} currentKey={null} changing={changing} onChoose={onChoose} />
             </>
           )}
           {host.kind === 'offline' && (
             <>
-              <p>A máquina {host.machine.name} está offline agora.</p>
-              <p className="mt-1 text-fg-dim">Ligue-a para continuar esta conversa, ou troque a máquina do chat.</p>
+              <p>{t('A máquina {{name}} está offline agora.', { name: host.machine.name })}</p>
+              <p className="mt-1 text-fg-dim">{t('Ligue-a para continuar esta conversa, ou troque a máquina do chat.')}</p>
             </>
           )}
           {host.kind === 'agent_too_old' && (
             <>
-              <p>
-                O agente da máquina {host.machine.name}
-                {versionNote(host.version)} ainda não sabe rodar o chat.
-              </p>
-              <p className="mt-1 text-fg-dim">Atualize o agente dessa máquina para conversar por aqui.</p>
+              <p>{agentTooOldText(host.machine.name, host.version)}</p>
+              <p className="mt-1 text-fg-dim">{t('Atualize o agente dessa máquina para conversar por aqui.')}</p>
               {/* The update button lives on the machine itself (the app's machine form), not here — and
                   the agent updates itself while it is idle, so this points at it instead of asking
                   anyone to run a command on their own computer. */}
               <Link to="/" className="mt-2 inline-block text-accent hover:underline">
-                Atualizar o agente
+                {t('Atualizar o agente')}
               </Link>
             </>
           )}
@@ -176,14 +175,14 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
         // about where it was: every conversation from before this feature has a session and no machine
         // (it ran in the operator's container), and naming a machine that "went away" would be a
         // sentence about something that was never recorded.
-        <p className="mt-1 text-warn">Esta conversa continua em {host.machine.name}, que não é onde a sessão anterior rodou: o histórico fica, mas a memória do modelo começa de novo.</p>
+        <p className="mt-1 text-warn">{t('Esta conversa continua em {{name}}, que não é onde a sessão anterior rodou: o histórico fica, mas a memória do modelo começa de novo.', { name: host.machine.name })}</p>
       )}
 
       {host.kind === 'ready' && host.account.kind === 'lost' && (
         // The silent degradation the payload knows about: the chosen account is not the one running —
         // and it sends the person to the picker below, the one place that can set this conversation's
         // account. "Contas de IA" registers a machine's logins and cannot choose the chat's.
-        <p className="mt-1 text-fg-muted">A conta de IA que você escolheu não serve mais para essa máquina. Use “Trocar máquina ou conta” para escolher outra.</p>
+        <p className="mt-1 text-fg-muted">{t('A conta de IA que você escolheu não serve mais para essa máquina. Use “Trocar máquina ou conta” para escolher outra.')}</p>
       )}
 
       {picking && host.kind !== 'not_chosen' && (
@@ -192,22 +191,22 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
               only when there is a change to make: the account moves the CLI session just as the machine
               does (the session lives in one config dir), so this one sentence covers both. A warning
               over a dead end is the kind nobody reads, and then the one that matters is invisible too. */}
-          {changeable && <p className="text-fg">Trocar de máquina ou de conta começa uma sessão nova: o histórico desta conversa fica, mas a memória do modelo começa de novo.</p>}
+          {changeable && <p className="text-fg">{t('Trocar de máquina ou de conta começa uma sessão nova: o histórico desta conversa fica, mas a memória do modelo começa de novo.')}</p>}
           {viewingAs ? (
             // The lists here would be the other person's machines and logins, and the host they would
             // set is this admin's own conversation: nothing on screen can be offered, and an empty list
             // would read as a fact about their own machines. One true sentence, and the way out.
-            <p className="text-fg">Você está vendo os dados de outra pessoa. Esta conversa é sempre sua: saia de “ver como” para trocar a máquina ou a conta dela.</p>
+            <p className="text-fg">{t('Você está vendo os dados de outra pessoa. Esta conversa é sempre sua: saia de “ver como” para trocar a máquina ou a conta dela.')}</p>
           ) : (
             <>
             {machines === null ? (
-              <p className="mt-2 text-fg-dim">Carregando suas máquinas…</p>
+              <p className="mt-2 text-fg-dim">{t('Carregando suas máquinas…')}</p>
             ) : otherMachines.length === 0 ? (
               // No *other* machine is the same dead end as no machine at all: there is nothing to switch
               // to, and saying so beats a list whose only row is the machine already running this.
-              <p className="mt-2 text-fg-dim">Nenhuma outra máquina com o agente do termhub.</p>
+              <p className="mt-2 text-fg-dim">{t('Nenhuma outra máquina com o agente do termhub.')}</p>
             ) : (
-              <ChoiceList options={machines.map((m) => ({ key: m.id, name: m.name }))} currentKey={current?.id ?? null} changing={changing} onChoose={onChoose} prefix="Trocar para " />
+              <ChoiceList options={machines.map((m) => ({ key: m.id, name: m.name }))} currentKey={current?.id ?? null} changing={changing} onChoose={onChoose} change />
             )}
             {/* The other half of the pair (spec §3), on the machine that is hosting right now: without it
                 `ai_account_id` could only ever be null and the chosen/lost states were unreachable. Only
@@ -215,26 +214,26 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
             {host.kind === 'ready' && host.account.kind === 'chosen' && host.account.via === 'project' ? (
               // TER-589: the project's setup picks this chat's account (and moves on to the next when one
               // hits its limit); a pick here would not be the one running, so none is offered.
-              <p className="mt-3 text-fg-dim">A conta deste chat vem do setup do projeto (Contas de IA e modelo), na ordem definida lá.</p>
+              <p className="mt-3 text-fg-dim">{t('A conta deste chat vem do setup do projeto (Contas de IA e modelo), na ordem definida lá.')}</p>
             ) : current !== null && (
               <>
-                <p className="mt-3 text-fg-dim">Conta do Claude em {current.name}</p>
+                <p className="mt-3 text-fg-dim">{t('Conta do Claude em {{name}}', { name: current.name })}</p>
                 {accountsError ? (
                   // Not "this machine has no other account": nobody read them. The machine list above
                   // still works, which is the point — one missing permission must not take the only way
                   // off an offline host with it.
-                  <p className="mt-1 text-fg-dim">Não foi possível ler as contas de IA dessa máquina.</p>
+                  <p className="mt-1 text-fg-dim">{t('Não foi possível ler as contas de IA dessa máquina.')}</p>
                 ) : accounts === null ? (
-                  <p className="mt-1 text-fg-dim">Carregando as contas dessa máquina…</p>
+                  <p className="mt-1 text-fg-dim">{t('Carregando as contas dessa máquina…')}</p>
                 ) : otherAccounts.length === 0 ? (
-                  <p className="mt-1 text-fg-dim">Essa máquina não tem outra conta do Claude cadastrada em Contas de IA.</p>
+                  <p className="mt-1 text-fg-dim">{t('Essa máquina não tem outra conta do Claude cadastrada em Contas de IA.')}</p>
                 ) : (
                   <ChoiceList
                     options={accountOptions}
                     currentKey={currentAccountKey}
                     changing={changing}
                     onChoose={(key) => onChooseAccount(key === DEFAULT_ACCOUNT ? null : key)}
-                    prefix="Trocar para "
+                    change
                   />
                 )}
               </>
@@ -242,7 +241,7 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
             </>
           )}
           <button type="button" className="btn-ghost mt-2 px-2 py-1" onClick={onCancelPick}>
-            Cancelar
+            {t('Cancelar')}
           </button>
         </div>
       )}
@@ -253,9 +252,10 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
 }
 
 function ChangeButton({ onPick, picking }: { onPick: () => void; picking: boolean }) {
+  const { t } = useTranslation();
   return (
     <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={picking} onClick={onPick}>
-      Trocar máquina ou conta
+      {t('Trocar máquina ou conta')}
     </button>
   );
 }
@@ -271,21 +271,21 @@ interface Choice {
  * machines and the host machine's Claude accounts, so neither can end up looking or behaving like a
  * different kind of choice. The current one is shown but not offered: re-picking it would set the same
  * pair again and say nothing new. `currentKey` is `null` when none of them is current, which is the
- * `lost` account — the stored id names nothing here, so every option really is a change. `prefix` is
+ * `lost` account — the stored id names nothing here, so every option really is a change. `change` is
  * what makes the change button name its own consequence ("Trocar para jarvis") while a first choice is
  * just the name.
  */
-function ChoiceList({ options, currentKey, changing, onChoose, prefix = '' }: { options: Choice[]; currentKey: string | null; changing: boolean; onChoose: (key: string) => void; prefix?: string }) {
+function ChoiceList({ options, currentKey, changing, onChoose, change = false }: { options: Choice[]; currentKey: string | null; changing: boolean; onChoose: (key: string) => void; change?: boolean }) {
+  const { t } = useTranslation();
   return (
     <ul className="mt-2 flex flex-col gap-1">
       {options.map((o) => (
         <li key={o.key}>
           {o.key === currentKey ? (
-            <span className="text-fg-dim">{o.name} (atual)</span>
+            <span className="text-fg-dim">{t('{{name}} (atual)', { name: o.name })}</span>
           ) : (
             <button type="button" className="btn-ghost px-2 py-1" disabled={changing} onClick={() => onChoose(o.key)}>
-              {prefix}
-              {o.name}
+              {change ? t('Trocar para {{name}}', { name: o.name }) : o.name}
             </button>
           )}
         </li>

@@ -1,0 +1,8 @@
+{
+  "Desvincular a máquina {{machine}} do projeto {{project}} fecha {{count}} abas abertas nela ({{tabs}}); repita com confirm: true para confirmar_one": "Desvincular a máquina {{machine}} do projeto {{project}} fecha {{count}} aba aberta nela ({{tabs}}); repita com confirm: true para confirmar",
+  "Desvincular a máquina {{machine}} do projeto {{project}} fecha {{count}} abas abertas nela ({{tabs}}); repita com confirm: true para confirmar_other": "Desvincular a máquina {{machine}} do projeto {{project}} fecha {{count}} abas abertas nela ({{tabs}}); repita com confirm: true para confirmar",
+  "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_one": "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefa; repita com confirm: true para confirmar",
+  "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_other": "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar",
+  "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_one": "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefa; repita com confirm: true para confirmar",
+  "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_other": "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar"
+}

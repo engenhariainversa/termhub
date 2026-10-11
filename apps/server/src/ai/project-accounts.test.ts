@@ -8,14 +8,14 @@ const ai = (accounts: string[], claude: string | null = null): ProjectAi => ({ a
 
 describe('accountsOn', () => {
   it('keeps the priority order, not the list order', () => {
-    expect(accountsOn(ai(['a2', 'a1']), all, 'm1', 'claude').map((a) => a.id)).toEqual(['a2', 'a1']);
+    expect(accountsOn('p1', ai(['a2', 'a1']), all, 'm1', 'claude').map((a) => a.id)).toEqual(['a2', 'a1']);
   });
   it('drops ids that no longer name an account, and accounts of other machines or providers', () => {
-    expect(accountsOn(ai(['gone', 'b1', 'c1', 'a1']), all, 'm1', 'claude').map((a) => a.id)).toEqual(['a1']);
-    expect(accountsOn(ai(['gone', 'b1', 'c1', 'a1']), all, 'm1').map((a) => a.id)).toEqual(['c1', 'a1']);
+    expect(accountsOn('p1', ai(['gone', 'b1', 'c1', 'a1']), all, 'm1', 'claude').map((a) => a.id)).toEqual(['a1']);
+    expect(accountsOn('p1', ai(['gone', 'b1', 'c1', 'a1']), all, 'm1').map((a) => a.id)).toEqual(['c1', 'a1']);
   });
   it('never returns a provider start_agent cannot launch', () => {
-    expect(accountsOn(ai(['g1']), all, 'm1')).toEqual([]);
+    expect(accountsOn('p1', ai(['g1']), all, 'm1')).toEqual([]);
   });
 });
 

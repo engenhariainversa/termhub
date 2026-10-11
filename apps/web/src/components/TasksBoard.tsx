@@ -1,22 +1,47 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
-import { applyMove, cardPath, cardsIn, dropPosition, epicsOf, FILTER_TYPES, nextColumn, openCount, readBoardFilter, visible, writeBoardFilter, type BoardFilter } from '../lib/board';
+import {
+  applyMove,
+  CARD_PARAM,
+  cardForRef,
+  cardsIn,
+  columnCategoryLabel,
+  dropPosition,
+  epicsOf,
+  FILTER_TYPES,
+  nextColumn,
+  openCount,
+  readBoardFilter,
+  taskTypeLabel,
+  visible,
+  writeBoardFilter,
+  type BoardFilter,
+} from '../lib/board';
 import { useData } from '../lib/data';
 import { useMonitor } from '../lib/monitor';
 import { readLastMachine, writeLastMachine } from '../lib/last-machine';
 import { cardTitle, ticketKey } from '../lib/ticket-link';
-import { COLUMN_CATEGORY_LABEL, PROVIDER_LABEL, TASK_TYPE_LABEL, type ColumnCategory, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
+import { PROVIDER_LABEL, type ColumnCategory, type Task, type TaskColumn, type TaskPatchInput, type TaskType } from '../lib/types';
+import { loadIneligibleReasons, untaggedUnderEpic } from '../lib/automation';
+import { AutomationBadge } from './AutomationBadge';
 import { MachinePicker } from './MachinePicker';
 import { TaskEditor, type PlaceTarget } from './TaskEditor';
 import { TypeBadge } from './TypeBadge';
+import { useTranslation } from '../i18n';
 
 const CATEGORY_DOT: Record<ColumnCategory, string> = { todo: 'bg-fg-dim', doing: 'bg-accent', done: 'bg-ok' };
 
 interface Props {
   projectId: string;
-  /** `/project/:ref`: the card whose editor is open — the URL owns it */
-  openTaskId?: string;
+}
+
+/**
+ * Set on the history entry that opening a card pushed: closing it then goes back, so the browser's
+ * back button and the editor's close land on the same page. A pasted `?card=` link has no such entry.
+ */
+interface CardOpenState {
+  boardCard?: boolean;
 }
 
 interface DragState {
@@ -26,11 +51,13 @@ interface DragState {
 }
 
 /** The project's Board (spec §7): its own columns, a type/epic filter, cards with type, ref and epic. */
-export function TasksBoard({ projectId, openTaskId }: Props) {
+export function TasksBoard({ projectId }: Props) {
+  const { t } = useTranslation();
   const { projects, machinesOf, setOpenTasks } = useData();
   const { openTabs } = useMonitor();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const project = projects.find((p) => p.id === projectId);
   const projectMachines = project ? machinesOf(project) : [];
   const [tasks, setTasks] = useState<Task[] | null>(null);
@@ -39,10 +66,12 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [pickingMachineFor, setPickingMachineFor] = useState<string | null>(null);
+  const [reasons, setReasons] = useState<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     try {
-      const r = await api.tasks.list(projectId);
+      const [r, why] = await Promise.all([api.tasks.list(projectId), loadIneligibleReasons(projectId)]);
+      setReasons(why);
       setTasks(r.tasks);
       setColumns([...r.columns].sort((a, b) => a.position - b.position));
       // a remembered epic that no longer exists would otherwise filter every card out with no visible cause
@@ -53,7 +82,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
         return next;
       });
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao carregar o board');
+      setError(e instanceof ApiError ? e.message : t('Erro ao carregar o board'));
     }
   }, [projectId]);
 
@@ -71,11 +100,32 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     .filter((t) => t.project_id === projectId && t.kind === 'terminal')
     .map((t) => ({ id: t.id, name: t.name, machine_name: projectMachines.find((m) => m.id === t.machine_id)?.name ?? '—' }));
   const epicTitle = useMemo(() => new Map(epics.map((e) => [e.id, e.title])), [epics]);
-  const editing = openTaskId ? ((tasks ?? []).find((t) => t.id === openTaskId) ?? null) : null;
-  /** The section a card was opened from; the card URL keeps it in the history state (a pasted link has none). */
-  const from = (location.state as { from?: string } | null)?.from ?? `/projects/${projectId}/tasks`;
-  const openCard = (task: Task) => navigate(cardPath(task.ref), { state: { from: location.pathname.startsWith('/project/') ? from : location.pathname } });
-  const closeCard = () => navigate(from);
+  // The open card lives in the board's own URL (`?card=TER-12`, TER-976): opening or closing it only
+  // changes the query, so the route, the board and its data stay mounted — no reload, no flash.
+  const openRef = searchParams.get(CARD_PARAM);
+  const editing = openRef && tasks ? cardForRef(tasks, openRef) : null;
+  const openTaskId = editing?.id ?? null;
+  const openCard = (task: Task) =>
+    setSearchParams(
+      (p) => {
+        p.set(CARD_PARAM, task.ref);
+        return p;
+      },
+      { state: { boardCard: true } satisfies CardOpenState },
+    );
+  const closeCard = () => {
+    if ((location.state as CardOpenState | null)?.boardCard) {
+      navigate(-1);
+      return;
+    }
+    setSearchParams(
+      (p) => {
+        p.delete(CARD_PARAM);
+        return p;
+      },
+      { replace: true },
+    );
+  };
 
   const changeFilter = (next: BoardFilter) => {
     setFilter(next);
@@ -100,7 +150,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       // the first card of a project also creates its default epic: fetch it for the names and the filter
       if (task.epic_id && !epicTitle.has(task.epic_id)) void load();
     } catch (e) {
-      fail(e, 'Erro ao criar o card');
+      fail(e, t('Erro ao criar o card'));
     }
   };
 
@@ -109,8 +159,18 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     try {
       replaceTask((await api.tasks.update(id, patch)).task);
     } catch (e) {
-      fail(e, 'Erro ao salvar o card');
+      fail(e, t('Erro ao salvar o card'));
     }
+  };
+
+  /** Tags or untags a card; an epic reaches its cards too, so the board reloads (the tag and the reasons). */
+  const setAuto = async (id: string, auto: boolean) => {
+    try {
+      await api.tasks.update(id, { auto });
+    } catch (e) {
+      fail(e, t('Erro ao marcar o card para trabalho automático'));
+    }
+    await load();
   };
 
   /** Moves locally (reindexing both columns) and persists. `position` is the server position. */
@@ -121,7 +181,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     try {
       replaceTask((await api.tasks.move(id, { column_id: columnId }, position)).task);
     } catch (e) {
-      fail(e, 'Erro ao mover o card');
+      fail(e, t('Erro ao mover o card'));
     }
   };
 
@@ -131,7 +191,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       await api.tasks.move(id, target, 0);
       await load(); // it left the board: the column it was in closes its gap
     } catch (e) {
-      fail(e, 'Erro ao mover o card');
+      fail(e, t('Erro ao mover o card'));
     }
   };
 
@@ -142,7 +202,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       replaceTask(r.task);
       navigate(`/projects/${projectId}?tab=${r.tab.id}`);
     } catch (e) {
-      fail(e, 'Erro ao abrir terminal');
+      fail(e, t('Erro ao abrir terminal'));
     }
   };
 
@@ -152,7 +212,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       await api.tasks.linkTab(id, tabId);
       await load(); // the card may have changed column, and the cards of both columns were reindexed
     } catch (e) {
-      fail(e, 'Erro ao ligar a aba ao card');
+      fail(e, t('Erro ao ligar a aba ao card'));
     }
   };
 
@@ -160,14 +220,14 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     try {
       replaceTask((await api.tasks.detachTerminal(id)).task);
     } catch (e) {
-      fail(e, 'Erro ao desligar a aba do card');
+      fail(e, t('Erro ao desligar a aba do card'));
     }
   };
 
   /** Resolves which machine to open the card's terminal on before calling the API. */
   const chooseTerminal = (id: string) => {
     if (projectMachines.length === 0) {
-      setError('Vincule uma máquina ao projeto em Setup → Máquinas para abrir terminais.');
+      setError(t('Vincule uma máquina ao projeto em Setup → Máquinas para abrir terminais.'));
       return;
     }
     if (projectMachines.length === 1) {
@@ -188,7 +248,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       replaceTask(r.task);
       return r.state;
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Erro ao atualizar no provedor');
+      setError(e instanceof ApiError ? e.message : t('Erro ao atualizar no provedor'));
       return null;
     }
   };
@@ -200,7 +260,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
       await api.tasks.remove(id);
       setTasks((t) => (t ?? []).filter((x) => x.id !== id));
     } catch (e) {
-      fail(e, 'Erro ao excluir o card');
+      fail(e, t('Erro ao excluir o card'));
     }
   };
 
@@ -226,7 +286,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
     void move(id, column.id, dropPosition(all, visible(all, filter), index, id));
   };
 
-  if (tasks === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">{error ?? 'Carregando o board…'}</div>;
+  if (tasks === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">{error ?? t('Carregando o board…')}</div>;
   const loaded = tasks;
 
   return (
@@ -235,7 +295,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
         <div className="border-b border-danger/30 bg-danger/10 px-3 py-1 text-xs text-danger">
           {error}{' '}
           <button className="underline" onClick={() => setError(null)}>
-            fechar
+            {t('fechar')}
           </button>
         </div>
       )}
@@ -257,7 +317,7 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
               }}
             >
               <header className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-fg-muted">
-                <span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_DOT[column.category]}`} title={COLUMN_CATEGORY_LABEL[column.category]} />
+                <span className={`h-2 w-2 shrink-0 rounded-full ${CATEGORY_DOT[column.category]}`} title={columnCategoryLabel(column.category)} />
                 <span className="truncate">{column.name}</span>
                 <span className="ml-auto rounded-full bg-bg-4 px-1.5 text-[10px] tabular-nums">{shown.length}</span>
               </header>
@@ -287,11 +347,12 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
                       next={next}
                       onMoveNext={next ? () => void move(task.id, next.id, 0) : undefined}
                       terminalHref={task.tab_id ? `/projects/${projectId}?tab=${task.tab_id}` : null}
+                      autoReason={reasons.get(task.id) ?? null}
                     />
                   </li>
                 ))}
                 {isOver && drag && drag.overIndex === shown.length && <DropLine />}
-                {shown.length === 0 && !isOver && <li className="px-1 py-6 text-center text-xs text-fg-dim">vazio</li>}
+                {shown.length === 0 && !isOver && <li className="px-1 py-6 text-center text-xs text-fg-dim">{t('vazio')}</li>}
               </ul>
             </section>
           );
@@ -309,6 +370,8 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
           onLinkTab={(tabId) => void linkTab(editing.id, tabId)}
           onDetachTerminal={() => void detachTerminal(editing.id)}
           onClose={closeCard}
+          epicUntagged={editing.type === 'epic' ? untaggedUnderEpic(editing, loaded) : 0}
+          onSetAuto={(auto) => void setAuto(editing.id, auto)}
           onSave={(patch) => void update(editing.id, patch)}
           onPlace={(target) => void place(editing.id, target)}
           onDelete={() => void remove(editing.id)}
@@ -339,29 +402,30 @@ export function TasksBoard({ projectId, openTaskId }: Props) {
 }
 
 function BoardToolbar({ filter, epics, onChange }: { filter: BoardFilter; epics: Task[]; onChange: (next: BoardFilter) => void }) {
+  const { t } = useTranslation();
   const toggle = (type: TaskType) =>
-    onChange({ ...filter, types: FILTER_TYPES.filter((t) => (t === type ? !filter.types.includes(t) : filter.types.includes(t))) });
+    onChange({ ...filter, types: FILTER_TYPES.filter((x) => (x === type ? !filter.types.includes(x) : filter.types.includes(x))) });
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-line px-3 py-2 text-xs">
-      <span className="text-fg-dim">Mostrar:</span>
-      {FILTER_TYPES.map((t) => (
+      <span className="text-fg-dim">{t('Mostrar:')}</span>
+      {FILTER_TYPES.map((type) => (
         <button
-          key={t}
+          key={type}
           type="button"
-          aria-pressed={filter.types.includes(t)}
-          onClick={() => toggle(t)}
-          className={`rounded-full border px-2 py-0.5 ${filter.types.includes(t) ? 'border-accent bg-accent/15 text-fg' : 'border-line text-fg-muted hover:bg-bg-3'}`}
+          aria-pressed={filter.types.includes(type)}
+          onClick={() => toggle(type)}
+          className={`rounded-full border px-2 py-0.5 ${filter.types.includes(type) ? 'border-accent bg-accent/15 text-fg' : 'border-line text-fg-muted hover:bg-bg-3'}`}
         >
-          {TASK_TYPE_LABEL[t]}
+          {taskTypeLabel(type)}
         </button>
       ))}
       <select
-        aria-label="Filtrar por épico"
+        aria-label={t('Filtrar por épico')}
         className="input ml-auto w-auto py-1 text-xs"
         value={filter.epicId ?? ''}
         onChange={(e) => onChange({ ...filter, epicId: e.target.value || null })}
       >
-        <option value="">Todos os épicos</option>
+        <option value="">{t('Todos os épicos')}</option>
         {epics.map((e) => (
           <option key={e.id} value={e.id}>
             {e.ref} {e.title}
@@ -377,6 +441,7 @@ function DropLine() {
 }
 
 function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
+  const { t } = useTranslation();
   const [value, setValue] = useState('');
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -389,7 +454,7 @@ function QuickAdd({ onAdd }: { onAdd: (title: string) => void }) {
     <form onSubmit={submit} className="px-2 pb-2">
       <input
         className="input py-1.5 text-xs"
-        placeholder="+ novo card (Enter)"
+        placeholder={t('+ novo card (Enter)')}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
@@ -410,16 +475,19 @@ interface CardProps {
   next?: TaskColumn;
   onMoveNext?: () => void;
   terminalHref: string | null;
+  /** why a tagged card cannot be taken yet (tooltip of the badge's warning dot) */
+  autoReason: string | null;
 }
 
 /** Visible on hover, on keyboard focus (anywhere in the card) and always on touch (no hover). */
 const CARD_ACTION = 'invisible shrink-0 rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg group-hover:visible group-focus-within:visible focus:visible [@media(hover:none)]:visible';
 
 /** Renaming happens in the card editor's "Título" field; the board card only opens it (spec §7). */
-function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, next, onMoveNext, terminalHref }: CardProps) {
+function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, next, onMoveNext, terminalHref, autoReason }: CardProps) {
   // A native drag can still leave a trailing click on the source element once it is dropped; this
   // flag outlives the drag by one tick so that stray click does not also open the card.
   const draggedRef = useRef(false);
+  const { t } = useTranslation();
 
   const done = task.subtasks?.filter((s) => s.status === 'done').length ?? 0;
   const total = task.subtasks?.length ?? 0;
@@ -462,20 +530,21 @@ function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, n
           <span className="mr-1.5 font-mono text-[10px] text-fg-dim">{task.ref}</span>
           {cardTitle(task.title, task.external_ref)}
         </span>
+        {task.auto && <AutomationBadge reason={autoReason} />}
         {total > 0 && (
-          <span className="shrink-0 rounded bg-bg-4 px-1 text-[10px] tabular-nums text-fg-muted" title={`${done} de ${total} subtarefas concluídas`}>
+          <span className="shrink-0 rounded bg-bg-4 px-1 text-[10px] tabular-nums text-fg-muted" title={t('{{done}} de {{total}} subtarefas concluídas', { done, total })}>
             ✓ {done}/{total}
           </span>
         )}
         {terminalHref && (
-          <Link to={terminalHref} onClick={(e) => e.stopPropagation()} className="shrink-0 rounded px-1 font-mono text-[11px] text-ok hover:bg-bg-4" title="Terminal deste card (ir para a tab)">
+          <Link to={terminalHref} onClick={(e) => e.stopPropagation()} className="shrink-0 rounded px-1 font-mono text-[11px] text-ok hover:bg-bg-4" title={t('Terminal deste card (ir para a tab)')}>
             ▮_
           </Link>
         )}
         <button
           className={CARD_ACTION}
-          title="Abrir card"
-          aria-label={`Abrir card ${task.ref}`}
+          title={t('Abrir card')}
+          aria-label={t('Abrir card {{ref}}', { ref: task.ref })}
           onClick={(e) => {
             e.stopPropagation();
             onOpen();
@@ -486,8 +555,8 @@ function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, n
         {onMoveNext && next && (
           <button
             className={CARD_ACTION}
-            title={`Mover para ${next.name}`}
-            aria-label={`Mover para ${next.name}`}
+            title={t('Mover para {{column}}', { column: next.name })}
+            aria-label={t('Mover para {{column}}', { column: next.name })}
             onClick={(e) => {
               e.stopPropagation();
               onMoveNext();
@@ -510,12 +579,12 @@ function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, n
         </a>
       )}
       {epicTitle && (
-        <p className="mt-0.5 truncate text-[10px] text-fg-dim" title={`Épico: ${epicTitle}`}>
+        <p className="mt-0.5 truncate text-[10px] text-fg-dim" title={t('Épico: {{title}}', { title: epicTitle })}>
           {epicTitle}
         </p>
       )}
       {task.external_ref && task.external_ref.status !== task.status && (
-        <p className="mt-1 text-[10px] text-warn" title="Estado no provedor difere da coluna; abra o card → Atualizar para sincronizar">
+        <p className="mt-1 text-[10px] text-warn" title={t('Estado no provedor difere da coluna; abra o card → Atualizar para sincronizar')}>
           {PROVIDER_LABEL[task.external_ref.provider]}: {task.external_ref.state}
         </p>
       )}

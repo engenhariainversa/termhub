@@ -5,15 +5,17 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// Loaded at boot so it hears the first `sessionStarted` and reads the feature flags (TER-1040).
+import '@/features/feature-flags/viewmodel/useFeatureFlagsStore';
 import { PushPrimerSheet } from '@/features/permissions/view/push-primer-sheet';
 import { setSystemSettingsOpener } from '@/features/permissions/viewmodel/usePermissionsStore';
 import { useNotificationsStore } from '@/features/notifications/viewmodel/useNotificationsStore';
 import { PinPromptSheet } from '@/features/session/view/pin-prompt-sheet';
 import { usePhaseRedirect } from '@/features/session/view/use-phase-redirect';
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
-import { appBackgrounded } from '@/features/shared/signals';
+import { appBackgrounded, appForegrounded } from '@/features/shared/signals';
 import { logScreen } from '@/services/analytics';
-import { configurePush, pushConversationId, pushNotificationId } from '@/services/push';
+import { configurePush, pushNotificationId, pushRoute } from '@/services/push';
 import { socketWake } from '@/services/api/wake';
 import { ThemeProvider, useSchemeName } from '@/ui/theme-provider';
 
@@ -64,19 +66,21 @@ function Navigator() {
         session.foreground();
         // A chat socket that backed off while the app was away reconnects now (P§6.1).
         socketWake.emit();
+        appForegrounded.emit();
       }
     });
     return () => sub.remove();
   }, []);
 
-  const openChat = useCallback(
-    (id: string) => {
+  const openRoute = useCallback(
+    (route: string) => {
       // Already unlocked: navigate at once, no need to stash and wait for `usePhaseRedirect`.
-      if (useSessionStore.getState().phase === 'unlocked') router.push(`/chat/${id}` as Href);
-      else useSessionStore.getState().setPendingRoute(`/chat/${id}`);
+      if (useSessionStore.getState().phase === 'unlocked') router.push(route as Href);
+      else useSessionStore.getState().setPendingRoute(route);
     },
     [router],
   );
+  const openChat = useCallback((id: string) => openRoute(`/chat/${id}`), [openRoute]);
 
   useEffect(() => {
     const handle = (url: string) => {
@@ -92,8 +96,9 @@ function Navigator() {
     return () => sub.remove();
   }, [openChat]);
 
-  // A tapped push — on a cold start too — opens its conversation, after the PIN when locked, and
-  // marks its history row read (P§9). Cleared once followed, so a remount never opens it again.
+  // A tapped push — on a cold start too — opens its tab ("aba terminou", TER-925) or its conversation,
+  // after the PIN when locked, and marks its history row read (P§9). Cleared once followed, so a
+  // remount never opens it again.
   const tapped = Notifications.useLastNotificationResponse();
   const [readOnUnlock, setReadOnUnlock] = useState<string | null>(null);
   useEffect(() => {
@@ -101,9 +106,9 @@ function Navigator() {
     Notifications.clearLastNotificationResponse();
     const { data } = tapped.notification.request.content;
     setReadOnUnlock(pushNotificationId(data));
-    const id = pushConversationId(data);
-    if (id) openChat(id);
-  }, [tapped, openChat]);
+    const route = pushRoute(data);
+    if (route) openRoute(route);
+  }, [tapped, openRoute]);
 
   // Marking read needs a session: a push tapped while locked waits for the PIN.
   const phase = useSessionStore((s) => s.phase);
@@ -116,7 +121,14 @@ function Navigator() {
   return (
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }}>
+        {/* The thread's rows answer a drag to the right (TER-447). Left unset, iOS 26 also pops the
+            screen on a right drag from anywhere in it, so a drag that missed a row's own recognizer
+            left the chat (TER-849). Back stays on the screen's edge, as before iOS 26. */}
+        <Stack.Screen name="chat/[id]" options={{ fullScreenGestureEnabled: false }} />
+        {/* "Refazer login" of an AI account (TER-1047): over whatever screen opened it. */}
+        <Stack.Screen name="ai-login/[accountId]" options={{ presentation: 'modal' }} />
+      </Stack>
       <PinPromptSheet />
       <PushPrimerSheet />
     </>

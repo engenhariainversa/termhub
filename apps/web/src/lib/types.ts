@@ -1,3 +1,5 @@
+import { tk } from '../i18n';
+
 export type MachineType = 'local' | 'ssh' | 'agent';
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 
@@ -26,10 +28,84 @@ export interface User {
   last_login_at: string | null;
   /** the address of this user's public city (`/city/@<nickname>`); null until claimed */
   nickname: string | null;
+  /** the language the person picked ('pt-BR' | 'en' | 'es'); null = automatic; absent on servers older than the i18n release */
+  locale?: 'pt-BR' | 'en' | 'es' | null;
   /** store-review mode: while in the future, this account's mobile device requests auto-approve */
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until; only the user-admin routes (/api/users) send it */
   review_enabled_by?: string | null;
+  /** when the person asked to delete their own account (TER-720); null = no request */
+  deletion_requested_at: string | null;
+  /** when the account is deleted for good; non-null = deletion pending, the account is deactivated */
+  deletion_scheduled_at: string | null;
+  /** feature flags resolved for this person (TER-1040); absent on older servers = everything off */
+  features?: Partial<Record<FeatureFlagKey, boolean>>;
+}
+
+/** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
+export type FeatureFlagKey = 'subscriptions';
+
+/** One person's own value for a flag (Configurações → Recursos em teste). */
+export interface FeatureFlagOverride {
+  flag: string;
+  user_id: string;
+  email: string;
+  name: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+/** GET /api/feature-flags: a flag, its instance value and who has their own. */
+export interface FeatureFlagInfo {
+  key: FeatureFlagKey;
+  default: boolean;
+  enabled: boolean;
+  updated_at: string | null;
+  overrides: FeatureFlagOverride[];
+}
+
+/** A registered version of the Terms of Use or of the Privacy Policy (TER-742). */
+export interface LegalVersion {
+  id: string;
+  document: 'terms' | 'privacy';
+  /** as printed in the document ("1", "1.1") */
+  version: string;
+  effective_at: string;
+  /** public page of that version */
+  url: string;
+  requires_acceptance: boolean;
+  /** what changed (pt-BR), when the maintainer wrote it */
+  summary: string | null;
+}
+
+/** GET /api/legal/status (also `legal` in /auth/me): versions in force not accepted yet, and the ones coming. */
+export interface LegalStatus {
+  pending: LegalVersion[];
+  upcoming: LegalVersion[];
+}
+
+/** GET/POST/DELETE /api/account/deletion. */
+export interface AccountDeletionStatus {
+  pending: boolean;
+  requested_at: string | null;
+  scheduled_at: string | null;
+}
+
+/** "Exportar meus dados" (TER-741): an archive request and where it stands. */
+export interface DataExport {
+  id: string;
+  status: 'pending' | 'running' | 'ready' | 'failed' | 'expired';
+  bytes: number | null;
+  created_at: string;
+  completed_at: string | null;
+  /** The download works until then (7 days after it is ready). */
+  expires_at: string | null;
+}
+
+export interface DataExportStatus {
+  export: DataExport | null;
+  /** When another request may be made; null = now. */
+  next_allowed_at: string | null;
 }
 
 /** Side effects of an invite (the user row is created regardless). */
@@ -85,8 +161,19 @@ export interface Machine {
   agent_auto_update: boolean;
   /** a tab whose Claude hits a usage limit resumes on another Claude account of this machine, on its own */
   claude_auto_swap: boolean;
+  /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
+  ai_usage_query: boolean;
+  automation_allowed: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
+   * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
+   * Absent from servers before it.
+   */
+  agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
+  /** TER-1056, server-computed: the agent is older than the server's minimum (it updates itself once idle, switch or not) */
+  below_min_version?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
   is_local: boolean;
   /** null = orphan (visible only to admins viewing "all") */
@@ -207,6 +294,8 @@ export interface Task {
   epic_id: string | null;
   /** board column; null in the backlog and on subtasks */
   column_id: string | null;
+  /** tagged for automatic work ("Trabalho automático"); absent from an older server */
+  auto?: boolean;
   /** Only on top-level cards from the list endpoint. */
   subtasks?: Task[];
   subtask_counts?: { done: number; total: number };
@@ -247,6 +336,8 @@ export interface TaskPatchInput {
   status?: TaskStatus;
   type?: TaskType;
   epic_id?: string | null;
+  /** tag for automatic work; on an epic it is the whole epic (new cards included) */
+  auto?: boolean;
 }
 
 /** Where a move sends a card: a column, or a status (backlog, or the first column of a category). */
@@ -263,14 +354,25 @@ export interface AgentOnCard {
   tab_name: string;
   machine_name: string;
   subtask_ref: string | null;
-  /** the server sends `waiting_background` as `working` with `background: true` (the contract predates it, TER-644) */
+  /**
+   * the server sends `waiting_background` as `working` with `background: true` (the contract predates it, TER-644),
+   * and `finished` as `idle` with `finished: true` (TER-972)
+   */
   state: TabState | null;
   state_at: string | null;
   background: boolean;
+  /** the agent ended its turn with a report and asks nothing (TER-972); only with `state: 'idle'` */
+  finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
   needs_you: boolean;
   activity: string | null;
   activity_verb: string | null;
   rate_limited: boolean;
+  /** the tab was started by an automatic run (agentic board) */
+  automatic: boolean;
 }
 /** A GitHub PR linked to a card, with its CI and deploy status (spec 2026-09-26 progress-panel §5.2). */
 export interface PullRequestBadge {
@@ -283,6 +385,7 @@ export interface PullRequestBadge {
   ci_summary: { total: number; passed: number; failed: number; running: number; failing: string[] };
   deploy_state: 'none' | 'running' | 'passed' | 'failed';
   deploy_url: string | null;
+  release_runs?: Array<{ workflow: string; state: 'none' | 'running' | 'passed' | 'failed'; url: string | null; version: string | null }>;
 }
 export interface CardProgress {
   id: string;
@@ -299,6 +402,13 @@ export interface CardProgress {
   estimate: ProgressEstimate;
   agents: AgentOnCard[] | null;
   pull_requests: PullRequestBadge[];
+  /** what the card's automatic tabs cost (spec D23); null/absent = nothing metered */
+  usage?: ProgressUsage | null;
+}
+/** Tokens and the API-equivalent cost estimate (US$; null = nothing priced, shown as "—"). */
+export interface ProgressUsage {
+  tokens: number;
+  cost_usd: number | null;
 }
 export interface EpicProgress {
   id: string;
@@ -314,9 +424,39 @@ export interface EpicProgress {
   /** distinct PR numbers across the epic's cards; null when none has a PR */
   ci: { open: number; failed: number; running: number; deployed: number } | null;
   ci_error: string | null;
+  /** the epic's own automatic tabs plus its cards'; null/absent = nothing metered */
+  usage?: ProgressUsage | null;
+}
+/** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
+export interface AutomationFeedEvent {
+  id: string;
+  kind: string;
+  created_at: string;
+  project_id: string;
+  task_id: string | null;
+  run_id: string | null;
+  tab_id: string | null;
+  ref: string | null;
+  epic: string | null;
+  machine: string | null;
+  account: string | null;
+  branch: string | null;
+  workflow: string | null;
+  version: string | null;
+  pr: number | null;
+  url: string | null;
+  until: string | null;
+  reason_text: string | null;
+  paused: boolean | null;
+  /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
+  tool: string | null;
+  /** TER-1043: the decision a decided_by_recommendation line names; absent from an older server */
+  summary?: string | null;
 }
 export interface ProgressResponse {
   epics: EpicProgress[];
+  /** the last 50 automatic events, newest first; absent from a server that predates it */
+  feed?: AutomationFeedEvent[];
   generated_at: string;
 }
 
@@ -414,6 +554,8 @@ export interface ProjectAiOption {
   machine_name: string;
   /** the machine's own login (no config dir override) */
   default: boolean;
+  /** TER-990: the only project this account may run in; another project's Setup shows it disabled */
+  exclusive_project?: { id: string; name: string } | null;
 }
 export interface ProjectAiView {
   ai: ProjectAi;
@@ -435,6 +577,66 @@ export interface TabLimit {
   result: string | null;
   created_at: string;
   closed_at: string | null;
+}
+
+/** GET /projects/:id/automation/queue: a tagged card and whether the agents can take it. */
+export interface AutomationQueueItem {
+  task_id: string;
+  ref: string;
+  title: string;
+  eligible: boolean;
+  reason: string | null;
+  reason_text: string | null;
+}
+
+/** Tokens and the API-equivalent cost estimate (US$) of automatic tabs; `cost_usd` null = no priced model. */
+export interface AutomationUsageLine {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  cost_usd: number | null;
+}
+
+/** GET /projects/:id/automation/usage (spec D23). */
+export interface AutomationUsage {
+  from: string | null;
+  to: string | null;
+  total: AutomationUsageLine;
+  cards: Array<AutomationUsageLine & { task_id: string; ref: string }>;
+  epics: Array<AutomationUsageLine & { epic_id: string; ref: string }>;
+  accounts: Array<AutomationUsageLine & { account_id: string; label: string | null }>;
+}
+
+export type AutomationAutonomy = 'pr' | 'merge' | 'deploy' | 'release';
+
+/** Mirrors the server's `ProjectAutomation` (setup/schema.ts). Off by default. */
+export interface ProjectAutomation {
+  enabled: boolean;
+  types: ('story' | 'task' | 'bug' | 'spike')[];
+  autonomy: AutomationAutonomy;
+  release_paths: string[];
+  store_paths: string[];
+  release_workflows: string[];
+  /** workflows that must pass on the PR head before termhub merges it; [] = every run (spike R1) */
+  required_checks: string[];
+  epic_branch_pattern: string;
+  worktrees_dir: string;
+  allowed_tools: string[] | null;
+  max_parallel: number | null;
+  resume_max: number;
+  /** TER-1043: "Parar em decisões de produto"; off (the default) = the agent decides and records it. Absent from an older server */
+  stop_on_decisions?: boolean;
+  fix_attempts: number;
+  /** TER-1025: re-runs of a deploy that failed on GitHub's side before the project is paused (0 = pause at once) */
+  deploy_retries: number;
+  /** TER-1025: automatic resumes of a run stuck on a GitHub error before the person is told */
+  github_retries: number;
+  daily_budget_usd: number | null;
+  /** a card whose estimate passes this is escalated and not resumed; null = off (spike R8) */
+  card_budget_usd: number | null;
+  summary_hour: number | null;
+  prompts: { implementer: string | null; integrator: string | null; fixer: string | null };
 }
 
 export interface ProjectSetupData {
@@ -460,6 +662,8 @@ export interface ProjectSetupData {
   agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null };
   verify: { type: 'none' | 'ios-simulator' | 'web-screenshot' | 'command'; target: string | null; build_command: string | null };
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
+  /** absent from an older server; the form sends back what it received */
+  automation?: ProjectAutomation;
 }
 
 export interface ProjectSetup {
@@ -469,15 +673,17 @@ export interface ProjectSetup {
   updated_at: string | null;
 }
 
+/** Brand names: shown as is in every language. */
 export const PROVIDER_LABEL: Record<IntegrationProvider, string> = { github: 'GitHub', linear: 'Linear', jira: 'Jira' };
 
+/** pt-BR keys; shown with `t(APPROVAL_LABEL[k].label)` / `t(APPROVAL_LABEL[k].hint)`. */
 export const APPROVAL_LABEL: Record<keyof ProjectSetupData['approvals'], { label: string; hint: string }> = {
-  spec: { label: 'Aprovar a spec', hint: 'antes de o agente planejar' },
-  plan: { label: 'Aprovar o plano', hint: 'antes de implementar' },
-  pr: { label: 'Aprovar o PR', hint: 'com o screenshot/evidência' },
-  merge: { label: 'Fazer o merge', hint: 'após o PR aprovado' },
-  tool_permissions: { label: 'Permissões de ferramentas', hint: 'pedidos do Claude para rodar comandos/editar' },
-  questions: { label: 'Perguntas do agente', hint: 'dúvidas em aberto durante a run' },
+  spec: { label: tk('Aprovar a spec'), hint: tk('antes de o agente planejar') },
+  plan: { label: tk('Aprovar o plano'), hint: tk('antes de implementar') },
+  pr: { label: tk('Aprovar o PR'), hint: tk('com o screenshot/evidência') },
+  merge: { label: tk('Fazer o merge'), hint: tk('após o PR aprovado') },
+  tool_permissions: { label: tk('Permissões de ferramentas'), hint: tk('pedidos do Claude para rodar comandos/editar') },
+  questions: { label: tk('Perguntas do agente'), hint: tk('dúvidas em aberto durante a run') },
 };
 
 export interface Note {
@@ -493,28 +699,6 @@ export interface DashboardItem {
   doing: Task[];
   open_tasks: number;
 }
-
-export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
-  backlog: 'Backlog',
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
-
-export const TASK_TYPE_LABEL: Record<TaskType, string> = {
-  epic: 'Épico',
-  story: 'História',
-  task: 'Tarefa',
-  subtask: 'Subtarefa',
-  bug: 'Bug',
-  spike: 'Spike',
-};
-
-export const COLUMN_CATEGORY_LABEL: Record<ColumnCategory, string> = {
-  todo: 'A fazer',
-  doing: 'Fazendo',
-  done: 'Feito',
-};
 
 export type TabKind = 'terminal' | 'simulator';
 
@@ -547,22 +731,46 @@ export interface Tab {
   rate_limited_at: string | null;
 }
 
-/** `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
+/**
+ * `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644).
+ * `finished`: the agent ended its turn with a plain report and asks nothing (TER-972).
+ * `blocked`: the tab's automatic run reported itself blocked; automation or the chat acts (TER-1046).
+ * `auth_required`: Claude Code's login expired, the person has to run /login (TER-1046).
+ * `trust_prompt`: Claude Code asks whether the folder is trusted, before it starts (TER-1046).
+ */
+export type TabState =
+  | 'working'
+  | 'waiting_input'
+  | 'waiting_permission'
+  | 'idle'
+  | 'error'
+  | 'waiting_background'
+  | 'finished'
+  | 'blocked'
+  | 'auth_required'
+  | 'trust_prompt';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
+/** pt-BR keys; shown with `t(TAB_STATE_LABEL[state])`. */
 export const TAB_STATE_LABEL: Record<TabState, string> = {
-  working: 'trabalhando',
-  waiting_input: 'esperando resposta',
-  waiting_permission: 'pedindo permissão',
-  idle: 'terminou',
-  error: 'erro',
-  waiting_background: 'aguardando segundo plano',
+  working: tk('trabalhando'),
+  waiting_input: tk('esperando resposta'),
+  waiting_permission: tk('pedindo permissão'),
+  idle: tk('terminou'),
+  error: tk('erro'),
+  waiting_background: tk('aguardando segundo plano'),
+  finished: tk('concluído'),
+  blocked: tk('bloqueado'),
+  auth_required: tk('login expirado'),
+  trust_prompt: tk('confiar na pasta?'),
 };
 
-/** States in which the tool is waiting for the person. */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+/** States in which the tool is waiting for the person: the yellow ones and the expired login (TER-1046). */
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+
+/** States a quick reply answers: typing text into a login or trust dialog would do nothing good. */
+export const ANSWERABLE: readonly TabState[] = ['waiting_input', 'waiting_permission'];
 
 export interface TabEvent {
   id: string;
@@ -578,6 +786,16 @@ export interface TabEvent {
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
+}
+
+/** One address the machine must reach besides /agent/ws (TER-586): `ok` only on the 401 termhub answers without a token. */
+export interface NetworkCheck {
+  name: 'hooks' | 'mcp';
+  url: string;
+  host: string;
+  ok: boolean;
+  status: number | null;
+  error: string | null;
 }
 
 export interface MonitorItem {
@@ -750,12 +968,6 @@ export interface AuthConfig {
   privacy_url?: string | null;
 }
 
-export const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
-  active: 'Ativo',
-  paused: 'Pausado',
-  archived: 'Arquivado',
-};
-
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
 
 export interface AiAccount {
@@ -764,6 +976,8 @@ export interface AiAccount {
   label: string;
   machine_id: string;
   config_dir: string | null;
+  /** TER-990: the only project this account may run in; null = any project */
+  exclusive_project?: { id: string; name: string } | null;
   created_at: string;
 }
 
@@ -785,8 +999,60 @@ export interface AiAccountUsage {
   hint: string | null;
   /** last good reading, shown because the provider is rate-limiting the usage query */
   stale?: boolean;
+  /**
+   * TER-735: why there is no reading when it is not an error — 'disabled' = the machine's usage query is
+   * turned off (Máquinas › the machine); 'agent_outdated' = the machine's agent predates the `ai.usage` RPC.
+   */
+  reason?: 'disabled' | 'agent_outdated';
 }
 
+/** TER-1047: whether an account's CLI is logged in on its machine (GET /ai-accounts/login-status). */
+export type AiLoginState = 'ok' | 'login_required' | 'unknown';
+
+export interface AiLoginStatusRow {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  machine_id: string;
+  machine_name: string | null;
+  state: AiLoginState;
+  checked_at: string | null;
+  /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
+  supported: boolean;
+}
+
+/** POST /ai-accounts/:id/login */
+export interface AiLoginStart {
+  login_id: string;
+  /** the page to open in a browser; null when `logged_in` */
+  url: string | null;
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: string | null;
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: boolean;
+  expires_at: string;
+  /** the CLI already finished the login on the machine (its own browser took it, TER-1054): nothing to open */
+  logged_in: boolean;
+  /** with `logged_in`: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
+}
+
+export interface AiLoginStuckTab {
+  id: string;
+  name: string;
+  project_id: string;
+}
+
+/** POST /ai-accounts/:id/login/:loginId/submit */
+export interface AiLoginSubmitResult {
+  ok: boolean;
+  /** why it did not finish; never the code */
+  message: string | null;
+  /** after a successful login: the account's tabs still showing the login error */
+  stuck_tabs: AiLoginStuckTab[];
+}
+
+/** Brand names: shown as is in every language. */
 export const AI_PROVIDER_LABEL: Record<AiProvider, string> = { claude: 'Claude', chatgpt: 'ChatGPT', gemini: 'Gemini', antigravity: 'Antigravity' };
 
 /** GET /machines/:id/hardware */
@@ -828,6 +1094,8 @@ export interface ChatConversation {
   context_tokens?: number | null;
   /** The model's context window; null when the CLI did not report it. */
   context_window?: number | null;
+  /** When the session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null = never. */
+  context_compacted_at?: string | null;
   last_message_at: string | null;
 }
 
@@ -885,6 +1153,8 @@ export interface ChatAttachment {
   error_code: string | null;
   /** pages, duration_s, sheets, width, height, truncated */
   meta: Record<string, unknown> | null;
+  /** What the server heard in an audio file, once `ready` (TER-1036); absent for other kinds and older servers. */
+  transcript?: string | null;
   created_at: string;
 }
 
@@ -904,11 +1174,16 @@ export interface ChatMessage {
   reply_to?: ChatReplyRef;
 }
 
-/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original was deleted. */
+/** The thread's cards a message can answer instead of a message (TER-849). */
+export type ReplyCardKind = 'action' | 'tab_question';
+
+/** What a message answers (TER-447): a snapshot taken when it was sent; `id` is null once the original
+ *  was deleted, and on a reply to a card (TER-849), which `card` names. */
 export interface ChatReplyRef {
   id: string | null;
   role: 'user' | 'assistant';
   excerpt: string;
+  card?: { kind: ReplyCardKind; id: string };
 }
 
 /** All the chat's host line ever needs of a machine; the payload carries whole `Machine` rows. */
@@ -1002,6 +1277,8 @@ export interface ChatAction {
 export interface AutoDecision {
   reason: string | null;
   sources: { ref: string; question: string | null; answer: string | null }[];
+  /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
+  by?: TabQuestionAutoAnswer['by'];
 }
 
 /** Mirrors the server's `SubagentStatus` (apps/server/src/chat/stream.ts). */
@@ -1129,6 +1406,24 @@ export interface ChoiceAnswer {
 export interface PermissionAnswer {
   allow: boolean;
   text?: string;
+  /** An option of the dialog on screen (TER-995), by number and text; the server adds `summary` once answered. */
+  option?: { number: number; label: string; summary?: string };
+}
+/** An option of the permission dialog a tab shows, read off its screen with the excerpt (TER-995). */
+export interface PermissionOption {
+  number: number;
+  label: string;
+  /** `label` shortened for a button. */
+  summary: string;
+  /** False for the option that rejects ("No…"). */
+  allow: boolean;
+  /** "Don't ask again", "always allow", "auto mode": the option that keeps the question from coming back. */
+  highlight: boolean;
+}
+export interface TabQuestionScreen {
+  text: string;
+  /** Absent from an older server; empty when the dialog on screen is not this card's. */
+  options?: PermissionOption[];
 }
 export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
 
@@ -1155,10 +1450,11 @@ export interface TabQuestionSuggestion {
 }
 
 /** A countdown that sends `answer` by itself at `due_at` unless the person cancels it (spec 2026-09-26
- * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call. */
+ * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call,
+ * `'automation'` the option the agent recommended in a tab with an automatic run (agentic board D18). */
 export interface TabQuestionAutoAnswer {
   answer: ChoiceAnswer;
-  by: 'memory' | 'concierge';
+  by: 'memory' | 'concierge' | 'automation';
   reason: string;
   sources: { kind: string; id: string }[];
   due_at: string;
@@ -1229,6 +1525,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
+  context_limit?: number | null;
   available: boolean;
   count: number;
   notes: number;
@@ -1350,7 +1648,7 @@ export type ChatEvent =
    * panel §5.4): the row keeps whatever status it already had, this just says the click failed. */
   | { type: 'subagent_cancel_failed'; subagent_id: string; conversation_id?: string }
   /** How full the session is now, after an answer or a compaction (TER-315). */
-  | { type: 'context'; tokens: number; window: number | null; conversation_id?: string }
+  | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 
@@ -1419,6 +1717,17 @@ export interface Device {
   pin_locked_until: string | null;
   last_seen_at: string | null;
   created_at: string;
+  /** Set once the phone turned notifications on; only its presence matters here. */
+  push_token?: string | null;
+}
+
+/** Which real push a test push imitates (TER-913). */
+export type PushTestKind = 'confirmation' | 'tab_question' | 'reply' | 'device_request';
+
+/** POST /devices/:id/test-push: `ticket` is null for a delayed send (its outcome lands in the trail). */
+export interface PushTestResult {
+  scheduled_for: string;
+  ticket: { status: 'ok' } | { status: 'error'; error: string } | null;
 }
 
 /** One row of the device trail (GET /devices/events), already carrying its pt-BR sentence. */
@@ -1449,9 +1758,174 @@ export interface ApiToken {
   created_at: string;
 }
 
+/** One MCP call made with a token (TER-577): metadata only. Names are null once the row is gone. */
+export interface ApiTokenEvent {
+  id: string;
+  tool: string;
+  ok: boolean;
+  error_code: string | null;
+  duration_ms: number;
+  machine_id: string | null;
+  machine_name: string | null;
+  project_id: string | null;
+  project_name: string | null;
+  tab_id: string | null;
+  tab_name: string | null;
+  attachment_id: string | null;
+  created_at: string;
+}
+
+/** One row of the security trail (TER-577). `action` stays a plain string: one a newer server adds shows as is. */
+export interface SecurityEvent {
+  id: string;
+  actor_id: string | null;
+  actor_email: string | null;
+  view_as_id: string | null;
+  action: string;
+  target_type: string | null;
+  target_id: string | null;
+  target_label: string | null;
+  ip: string | null;
+  meta: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface SecurityEventFilter {
+  /** an action (`auth.login`) or a group (`auth`) */
+  action?: string;
+  q?: string;
+  /** ISO dates */
+  from?: string;
+  to?: string;
+}
+
+export interface SecurityEventsPage {
+  events: SecurityEvent[];
+  next: string | null;
+  actions: string[];
+  retention_days: number;
+}
+
 /** Create response: the only time the plain token is ever returned. */
 export interface CreatedApiToken {
   api_token: ApiToken;
   token: string;
   mcp_url: string | null;
 }
+
+/** A previewed file (spec 2026-10-04 file preview): the body, or why there is none. `status` is a plain
+ *  string on the way in: a reason a newer server adds shows as the generic line, not an error. */
+export interface FilePreviewOk {
+  status: 'ok';
+  machine: { id: string; name: string };
+  project_id: string | null;
+  path: string;
+  rel_path: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+  content: string;
+  github_url: string | null;
+}
+export interface FilePreviewRefused {
+  status: Exclude<string, 'ok'>;
+  machine: { id: string; name: string } | null;
+  size?: number;
+}
+export type FilePreview = FilePreviewOk | FilePreviewRefused;
+
+/** The automatic work's pause switch (`GET /api/automation/state`): the person's "Pausar tudo" and the projects paused on their own. */
+export interface AutomationPauseState {
+  paused_at: string | null;
+  projects: Array<{ id: string; paused_at: string }>;
+  /** the person has a project with automatic work on: otherwise the switch is hidden */
+  has_automation: boolean;
+  can_update: boolean;
+}
+/** A project's recent Markdown files (spec 2026-10-04 recent Markdown files, GET /api/file-recent). */
+export type FileRecentGroup = 'specs' | 'plans' | 'lessons' | 'legal' | 'other';
+export interface FileRecentItem {
+  machine: { id: string; name: string };
+  /** the file as the machine resolved it */
+  path: string;
+  /** relative to the project folder when the file is inside it, else null */
+  rel_path: string | null;
+  name: string;
+  size: number;
+  mtime: string;
+  /** over the preview's size limit: listed, but it will not open */
+  too_large: boolean;
+  group: FileRecentGroup;
+  /** named in an answer or an event of the project's tabs */
+  cited: boolean;
+}
+/** `offline`, `outdated` or `unsupported`; read as a plain string, a newer server may add reasons. */
+export interface FileRecentSkipped {
+  machine: { id: string; name: string };
+  reason: string;
+}
+export interface FileRecentResponse {
+  items: FileRecentItem[];
+  skipped: FileRecentSkipped[];
+}
+
+// --- A Claude Code tab read as a conversation (TER-1003; spec 2026-10-01 tab chat) --------------------
+// The phone's contract (`packages/mobile-api/src/tab-chat.ts`), as the web reads it from `/api/tab-chat`
+// and `/ws/tabs/:id/chat`. Nothing of it is stored: the server reads the session's transcript on the
+// machine and relays it.
+
+export type TabChatItem =
+  | { kind: 'user'; id: string; at: string; text: string; images: number }
+  | { kind: 'assistant'; id: string; at: string; text: string }
+  | { kind: 'tool'; id: string; at: string; name: string; summary: string | null }
+  | { kind: 'tool_result'; id: string; at: string; tool_id: string; error: boolean; preview: string | null }
+  | { kind: 'command'; id: string; at: string; name: string; args: string | null }
+  | { kind: 'command_output'; id: string; at: string; text: string }
+  | { kind: 'notice'; id: string; at: string; notice: 'compacted' | 'interrupted' | 'truncated' };
+
+/** `ready`, `no_session`, `unsupported_tool`, `unsupported_machine`, `agent_outdated`, `offline`, or one a newer server adds. */
+export type TabChatAvailability = string;
+
+export interface TabChatSummary {
+  id: string;
+  name: string;
+  project: { id: string; key: string; name: string };
+  machine: { id: string; name: string };
+  /** `waiting_background` travels as `working` + `background`, `finished` as `idle` + `finished`. */
+  state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
+  background: boolean;
+  finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
+  state_at: string | null;
+  needs_you: boolean;
+  activity: string | null;
+  activity_verb: string | null;
+  availability: TabChatAvailability;
+}
+
+export interface TabChatPage {
+  tab: TabChatSummary;
+  session_id: string | null;
+  items: TabChatItem[];
+  /** opaque cursor of the previous page; null at the start of the session */
+  before: string | null;
+  /** opaque cursor the live socket follows from; null when there is no transcript to follow */
+  live: string | null;
+  mode: string | null;
+  degraded: boolean;
+  questions: TabQuestion[];
+  suggestions: TabSuggestion[];
+}
+
+export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';
+
+/** Server to browser on `/ws/tabs/:id/chat`. `reset`: drop the items and fetch the first page again. */
+export type TabChatFrame =
+  | { type: 'hello'; protocol: number; server_time: string; availability: TabChatAvailability }
+  | { type: 'items'; items: TabChatItem[]; live: string; mode: string | null }
+  | { type: 'state'; tab: TabChatSummary }
+  | { type: 'reset'; session_id: string | null }
+  | { type: 'unavailable'; availability: TabChatAvailability };

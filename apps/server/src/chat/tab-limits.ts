@@ -123,7 +123,7 @@ export async function answerTabLimit(ctx: ControlContext, log: FastifyBaseLogger
   try {
     await swapAccount(ctx.repos, log, found.tab, found.machine, { accountId, auto: false });
   } catch (e) {
-    if (e instanceof ControlError) throw conflict(e.message);
+    if (e instanceof ControlError) throw conflict(e.localized);
     throw e;
   }
   const swapped = await ctx.repos.tabLimitNotices.markSwapped(notice.id, accountId);

@@ -1,59 +1,66 @@
+import { i18n, tk } from '../../i18n';
 import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
+import { appNavigate } from '../../lib/app-navigate';
+import { copyText } from '../../lib/clipboard';
 import { decorateCodeBlocks } from '../../lib/code-blocks';
 import { renderMarkdown } from '../../lib/markdown';
+import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
 import { limitSentence, swapSentence } from '../../lib/chat-notice';
 import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
+import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
 import { MessageAttachments } from './MessageAttachments';
 
-const COPY_FEEDBACK_MS = 1500;
+const COPY_FEEDBACK_MS = 2000;
 
 /** What an answer that stopped says when nothing was said about why. */
-const GENERIC_FAILURE = 'A resposta não terminou — tente de novo.';
+const GENERIC_FAILURE = tk('A resposta não terminou — tente de novo.');
 
 /**
  * One sentence per stored failure: what happened, and what to do about it. Short, because this is read
  * on a phone under an answer that stopped — and specific, because "a resposta não terminou" told a
  * person whose machine has no `claude` installed exactly nothing. An unknown code (a server newer than
- * this bundle) falls back to the generic line rather than showing a label.
+ * this bundle) falls back to the generic line rather than showing a label. pt-BR keys, translated by
+ * `failureLine`.
  */
 const FAILURE_LINE: Record<ChatErrorCode, string> = {
   RUNNER_FAILED: GENERIC_FAILURE,
-  TOKEN_FAILED: 'O servidor não conseguiu criar a credencial do concierge. Tente de novo.',
-  CLI_MISSING: 'Essa máquina não tem o Claude Code instalado. Instale o claude nela e mande a mensagem de novo.',
-  CLI_REJECTED: 'O Claude Code dessa máquina recusou os parâmetros do chat. Atualize o claude nela e tente de novo.',
-  MISSING_SESSION: 'A sessão do Claude nessa máquina não existe mais. Mande a mensagem de novo para começar uma nova.',
-  RUN_FAILED: 'O Claude parou no meio da resposta. Mande a mensagem de novo.',
+  TOKEN_FAILED: tk('O servidor não conseguiu criar a credencial do concierge. Tente de novo.'),
+  CLI_MISSING: tk('Essa máquina não tem o Claude Code instalado. Instale o claude nela e mande a mensagem de novo.'),
+  CLI_REJECTED: tk('O Claude Code dessa máquina recusou os parâmetros do chat. Atualize o claude nela e tente de novo.'),
+  MISSING_SESSION: tk('A sessão do Claude nessa máquina não existe mais. Mande a mensagem de novo para começar uma nova.'),
+  RUN_FAILED: tk('O Claude parou no meio da resposta. Mande a mensagem de novo.'),
   // Unreachable on a stored row today, and kept anyway: the agent only ever sends `killed` in answer
   // to the server's own `close`, and the connection layer swallows that ack (a locally closed channel
   // reports no exit), so nothing writes KILLED. The sentence stays because the label is the protocol's
   // and a future path may store it — but nobody should write a test that expects this on screen, since
   // it would be a test for a state the server cannot produce.
-  KILLED: 'A resposta foi interrompida antes de terminar. Mande a mensagem de novo.',
-  HOST_GONE: 'A máquina do chat saiu do ar no meio da resposta. Ligue-a e mande a mensagem de novo.',
+  KILLED: tk('A resposta foi interrompida antes de terminar. Mande a mensagem de novo.'),
+  HOST_GONE: tk('A máquina do chat saiu do ar no meio da resposta. Ligue-a e mande a mensagem de novo.'),
   // Not a machine that went away: it is up, and this sentence must not send anyone looking for a
   // problem with it. What unblocks the chat is closing a few terminals, and nothing else.
-  HOST_BUSY: 'A máquina do chat está com terminais demais abertos e não sobrou espaço para a conversa. Feche algumas abas e mande a mensagem de novo.',
-  AGENT_TOO_OLD: 'O agente dessa máquina ainda não sabe rodar o chat. Atualize o agente e tente de novo.',
+  HOST_BUSY: tk('A máquina do chat está com terminais demais abertos e não sobrou espaço para a conversa. Feche algumas abas e mande a mensagem de novo.'),
+  AGENT_TOO_OLD: tk('O agente dessa máquina ainda não sabe rodar o chat. Atualize o agente e tente de novo.'),
   // The answer's notice says more (which account, when it resets): see `failureLine`.
-  USAGE_LIMIT: limitSentence(undefined),
-  MODEL_UNAVAILABLE: 'O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.',
-  AUTH_FAILED: 'A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.',
+  USAGE_LIMIT: tk('A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.'),
+  MODEL_UNAVAILABLE: tk('O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.'),
+  AUTH_FAILED: tk('A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.'),
 };
 
 /** The sentence under a stopped answer: the limit's own, with its reset time, or the code's. */
 function failureLine(message: ChatMessage): string {
   if (message.error_code === 'USAGE_LIMIT') return limitSentence(message.notice);
-  return (message.error_code && FAILURE_LINE[message.error_code]) || GENERIC_FAILURE;
+  return i18n.t((message.error_code && FAILURE_LINE[message.error_code]) || GENERIC_FAILURE);
 }
 
-/** The two things a copy attempt can end as, in the words the block shows and the ones it announces. */
+/** The two things a copy attempt can end as, in the words the block shows and the ones it announces
+ * (pt-BR keys, translated by `flashCopy`). */
 const COPY_OUTCOME = {
-  copied: { label: 'copiado', announced: 'Código copiado', name: 'Código copiado' },
-  failed: { label: 'falhou', announced: 'Não foi possível copiar o código', name: 'Não foi possível copiar' },
+  copied: { state: 'copied', label: tk('Copiado ✓'), announced: tk('Código copiado'), name: tk('Código copiado') },
+  failed: { state: 'failed', label: tk('Falhou'), announced: tk('Não foi possível copiar o código'), name: tk('Não foi possível copiar') },
 } as const;
 
 /**
@@ -62,13 +69,13 @@ const COPY_OUTCOME = {
  * click actually landed on inside the button (its label span, most likely), so this walks up to the
  * element `decorateCodeBlocks` marked with `data-copy`.
  *
- * Every way this can fail ends in the same visible "falhou": a missing `navigator.clipboard` (an
- * insecure context, an older browser), a `writeText` that rejects (Firefox without the permission, a
- * document that is not focused), and a `writeText` that is not a promise at all, which used to throw
- * out of this handler on `.then`. Copying the block is the whole point of the button — a tap that
- * silently does nothing, again and again, is the one outcome it must never have.
+ * A missing `navigator.clipboard` (an insecure context, a WebView, an older browser) or a `writeText`
+ * that rejects (Firefox without the permission, a document that is not focused) falls back to
+ * `execCommand('copy')` (`copyText`); only when that fails too does the button say "Falhou". Copying
+ * the block is the whole point of the button — a tap that silently does nothing, again and again, is
+ * the one outcome it must never have.
  */
-function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
+export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   const target = event.target as HTMLElement;
   const button = target.closest('[data-copy]') as HTMLElement | null;
   if (!button) return;
@@ -79,22 +86,7 @@ function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   // trimmed before anything reaches the clipboard.
   const text = (pre?.textContent ?? '').replace(/\n$/, '');
 
-  try {
-    const clipboard = navigator.clipboard;
-    if (!clipboard) {
-      flashCopy(button, COPY_OUTCOME.failed);
-      return;
-    }
-    // `Promise.resolve` so a `writeText` that returns undefined (or anything else) is handled here
-    // instead of throwing on `.then`.
-    void Promise.resolve(clipboard.writeText(text)).then(
-      () => flashCopy(button, COPY_OUTCOME.copied),
-      () => flashCopy(button, COPY_OUTCOME.failed),
-    );
-  } catch {
-    // `writeText` threw synchronously, or reading `navigator.clipboard` itself did.
-    flashCopy(button, COPY_OUTCOME.failed);
-  }
+  void copyText(text).then((ok) => flashCopy(button, ok ? COPY_OUTCOME.copied : COPY_OUTCOME.failed));
 }
 
 /** Transient, DOM-only feedback on the button that was clicked — there is no React state to hold it,
@@ -102,26 +94,54 @@ function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
  * `decorateCodeBlocks` mounted with the block. Reverts on its own after `COPY_FEEDBACK_MS`. */
 function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typeof COPY_OUTCOME]): void {
   const live = button.closest('figure')?.querySelector('[data-copy-live]') ?? null;
-  if (live) live.textContent = outcome.announced;
+  if (live) live.textContent = i18n.t(outcome.announced);
 
   const label = button.querySelector('[data-copy-label]');
-  const original = label?.textContent ?? null;
-  if (label) label.textContent = outcome.label;
-  button.setAttribute('aria-label', outcome.name);
-  window.setTimeout(() => {
-    if (live) live.textContent = '';
-    if (label) label.textContent = original;
-    button.setAttribute('aria-label', 'Copiar código');
-  }, COPY_FEEDBACK_MS);
+  if (label) label.textContent = i18n.t(outcome.label);
+  button.setAttribute('aria-label', i18n.t(outcome.name));
+  // The state keeps the button on screen on a desktop (it otherwise shows only on hover, index.css)
+  // while it says how the copy went.
+  button.setAttribute('data-copy-state', outcome.state);
+  // A second click inside the window restarts it instead of letting the first one's revert cut it short.
+  window.clearTimeout(copyTimers.get(button));
+  copyTimers.set(
+    button,
+    window.setTimeout(() => {
+      copyTimers.delete(button);
+      if (live) live.textContent = '';
+      if (label) label.textContent = i18n.t('Copiar');
+      button.setAttribute('aria-label', i18n.t('Copiar código'));
+      button.removeAttribute('data-copy-state');
+    }, COPY_FEEDBACK_MS),
+  );
 }
 
-/** Markdown to sanitised HTML, with the copy buttons on any fence: the one path both halves go through. */
-function toHtml(markdown: string): string {
+/** The pending revert of each button that is showing an outcome. */
+const copyTimers = new WeakMap<HTMLElement, number>();
+
+/** Markdown to sanitised HTML, with the copy buttons on any fence and preview links on Markdown paths
+ *  (spec 2026-10-04 file preview): the one path both halves go through, and the tab conversation's
+ *  (TER-1003) too. */
+export function toHtml(markdown: string, projectId: string | null): string {
   if (!markdown) return '';
   const rendered = renderMarkdown(markdown, { markdownOnly: true });
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
-  // for a full DOMParser round trip that cannot change anything.
-  return rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+  // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
+  const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+  return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
+}
+
+/** A click in rendered Markdown: a Markdown path opens its preview in the app (a double click pins it; a
+ *  modified click keeps the browser's own), a fence's button copies it. */
+export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
+  const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
+  if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    const href = link.getAttribute('href') ?? '';
+    appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
+    return;
+  }
+  handleCopyClick(event);
 }
 
 export interface ChatTurnProps {
@@ -140,19 +160,8 @@ export interface ChatTurnProps {
   onReply?: (message: ChatMessage) => void;
   /** The row a quote just scrolled to: a ring for a moment. */
   highlighted?: boolean;
-}
-
-/** "Responder" (TER-447): shown on hover and on keyboard focus, and always on a device with no hover. */
-function ReplyButton({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="shrink-0 rounded px-1.5 py-0.5 text-xs text-fg-dim opacity-0 hover:text-fg focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"
-    >
-      Responder
-    </button>
-  );
+  /** The conversation's project: a Markdown path opens as a file tab there; null = the account chat. */
+  projectId?: string | null;
 }
 
 /**
@@ -168,8 +177,8 @@ function ReplyButton({ onClick }: { onClick: () => void }) {
  * every delta, and parsing plus sanitising one message costs about 1 ms — a 50-message thread was
  * paying ~51 ms per delta, on the same main thread the answer is being written on.
  */
-export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false }: ChatTurnProps) {
-  const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? 'pensando…' : '');
+export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false, projectId = null }: ChatTurnProps) {
+  const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? i18n.t('pensando…') : '');
   /**
    * While the answer streams (nothing stored yet), the body is split at its last finished block: the
    * settled prefix is parsed once and kept by its text, and only the tail is parsed again on each
@@ -178,10 +187,10 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
    */
   const live = message.role === 'assistant' && !message.text && Boolean(streaming);
   const { settled, tail } = useMemo(() => (live ? splitSettled(body) : { settled: body, tail: '' }), [body, live]);
-  const settledHtml = useMemo(() => toHtml(settled), [settled]);
-  const tailHtml = useMemo(() => toHtml(tail), [tail]);
+  const settledHtml = useMemo(() => toHtml(settled, projectId), [settled, projectId]);
+  const tailHtml = useMemo(() => toHtml(tail, projectId), [tail, projectId]);
 
-  const reply = onReply && isReplyable(message) ? <ReplyButton onClick={() => onReply(message)} /> : null;
+  const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
   const ring = highlighted ? 'ring-2 ring-accent/60' : 'ring-2 ring-transparent';
 
@@ -225,7 +234,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.
-          onClick={handleCopyClick}
+          onClick={handleMarkdownClick}
         >
           {settledHtml && <div dangerouslySetInnerHTML={{ __html: settledHtml }} />}
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}

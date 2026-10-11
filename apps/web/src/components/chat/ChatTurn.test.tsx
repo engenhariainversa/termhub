@@ -17,6 +17,9 @@ vi.mock('../../lib/code-blocks', async (importOriginal) => {
   return { ...actual, decorateCodeBlocks: decorateCodeBlocks.mockImplementation(actual.decorateCodeBlocks) };
 });
 
+const appNavigate = vi.hoisted(() => vi.fn());
+vi.mock('../../lib/app-navigate', () => ({ appNavigate }));
+
 function answer(overrides: Partial<ChatMessage> = {}): ChatMessage {
   return { id: 'm1', conversation_id: 'c1', role: 'assistant', text: 'feito', error_code: null, created_at: '2026-09-21T00:00:00.000Z', ...overrides };
 }
@@ -311,29 +314,133 @@ describe('ChatTurn', () => {
 
       fireEvent.click(button);
 
-      await waitFor(() => expect(button.textContent).toBe('copiado'));
+      await waitFor(() => expect(button.textContent).toBe('Copiado ✓'));
       expect(live()).toBe('Código copiado');
+      expect(button.getAttribute('aria-label')).toBe('Código copiado');
+      expect(button.getAttribute('data-copy-state')).toBe('copied');
     });
 
-    it('says "falhou" when there is no navigator.clipboard at all, instead of a tap that does nothing', () => {
-      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
-      const { button, live } = renderFence();
+    it('goes back to "Copiar" about 2 s after the copy', async () => {
+      vi.useFakeTimers();
+      try {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
+        const { button, live } = renderFence();
 
-      expect(() => fireEvent.click(button)).not.toThrow();
+        fireEvent.click(button);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(button.textContent).toBe('Copiado ✓');
 
-      expect(button.textContent).toBe('falhou');
-      expect(button.textContent?.toLowerCase()).not.toContain('copiado');
-      expect(live()).toBe('Não foi possível copiar o código');
+        await vi.advanceTimersByTimeAsync(1900);
+        expect(button.textContent).toBe('Copiado ✓');
+
+        await vi.advanceTimersByTimeAsync(200);
+        expect(button.textContent).toBe('Copiar');
+        expect(button.getAttribute('aria-label')).toBe('Copiar código');
+        expect(button.hasAttribute('data-copy-state')).toBe(false);
+        expect(live()).toBe('');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
-    it('says "falhou" when writeText rejects, which is Firefox without the permission or an unfocused document', async () => {
-      Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('not allowed')) }, configurable: true });
-      const { button, live } = renderFence();
+    it('a second click restarts the window and still reverts to "Copiar", not to "Copiado ✓"', async () => {
+      vi.useFakeTimers();
+      try {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true });
+        const { button } = renderFence();
 
-      fireEvent.click(button);
+        fireEvent.click(button);
+        await vi.advanceTimersByTimeAsync(1500);
+        fireEvent.click(button);
+        await vi.advanceTimersByTimeAsync(1000);
+        // 2.5 s after the first click, 1 s after the second: still the outcome.
+        expect(button.textContent).toBe('Copiado ✓');
 
-      await waitFor(() => expect(button.textContent).toBe('falhou'));
-      expect(live()).toBe('Não foi possível copiar o código');
+        await vi.advanceTimersByTimeAsync(1100);
+        expect(button.textContent).toBe('Copiar');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    describe('without a working Clipboard API (insecure context, WebView)', () => {
+      afterEach(() => {
+        // jsdom has no execCommand; each test that added one removes it.
+        delete (document as { execCommand?: unknown }).execCommand;
+      });
+
+      it('falls back to execCommand when there is no navigator.clipboard, with the exact text', async () => {
+        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+        let copied: string | null = null;
+        const execCommand = vi.fn((command: string) => {
+          // What a real browser copies: the selection, which is the fallback textarea's value.
+          copied = (document.activeElement as HTMLTextAreaElement | null)?.value ?? null;
+          return command === 'copy';
+        });
+        Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true, writable: true });
+        renderMarkdown.mockReturnValueOnce('<pre><code class="language-text">Oi, pessoal! 👋\n\nLinha 2 🎉\n</code></pre>');
+        const { getByRole } = render(
+          <ol>
+            <ChatTurn message={answer()} waiting={false} failed={false} />
+          </ol>,
+        );
+        const button = getByRole('button', { name: /copiar/i });
+
+        fireEvent.click(button);
+
+        await waitFor(() => expect(button.textContent).toBe('Copiado ✓'));
+        expect(execCommand).toHaveBeenCalledWith('copy');
+        expect(copied).toBe('Oi, pessoal! 👋\n\nLinha 2 🎉');
+        // The off-screen textarea is gone again.
+        expect(document.querySelector('textarea')).toBeNull();
+      });
+
+      it('falls back to execCommand when writeText rejects (Firefox without the permission, an unfocused document)', async () => {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('not allowed')) }, configurable: true });
+        const execCommand = vi.fn(() => true);
+        Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true, writable: true });
+        const { button, live } = renderFence();
+
+        fireEvent.click(button);
+
+        await waitFor(() => expect(button.textContent).toBe('Copiado ✓'));
+        expect(execCommand).toHaveBeenCalledWith('copy');
+        expect(live()).toBe('Código copiado');
+      });
+
+      it('says "Falhou" when the fallback fails too, instead of a tap that does nothing', async () => {
+        Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+        Object.defineProperty(document, 'execCommand', { value: vi.fn(() => false), configurable: true, writable: true });
+        const { button, live } = renderFence();
+
+        expect(() => fireEvent.click(button)).not.toThrow();
+
+        await waitFor(() => expect(button.textContent).toBe('Falhou'));
+        expect(live()).toBe('Não foi possível copiar o código');
+        expect(button.getAttribute('data-copy-state')).toBe('failed');
+      });
+
+      it('says "Falhou" when there is no execCommand either', async () => {
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('not allowed')) }, configurable: true });
+        const { button, live } = renderFence();
+
+        fireEvent.click(button);
+
+        await waitFor(() => expect(button.textContent).toBe('Falhou'));
+        expect(live()).toBe('Não foi possível copiar o código');
+      });
+    });
+
+    it('gives a fence without a language a button too, and inline code none', () => {
+      renderMarkdown.mockReturnValueOnce('<p>rode <code>npm test</code></p><pre><code>sem linguagem\n</code></pre>');
+      const { getAllByRole, getByText } = render(
+        <ol>
+          <ChatTurn message={answer()} waiting={false} failed={false} />
+        </ol>,
+      );
+
+      expect(getAllByRole('button', { name: /copiar/i })).toHaveLength(1);
+      expect(getByText('código')).not.toBeNull();
     });
 
     it('does not throw when writeText returns something that is not a promise', () => {
@@ -397,5 +504,30 @@ describe('ChatTurn', () => {
     expect(onReply).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
     rerender(<ol><ChatTurn message={answer({ text: '' })} waiting failed={false} onReply={onReply} /></ol>);
     expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
+  });
+});
+
+describe('ChatTurn: Markdown paths (TER-941)', () => {
+  it('links a path and opens it in the app on a click, pinned on a double click', async () => {
+    appNavigate.mockClear();
+    render(
+      <ol>
+        <ChatTurn message={answer({ text: 'Relatório em ~/r.md' })} waiting={false} failed={false} projectId="p1" />
+      </ol>,
+    );
+    const link = screen.getByRole('link', { name: '~/r.md' });
+    expect(link.getAttribute('href')).toBe('/projects/p1?file=%7E%2Fr.md');
+    fireEvent.click(link, { detail: 1 });
+    fireEvent.click(link, { detail: 2 });
+    expect(appNavigate.mock.calls).toEqual([['/projects/p1?file=%7E%2Fr.md'], ['/projects/p1?file=%7E%2Fr.md&pin=1']]);
+  });
+
+  it('outside a project, links to the file page', () => {
+    render(
+      <ol>
+        <ChatTurn message={answer({ text: 'veja /tmp/a.md' })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByRole('link', { name: '/tmp/a.md' }).getAttribute('href')).toBe('/files?file=%2Ftmp%2Fa.md');
   });
 });

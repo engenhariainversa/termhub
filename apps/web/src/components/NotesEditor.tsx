@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
+import { formatDateTime } from '../lib/format';
+import { useTranslation } from '../i18n';
 
 interface Props {
   projectId: string;
@@ -12,7 +14,10 @@ interface Props {
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error' | 'merged';
 const DEBOUNCE_MS = 800;
 
+const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 export function NotesEditor({ projectId }: Props) {
+  const { t } = useTranslation();
   const [content, setContent] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('idle');
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -131,19 +136,19 @@ export function NotesEditor({ projectId }: Props) {
     return renderMarkdown(content);
   }, [content]);
 
-  if (content === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">Carregando notas…</div>;
+  if (content === null) return <div className="flex h-full items-center justify-center text-sm text-fg-dim">{t('Carregando notas…')}</div>;
 
   const status =
     saveState === 'saving'
-      ? 'salvando…'
+      ? t('salvando…')
       : saveState === 'dirty'
-        ? 'alterações pendentes'
+        ? t('alterações pendentes')
         : saveState === 'error'
-          ? 'erro ao salvar'
+          ? t('erro ao salvar')
           : saveState === 'merged'
-            ? 'lição adicionada por um agente'
+            ? t('lição adicionada por um agente')
             : saveState === 'saved'
-              ? 'salvo'
+              ? t('salvo')
               : '';
 
   return (
@@ -151,12 +156,12 @@ export function NotesEditor({ projectId }: Props) {
       <div className="flex h-9 shrink-0 items-center gap-1 border-b border-line bg-bg-2 px-3 text-xs">
         {(['edit', 'split', 'preview'] as const).map((m) => (
           <button key={m} className={`rounded px-2 py-1 ${mode === m ? 'bg-bg-4 text-fg' : 'text-fg-muted hover:text-fg'}`} onClick={() => setMode(m)}>
-            {m === 'edit' ? 'Editar' : m === 'split' ? 'Lado a lado' : 'Preview'}
+            {m === 'edit' ? t('Editar') : m === 'split' ? t('Lado a lado') : t('Preview')}
           </button>
         ))}
         <span className={`ml-auto ${saveState === 'error' ? 'text-danger' : 'text-fg-dim'}`}>
           {status}
-          {updatedAt && saveState !== 'dirty' && saveState !== 'saving' ? ` · ${new Date(updatedAt).toLocaleString('pt-BR')}` : ''}
+          {updatedAt && saveState !== 'dirty' && saveState !== 'saving' ? ` · ${formatDateTime(updatedAt)}` : ''}
         </span>
       </div>
       <div className={`grid min-h-0 flex-1 ${mode === 'split' ? 'grid-cols-2' : 'grid-cols-1'}`}>
@@ -165,7 +170,7 @@ export function NotesEditor({ projectId }: Props) {
             className="h-full w-full resize-none border-r border-line bg-bg p-4 font-mono text-[13px] leading-relaxed text-fg outline-none placeholder:text-fg-dim"
             value={content}
             onChange={(e) => onChange(e.target.value)}
-            placeholder={'# Notas do projeto\n\nMarkdown com preview ao lado. Salva sozinho.'}
+            placeholder={t('# Notas do projeto\n\nMarkdown com preview ao lado. Salva sozinho.')}
             spellCheck={false}
             onKeyDown={(e) => {
               if (e.key === 'Tab') {
@@ -185,7 +190,7 @@ export function NotesEditor({ projectId }: Props) {
           />
         )}
         {mode !== 'edit' && (
-          <div className="prose-termhub h-full overflow-y-auto p-4" dangerouslySetInnerHTML={{ __html: html || '<p class="text-fg-dim">Nada para mostrar ainda.</p>' }} />
+          <div className="prose-termhub h-full overflow-y-auto p-4" dangerouslySetInnerHTML={{ __html: html || `<p class="text-fg-dim">${escapeHtml(t('Nada para mostrar ainda.'))}</p>` }} />
         )}
       </div>
     </div>

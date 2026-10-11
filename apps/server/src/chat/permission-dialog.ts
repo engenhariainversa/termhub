@@ -45,6 +45,26 @@ export function dialogTool(screen: string): string | null {
 }
 
 /**
+ * The tool of the permission dialog on screen, identified positively for an automatic answer (agentic
+ * board spec §9.2, review I1): the line under the lowest box rule is exactly one of the known titles — no
+ * subagent suffix, no unknown title — and that title's tool is the card's `tool_name`. Unlike `promptVisible`
+ * (which fails open on a title it does not know, for a person who sees the excerpt), anything else is
+ * false: an MCP tool, Write, a subagent's dialog, a Codex row, another dialog swapped in.
+ */
+export function permissionToolOnScreen(screen: string, row: Pick<TabQuestion, 'kind' | 'payload'>): boolean {
+  if (row.kind !== 'permission') return false;
+  const payload = row.payload as PermissionPayload;
+  if (payload.agent === 'codex' || !promptVisible(screen, row)) return false;
+  const lines = screen.split('\n').filter((l) => l.trim() !== '');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!RULE.test(lines[i]!)) continue;
+    const under = (lines[i + 1] ?? '').trim().toLowerCase();
+    return DIALOG_TITLES.some(([title, tool]) => under === title && tool === payload.tool_name);
+  }
+  return false;
+}
+
+/**
  * Letters and digits only: whitespace (Claude Code wraps a long question over indented rows) and
  * every mark the terminal may render differently from the tool's input (markdown backticks and
  * asterisks, curled quotes, dashes) are dropped on both sides of the comparison.

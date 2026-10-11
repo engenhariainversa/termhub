@@ -9,9 +9,11 @@ export interface WorkflowRun {
   conclusion: string | null;
   html_url: string;
   created_at: string;
+  /** When the run last changed (its end, for a finished one); absent in older fixtures. */
+  updated_at?: string;
 }
 
-const FAILED = new Set(['failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure', 'stale']);
+export const FAILED = new Set(['failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure', 'stale']);
 const MAX_FAILING = 5;
 
 /** Card numbers of `key` refs ("TER-183", any case) in a PR's branch, title and body (spec D13). */
@@ -55,14 +57,17 @@ export function ciOf(runs: WorkflowRun[]): { state: CiState; summary: CiSummary 
   };
 }
 
+/** Whether a run is of `workflow`, named in a setup by its display name, its path or its file name. */
+export const matchesWorkflow = (r: WorkflowRun, workflow: string): boolean => r.name === workflow || r.path === workflow || r.path.endsWith(`/${workflow}`);
+
 /** The deploy: the latest run of the setup's workflow, matched by file name or display name. */
-export function deployOf(runs: WorkflowRun[], workflow: string | null): { state: CiState; url: string | null } {
-  if (!workflow) return { state: 'none', url: null };
+export function deployOf(runs: WorkflowRun[], workflow: string | null): { state: CiState; url: string | null; run: WorkflowRun | null } {
+  if (!workflow) return { state: 'none', url: null, run: null };
   // A cancelled deploy was superseded by a newer one (deploy workflows use cancel-in-progress), so it is
   // not a failure: the merge's code ships with the next run. CI (`ciOf`) keeps cancelled = failed.
-  const mine = latestPerWorkflow(runs.filter((r) => r.name === workflow || r.path === workflow || r.path.endsWith(`/${workflow}`))).filter(
+  const mine = latestPerWorkflow(runs.filter((r) => matchesWorkflow(r, workflow))).filter(
     (r) => r.conclusion !== 'cancelled',
   );
-  if (mine.length === 0) return { state: 'none', url: null };
-  return { state: stateOf(mine), url: mine[0].html_url };
+  if (mine.length === 0) return { state: 'none', url: null, run: null };
+  return { state: stateOf(mine), url: mine[0].html_url, run: mine[0] };
 }

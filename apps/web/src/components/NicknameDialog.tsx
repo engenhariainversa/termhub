@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
 import { Modal } from './Modal';
+import { i18n, tk, useTranslation } from '../i18n';
 
 /**
  * The same small rules the server enforces (apps/server/src/public/nickname.ts), copied here on
@@ -15,8 +16,8 @@ function checkNickname(input: string): { ok: true; value: string } | { ok: false
   const value = input.trim().toLowerCase();
   // Reserved words are checked before the shape, exactly like the server: 'ws' is too short to ever
   // pass the shape check, yet it must still be refused as reserved, not as a bad shape.
-  if ((RESERVED_NICKNAMES as readonly string[]).includes(value)) return { ok: false, message: 'Esse apelido é reservado' };
-  if (!SHAPE.test(value)) return { ok: false, message: 'Use de 3 a 30 letras, números ou hífen' };
+  if ((RESERVED_NICKNAMES as readonly string[]).includes(value)) return { ok: false, message: tk('Esse apelido é reservado') };
+  if (!SHAPE.test(value)) return { ok: false, message: tk('Use de 3 a 30 letras, números ou hífen') };
   return { ok: true, value };
 }
 
@@ -33,6 +34,7 @@ interface Props {
  * `NICKNAME_REQUIRED`.
  */
 export function NicknameDialog({ open, onClose, onSaved }: Props) {
+  const { t } = useTranslation();
   const { user, setNickname, publicCityUrl } = useAuth();
   // The address as the visitor will read it, host and all: this instance's own, told by the server.
   const address = (nickname: string) => `${(publicCityUrl ?? '/city').replace(/^https?:\/\//, '')}/@${nickname}`;
@@ -46,7 +48,7 @@ export function NicknameDialog({ open, onClose, onSaved }: Props) {
     e.preventDefault();
     const checked = checkNickname(value);
     if (!checked.ok) {
-      setError(checked.message);
+      setError(i18n.t(checked.message));
       return;
     }
     setBusy(true);
@@ -56,7 +58,7 @@ export function NicknameDialog({ open, onClose, onSaved }: Props) {
       onSaved?.(checked.value);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao salvar apelido');
+      setError(err instanceof ApiError ? err.message : t('Erro ao salvar apelido'));
     } finally {
       setBusy(false);
     }
@@ -66,15 +68,15 @@ export function NicknameDialog({ open, onClose, onSaved }: Props) {
   // must keep pointing at the same person. So an account that has one only gets to see it.
   if (user?.nickname) {
     return (
-      <Modal title="Seu apelido" open={open} onClose={onClose} width="max-w-sm">
+      <Modal title={t('Seu apelido')} open={open} onClose={onClose} width="max-w-sm">
         <div className="space-y-3">
-          <p className="text-sm text-fg-muted">É o endereço da sua cidade pública e não pode ser trocado.</p>
+          <p className="text-sm text-fg-muted">{t('É o endereço da sua cidade pública e não pode ser trocado.')}</p>
           <p className="text-sm font-medium">
             {address(user.nickname)}
           </p>
           <div className="flex justify-end pt-2">
             <button type="button" className="btn-ghost" onClick={onClose}>
-              Fechar
+              {t('Fechar')}
             </button>
           </div>
         </div>
@@ -83,12 +85,12 @@ export function NicknameDialog({ open, onClose, onSaved }: Props) {
   }
 
   return (
-    <Modal title="Escolha seu apelido" open={open} onClose={onClose} width="max-w-sm">
+    <Modal title={t('Escolha seu apelido')} open={open} onClose={onClose} width="max-w-sm">
       <form onSubmit={submit} className="space-y-3">
-        <p className="text-sm text-fg-muted">É o endereço da sua cidade pública, para quem tiver o link.</p>
+        <p className="text-sm text-fg-muted">{t('É o endereço da sua cidade pública, para quem tiver o link.')}</p>
         <div>
           <label className="label" htmlFor="nickname-dialog-input">
-            Apelido
+            {t('Apelido')}
           </label>
           <input
             id="nickname-dialog-input"
@@ -108,10 +110,10 @@ export function NicknameDialog({ open, onClose, onSaved }: Props) {
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button type="submit" className="btn-primary" disabled={busy || !value.trim()}>
-            {busy ? 'Salvando…' : 'Salvar'}
+            {busy ? t('Salvando…') : t('Salvar')}
           </button>
         </div>
       </form>

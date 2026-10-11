@@ -3,7 +3,7 @@ import type { Machine } from '../db/repositories/types.js';
 import { DOCS_LESSONS_MIN_AGENT_VERSION } from '../memory/docs.js';
 import { AgentRpcError, AgentTimeoutError } from './connection.js';
 import { AgentOfflineError, agents } from './registry.js';
-import { agentRpc, requireAgentVersion, requireSimCapable, toHttpError, versionAtLeast } from './errors.js';
+import { agentRpc, requireAgentVersion, requireFileReadCapable, requireSimCapable, requireTranscriptCapable, toHttpError, versionAtLeast } from './errors.js';
 
 describe('versionAtLeast', () => {
   it('compares dotted numeric versions component by component', () => {
@@ -33,6 +33,8 @@ describe('toHttpError codes', () => {
     expect(toHttpError(new AgentRpcError({ code: 'no_tmux', message: 'x' }))).toMatchObject({ statusCode: 502, code: 'NO_TMUX' });
     expect(toHttpError(new AgentRpcError({ code: 'invalid', message: 'x' }))).toMatchObject({ statusCode: 400, code: 'MACHINE_INVALID' });
     expect(toHttpError(new AgentRpcError({ code: 'failed', message: 'pasta não existe' }))).toMatchObject({ statusCode: 502, code: 'MACHINE_FAILED', message: 'pasta não existe' });
+    expect(toHttpError(new AgentRpcError({ code: 'worktree_conflict', message: 'outro branch' }))).toMatchObject({ statusCode: 409, code: 'WORKTREE_CONFLICT', message: 'outro branch' });
+    expect(toHttpError(new AgentRpcError({ code: 'path_outside_root', message: 'x' }))).toMatchObject({ statusCode: 400, code: 'PATH_OUTSIDE_ROOT' });
   });
 });
 
@@ -79,6 +81,44 @@ describe('requireSimCapable', () => {
   it('passes when the agent claims sim', () => {
     attachFake('m-sim', { agent_version: '0.5.0', capabilities: ['sim'] });
     expect(() => requireSimCapable({ ...base, type: 'agent' })).not.toThrow();
+  });
+});
+
+describe('requireFileReadCapable', () => {
+  afterEach(() => agents.reset());
+  const base = { id: 'm-fr', name: 'box', host: null, ssh_user: null, ssh_port: 22, type: 'agent' } as unknown as Machine;
+  it('refuses a machine that is not an agent machine', () => {
+    expect(() => requireFileReadCapable({ ...base, type: 'ssh' })).toThrow(expect.objectContaining({ statusCode: 400, code: 'UNSUPPORTED_MACHINE' }));
+  });
+  it('answers 503 when the agent is offline', () => {
+    expect(() => requireFileReadCapable(base)).toThrow(expect.objectContaining({ statusCode: 503, code: 'AGENT_OFFLINE' }));
+  });
+  it('answers 409 AGENT_OUTDATED, telling the version, for an agent without the capability', () => {
+    attachFake('m-fr', { agent_version: '0.15.0', capabilities: ['claude', 'transcript'] });
+    expect(() => requireFileReadCapable(base)).toThrow(expect.objectContaining({ statusCode: 409, code: 'AGENT_OUTDATED', message: expect.stringContaining('0.16.0') }));
+  });
+  it('passes an agent that claims file_read', () => {
+    attachFake('m-fr', { agent_version: '0.16.0', capabilities: ['claude', 'file_read'] });
+    expect(() => requireFileReadCapable(base)).not.toThrow();
+  });
+});
+
+describe('requireTranscriptCapable', () => {
+  afterEach(() => agents.reset());
+  const base = { id: 'm-tr', name: 'box', host: null, ssh_user: null, ssh_port: 22, type: 'agent' } as unknown as Machine;
+  it('refuses a machine that is not an agent machine', () => {
+    expect(() => requireTranscriptCapable({ ...base, type: 'ssh' })).toThrow(expect.objectContaining({ statusCode: 400, code: 'UNSUPPORTED_MACHINE' }));
+  });
+  it('answers 503 when the agent is offline', () => {
+    expect(() => requireTranscriptCapable(base)).toThrow(expect.objectContaining({ statusCode: 503, code: 'AGENT_OFFLINE' }));
+  });
+  it('answers 409 AGENT_OUTDATED for an agent without the capability', () => {
+    attachFake('m-tr', { agent_version: '0.14.2', capabilities: ['claude'] });
+    expect(() => requireTranscriptCapable(base)).toThrow(expect.objectContaining({ statusCode: 409, code: 'AGENT_OUTDATED' }));
+  });
+  it('passes an agent that claims transcript', () => {
+    attachFake('m-tr', { agent_version: '0.15.0', capabilities: ['claude', 'transcript'] });
+    expect(() => requireTranscriptCapable(base)).not.toThrow();
   });
 });
 

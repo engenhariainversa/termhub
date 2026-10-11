@@ -6,7 +6,7 @@ import { TranscriptionService } from '../terminal/transcription.js';
 import { transcriptionRoutes } from './transcriptions.js';
 
 vi.mock('../config.js', () => ({
-  config: { transcription: { url: 'http://whisper:8000', language: 'pt' } },
+  config: { transcription: { url: 'http://whisper:8000', language: 'pt', secret: 'whisper-secret' } },
 }));
 
 const alice = { id: 'u-alice', name: 'Alice' } as User;
@@ -52,6 +52,7 @@ describe('POST /api/transcriptions', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe('http://whisper:8000/transcribe?language=pt');
     expect((init?.headers as Record<string, string>)['content-type']).toBe('audio/webm');
+    expect((init?.headers as Record<string, string>).authorization).toBe('Bearer whisper-secret');
     expect(Buffer.from(init?.body as Uint8Array).toString()).toBe('audio-bytes');
 
     const done = await app.inject({ method: 'GET', url: `/api/transcriptions/${job.id}` });

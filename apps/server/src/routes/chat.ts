@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE } from '@termhub/mobile-api';
+import { chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE, replyCardKind } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { chatMemoryRoutes } from './chat-memory.js';
@@ -33,9 +33,11 @@ import {
   revokeGrant,
 } from '../chat/grants.js';
 import { decideMany } from '../chat/decisions.js';
+import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL } from '../chat/gate.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
+import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
 
 /** Indexes decided gate actions, best effort, fire-and-forget — the writer for `chatRoutes`'/
  * `mobileChatRoutes`'s own `deps.indexActions` (spec 2026-09-26 concierge memory §4): only
@@ -54,8 +56,11 @@ const messageBody = z
     wait: z.boolean().optional(),
     /** The message this one answers (TER-447). */
     reply_to_id: z.string().min(1).max(64).optional(),
+    /** Or the card it answers (TER-849): never both. */
+    reply_to_card: z.object({ kind: replyCardKind, id: z.string().min(1).max(64) }).optional(),
   })
-  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] });
+  .refine((b) => b.text.length > 0 || (b.attachment_ids?.length ?? 0) > 0, { message: 'Escreva uma mensagem ou anexe um arquivo', path: ['text'] })
+  .refine((b) => b.reply_to_id === undefined || b.reply_to_card === undefined, { message: 'Responda a uma mensagem ou a um card, não aos dois', path: ['reply_to_card'] });
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
@@ -101,7 +106,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -120,6 +125,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       deps.service.openAnswerIds(conversation.id),
       // Usage-limit cards (TER-589): their own list, like suggestions, for the apps that parse tab_questions strictly.
       repos.tabLimitNotices.listByConversation(conversation.id),
+      // What the context meter measures against (TER-1038): null = the model's window.
+      repos.users.chatContextLimit(request.scope.user.id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
@@ -140,6 +147,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       compacting: deps.service.isCompacting(conversation.id),
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
+      context_limit,
     };
   });
 
@@ -167,6 +175,11 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // also rejects an account of another machine of their own, whose config dir does not exist here.
       if (!account || account.machine_id !== machine.id) throw notFound('Conta de IA não encontrada nessa máquina');
       if (account.provider !== 'claude') throw new HttpError(400, 'O chat roda no Claude: escolha uma conta do Claude nessa máquina', 'CHAT_ACCOUNT_NOT_CLAUDE');
+      // TER-990: the chat's host runs the account-wide chat, outside any project — never on an exclusive account
+      if (!usableIn(account, null)) {
+        await auditBlocked(repos, request.log, account, { project_id: null, path: 'chat_host', machine_id: machine.id });
+        throw new HttpError(400, exclusiveError(account).localized, 'ACCOUNT_EXCLUSIVE');
+      }
     }
 
     const current = await deps.service.conversationFor(user);
@@ -181,9 +194,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
     // `wait` is read and ignored: a page loaded before this release still sends it.
-    const { text, project_id, attachment_ids, reply_to_id } = messageBody.parse(request.body);
+    const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = messageBody.parse(request.body);
     // Each only when the body carried it, so a plain message calls the service exactly as before.
-    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}) };
+    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) };
     // A refusal (host problem, archived conversation, an attachment that is not this user's) rejects
     // `start` itself and keeps its status. The answer streams over `/ws/chat`; a failure after this
     // point is logged by label, and a run that could not be attempted says so on the stream.
@@ -209,6 +222,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     return { conversation: await deps.service.reset(request.scope.user, project_id ?? null) };
   });
 
+  /** "Apagar conversa" (TER-743): deletes the scope's active conversation for good and answers the fresh one. */
+  app.post('/delete', { config: { action: 'delete' } }, async (request) => {
+    const { project_id } = resetBody.parse(request.body ?? {});
+    return { conversation: await deps.service.deleteConversation(request.scope.user, project_id ?? null) };
+  });
+
   /** Per-project chat status for the sidebar's 💬: answering now, and questions waiting on the user. */
   app.get('/projects', async (request) => ({ projects: await deps.service.projectStatuses(request.scope.user) }));
 
@@ -218,6 +237,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const status = decision === 'deny' ? 'denied' : 'approved';
     const user = request.scope.user;
 
+    // A card whose tab was closed is retired rather than approved (TER-986): 409 TAB_GONE, and every
+    // screen shows it as stale. Before the grant checks, so their refusal never names the wrong cause.
+    if (decision !== 'deny') await assertActionTabAlive(repos, user.id, id);
     // "Permitir sempre nesta aba" is only for what the gate will honour — checked before anything is
     // decided, so a refused request changes nothing (404 not found, 400 GRANT_NOT_ALLOWED otherwise).
     // "Liberar teclas e shell nesta aba" (TER-325) likewise.
@@ -248,6 +270,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
     // Every open tab must see the decision, not only the one that clicked it.
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    // The server's own cards (a merge above the level) act on approval here (agentic board F-19).
+    deps.service.afterDecisions([action]);
     // Memory (spec 2026-09-26 concierge memory §4): best effort, fire-and-forget, never on the request's
     // critical path — a slow or failing embed service must not delay the decision's own response.
     void indexActions(user.id, [action]);
@@ -304,6 +328,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const { decisions } = batchBody.parse(request.body);
     const user = request.scope.user;
     const { decided, skipped } = await decideMany(repos, user.id, decisions);
+    deps.service.afterDecisions(decided);
     void indexActions(user.id, decided);
     try {
       // The start of the run, never its end, as in the single decision above.

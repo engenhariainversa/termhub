@@ -56,6 +56,7 @@ export const ModelName = {
   Permission: 'Permission',
   Session: 'Session',
   LoginCode: 'LoginCode',
+  AccountDeletionLink: 'AccountDeletionLink',
   LoginAttempt: 'LoginAttempt',
   Machine: 'Machine',
   Project: 'Project',
@@ -68,6 +69,11 @@ export const ModelName = {
   TaskColumn: 'TaskColumn',
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
+  AutomationEvent: 'AutomationEvent',
+  AutomationRun: 'AutomationRun',
+  TabUsage: 'TabUsage',
+  TabUsageDay: 'TabUsageDay',
+  AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
   ProjectSetup: 'ProjectSetup',
@@ -97,8 +103,18 @@ export const ModelName = {
   Device: 'Device',
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
+  AccessLog: 'AccessLog',
   DeviceEvent: 'DeviceEvent',
-  UserNotification: 'UserNotification'
+  PushTicket: 'PushTicket',
+  UserNotification: 'UserNotification',
+  AutomationSummary: 'AutomationSummary',
+  LegalDocumentVersion: 'LegalDocumentVersion',
+  LegalAcceptance: 'LegalAcceptance',
+  DataExport: 'DataExport',
+  ViewAsAudit: 'ViewAsAudit',
+  SecurityEvent: 'SecurityEvent',
+  FeatureFlag: 'FeatureFlag',
+  FeatureFlagOverride: 'FeatureFlagOverride'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -136,7 +152,14 @@ export const UserScalarFieldEnum = {
   reviewEnabledBy: 'reviewEnabledBy',
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
-  chatCodexReplies: 'chatCodexReplies'
+  chatCodexReplies: 'chatCodexReplies',
+  pushTabFinished: 'pushTabFinished',
+  chatContextLimit: 'chatContextLimit',
+  deletionRequestedAt: 'deletionRequestedAt',
+  deletionScheduledAt: 'deletionScheduledAt',
+  automationPausedAt: 'automationPausedAt',
+  timeZone: 'timeZone',
+  locale: 'locale'
 } as const
 
 export type UserScalarFieldEnum = (typeof UserScalarFieldEnum)[keyof typeof UserScalarFieldEnum]
@@ -190,6 +213,18 @@ export const LoginCodeScalarFieldEnum = {
 export type LoginCodeScalarFieldEnum = (typeof LoginCodeScalarFieldEnum)[keyof typeof LoginCodeScalarFieldEnum]
 
 
+export const AccountDeletionLinkScalarFieldEnum = {
+  id: 'id',
+  email: 'email',
+  tokenHash: 'tokenHash',
+  expiresAt: 'expiresAt',
+  usedAt: 'usedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AccountDeletionLinkScalarFieldEnum = (typeof AccountDeletionLinkScalarFieldEnum)[keyof typeof AccountDeletionLinkScalarFieldEnum]
+
+
 export const LoginAttemptScalarFieldEnum = {
   key: 'key',
   failures: 'failures',
@@ -213,10 +248,16 @@ export const MachineScalarFieldEnum = {
   checkedAt: 'checkedAt',
   agentTokenHash: 'agentTokenHash',
   agentTokenCreatedAt: 'agentTokenCreatedAt',
+  agentPairingHash: 'agentPairingHash',
+  agentPairingExpiresAt: 'agentPairingExpiresAt',
+  agentPublicKey: 'agentPublicKey',
+  agentPairedAt: 'agentPairedAt',
   agentVersion: 'agentVersion',
   agentLastSeenAt: 'agentLastSeenAt',
   agentAutoUpdate: 'agentAutoUpdate',
   claudeAutoSwap: 'claudeAutoSwap',
+  aiUsageQuery: 'aiUsageQuery',
+  automationAllowed: 'automationAllowed',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
   createdAt: 'createdAt'
@@ -236,6 +277,7 @@ export const ProjectScalarFieldEnum = {
   isPublic: 'isPublic',
   agentColumnId: 'agentColumnId',
   lastTerminalAt: 'lastTerminalAt',
+  automationPausedAt: 'automationPausedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -274,6 +316,7 @@ export const TabScalarFieldEnum = {
   agentTranscriptPath: 'agentTranscriptPath',
   aiAccountId: 'aiAccountId',
   rateLimitedAt: 'rateLimitedAt',
+  cwd: 'cwd',
   createdByTokenId: 'createdByTokenId',
   createdAt: 'createdAt'
 } as const
@@ -363,6 +406,7 @@ export const TaskScalarFieldEnum = {
   startedAt: 'startedAt',
   doneAt: 'doneAt',
   activeSeconds: 'activeSeconds',
+  auto: 'auto',
   externalKey: 'externalKey',
   tabId: 'tabId',
   parentId: 'parentId',
@@ -387,14 +431,99 @@ export const TaskPullRequestScalarFieldEnum = {
   draft: 'draft',
   mergedAt: 'mergedAt',
   mergeCommitSha: 'mergeCommitSha',
+  baseRef: 'baseRef',
+  changedLevel: 'changedLevel',
   ciState: 'ciState',
   ciSummary: 'ciSummary',
   deployState: 'deployState',
   deployUrl: 'deployUrl',
+  releaseRuns: 'releaseRuns',
   syncedAt: 'syncedAt'
 } as const
 
 export type TaskPullRequestScalarFieldEnum = (typeof TaskPullRequestScalarFieldEnum)[keyof typeof TaskPullRequestScalarFieldEnum]
+
+
+export const AutomationEventScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  runId: 'runId',
+  kind: 'kind',
+  payload: 'payload',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
+
+
+export const AutomationRunScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  role: 'role',
+  status: 'status',
+  waitingReason: 'waitingReason',
+  tabId: 'tabId',
+  machineId: 'machineId',
+  accountId: 'accountId',
+  branch: 'branch',
+  worktreePath: 'worktreePath',
+  resumeCount: 'resumeCount',
+  fixCount: 'fixCount',
+  restartCount: 'restartCount',
+  allowedTools: 'allowedTools',
+  lastTypedAt: 'lastTypedAt',
+  wokenAt: 'wokenAt',
+  triggerSha: 'triggerSha',
+  cleanupState: 'cleanupState',
+  cleanupAttempts: 'cleanupAttempts',
+  claimedBy: 'claimedBy',
+  heartbeatAt: 'heartbeatAt',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const TabUsageScalarFieldEnum = {
+  tabId: 'tabId',
+  sessionId: 'sessionId',
+  transcriptOffset: 'transcriptOffset',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageScalarFieldEnum = (typeof TabUsageScalarFieldEnum)[keyof typeof TabUsageScalarFieldEnum]
+
+
+export const TabUsageDayScalarFieldEnum = {
+  tabId: 'tabId',
+  day: 'day',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  accountId: 'accountId',
+  model: 'model',
+  inputTokens: 'inputTokens',
+  outputTokens: 'outputTokens',
+  cacheReadTokens: 'cacheReadTokens',
+  cacheWriteTokens: 'cacheWriteTokens',
+  costUsdEstimate: 'costUsdEstimate',
+  updatedAt: 'updatedAt'
+} as const
+
+export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
+
+
+export const AiAccountExhaustionScalarFieldEnum = {
+  accountId: 'accountId',
+  until: 'until',
+  reason: 'reason',
+  createdAt: 'createdAt'
+} as const
+
+export type AiAccountExhaustionScalarFieldEnum = (typeof AiAccountExhaustionScalarFieldEnum)[keyof typeof AiAccountExhaustionScalarFieldEnum]
 
 
 export const NoteScalarFieldEnum = {
@@ -437,6 +566,7 @@ export const AiAccountScalarFieldEnum = {
   label: 'label',
   machineId: 'machineId',
   configDir: 'configDir',
+  exclusiveProjectId: 'exclusiveProjectId',
   createdAt: 'createdAt'
 } as const
 
@@ -528,7 +658,9 @@ export const ChatConversationScalarFieldEnum = {
   reviewMode: 'reviewMode',
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
+  contextCompactedAt: 'contextCompactedAt',
   lastMessageAt: 'lastMessageAt',
+  lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -546,6 +678,8 @@ export const ChatMessageScalarFieldEnum = {
   replyToId: 'replyToId',
   replyToRole: 'replyToRole',
   replyToExcerpt: 'replyToExcerpt',
+  replyToCardKind: 'replyToCardKind',
+  replyToCardId: 'replyToCardId',
   createdAt: 'createdAt'
 } as const
 
@@ -584,6 +718,7 @@ export const ChatActionScalarFieldEnum = {
   machineId: 'machineId',
   projectId: 'projectId',
   tabId: 'tabId',
+  tabName: 'tabName',
   grantId: 'grantId',
   errorCode: 'errorCode',
   durationMs: 'durationMs',
@@ -883,6 +1018,20 @@ export const DeviceChallengeScalarFieldEnum = {
 export type DeviceChallengeScalarFieldEnum = (typeof DeviceChallengeScalarFieldEnum)[keyof typeof DeviceChallengeScalarFieldEnum]
 
 
+export const AccessLogScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
+  ip: 'ip',
+  userId: 'userId',
+  kind: 'kind',
+  method: 'method',
+  route: 'route',
+  status: 'status'
+} as const
+
+export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]
+
+
 export const DeviceEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -900,6 +1049,19 @@ export const DeviceEventScalarFieldEnum = {
 export type DeviceEventScalarFieldEnum = (typeof DeviceEventScalarFieldEnum)[keyof typeof DeviceEventScalarFieldEnum]
 
 
+export const PushTicketScalarFieldEnum = {
+  id: 'id',
+  ticketId: 'ticketId',
+  deviceId: 'deviceId',
+  pushToken: 'pushToken',
+  kind: 'kind',
+  claimedAt: 'claimedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type PushTicketScalarFieldEnum = (typeof PushTicketScalarFieldEnum)[keyof typeof PushTicketScalarFieldEnum]
+
+
 export const UserNotificationScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -912,6 +1074,111 @@ export const UserNotificationScalarFieldEnum = {
 } as const
 
 export type UserNotificationScalarFieldEnum = (typeof UserNotificationScalarFieldEnum)[keyof typeof UserNotificationScalarFieldEnum]
+
+
+export const AutomationSummaryScalarFieldEnum = {
+  userId: 'userId',
+  day: 'day',
+  sentAt: 'sentAt'
+} as const
+
+export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const LegalDocumentVersionScalarFieldEnum = {
+  id: 'id',
+  document: 'document',
+  version: 'version',
+  effectiveAt: 'effectiveAt',
+  url: 'url',
+  requiresAcceptance: 'requiresAcceptance',
+  summary: 'summary',
+  noticeSentAt: 'noticeSentAt',
+  createdAt: 'createdAt'
+} as const
+
+export type LegalDocumentVersionScalarFieldEnum = (typeof LegalDocumentVersionScalarFieldEnum)[keyof typeof LegalDocumentVersionScalarFieldEnum]
+
+
+export const LegalAcceptanceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  versionId: 'versionId',
+  acceptedAt: 'acceptedAt',
+  ip: 'ip',
+  userAgent: 'userAgent',
+  channel: 'channel'
+} as const
+
+export type LegalAcceptanceScalarFieldEnum = (typeof LegalAcceptanceScalarFieldEnum)[keyof typeof LegalAcceptanceScalarFieldEnum]
+
+
+export const DataExportScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  status: 'status',
+  attempts: 'attempts',
+  bytes: 'bytes',
+  errorCode: 'errorCode',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  expiresAt: 'expiresAt',
+  downloadedAt: 'downloadedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type DataExportScalarFieldEnum = (typeof DataExportScalarFieldEnum)[keyof typeof DataExportScalarFieldEnum]
+
+
+export const ViewAsAuditScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  scope: 'scope',
+  targetUserId: 'targetUserId',
+  ip: 'ip',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ViewAsAuditScalarFieldEnum = (typeof ViewAsAuditScalarFieldEnum)[keyof typeof ViewAsAuditScalarFieldEnum]
+
+
+export const SecurityEventScalarFieldEnum = {
+  id: 'id',
+  actorId: 'actorId',
+  actorEmail: 'actorEmail',
+  viewAsId: 'viewAsId',
+  action: 'action',
+  targetType: 'targetType',
+  targetId: 'targetId',
+  targetLabel: 'targetLabel',
+  ip: 'ip',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityEventScalarFieldEnum = (typeof SecurityEventScalarFieldEnum)[keyof typeof SecurityEventScalarFieldEnum]
+
+
+export const FeatureFlagScalarFieldEnum = {
+  key: 'key',
+  enabled: 'enabled',
+  updatedAt: 'updatedAt',
+  updatedBy: 'updatedBy'
+} as const
+
+export type FeatureFlagScalarFieldEnum = (typeof FeatureFlagScalarFieldEnum)[keyof typeof FeatureFlagScalarFieldEnum]
+
+
+export const FeatureFlagOverrideScalarFieldEnum = {
+  flag: 'flag',
+  userId: 'userId',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  createdBy: 'createdBy'
+} as const
+
+export type FeatureFlagOverrideScalarFieldEnum = (typeof FeatureFlagOverrideScalarFieldEnum)[keyof typeof FeatureFlagOverrideScalarFieldEnum]
 
 
 export const SortOrder = {

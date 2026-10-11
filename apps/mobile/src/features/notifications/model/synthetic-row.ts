@@ -1,6 +1,7 @@
 // The unread row a live `confirmation` event (design spec §7, ruling) prepends into
 // `useNotificationsStore` before the server's own row has been fetched: same shape as a real
 // `TNotificationRow`, but with an id the store can tell apart from a server-issued one.
+import { t } from '@/i18n';
 import type { TChatEvent, TNotificationRow } from '@/services/api/contract';
 
 type ConfirmationEvent = Extract<TChatEvent, { type: 'confirmation' }>;
@@ -20,12 +21,12 @@ export const isLocalRowId = (id: string): boolean => id.startsWith('local:');
  */
 export function syntheticConfirmationRow(event: ConfirmationEvent, projectName: string | null, now: number): TNotificationRow {
   const body = projectName
-    ? `O chat do projeto ${projectName} pediu confirmação para agir.`
-    : 'O chat geral pediu confirmação para agir.';
+    ? t('O chat do projeto {{projectName}} pediu confirmação para agir.', { projectName })
+    : t('O chat geral pediu confirmação para agir.');
   return {
     id: localRowId(event.action_id),
     kind: 'confirmation',
-    title: 'termhub precisa de você',
+    title: t('termhub precisa de você'),
     body,
     data: { conversation_id: event.conversation_id, project_id: event.project_id, action_id: event.action_id },
     created_at: new Date(now).toISOString(),

@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+jest.mock('@/features/ai-login/viewmodel/useAiLoginStore', () => ({ useAiLoginStore: require('../../../../test/helpers/ui-stores').stores.aiLogin }));
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
 jest.mock('@/features/permissions/viewmodel/usePermissionsStore', () => ({ usePermissionsStore: require('../../../../test/helpers/ui-stores').stores.permissions }));
@@ -19,6 +20,7 @@ jest.mock('expo-router', () => ({
 }));
 
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
+import { setLocale } from '@/i18n';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { HomeScreen } from './home-screen';
 
@@ -38,6 +40,17 @@ afterEach(async () => {
 });
 
 describe('Home (TER-541)', () => {
+  it('in English, with nothing pinned', async () => {
+    setLocale('en');
+    try {
+      await render(<HomeScreen />);
+      expect(await screen.findByText('No pinned projects', undefined, LOAD)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'View projects' })).toBeTruthy();
+    } finally {
+      await act(async () => setLocale(null));
+    }
+  });
+
   it('with nothing pinned, explains how to pin and leads to Chats', async () => {
     await render(<HomeScreen />);
     expect(await screen.findByText('Nenhum projeto fixado', undefined, LOAD)).toBeTruthy();
@@ -57,6 +70,23 @@ describe('Home (TER-541)', () => {
     expect(screen.getByText('TER')).toBeTruthy();
     expect(screen.getByLabelText('2 confirmações pendentes')).toBeTruthy();
     expect(screen.queryByText('Nenhum projeto fixado')).toBeNull();
+  });
+
+  it('warns in red when an AI login expired, and "Refazer login" opens its modal (TER-1047)', async () => {
+    await render(<HomeScreen />);
+    await screen.findByText('Nenhum projeto fixado', undefined, LOAD);
+    expect(screen.queryByText('O login do Codex expirou em jarvis')).toBeNull();
+
+    // The next focus reads the status again.
+    stores.controls.setAiLoginState('acc-3', 'login_required');
+    await act(async () => mockFocus?.());
+    expect(await screen.findByText('O login do Codex expirou em jarvis', undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Refazer login' }));
+    expect(mockPush).toHaveBeenCalledWith('/ai-login/acc-3');
+
+    stores.controls.setAiLoginState('acc-3', 'ok');
+    await act(async () => mockFocus?.());
+    await waitFor(() => expect(screen.queryByText('O login do Codex expirou em jarvis')).toBeNull());
   });
 
   it("opens a project's chat", async () => {
@@ -87,7 +117,7 @@ describe('Home (TER-541)', () => {
     stores.permissionDeps.trackingStatus.mockClear();
     await render(<HomeScreen />);
     expect(stores.permissionDeps.trackingStatus).toHaveBeenCalled();
-    expect(await screen.findByText('Ajude a medir nossos anúncios', undefined, LOAD)).toBeTruthy();
+    expect(await screen.findByText('Ajude a melhorar o termhub', undefined, LOAD)).toBeTruthy();
   });
 
   it('does not claim nothing is pinned while the first load is running', async () => {

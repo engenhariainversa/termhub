@@ -9,6 +9,7 @@ import { removeTabMcp } from '../terminal/tab-mcp.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabsRemoved } from '../monitor/tab-events.js';
 import { ControlError, type ControlContext } from './context.js';
+import { msg } from '../i18n/index.js';
 
 /** Windows paths (C:\...) do not go through sh: they are stored/inspected unchecked. */
 const isPosixPath = (p: string) => p.startsWith('/') || p.startsWith('~');
@@ -34,7 +35,10 @@ async function checkedDir(machine: Machine, cwd: string, createDir: boolean | un
     if (e instanceof HttpError && e.code === 'DIR_NOT_FOUND') {
       throw new ControlError(
         'DIR_NOT_FOUND',
-        `A pasta ${cwd} não existe na máquina ${machine.name}. Repita com create_dir: true para criá-la vazia; para ter o repositório, depois de vincular abra uma aba nesse projeto e máquina e rode git clone <url> . dentro dela.`,
+        msg(
+          'A pasta {{dir}} não existe na máquina {{machine}}. Repita com create_dir: true para criá-la vazia; para ter o repositório, depois de vincular abra uma aba nesse projeto e máquina e rode git clone <url> . dentro dela.',
+          { dir: cwd, machine: machine.name },
+        ),
       );
     }
     throw e;
@@ -101,13 +105,16 @@ export async function linkProjectMachine(ctx: ControlContext, input: { project_i
   const { project } = await ctx.scoped.project(input.project_id);
   const machine = await ctx.scoped.machine(input.machine_id);
   if (await ctx.repos.projectMachines.find(project.id, machine.id)) {
-    throw new ControlError('MACHINE_ALREADY_LINKED', `O projeto ${project.name} já está vinculado à máquina ${machine.name}; para trocar a pasta use set_project_machine_cwd`);
+    throw new ControlError(
+      'MACHINE_ALREADY_LINKED',
+      msg('O projeto {{project}} já está vinculado à máquina {{machine}}; para trocar a pasta use set_project_machine_cwd', { project: project.name, machine: machine.name }),
+    );
   }
   const dir = await checkedDir(machine, input.cwd, input.create_dir);
   try {
     await ctx.repos.projectMachines.link({ project_id: project.id, machine_id: machine.id, cwd: dir.path });
   } catch (e) {
-    if (e instanceof ProjectRuleError) throw new ControlError(e.code, e.message);
+    if (e instanceof ProjectRuleError) throw new ControlError(e.code, e.localized);
     throw e;
   }
   announceLinked(project);
@@ -132,7 +139,12 @@ export async function unlinkProjectMachine(ctx: ControlContext, input: { project
   if (tabs.length > 0 && input.confirm !== true) {
     throw new ControlError(
       'CONFIRM_REQUIRED',
-      `Desvincular a máquina ${machine.name} do projeto ${project.name} fecha ${tabs.length} aba(s) abertas nela (${tabs.map((t) => t.name).join(', ')}); repita com confirm: true para confirmar`,
+      msg('Desvincular a máquina {{machine}} do projeto {{project}} fecha {{count}} abas abertas nela ({{tabs}}); repita com confirm: true para confirmar', {
+        machine: machine.name,
+        project: project.name,
+        count: tabs.length,
+        tabs: tabs.map((t) => t.name).join(', '),
+      }),
     );
   }
   const closed_tabs = await removeProjectMachineLink(ctx.repos, project.id, machine, tabs);

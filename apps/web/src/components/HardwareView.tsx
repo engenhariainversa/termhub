@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import type { HardwareSnapshot } from '../lib/types';
+import { formatNumber } from '../lib/format';
+import { i18n, useTranslation } from '../i18n';
 
 /**
  * Home "Hardware" tab: live CPU / memory / disks / temps / GPU / top processes of a machine.
@@ -11,13 +13,16 @@ import type { HardwareSnapshot } from '../lib/types';
 const POLL_MS = 5000;
 const MACHINE_KEY = 'termhub:hardware-machine';
 
+/** A number with exactly `digits` decimals, in the language on screen ("25,3" / "25.3"). */
+const fixed = (n: number, digits: number) => formatNumber(n, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+
 function gb(kb: number | null | undefined): string {
   if (kb == null) return '—';
   const g = kb / 1048576;
-  if (g >= 1000) return `${(g / 1024).toFixed(2)} TB`;
-  if (g >= 10) return `${g.toFixed(0)} GB`;
-  if (g >= 1) return `${g.toFixed(1)} GB`;
-  return `${Math.round(kb / 1024)} MB`;
+  if (g >= 1000) return `${fixed(g / 1024, 2)} TB`;
+  if (g >= 10) return `${fixed(g, 0)} GB`;
+  if (g >= 1) return `${fixed(g, 1)} GB`;
+  return `${formatNumber(Math.round(kb / 1024))} MB`;
 }
 
 function uptime(s: number | null): string {
@@ -25,7 +30,7 @@ function uptime(s: number | null): string {
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
-  return d > 0 ? `${d} d ${h} h` : h > 0 ? `${h} h ${m} min` : `${m} min`;
+  return d > 0 ? i18n.t('{{d}} d {{h}} h', { d, h }) : h > 0 ? i18n.t('{{h}} h {{m}} min', { h, m }) : i18n.t('{{m}} min', { m });
 }
 
 function tone(pct: number | null): 'ok' | 'warn' | 'danger' | 'none' {
@@ -66,6 +71,7 @@ function Tile({ title, children, className = '' }: { title: string; children: Re
 }
 
 export function HardwareView() {
+  const { t } = useTranslation();
   const { machines, statuses } = useData();
   const [machineId, setMachineId] = useState<string>(() => {
     try {
@@ -95,7 +101,7 @@ export function HardwareView() {
       setSnap(r.hardware);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao coletar o hardware');
+      setError(err instanceof ApiError ? err.message : t('Erro ao coletar o hardware'));
     } finally {
       inflight.current = false;
       setLoading(false);
@@ -132,24 +138,27 @@ export function HardwareView() {
     <div>
       <div className="mb-5 flex items-end gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Hardware</h2>
+          <h2 className="text-lg font-semibold">{t('Hardware')}</h2>
           <p className="text-sm text-fg-muted">
             {snap ? (
-              <>
-                {snap.hostname ?? machine?.name} · {snap.cpu_model ?? 'CPU ?'} · {snap.ncpu ?? '?'} núcleos · ligado há {uptime(snap.uptime_s)}
-              </>
+              t('{{host}} · {{cpu}} · {{cores}} núcleos · ligado há {{uptime}}', {
+                host: snap.hostname ?? machine?.name ?? '',
+                cpu: snap.cpu_model ?? 'CPU ?', // i18n-ignore
+                cores: snap.ncpu ?? '?',
+                uptime: uptime(snap.uptime_s),
+              })
             ) : (
-              'Uso de CPU, memória, discos e processos, atualizado a cada 5 s.'
+              t('Uso de CPU, memória, discos e processos, atualizado a cada 5 s.')
             )}
           </p>
         </div>
         <span className="ml-auto flex items-center gap-2">
-          {loading && <span className="text-xs text-fg-dim">atualizando…</span>}
+          {loading && <span className="text-xs text-fg-dim">{t('atualizando…')}</span>}
           <select className="input w-auto py-1 text-xs" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
-                {statuses[m.id] === 'offline' ? ' (offline)' : ''}
+                {statuses[m.id] === 'offline' ? t(' (offline)') : ''}
               </option>
             ))}
           </select>
@@ -157,62 +166,72 @@ export function HardwareView() {
       </div>
 
       {error && <p className="mb-3 rounded border border-danger/40 bg-danger/10 p-2 text-sm text-danger">{error}</p>}
-      {!snap && !error && <p className="text-sm text-fg-dim">Coletando…</p>}
+      {!snap && !error && <p className="text-sm text-fg-dim">{t('Coletando…')}</p>}
 
       {snap && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          <Tile title="CPU">
+          <Tile title="CPU" /* i18n-ignore */>
             <div className="space-y-3">
-              <Meter pct={snap.cpu_pct} label="uso" />
-              <Meter pct={loadPct} label="carga 1 min" detail={snap.load ? `${snap.load[0].toFixed(2)} · 5 min ${snap.load[1].toFixed(2)} · 15 min ${snap.load[2].toFixed(2)}` : undefined} />
+              <Meter pct={snap.cpu_pct} label={t('uso')} />
+              <Meter
+                pct={loadPct}
+                label={t('carga 1 min')}
+                detail={snap.load ? t('{{l1}} · 5 min {{l5}} · 15 min {{l15}}', { l1: fixed(snap.load[0], 2), l5: fixed(snap.load[1], 2), l15: fixed(snap.load[2], 2) }) : undefined}
+              />
             </div>
           </Tile>
-          <Tile title="Memória">
+          <Tile title={t('Memória')}>
             <div className="space-y-3">
-              <Meter pct={memPct} label="RAM" detail={`${gb(snap.mem_used_kb)} de ${gb(snap.mem_total_kb)}`} />
-              <Meter pct={swapPct} label="swap" detail={snap.swap_total_kb ? `${gb(snap.swap_used_kb)} de ${gb(snap.swap_total_kb)}` : 'sem swap'} />
+              <Meter pct={memPct} label="RAM" /* i18n-ignore */ detail={t('{{used}} de {{total}}', { used: gb(snap.mem_used_kb), total: gb(snap.mem_total_kb) })} />
+              <Meter
+                pct={swapPct}
+                label={t('swap')}
+                detail={snap.swap_total_kb ? t('{{used}} de {{total}}', { used: gb(snap.swap_used_kb), total: gb(snap.swap_total_kb) }) : t('sem swap')}
+              />
             </div>
           </Tile>
-          <Tile title="Temperaturas">
+          <Tile title={t('Temperaturas')}>
             {snap.temps.length === 0 && snap.gpus.length === 0 ? (
-              <p className="text-xs text-fg-dim">{snap.os === 'macos' ? 'O macOS não expõe sensores sem ferramentas extras.' : 'Nenhum sensor encontrado.'}</p>
+              <p className="text-xs text-fg-dim">{snap.os === 'macos' ? t('O macOS não expõe sensores sem ferramentas extras.') : t('Nenhum sensor encontrado.')}</p>
             ) : (
               <ul className="flex flex-wrap gap-1.5">
-                {snap.temps.map((t, i) => (
-                  <li key={`${t.label}-${i}`} className="rounded bg-bg-3 px-2 py-1 text-xs">
-                    <span className="text-fg-muted">{t.label}</span> <span className={`tabular-nums ${t.c >= 85 ? 'text-danger' : t.c >= 70 ? 'text-warn' : 'text-fg'}`}>{Math.round(t.c)}°C</span>
+                {snap.temps.map((s, i) => (
+                  <li key={`${s.label}-${i}`} className="rounded bg-bg-3 px-2 py-1 text-xs">
+                    <span className="text-fg-muted">{s.label}</span>{' '}
+                    {/* i18n-ignore: °C is a unit */}
+                    <span className={`tabular-nums ${s.c >= 85 ? 'text-danger' : s.c >= 70 ? 'text-warn' : 'text-fg'}`}>{Math.round(s.c)}°C</span>
                   </li>
                 ))}
               </ul>
             )}
           </Tile>
           {snap.gpus.length > 0 && (
-            <Tile title="GPU">
+            <Tile title="GPU" /* i18n-ignore */>
               <ul className="space-y-3">
                 {snap.gpus.map((g, i) => (
                   <li key={i} className="space-y-2">
                     <p className="text-xs text-fg">{g.name}</p>
-                    <Meter pct={g.utilization} label="uso" detail={g.temp_c != null ? `${g.temp_c}°C` : undefined} />
-                    {g.mem_total_mb ? <Meter pct={((g.mem_used_mb ?? 0) / g.mem_total_mb) * 100} label="VRAM" detail={`${g.mem_used_mb} de ${g.mem_total_mb} MB`} /> : null}
+                    <Meter pct={g.utilization} label={t('uso')} detail={g.temp_c != null ? `${g.temp_c}°C` : undefined} />
+                    {g.mem_total_mb ? <Meter pct={((g.mem_used_mb ?? 0) / g.mem_total_mb) * 100} label="VRAM" /* i18n-ignore */ detail={t('{{used}} de {{total}} MB', { used: g.mem_used_mb, total: g.mem_total_mb })} /> : null}
                   </li>
                 ))}
               </ul>
             </Tile>
           )}
-          <Tile title="Discos" className="md:col-span-2 xl:col-span-2">
+          <Tile title={t('Discos')} className="md:col-span-2 xl:col-span-2">
             {snap.disks.length === 0 ? (
-              <p className="text-xs text-fg-dim">Nenhum disco encontrado.</p>
+              <p className="text-xs text-fg-dim">{t('Nenhum disco encontrado.')}</p>
             ) : (
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {snap.disks.map((d) => (
                   <li key={d.mount} title={d.source}>
-                    <Meter pct={(d.used_kb / d.size_kb) * 100} label={d.mount} detail={`${gb(d.avail_kb)} livres de ${gb(d.size_kb)}`} />
+                    <Meter pct={(d.used_kb / d.size_kb) * 100} label={d.mount} detail={t('{{free}} livres de {{total}}', { free: gb(d.avail_kb), total: gb(d.size_kb) })} />
                   </li>
                 ))}
               </ul>
             )}
           </Tile>
-          <Tile title="Processos (por CPU)">
+          <Tile title={t('Processos (por CPU)')}>
             {snap.processes.length === 0 ? (
               <p className="text-xs text-fg-dim">—</p>
             ) : (
@@ -223,8 +242,8 @@ export function HardwareView() {
                       <td className="max-w-0 truncate py-1 pr-2 font-mono" title={p.command}>
                         {p.command}
                       </td>
-                      <td className="w-14 py-1 text-right tabular-nums">{p.cpu.toFixed(1)}%</td>
-                      <td className="w-16 py-1 text-right tabular-nums text-fg-dim">{p.mem.toFixed(1)}% mem</td>
+                      <td className="w-14 py-1 text-right tabular-nums">{fixed(p.cpu, 1)}%</td>
+                      <td className="w-16 py-1 text-right tabular-nums text-fg-dim">{t('{{pct}}% mem', { pct: fixed(p.mem, 1) })}</td>
                     </tr>
                   ))}
                 </tbody>

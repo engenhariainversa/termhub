@@ -10,16 +10,18 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import type { ChatAction, ChatActionClass } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
+import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
+import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
 import { resurfaceCards } from './resurface.js';
-import { ACTION_TTL_MS } from './service.js';
+import { ACTION_TTL_MS, scrubSecretArgs } from './service.js';
 import { standingProjectOf } from './standing-project.js';
 import { subagentOrigins } from './subagent-origin.js';
 
@@ -37,8 +39,9 @@ export interface GatedCall {
    * the transport carried one — set only by the MCP route. Used to look up which subagent's turn (if
    * any) is making this call, through `subagentOrigins`. */
   tool_use_id?: string;
-  /** The tool call itself, already scope-checked and argument-validated by the caller. */
-  run(): Promise<unknown>;
+  /** The tool call itself, already scope-checked and argument-validated by the caller. `approval` is
+   *  passed only when it runs a card the person clicked, never under a grant (TER-851). */
+  run(approval?: { actionId: string; approvedAt: Date }): Promise<unknown>;
 }
 
 const PENDING = (tool: string) =>
@@ -102,10 +105,8 @@ const REFUSED: GateOutcome = {
  * have changed their mind, and a permanent refusal would leave them no way to say so. A question the
  * user never answered (`expired`) is not a "no" at all, and is simply asked again.
  *
- * Scoping this to the assistant turn would be the better rule, since the retry is a within-turn
- * behaviour, but it needs the runtime to know which message is current and a call carrying only a
- * token has no such plumbing. A clock window is cruder and entirely predictable, which is the right
- * trade until that plumbing exists.
+ * The window is also cut short by the person writing again (`denialInForce`, TER-530): a message they
+ * typed after the "no" is a new request, and the same call then asks again instead of refusing.
  */
 const DENIAL_HOLDS_MS = 15 * 60 * 1000;
 
@@ -124,12 +125,17 @@ const DENIAL_HOLDS_MS = 15 * 60 * 1000;
  */
 const APPROVAL_HOLDS_MS = ACTION_TTL_MS;
 
-/** The user's "no" while it still holds. An older one is history: the same proposal is asked again. */
+/** The user's "no" while it still holds. An older one is history: the same proposal is asked again.
+ * So is one the person has written after (TER-530): the retry a denial guards against is the model's
+ * own, within the turn it was told no; once the person types again — "pode fechar as janelas" — the
+ * same call is their request, and it gets a fresh card instead of a refusal they never gave. */
 async function denialInForce(ctx: ControlContext, conversationId: string, key: string): Promise<ChatAction | undefined> {
   const row = await ctx.repos.chatActions.findDeniedByKey(conversationId, key);
   if (!row) return undefined;
   const decidedAt = Date.parse(row.decided_at ?? row.created_at);
-  return Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS ? row : undefined;
+  if (!(Number.isFinite(decidedAt) && Date.now() - decidedAt < DENIAL_HOLDS_MS)) return undefined;
+  const typedAt = Date.parse((await ctx.repos.chat.lastTypedAt(conversationId)) ?? '');
+  return Number.isFinite(typedAt) && typedAt > decidedAt ? undefined : row;
 }
 
 /** The mirror of `denialInForce` for a "yes": whether this approval is still the user's current
@@ -183,6 +189,23 @@ const targetOf = (args: Record<string, unknown>) => ({
   project_id: targetId(args.project_id),
   tab_id: targetId(args.tab_id),
 });
+
+/**
+ * A tab card also keeps its tab's project (TER-986) and its name (TER-1024), read owner-scoped when the
+ * card is asked: the card then still says which tab, of which project, it was for once the tab is
+ * closed. Only fills a project the call did not name; a tab that does not resolve (gone, or another
+ * user's) adds nothing. Best-effort: a failed read keeps the target as the call named it.
+ */
+type Target = ReturnType<typeof targetOf> & { tab_name?: string | null };
+async function withTabSnapshot(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<Target> {
+  if (!target.tab_id) return target;
+  try {
+    const [tab] = await ctx.repos.tabs.findByIdsForOwner([target.tab_id], ctx.scope.user.id);
+    return tab ? { ...target, project_id: target.project_id ?? tab.project_id, tab_name: tab.name } : target;
+  } catch {
+    return target;
+  }
+}
 
 /** The subagent that made this call, if the live run saw its tool frame first and it is this
  * conversation's. */
@@ -294,17 +317,24 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
   const stale = await staleApproval(ctx, call, row);
   if (stale) {
     await ctx.repos.chatActions.markExecuted(row.id, false, stale.code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', stale.code);
     return { ok: false, ...stale };
   }
   try {
-    const value = await call.run();
+    // A row born approved by a grant or a default is the gate letting the call through, not the person
+    // approving this text: only a clicked card (`grant_id` null) makes what is typed theirs (TER-851).
+    const decidedAt = row.decided_at ? new Date(row.decided_at) : null;
+    const approval = row.grant_id === null && decidedAt && Number.isFinite(decidedAt.getTime()) ? { actionId: row.id, approvedAt: decidedAt } : undefined;
+    const value = await call.run(approval);
     await ctx.repos.chatActions.markExecuted(row.id, true, null, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'executed', null);
     return { ok: true, value };
   } catch (err) {
     const code = err instanceof ControlError || err instanceof HttpError ? (err.code ?? 'ERROR') : 'INTERNAL';
     await ctx.repos.chatActions.markExecuted(row.id, false, code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', code);
     throw err; // the caller turns it into the same answer any other failed tool call gets
   }
@@ -327,7 +357,7 @@ function actionNotRecorded(): never {
 
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
-  const target = targetOf(call.args);
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
@@ -341,16 +371,24 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
     actionNotRecorded();
   }
   row = await bindLateOrigin(ctx, call, conversationId, row);
-  // Enriched the same way, and only in this one place, as `GET /api/chat`'s trail — the browser
-  // must never resolve a machine/project/tab name or build the sentence itself. Scoped to the calling
-  // user: the model on a gated token could name someone else's task/tab/project id in `call.args`
-  // (exactly what a prompt injected into a terminal screen would aim for), and this card must never
-  // confirm that a foreign id exists, let alone show its name, before the call that would 404 on it.
-  const [card] = await describeActions(ctx.repos, [row], ctx.scope.user.id);
+  await publishCard(ctx.repos, ctx.scope.user.id, row);
+  return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+}
+
+/**
+ * Puts a pending card in front of the person (every open screen, and the phone's push). Enriched the same
+ * way, and only in this one place, as `GET /api/chat`'s trail — the browser must never resolve a
+ * machine/project/tab name or build the sentence itself. Scoped to the person the card is for: the model
+ * on a gated token could name someone else's task/tab/project id in `call.args` (exactly what a prompt
+ * injected into a terminal screen would aim for), and this card must never confirm that a foreign id
+ * exists, let alone show its name, before the call that would 404 on it.
+ */
+async function publishCard(repos: Repositories, userId: string, row: ChatAction): Promise<void> {
+  const [card] = await describeActions(repos, [row], userId);
   chatBus.publish({
     type: 'confirmation',
-    user_id: ctx.scope.user.id,
-    conversation_id: conversationId,
+    user_id: userId,
+    conversation_id: row.conversation_id,
     action_id: row.id,
     tool: row.tool,
     args: row.args,
@@ -362,7 +400,42 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
     subagent: card.subagent,
     created_at: row.created_at,
   });
-  return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+}
+
+/**
+ * A card the server asks by itself, for automatic work (agentic board D7: a merge above the project's
+ * level). It is the gate's pending card — same row, same class rules, same publish as `ask()` — in the
+ * owner's most recent conversation of the project (opened when there is none), but it is never a
+ * concierge proposal: the row is born injected (the model is never told to repeat a call it never made)
+ * and its approval is acted on by the server (`ChatService.onApproved`). Asked once per `key`, whatever
+ * became of the earlier card: null when the key was already asked.
+ */
+export async function askForAutomation(
+  repos: Repositories,
+  ownerId: string,
+  projectId: string,
+  payload: { tool: string; args: Record<string, unknown>; key: string },
+): Promise<ChatAction | null> {
+  if (await repos.chatActions.findLatestByKeyInProject(ownerId, projectId, payload.key)) return null;
+  const conversation = (await repos.chat.findLatestActiveForProject(projectId, ownerId)) ?? (await repos.chat.getOrCreateForProject(ownerId, projectId));
+  let row: ChatAction;
+  try {
+    row = await repos.chatActions.insertPending({
+      conversation_id: conversation.id,
+      tool: payload.tool,
+      args: payload.args,
+      class: actionClass(payload.tool, payload.args) === 'irreversible' ? 'irreversible' : 'write',
+      idempotency_key: payload.key,
+      project_id: projectId,
+      injected: true,
+    });
+  } catch (e) {
+    // the other colour asked the same key in the same instant: its card is the one
+    if (await repos.chatActions.findOpenByKey(conversation.id, payload.key)) return null;
+    throw e;
+  }
+  await publishCard(repos, ownerId, row);
+  return row;
 }
 
 /**
@@ -374,9 +447,10 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
  * live, since no card was ever shown for it.
  */
 async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
-    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
+    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target, ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
   } catch {
     // Either reading of a failed insert: the partial unique index refused it because an identical
     // call arrived in the same instant and its (approved) row already occupies the key — the same
@@ -416,7 +490,7 @@ async function executeGranted(ctx: ControlContext, call: GatedCall, conversation
  * start with `!` into a `!` command by the time the TUI reads it. `CONTROL_CHARS` is the same check
  * `checkPrompt` uses for a prompt's own text; only `\n` (a pasted multi-line prompt) is allowed. Both
  * checks read the arguments alone, before any read, and the tab must separately report an agent at
- * work (`working`, `waiting_background` or `waiting_input`, from the monitor hooks). A tab that never reported (a shell), an
+ * work (`working`, `waiting_background`, `waiting_input` or `finished`, from the monitor hooks). A tab that never reported (a shell), an
  * agent that ended (`idle`) or errored falls back to a normal question. Two readings deliberately still
  * go through the grant: a tab that does not resolve (missing, or somebody else's) and one waiting on a
  * permission, so `execute()` records them as the `TAB_GONE` / `WAITING_PERMISSION` locks — the model
@@ -429,7 +503,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'blocked' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -512,10 +586,12 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
   return grant.id;
 }
 
-/** Tab states a default close is for (TER-627): the agent is not at work. `null` (a tab that never
- * reported, a bare shell that may be running anything) is not among them, nor `working` read at face
- * value, nor `waiting_permission`, which the person has to see. */
-const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'idle', 'error']);
+/** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
+ * that reported and asks nothing (TER-972), and `blocked`, a run that reported itself blocked (TER-1046). A
+ * login that expired is the person's to see. `null` (a tab that never reported, a bare shell that may be
+ * running anything) is not among them, nor `working` read at face value, nor `waiting_permission`, which
+ * the person has to see. */
+const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'blocked', 'idle', 'error']);
 
 /**
  * A Claude Code `working` tab whose state is stale in the TER-615 sense — no hook event for `STALE_WORKING_MS` — and
@@ -530,7 +606,9 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
   if (!Number.isFinite(since) || Date.now() - since < STALE_WORKING_MS) return false;
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_STATE_LINES + 20 }, { plain: true });
-    return claudeScreenState(text) === 'prompt';
+    // back at the input box, also when its last answer is the login error (TER-1046)
+    const screen = claudeScreenState(text);
+    return screen === 'prompt' || screen === 'auth';
   } catch {
     return false;
   }
@@ -541,7 +619,7 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
  * or null: what the chat does without asking for every user who did not restrict it in "Permissões do
  * chat". The standing grant's resolution and guards, owner-scoped, and stricter where a default reaches
  * further than a grant someone chose:
- * - terminal: an agent at work in the tab (`working`, `waiting_background` or `waiting_input`) — typed text on a bare shell is
+ * - terminal: an agent at work in the tab (`working`, `waiting_background`, `waiting_input` or `finished`) — typed text on a bare shell is
  *   `run_command` under another name — never `!`/control characters, never a permission (state or screen);
  * - close_tab: a stopped tab (`STOPPED_TAB_STATES`), or a `working` one the screen shows idle;
  * - link_tab_task: the tab resolves (the tool checks the card itself).
@@ -561,7 +639,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished' && tab?.state !== 'blocked') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
@@ -570,9 +648,21 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
   return grantId;
 }
 
+/**
+ * `actionClass`, plus what only the current state can tell (TER-975): a `set_automation_policy` change is a
+ * brake or a widening only against the Setup it changes. A brake goes through like `pause_automation`; a
+ * widening keeps the static `write`, which no grant or default covers, so the person is always asked. Only
+ * on a gated token: anyone else's call runs unmediated anyway.
+ */
+async function classOf(ctx: ControlContext, call: GatedCall): Promise<ActionClass> {
+  const cls = actionClass(call.tool, call.args);
+  if (call.token.gated && cls === 'write' && call.tool === 'set_automation_policy' && (await automationCallIsBrake(ctx, call.args))) return 'self_mediated';
+  return cls;
+}
+
 /** The gate itself: run the call, or answer why it did not run. */
 export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<GateOutcome> {
-  const cls = actionClass(call.tool, call.args);
+  const cls = await classOf(ctx, call);
   // Reads are never gated, whatever the token; and a person's own MCP session acts unmediated —
   // they are the one calling, and asking them to confirm their own keystroke is nonsense. A
   // self-mediated call (spec 2026-09-26 concierge memory D13) is let through the same way even on a

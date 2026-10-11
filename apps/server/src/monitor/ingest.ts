@@ -4,29 +4,84 @@ import { noteHookEvent } from '../chat/tab-questions.js';
 import { cancelTabSuggestion, openCodexReply, scheduleTabSuggestion } from '../chat/tab-suggestions.js';
 import type { Waker } from '../chat/wake.js';
 import { autoSwapOnLimit } from '../control/account-swap.js';
+import { meterTab } from '../automation/usage.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
+import { takeInputOrigin } from '../terminal/input-origin.js';
+import { buildOriginNote } from '../terminal/origin-note.js';
+import { applyRunOutcome, checkAuthOnScreen, defaultAuthScreenDeps } from './attention.js';
 import { monitorBus } from './bus.js';
 import { claudeSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
 
-export type IngestResult = { ok: true; tab: Tab } | { ok: false; reason: 'unknown_session' | 'ignored' };
+/** `origin_note`: what the hook prints back for a prompt termhub typed (TER-851), when one matched. */
+export type IngestResult = ({ ok: true; tab: Tab } | { ok: false; reason: 'unknown_session' | 'ignored' }) & { origin_note?: string };
 
 /**
  * A hook fired on a machine: find the tab by its tmux session, interpret the payload, store
  * the event as the tab's state and tell the subscribers. Logs metadata only (never `text`). `waker`
  * (spec 2026-09-26 concierge memory §7) reaches `noteHookEvent` from here — the route's own deps,
  * passed down from `app.ts` next to `repos` and `log` — since this module already sits between the
- * hooks route and the tab-question bookkeeping.
+ * hooks route and the tab-question bookkeeping. `onTabEvent` is told the tab of every Claude event
+ * (the tab chat hub's `poke`).
  */
 export async function ingestHookEvent(
   repos: Repositories,
   log: FastifyBaseLogger,
   input: { machineId: string; tool: HookTool; session: string; event: unknown },
   waker?: Waker,
+  onTabEvent?: (tabId: string) => void,
 ): Promise<IngestResult> {
   const tab = await repos.tabs.findByTmuxSession(input.machineId, input.session);
   if (!tab) return { ok: false, reason: 'unknown_session' };
-  const interpreted = interpretHookEvent(input.tool, input.event);
+  // Taken before anything else reads the event: the prompt is compared in memory and dropped here.
+  const originNote = input.tool === 'claude' ? originNoteFor(repos, log, tab, input.event) : null;
+  const result = await ingestForTab(repos, log, tab, input, waker);
+  // A Claude hook means the session's transcript moved: an open tab chat reads it now, after the tab
+  // row (session id, state) is updated (spec 2026-10-01 tab chat §5.3). Every event, even one the wait
+  // rule dropped: a dropped event still wrote lines.
+  if (input.tool === 'claude' && onTabEvent) {
+    try {
+      onTabEvent(tab.id);
+    } catch (err) {
+      log.warn({ tabId: tab.id, err: err instanceof Error ? err.message : String(err) }, 'monitor: tab event listener failed');
+    }
+  }
+  const note = await originNote;
+  return note ? { ...result, origin_note: note } : result;
+}
+
+/**
+ * The origin note for a Claude `UserPromptSubmit` whose prompt is a text termhub typed into this tab
+ * (TER-851, spec §5.3). Only this machine's tab is looked at (the caller resolved it from the machine's
+ * token). Never throws and never logs the prompt: a failure is the same as no note (D4).
+ */
+async function originNoteFor(repos: Repositories, log: FastifyBaseLogger, tab: Tab, event: unknown): Promise<string | null> {
+  if (!event || typeof event !== 'object') return null;
+  const { hook_event_name: name, prompt } = event as Record<string, unknown>;
+  if (name !== 'UserPromptSubmit' || typeof prompt !== 'string') return null;
+  const origin = takeInputOrigin(tab.id, prompt);
+  if (!origin) return null;
+  try {
+    const note = await buildOriginNote(origin, repos);
+    log.info({ tabId: tab.id, level: origin.level, noted: note !== null }, 'monitor: prompt origin');
+    return note;
+  } catch (err) {
+    log.warn({ tabId: tab.id, level: origin.level, err: err instanceof Error ? err.name : 'unknown' }, 'monitor: prompt origin note failed');
+    return null;
+  }
+}
+
+async function ingestForTab(
+  repos: Repositories,
+  log: FastifyBaseLogger,
+  tab: Tab,
+  input: { machineId: string; tool: HookTool; session: string; event: unknown },
+  waker?: Waker,
+): Promise<IngestResult> {
+  const raw = interpretHookEvent(input.tool, input.event);
+  // A turn end right after the tab's automatic run reported: its report decides between finished and blocked
+  // (TER-1046). A failed read keeps the hook's own reading.
+  const interpreted = raw ? await applyRunOutcome(repos, tab, input.tool, raw).catch(() => raw) : raw;
   // A subagent ended (spec 2026-09-30 tab questions per subagent §5): the tab's screen and state are
   // its main thread's, so nothing is recorded and a suggestion check still waiting is left alone.
   if (interpreted?.closeOnly) {
@@ -59,12 +114,20 @@ export async function ingestHookEvent(
   // Claude Code draws its suggested next prompt shortly after the turn ends: look in a few seconds, with the
   // Stop's own message and background count (spec 2026-09-26 TER-203 §4.2).
   if (input.tool === 'claude' && interpreted.meta.event === 'Stop') scheduleTabSuggestion(repos, log, updated.id, { context: interpreted.text, backgroundTasks: interpreted.backgroundTasks ?? 0 });
+  // The turn's tokens, from the new lines of its transcript (agentic board, spec D23): automatic tabs only,
+  // checked inside; a Codex tab is only noted, its card shows "—". Not awaited and never throws.
+  if ((input.tool === 'claude' || input.tool === 'codex') && interpreted.meta.event === 'Stop' && interpreted.meta.subagent !== true) void meterTab({ repos, log }, updated);
   // Codex has no suggestion to read: a Stop that ends in a question opens a reply card, after noteHookEvent
   // (which closed the cards of the turn that just ended). It gets the whole message (`answer`), since the
   // question is at its end and `text` is capped from the start. Not awaited, like Claude's check: it
   // never throws, and the hook's answer does not wait for the card.
   if (input.tool === 'codex' && interpreted.meta.event === 'Stop' && interpreted.meta.subagent !== true) void openCodexReply(repos, log, updated.id, interpreted.answer ?? interpreted.text);
   if (isRateLimit(interpreted)) autoSwapOnLimit(repos, log, updated);
+  // Claude's idle reminder on a wait: the turn may have ended on its login error with nothing in the Stop
+  // (TER-1046). Not awaited; it never throws.
+  if (input.tool === 'claude' && interpreted.meta.event === 'Notification' && interpreted.meta.type === 'idle_prompt' && updated.state === 'waiting_input') {
+    void checkAuthOnScreen(repos, log, updated, defaultAuthScreenDeps(publishTabChange));
+  }
   return { ok: true, tab: updated };
 }
 

@@ -7,19 +7,34 @@ import type { ControlContext } from '../control/context.js';
 import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
+import { setAccountExclusive } from '../control/account-exclusive.js';
+import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
+import { automationQueue } from '../automation/queue.js';
+import { policyText } from '../automation/policy.js';
+import { listAutomationEvents } from '../automation/events.js';
+import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
+import { DECISIONS_MAX } from '../automation/decisions-taken.js';
+import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
+import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
+import { AUTONOMY_LEVELS } from '../setup/schema.js';
+import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
+import { getChatContext } from '../control/chat-context.js';
+import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
+import { updateMachineAgent } from '../control/agent-update.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
+import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 export interface ToolDef {
   name: string;
@@ -55,6 +70,15 @@ const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescr
 const precedentInput = { sources: z.array(z.string().regex(MEMORY_REF)).min(1).max(10).optional(), reason: z.string().trim().min(1).max(500).optional() };
 const PRECEDENT_NOTE = 'When you send this on a precedent from memory, pass the search_memory refs you followed in sources and a short reason in the person\'s language: the chat shows it as an automatic decision. Leave both out otherwise.';
 
+/** TER-851: the agent learns later orders from the person through the chat, so a restriction in its first
+ *  prompt must say who can lift it; and the prompt is the assistant's text, never the person's. */
+const START_AGENT_RESTRICTIONS_NOTE =
+  'Phrase a restriction in the prompt as "until <name> authorizes it (the termhub chat counts)", never as an absolute such as "NÃO faça merge": the agent can tell when a later message carries the person\'s own words. Never write the prompt in the person\'s name.';
+
+/** TER-851: how the concierge relays the person's order so the tab can tell it is theirs. */
+const ON_BEHALF_NOTE =
+  "The tab's session is told who wrote each text: without on_behalf_of, what you send reads as your own words, not the person's. When you relay something the person asked for, pass on_behalf_of with the refs of their chat messages that ask for it (message:…, the ref each message they type comes with, or a search_memory ref of kind \"message\"), at most 24 h old; the tab sees their exact words next to your text. Never write in the person's name (\"<name> aqui…\", \"<name> autorizou…\"): say what to do and let the quote carry the authority.";
+
 /** The object schema a tool's arguments are validated against — by `parseArgs` and by the MCP SDK. */
 export function inputSchemaOf(tool: ToolDef) {
   const schema = z.object(tool.input);
@@ -74,7 +98,7 @@ export function parseArgs(tool: ToolDef, args: unknown): { ok: true; value: Reco
 export const TOOLS: ToolDef[] = [
   {
     name: 'list_machines',
-    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …).',
+    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …). Agent machines also carry agent_version (the connected agent, or the last one seen), update_available (a newer verified release can be installed now: update_machine_agent) and below_min_version (older than the minimum the server requires: it updates itself once idle, but tell the person); the answer has latest_agent_version and min_agent_version.',
     scope: 'read', resource: 'machines', action: 'read', input: {},
     run: (ctx) => listMachines(ctx),
   },
@@ -95,7 +119,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_tabs',
-    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person), its pending question, and the task linked to it.',
+    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person; or blocked: its automatic run reported itself blocked — automation or the chat acts, not the person; or auth_required: the Claude Code login expired and the person must run /login in that tab — urgent; or trust_prompt: Claude Code asks whether the folder is trusted, before it starts), its pending question, and the task linked to it. A tab needs the person in waiting_input, waiting_permission, auth_required and trust_prompt.',
     scope: 'read', resource: 'terminals', action: 'read',
     input: { project_id: id.optional(), machine_id: id.optional() },
     run: (ctx, a) => listTabs(ctx, a as { project_id?: string; machine_id?: string }),
@@ -103,10 +127,43 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_ai_accounts',
     description:
-      "List the AI CLI accounts (Claude, Codex, Gemini, Antigravity) logged in on your machines: id, provider, label, machine and default. default: true is the machine's own login for that CLI (the one it uses with no config dir override); false is another login kept on the same machine.",
+      "List the AI CLI accounts (Claude, Codex, Gemini, Antigravity) logged in on your machines: id, provider, label, machine, default and exclusive_project. default: true is the machine's own login for that CLI (the one it uses with no config dir override); false is another login kept on the same machine. exclusive_project ({ id, name }, or null) is the only project the account may run in — show it as \"Exclusiva: <name>\"; start_agent, swaps, restarts and the chat refuse it anywhere else.",
     scope: 'read', resource: 'ai_accounts', action: 'read',
     input: { machine_id: id.optional() },
     run: (ctx, a) => listAiAccounts(ctx, a as { machine_id?: string }),
+  },
+  {
+    name: 'set_ai_account_exclusive',
+    description:
+      "Make an AI account exclusive to one project (project_id), or free it again (project_id: null). An exclusive account (a client's or a company's login) runs only in that project: start_agent, the project Setup, account swaps, automatic work, restarts and the chat refuse it in any other, and the machine's default login marked exclusive is no fallback elsewhere. Needs confirm: true; without it the answer says what would change and nothing happens. Every change is written to the project's automation events. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
+    run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
+  },
+  {
+    name: 'start_ai_login',
+    description:
+      "Redo the CLI login of an AI account (Claude or Codex) whose login expired, without going to the machine: the machine's agent (0.26.0 or newer) starts the CLI's login in a hidden session and this answers the url the person opens in a browser, the user_code to type there (Codex) and needs_code. Claude (needs_code: true): the person signs in and copies the code the page shows; send it with submit_ai_login_code. Codex (needs_code: false): the person types user_code on the page and authorizes; then call submit_ai_login_code without code. logged_in: true means the CLI already finished on the machine (its own browser took the login): there is no url and nothing to submit; stuck_tabs lists that account's tabs still showing the login error. The flow expires at expires_at (15 min). Only the machine's owner can do it; agent tabs cannot call it. Gemini and Antigravity accounts are refused with the manual instruction.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    input: { account_id: id },
+    run: async (ctx, a) => {
+      const started = await startAiLogin(ctx, a as { account_id: string });
+      const instruction = started.logged_in
+        ? 'The login already finished on the machine: tell the person it is done. If stuck_tabs is not empty, ask before typing continue into them (send_input).'
+        : started.needs_code
+          ? 'Give the person the url to open and sign in. Ask them for the code the page shows, then call submit_ai_login_code with login_id and code. Never repeat the code back.'
+          : 'Give the person the url and the user_code to type on that page. Once they say it is authorized, call submit_ai_login_code with login_id and no code.';
+      return { ...started, instruction };
+    },
+  },
+  {
+    name: 'submit_ai_login_code',
+    description:
+      "Finish a login started by start_ai_login: code is what the login page showed (Claude), omitted for Codex — and for a Claude login the person finished in the machine's own browser instead. Waits up to about 45 s for the CLI to confirm. ok: true means the account is logged in again; stuck_tabs then lists that account's tabs still showing the login error — ask the person before typing continue into them (send_input). ok: false carries message; for Codex the person may finish authorizing and you call it again, for Claude start over with start_ai_login. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'ai_accounts', action: 'update',
+    strict: true,
+    input: { login_id: id, code: z.string().trim().min(1).max(2000).optional() },
+    run: (ctx, a) => submitAiLogin(ctx, { login_id: (a as { login_id: string }).login_id, code: (a as { code?: string }).code ?? null }),
   },
   {
     name: 'find',
@@ -136,7 +193,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'wait_for_state',
-    description: `Wait until the tool in a tab stops working (it finished, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
+    description: `Wait until the tool in a tab stops working (it finished — state finished, a report that asks nothing —, asks something, or needs a permission), up to timeout_seconds (default 60, max ${WAIT_MAX_SECONDS}). A tab in waiting_background (its turn ended while its own subagents, background shells or monitors still run) is still working: the wait goes on until that work reports and the agent stops for real, unless return_on_background is true. A timeout is not an error: call again to keep waiting. This is how to follow a tab (no read_screen loops or sleep); when it stops, read_last_answer for what it said.`,
     scope: 'read', resource: 'terminals', action: 'read',
     input: { tab_id: id, timeout_seconds: z.number().int().min(1).max(WAIT_MAX_SECONDS).optional(), return_on_background: z.boolean().optional() },
     run: (ctx, a, signal) => waitForState(ctx, a as { tab_id: string; timeout_seconds?: number; return_on_background?: boolean }, signal),
@@ -150,10 +207,17 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
-    input: { tab_id: id, text: z.string().max(INPUT_MAX_CHARS), enter: z.boolean().optional(), answering_permission: z.boolean().optional(), ...precedentInput },
-    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean }),
+    input: {
+      tab_id: id,
+      text: z.string().max(INPUT_MAX_CHARS),
+      enter: z.boolean().optional(),
+      answering_permission: z.boolean().optional(),
+      ...precedentInput,
+      on_behalf_of: z.array(z.string().regex(/^message:[a-z0-9]{1,64}$/)).min(1).max(3).optional(),
+    },
+    run: (ctx, a) => sendInput(ctx, a as { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] }),
   },
   {
     name: 'send_key',
@@ -203,7 +267,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'start_agent',
-    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know.`,
+    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       project_id: id,
@@ -231,6 +295,167 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
+  },
+  {
+    name: 'list_automation_queue',
+    description:
+      "List a project's cards tagged \"automático\" in the order automatic work takes them (board order: column, then position). Each item has the card's ref, title, whether it is eligible now and, when it is not, the reason code and its pt-BR text (automation off, paused, type not allowed, not in a todo column, no description, already has an agent, no machine with the worktree capability, repository not configured; or, for an eligible card the dispatcher found no place for: no account with room, machine offline, machine without room, no machine accepting automatic work, followed by each machine and account it left out and why; or start_backoff: its last start failed and the next attempt waits, with the attempt, the minutes left and the failure's reason). Untagged cards and subtasks are not listed.",
+    scope: 'tasks', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
+  },
+  {
+    name: 'get_automation_policy',
+    description:
+      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. Read it before opening a pull request, to know what happens after it.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: async (ctx, a) => {
+      const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
+      return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
+    },
+  },
+  {
+    name: 'set_automation_policy',
+    description:
+      "Read or change the project's automatic-work Setup (\"Trabalho automático\"). With only project_id it reads. Fields left out keep their value: enabled (on/off), autonomy (pr, merge, deploy, release; each includes the previous), release_paths and store_paths (globs, the whole list), release_workflows (GitHub Actions workflow names), required_checks (workflows that must pass on the PR head; [] = every run), max_parallel (cards at once; null = no cap). Turning it on, raising the level, changing a path, workflow or check list, or raising max_parallel always asks the person; turning it off, lowering the level or lowering max_parallel is a brake and runs at once. Answers the saved values, the policy text in pt-BR and which fields changed; every change is written to the automation events. Other Setup fields (card types, budgets, prompts) stay on the Setup screen.",
+    scope: 'terminals', resource: 'projects', action: 'update',
+    strict: true,
+    input: {
+      project_id: id,
+      enabled: z.boolean().optional(),
+      autonomy: z.enum(AUTONOMY_LEVELS).optional(),
+      release_paths: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      store_paths: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+      release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
+      required_checks: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
+      max_parallel: z.number().int().min(1).max(100).nullable().optional(),
+    },
+    run: (ctx, a) => setAutomationPolicy(ctx, a as Parameters<typeof setAutomationPolicy>[1]),
+  },
+  {
+    name: 'set_machine_automation',
+    description:
+      "Turn a machine's \"Aceita trabalho automático\" switch on (accept: true) or off (accept: false). Off, automatic work never starts a card there; tabs already running stay. Accepting asks the person first; refusing runs at once. Written to the automation events of every project linked to the machine.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id, accept: z.boolean() },
+    run: (ctx, a) => setMachineAutomation(ctx, a as { machine_id: string; accept: boolean }),
+  },
+  {
+    name: 'get_machine_hooks',
+    description:
+      "Read the termhub monitor hooks on a machine — what makes the tabs' Claude Code, Codex and Cursor report their state and send their questions and approvals to the chat. Per CLI (claude, codex, cursor): present (the CLI's config dir is there), installed, outdated (an install would change something) and state (missing, outdated, current, unreadable); claude lists each config dir; codex says whether our notify line is there and trusted (all, some or none: Codex runs the hooks only after the person trusts them in Codex itself). script has the forwarding script's version and whether it is outdated. Reads only; never returns a file's content or a token. An agent older than 0.21.0 answers AGENT_OUTDATED with the version to update to.",
+    scope: 'read', resource: 'machines', action: 'read',
+    input: { machine_id: id },
+    run: (ctx, a) => getMachineHooks(ctx, a as { machine_id: string }),
+  },
+  {
+    name: 'install_machine_hooks',
+    description:
+      "Install or update the termhub monitor hooks on a machine through its agent, as the Install button of the machine screen does: the forwarding script with a fresh token, and our entries in each Claude config dir, Codex (hooks.json and notify) and the Cursor CLI that are on the machine; the person's own settings and hooks are kept. Use it to set up a machine instead of asking the person for a command. tools (claude, codex, cursor) names the CLIs the person expects hooked: the call refuses, changing nothing, when one of them is not on the machine; the install always covers every CLI found there. It changes config files on the machine, so it always asks the person first. Answers what changed per CLI (before → after) and the new state, as get_machine_hooks. Codex then asks the person to trust the hooks the next time it opens. An agent older than 0.21.0 answers AGENT_OUTDATED with the version to update to.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id, tools: z.array(z.enum(HOOK_TOOLS)).min(1).max(3).optional() },
+    run: (ctx, a) => installMachineHooks(ctx, a as { machine_id: string; tools?: HookTool[] }),
+  },
+  {
+    name: 'update_machine_agent',
+    description:
+      "Update the termhub agent of one machine (machine_id) or of every agent machine of the person (all: true), as the Atualizar button of the machine screen does: installs the newest release the server verified, the agent restarts as a service (tmux sessions survive, open terminals reconnect), and the call waits for it to come back. Pass exactly one of machine_id and all. It restarts the agent, so it always asks the person first. Answers per machine status (updated, current, scheduled, offline, too_old, restart_needed, not_back, failed), the version before and after, below_min_version, hooks (reinstalled when termhub's hooks there changed, current, not_installed, failed) and repair_suggested (the machine still uses the legacy token: offer a new pairing on Máquinas). The machine this chat runs on answers scheduled: it updates once your answer is over and it is idle. Use list_machines (agent_version, update_available, below_min_version) to see who is behind.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id.optional(), all: z.literal(true).optional() },
+    run: (ctx, a) => updateMachineAgent(ctx, a as { machine_id?: string; all?: boolean }),
+  },
+  {
+    name: 'report_card',
+    description:
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
+    // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
+    // admits only a tab token whose own tab has an active run, or whose latest run ended blocked and may still
+    // be adopted (spike TER-1031 §5.4), and the tool writes that run's status only.
+    scope: 'read', resource: 'tasks', action: 'read',
+    allowedIf: tabMayReport,
+    grantText: 'de uma aba com trabalho automático em andamento',
+    strict: true,
+    input: {
+      status: z.enum(['done', 'blocked']),
+      pr_url: z.string().trim().url().max(500).optional(),
+      reason: z.string().trim().min(1).max(500).optional(),
+      code: z.enum(['github_transient']).optional(),
+      decisions: z
+        .array(
+          z.object({
+            question: z.string().trim().min(1).max(300),
+            options: z.string().trim().min(1).max(300).optional(),
+            choice: z.string().trim().min(1).max(300),
+            reason: z.string().trim().min(1).max(500),
+          }).strict(),
+        )
+        .max(DECISIONS_MAX)
+        .optional(),
+    },
+    run: (ctx, a) => reportCard(ctx, a as Parameters<typeof reportCard>[1]),
+  },
+  {
+    name: 'escalate_automation_run',
+    description:
+      "Hand an automatic run over to the person (agentic board): use it when a woken tab stopped and you read its last answer and cannot continue it with send_input. run_id is the one the wake message names; reason (pt-BR, one or two sentences) says why. The person is told; the run stops being followed.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { run_id: id, reason: z.string().trim().min(1).max(500) },
+    run: (ctx, a) => escalateAutomationRun(ctx, a as { run_id: string; reason: string }),
+  },
+  {
+    name: 'resume_automation_run',
+    description:
+      "Hand an automatic run that stopped for the person back to automatic work (agentic board): run_id is the run the escalation named. The run goes back to running with a fresh budget of resumes; termhub follows its tab again. A run still running is left as is; an ended one is refused. Nothing is typed into the tab by this call.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { run_id: id },
+    run: (ctx, a) => resumeAutomationRun(ctx, a as { run_id: string }),
+  },
+  {
+    name: 'get_card',
+    description:
+      "Only in a tab running automatic work (agentic board): read your run's card — ref, title, description, status, its subtasks and the branch you work on. Read-only; no arguments.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    allowedIf: tabHasActiveRun,
+    grantText: 'de uma aba com trabalho automático em andamento',
+    input: {},
+    run: (ctx) => getRunCard(ctx),
+  },
+  {
+    name: 'pause_automation',
+    description:
+      "Pause the automatic work (agentic board): with project_id, that project only; without it, every project of the person (\"Pausar tudo\"). While paused nothing is started, typed, answered or merged. Pausing what is already paused keeps the first time. interrupt: true also asks to stop the tabs running automatic work now (it sends Escape to them, so it asks the person first). Answers paused_at.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { project_id: id.optional(), interrupt: z.boolean().optional() },
+    run: (ctx, a) => {
+      const { project_id, interrupt } = a as { project_id?: string; interrupt?: boolean };
+      return pauseAutomation(ctx, { scope: project_id ?? 'all', interrupt });
+    },
+  },
+  {
+    name: 'resume_automation',
+    description:
+      "Lift a pause of the automatic work: with project_id, that project's pause; without it, the person's \"Pausar tudo\". A project stays paused while either pause is on.",
+    scope: 'tasks', resource: 'projects', action: 'update',
+    input: { project_id: id.optional() },
+    run: async (ctx, a) => {
+      await resumeAutomation(ctx, { scope: (a as { project_id?: string }).project_id ?? 'all' });
+      return { ok: true };
+    },
+  },
+  {
+    name: 'list_automation_events',
+    description:
+      `What the automatic work did on a project, newest first: runs started, resumed, done or blocked, questions answered, pull requests, merges, deploys, releases, limits hit, pauses, and changes to what it may do (automation_on/off, setup_changed, cards tagged/untagged, machine_opt_in/out, each with via: chat, mcp, web or app). Each event has its kind, card (task_id), run, a small payload of ids, URLs, counts and reasons (a run_blocked with stage start also has message, the failure's reason in pt-BR, message_en and message_es, attempt of max_attempts, and retry_at or untagged), and created_at. Page back with before (an earlier event's created_at). At most ${AUTOMATION_EVENTS_PAGE_MAX} per call.`,
+    scope: 'read', resource: 'projects', action: 'read',
+    input: { project_id: id, before: z.string().datetime({ offset: true }).optional(), limit: z.number().int().min(1).max(AUTOMATION_EVENTS_PAGE_MAX).optional() },
+    run: async (ctx, a) => {
+      const { project_id, before, limit } = a as { project_id: string; before?: string; limit?: number };
+      return { events: await listAutomationEvents(ctx, project_id, { before, limit }) };
+    },
   },
   {
     name: 'read_attachment',
@@ -311,6 +536,16 @@ export const TOOLS: ToolDef[] = [
     run: (ctx) => recapPendingCards(ctx),
   },
   {
+    name: 'get_chat_context',
+    description:
+      "How full this chat's own session is, as the chat's context meter shows it: tokens at the end of the last turn, the model's window, the person's own limit when they set one (measure against it first), the percent, when the conversation was last compacted, and whether to suggest compacting. Call it when the person asks how much context the conversation uses, or before a long task, instead of estimating. Compacting is the person's: suggest the \"Compactar\" button or /compact, never run it. Only works in the termhub chat.",
+    scope: 'read',
+    resource: 'chat',
+    action: 'read',
+    input: {},
+    run: (ctx) => getChatContext(ctx),
+  },
+  {
     name: 'answer_tab_question',
     description:
       'Answer a tab\'s open multiple-choice question (from list_tab_questions) on the person\'s behalf, based on memory. Give one answer per question (option labels, or text), a short reason in the person\'s language and the search_memory refs you relied on. mode "auto" (default) schedules the answer with a visible countdown (60 s) the person can cancel; the server only accepts it when a cited ref is a decision (trust "person") about the same question whose past answer is exactly this one, the person turned "Responder sozinho" on, and the question is not about deploys, pushes, merges, deletions or other irreversible acts — otherwise it becomes a suggestion (pre-selected on the card, the person still clicks), and the result says why. Use mode "suggest" when your basis is a spec, a card or a note. Never answer permission prompts: they are not listed here.',
@@ -326,11 +561,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',
@@ -342,10 +577,10 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'update_task',
     description:
-      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
+      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. auto: true marks the card for automatic work (tag "automático"); on an epic it marks or clears every card of the epic. Subtasks never carry the tag. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog).',
     scope: 'tasks', resource: 'tasks', action: 'update',
-    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional() },
-    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string }),
+    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional(), auto: z.boolean().optional() },
+    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean }),
   },
   {
     name: 'move_task',
@@ -427,7 +662,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_project_setup',
     description:
-      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login.",
+      "Read a project's repository setup: the GitHub integration, the repository (owner/repo), the base branch and the deploy workflow (the GitHub Actions workflow whose run on a merge is the deploy; null = not tracked), with the integration's name and login. Also returns the `automation` block (agentic board settings: enabled, autonomy level, eligible card types, release/store paths and limits).",
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id },
     run: (ctx, a) => getProjectSetup(ctx, a as { project_id: string }),
@@ -459,8 +694,12 @@ export async function allowedTools(ctx: ControlContext, scopes: readonly ApiToke
 }
 
 /** pt-BR answer for a tools/call this token may not make (spec §6: a tool error, not a JSON-RPC error). */
-export function refusalMessage(name: string): string {
-  const tool = TOOLS.find((t) => t.name === name);
-  if (!tool) return `Ferramenta desconhecida: ${name.slice(0, 64)}`;
-  return `Este token não pode usar a ferramenta ${name}: ela precisa do escopo \`${tool.scope}\` e da permissão ${tool.grantText ?? `${tool.resource}:${tool.action}`} na sua role`;
+export function refusalMessage(name: string, locale: Locale = DEFAULT_LOCALE): string {
+  const tool = TOOLS.find((x) => x.name === name);
+  if (!tool) return t(locale, 'Ferramenta desconhecida: {{tool}}', { tool: name.slice(0, 64) });
+  return t(locale, 'Este token não pode usar a ferramenta {{tool}}: ela precisa do escopo `{{scope}}` e da permissão {{grant}} na sua role', {
+    tool: name,
+    scope: tool.scope,
+    grant: tool.grantText ?? `${tool.resource}:${tool.action}`,
+  });
 }

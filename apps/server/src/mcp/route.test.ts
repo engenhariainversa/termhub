@@ -105,7 +105,7 @@ describe('POST /mcp tools', () => {
 
     const list = await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const names = list.json().result.tools.map((t: { name: string }) => t.name).sort();
-    expect(names).toEqual(['find', 'get_project_setup', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
+    expect(names).toEqual(['find', 'get_machine_hooks', 'get_project_setup', 'list_automation_events', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
     await flush();
     expect(apiTokens.touchLastUsed).toHaveBeenCalledWith('tok1');
   });
@@ -396,6 +396,34 @@ describe('terminals scope', () => {
     expect(list.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('send_input');
   });
 
+  // TER-576: a role that can read (and even create/update/delete) terminals but lacks terminals:write —
+  // the default AUTHENTICATED/MANAGER grants before the migration — never types through the MCP.
+  it('neither lists nor runs send_input, send_key or run_command for a user without terminals:write', async () => {
+    vi.mocked(sendInput).mockClear();
+    const crud = ['machines:read', 'projects:read', 'terminals:create', 'terminals:read', 'terminals:update', 'terminals:delete'];
+    const { app, apiTokens } = build({ token: terminalsToken, grants: crud });
+    const list = await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    const names = list.json().result.tools.map((t: { name: string }) => t.name);
+    for (const tool of ['send_input', 'send_key', 'run_command']) expect(names).not.toContain(tool);
+    expect(names).toContain('read_screen');
+
+    for (const [tool, args] of [
+      ['send_input', { tab_id: 't1', text: 'oi' }],
+      ['send_key', { tab_id: 't1', key: 'Enter' }],
+      ['run_command', { tab_id: 't1', command: 'ls' }],
+    ] as const) {
+      const r = await rpc(app, call(tool, args));
+      expect(r.json().result.isError).toBe(true);
+    }
+    await flush();
+    expect(apiTokens.recordEvent.mock.calls.map((c) => c[0])).toEqual([
+      expect.objectContaining({ tool: 'send_input', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+      expect.objectContaining({ tool: 'send_key', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+      expect.objectContaining({ tool: 'run_command', ok: false, error_code: 'TOOL_NOT_ALLOWED' }),
+    ]);
+    expect(sendInput).not.toHaveBeenCalled();
+  });
+
   it('refuses a key outside the closed list before the machine is touched', async () => {
     const { app, apiTokens } = build({ token: terminalsToken, grants: writeGrants });
     const r = await rpc(app, call('send_key', { tab_id: 't1', key: 'C-d' }));
@@ -536,8 +564,8 @@ describe('read_attachment', () => {
 
   it('is offered to a read token whose user can read the chat, and hidden otherwise', async () => {
     const offered = await rpc(build({ grants: chatGrants }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    // search_memory shares the same chat:read grant as read_attachment.
-    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory']);
+    // search_memory and get_chat_context (TER-1038) share the same chat:read grant as read_attachment.
+    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory', 'get_chat_context']);
     const hidden = await rpc(build({ grants: ['machines:read'] }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('read_attachment');
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('search_memory');
@@ -669,13 +697,22 @@ describe('tab token (TER-212)', () => {
     const { app } = build({ token: tabToken(), grants, tabs });
     const names: string[] = (await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json().result.tools.map((t: { name: string }) => t.name);
     expect(names).toContain('search_memory');
-    expect(names.every((n) => ['search_memory', 'record_lesson'].includes(n))).toBe(true);
+    expect(names.every((n) => ['search_memory', 'record_lesson', 'get_automation_policy'].includes(n))).toBe(true);
   });
 
   it('also lists the real record_lesson once the owner has notes:update (TER-205)', async () => {
     const { app } = build({ token: tabToken(), grants: [...grants, 'notes:update'], tabs });
     const names: string[] = (await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' })).json().result.tools.map((t: { name: string }) => t.name);
-    expect(names.sort()).toEqual(['record_lesson', 'search_memory']);
+    expect(names.sort()).toEqual(['get_automation_policy', 'record_lesson', 'search_memory']);
+  });
+
+  it('refuses report_card from a tab with no automatic run, saying why (F-8)', async () => {
+    const { app, apiTokens } = build({ token: tabToken(), grants, tabs });
+    const res = (await rpc(app, call('report_card', { status: 'done' }))).json().result;
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toBe('report_card só está disponível numa aba com trabalho automático em andamento');
+    await flush();
+    expect(apiTokens.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ tool: 'report_card', ok: false, error_code: 'TOOL_NOT_ALLOWED' }));
   });
 
   it('refuses list_tabs as a pt-BR tool error, audited as TOOL_NOT_ALLOWED', async () => {

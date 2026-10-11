@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CityModel } from '../office/model';
 import { createSoundscape, DEFAULT_MIX, EQ_RANGE_DB, loadMix, saveMix, soundEvents, type SoundMix, type Soundscape } from './share/sound';
+import { i18n, tk, useTranslation } from '../i18n';
 
 const ON_KEY = 'termhub.city.sound-on';
 
@@ -155,52 +156,61 @@ const db = (v: number) => `${v > 0 ? '+' : ''}${v} dB`;
 
 /** One line that says the whole mix, to read out or paste back ("ambiente 70% · teclado 80% · …"). */
 export function describeMix(m: SoundMix): string {
-  return `ambiente ${pct(m.ambience)} · teclado ${pct(m.keyboard)} · aviso ${pct(m.ding)} · graves ${db(m.bass)} · médios ${db(m.mid)} · agudos ${db(m.treble)}`;
+  return i18n.t('ambiente {{ambience}} · teclado {{keyboard}} · aviso {{ding}} · graves {{bass}} · médios {{mid}} · agudos {{treble}}', {
+    ambience: pct(m.ambience),
+    keyboard: pct(m.keyboard),
+    ding: pct(m.ding),
+    bass: db(m.bass),
+    mid: db(m.mid),
+    treble: db(m.treble),
+  });
 }
 
 /** `videos`: this page records videos (the public city), so the panel says they carry this mix. */
 export function SoundPanel({ on, onToggle, mix, onChange, onClose, videos = true }: { on: boolean; onToggle(): void; mix: SoundMix; onChange(mix: SoundMix): void; onClose(): void; videos?: boolean }) {
+  const { t } = useTranslation();
+  /** `label` is a key (tk), translated here */
   const level = (key: 'ambience' | 'keyboard' | 'ding', label: string) => (
     <label className="grid grid-cols-[5.5rem_1fr_3rem] items-center gap-2 text-xs text-fg-muted">
-      {label}
+      {t(label)}
       <input type="range" min={0} max={100} step={5} value={Math.round(mix[key] * 100)} onChange={(e) => onChange({ ...mix, [key]: Number(e.target.value) / 100 })} />
       <span className="text-right tabular-nums text-fg">{pct(mix[key])}</span>
     </label>
   );
   const band = (key: 'bass' | 'mid' | 'treble', label: string) => (
     <label className="grid grid-cols-[5.5rem_1fr_3rem] items-center gap-2 text-xs text-fg-muted">
-      {label}
+      {t(label)}
       <input type="range" min={-EQ_RANGE_DB} max={EQ_RANGE_DB} step={1} value={mix[key]} onChange={(e) => onChange({ ...mix, [key]: Number(e.target.value) })} />
       <span className="text-right tabular-nums text-fg">{db(mix[key])}</span>
     </label>
   );
   return (
-    <div role="dialog" aria-label="Som da cidade" className="space-y-3 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl sm:rounded-lg">
+    <div role="dialog" aria-label={t('Som da cidade')} className="space-y-3 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl sm:rounded-lg">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-fg">Som</h2>
-        <button type="button" aria-label="Fechar" className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
+        <h2 className="text-sm font-semibold text-fg">{t('Som')}</h2>
+        <button type="button" aria-label={t('Fechar')} className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
           ×
         </button>
       </div>
       <button type="button" onClick={onToggle} aria-pressed={on} className="w-full rounded-md border border-line bg-bg-3 px-3 py-2 text-left text-sm text-fg hover:bg-bg-4">
-        {on ? 'Som ligado · desligar' : 'Som desligado · ligar'}
+        {on ? t('Som ligado · desligar') : t('Som desligado · ligar')}
       </button>
       <div className="space-y-2">
-        {level('ambience', 'Ambiente')}
-        {level('keyboard', 'Teclado')}
-        {level('ding', 'Aviso')}
+        {level('ambience', tk('Ambiente'))}
+        {level('keyboard', tk('Teclado'))}
+        {level('ding', tk('Aviso'))}
       </div>
       <div className="space-y-2">
-        <p className="text-xs font-semibold text-fg-muted">Equalização</p>
-        {band('bass', 'Graves')}
-        {band('mid', 'Médios')}
-        {band('treble', 'Agudos')}
+        <p className="text-xs font-semibold text-fg-muted">{t('Equalização')}</p>
+        {band('bass', tk('Graves'))}
+        {band('mid', tk('Médios'))}
+        {band('treble', tk('Agudos'))}
       </div>
       <p className="select-all rounded bg-bg-3 px-2 py-1.5 text-xs text-fg-dim">{describeMix(mix)}</p>
       <div className="flex justify-between gap-2">
-        <p className="text-xs text-fg-dim">{videos ? 'Os vídeos gravam com esta mixagem.' : ''}</p>
+        <p className="text-xs text-fg-dim">{videos ? t('Os vídeos gravam com esta mixagem.') : ''}</p>
         <button type="button" className="shrink-0 rounded-md border border-line px-2 py-1 text-xs text-fg hover:bg-bg-3" onClick={() => onChange({ ...DEFAULT_MIX })}>
-          Restaurar
+          {t('Restaurar')}
         </button>
       </div>
     </div>

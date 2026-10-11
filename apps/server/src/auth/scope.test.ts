@@ -31,7 +31,11 @@ function fakeRepos(): Repositories {
     { id: 'l3', project_id: 'p2', machine_id: 'm4', cwd: '/p2-m4' },
     { id: 'l4', project_id: 'p1', machine_id: 'm2', cwd: '/bobs' }, // a link to a machine alice does not own
   ];
-  const tabs = [{ id: 't1', project_id: 'p1', machine_id: 'm1' }, { id: 't2', project_id: 'p1', machine_id: 'm2' }];
+  const tabs = [
+    { id: 't1', project_id: 'p1', machine_id: 'm1', cwd: null },
+    { id: 't2', project_id: 'p1', machine_id: 'm2', cwd: null },
+    { id: 't3', project_id: 'p1', machine_id: 'm1', cwd: '/wt/ALI-7' },
+  ];
   const tasks = [{ id: 'k1', project_id: 'p1', number: 7 }];
   const columns = [{ id: 'c1', project_id: 'p1' }];
   const integrations = [{ id: 'i1', owner_id: 'alice' }];
@@ -96,6 +100,11 @@ describe('Scoped', () => {
     expect((await s.task('k1')).project.id).toBe('p1');
     expect((await s.integration('i1')).id).toBe('i1');
     expect((await s.projectMachine('p2', 'm4')).link.cwd).toBe('/p2-m4');
+  });
+
+  it("resolves a tab's own cwd (a card's worktree) over the project's folder (TER-870)", async () => {
+    expect((await as('alice').tab('t3')).cwd).toBe('/wt/ALI-7');
+    expect((await as('alice').tab('t1')).cwd).toBe('/p1');
   });
 
   it('projectMachines lists only linked machines the owner can see', async () => {

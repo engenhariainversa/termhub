@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
+import { useTranslation } from '../i18n';
 import type { Machine } from '../lib/types';
 
 export const POLL_MS = 3000;
 const POLL_MAX_MS = 90_000;
 
-type Versions = { current: string | null; latest: string | null; online: boolean; updateAvailable: boolean };
+type Versions = { current: string | null; latest: string | null; online: boolean; updateAvailable: boolean; min: string | null; belowMin: boolean };
 
 /** Machine form: the agent's version, the update button and the auto-update switch. */
 export function AgentUpdateCard({ machine }: { machine: Machine }) {
+  const { t } = useTranslation();
   const { updateMachine, checkStatus } = useData();
   const [v, setV] = useState<Versions | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,7 +24,14 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
 
   const load = async (): Promise<Versions> => {
     const s = await api.machines.status(machine.id);
-    const next = { current: s.agent_version ?? null, latest: s.latest_agent_version ?? null, online: s.online, updateAvailable: !!s.update_available };
+    const next = {
+      current: s.agent_version ?? null,
+      latest: s.latest_agent_version ?? null,
+      online: s.online,
+      updateAvailable: !!s.update_available,
+      min: s.min_agent_version ?? null,
+      belowMin: !!s.below_min_version,
+    };
     setV(next);
     return next;
   };
@@ -30,7 +39,7 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
   useEffect(() => {
     let cancelled = false;
     alive.current = true;
-    load().catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : 'Erro ao consultar'));
+    load().catch((e) => !cancelled && setError(e instanceof ApiError ? e.message : t('Erro ao consultar')));
     const all = timers.current;
     return () => {
       cancelled = true;
@@ -52,13 +61,13 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
       }
       if (!alive.current) return;
       if (s && s.online && s.current === target) {
-        setNote(`Agente atualizado para v${target}.`);
+        setNote(t('Agente atualizado para v{{version}}.', { version: target }));
         setBusy(false);
         void checkStatus(machine.id);
         return;
       }
       if (Date.now() - started > POLL_MAX_MS) {
-        setNote('Ainda reconectando… verifique o agente na máquina.');
+        setNote(t('Ainda reconectando… verifique o agente na máquina.'));
         setBusy(false);
         return;
       }
@@ -75,10 +84,10 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
     try {
       const r = await api.machines.updateAgent(machine.id);
       if (r.restarting) {
-        setNote('Instalando… o agente reinicia e os terminais abertos reconectam.');
+        setNote(t('Instalando… o agente reinicia e os terminais abertos reconectam.'));
         pollUntil(v.latest);
       } else {
-        setNote(`Instalado v${r.installed_version ?? v.latest}; reinicie o agente nesta máquina (termhub-agent run ou o serviço).`);
+        setNote(t('Instalado v{{version}}; reinicie o agente nesta máquina (termhub-agent run ou o serviço).', { version: r.installed_version ?? v.latest }));
         setBusy(false);
       }
     } catch (e) {
@@ -87,10 +96,10 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
       // an error, unless the server already told us the RPC itself failed or npm is missing.
       const cutMidInstall = e instanceof ApiError && (e.status === 504 || e.status === 524 || (e.status === 502 && e.code !== 'AGENT_UPDATE_FAILED' && e.code !== 'AGENT_UPDATE_NPM_MISSING'));
       if (cutMidInstall) {
-        setNote('A conexão caiu durante a instalação; ela pode continuar na máquina. Aguardando o agente voltar…');
+        setNote(t('A conexão caiu durante a instalação; ela pode continuar na máquina. Aguardando o agente voltar…'));
         pollUntil(v.latest);
       } else {
-        setError(e instanceof ApiError ? e.message : 'Erro ao atualizar');
+        setError(e instanceof ApiError ? e.message : t('Erro ao atualizar'));
         setBusy(false);
       }
     }
@@ -102,30 +111,45 @@ export function AgentUpdateCard({ machine }: { machine: Machine }) {
       await updateMachine(machine.id, { agent_auto_update: next });
     } catch (e) {
       setAuto(!next);
-      setError(e instanceof ApiError ? e.message : 'Erro ao salvar');
+      setError(e instanceof ApiError ? e.message : t('Erro ao salvar'));
     }
   };
 
-  const summary = !v ? '…' : !v.current ? 'versão desconhecida' : v.updateAvailable && v.latest ? `v${v.current} · v${v.latest} disponível` : v.latest ? `v${v.current} · atualizado` : `v${v.current}`;
+  const summary = !v
+    ? '…'
+    : !v.current
+      ? t('versão desconhecida')
+      : v.updateAvailable && v.latest
+        ? t('v{{current}} · v{{latest}} disponível', { current: v.current, latest: v.latest })
+        : v.latest
+          ? t('v{{current}} · atualizado', { current: v.current })
+          : `v${v.current}`;
 
   return (
     <div className="rounded-md border border-line bg-bg p-2 text-xs">
       <div className="flex items-center gap-2">
-        <p className="font-medium text-fg-muted">Agente</p>
+        <p className="font-medium text-fg-muted">{t('Agente')}</p>
         <span className="text-fg-dim">{summary}</span>
         {v?.updateAvailable && (
           <span className="ml-auto">
             <button type="button" className="btn-ghost px-2 py-0.5" onClick={() => void update()} disabled={busy || !v.online}>
-              {busy ? '…' : 'Atualizar'}
+              {busy ? '…' : t('Atualizar')}
             </button>
           </span>
         )}
       </div>
       <label className="mt-1 flex items-center gap-2 text-fg-dim">
         <input type="checkbox" checked={auto} onChange={(e) => void toggleAuto(e.target.checked)} />
-        Atualizar automaticamente quando ociosa
+        {t('Atualizar automaticamente quando ociosa')}
       </label>
-      <p className="mt-1 text-fg-dim">Sem terminal aberto e sem ferramenta trabalhando, o servidor instala novas versões do agente sozinho. As sessões do tmux continuam vivas: os terminais reconectam depois da atualização.</p>
+      <p className="mt-1 text-fg-dim">
+        {t('Sem terminal aberto e sem ferramenta trabalhando, o servidor instala novas versões do agente sozinho. As sessões do tmux continuam vivas: os terminais reconectam depois da atualização.')}
+      </p>
+      {v?.belowMin && v.min && (
+        <p className="mt-1 font-medium text-danger" role="alert">
+          {t('Este agente está abaixo da versão mínima do termhub (v{{min}}). Ele é atualizado assim que a máquina ficar ociosa, mesmo com a atualização automática desligada.', { min: v.min })}
+        </p>
+      )}
       {note && <p className="mt-1 text-fg-muted">{note}</p>}
       {error && <p className="mt-1 text-danger">{error}</p>}
     </div>

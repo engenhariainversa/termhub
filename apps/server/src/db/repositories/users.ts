@@ -2,6 +2,7 @@ import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapUser, type User, type UserRole } from './types.js';
+import type { Locale } from '../../i18n/index.js';
 
 export class UsersRepository {
   constructor(private db: PrismaClient) {}
@@ -149,15 +150,30 @@ export class UsersRepository {
     return u?.chatSuggestions ?? true;
   }
 
+  /** The language this person chose (TER-405); null = automatic. */
+  async setLocale(userId: string, locale: Locale | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { locale } });
+  }
+
+  /** The IANA zone the client reported (the daily summary's clock); null when unset. */
+  async timeZone(userId: string): Promise<string | null> {
+    return (await this.db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone ?? null;
+  }
+
+  async setTimeZone(userId: string, timeZone: string): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { timeZone } });
+  }
+
   async setChatSuggestions(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatSuggestions: enabled } });
   }
 
   /** "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): false when
-   *  the row is missing too — off is the safe default, never send keys without an explicit opt-in. */
+   *  the row is missing too — off is the safe default, never send keys without an explicit opt-in.
+   *  Also false while the account waits out its deletion (TER-720): a deactivated account answers nothing. */
   async chatAutodecide(userId: string): Promise<boolean> {
-    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatAutodecide: true } });
-    return u?.chatAutodecide ?? false;
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatAutodecide: true, deletionScheduledAt: true } });
+    return !!u?.chatAutodecide && !u.deletionScheduledAt;
   }
 
   async setChatAutodecide(userId: string, enabled: boolean): Promise<void> {
@@ -172,5 +188,25 @@ export class UsersRepository {
 
   async setChatCodexReplies(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
+  }
+
+  /** The token count the chat's context meter measures against (TER-1038); null = the model's window. */
+  async chatContextLimit(userId: string): Promise<number | null> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatContextLimit: true } });
+    return u?.chatContextLimit ?? null;
+  }
+
+  async setChatContextLimit(userId: string, limit: number | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatContextLimit: limit } });
+  }
+
+  /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */
+  async pushTabFinished(userId: string): Promise<boolean> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { pushTabFinished: true } });
+    return u?.pushTabFinished ?? false;
+  }
+
+  async setPushTabFinished(userId: string, enabled: boolean): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { pushTabFinished: enabled } });
   }
 }

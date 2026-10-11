@@ -1,6 +1,7 @@
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { INPUT_MAX_CHARS, sendTextToSession } from '../terminal/session-ops.js';
+import { tk } from '../i18n/index.js';
 
 // Declared once in session-ops.ts (a future control/terminals.ts will use it too); re-exported
 // here so apps/server/src/routes/tabs.ts keeps its existing named import.
@@ -23,6 +24,6 @@ export async function sendKeysToSession(machine: Machine, session: string, text:
     // with a generic, actionable message instead.
     if (e instanceof HttpError) return { ok: false, error: e.message };
     console.error('sendKeysToSession: falha inesperada ao enviar para o tmux', e);
-    return { ok: false, error: 'Não foi possível enviar o texto para o terminal. Tente novamente.' };
+    return { ok: false, error: tk('Não foi possível enviar o texto para o terminal. Tente novamente.') };
   }
 }

@@ -10,6 +10,7 @@ const listMock = vi.fn();
 const renameMock = vi.fn();
 const revokeMock = vi.fn();
 const eventsMock = vi.fn();
+const testPushMock = vi.fn();
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {
@@ -28,6 +29,7 @@ vi.mock('../lib/api', () => {
         rename: (...a: unknown[]) => renameMock(...a),
         revoke: (...a: unknown[]) => revokeMock(...a),
         events: (...a: unknown[]) => eventsMock(...a),
+        testPush: (...a: unknown[]) => testPushMock(...a),
       },
     },
   };
@@ -225,5 +227,52 @@ describe('DevicesView', () => {
     expect(screen.getByText('20/09/2026')).toBeTruthy();
     expect(screen.getByText('Sessão renovada')).toBeTruthy();
     expect(screen.getByText('21/09/2026')).toBeTruthy();
+  });
+});
+
+describe('DevicesView — notificação de teste (TER-913)', () => {
+  it('is hidden while no active device has notifications on', async () => {
+    listMock.mockResolvedValue({ devices: [dev({ id: 'd1' }), dev({ id: 'd2', status: 'revoked', push_token: 'ExponentPushToken[x]' })] });
+    render(<DevicesView />);
+    await screen.findByText('Aparelhos');
+    expect(screen.queryByRole('button', { name: 'Enviar notificação de teste' })).toBeNull();
+  });
+
+  it('sends the chosen kind and delay to the device and says what happens next', async () => {
+    listMock.mockResolvedValue({ devices: [dev({ id: 'd1', push_token: 'ExponentPushToken[a]' })] });
+    testPushMock.mockResolvedValue({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null });
+    render(<DevicesView />);
+    const send = await screen.findByRole('button', { name: 'Enviar notificação de teste' });
+    // One device: no device picker.
+    expect(screen.queryByLabelText('Aparelho')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Tipo de aviso'), { target: { value: 'reply' } });
+    fireEvent.change(screen.getByLabelText('Quando enviar'), { target: { value: '10' } });
+    fireEvent.click(send);
+    await waitFor(() => expect(testPushMock).toHaveBeenCalledWith('d1', { kind: 'reply', delay_seconds: 10 }));
+    expect(await screen.findByText('Enviando em 10 s. Feche o app para ver como ela chega.')).toBeTruthy();
+  });
+
+  it('picks among several devices, shows a ticket error and a server refusal', async () => {
+    listMock.mockResolvedValue({ devices: [dev({ id: 'd1', push_token: 'ExponentPushToken[a]' }), dev({ id: 'd2', name: 'Pixel', push_token: 'ExponentPushToken[b]' })] });
+    testPushMock.mockResolvedValueOnce({ scheduled_for: '', ticket: { status: 'error', error: 'DeviceNotRegistered' } });
+    render(<DevicesView />);
+    await screen.findByRole('button', { name: 'Enviar notificação de teste' });
+    fireEvent.change(screen.getByLabelText('Aparelho'), { target: { value: 'd2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar notificação de teste' }));
+    await waitFor(() => expect(testPushMock).toHaveBeenCalledWith('d2', { kind: 'confirmation', delay_seconds: 0 }));
+    expect(await screen.findByText('A notificação de teste falhou: DeviceNotRegistered')).toBeTruthy();
+
+    const { ApiError } = await import('../lib/api');
+    testPushMock.mockRejectedValueOnce(new ApiError('Muitas notificações de teste. Espere um minuto e tente de novo.'));
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar notificação de teste' }));
+    expect(await screen.findByText('Muitas notificações de teste. Espere um minuto e tente de novo.')).toBeTruthy();
+  });
+
+  it('needs devices:update', async () => {
+    authMock.can = (_r: string, action?: string) => action !== 'update';
+    listMock.mockResolvedValue({ devices: [dev({ id: 'd1', push_token: 'ExponentPushToken[a]' })] });
+    render(<DevicesView />);
+    await screen.findByText('Aparelhos');
+    expect(screen.queryByRole('button', { name: 'Enviar notificação de teste' })).toBeNull();
   });
 });

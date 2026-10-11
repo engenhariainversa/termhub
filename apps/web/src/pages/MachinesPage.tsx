@@ -1,36 +1,59 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import type { Machine } from '../lib/types';
-import { agentVersionBadge, machineTitle } from '../lib/machine-labels';
+import { AGENT_UNINSTALL_MIN_VERSION, agentVersionBadge, machineTitle, versionAtLeast } from '../lib/machine-labels';
 import { STATUS_DOT, STATUS_LABEL, TYPE_LABEL } from '../lib/machine-status';
-import { MachineForm } from '../components/MachineForm';
+import { MACHINE_FORM_TABS, MachineForm, type MachineFormTab } from '../components/MachineForm';
+import { AiLoginWarnings } from '../components/AiLoginWarnings';
 import { ConfirmDialog } from '../components/Modal';
 import { PageFrame } from '../components/PageHeader';
+import { Trans, useTranslation } from '../i18n';
+
+/** Shell commands to remove an agent by hand (offline or older than 0.22.0); commands, not copy, so not translated. */
+const MANUAL_UNINSTALL_STEPS = ['termhub-agent service uninstall', 'termhub-agent disconnect', 'npm rm -g @termhub/agent'].join('\n');
 
 /** `/machines`: every machine in the scope, with the projects it's linked to and edit/delete actions. */
 export function MachinesPage() {
+  const { t } = useTranslation();
   const { can, viewAs } = useAuth();
   const { machines, projects, hiddenLocal, claimLocal, statuses, missingTmux, deleteMachine, checkStatus } = useData();
-  const [form, setForm] = useState<{ open: boolean; machine?: Machine | null }>({ open: false });
+  const [form, setForm] = useState<{ open: boolean; machine?: Machine | null; tab?: MachineFormTab }>({ open: false });
+  const [params, setParams] = useSearchParams();
+  // Direct link to a machine's form, optionally on one tab: `/machines?edit=<id>&tab=agent`.
+  const editId = params.get('edit');
+  useEffect(() => {
+    if (!editId) return;
+    const m = machines.find((x) => x.id === editId);
+    if (!m) return;
+    const tab = params.get('tab');
+    setForm({ open: true, machine: m, tab: MACHINE_FORM_TABS.includes(tab as MachineFormTab) ? (tab as MachineFormTab) : undefined });
+    setParams({}, { replace: true });
+  }, [editId, machines, params, setParams]);
   const [deleting, setDeleting] = useState<Machine | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  // "Também desinstalar da máquina": on by default every time the dialog opens.
+  const [uninstall, setUninstall] = useState(true);
+  // Enter and the button both confirm: one request at a time.
+  const deletingBusy = useRef(false);
+  const isAgent = deleting?.type === 'agent';
+  const canUninstall = !!deleting && isAgent && statuses[deleting.id] === 'online' && versionAtLeast(deleting.agent_version, AGENT_UNINSTALL_MIN_VERSION);
 
   return (
     <PageFrame
-      title="Máquinas"
+      title={t('Máquinas')}
       actions={
         can('machines', 'create') && (
           <button className="btn-primary text-xs" onClick={() => setForm({ open: true, machine: null })}>
-            + máquina
+            {t('+ máquina')}
           </button>
         )
       }
     >
 
       {machines.length === 0 && hiddenLocal.length === 0 && (
-        <p className="text-sm text-fg-dim">Nenhuma máquina cadastrada. Cadastre uma pelo botão acima ou ao criar um projeto.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhuma máquina cadastrada. Cadastre uma pelo botão acima ou ao criar um projeto.')}</p>
       )}
 
       <ul className="space-y-2">
@@ -43,7 +66,7 @@ export function MachinesPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`}
-                  title={`${STATUS_LABEL[status]} — clique para verificar`}
+                  title={t('{{status}} — clique para verificar', { status: t(STATUS_LABEL[status]) })}
                   onClick={() => void checkStatus(m.id)}
                 />
                 <span className="truncate text-sm font-medium" title={machineTitle(m, status)}>
@@ -54,11 +77,11 @@ export function MachinesPage() {
                     {m.subtitle}
                   </span>
                 )}
-                <span className="text-[11px] text-fg-dim">{TYPE_LABEL[m.type]}</span>
+                <span className="text-[11px] text-fg-dim">{t(TYPE_LABEL[m.type])}</span>
                 {m.os && <span className="text-[11px] text-fg-dim">{m.os === 'macos' ? '' : m.os}</span>}
                 {badge &&
                   (badge.outdated ? (
-                    <button type="button" className="rounded px-1 text-[11px] text-warn hover:bg-bg-3" title={badge.title} onClick={() => setForm({ open: true, machine: m })}>
+                    <button type="button" className={`rounded px-1 text-[11px] hover:bg-bg-3 ${badge.critical ? 'font-medium text-danger' : 'text-warn'}`} title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
                       {badge.text}
                     </button>
                   ) : (
@@ -67,34 +90,35 @@ export function MachinesPage() {
                     </span>
                   ))}
                 {viewAs === 'all' && (
-                  <span className="truncate text-[11px] text-fg-dim" title={m.owner_name ? `Dono: ${m.owner_name}` : 'Sem dono'}>
-                    {m.owner_name ?? 'sem dono'}
+                  <span className="truncate text-[11px] text-fg-dim" title={m.owner_name ? t('Dono: {{name}}', { name: m.owner_name }) : t('Sem dono')}>
+                    {m.owner_name ?? t('sem dono')}
                   </span>
                 )}
                 {missingTmux[m.id] && (
-                  <span className="text-[11px] text-warn" title="tmux não está instalado nesta máquina">
-                    sem tmux
+                  <span className="text-[11px] text-warn" title={t('tmux não está instalado nesta máquina')}>
+                    {t('sem tmux')}
                   </span>
                 )}
                 {m.type === 'agent' && m.hooks_installed_at === null && (
                   <button
                     type="button"
                     className="rounded px-1 text-[11px] text-warn hover:bg-bg-3"
-                    title="Os hooks do monitor não estão instalados: as tabs desta máquina não aparecem em “Precisando de você”. Clique para instalar."
-                    onClick={() => setForm({ open: true, machine: m })}
+                    title={t('Os hooks do monitor não estão instalados: as tabs desta máquina não aparecem em “Precisando de você”. Clique para instalar.')}
+                    onClick={() => setForm({ open: true, machine: m, tab: 'monitor' })}
                   >
-                    sem monitor
+                    {t('sem monitor')}
                   </button>
                 )}
                 <span className="ml-auto flex shrink-0 items-center gap-0.5">
-                  <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title="Editar" onClick={() => setForm({ open: true, machine: m })}>
+                  <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Editar')} onClick={() => setForm({ open: true, machine: m })}>
                     ✎
                   </button>
                   <button
                     className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger"
-                    title="Excluir"
+                    title={t('Excluir')}
                     onClick={() => {
                       setDeleteError(null);
+                      setUninstall(true);
                       setDeleting(m);
                     }}
                   >
@@ -104,7 +128,7 @@ export function MachinesPage() {
               </div>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {linked.length === 0 ? (
-                  <span className="text-[11px] text-fg-dim">nenhum projeto</span>
+                  <span className="text-[11px] text-fg-dim">{t('nenhum projeto')}</span>
                 ) : (
                   linked.map((p) => (
                     <Link key={p.id} to={`/projects/${p.id}`} className="rounded-full bg-bg-4 px-2 py-0.5 text-[11px] text-fg-muted hover:text-fg">
@@ -113,6 +137,7 @@ export function MachinesPage() {
                   ))
                 )}
               </div>
+              <AiLoginWarnings machineId={m.id} className="mt-2" />
             </li>
           );
         })}
@@ -120,15 +145,15 @@ export function MachinesPage() {
 
       {hiddenLocal.length > 0 && (
         <div className="mt-3 text-xs text-fg-dim">
-          <p title="Máquinas marcadas como “o computador que estou usando” em outro navegador. Se esta for a máquina onde você está, clique para vê-la aqui.">
-            {hiddenLocal.length === 1 ? '1 máquina local de outro computador' : `${hiddenLocal.length} máquinas locais de outros computadores`}
+          <p title={t('Máquinas marcadas como “o computador que estou usando” em outro navegador. Se esta for a máquina onde você está, clique para vê-la aqui.')}>
+            {t('{{count}} máquinas locais de outros computadores', { count: hiddenLocal.length })}
           </p>
           <ul className="mt-0.5">
             {hiddenLocal.map((m) => (
               <li key={m.id} className="flex items-center gap-2">
                 <span className="truncate">{m.name}</span>
-                <button className="hover:text-fg" title="Mostrar neste navegador (é o computador que estou usando)" onClick={() => claimLocal(m.id)}>
-                  é este pc
+                <button className="hover:text-fg" title={t('Mostrar neste navegador (é o computador que estou usando)')} onClick={() => claimLocal(m.id)}>
+                  {t('é este pc')}
                 </button>
               </li>
             ))}
@@ -136,27 +161,54 @@ export function MachinesPage() {
         </div>
       )}
 
-      {form.open && <MachineForm key={form.machine?.id ?? 'new'} open onClose={() => setForm({ open: false })} machine={form.machine} />}
+      {form.open && <MachineForm key={form.machine?.id ?? 'new'} open onClose={() => setForm({ open: false })} machine={form.machine} initialTab={form.tab} />}
 
       <ConfirmDialog
         open={!!deleting}
-        title="Excluir máquina"
+        title={t('Excluir máquina')}
         message={
           <>
-            Excluir <strong>{deleting?.name}</strong>? Os projetos vinculados continuam existindo; só o vínculo e as tabs abertas nesta máquina são removidos.
+            <Trans
+              i18nKey="Excluir <0>{{name}}</0>? Os projetos vinculados continuam existindo; só o vínculo e as tabs abertas nesta máquina são removidos."
+              values={{ name: deleting?.name ?? '' }}
+              components={[<strong key="n" />]}
+            />
+            {canUninstall && (
+              <label className="mt-3 flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={uninstall} onChange={(e) => setUninstall(e.target.checked)} />
+                <span>
+                  <span className="text-fg">{t('Também desinstalar da máquina')}</span>
+                  <span className="mt-0.5 block text-fg-dim">
+                    {t('Remove os hooks, encerra as sessões de terminal das tabs desta máquina e remove o serviço e a credencial do agente. O pacote npm continua instalado (npm rm -g @termhub/agent).')}
+                  </span>
+                </span>
+              </label>
+            )}
+            {isAgent && !canUninstall && (
+              <div className="mt-3 text-xs text-fg-dim">
+                <p>{t('O agente continua instalado na máquina. Para removê-lo, rode nela:')}</p>
+                <pre className="mt-1 overflow-x-auto rounded bg-bg-3 px-2 py-1.5 font-mono text-[11px] text-fg-muted">
+                  <code>{MANUAL_UNINSTALL_STEPS}</code>
+                </pre>
+              </div>
+            )}
             {deleteError && <p className="mt-2 text-danger">{deleteError}</p>}
           </>
         }
-        confirmLabel="Excluir"
+        confirmLabel={t('Excluir')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
-          if (!deleting) return;
+          if (!deleting || deletingBusy.current) return;
+          deletingBusy.current = true;
+          setDeleteError(null);
           try {
-            await deleteMachine(deleting.id);
+            await deleteMachine(deleting.id, { uninstall: canUninstall && uninstall });
             setDeleting(null);
           } catch (e) {
-            setDeleteError((e as Error).message || 'Erro ao excluir');
+            setDeleteError((e as Error).message || t('Erro ao excluir'));
+          } finally {
+            deletingBusy.current = false;
           }
         }}
       />

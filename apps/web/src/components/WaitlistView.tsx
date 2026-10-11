@@ -3,6 +3,8 @@ import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { Role, WaitlistEntry, WaitlistInviteResult } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
+import { formatDate, formatDateTime } from '../lib/format';
+import { Trans, useTranslation } from '../i18n';
 
 /**
  * Home "Waitlist" tab: sign-ups from the landing page's Cloud section.
@@ -16,10 +18,11 @@ function csv(entries: WaitlistEntry[]): string {
   return [cols.join(','), ...entries.map((e) => cols.map((c) => esc(e[c])).join(','))].join('\n');
 }
 
-const shortDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
+const shortDate = (iso: string) => formatDate(iso);
 
 /** Confirm + role picker for the alpha invite; shows each entry's outcome once sent. */
 function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEntry[]; roles: Role[]; onClose: () => void; onDone: (results: WaitlistInviteResult[]) => void }) {
+  const { t } = useTranslation();
   const [roleId, setRoleId] = useState(roles.find((r) => r.name === 'AUTHENTICATED')?.id ?? roles[0]?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,7 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
       setResults(results);
       onDone(results);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao convidar');
+      setError(err instanceof ApiError ? err.message : t('Erro ao convidar'));
     } finally {
       setBusy(false);
     }
@@ -44,11 +47,11 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
   const sent = results?.filter((r) => 'mail' in r && r.mail.sent).length ?? 0;
 
   return (
-    <Modal title={many ? `Convidar ${entries.length} alpha testers` : 'Convidar alpha tester'} open onClose={onClose}>
+    <Modal title={many ? t('Convidar {{n}} alpha testers', { n: entries.length }) : t('Convidar alpha tester')} open onClose={onClose}>
       {!results ? (
         <div className="space-y-3">
           <p className="text-xs text-fg-muted">
-            Cria o usuário com a role escolhida (ou reaproveita a conta que já tem esse e-mail), libera o e-mail no Cloudflare Access quando configurado e envia o e-mail de alpha tester com o link do app e do grupo do WhatsApp, no idioma da inscrição.
+            {t('Cria o usuário com a role escolhida (ou reaproveita a conta que já tem esse e-mail), libera o e-mail no Cloudflare Access quando configurado e envia o e-mail de alpha tester com o link do app e do grupo do WhatsApp, no idioma da inscrição.')}
           </p>
           <ul className="max-h-40 overflow-y-auto rounded-md border border-line bg-bg-3 px-3 py-2 text-sm">
             {entries.map((e) => (
@@ -62,13 +65,13 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
           </ul>
           <div>
             <label className="label" htmlFor="waitlist-invite-role">
-              Role
+              {t('Role')}
             </label>
             <select id="waitlist-invite-role" className="input" value={roleId} onChange={(e) => setRoleId(e.target.value)} required>
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
-                  {r.is_admin ? ' (admin)' : ''}
+                  {r.is_admin ? t(' (admin)') : ''}
                 </option>
               ))}
             </select>
@@ -76,17 +79,17 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-ghost" onClick={onClose}>
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button type="button" className="btn-primary" disabled={busy || !roleId} onClick={() => void send()}>
-              {busy ? 'Enviando…' : many ? `Enviar convites (${entries.length})` : 'Enviar convite'}
+              {busy ? t('Enviando…') : many ? t('Enviar convites ({{n}})', { n: entries.length }) : t('Enviar convite')}
             </button>
           </div>
         </div>
       ) : (
         <div className="space-y-3">
           <p className="text-sm">
-            {sent} convite{sent === 1 ? '' : 's'} enviado{sent === 1 ? '' : 's'} de {results.length}.
+            {t('{{count}} convites enviados de {{total}}.', { count: sent, total: results.length })}
           </p>
           <ul className="max-h-60 overflow-y-auto rounded-md border border-line bg-bg-3 px-3 py-2 text-sm">
             {results.map((r) => {
@@ -99,9 +102,9 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
                   </li>
                 );
               const notes = [
-                r.existing ? 'usuário já existia' : 'usuário criado',
-                r.mail.sent ? 'e-mail enviado' : `e-mail falhou: ${r.mail.error ?? 'erro'}`,
-                r.access.configured ? (r.access.synced ? 'Access liberado' : `Access falhou: ${r.access.error ?? 'erro'}`) : null,
+                r.existing ? t('usuário já existia') : t('usuário criado'),
+                r.mail.sent ? t('e-mail enviado') : t('e-mail falhou: {{error}}', { error: r.mail.error ?? t('erro') }),
+                r.access.configured ? (r.access.synced ? t('Access liberado') : t('Access falhou: {{error}}', { error: r.access.error ?? t('erro') })) : null,
               ].filter(Boolean);
               return (
                 <li key={r.id} className={r.mail.sent ? '' : 'text-warn'}>
@@ -112,7 +115,7 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
           </ul>
           <div className="flex justify-end pt-2">
             <button type="button" className="btn-primary" onClick={onClose}>
-              Fechar
+              {t('Fechar')}
             </button>
           </div>
         </div>
@@ -122,6 +125,7 @@ function InviteDialog({ entries, roles, onClose, onDone }: { entries: WaitlistEn
 }
 
 export function WaitlistView() {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const canInvite = can('users', 'create');
   const [entries, setEntries] = useState<WaitlistEntry[] | null>(null);
@@ -139,7 +143,7 @@ export function WaitlistView() {
         setEntries(r.entries);
         setError(null);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : 'Erro ao carregar a waitlist'));
+      .catch((err) => setError(err instanceof ApiError ? err.message : t('Erro ao carregar a waitlist')));
 
   useEffect(() => {
     void load();
@@ -187,39 +191,39 @@ export function WaitlistView() {
     <div>
       <div className="mb-5 flex items-end gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Waitlist do Cloud</h2>
-          <p className="text-sm text-fg-muted">{entries ? `${entries.length} inscrito(s) pela landing page` : 'Carregando…'}</p>
+          <h2 className="text-lg font-semibold">{t('Waitlist do Cloud')}</h2>
+          <p className="text-sm text-fg-muted">{entries ? t('{{n}} inscrito(s) pela landing page', { n: entries.length }) : t('Carregando…')}</p>
         </div>
         <span className="ml-auto flex items-center gap-2">
           {canInvite && selected.size > 0 && (
             <button className="btn-primary text-xs" onClick={() => setInviting((entries ?? []).filter((e) => selected.has(e.id)))}>
-              Convidar selecionados ({selected.size})
+              {t('Convidar selecionados ({{n}})', { n: selected.size })}
             </button>
           )}
-          <input className="input w-48 py-1 text-xs" placeholder="filtrar…" value={filter} onChange={(e) => setFilter(e.target.value)} />
+          <input className="input w-48 py-1 text-xs" placeholder={t('filtrar…')} value={filter} onChange={(e) => setFilter(e.target.value)} />
           <button className="btn-ghost text-xs" onClick={download} disabled={!entries?.length}>
-            ↓ CSV
+            {t('↓ CSV')}
           </button>
-          <button className="btn-ghost text-xs" onClick={() => void load()} title="Recarregar">
+          <button className="btn-ghost text-xs" onClick={() => void load()} title={t('Recarregar')}>
             ↻
           </button>
         </span>
       </div>
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
-      {entries && entries.length === 0 && <p className="text-sm text-fg-dim">Ninguém ainda. O formulário fica na seção Cloud da landing page.</p>}
+      {entries && entries.length === 0 && <p className="text-sm text-fg-dim">{t('Ninguém ainda. O formulário fica na seção Cloud da landing page.')}</p>}
       {visible.length > 0 && (
         <div className="overflow-x-auto rounded-lg border border-line bg-bg-2">
           <table className="w-full text-sm">
             <thead className="text-left text-[11px] uppercase tracking-wide text-fg-dim">
               <tr className="border-b border-line">
                 {canInvite && <th className="w-8 px-3 py-2" />}
-                <th className="px-3 py-2">Quando</th>
-                <th className="px-3 py-2">Nome</th>
-                <th className="px-3 py-2">E-mail</th>
-                <th className="px-3 py-2">Telefone</th>
-                <th className="px-3 py-2">Links</th>
-                <th className="px-3 py-2">Idioma</th>
-                <th className="px-3 py-2">Convite</th>
+                <th className="px-3 py-2">{t('Quando')}</th>
+                <th className="px-3 py-2">{t('Nome')}</th>
+                <th className="px-3 py-2">{t('E-mail')}</th>
+                <th className="px-3 py-2">{t('Telefone')}</th>
+                <th className="px-3 py-2">{t('Links')}</th>
+                <th className="px-3 py-2">{t('Idioma')}</th>
+                <th className="px-3 py-2">{t('Convite')}</th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -228,10 +232,10 @@ export function WaitlistView() {
                 <tr key={e.id} className="border-b border-line last:border-0 hover:bg-bg-3">
                   {canInvite && (
                     <td className="px-3 py-2">
-                      <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} aria-label={`Selecionar ${e.email}`} />
+                      <input type="checkbox" checked={selected.has(e.id)} onChange={() => toggle(e.id)} aria-label={t('Selecionar {{email}}', { email: e.email })} />
                     </td>
                   )}
-                  <td className="whitespace-nowrap px-3 py-2 text-xs text-fg-dim">{new Date(e.created_at).toLocaleString('pt-BR')}</td>
+                  <td className="whitespace-nowrap px-3 py-2 text-xs text-fg-dim">{formatDateTime(e.created_at)}</td>
                   <td className="px-3 py-2">
                     {e.first_name} {e.last_name}
                   </td>
@@ -244,26 +248,28 @@ export function WaitlistView() {
                   <td className="px-3 py-2 text-xs">
                     {e.linkedin && (
                       <a href={e.linkedin} target="_blank" rel="noreferrer" className="mr-2 text-accent hover:underline">
+                        {/* i18n-ignore */}
                         LinkedIn
                       </a>
                     )}
                     {e.github && (
                       <a href={e.github} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                        {/* i18n-ignore */}
                         GitHub
                       </a>
                     )}
                   </td>
                   <td className="px-3 py-2 text-xs uppercase text-fg-dim">{e.locale}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-xs">
-                    {e.invited_at ? <span className="text-ok">Convidado em {shortDate(e.invited_at)}</span> : <span className="text-fg-dim">—</span>}
+                    {e.invited_at ? <span className="text-ok">{t('Convidado em {{date}}', { date: shortDate(e.invited_at) })}</span> : <span className="text-fg-dim">—</span>}
                     {canInvite && (
                       <button className="btn-ghost ml-2 px-2 py-0.5 text-xs" onClick={() => setInviting([e])}>
-                        {e.invited_at ? 'Reenviar' : 'Convidar'}
+                        {e.invited_at ? t('Reenviar') : t('Convidar')}
                       </button>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-danger" title="Remover" onClick={() => setDeleting(e)}>
+                    <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-danger" title={t('Remover')} onClick={() => setDeleting(e)}>
                       ✕
                     </button>
                   </td>
@@ -276,13 +282,9 @@ export function WaitlistView() {
       {inviting && <InviteDialog entries={inviting} roles={roles} onClose={() => setInviting(null)} onDone={onInvited} />}
       <ConfirmDialog
         open={!!deleting}
-        title="Remover da waitlist"
-        message={
-          <>
-            Remover <strong>{deleting?.email}</strong> da lista?
-          </>
-        }
-        confirmLabel="Remover"
+        title={t('Remover da waitlist')}
+        message={<Trans i18nKey="Remover <0>{{email}}</0> da lista?" values={{ email: deleting?.email ?? '' }} components={[<strong key="e" />]} />}
+        confirmLabel={t('Remover')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
@@ -291,7 +293,7 @@ export function WaitlistView() {
             await api.waitlist.remove(deleting.id);
             setEntries((l) => (l ?? []).filter((x) => x.id !== deleting.id));
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Erro ao remover');
+            setError(err instanceof ApiError ? err.message : t('Erro ao remover'));
           }
           setDeleting(null);
         }}

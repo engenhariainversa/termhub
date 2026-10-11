@@ -110,7 +110,8 @@ describe('ReviewAccountPanel', () => {
     listMock.mockResolvedValue({ users: [adminUser({ id: 'admin1', name: 'Pedro' })] });
     setReviewMock.mockResolvedValue({ user: targetUser() });
     devicesMock.mockResolvedValue({ devices: [dev({ id: 'd1' })], events: [], can_enrol: true });
-    const until = '2026-10-05T12:00:00.000Z';
+    // Always in the future: a fixed date made this test fail once the clock passed it.
+    const until = new Date(Date.now() + 3 * 86_400_000).toISOString();
     render(<ReviewAccountPanel user={targetUser({ review_enabled_until: until, review_enabled_by: 'admin1' })} onChange={() => {}} />);
 
     expect(await screen.findByText(`ligado até ${new Date(until).toLocaleString('pt-BR')} por Pedro`)).toBeTruthy();

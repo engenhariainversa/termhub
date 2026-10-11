@@ -1,4 +1,5 @@
 import type { ChannelClosedReason } from '../agent/connection.js';
+import { MODEL_RE } from '../setup/schema.js';
 
 /** Status of a subagent task in the CLI. */
 export type SubagentStatus = 'running' | 'stopping' | 'completed' | 'failed' | 'stopped' | 'interrupted';
@@ -44,8 +45,9 @@ export type ChatFrame =
   | { type: 'api_error'; reason: ChatFailureReason }
   /** The account hit its usage limit (`rate_limit_event` rejected); `resets_at` is ISO, or null when not said. */
   | { type: 'usage_limit'; resets_at: string | null }
-  /** Where this run's session lives on the machine (`<config dir>/projects/<cwd slug>`), from `init`. */
-  | { type: 'session_dir'; dir: string };
+  /** From `init`: where this run's session lives on the machine (`<config dir>/projects/<cwd slug>`), and
+   *  the model it runs on (an id, e.g. "claude-opus-5-5"; TER-837). Either may be null when not said. */
+  | { type: 'init'; dir: string | null; model: string | null };
 
 /**
  * Every label a runner may end a failed run with: the container's `FailureReason`, the protocol's
@@ -229,8 +231,9 @@ export function parseFrame(line: string): ChatFrame | null {
     return { type: 'usage_limit', resets_at: count(info.resetsAt) > 0 ? new Date((info.resetsAt as number) * 1000).toISOString() : null };
   }
   if (type === 'system' && f.subtype === 'init') {
-    const dir = sessionDirOf((f.memory_paths as { auto?: unknown } | undefined)?.auto);
-    return dir ? { type: 'session_dir', dir } : null;
+    const dir = sessionDirOf((f.memory_paths as { auto?: unknown } | undefined)?.auto) ?? null;
+    const model = typeof f.model === 'string' && MODEL_RE.test(f.model) ? f.model : null;
+    return dir || model ? { type: 'init', dir, model } : null;
   }
   if (type === 'system' && f.subtype === 'background_tasks_changed') return { type: 'background', count: Array.isArray(f.tasks) ? f.tasks.length : 0 };
   if (type === 'result') {

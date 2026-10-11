@@ -1,6 +1,7 @@
 import { parseRef } from '../../memory/refs.js';
 import type { ChatDecision } from './chat-decisions.js';
 import type { Repositories } from './index.js';
+import type { AutoAnswerBy } from './tab-questions.js';
 
 /** One memory ref an automatic decision cited, as the chat shows it (TER-641). A `decision:` ref of the
  * person's own that still exists carries its recorded question and answer; any other ref (a card, a
@@ -11,17 +12,22 @@ export interface AutoDecisionSource {
   answer: string | null;
 }
 
-/** "Decisão automática" (TER-641): what the concierge (or the repeat path) sent a tab on its own, from
- * memory — the reason it gave and the refs it cited. Absent (null) on anything decided by a click. */
+/** "Decisão automática" (TER-641): what the concierge (or the repeat path, or automatic board work) sent a
+ * tab on its own, from memory — the reason it gave and the refs it cited. Absent (null) on anything decided by a click. */
 export interface AutoDecisionView {
   reason: string | null;
   sources: AutoDecisionSource[];
+  /** Who decided, on a question card's countdown (`AutoAnswer.by`): `'automation'` is the option the agent
+   *  recommended in a tab with an automatic run — screens show its reason in the reader's language
+   *  ("Opção recomendada pelo agente") and no sources. Absent on an action card. */
+  by?: AutoAnswerBy;
 }
 
 /** What a caller knows before resolving: the reason and the cited refs (`kind:id`), or null for no badge. */
 export interface AutoDecisionInput {
   reason: string | null;
   refs: string[];
+  by?: AutoAnswerBy;
 }
 
 /** The tools whose optional `sources`/`reason` mark a send as decided from memory (TER-641). */
@@ -59,6 +65,7 @@ export async function describeAutoDecisions(repos: Pick<Repositories, 'chatDecis
         const d = parsed?.kind === 'decision' ? byId.get(parsed.id) : undefined;
         return { ref, question: d ? d.question : null, answer: d ? answerText(d) : null };
       }),
+      ...(input.by ? { by: input.by } : {}),
     };
   });
 }

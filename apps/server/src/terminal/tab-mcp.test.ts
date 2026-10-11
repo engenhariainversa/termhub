@@ -14,7 +14,7 @@ vi.mock('../agent/errors.js', async (orig) => ({ ...(await orig<typeof import('.
 vi.mock('../agent/registry.js', () => ({ agents: { info } }));
 vi.mock('./machine-exec.js', async (orig) => ({ ...(await orig<typeof import('./machine-exec.js')>()), runOnMachineWithInput }));
 
-const { installTabMcp, removeTabMcp, tabMcpSupported, TAB_MCP_MIN_AGENT_VERSION } = await import('./tab-mcp.js');
+const { guardSupported, installTabMcp, removeTabMcp, tabMcpSupported, GUARD_MIN_AGENT_VERSION, TAB_MCP_MIN_AGENT_VERSION } = await import('./tab-mcp.js');
 
 const machine = (type: Machine['type'], agent_version: string | null = null): Machine =>
   ({ id: 'm1', name: 'jarvis', type, os: 'linux', capabilities: ['tmux'], owner_id: 'u1', agent_version }) as Machine;
@@ -116,5 +116,20 @@ describe('removeTabMcp', () => {
     runOnMachineWithInput.mockRejectedValue(new Error('ssh down'));
     await expect(removeTabMcp(machine('ssh'), 'abc')).resolves.toBeUndefined();
     await expect(removeTabMcp(machine('ssh'), '../x')).resolves.toBeUndefined();
+  });
+});
+
+describe('guardSupported (TER-993)', () => {
+  it('never for ssh or local (they do not run automatic work), for an agent only from 0.19.0', () => {
+    expect(GUARD_MIN_AGENT_VERSION).toBe('0.19.0');
+    expect(guardSupported(machine('ssh'))).toBe(false);
+    expect(guardSupported(machine('local'))).toBe(false);
+    expect(guardSupported(machine('agent', '0.18.0'))).toBe(false);
+    expect(guardSupported(machine('agent', '0.19.0'))).toBe(true);
+    expect(guardSupported(machine('agent', null))).toBe(false);
+    info.mockReturnValue({ agent_version: '0.19.0' });
+    expect(guardSupported(machine('agent', '0.18.0'))).toBe(true);
+    info.mockReturnValue({ agent_version: '0.18.9' });
+    expect(guardSupported(machine('agent', '0.19.0'))).toBe(false);
   });
 });

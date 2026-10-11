@@ -366,6 +366,7 @@ it('requestPinProofs asks the PIN once, then signs one decision challenge per ac
   const secret = fromB64url(await enrol(ctx));
   const { store } = ctx;
   const challenge = jest.spyOn(ctx.api, 'challenge');
+  const decisionChallenges = jest.spyOn(ctx.api, 'decisionChallenges');
   const seen: Record<string, Proof>[] = [];
   const perform = jest.fn(async (proofs: Record<string, Proof>) => {
     expect(store.getState()).toMatchObject({ pinPrompt: { actionIds: ['a1', 'a2'] }, busy: true });
@@ -376,9 +377,10 @@ it('requestPinProofs asks the PIN once, then signs one decision challenge per ac
   expect(store.getState().pinPrompt).toEqual({ actionId: 'a1', actionIds: ['a1', 'a2'], decision: 'approve' });
   await store.getState().resolvePinPrompt(PIN);
   await pending;
-  expect(challenge).toHaveBeenCalledTimes(2);
-  expect(challenge).toHaveBeenNthCalledWith(1, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a1' });
-  expect(challenge).toHaveBeenNthCalledWith(2, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a2' });
+  // One authenticated call for the whole batch (TER-530), never one anonymous `session/challenge` each.
+  expect(decisionChallenges).toHaveBeenCalledTimes(1);
+  expect(decisionChallenges).toHaveBeenCalledWith(expect.anything(), { action_ids: ['a1', 'a2'] });
+  expect(challenge).not.toHaveBeenCalled();
   expect(perform).toHaveBeenCalledTimes(1);
   expect(Object.keys(seen[0]!)).toEqual(['a1', 'a2']);
   for (const id of ['a1', 'a2']) {
@@ -387,6 +389,48 @@ it('requestPinProofs asks the PIN once, then signs one decision challenge per ac
   }
   expect(seen[0]!.a1!.challenge).not.toBe(seen[0]!.a2!.challenge);
   expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null });
+});
+
+it('requestPinProofs: a batch of 13 approvals goes through even where session/challenge answers 429 from the sixth call on (TER-530)', async () => {
+  const ctx = setup();
+  const secret = fromB64url(await enrol(ctx));
+  const { store } = ctx;
+  // The proxy's budget for the anonymous session routes (2 r/s, burst 5): what one challenge per action hit.
+  let calls = 0;
+  const realChallenge = ctx.api.challenge.bind(ctx.api);
+  jest.spyOn(ctx.api, 'challenge').mockImplementation(async (body) => {
+    if (++calls > 5) throw new ApiError(429, 'HTTP_429', 'Erro do servidor (429)');
+    return realChallenge(body);
+  });
+  const ids = Array.from({ length: 13 }, (_, i) => `a${i + 1}`);
+  const seen: Record<string, Proof>[] = [];
+  const pending = store.getState().requestPinProofs(ids, async (proofs) => {
+    seen.push(proofs);
+  });
+
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(calls).toBe(0);
+  expect(Object.keys(seen[0]!)).toEqual(ids);
+  for (const id of ids) expect(seen[0]![id]!.pin_proof).toBe(decisionProof(secret, seen[0]![id]!.challenge, id, 'approve'));
+  expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null });
+});
+
+it('requestPinProofs: a server without the batch route (404) still gets one challenge per action', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const { store } = ctx;
+  jest.spyOn(ctx.api, 'decisionChallenges').mockRejectedValue(new ApiError(404, 'HTTP_404', 'Erro do servidor (404)'));
+  const challenge = jest.spyOn(ctx.api, 'challenge');
+  const perform = jest.fn(noop);
+  const pending = store.getState().requestPinProofs(['a1', 'a2'], perform);
+
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(challenge).toHaveBeenCalledTimes(2);
+  expect(challenge).toHaveBeenNthCalledWith(1, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a1' });
+  expect(challenge).toHaveBeenNthCalledWith(2, { device_id: store.getState().deviceId, purpose: 'decision', action_id: 'a2' });
+  expect(perform).toHaveBeenCalledTimes(1);
 });
 
 it('requestPinProofs: a PIN_INVALID from perform keeps the batch prompt open; the next PIN goes through', async () => {

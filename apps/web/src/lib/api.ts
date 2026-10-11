@@ -1,4 +1,10 @@
-import type { AccessStatus, ApiToken, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView } from './types';
+import { currentLocale, i18n, type Locale } from '../i18n';
+import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { DataExportStatus } from './types';
+import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
+import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
+import type { LegalStatus } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -16,8 +22,13 @@ export function readCookie(name: string): string | undefined {
   return m ? decodeURIComponent(m[1]) : undefined;
 }
 
+function securityEventQuery(params: Record<string, string | undefined>): string {
+  return new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => !!e[1])).toString();
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { accept: 'application/json' };
+  // the server answers errors (and anything it words) in the language on screen
+  const headers: Record<string, string> = { accept: 'application/json', 'accept-language': currentLocale() };
   const raw = body instanceof Blob;
   if (raw) headers['content-type'] = body.type || 'application/octet-stream';
   else if (body !== undefined) headers['content-type'] = 'application/json';
@@ -44,8 +55,11 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 function errorFrom(status: number, data: unknown): ApiError {
   const d = (data ?? {}) as { error?: string; code?: string; issues?: unknown };
-  if (status === 401) window.dispatchEvent(new CustomEvent('termhub:unauthorized'));
-  return new ApiError(status, d.error ?? `Erro ${status}`, d.code, d.issues);
+  // A wrong password/code while re-authenticating is a 401 too, but the session is still fine.
+  if (status === 401 && d.code !== 'REAUTH_FAILED') window.dispatchEvent(new CustomEvent('termhub:unauthorized'));
+  // The account asked to be deleted (maybe from another device): the auth layer refetches /auth/me and shows the gate.
+  if (status === 403 && d.code === 'ACCOUNT_PENDING_DELETION') window.dispatchEvent(new CustomEvent('termhub:pending-deletion'));
+  return new ApiError(status, d.error ?? i18n.t('Erro {{status}}', { status }), d.code, d.issues);
 }
 
 /**
@@ -57,7 +71,7 @@ function errorFrom(status: number, data: unknown): ApiError {
 function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new ApiError(0, 'Envio cancelado', 'ABORTED'));
+      reject(new ApiError(0, i18n.t('Envio cancelado'), 'ABORTED'));
       return;
     }
     const xhr = new XMLHttpRequest();
@@ -65,14 +79,15 @@ function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => 
     xhr.withCredentials = true;
     xhr.responseType = 'text';
     xhr.setRequestHeader('accept', 'application/json');
+    xhr.setRequestHeader('accept-language', currentLocale());
     xhr.setRequestHeader('content-type', body.type || 'application/octet-stream');
     const csrf = readCookie('termhub_csrf');
     if (csrf) xhr.setRequestHeader('x-csrf-token', csrf);
     xhr.upload.onprogress = (ev) => {
       if (ev.lengthComputable && onProgress) onProgress(ev.loaded / ev.total);
     };
-    xhr.onerror = () => reject(new ApiError(0, 'Sem conexão com o servidor', 'NETWORK'));
-    xhr.onabort = () => reject(new ApiError(0, 'Envio cancelado', 'ABORTED'));
+    xhr.onerror = () => reject(new ApiError(0, i18n.t('Sem conexão com o servidor'), 'NETWORK'));
+    xhr.onabort = () => reject(new ApiError(0, i18n.t('Envio cancelado'), 'ABORTED'));
     xhr.onload = () => {
       let data: unknown = null;
       try {
@@ -89,9 +104,20 @@ function upload<T>(path: string, body: Blob, onProgress?: (fraction: number) => 
 }
 
 export const api = {
+  /** A file an agent wrote, read on its machine (spec 2026-10-04 file preview): by the project's machines, or by the person's. */
+  filePreview: (q: { path: string; project_id?: string | null; machine_id?: string | null; tab_id?: string | null }) => {
+    const p = new URLSearchParams({ path: q.path });
+    if (q.project_id) p.set('project_id', q.project_id);
+    if (q.machine_id) p.set('machine_id', q.machine_id);
+    if (q.tab_id) p.set('tab_id', q.tab_id);
+    return request<FilePreview>('GET', `/file-preview?${p}`);
+  },
+  /** A project's recent Markdown files on its machines (spec 2026-10-04 recent Markdown files). */
+  fileRecent: (projectId: string) => request<FileRecentResponse>('GET', `/file-recent?${new URLSearchParams({ project_id: projectId })}`),
   auth: {
     config: () => request<AuthConfig>('GET', '/auth/config'),
-    me: () => request<{ user: User; view_as: ViewAs }>('GET', '/auth/me'),
+    /** `legal` is absent on servers older than TER-742 */
+    me: () => request<{ user: User; view_as: ViewAs; legal?: LegalStatus }>('GET', '/auth/me'),
     /** admin only: null = self, '*' = everything, or a user id */
     viewAs: (user_id: string | null) => request<{ view_as: ViewAs }>('POST', '/auth/view-as', { user_id }),
     login: (email: string, password: string) => request<{ user: User }>('POST', '/auth/login', { email, password }),
@@ -102,6 +128,10 @@ export const api = {
      *  reserved word, 409 NICKNAME_TAKEN when somebody else already holds it, 409 NICKNAME_LOCKED
      *  when the account already has one (a claimed address is never changed). */
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
+    /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
+    setLocale: (locale: Locale | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
+    /** The browser's IANA zone, for the automation's daily summary hour. 204. */
+    setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
     cityLink: () => request<CityLink>('GET', '/auth/me/city-link'),
     /** 400 SHORT_LINK_INVALID, 400 SHORT_LINK_MISMATCH (the message says where the link really goes), 502 SHORT_LINK_UNREACHABLE */
@@ -109,12 +139,36 @@ export const api = {
     /** back to the partner link */
     clearCustomCityLink: () => request<CityLink>('DELETE', '/auth/me/city-link/custom'),
   },
+  /** Acceptance of the Terms of Use and of the Privacy Policy (TER-742). */
+  legal: {
+    status: () => request<LegalStatus>('GET', '/legal/status'),
+    /** every id must be a pending or upcoming version of this user (400 otherwise); answers the new status */
+    accept: (version_ids: string[], channel?: 'web' | 'checkout') =>
+      request<LegalStatus>('POST', '/legal/accept', channel ? { version_ids, channel } : { version_ids }),
+  },
+  /** The person's own account (TER-720). Only `deletion` and its DELETE answer while a deletion is pending. */
+  account: {
+    deletion: () => request<AccountDeletionStatus>('GET', '/account/deletion'),
+    /** e-mails a 6-digit code that confirms the request; 429 RATE_LIMITED, 502 SEND_FAILED */
+    sendDeletionCode: () => request<{ ok: true; ttl_minutes: number }>('POST', '/account/deletion/code'),
+    /** deactivates the account and schedules its deletion. Ends every session, this one included.
+     *  401 REAUTH_FAILED (wrong password/code), 429 LOCKED, 409 LAST_ADMIN. */
+    requestDeletion: (reauth: { password: string } | { code: string }) => request<AccountDeletionStatus>('POST', '/account/deletion', reauth),
+    cancelDeletion: () => request<AccountDeletionStatus>('DELETE', '/account/deletion'),
+    /** "Exportar meus dados" (TER-741): the latest request and when another may be asked. */
+    dataExport: () => request<DataExportStatus>('GET', '/account/export'),
+    /** builds the archive in the background and e-mails when it is ready; 409 EXPORT_IN_PROGRESS, 429 RATE_LIMITED (one a day) */
+    requestDataExport: () => request<DataExportStatus>('POST', '/account/export'),
+    /** The zip, for the signed-in account only (404 EXPORT_NOT_FOUND once its 7 days are over). */
+    dataExportUrl: (id: string) => `/api/account/export/${encodeURIComponent(id)}/download`,
+  },
   machines: {
     list: () => request<{ machines: Machine[]; latest_agent_version: string | null }>('GET', '/machines'),
     /** for `type: 'agent'`, the response also carries `agent_token` (the plaintext token, shown only once) */
     create: (input: Partial<Machine>) => request<{ machine: Machine; agent_token?: string }>('POST', '/machines', input),
     update: (id: string, input: Partial<Machine>) => request<{ machine: Machine }>('PATCH', `/machines/${id}`, input),
-    remove: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}`),
+    /** `uninstall`: also remove the hooks, the tabs' tmux sessions and the agent's service + token from the machine (agent 0.20.0+, online). */
+    remove: (id: string, opts?: { uninstall?: boolean }) => request<{ ok: true }>('DELETE', `/machines/${id}${opts?.uninstall ? '?uninstall=1' : ''}`),
     status: (id: string) =>
       request<{
         id: string;
@@ -126,6 +180,8 @@ export const api = {
         last_seen_at?: string | null;
         latest_agent_version?: string | null;
         update_available?: boolean;
+        min_agent_version?: string;
+        below_min_version?: boolean;
       }>('GET', `/machines/${id}/status`),
     /** installs the latest @termhub/agent through the agent; `restarting` = poll the status until the version changes */
     updateAgent: (id: string) => request<{ installed_version: string | null; restart: 'service' | 'manual'; restarting: boolean }>('POST', `/machines/${id}/agent/update`, {}),
@@ -136,6 +192,7 @@ export const api = {
     hooks: (id: string) => request<MachineHooks>('GET', `/machines/${id}/hooks`),
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
+    networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
     startWdaSetup: (id: string) => request<{ ok: true }>('POST', `/machines/${id}/simulator/setup`, {}),
     /** subpastas de `path` (padrão $HOME) + discos/mounts da máquina */
     hardware: (id: string) => request<{ hardware: HardwareSnapshot }>('GET', `/machines/${id}/hardware`),
@@ -181,7 +238,7 @@ export const api = {
    * predates trusted tabs, trusted projects or standing grants has none. */
   chat: Object.assign(
     (projectId?: string | null) =>
-      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[]; context_limit?: number | null }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
     {
       /** Files attached to a message before it is sent (spec §5.3). */
       attachments: {
@@ -200,6 +257,8 @@ export const api = {
         /** Only while the attachment is not yet sent (409 once it belongs to a message, 404 for another user's). */
         remove: (id: string) => request<{ ok: true }>('DELETE', `/chat/attachments/${encodeURIComponent(id)}`),
         status: (id: string) => request<{ attachment: ChatAttachment }>('GET', `/chat/attachments/${encodeURIComponent(id)}/status`),
+        /** A transcription whisper could not do goes back to the queue; the row answers pending (409 when a retry cannot help). */
+        retry: (id: string) => request<{ attachment: ChatAttachment }>('POST', `/chat/attachments/${encodeURIComponent(id)}/retry`),
         /** The download (images are served inline, everything else as an attachment). */
         url: (id: string) => `/api/chat/attachments/${encodeURIComponent(id)}`,
       },
@@ -245,20 +304,22 @@ export const api = {
    *  CHAT_AGENT_TOO_OLD when the host cannot run it, 409 CHAT_ARCHIVED or CHAT_BUSY while a reset is
    *  under way (each with its pt-BR sentence); 409 ATTACHMENT_UNAVAILABLE when an id is not this
    *  conversation's, already sent or invalid (the text and chips stay in the box); 409 REPLY_UNAVAILABLE
-   *  when the quoted message (`replyToId`, TER-447) is gone or empty. `text` may be empty
-   *  when there is at least one attachment. */
-  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], replyToId?: string) =>
+   *  when the quoted message (`reply`, TER-447: a message id) or card (TER-849) is gone or empty. `text`
+   *  may be empty when there is at least one attachment. */
+  sendChatMessage: (text: string, projectId?: string | null, attachmentIds?: string[], reply?: string | { kind: ReplyCardKind; id: string }) =>
     request<{ conversation_id: string; user_message_id: string; assistant_message_id: string }>('POST', '/chat/messages', {
       text,
       ...(projectId ? { project_id: projectId } : {}),
       ...(attachmentIds && attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
-      ...(replyToId ? { reply_to_id: replyToId } : {}),
+      ...(typeof reply === 'string' ? { reply_to_id: reply } : reply ? { reply_to_card: reply } : {}),
       wait: false,
     }),
   /** "Nova conversa": archives the scope's active conversation (the transcript is kept) and answers the
    *  fresh one. 409 CHAT_BUSY while an answer is being written, 409 CHAT_ARCHIVED if the send that lost
    *  the race already ran against the conversation this call just archived. */
   resetChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/reset', projectId ? { project_id: projectId } : {}),
+  /** "Apagar conversa" (TER-743): like `resetChat`, but the old conversation is deleted for good. Same 409s. */
+  deleteChat: (projectId?: string | null) => request<{ conversation: ChatConversation }>('POST', '/chat/delete', projectId ? { project_id: projectId } : {}),
   /** "Compactar" (TER-315): runs `/compact` on the scope's session. 202 once it started; the end comes
    *  over /ws/chat (`compact`, `context`). 409 CHAT_BUSY while an answer is being written,
    *  CHAT_NOTHING_TO_COMPACT before the first answer, and the host 409s (each with its pt-BR sentence). */
@@ -301,7 +362,7 @@ export const api = {
    *  answer stays as the pre-selection. 409 `NOT_SCHEDULED` when no countdown is running. */
   cancelAutoAnswer: (id: string) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/auto-answer/cancel`, {}),
   /** The last lines of the tab, live, for a permission card; 409 once the question is closed. */
-  tabQuestionScreen: (id: string) => request<{ text: string }>('GET', `/chat/tab-questions/${encodeURIComponent(id)}/screen`),
+  tabQuestionScreen: (id: string) => request<TabQuestionScreen>('GET', `/chat/tab-questions/${encodeURIComponent(id)}/screen`),
   /** Sends a tab's suggestion, as edited (409 `TAB_PROMPT_CHANGED` when the tab's prompt changed). */
   sendTabSuggestion: (id: string, text: string) => request<{ tab_suggestion: TabSuggestion }>('POST', `/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { text }),
   /** "Dispensar": closes the card; the tab is not touched. */
@@ -323,7 +384,7 @@ export const api = {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with no key. `codex_replies` is the opt-in for the Codex reply card. */
-  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
     request<ChatMemory>('PATCH', '/chat/memory', typeof body === 'boolean' ? { enabled: body } : body),
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `chatDecisions`. */
   chatNotes: (cursor?: string | null) => {
@@ -338,6 +399,8 @@ export const api = {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */
     openTabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/open-tabs'),
+    /** the tabs an automatic run works in, with the card's ref (TER-1044) */
+    autoRuns: () => request<{ items: Array<{ tab_id: string; ref: string }> }>('GET', '/monitor/auto-runs'),
   },
   tasks: {
     list: (projectId: string) => request<BoardData>('GET', `/projects/${projectId}/tasks`),
@@ -352,6 +415,8 @@ export const api = {
     reorder: (id: string, position: number) => request<{ task: Task }>('POST', `/tasks/${id}/reorder`, { position }),
     /** The card's pull requests (a subtask answers its parent's). */
     pullRequests: (id: string) => request<{ pull_requests: PullRequestBadge[] }>('GET', `/tasks/${id}/pull-requests`),
+    /** What the automatic work did on the card and its subtasks, newest first (the card's page). */
+    activity: (id: string) => request<{ events: AutomationFeedEvent[] }>('GET', `/tasks/${id}/activity`),
     pushStatus: (id: string) => request<{ task: Task; state: string }>('POST', `/tasks/${id}/push-status`, {}),
     openTerminal: (id: string, machineId?: string) =>
       request<{ task: Task; tab: Tab; created: boolean }>('POST', `/tasks/${id}/terminal`, machineId ? { machine_id: machineId } : {}),
@@ -387,6 +452,19 @@ export const api = {
     test: (input: { provider: IntegrationProvider; config: Record<string, unknown>; secret?: string; integration_id?: string }) =>
       request<ConnectionInfo>('POST', '/integrations/test', input),
   },
+  automation: {
+    queue: (projectId: string) => request<{ items: AutomationQueueItem[] }>('GET', `/projects/${projectId}/automation/queue`),
+    /** Tokens and cost per card, epic and account; `from`/`to` are `YYYY-MM-DD` (open when absent). */
+    usage: (projectId: string, range: { from?: string; to?: string } = {}) => {
+      const q = new URLSearchParams(Object.entries(range).filter((e): e is [string, string] => typeof e[1] === 'string')).toString();
+      return request<AutomationUsage>('GET', `/projects/${projectId}/automation/usage${q ? `?${q}` : ''}`);
+    },
+    promptDefaults: () => request<{ implementer: string; integrator: string; fixer: string }>('GET', '/automation/prompt-defaults'),
+    pauseState: () => request<AutomationPauseState>('GET', '/automation/state'),
+    /** `scope`: `all` ("Pausar tudo") or a project id. `interrupt` also asks to stop the tabs running now. */
+    pause: (scope: string, interrupt = false) => request<{ paused_at: string }>('POST', '/automation/pause', { scope, interrupt }),
+    resume: (scope: string) => request<void>('POST', '/automation/resume', { scope }),
+  },
   setup: {
     get: (projectId: string) => request<{ setup: ProjectSetup }>('GET', `/projects/${projectId}/setup`),
     save: (projectId: string, data: ProjectSetupData) => request<{ setup: ProjectSetup }>('PUT', `/projects/${projectId}/setup`, data),
@@ -402,10 +480,18 @@ export const api = {
     list: () => request<{ accounts: AiAccount[] }>('GET', '/ai-accounts'),
     create: (input: { provider: AiProvider; label: string; machine_id: string; config_dir?: string | null }) =>
       request<{ account: AiAccount }>('POST', '/ai-accounts', input),
-    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
+    update: (id: string, input: { label?: string; machine_id?: string; config_dir?: string | null; exclusive_project_id?: string | null }) => request<{ account: AiAccount }>('PATCH', `/ai-accounts/${id}`, input),
     remove: (id: string) => request<{ ok: true }>('DELETE', `/ai-accounts/${id}`),
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),
+    /** TER-1047: the login state of every account in scope; `refresh` asks the machines again. */
+    loginStatus: (refresh = false) => request<{ accounts: AiLoginStatusRow[] }>('GET', `/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`),
+    /** Starts a login flow in a hidden session on the account's machine. 400/403/409/503 carry a message to show. */
+    startLogin: (id: string) => request<AiLoginStart>('POST', `/ai-accounts/${id}/login`),
+    /** Claude: the code the page showed; Codex: null (just "already authorized"). 404 LOGIN_NOT_FOUND once expired. */
+    submitLogin: (id: string, loginId: string, code: string | null) => request<AiLoginSubmitResult>('POST', `/ai-accounts/${id}/login/${loginId}/submit`, { code }),
+    cancelLogin: (id: string, loginId: string) => request<{ cancelled: true }>('DELETE', `/ai-accounts/${id}/login/${loginId}`),
+    resumeAfterLogin: (id: string, tabIds: string[]) => request<{ resumed: string[] }>('POST', `/ai-accounts/${id}/login/resume`, { tab_ids: tabIds }),
   },
   roles: {
     list: () => request<{ roles: Role[] }>('GET', '/roles'),
@@ -423,7 +509,7 @@ export const api = {
     resendInvite: (id: string) => request<InviteResult>('POST', `/users/${id}/invite`),
     inviteFromWaitlist: (input: { ids: string[]; role_id: string }) => request<{ results: WaitlistInviteResult[] }>('POST', '/users/invite-from-waitlist', input),
     setRole: (id: string, role_id: string) => request<{ user: User }>('PATCH', `/users/${id}`, { role_id }),
-    remove: (id: string) => request<{ ok: true; access_removed: boolean }>('DELETE', `/users/${id}`),
+    remove: (id: string) => request<{ ok: true }>('DELETE', `/users/${id}`),
     /** Store-review switch (Settings → Usuários → Revisão). `days: null` turns it off. 400 REVIEW_ADMIN
      *  ("A conta de revisão não pode ser admin.") when the target is an admin. `revoked_devices` is how
      *  many of the target's active devices were actually revoked (a failing one is skipped, not fatal). */
@@ -439,6 +525,23 @@ export const api = {
     list: () => request<{ tokens: ApiToken[] }>('GET', '/api-tokens'),
     create: (input: { name: string; scopes: ApiTokenScope[]; expires_in_days: number | null }) => request<CreatedApiToken>('POST', '/api-tokens', input),
     revoke: (id: string) => request<{ api_token: ApiToken }>('DELETE', `/api-tokens/${id}`),
+    /** The token's MCP calls (metadata only), newest first; the server keeps `retention_days`. */
+    events: (id: string) => request<{ events: ApiTokenEvent[]; retention_days: number }>('GET', `/api-tokens/${id}/events`),
+  },
+  /** Settings → Auditoria (TER-577): the instance's security trail, for admins. */
+  securityEvents: {
+    list: (filter: SecurityEventFilter, before?: string | null) =>
+      request<SecurityEventsPage>('GET', `/security-events?${securityEventQuery({ ...filter, before: before ?? undefined })}`),
+    /** A plain link (the browser downloads it with the session cookie); the export goes on the trail. */
+    exportUrl: (filter: SecurityEventFilter, format: 'csv' | 'json') => `/api/security-events/export?${securityEventQuery({ ...filter, format })}`,
+  },
+  /** Settings → Recursos em teste (TER-1040): feature flags, for admins. */
+  featureFlags: {
+    list: () => request<{ flags: FeatureFlagInfo[] }>('GET', '/feature-flags'),
+    set: (key: FeatureFlagKey, enabled: boolean) => request<{ key: FeatureFlagKey; enabled: boolean }>('PUT', `/feature-flags/${key}`, { enabled }),
+    /** 404 when no account has this e-mail */
+    setOverride: (key: FeatureFlagKey, email: string, enabled: boolean) => request<{ overrides: FeatureFlagOverride[] }>('PUT', `/feature-flags/${key}/overrides`, { email, enabled }),
+    removeOverride: (key: FeatureFlagKey, userId: string) => request<null>('DELETE', `/feature-flags/${key}/overrides/${userId}`),
   },
   waitlist: {
     list: () => request<{ entries: WaitlistEntry[] }>('GET', '/waitlist'),
@@ -453,8 +556,21 @@ export const api = {
     list: () => request<{ devices: Device[] }>('GET', '/devices'),
     rename: (id: string, name: string) => request<{ device: Device }>('PATCH', `/devices/${id}`, { name }),
     revoke: (id: string) => request<{ device: Device }>('DELETE', `/devices/${id}`),
+    /** A sample push to one of my own active devices (TER-913). 409 NO_PUSH_TOKEN, 429 PUSH_TEST_RATE_LIMITED. */
+    testPush: (id: string, input: { kind: PushTestKind; delay_seconds: number }) => request<PushTestResult>('POST', `/devices/${id}/test-push`, input),
     events: () => request<{ events: DeviceEventView[] }>('GET', '/devices/events'),
     summary: () => request<DevicesSummary>('GET', '/devices/summary'),
+  },
+  /** A Claude Code tab read as a conversation (TER-1003): its transcript relayed by the server, never stored. */
+  tabChat: {
+    /** A page of the conversation, read backward from `before` (the newest when absent), with the tab's open cards. */
+    page: (id: string, before?: string | null) => request<TabChatPage>('GET', `/tab-chat/${id}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`),
+    /** Types the text into the tab as the person's (TER-851). 409 WAITING_PERMISSION while a dialog waits for an answer. */
+    send: (id: string, text: string) => request<{ sent: true }>('POST', `/tab-chat/${id}/chat/messages`, { text }),
+    /** Interrupt (Esc), cycle the mode (Shift+Tab; answers the mode the footer shows), `/clear`, `/compact`. */
+    action: (id: string, action: TabChatAction) => request<{ done: true; mode: string | null }>('POST', `/tab-chat/${id}/chat/actions`, { action }),
+    /** The last lines of the pane, plain text ("Ver tela"). */
+    screen: (id: string, lines = 120) => request<{ text: string }>('GET', `/tab-chat/${id}/screen?lines=${lines}`),
   },
   tabs: {
     rename: (id: string, name: string) => request<{ tab: Tab }>('PATCH', `/tabs/${id}`, { name }),

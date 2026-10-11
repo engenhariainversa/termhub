@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { BetaForm } from './BetaForm';
+import { tk, useTranslation } from '../i18n';
 
 /** Where a visitor learns what termhub is. */
 export const LANDING_URL = 'https://termhub.dev/';
@@ -39,7 +40,11 @@ export function useBetaCard(): [boolean, (open: boolean) => void] {
   return [open, set];
 }
 
-const BENEFITS = ['Terminais que não morrem: feche o navegador e o shell continua.', 'Todas as suas máquinas e agentes num só lugar.', 'Aviso no celular quando o agente precisa de você.'];
+const BENEFITS = [
+  tk('Terminais que não morrem: feche o navegador e o shell continua.'),
+  tk('Todas as suas máquinas e agentes num só lugar.'),
+  tk('Aviso no celular quando o agente precisa de você.'),
+];
 
 /**
  * The invitation a visitor gets on somebody else's city: what they are looking at, why they would
@@ -48,22 +53,24 @@ const BENEFITS = ['Terminais que não morrem: feche o navegador e o shell contin
  * `className` carries the shape, which differs between a floating card and a bottom sheet.
  */
 export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border' }: { ownerName: string | null; onCollapse?: () => void; className?: string }) {
+  const { t } = useTranslation();
   return (
     <section aria-labelledby="beta-title" className={`${className} border-line bg-bg-2/95 p-4 text-left shadow-2xl shadow-black/40 backdrop-blur`}>
       <div className="mb-2 flex items-start gap-2">
         <h2 id="beta-title" className="text-sm font-semibold text-fg">
-          termhub · <span className="text-accent">beta gratuito</span>
+          {/* i18n-ignore */}
+          termhub · <span className="text-accent">{t('beta gratuito')}</span>
         </h2>
         {onCollapse && (
-          <button type="button" onClick={onCollapse} aria-label="Recolher" title="Recolher" className="-mr-1 -mt-1 ml-auto rounded px-1.5 text-lg leading-none text-fg-muted hover:bg-bg-3 hover:text-fg">
+          <button type="button" onClick={onCollapse} aria-label={t('Recolher')} title={t('Recolher')} className="-mr-1 -mt-1 ml-auto rounded px-1.5 text-lg leading-none text-fg-muted hover:bg-bg-3 hover:text-fg">
             <span aria-hidden="true">×</span>
           </button>
         )}
       </div>
       <p className="text-sm text-fg-muted">
         {ownerName
-          ? `Você está vendo os agentes de IA de ${ownerName} trabalhando ao vivo — cada robô é um terminal de verdade.`
-          : 'Numa cidade do termhub, os agentes de IA trabalham ao vivo — cada robô é um terminal de verdade.'}
+          ? t('Você está vendo os agentes de IA de {{name}} trabalhando ao vivo — cada robô é um terminal de verdade.', { name: ownerName })
+          : t('Numa cidade do termhub, os agentes de IA trabalham ao vivo — cada robô é um terminal de verdade.')}
       </p>
       <ul className="my-3 space-y-1 text-xs text-fg">
         {BENEFITS.map((b) => (
@@ -71,13 +78,13 @@ export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border
             <span className="text-accent" aria-hidden="true">
               ✓
             </span>
-            <span>{b}</span>
+            <span>{t(b)}</span>
           </li>
         ))}
       </ul>
       <BetaForm />
       <a href={LANDING_URL} className="mt-3 inline-block text-xs text-accent hover:underline">
-        Conheça o termhub →
+        {t('Conheça o termhub →')}
       </a>
     </section>
   );
@@ -88,15 +95,16 @@ export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border
  * the whole form, so the city stays in view. "Quero participar" opens the full card.
  */
 export function BetaTeaser({ ownerName, onExpand, onCollapse }: { ownerName: string | null; onExpand: () => void; onCollapse: () => void }) {
+  const { t } = useTranslation();
   return (
-    <section aria-label="Convite para o beta" className="flex items-center gap-2 border-t border-line bg-bg-2/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur">
+    <section aria-label={t('Convite para o beta')} className="flex items-center gap-2 border-t border-line bg-bg-2/95 px-3 py-2 shadow-2xl shadow-black/40 backdrop-blur">
       <p className="min-w-0 flex-1 truncate text-xs text-fg-muted">
-        {ownerName ? `Agentes de IA de ${ownerName} ao vivo.` : 'Agentes de IA ao vivo.'} <span className="text-fg">Beta grátis.</span>
+        {ownerName ? t('Agentes de IA de {{name}} ao vivo.', { name: ownerName }) : t('Agentes de IA ao vivo.')} <span className="text-fg">{t('Beta grátis.')}</span>
       </p>
       <button type="button" onClick={onExpand} className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white hover:bg-accent-hover">
-        Quero participar
+        {t('Quero participar')}
       </button>
-      <button type="button" onClick={onCollapse} aria-label="Fechar convite" title="Fechar convite" className="shrink-0 rounded px-1.5 text-lg leading-none text-fg-muted hover:bg-bg-3 hover:text-fg">
+      <button type="button" onClick={onCollapse} aria-label={t('Fechar convite')} title={t('Fechar convite')} className="shrink-0 rounded px-1.5 text-lg leading-none text-fg-muted hover:bg-bg-3 hover:text-fg">
         <span aria-hidden="true">×</span>
       </button>
     </section>

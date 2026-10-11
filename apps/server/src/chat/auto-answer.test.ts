@@ -118,7 +118,7 @@ describe('scheduleAutoAnswer', () => {
       status: 'scheduled',
     });
     expect(r?.auto_answer?.status).toBe('scheduled');
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [r]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [r], { update: true });
   });
 
   it('a row that moved on (closed, or already counting down) schedules nothing and publishes nothing', async () => {
@@ -334,7 +334,7 @@ describe('sendDueAutoAnswers', () => {
     expect(await sendDueAutoAnswers(repos as unknown as Repositories, l, { now, answer })).toBe(0);
     expect(answer).toHaveBeenCalledTimes(1);
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'TAB_PROMPT_CHANGED');
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [expect.objectContaining({ id: 'q1', auto_answer: expect.objectContaining({ status: 'failed', error_code: 'TAB_PROMPT_CHANGED' }) })]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [expect.objectContaining({ id: 'q1', auto_answer: expect.objectContaining({ status: 'failed', error_code: 'TAB_PROMPT_CHANGED' }) })], { update: true });
     expect(repos.chatDecisions.bumpAuto).not.toHaveBeenCalled();
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: 'TAB_PROMPT_CHANGED' }, 'auto answer failed');
   });
@@ -427,6 +427,89 @@ describe('sendDueAutoAnswers', () => {
   });
 });
 
+/** The automation side of a card's tab (agentic board D18, F-17): an active run, its project on, not paused. */
+const automation = (o: { run?: boolean; enabled?: boolean; paused?: boolean } = {}) => ({
+  automationRuns: { activeByTab: vi.fn(async (tabId: string) => ((o.run ?? true) && tabId === 't1' ? { id: 'run1', project_id: 'p1', tab_id: 't1', status: 'running' } : null)) },
+  projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
+  projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true } } })) },
+  automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
+});
+
+describe('automatic tabs bypass "Responder sozinho" (agentic board D18, preflight F-17)', () => {
+  const now = () => new Date('2026-09-26T12:01:05.000Z');
+  const user = { id: 'u1', email: 'a@x', name: 'Ana', nickname: 'ana', role_id: 'r1', password_hash: 'h' };
+  const log = () => ({ info: vi.fn(), warn: vi.fn() });
+  beforeEach(() => vi.mocked(publishTabQuestions).mockClear());
+
+  const repeatRepos = (o: Parameters<typeof automation>[0]) => {
+    const setAutoAnswer = vi.fn(async (_id: string, auto: AutoAnswer) => row({ auto_answer: auto }));
+    const repos = {
+      tabQuestions: { setAutoAnswer },
+      users: { chatAutodecide: vi.fn(async () => false) },
+      chatDecisions: { findManyForUser: vi.fn(async () => [decision({ id: 'd1' })]) },
+      ...automation(o),
+    } as unknown as Repositories;
+    return { repos, setAutoAnswer };
+  };
+
+  it('the repeat path schedules with the switch off when the tab has a live automatic run', async () => {
+    const { repos, setAutoAnswer } = repeatRepos({});
+    const r = await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now());
+    expect(r?.auto_answer).toMatchObject({ by: 'memory', status: 'scheduled' });
+    expect(setAutoAnswer).toHaveBeenCalledTimes(1);
+  });
+
+  it('…but not when that project is paused, turned off, or the tab has no run (a manual tab: as before)', async () => {
+    for (const o of [{ paused: true }, { enabled: false }, { run: false }]) {
+      const { repos, setAutoAnswer } = repeatRepos(o);
+      expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now())).toBeNull();
+      expect(setAutoAnswer).not.toHaveBeenCalled();
+    }
+  });
+
+  function sendRepos(auto: Partial<AutoAnswer>, o: Parameters<typeof automation>[0] & { autodecide?: boolean }) {
+    const due = row({ auto_answer: { answer: { answers: [{ selected: [0] }] }, by: 'automation', reason: 'Opção recomendada pelo agente', sources: [], due_at: '2026-09-26T12:01:00.000Z', status: 'scheduled', ...auto } });
+    const tabQuestions = {
+      listDueAutoAnswers: vi.fn(async () => [due]),
+      claimAutoAnswer: vi.fn(async () => ({ ...due, auto_answer: { ...due.auto_answer!, status: 'sent' as const } })),
+      finishAutoAnswer: vi.fn(async (_id: string, status: 'failed', code: string) => ({ ...due, auto_answer: { ...due.auto_answer!, status, error_code: code } })),
+    };
+    const repos = {
+      tabQuestions,
+      users: { findById: vi.fn(async () => user), chatAutodecide: vi.fn(async () => o.autodecide ?? false) },
+      chatDecisions: { bumpAuto: vi.fn(async () => {}), findManyForUser: vi.fn(async (ids: string[]) => ids.map((id) => decision({ id }))) },
+      ...automation(o),
+    } as unknown as Repositories;
+    return { repos, tabQuestions };
+  }
+
+  it('a recommended countdown (`by: automation`) is sent with the switch off while the run is live', async () => {
+    const { repos, tabQuestions } = sendRepos({}, {});
+    const answer = vi.fn(async () => ({}) as never);
+    expect(await sendDueAutoAnswers(repos, log(), { now, answer })).toBe(1);
+    expect(answer).toHaveBeenCalledTimes(1);
+    expect(tabQuestions.finishAutoAnswer).not.toHaveBeenCalled();
+  });
+
+  it('paused (or turned off, or the run gone) at send time → failed AUTOMATION_OFF, nothing typed — even with the switch on (D24)', async () => {
+    for (const o of [{ paused: true, autodecide: true }, { enabled: false, autodecide: true }, { run: false, autodecide: true }]) {
+      const { repos, tabQuestions } = sendRepos({}, o);
+      const answer = vi.fn();
+      expect(await sendDueAutoAnswers(repos, log(), { now, answer })).toBe(0);
+      expect(answer).not.toHaveBeenCalled();
+      expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'AUTOMATION_OFF');
+    }
+  });
+
+  it('a memory or concierge countdown in a live automatic tab is sent with the switch off; in a paused one it is AUTODECIDE_OFF as before', async () => {
+    const live = sendRepos({ by: 'memory', sources: [{ kind: 'decision', id: 'd1' }] }, {});
+    expect(await sendDueAutoAnswers(live.repos, log(), { now, answer: vi.fn(async () => ({}) as never) })).toBe(1);
+    const paused = sendRepos({ by: 'concierge', sources: [{ kind: 'decision', id: 'd1' }] }, { paused: true });
+    expect(await sendDueAutoAnswers(paused.repos, log(), { now, answer: vi.fn() })).toBe(0);
+    expect(paused.tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'AUTODECIDE_OFF');
+  });
+});
+
 describe('recoverLostAutoAnswers', () => {
   beforeEach(() => vi.mocked(publishTabQuestions).mockClear());
 
@@ -438,7 +521,7 @@ describe('recoverLostAutoAnswers', () => {
     expect(await recoverLostAutoAnswers(repos, l)).toBe(1);
     // The age is measured on the database's clock, the same one that stamped the claim.
     expect(failLostAutoAnswers).toHaveBeenCalledWith('SENDER_LOST', 120_000);
-    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [lost]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [lost], { update: true });
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: 'SENDER_LOST' }, 'auto answer sender lost');
   });
 });
@@ -524,7 +607,7 @@ describe('cancelAutoAnswer', () => {
     const view = await cancelAutoAnswer(ctx, 'q1');
     expect(tabQuestions.cancelAutoAnswer).toHaveBeenCalledWith('q1', 'u1');
     expect(view).toMatchObject({ id: 'q1', auto_answer: { status: 'cancelled' } });
-    expect(publishTabQuestions).toHaveBeenCalledWith(ctx.repos, 'tab_question', [cancelled]);
+    expect(publishTabQuestions).toHaveBeenCalledWith(ctx.repos, 'tab_question', [cancelled], { update: true });
   });
 
   it('404 for a foreign or missing row, or a suggestion', async () => {

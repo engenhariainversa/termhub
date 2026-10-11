@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { tabLimitSchema } from './project-ai.js';
 import { chatAttachment } from './attachments.js';
+import { automationEventSchema } from './automation.js';
 
 /** Mirrors `ChatNotice` in `apps/server/src/db/repositories/chat.ts` (TER-588): the usage limit an answer
  *  hit, or the account that took over. Account labels are null for the machine's default login. */
@@ -10,9 +11,18 @@ export const chatNotice = z.discriminatedUnion('kind', [
 ]);
 export type ChatNotice = z.infer<typeof chatNotice>;
 
+/** The thread's cards a message can answer instead of a message (TER-849): a gate card the concierge
+ * proposed, or a tab's question (choice or permission). */
+export const replyCardKind = z.enum(['action', 'tab_question']);
+export type ReplyCardKind = z.infer<typeof replyCardKind>;
+export const replyCardRef = z.object({ kind: replyCardKind, id: z.string() });
+export type ReplyCardRef = z.infer<typeof replyCardRef>;
+
 /** What a message answers (TER-447): a snapshot taken when the reply was sent. `id` is null once the
- * quoted message was deleted; the role and the excerpt stay. */
-export const chatReplyRef = z.object({ id: z.string().nullable(), role: z.enum(['user', 'assistant']), excerpt: z.string() });
+ * quoted message was deleted; the role and the excerpt stay. A reply to a card (TER-849) has a null
+ * `id`, the role `assistant` and the card in `card`: an app that predates it shows the quote all the
+ * same, and a card kind this app does not know is dropped rather than failing the message. */
+export const chatReplyRef = z.object({ id: z.string().nullable(), role: z.enum(['user', 'assistant']), excerpt: z.string(), card: replyCardRef.optional().catch(undefined) });
 
 /** Mirrors `ChatMessage` in `apps/server/src/db/repositories/chat.ts`. */
 export const chatMessage = z.object({
@@ -44,6 +54,9 @@ export const chatActionStatus = z.enum(['pending', 'approved', 'denied', 'expire
 export const autoDecisionSchema = z.object({
   reason: z.string().nullable(),
   sources: z.array(z.object({ ref: z.string(), question: z.string().nullable(), answer: z.string().nullable() })),
+  /** `'automation'` on a question card answered by automatic board work (the agent's recommended option):
+   *  its reason is shown translated. Plain string, optional: absent from an older server. */
+  by: z.string().optional(),
 });
 export type TAutoDecision = z.infer<typeof autoDecisionSchema>;
 
@@ -193,7 +206,7 @@ export const tabQuestionSuggestionSchema = z.object({
 export const tabQuestionAutoAnswerSchema = z.object({
   answer: z.object({ answers: z.array(z.object({ selected: z.array(z.number().int()), text: z.string().optional() })) }),
   // Plain strings, like `sources.kind`: a value a newer server adds must not break an installed app.
-  // Known today: `by` 'memory' | 'concierge'; `status` 'scheduled' | 'cancelled' | 'sent' | 'failed'.
+  // Known today: `by` 'memory' | 'concierge' | 'automation'; `status` 'scheduled' | 'cancelled' | 'sent' | 'failed'.
   by: z.string(),
   reason: z.string(),
   sources: z.array(z.object({ kind: z.string(), id: z.string() })),
@@ -236,7 +249,8 @@ export const tabQuestionSchema = z.discriminatedUnion('kind', [
     ...tabQuestionCommon,
     kind: z.literal('permission'),
     payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional() }),
-    answer: z.object({ allow: z.boolean(), text: z.string().optional() }).nullable(),
+    // `option` (TER-995): the dialog option chosen on the card; absent from an older server.
+    answer: z.object({ allow: z.boolean(), text: z.string().optional(), option: z.object({ number: z.number().int(), label: z.string(), summary: z.string().optional() }).optional() }).nullable(),
   }),
 ]);
 /** A suggestion's life: `dismissed` is its own ("Dispensar"); a question never has it. */
@@ -341,8 +355,9 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('subagent'), user_id: z.string(), conversation_id: z.string(), subagent: subagentViewSchema }),
   /** A cancel did not happen: the row is running again ("Não foi possível cancelar"). */
   z.object({ type: z.literal('subagent_cancel_failed'), user_id: z.string(), conversation_id: z.string(), subagent_id: z.string() }),
-  /** How full the conversation's CLI session is (TER-315): after a turn or a compaction. */
-  z.object({ type: z.literal('context'), user_id: z.string(), conversation_id: z.string(), tokens: z.number(), window: z.number().nullable() }),
+  /** How full the conversation's CLI session is (TER-315): after a turn or a compaction. `compacted_at`
+   *  (TER-1038): when it was last compacted; absent from a server before it. */
+  z.object({ type: z.literal('context'), user_id: z.string(), conversation_id: z.string(), tokens: z.number(), window: z.number().nullable(), compacted_at: z.string().nullable().optional() }),
   /** "Compactar" (TER-315): started, done or failed. */
   z.object({
     type: z.literal('compact'),
@@ -367,6 +382,9 @@ export const chatEventSchema = z.discriminatedUnion('type', [
     conversation_id: z.string(),
     message_id: z.string(),
   }),
+  /** An automation event of one of the user's projects (agentic board): pauses, runs, PRs. Not chat-bound,
+   * so it carries no user or conversation id. A new event, so an older app drops it. */
+  z.object({ type: z.literal('automation'), event: automationEventSchema }),
   z.object({
     type: z.literal('message_removed'),
     user_id: z.string(),

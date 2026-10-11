@@ -25,7 +25,7 @@ function build(opts: {
   hostFor?: ReturnType<typeof vi.fn>;
   /** The machines this user owns, as `findByIdsForOwner` answers them (a host must be an agent one). */
   hostMachines?: { id: string; name: string; type: string }[];
-  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null }[];
+  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string; exclusive_project?: { id: string; name: string } | null }[];
   clearProjectSessions?: ReturnType<typeof vi.fn>;
   setHost?: ReturnType<typeof vi.fn>;
   /** Active grants `listActive` answers with, as `GET /chat` returns them. */
@@ -68,7 +68,9 @@ function build(opts: {
     start,
     startAfterDecision,
     resumeAfterDecision,
+    afterDecisions: vi.fn(),
     reset,
+    deleteConversation: vi.fn(async () => ({ id: 'c_new', project_id: 'p1' })),
     hostFor: opts.hostFor ?? vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
     projectStatuses: vi.fn(async () => [{ project_id: 'p1', busy: true, pending_confirmations: 1 }]),
     subagentsFor: opts.subagentsFor ?? vi.fn(async () => []),
@@ -89,9 +91,10 @@ function build(opts: {
   const clearProjectSessions = opts.clearProjectSessions ?? vi.fn(async () => undefined);
   const repos = {
     chat: { listMessages: vi.fn(async () => [{ id: 'm1', role: 'user', text: 'oi' }]), setHost, clearProjectSessions },
-    chatActions: { decide, findByIdForUser, listByConversation },
+    chatActions: { decide, findByIdForUser, listByConversation, failPendingTabGone: vi.fn(async (id: string) => ({ action: { ...pendingAction, id, status: 'failed', error_code: 'TAB_GONE' }, user_id: 'u1' })) },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? tabs.filter((t) => ids.includes(t.id)) : [])) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], ownerId: string) => (ownerId === fixturesOwner ? projects.filter((p) => ids.includes(p.id)) : [])) },
     // Both the trail's machine names and the host's own machine, owner-scoped exactly like the
@@ -232,6 +235,14 @@ it('refuses a machine with no agent and an account that is not a Claude login', 
   const notClaude = await other.app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc1' } });
   expect(notClaude.statusCode).toBe(400);
   expect(other.setHost).not.toHaveBeenCalled();
+});
+
+it('refuses an account exclusive to a project as the chat host: the account-wide chat runs outside any project (TER-990)', async () => {
+  const { app, setHost } = build({ aiAccounts: [{ id: 'acc1', label: 'drhorton', provider: 'claude', machine_id: 'm1', config_dir: null, exclusive_project: { id: 'p9', name: 'DR Horton' } }] });
+  const res = await app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc1' } });
+  expect(res.statusCode).toBe(400);
+  expect(res.json()).toEqual({ error: 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto', code: 'ACCOUNT_EXCLUSIVE' });
+  expect(setHost).not.toHaveBeenCalled();
 });
 
 it('rejects a host payload with no machine', async () => {
@@ -376,7 +387,7 @@ it('surfaces a concierge that did not answer as 502', async () => {
 });
 
 it('approves a row the user owns: 200, decided through the repository, and the run is resumed', async () => {
-  const { app, decide, startAfterDecision, resumeAfterDecision, indexActions } = build();
+  const { app, decide, startAfterDecision, resumeAfterDecision, indexActions, service } = build();
   const events: ChatEvent[] = [];
   const unsubscribe = chatBus.subscribe((e) => events.push(e));
   let res;
@@ -396,6 +407,8 @@ it('approves a row the user owns: 200, decided through the repository, and the r
   expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'approved' });
   // Memory (spec 2026-09-26 concierge memory §4): the decided row is indexed, fire-and-forget.
   expect(indexActions).toHaveBeenCalledWith('u1', [expect.objectContaining({ id: 'act1', status: 'approved' })]);
+  // The decision hook (agentic board F-19) sees the decided row.
+  expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'act1', status: 'approved' })]);
 });
 
 it('denies a row the user owns: 200, decided as denied, and the run is resumed', async () => {
@@ -511,6 +524,15 @@ it('POST /reset is a 409 while busy', async () => {
   expect(res.statusCode).toBe(409);
 });
 
+it('POST /delete deletes the scope\'s conversation and answers the fresh one', async () => {
+  const { app, service } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/delete', payload: { project_id: 'p1' } });
+  expect(res.statusCode).toBe(200);
+  expect(res.json().conversation.id).toBe('c_new');
+  expect(service.deleteConversation).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'p1');
+  expect(service.reset).not.toHaveBeenCalled();
+});
+
 it('GET /projects lists per-project status', async () => {
   const { app } = build();
   const res = await app.inject({ method: 'GET', url: '/chat/projects' });
@@ -572,7 +594,7 @@ it('POST /chat/actions/decisions decides the batch and resumes the conversation 
   const rows: Record<string, typeof pendingAction & { status: string }> = { a1: { ...pendingAction, id: 'a1', status: 'pending' }, a2: { ...pendingAction, id: 'a2', status: 'pending' } };
   const findByIdForUser = vi.fn(async (id: string) => rows[id]);
   const decide = vi.fn(async (id: string, _u: string, status: string) => ({ ...rows[id], status }));
-  const { app, startAfterDecision, indexActions } = build({ findByIdForUser, decide });
+  const { app, startAfterDecision, indexActions, service } = build({ findByIdForUser, decide });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'deny' }] } });
   expect(res.statusCode).toBe(200);
   expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
@@ -581,6 +603,8 @@ it('POST /chat/actions/decisions decides the batch and resumes the conversation 
   expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [] });
   // Memory (spec 2026-09-26 concierge memory §4): the whole decided batch is indexed, fire-and-forget.
   expect(indexActions).toHaveBeenCalledWith('u1', [expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
+  // The decision hook (agentic board F-19) sees every decided row of the batch.
+  expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
 });
 
 it('POST /chat/actions/decisions validates the body', async () => {
@@ -641,7 +665,7 @@ it.each([
   ['run_command', { tab_id: 't1', command: 'ls' }, 'run_command'],
 ])('approve_tab refuses %s with 400 and decides nothing', async (_l, args, tool) => {
   const row = { ...pendingAction, status: 'pending', tool, args };
-  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row) });
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab' } });
   expect(res.statusCode).toBe(400);
   expect(res.json().code).toBe('GRANT_NOT_ALLOWED');
@@ -778,9 +802,8 @@ it('approve_tab_terminal whose grant fails still approves and resumes, with no g
 it.each([
   ['run_command', { ...keyCard, tool: 'run_command', args: { tab_id: 't1', command: 'ls' } }],
   ['answering a permission', { ...keyCard, args: { tab_id: 't1', key: '1', answering_permission: true } }],
-  ['a tab that is not this user\'s', keyCard],
 ])('approve_tab_terminal on %s answers 400 GRANT_NOT_ALLOWED and decides nothing', async (_l, row) => {
-  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs: _l === 'a tab that is not this user\'s' ? [] : [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_tab_terminal' } });
   expect(res.statusCode).toBe(400);
   expect(res.json().code).toBe('GRANT_NOT_ALLOWED');
@@ -811,7 +834,6 @@ it('approve_project_all on a board card grants the card\'s project with scope al
 
 it.each([
   ['delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-  ['a tab that is not this user\'s', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
 ])('approve_project_all on %s answers 400 GRANT_NOT_ALLOWED and decides nothing', async (_l, row) => {
   const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), boardTasks: [{ id: 'k1', project_id: 'p1' }], tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_project_all' } });
@@ -854,7 +876,6 @@ it('approve_project_always on a terminal card grants the tab\'s project as a "te
 
 it.each([
   ['delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-  ['a tab that is not this user\'s', keyCard],
 ])('approve_project_always on %s answers 400 GRANT_NOT_ALLOWED and decides nothing', async (_l, row) => {
   const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), boardTasks: [{ id: 'k1', project_id: 'p1' }] });
   const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_project_always' } });
@@ -862,6 +883,54 @@ it.each([
   expect(res.json().code).toBe('GRANT_NOT_ALLOWED');
   expect(decide).not.toHaveBeenCalled();
   expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
+});
+
+// TER-986: a card whose tab was closed (or is not this user's — the two read the same) offers nothing any
+// more. Any approve word retires it as TAB_GONE with a 409 that says why, instead of a grant refusal
+// that names the wrong cause ("Só dá para liberar sem prazo uma ação de rotina…").
+it.each(['approve', 'approve_tab', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always'])(
+  '%s on a card whose tab is gone answers 409 TAB_GONE, retires the card and decides nothing (TER-986)',
+  async (decision) => {
+    const events: ChatEvent[] = [];
+    const off = chatBus.subscribe((e) => events.push(e));
+    const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => keyCard), tabs: [], projects: [{ id: 'p1', owner_id: 'u1', name: 'App' }] });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision } });
+    off();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('TAB_GONE');
+    expect(res.json().error).toContain('A aba desta ação foi fechada');
+    expect(decide).not.toHaveBeenCalled();
+    expect(repos.chatActions.failPendingTabGone).toHaveBeenCalledWith('act1');
+    expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
+    expect(repos.chatProjectGrants.grant).not.toHaveBeenCalled();
+    expect(repos.chatGrants.grant).not.toHaveBeenCalled();
+    expect(events).toContainEqual(expect.objectContaining({ type: 'action_status', action_id: 'act1', status: 'failed', error_code: 'TAB_GONE' }));
+  },
+);
+
+it('a card whose tab is gone answers TAB_GONE in English for an English request (TER-986)', async () => {
+  const { app } = build({ findByIdForUser: vi.fn(async () => keyCard), tabs: [] });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', headers: { 'accept-language': 'en' }, payload: { decision: 'approve_project_always' } });
+  expect(res.statusCode).toBe(409);
+  expect(res.json().error).toContain('The tab of this action was closed');
+});
+
+it('deny on a card whose tab is gone still decides it: refusing is always fine (TER-986)', async () => {
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => keyCard), tabs: [] });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'deny' } });
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('act1', 'u1', 'denied');
+  expect(repos.chatActions.failPendingTabGone).not.toHaveBeenCalled();
+});
+
+it('approve_project_always on a live terminal card works (TER-986: the reported card, with its tab open)', async () => {
+  const sendCard = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'revise o APPS-150' } };
+  const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => sendCard), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }], projects: [{ id: 'p1', owner_id: 'u1', name: 'App' }] });
+  const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_project_always' } });
+  expect(res.statusCode).toBe(200);
+  expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+  expect(repos.chatStandingGrants.grant).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'terminal' }));
+  expect(repos.chatActions.failPendingTabGone).not.toHaveBeenCalled();
 });
 
 it('approve_project_always whose grant fails still approves and resumes, with no standing_grant in the answer', async () => {
@@ -1004,6 +1073,15 @@ it('POST /messages passes reply_to_id to the service (TER-447)', async () => {
   expect(res.statusCode).toBe(202);
   expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7' });
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
+});
+
+it('POST /messages passes reply_to_card to the service, never together with reply_to_id (TER-849)', async () => {
+  const { app, start } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'por quê?', reply_to_card: { kind: 'action', id: 'a7' } } });
+  expect(res.statusCode).toBe(202);
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'por quê?', { projectId: null, replyToCard: { kind: 'action', id: 'a7' } });
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_card: { kind: 'tab_suggestion', id: 'q1' } } })).statusCode).toBe(400);
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: 'm7', reply_to_card: { kind: 'action', id: 'a7' } } })).statusCode).toBe(400);
 });
 
 it('POST /messages answers 409 ATTACHMENT_UNAVAILABLE as the service throws it', async () => {

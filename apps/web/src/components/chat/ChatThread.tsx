@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactNode, UIEvent } from 'react';
 import { isNearBottom } from '../../lib/chat-scroll';
@@ -47,6 +48,7 @@ export function ChatThread({ children, empty, reconnecting, followKey, stickRef 
   /** The content's size at the last look: what says whether something arrived at the bottom. */
   const measured = useRef({ height: 0, rows: 0 });
   /** Something arrived while the reader was scrolled up: show the pill. */
+  const { t } = useTranslation();
   const [unread, setUnread] = useState(false);
 
   /** Reads the content's size and says whether it grew since the last read (a row, a streamed line). */
@@ -126,7 +128,7 @@ export function ChatThread({ children, empty, reconnecting, followKey, stickRef 
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {reconnecting && (
         <p role="status" className="pointer-events-none absolute left-1/2 top-2 z-10 -translate-x-1/2 rounded-full border border-line bg-bg-2 px-3 py-1 text-xs text-warn shadow">
-          Reconectando…
+          {t('Reconectando…')}
         </p>
       )}
       {empty}
@@ -138,13 +140,13 @@ export function ChatThread({ children, empty, reconnecting, followKey, stickRef 
        * keeps the column from growing in the first place — unlike `break-words`, which wraps but never
        * shrinks a min-content width. Fences and tables keep their own `overflow-x-auto` (ChatTurn). */}
       <div ref={scrollRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain" onScroll={onScroll}>
-        <ol ref={listRef} aria-label="Conversa" className="min-w-0 space-y-5 py-4 [overflow-wrap:anywhere]">
+        <ol ref={listRef} aria-label={t('Conversa')} className="min-w-0 space-y-5 py-4 [overflow-wrap:anywhere]">
           {children}
         </ol>
       </div>
       {unread && (
         <button type="button" className="chat-enter absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full border border-line bg-bg-2 px-3 py-1 text-xs text-fg shadow hover:bg-bg-3" onClick={jump}>
-          ↓ novas mensagens
+          {t('↓ novas mensagens')}
         </button>
       )}
     </div>

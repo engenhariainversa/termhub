@@ -34,6 +34,8 @@ export type ChatMessageMinAggregateOutputType = {
   replyToId: string | null
   replyToRole: string | null
   replyToExcerpt: string | null
+  replyToCardKind: string | null
+  replyToCardId: string | null
   createdAt: Date | null
 }
 
@@ -46,6 +48,8 @@ export type ChatMessageMaxAggregateOutputType = {
   replyToId: string | null
   replyToRole: string | null
   replyToExcerpt: string | null
+  replyToCardKind: string | null
+  replyToCardId: string | null
   createdAt: Date | null
 }
 
@@ -60,6 +64,8 @@ export type ChatMessageCountAggregateOutputType = {
   replyToId: number
   replyToRole: number
   replyToExcerpt: number
+  replyToCardKind: number
+  replyToCardId: number
   createdAt: number
   _all: number
 }
@@ -74,6 +80,8 @@ export type ChatMessageMinAggregateInputType = {
   replyToId?: true
   replyToRole?: true
   replyToExcerpt?: true
+  replyToCardKind?: true
+  replyToCardId?: true
   createdAt?: true
 }
 
@@ -86,6 +94,8 @@ export type ChatMessageMaxAggregateInputType = {
   replyToId?: true
   replyToRole?: true
   replyToExcerpt?: true
+  replyToCardKind?: true
+  replyToCardId?: true
   createdAt?: true
 }
 
@@ -100,6 +110,8 @@ export type ChatMessageCountAggregateInputType = {
   replyToId?: true
   replyToRole?: true
   replyToExcerpt?: true
+  replyToCardKind?: true
+  replyToCardId?: true
   createdAt?: true
   _all?: true
 }
@@ -187,6 +199,8 @@ export type ChatMessageGroupByOutputType = {
   replyToId: string | null
   replyToRole: string | null
   replyToExcerpt: string | null
+  replyToCardKind: string | null
+  replyToCardId: string | null
   createdAt: Date
   _count: ChatMessageCountAggregateOutputType | null
   _min: ChatMessageMinAggregateOutputType | null
@@ -222,6 +236,8 @@ export type ChatMessageWhereInput = {
   replyToId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToRole?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToExcerpt?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardKind?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatMessage"> | Date | string
   conversation?: Prisma.XOR<Prisma.ChatConversationScalarRelationFilter, Prisma.ChatConversationWhereInput>
   replyTo?: Prisma.XOR<Prisma.ChatMessageNullableScalarRelationFilter, Prisma.ChatMessageWhereInput> | null
@@ -240,6 +256,8 @@ export type ChatMessageOrderByWithRelationInput = {
   replyToId?: Prisma.SortOrderInput | Prisma.SortOrder
   replyToRole?: Prisma.SortOrderInput | Prisma.SortOrder
   replyToExcerpt?: Prisma.SortOrderInput | Prisma.SortOrder
+  replyToCardKind?: Prisma.SortOrderInput | Prisma.SortOrder
+  replyToCardId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   conversation?: Prisma.ChatConversationOrderByWithRelationInput
   replyTo?: Prisma.ChatMessageOrderByWithRelationInput
@@ -261,6 +279,8 @@ export type ChatMessageWhereUniqueInput = Prisma.AtLeast<{
   replyToId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToRole?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToExcerpt?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardKind?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatMessage"> | Date | string
   conversation?: Prisma.XOR<Prisma.ChatConversationScalarRelationFilter, Prisma.ChatConversationWhereInput>
   replyTo?: Prisma.XOR<Prisma.ChatMessageNullableScalarRelationFilter, Prisma.ChatMessageWhereInput> | null
@@ -279,6 +299,8 @@ export type ChatMessageOrderByWithAggregationInput = {
   replyToId?: Prisma.SortOrderInput | Prisma.SortOrder
   replyToRole?: Prisma.SortOrderInput | Prisma.SortOrder
   replyToExcerpt?: Prisma.SortOrderInput | Prisma.SortOrder
+  replyToCardKind?: Prisma.SortOrderInput | Prisma.SortOrder
+  replyToCardId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.ChatMessageCountOrderByAggregateInput
   _max?: Prisma.ChatMessageMaxOrderByAggregateInput
@@ -299,6 +321,8 @@ export type ChatMessageScalarWhereWithAggregatesInput = {
   replyToId?: Prisma.StringNullableWithAggregatesFilter<"ChatMessage"> | string | null
   replyToRole?: Prisma.StringNullableWithAggregatesFilter<"ChatMessage"> | string | null
   replyToExcerpt?: Prisma.StringNullableWithAggregatesFilter<"ChatMessage"> | string | null
+  replyToCardKind?: Prisma.StringNullableWithAggregatesFilter<"ChatMessage"> | string | null
+  replyToCardId?: Prisma.StringNullableWithAggregatesFilter<"ChatMessage"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ChatMessage"> | Date | string
 }
 
@@ -311,6 +335,8 @@ export type ChatMessageCreateInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   conversation: Prisma.ChatConversationCreateNestedOneWithoutMessagesInput
   replyTo?: Prisma.ChatMessageCreateNestedOneWithoutRepliesInput
@@ -329,6 +355,8 @@ export type ChatMessageUncheckedCreateInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   replies?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutReplyToInput
   attachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutMessageInput
@@ -343,6 +371,8 @@ export type ChatMessageUpdateInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutMessagesNestedInput
   replyTo?: Prisma.ChatMessageUpdateOneWithoutRepliesNestedInput
@@ -361,6 +391,8 @@ export type ChatMessageUncheckedUpdateInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   replies?: Prisma.ChatMessageUncheckedUpdateManyWithoutReplyToNestedInput
   attachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutMessageNestedInput
@@ -377,6 +409,8 @@ export type ChatMessageCreateManyInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
 }
 
@@ -389,6 +423,8 @@ export type ChatMessageUpdateManyMutationInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -403,6 +439,8 @@ export type ChatMessageUncheckedUpdateManyInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -432,6 +470,8 @@ export type ChatMessageCountOrderByAggregateInput = {
   replyToId?: Prisma.SortOrder
   replyToRole?: Prisma.SortOrder
   replyToExcerpt?: Prisma.SortOrder
+  replyToCardKind?: Prisma.SortOrder
+  replyToCardId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -444,6 +484,8 @@ export type ChatMessageMaxOrderByAggregateInput = {
   replyToId?: Prisma.SortOrder
   replyToRole?: Prisma.SortOrder
   replyToExcerpt?: Prisma.SortOrder
+  replyToCardKind?: Prisma.SortOrder
+  replyToCardId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -456,6 +498,8 @@ export type ChatMessageMinOrderByAggregateInput = {
   replyToId?: Prisma.SortOrder
   replyToRole?: Prisma.SortOrder
   replyToExcerpt?: Prisma.SortOrder
+  replyToCardKind?: Prisma.SortOrder
+  replyToCardId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -584,6 +628,8 @@ export type ChatMessageCreateWithoutConversationInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   replyTo?: Prisma.ChatMessageCreateNestedOneWithoutRepliesInput
   replies?: Prisma.ChatMessageCreateNestedManyWithoutReplyToInput
@@ -600,6 +646,8 @@ export type ChatMessageUncheckedCreateWithoutConversationInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   replies?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutReplyToInput
   attachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutMessageInput
@@ -645,6 +693,8 @@ export type ChatMessageScalarWhereInput = {
   replyToId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToRole?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   replyToExcerpt?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardKind?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
+  replyToCardId?: Prisma.StringNullableFilter<"ChatMessage"> | string | null
   createdAt?: Prisma.DateTimeFilter<"ChatMessage"> | Date | string
 }
 
@@ -657,6 +707,8 @@ export type ChatMessageCreateWithoutRepliesInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   conversation: Prisma.ChatConversationCreateNestedOneWithoutMessagesInput
   replyTo?: Prisma.ChatMessageCreateNestedOneWithoutRepliesInput
@@ -674,6 +726,8 @@ export type ChatMessageUncheckedCreateWithoutRepliesInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   attachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutMessageInput
 }
@@ -692,6 +746,8 @@ export type ChatMessageCreateWithoutReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   conversation: Prisma.ChatConversationCreateNestedOneWithoutMessagesInput
   replies?: Prisma.ChatMessageCreateNestedManyWithoutReplyToInput
@@ -708,6 +764,8 @@ export type ChatMessageUncheckedCreateWithoutReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   replies?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutReplyToInput
   attachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutMessageInput
@@ -743,6 +801,8 @@ export type ChatMessageUpdateWithoutRepliesInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutMessagesNestedInput
   replyTo?: Prisma.ChatMessageUpdateOneWithoutRepliesNestedInput
@@ -760,6 +820,8 @@ export type ChatMessageUncheckedUpdateWithoutRepliesInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   attachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutMessageNestedInput
 }
@@ -789,6 +851,8 @@ export type ChatMessageCreateWithoutAttachmentsInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   conversation: Prisma.ChatConversationCreateNestedOneWithoutMessagesInput
   replyTo?: Prisma.ChatMessageCreateNestedOneWithoutRepliesInput
@@ -806,6 +870,8 @@ export type ChatMessageUncheckedCreateWithoutAttachmentsInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
   replies?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutReplyToInput
 }
@@ -835,6 +901,8 @@ export type ChatMessageUpdateWithoutAttachmentsInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutMessagesNestedInput
   replyTo?: Prisma.ChatMessageUpdateOneWithoutRepliesNestedInput
@@ -852,6 +920,8 @@ export type ChatMessageUncheckedUpdateWithoutAttachmentsInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   replies?: Prisma.ChatMessageUncheckedUpdateManyWithoutReplyToNestedInput
 }
@@ -866,6 +936,8 @@ export type ChatMessageCreateManyConversationInput = {
   replyToId?: string | null
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
 }
 
@@ -878,6 +950,8 @@ export type ChatMessageUpdateWithoutConversationInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   replyTo?: Prisma.ChatMessageUpdateOneWithoutRepliesNestedInput
   replies?: Prisma.ChatMessageUpdateManyWithoutReplyToNestedInput
@@ -894,6 +968,8 @@ export type ChatMessageUncheckedUpdateWithoutConversationInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   replies?: Prisma.ChatMessageUncheckedUpdateManyWithoutReplyToNestedInput
   attachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutMessageNestedInput
@@ -909,6 +985,8 @@ export type ChatMessageUncheckedUpdateManyWithoutConversationInput = {
   replyToId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -922,6 +1000,8 @@ export type ChatMessageCreateManyReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: string | null
   replyToExcerpt?: string | null
+  replyToCardKind?: string | null
+  replyToCardId?: string | null
   createdAt?: Date | string
 }
 
@@ -934,6 +1014,8 @@ export type ChatMessageUpdateWithoutReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutMessagesNestedInput
   replies?: Prisma.ChatMessageUpdateManyWithoutReplyToNestedInput
@@ -950,6 +1032,8 @@ export type ChatMessageUncheckedUpdateWithoutReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   replies?: Prisma.ChatMessageUncheckedUpdateManyWithoutReplyToNestedInput
   attachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutMessageNestedInput
@@ -965,6 +1049,8 @@ export type ChatMessageUncheckedUpdateManyWithoutReplyToInput = {
   notice?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   replyToRole?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   replyToExcerpt?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardKind?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  replyToCardId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1019,6 +1105,8 @@ export type ChatMessageSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   replyToId?: boolean
   replyToRole?: boolean
   replyToExcerpt?: boolean
+  replyToCardKind?: boolean
+  replyToCardId?: boolean
   createdAt?: boolean
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
   replyTo?: boolean | Prisma.ChatMessage$replyToArgs<ExtArgs>
@@ -1038,6 +1126,8 @@ export type ChatMessageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   replyToId?: boolean
   replyToRole?: boolean
   replyToExcerpt?: boolean
+  replyToCardKind?: boolean
+  replyToCardId?: boolean
   createdAt?: boolean
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
   replyTo?: boolean | Prisma.ChatMessage$replyToArgs<ExtArgs>
@@ -1054,6 +1144,8 @@ export type ChatMessageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   replyToId?: boolean
   replyToRole?: boolean
   replyToExcerpt?: boolean
+  replyToCardKind?: boolean
+  replyToCardId?: boolean
   createdAt?: boolean
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
   replyTo?: boolean | Prisma.ChatMessage$replyToArgs<ExtArgs>
@@ -1070,10 +1162,12 @@ export type ChatMessageSelectScalar = {
   replyToId?: boolean
   replyToRole?: boolean
   replyToExcerpt?: boolean
+  replyToCardKind?: boolean
+  replyToCardId?: boolean
   createdAt?: boolean
 }
 
-export type ChatMessageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "conversationId" | "role" | "text" | "usage" | "errorCode" | "notice" | "replyToId" | "replyToRole" | "replyToExcerpt" | "createdAt", ExtArgs["result"]["chatMessage"]>
+export type ChatMessageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "conversationId" | "role" | "text" | "usage" | "errorCode" | "notice" | "replyToId" | "replyToRole" | "replyToExcerpt" | "replyToCardKind" | "replyToCardId" | "createdAt", ExtArgs["result"]["chatMessage"]>
 export type ChatMessageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
   replyTo?: boolean | Prisma.ChatMessage$replyToArgs<ExtArgs>
@@ -1122,6 +1216,12 @@ export type $ChatMessagePayload<ExtArgs extends runtime.Types.Extensions.Interna
      */
     replyToRole: string | null
     replyToExcerpt: string | null
+    /**
+     * TER-849: a reply to a card of the thread instead of a message (`replyToId` is then null).
+     * action | tab_question, with that row's id; no foreign key, the excerpt above is the quote.
+     */
+    replyToCardKind: string | null
+    replyToCardId: string | null
     createdAt: Date
   }, ExtArgs["result"]["chatMessage"]>
   composites: {}
@@ -1560,6 +1660,8 @@ export interface ChatMessageFieldRefs {
   readonly replyToId: Prisma.FieldRef<"ChatMessage", 'String'>
   readonly replyToRole: Prisma.FieldRef<"ChatMessage", 'String'>
   readonly replyToExcerpt: Prisma.FieldRef<"ChatMessage", 'String'>
+  readonly replyToCardKind: Prisma.FieldRef<"ChatMessage", 'String'>
+  readonly replyToCardId: Prisma.FieldRef<"ChatMessage", 'String'>
   readonly createdAt: Prisma.FieldRef<"ChatMessage", 'DateTime'>
 }
     

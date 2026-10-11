@@ -6,12 +6,18 @@ import { canonicalHtu, parseAppHeader } from '../contract';
 import type { Transport, TransportFetchInput, TransportFetchResult, TransportUploadResult } from '../transport';
 import { createMockControls, type MockControls } from './controls';
 import { seedFixtures } from './fixtures';
+import { registerAccountRoutes } from './handlers/account';
 import { registerChatRoutes } from './handlers/chat';
 import { registerDeviceRoutes } from './handlers/devices';
+import { registerFileRoutes } from './handlers/files';
+import { registerLegalRoutes } from './handlers/legal';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notifications';
+import { registerAutomationRoutes } from './handlers/automation';
+import { registerAiLoginRoutes } from './handlers/ai-login';
 import { registerProgressRoutes } from './handlers/progress';
 import { registerSessionRoutes } from './handlers/session';
+import { registerTabRoutes, seedTabs } from './handlers/tabs';
 import { registerTranscriptionRoutes } from './handlers/transcriptions';
 import { createRouter, type MockUploadBody } from './router';
 import { createFakeSocketConnect } from './socket';
@@ -37,15 +43,22 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   const now = opts.now ?? Date.now;
   const [minLatency, maxLatency] = opts.latency ?? [150, 400];
   seedFixtures(state, now());
+  seedTabs(state, now());
 
   const router = createRouter();
   registerDeviceRoutes(router, state);
   registerSessionRoutes(router, state);
   registerMeRoutes(router, state);
+  registerAccountRoutes(router, state);
+  registerLegalRoutes(router, state);
   registerChatRoutes(router, state, { maxLatency });
   registerNotificationRoutes(router, state);
   registerProgressRoutes(router, state);
+  registerAutomationRoutes(router, state);
+  registerAiLoginRoutes(router, state);
   registerTranscriptionRoutes(router, state);
+  registerTabRoutes(router, state);
+  registerFileRoutes(router, state);
 
   const waitForLatency = (): Promise<void> => {
     const ms = minLatency + Math.random() * (maxLatency - minLatency);

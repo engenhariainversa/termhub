@@ -9,8 +9,12 @@ const EVENTS_KEPT_PER_TAB = 200;
 /** One working interval counts at most this much agent time: bounds a hook that died mid-turn (spec 2026-09-26 progress-panel D2). */
 export const MAX_WORKING_INTERVAL_S = 7200;
 
-/** States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background'];
+/**
+ * States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. `finished`
+ * counts like `waiting_input`: the agent is still open at its prompt (TER-972), and so do `blocked`,
+ * `auth_required` and `trust_prompt` (TER-1046).
+ */
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished', 'blocked', 'auth_required', 'trust_prompt'];
 
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 
@@ -43,6 +47,16 @@ export interface LastAnswer {
 function hasBackgroundTasks(meta: unknown): boolean {
   const count = metaOf(meta).background_tasks;
   return typeof count === 'number' && count > 0;
+}
+
+/** How many of a tab's newest event texts are scanned for cited Markdown paths. */
+const CITED_EVENTS_PER_TAB = 50;
+
+/** A text an agent of a project wrote, with the machine its tab runs on. */
+export interface CitedText {
+  machineId: string;
+  text: string;
+  at: Date;
 }
 
 export class TabsRepository {
@@ -131,6 +145,21 @@ export class TabsRepository {
     return rows.map(mapTab);
   }
 
+  /**
+   * Terminal tabs with a tmux session that never reported a state, opened between `since` and `before`
+   * (TER-1046), newest first, at most `limit`: Claude Code's folder trust dialog and its login error come
+   * before any hook, so the monitor reads their screen (monitor/stale-working.ts). A plain shell tab stays
+   * on this list until it ages out of the window.
+   */
+  async listUnreported(since: Date, before: Date, limit = 100): Promise<Tab[]> {
+    const rows = await this.db.tab.findMany({
+      where: { kind: 'terminal', tmuxSession: { not: null }, state: null, createdAt: { gte: since, lt: before } },
+      orderBy: [{ createdAt: 'desc' }],
+      take: limit,
+    });
+    return rows.map(mapTab);
+  }
+
   /** Every tab on one machine. */
   async listByMachine(machineId: string): Promise<Tab[]> {
     const rows = await this.db.tab.findMany({ where: { machineId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] });
@@ -196,10 +225,12 @@ export class TabsRepository {
       answer?: string;
       /**
        * Only for a state read off the screen (monitor/stale-working.ts): the tab's `state_at` when the
-       * screen was captured. The event is dropped unless the tab is still `working` (or
-       * `waiting_background`) since then — a hook that landed meanwhile knows better than the capture.
+       * screen was captured (null for a tab that never reported). The event is dropped unless the tab is
+       * still in one of `ifStateIn` (default `working` or `waiting_background`) since then — a hook that
+       * landed meanwhile knows better than the capture.
        */
-      ifStateAt?: string;
+      ifStateAt?: string | null;
+      ifStateIn?: readonly (TabState | null)[];
     },
   ): Promise<{ tab: Tab; event: TabEvent | null; rearm: Rearm | null }> {
     const [e, t, rearm] = await this.db.$transaction(async (tx) => {
@@ -222,8 +253,9 @@ export class TabsRepository {
         seenAgeMs: current?.stateSeenAt ? at.getTime() - current.stateSeenAt.getTime() : null,
       };
       const incoming = { kind: event.kind, name: eventName(event.meta), continuesWait: !!event.continuesWait, keepsWaitText: !!event.keepsWaitText, subagent: subagentOf(event.meta) };
-      const stillWorking = current?.state === 'working' || current?.state === 'waiting_background';
-      const outdated = event.ifStateAt !== undefined && (!stillWorking || current?.stateAt?.toISOString() !== event.ifStateAt);
+      const expected: readonly (TabState | null)[] = event.ifStateIn ?? ['working', 'waiting_background'];
+      const unchanged = expected.includes((current?.state ?? null) as TabState | null) && (current?.stateAt?.toISOString() ?? null) === event.ifStateAt;
+      const outdated = event.ifStateAt !== undefined && !unchanged;
       const outcome = outdated ? ({ action: 'drop' } as const) : decideWait(now, history, incoming);
       if (outcome.action === 'drop') {
         return [null, await tx.tab.findUniqueOrThrow({ where: { id: tabId } }), null] as const;
@@ -267,9 +299,49 @@ export class TabsRepository {
     return { tab: mapTab(t), event: e ? mapTabEvent(e) : null, rearm };
   }
 
+  /** The retention purge (TER-743): every tab's state events older than `cutoff`. The tab row keeps its
+   *  current state, and its last whole answer stays while the tab exists. */
+  async purgeEventsBefore(cutoff: Date): Promise<number> {
+    const r = await this.db.tabEvent.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    return r.count;
+  }
+
   async listEvents(tabId: string, limit = 50): Promise<TabEvent[]> {
     const rows = await this.db.tabEvent.findMany({ where: { tabId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(mapTabEvent);
+  }
+
+  /**
+   * What the agents of a project wrote, for the Markdown paths they cite (spec 2026-10-04 recent Markdown
+   * files D3): each tab's last whole answer and the texts of its newest `eventsPerTab` monitor events,
+   * with the tab's machine, newest first. Read only to find paths; never logged.
+   */
+  async citedTexts(projectId: string, eventsPerTab = CITED_EVENTS_PER_TAB): Promise<CitedText[]> {
+    const tabs = await this.db.tab.findMany({
+      where: { projectId },
+      select: {
+        machineId: true,
+        lastAnswer: { select: { text: true, at: true } },
+        events: { where: { text: { not: null } }, orderBy: { createdAt: 'desc' }, take: eventsPerTab, select: { text: true, createdAt: true } },
+      },
+    });
+    const out: CitedText[] = [];
+    for (const t of tabs) {
+      if (t.lastAnswer) out.push({ machineId: t.machineId, text: t.lastAnswer.text, at: t.lastAnswer.at });
+      for (const e of t.events) if (e.text) out.push({ machineId: t.machineId, text: e.text, at: e.createdAt });
+    }
+    return out.sort((a, b) => b.at.getTime() - a.at.getTime());
+  }
+
+  /**
+   * Whether a prompt was submitted in the tab after `since` (a main-thread `UserPromptSubmit`): someone
+   * typed in it (TER-1051). Also true when the kept history may not reach back that far (the tab has
+   * EVENTS_KEPT_PER_TAB events after `since`): unknown counts as used.
+   */
+  async promptedSince(tabId: string, since: Date): Promise<boolean> {
+    const rows = await this.db.tabEvent.findMany({ where: { tabId, createdAt: { gt: since } }, select: { meta: true } });
+    if (rows.length >= EVENTS_KEPT_PER_TAB) return true;
+    return rows.some((e) => eventName(e.meta) === 'UserPromptSubmit' && !isSubagentEvent(e.meta));
   }
 
   /** Clears the monitor state (e.g. the tmux session is gone). */
@@ -331,7 +403,7 @@ export class TabsRepository {
     return written > 0 ? this.findById(id) : undefined;
   }
 
-  async create(projectId: string, machineId: string, name: string, opts: { kind?: TabKind; simulator_udid?: string | null; created_by_token_id?: string | null } = {}): Promise<Tab> {
+  async create(projectId: string, machineId: string, name: string, opts: { kind?: TabKind; simulator_udid?: string | null; created_by_token_id?: string | null; cwd?: string | null } = {}): Promise<Tab> {
     const id = newId();
     const kind = opts.kind ?? 'terminal';
     const agg = await this.db.tab.aggregate({ where: { projectId }, _max: { position: true } });
@@ -345,6 +417,7 @@ export class TabsRepository {
         tmuxSession: kind === 'terminal' ? `termhub-${projectId}-${id}` : null,
         simulatorUdid: kind === 'simulator' ? (opts.simulator_udid ?? null) : null,
         createdByTokenId: opts.created_by_token_id ?? null,
+        cwd: opts.cwd ?? null,
         position: (agg._max.position ?? -1) + 1,
       },
     });

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { unsafeAllowedTool } from '../control/automation-tools.js';
+import { tk } from '../i18n/index.js';
 
 /**
  * Setup do projeto (ProjectSetup.data). Versionado: ao mudar o formato, incremente
@@ -100,6 +102,63 @@ export const aiSchema = z
   });
 export type ProjectAi = z.infer<typeof aiSchema>;
 
+export const AUTONOMY_LEVELS = ['pr', 'merge', 'deploy', 'release'] as const;
+export type AutonomyLevel = (typeof AUTONOMY_LEVELS)[number];
+const glob = z.string().trim().min(1).max(200);
+// 1200, not more: the implementer template with a custom middle must stay under 4000 characters
+const promptText = z.string().trim().min(1).max(1200).nullable().default(null);
+
+/** Agentic board automation (spec 2026-10-04). Off by default: nothing runs until `enabled`. */
+export const automationSchema = z.object({
+  enabled: z.boolean().default(false),
+  types: z.array(z.enum(['story', 'task', 'bug', 'spike'])).min(1).default(['story', 'task', 'bug']),
+  // maintainer 2026-10-04: pr for everyone (spec §15.1 alternative)
+  autonomy: z.enum(AUTONOMY_LEVELS).default('pr'),
+  release_paths: z.array(glob).max(50).default([]),
+  store_paths: z.array(glob).max(50).default([]),
+  release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  // spike R1 (TER-964): workflows (name or file) that must pass on the PR head before termhub merges; [] = every run
+  required_checks: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  epic_branch_pattern: z.string().trim().min(1).max(100).refine((p) => p.includes('{ref}'), 'use {ref}').default('epic/{ref}-{slug}'),
+  worktrees_dir: z.string().trim().min(1).max(512).default('~/.termhub/worktrees'),
+  allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),
+  max_parallel: z.number().int().min(1).max(100).nullable().default(null),
+  resume_max: z.number().int().min(0).max(10).default(3),
+  // TER-1043: off = the agent decides by itself (its recommendation, or the person's precedent) and records
+  // it; on = a run that stops on a decision waits for the person ("Parar em decisões de produto")
+  stop_on_decisions: z.boolean().default(false),
+  fix_attempts: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a deploy that failed on GitHub's side (no job, no failed step, an Actions incident) is run again
+  // this many times (5, 15, 30 min apart) before the project is paused; 0 = pause at once, as before
+  deploy_retries: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a run that reported a GitHub error (push or PR) is resumed this many times, once GitHub works
+  // again, before it goes to the person
+  github_retries: z.number().int().min(0).max(10).default(3),
+  daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
+  // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off
+  card_budget_usd: z.number().positive().max(100000).nullable().default(null),
+  summary_hour: z.number().int().min(0).max(23).nullable().default(null),
+  prompts: z.object({ implementer: promptText, integrator: promptText, fixer: promptText }).default({}),
+});
+export type ProjectAutomation = z.infer<typeof automationSchema>;
+
+/** Why a saved allow rule is refused (TER-968): shown to the person on the field. */
+export const UNSAFE_ALLOWED_TOOL = tk('Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).');
+
+/**
+ * Flags each `allowed_tools` entry too broad for an automatic tab (`unsafeAllowedTool`). Checked when the
+ * person saves, not when a stored setup is read: a stored list is filtered at launch instead, so a rule
+ * saved before this check never resets the whole automation section to its defaults.
+ */
+function checkAllowedTools(tools: string[] | null, ctx: z.RefinementCtx, path: (string | number)[]): void {
+  tools?.forEach((t, i) => {
+    if (unsafeAllowedTool(t)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: [...path, i], message: UNSAFE_ALLOWED_TOOL });
+  });
+}
+
+/** The automation section as the person saves it (the mobile route): `automationSchema` plus the allow-rule check. */
+export const automationInputSchema = automationSchema.superRefine((a, ctx) => checkAllowedTools(a.allowed_tools, ctx, ['allowed_tools']));
+
 export const setupSchema = z.object({
   repo: repoSchema.nullable().default(null),
   tickets: ticketsSchema.nullable().default(null),
@@ -109,12 +168,14 @@ export const setupSchema = z.object({
   verify: verifySchema.default({}),
   approvals: approvalsSchema.default({}),
   ai: aiSchema.default({}),
+  automation: automationSchema.default({}),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;
 
 /** What PUT /setup accepts: the same shape, and no source twice. */
 export const setupInputSchema = setupSchema.superRefine((d, ctx) => {
+  checkAllowedTools(d.automation.allowed_tools, ctx, ['automation', 'allowed_tools']);
   const seen = new Set<string>();
   d.ticket_sources.forEach((s, i) => {
     const id = sourceIdentity(s);

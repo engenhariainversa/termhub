@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
-import { STANDING_KIND_LABEL, replyExcerpt, type ChatAttachment } from '@termhub/mobile-api';
+import { STANDING_KIND_LABEL, replyExcerpt, tabQuestionReplyText, type ChatAttachment, type ReplyCardRef } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatConversation, ChatMessage, ChatNotice } from '../db/repositories/chat.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
@@ -15,17 +15,20 @@ import { fallbackShortfall, pickFallback, type FallbackPick } from './account-fa
 import { attachmentContext } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
+import { withMessageRef } from './message-ref.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
-import { hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
-import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
+import { exclusiveConflict, hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
+import { DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretArgs, SECRET_ARGS, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
 import { accountSystemPrompt, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
 import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { toSubagentView, type SubagentView } from './subagent-view.js';
 import { tabQuestionContext } from './tab-question-context.js';
+import type { ChoicePayload, PermissionPayload } from './tab-question-payload.js';
 import { mintConciergeToken } from './token.js';
 import { indexMessage } from '../memory/index-items.js';
 import { groupsOf, type GroupView } from '../control/groups.js';
@@ -58,6 +61,12 @@ class LimitFallback {
   readonly tried = new Set<string>();
   private first: { label: string | null; resets_at: string | null } | null = null;
   account: RunAccount;
+  /**
+   * The model the run is on: the configured one, else — once the CLI's `init` said it — the one the
+   * account's default resolved to (TER-837). It decides which usage windows count when picking the next
+   * account, and the turn keeps it there: that account's own default may be a model it has no room for.
+   */
+  model: string | null;
 
   /** The run is on the project's account list (TER-589): the account that takes over becomes the project chat's own. */
   private readonly projectRun: boolean;
@@ -68,15 +77,18 @@ class LimitFallback {
     private projectId: string | null,
     private conversationId: string,
     host: RunHost,
+    model: string | null,
   ) {
     this.account = runAccountOf(host);
+    this.model = model;
     if (this.account.id) this.tried.add(this.account.id);
     this.projectRun = host.account.kind === 'chosen' && host.account.via === 'project';
   }
 
   /** The next account, its session moved there when it can be, and the notice its answer carries. */
-  async next(limit: { resets_at: string | null }, session: { dir: string | null; id: string | null }): Promise<{ pick: FallbackPick; notice: ChatNotice } | { pick: null; notice: ChatNotice }> {
+  async next(limit: { resets_at: string | null }, session: { dir: string | null; id: string | null; model: string | null }): Promise<{ pick: FallbackPick; notice: ChatNotice } | { pick: null; notice: ChatNotice }> {
     this.first ??= { label: this.account.label, resets_at: limit.resets_at };
+    this.model ??= session.model;
     // The same opt-in as the tabs' automatic swap (TER-55): an account of the machine is used for
     // someone else's quota only when its owner asked for that.
     if (!this.machine.claude_auto_swap) {
@@ -85,7 +97,7 @@ class LimitFallback {
     }
     let pick: FallbackPick | null = null;
     try {
-      pick = await pickFallback(this.repos, { machine: this.machine, currentAccountId: this.account.id, tried: this.tried, projectId: this.projectId, sessionDir: session.dir, sessionId: session.id });
+      pick = await pickFallback(this.repos, { machine: this.machine, currentAccountId: this.account.id, tried: this.tried, projectId: this.projectId, sessionDir: session.dir, sessionId: session.id, model: this.model });
     } catch (err) {
       console.error('chat: account fallback failed', { conversation_id: this.conversationId, error: failureLabel(err) });
     }
@@ -124,12 +136,17 @@ export interface SendOptions {
   attachmentIds?: string[];
   /** The message this one answers (TER-447): a message of this conversation that has something in it. */
   replyToId?: string;
+  /** Or the card it answers (TER-849): a gate card or a tab's question of this conversation. */
+  replyToCard?: ReplyCardRef;
 }
 /** What `startIn` takes besides the text: a decision's marking hook, and the attachment ids of a typed message. */
 interface StartOptions {
   beforeRun?: () => Promise<void>;
   attachmentIds?: string[];
   replyToId?: string;
+  replyToCard?: ReplyCardRef;
+  /** The person typed this message (`start`): its run text carries the message's ref (TER-1037). */
+  typed?: boolean;
 }
 /** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
 interface Attachable {
@@ -181,7 +198,30 @@ export const CANCEL_TIMEOUT_MS = 30_000;
  * use for, and it can be unit-tested the same way.
  */
 export async function purgeExpiredActions(repos: Repositories, now = new Date()): Promise<number> {
-  return repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  const count = await repos.chatActions.expireOlderThan(new Date(now.getTime() - ACTION_TTL_MS));
+  // Denied and just-expired rows close here, not in the gate's execute(): their secrets go now.
+  await scrubSecretArgs(repos);
+  return count;
+}
+
+/**
+ * Redacts the secret arguments (`SECRET_ARGS`) of closed rows (TER-1047). Given `rows`, only those; else
+ * every closed row of a tool that has secrets. Never throws: a failed scrub is retried by the next sweep.
+ */
+export async function scrubSecretArgs(repos: Repositories, rows?: ChatAction[]): Promise<number> {
+  try {
+    const closed = rows ?? (await repos.chatActions.listClosedByTools(Object.keys(SECRET_ARGS)));
+    let scrubbed = 0;
+    for (const row of closed) {
+      const redacted = redactSecretArgs(row.tool, row.args);
+      if (redacted === row.args) continue;
+      await repos.chatActions.replaceClosedArgs(row.id, redacted);
+      scrubbed++;
+    }
+    return scrubbed;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -217,6 +257,8 @@ interface QueuedTurn {
   attachments: AttachmentRow[];
   /** What the message answers, for a run text built later (`runText` unset). */
   reply: ReplyTarget | null;
+  /** The person typed it: a run text built later carries its ref (TER-1037). */
+  typed?: boolean;
   question: ChatMessage;
   answer: ChatMessage;
   settle: LiveTurn['settle'];
@@ -395,9 +437,16 @@ export class ChatService {
   /** Conversations whose lock `reset` holds: a message there is not queued (it would land in the thread
    *  being archived), it is refused as before. */
   private resetting = new Set<string>();
+  /** Conversations "Apagar conversa" archived and still has to delete: the row goes once no process
+   *  holds it and nothing is queued in it, so their last writes never land on a deleted row. */
+  private deleting = new Set<string>();
+  /** Queue launches in flight, by conversation (`launchQueued`): a deletion waits for them. */
+  private draining = new Map<string, number>();
   /** Decisions whose `markInjectedMany` failed in this process — see `drainNextDecision`. In memory on
    * purpose: the row itself is untouched, so a restart tries it again with a healthy database. */
   private unmarkable = new Set<string>();
+  /** Server work run when a person approves one of the server's own cards, by tool (`onApproved`). */
+  private approvedHooks = new Map<string, (action: ChatAction) => Promise<void>>();
   /** Who this process is in `chat_live_runs` (spec 2026-09-26 panel §3): a random id per process. */
   readonly instanceId = randomUUID();
   /** Set by `suspendAll` (a graceful shutdown): a run that ends now leaves its turns open for the
@@ -470,6 +519,17 @@ export class ChatService {
   }
 
   /**
+   * TER-990: refuses a run whose account (the chosen one, else the machine's default login) is exclusive
+   * to a project other than the conversation's — before any row is written, like a host problem.
+   */
+  private async guardExclusive(user: User, conversation: ChatConversation, host: Extract<HostChoice, { kind: 'ready' }>): Promise<void> {
+    const login = await exclusiveConflict(this.deps.repos, user, host, conversation.project_id);
+    if (!login) return;
+    await auditBlocked(this.deps.repos, undefined, login, { project_id: conversation.project_id, path: 'chat', machine_id: host.machine.id });
+    throw new HttpError(409, exclusiveError(login).localized, 'ACCOUNT_EXCLUSIVE');
+  }
+
+  /**
    * "Nova conversa" (spec §4.1): the active conversation of the scope is archived and a fresh one takes
    * its place — a new CLI session, an empty thread. Holds the conversation's lock while it works, so a
    * message cannot start a run on the row being archived. Its open questions are expired and its tokens
@@ -515,6 +575,41 @@ export class ChatService {
       return (await this.deps.repos.chat.setHost(fresh.id, { machine_id: current.machine_id, ai_account_id: current.ai_account_id })).conversation;
     }
     return fresh;
+  }
+
+  /**
+   * "Apagar conversa" (TER-743): the scope's active conversation ends exactly as in "Nova conversa"
+   * (`reset`, with the same 409 while it is answering) and is then deleted for good, with its memory
+   * rows. A process that `reset` stopped still holds the lock until it exits, and messages queued
+   * behind it are closed by the release: the row goes after both (`deleteIfFree`). Answers the fresh,
+   * empty conversation.
+   */
+  async deleteConversation(user: User, projectId: string | null): Promise<ChatConversation> {
+    const current = await this.conversationFor(user, projectId);
+    // Marked before the reset: the queue launch its release may start must find the mark when it ends.
+    this.deleting.add(current.id);
+    let fresh: ChatConversation;
+    try {
+      fresh = await this.reset(user, projectId);
+    } catch (e) {
+      this.deleting.delete(current.id);
+      throw e;
+    }
+    await this.deleteIfFree(user, current.id);
+    return fresh;
+  }
+
+  /** Deletes a conversation `deleteConversation` archived, unless a process, a queued message or a
+   *  queue launch closing them still needs it; `releaseLock` and `launchQueued` call it again when they let go. */
+  private async deleteIfFree(user: User, conversationId: string): Promise<void> {
+    if (!this.deleting.has(conversationId) || this.running.has(conversationId) || this.draining.has(conversationId) || this.queued.get(conversationId)?.length) return;
+    this.deleting.delete(conversationId);
+    this.queued.delete(conversationId);
+    try {
+      await this.deps.repos.chat.deleteConversation(conversationId, user.id);
+    } catch {
+      // The archived row stays (out of sight, as after "Nova conversa"); the next try is the person's.
+    }
   }
 
   /** Whether "Compactar" is running in this conversation — what `GET /api/chat` tells a screen that
@@ -563,6 +658,7 @@ export class ChatService {
     // Before the lock, like `startIn`: a host that cannot run is a compaction that never started.
     const host = await this.hostForConversation(user, conversation, { wait: true });
     if (host.kind !== 'ready') throw hostFailure(host);
+    await this.guardExclusive(user, conversation, host);
     if (this.running.has(conversation.id)) throw new HttpError(409, 'O concierge ainda está respondendo: compacte quando ele terminar', 'CHAT_BUSY');
     this.running.add(conversation.id);
     let handedOff = false;
@@ -620,7 +716,7 @@ export class ChatService {
     } finally {
       this.compacting.delete(conversation.id);
       try {
-        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after });
+        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after, compacted: true });
         const ok = compacted && errorCode === null;
         chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: ok ? 'done' : 'failed', tokens_before: before, tokens: after, error_code: ok ? null : errorCode });
       } finally {
@@ -694,6 +790,32 @@ export class ChatService {
     const gone = await this.deps.repos.chatSubagents.setStatus(subagentId, 'interrupted', { from: ['running', 'stopping'] });
     if (gone) chatBus.publish({ type: 'subagent', user_id: user.id, conversation_id: conversationId, subagent: toSubagentView(gone) });
     throw new HttpError(409, 'O processo deste subagente já terminou', 'SUBAGENT_GONE');
+  }
+
+  /**
+   * Registers what the server does when a person approves a card of `tool` that the server asked itself
+   * (agentic board F-19: `automation_merge` → `mergeApproved`). Such cards are born injected, so the
+   * concierge never hears of them: this hook is their only effect.
+   */
+  onApproved(tool: string, fn: (action: ChatAction) => Promise<void>): void {
+    this.approvedHooks.set(tool, fn);
+  }
+
+  /**
+   * The decision hook, called by every path that decides cards — the web's single and batch routes, the
+   * phone's single and batch routes — right after the rows are decided. Approved rows with a hook run it
+   * in the background; a failure is logged by code and never turns the decision into an error (the hook
+   * owner retries on its own: the merge executor picks an approved card up on its next pass).
+   */
+  afterDecisions(actions: ChatAction[]): void {
+    for (const action of actions) {
+      if (action.status !== 'approved') continue;
+      const hook = this.approvedHooks.get(action.tool);
+      if (!hook) continue;
+      void Promise.resolve()
+        .then(() => hook(action))
+        .catch((err: unknown) => console.error('chat: approval hook failed', { action_id: action.id, tool: action.tool, error: failureLabel(err) }));
+    }
   }
 
   /**
@@ -898,7 +1020,11 @@ export class ChatService {
    */
   async start(user: User, text: string, opts: SendOptions = {}): Promise<StartedRun> {
     const conversation = await this.conversationFor(user, opts.projectId ?? null);
-    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId });
+    // Before the run can see the message: from here on, a "no" given earlier no longer refuses a call
+    // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
+    // failure keeps the old denial window, never the message.
+    await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
+    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true });
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.
     void this.deps.indexMessage({ id: started.user_message_id, owner_id: user.id, project_id: conversation.project_id, text, created_at: new Date().toISOString() });
@@ -991,7 +1117,7 @@ export class ChatService {
       role: 'user',
       text,
       // The quote the thread shows, cut now: it has to read the same once the original is gone (TER-447).
-      ...(reply ? { reply_to: { id: reply.id, role: reply.role, excerpt: replyExcerpt(reply.text, reply.attachmentNames) } } : {}),
+      ...(reply ? { reply_to: { id: reply.id, role: reply.role, excerpt: replyExcerpt(reply.text, reply.attachmentNames), ...(reply.card ? { card: { kind: reply.card.kind, id: reply.card.id } } : {}) } } : {}),
     });
     const question = await this.bindAttachments(stored, attachable.ids, user, conversationId);
     chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: question });
@@ -1043,10 +1169,12 @@ export class ChatService {
     // `startIn`: a bad id is a message never sent — 409, nothing stored, no decision marked, no tab
     // context stamped — whether the message is injected or queued.
     const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
-    const reply = await this.replyTargetFor(conversation.id, opts?.replyToId);
+    const reply = await this.replyTargetFor(user, conversation.id, opts);
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
-    let runText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
+    const baseText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
     const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
+    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed);
+    let runText = baseText === undefined ? undefined : withRef(baseText);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
     // Re-read after the awaits above: the process may have ended its input in between, and a newer one
@@ -1054,10 +1182,10 @@ export class ChatService {
     // would leave the message waiting until it ends.
     const now = this.live.get(conversation.id);
     if (now?.accepting) {
-      runText ??= await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
+      runText ??= withRef(await this.runTextFor(user, conversation.id, text, attachable.rows, reply));
       if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
     }
-    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, question, answer, settle: d.settle });
+    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, question, answer, settle: d.settle });
     // Announced here, before the queue may run: `launchQueued` can close this turn at once.
     chatBus.publish({ type: 'run_started', user_id: user.id, conversation_id: conversation.id, message_id: answer.id });
     this.live.get(conversation.id)?.giveWay();
@@ -1073,13 +1201,36 @@ export class ChatService {
    * still being written, or one that never came) is not quotable. Anything else is a message never
    * sent: 409, nothing stored, nothing stamped.
    */
-  private async replyTargetFor(conversationId: string, id: string | undefined): Promise<ReplyTarget | null> {
+  private async replyTargetFor(user: User, conversationId: string, opts: Pick<StartOptions, 'replyToId' | 'replyToCard'> | undefined): Promise<ReplyTarget | null> {
+    if (opts?.replyToCard) return this.replyCardTargetFor(user, conversationId, opts.replyToCard);
+    const id = opts?.replyToId;
     if (id === undefined) return null;
     const [row] = await this.deps.repos.chat.findMessagesByIds(conversationId, [id]);
     if (!row) throw replyUnavailable();
     const attachmentNames = row.text ? [] : (await this.deps.repos.chatAttachments.listForMessages([row.id])).map((a) => a.name);
     if (!row.text && attachmentNames.length === 0) throw replyUnavailable();
     return { id: row.id, role: row.role, text: row.text, attachmentNames };
+  }
+
+  /**
+   * The card a reply answers (TER-849), under the same rule as a message: read before anything is
+   * written, and refused (409, nothing stored) unless it is a card of this conversation — a gate card,
+   * or a tab's question (a suggestion is not one). Its words are what the card shows: the action's
+   * summary, resolved owner-scoped like the card's own, or what the question asks.
+   */
+  private async replyCardTargetFor(user: User, conversationId: string, ref: ReplyCardRef): Promise<ReplyTarget> {
+    const repos = this.deps.repos;
+    if (ref.kind === 'action') {
+      const row = await repos.chatActions.findByIdForUser(ref.id, user.id);
+      if (!row || row.conversation_id !== conversationId) throw replyUnavailable();
+      const [card] = await describeActions(repos, [row], user.id);
+      return { id: null, role: 'assistant', text: card?.summary ?? '', attachmentNames: [], card: { kind: 'action', id: row.id, status: row.status } };
+    }
+    const row = await repos.tabQuestions.findByIdForUser(ref.id, user.id);
+    if (!row || row.conversation_id !== conversationId || row.kind === 'suggestion') throw replyUnavailable();
+    const [view] = await describeTabQuestions(repos, [row], user.id);
+    const text = row.kind === 'choice' ? tabQuestionReplyText({ kind: 'choice', payload: row.payload as ChoicePayload }) : tabQuestionReplyText({ kind: 'permission', payload: row.payload as PermissionPayload });
+    return { id: null, role: 'assistant', text, attachmentNames: [], card: { kind: 'tab_question', id: row.id, status: row.status, tab_name: view?.tab_name ?? null } };
   }
 
   /**
@@ -1160,6 +1311,7 @@ export class ChatService {
     // window in which a second message passes the check and starts a second run on the same session.
     const host = await this.hostForConversation(user, conversation, { wait: true });
     if (host.kind !== 'ready') throw hostFailure(host);
+    await this.guardExclusive(user, conversation, host);
     // Read with the host, before the lock and before any row: a read that fails here is a message never
     // sent, not an empty assistant bubble left behind by an error thrown mid-run.
     const appendSystemPrompt = await this.promptFor(user, conversation);
@@ -1182,7 +1334,7 @@ export class ChatService {
       // injected and before the tab context is stamped.
       const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
       // The message this one answers (TER-447), under the same rule: read before anything is written.
-      const reply = await this.replyTargetFor(conversation.id, opts?.replyToId);
+      const reply = await this.replyTargetFor(user, conversation.id, opts);
 
       // The host this run uses is the host this conversation has, and from here on it says so: a
       // conversation whose machine was auto-picked (one candidate, nothing stored) is otherwise
@@ -1204,8 +1356,9 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
-      const runText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
+      const baseText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
       const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
+      const runText = withMessageRef(baseText, question.id, text, opts?.typed);
       const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
       // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
@@ -1269,6 +1422,8 @@ export class ChatService {
       /** Whether the answer called a tool: then it is never re-run elsewhere. */
       let acted = false;
       let sessionDir: string | null = null;
+      /** The model the CLI's `init` said the run is on (TER-837). */
+      let runModel: string | null = null;
       let notice: ChatNotice | undefined;
 
       const consume = async (run: RunnerInput) => {
@@ -1288,12 +1443,17 @@ export class ChatService {
             usage = frame.usage ?? null;
             if (frame.session_id && frame.session_id !== conversation.cli_session_id) await this.deps.repos.chat.setCliSession(conversation.id, frame.session_id);
             if (frame.context) await saveContext(this.deps.repos.chat, user.id, conversation.id, frame.context);
+          } else if (frame.type === 'compacted') {
+            // The CLI compacted on its own mid-turn (auto-compact, TER-1038): the meter drops now and
+            // remembers when; the turn's own `done` writes the fill it ends with.
+            if (frame.tokens !== undefined) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: frame.tokens, compacted: true });
           } else if (frame.type === 'api_error') {
             turnReason = frame.reason;
           } else if (frame.type === 'usage_limit') {
             limit = { resets_at: frame.resets_at };
-          } else if (frame.type === 'session_dir') {
-            sessionDir = frame.dir;
+          } else if (frame.type === 'init') {
+            sessionDir = frame.dir ?? sessionDir;
+            runModel = frame.model ?? runModel;
           } else if (frame.type === 'error') {
             // The reason is the container's closed-set classification, so a failure is diagnosable
             // from the stored row alone: CLI_REJECTED means our own flags were refused, which no
@@ -1332,14 +1492,14 @@ export class ChatService {
       }
 
       if (token !== undefined) {
-        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host);
+        // the conversation's own model, else the project's default (TER-589)
+        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
         let input: RunnerInput = {
           session_id: conversation.cli_session_id ?? randomUUID(),
           resume: conversation.cli_session_id !== null,
           text,
           config_dir: fallback.account.configDir,
-          // the conversation's own model, else the project's default (TER-589)
-          model: conversation.model ?? host.model ?? null,
+          model: fallback.model,
           token,
           append_system_prompt: appendSystemPrompt,
         };
@@ -1386,7 +1546,7 @@ export class ChatService {
           // (Read through a widened copy: `consume` assigns it, which the compiler cannot see here.)
           const failed = errorCode as ChatErrorCode;
           if (failed === 'USAGE_LIMIT' && collected === '' && !acted) {
-            const next = await fallback.next(limit ?? { resets_at: null }, { dir: sessionDir, id: input.session_id });
+            const next = await fallback.next(limit ?? { resets_at: null }, { dir: sessionDir, id: input.session_id, model: runModel });
             notice = next.notice;
             if (!next.pick) break;
             startOver();
@@ -1394,7 +1554,7 @@ export class ChatService {
               freshTried = true;
               await this.deps.repos.chat.setCliSession(conversation.id, null);
             }
-            input = { ...input, config_dir: next.pick.account.config_dir, resume: next.pick.resume, session_id: next.pick.resume ? input.session_id : randomUUID() };
+            input = { ...input, config_dir: next.pick.account.config_dir, model: fallback.model, resume: next.pick.resume, session_id: next.pick.resume ? input.session_id : randomUUID() };
             continue;
           }
 
@@ -1499,7 +1659,8 @@ export class ChatService {
         else await live.failOpen('TOKEN_FAILED');
         return;
       }
-      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host);
+      // the conversation's own model, else the project's default (TER-589)
+      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
       /** A missing session is retried on a fresh one once — and never after a swap started one fresh. */
       let freshTried = false;
       for (;;) {
@@ -1510,8 +1671,7 @@ export class ChatService {
           resume,
           text: live.initialText(),
           config_dir: fallback.account.configDir,
-          // the conversation's own model, else the project's default (TER-589)
-          model: conversation.model ?? host.model ?? null,
+          model: fallback.model,
           token,
           append_system_prompt: appendSystemPrompt,
           stream_input: true,
@@ -1536,7 +1696,7 @@ export class ChatService {
         // The account hit its usage limit and the turn that met it waits again (TER-588): it goes on
         // another account of the machine, or every open turn is stored as the limit.
         if (outcome.limit) {
-          const next = await fallback.next(outcome.limit, { dir: live.sessionDir, id: live.sessionId });
+          const next = await fallback.next(outcome.limit, { dir: live.sessionDir, id: live.sessionId, model: live.model });
           if (this.suspending) {
             live.rejectOpen(serverRestarting());
             return;
@@ -1626,7 +1786,7 @@ export class ChatService {
         const stored = queue.map((q) => ({
           question_id: q.question.id,
           answer_id: q.answer.id,
-          text: q.runText ?? [attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'),
+          text: q.runText ?? withMessageRef([attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed),
         }));
         const held = rows.get(conversationId);
         rows.set(conversationId, { userId: held?.userId ?? queue[0].userId, turns: [...(held?.turns ?? []), ...stored] });
@@ -1672,7 +1832,9 @@ export class ChatService {
         // The reads above yield: `suspendAll` may have started meanwhile, and a row it released is not
         // this instance's to claim any more (nor to give up on).
         if (this.suspending) return;
-        if (!user || !conversation || !host || host.kind !== 'ready' || !this.streams(host.machine.id)) {
+        // TER-990: a run whose account became exclusive to another project is not resumed on it
+        const blocked = user && host?.kind === 'ready' && conversation ? await exclusiveConflict(this.deps.repos, user, host, conversation.project_id) : null;
+        if (!user || !conversation || !host || host.kind !== 'ready' || blocked || !this.streams(host.machine.id)) {
           if (age > RESUME_WINDOW_MS && (await this.deps.repos.chatLiveRuns.claim(row.conversation_id, row.instance_id, this.instanceId, staleBefore))) {
             try {
               await this.giveUp(row);
@@ -1818,7 +1980,16 @@ export class ChatService {
   private launchQueued(user: User, conversationId: string): Promise<void> {
     // Shutting down: the queue was released with the row, for the instance that takes over.
     if (this.suspending) return Promise.resolve();
-    return this.track(this.launchQueuedNow(user, conversationId));
+    // Counted per call: two launches may overlap, and only the last one to end may let a deletion through.
+    this.draining.set(conversationId, (this.draining.get(conversationId) ?? 0) + 1);
+    return this.track(
+      this.launchQueuedNow(user, conversationId).finally(() => {
+        const left = (this.draining.get(conversationId) ?? 1) - 1;
+        if (left > 0) this.draining.set(conversationId, left);
+        else this.draining.delete(conversationId);
+        return this.deleteIfFree(user, conversationId);
+      }),
+    );
   }
 
   private async launchQueuedNow(user: User, conversationId: string): Promise<void> {
@@ -1831,8 +2002,9 @@ export class ChatService {
     try {
       const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
       const host = conversation && conversation.archived_at === null ? await this.hostForConversation(user, conversation, { wait: true }) : null;
-      if (!conversation || !host || host.kind !== 'ready') {
-        // No host that can run them (the machine went away, the conversation was archived): each
+      const blocked = host?.kind === 'ready' && conversation ? await exclusiveConflict(this.deps.repos, user, host, conversation.project_id) : null;
+      if (!conversation || !host || host.kind !== 'ready' || blocked) {
+        // No host that can run them (TER-990: or only on an account exclusive to another project) (the machine went away, the conversation was archived): each
         // queued message gets its answer row closed with a reason, never a bubble waiting for ever.
         await this.closeAllQueued(user, conversationId, queue.splice(0), host?.kind === 'agent_too_old' ? 'AGENT_TOO_OLD' : 'HOST_GONE');
         return;
@@ -1848,7 +2020,7 @@ export class ChatService {
       if (streamed) carried = await this.takeOver(user, conversation);
       taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
-      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? (await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply)), question: q.question, answer: q.answer, settle: q.settle });
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply), q.question.id, q.text, q.typed), question: q.question, answer: q.answer, settle: q.settle });
       // A one-shot run takes a single queued turn, whose question row always exists.
       const oneShot = taken[0];
       // From here the run owns the lock and releases it itself, and settles the turns.
@@ -1894,6 +2066,11 @@ export class ChatService {
   /** Frees a conversation's run lock and hands the conversation to its queue, or else the decision drain. */
   private releaseLock(user: User, conversationId: string): void {
     this.running.delete(conversationId);
+    // "Apagar conversa" waited for this process to let go (with a queue, `launchQueued` closes it first).
+    if (this.deleting.has(conversationId) && !this.queued.get(conversationId)?.length) {
+      void this.deleteIfFree(user, conversationId);
+      return;
+    }
     // Shutting down: what is queued was released with the row, for the instance that takes over.
     if (this.suspending) return;
     // Messages typed while the process could not take them come first: the person is waiting on

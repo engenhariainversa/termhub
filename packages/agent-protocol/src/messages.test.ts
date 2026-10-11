@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   agentMessage,
   CAPABILITY_CLAUDE_STREAM_INPUT,
+  CAPABILITY_FILE_LIST,
+  CAPABILITY_WORKTREE,
+  WORKTREE_MIN_AGENT_VERSION,
+  CAPABILITY_FILE_READ,
+  CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
   claudeOpenParams,
   helloMessage,
@@ -39,6 +44,9 @@ describe('control messages', () => {
     expect(serverMessage.parse({ type: 'open', ch: 1, kind: 'pty', params: { session: 'th-a', cwd: '/tmp', cols: 80, rows: 24 } }).type).toBe('open');
     expect(serverMessage.parse({ type: 'resize', ch: 1, cols: 100, rows: 30 }).type).toBe('resize');
     expect(serverMessage.parse({ type: 'close', ch: 1 }).type).toBe('close');
+    expect(serverMessage.parse({ type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: null }).type).toBe('probe_info');
+    expect(serverMessage.parse({ type: 'probe_info', hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' }).type).toBe('probe_info');
+    expect(serverMessage.safeParse({ type: 'probe_info', hooks_url: 'not a url', mcp_url: null }).success).toBe(false);
     expect(serverMessage.safeParse({ type: 'open', ch: 0, kind: 'pty', params: { session: 'a', cwd: '/', cols: 1, rows: 1 } }).success).toBe(false);
   });
 
@@ -142,4 +150,21 @@ describe('streamed claude input', () => {
     expect(line).not.toBe(STREAM_END_INPUT_LINE);
     expect(JSON.parse(STREAM_END_INPUT_LINE)).toEqual({ type: 'termhub_end_input' });
   });
+});
+
+it('names the transcript capability once', () => {
+  expect(CAPABILITY_TRANSCRIPT).toBe('transcript');
+});
+
+it('names the file read capability once', () => {
+  expect(CAPABILITY_FILE_READ).toBe('file_read');
+});
+
+it('names the file list capability once', () => {
+  expect(CAPABILITY_FILE_LIST).toBe('file_list');
+});
+
+it('names the worktree capability once, with the agent version that ships it', () => {
+  expect(CAPABILITY_WORKTREE).toBe('worktree');
+  expect(WORKTREE_MIN_AGENT_VERSION).toBe('0.18.0');
 });

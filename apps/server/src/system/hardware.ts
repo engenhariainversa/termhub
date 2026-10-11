@@ -3,6 +3,7 @@ import { agentRpc } from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { REMOTE_PATH_PREFIX, runOnMachine } from '../terminal/machine-exec.js';
+import { tk } from '../i18n/index.js';
 
 /**
  * Hardware snapshot of a machine (CPU, memory, disks, temperatures, GPU, top processes),
@@ -202,7 +203,7 @@ export async function collectHardware(machine: Machine): Promise<HardwareSnapsho
   } else {
     const r = await runOnMachine(machine, { file: '/bin/sh', args: ['-c', HARDWARE_SCRIPT] }, `${REMOTE_PATH_PREFIX}${HARDWARE_SCRIPT}`, 15000);
     if (r.timedOut) throw new HttpError(504, 'A máquina demorou para responder');
-    if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? 'Máquina inacessível via SSH' : 'Falha ao coletar o hardware');
+    if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? tk('Máquina inacessível via SSH') : tk('Falha ao coletar o hardware'));
     stdout = r.stdout;
   }
   const snap = parse(stdout);

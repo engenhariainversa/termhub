@@ -50,4 +50,18 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('UserNotificationsReposito
     expect(await repo.markRead(n.id, userId, new Date())).toBe(false);
     expect(await repo.countUnread(userId)).toBe(0);
   });
+
+  it('markReadByData marks only the user\'s unread rows about that card (TER-923)', async () => {
+    const row = (owner: string, data: Record<string, unknown>) => repo.create({ user_id: owner, kind: 'confirmation', title: 't', body: 'b', data });
+    await row(userId, { kind: 'tab_question', tab_question_id: 'q1' });
+    await row(userId, { kind: 'tab_question', tab_question_id: 'q1' });
+    await row(userId, { kind: 'tab_question', tab_question_id: 'q2' });
+    await row(userId, { kind: 'confirmation', action_id: 'q1' });
+    await row(otherId, { kind: 'tab_question', tab_question_id: 'q1' });
+    expect(await repo.markReadByData(userId, 'tab_question_id', 'q1', new Date())).toBe(2);
+    expect(await repo.markReadByData(userId, 'tab_question_id', 'q1', new Date())).toBe(0);
+    expect(await repo.countUnread(userId)).toBe(2);
+    expect(await repo.countUnread(otherId)).toBe(1);
+    expect(await repo.markReadByData(userId, 'action_id', 'q1', new Date())).toBe(1);
+  });
 });

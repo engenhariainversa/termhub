@@ -1,22 +1,19 @@
+import { i18n, tk } from '../i18n';
 import type { SubagentStatus, SubagentView } from './types';
 
-/** The subagents panel (spec 2026-09-26 §4): pt-BR status line for each row. */
+/** The subagents panel (spec 2026-09-26 §4): status line for each row (pt-BR keys: translate with `t()` where shown). */
 export const SUBAGENT_STATUS_LABEL: Record<SubagentStatus, string> = {
-  running: 'rodando',
-  stopping: 'cancelando…',
-  completed: 'concluído',
-  failed: 'falhou',
-  stopped: 'cancelado',
-  interrupted: 'interrompido',
+  running: tk('rodando'),
+  stopping: tk('cancelando…'),
+  completed: tk('concluído'),
+  failed: tk('falhou'),
+  stopped: tk('cancelado'),
+  interrupted: tk('interrompido'),
 };
 
 /** Still doing something (or being asked to stop) — the only ones the toolbar button counts. */
 export const isActive = (s: SubagentView): boolean => s.status === 'running' || s.status === 'stopping';
 
-const minutesLabel = (ms: number): string => {
-  const minutes = Math.floor(ms / 60_000);
-  return minutes < 1 ? 'menos de 1 min' : `${minutes} min`;
-};
 
 /**
  * How long a row has been at it: "há N min" while it is still running (or being cancelled), "levou N
@@ -28,7 +25,9 @@ export function elapsedLabel(s: SubagentView, now: number): string {
   const start = new Date(s.started_at).getTime();
   const end = running ? now : s.ended_at !== null ? new Date(s.ended_at).getTime() : now;
   const ms = Math.max(0, end - start);
-  return running ? `há ${minutesLabel(ms)}` : `levou ${minutesLabel(ms)}`;
+  const minutes = Math.floor(ms / 60_000);
+  if (minutes < 1) return running ? i18n.t('há menos de 1 min') : i18n.t('levou menos de 1 min');
+  return running ? i18n.t('há {{n}} min', { n: minutes }) : i18n.t('levou {{n}} min', { n: minutes });
 }
 
 /** Replaces a row by id, or prepends a new one — the panel's own newest-first order. */

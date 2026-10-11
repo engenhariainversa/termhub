@@ -43,6 +43,13 @@ export type Session = Prisma.SessionModel
  */
 export type LoginCode = Prisma.LoginCodeModel
 /**
+ * Model AccountDeletionLink
+ * A deletion asked from the public page (termhub.dev/excluir-conta, TER-728): the e-mailed link's
+ * token, hashed, single use and short-lived. No FK: written only for an existing account, removed
+ * with it by e-mail.
+ */
+export type AccountDeletionLink = Prisma.AccountDeletionLinkModel
+/**
  * Model LoginAttempt
  * Rate limit / lockout progressivo (chave "email:<e-mail>" ou "ip:<ip>").
  */
@@ -106,6 +113,42 @@ export type Task = Prisma.TaskModel
  * A GitHub pull request linked to a card by its ref (spec 2026-09-26 progress-panel §5.2). Written only by the CI sync.
  */
 export type TaskPullRequest = Prisma.TaskPullRequestModel
+/**
+ * Model AutomationEvent
+ * What the automatic work did, for the activity feed and the daily summary (agentic board). Holds ids,
+ * URLs, counts and reasons only — never terminal content or prompts. Kept 30 days (hourly purge).
+ */
+export type AutomationEvent = Prisma.AutomationEventModel
+/**
+ * Model AutomationRun
+ * One automatic run on a card (agentic board, spec D11): who claimed it (`claimed_by`, the server
+ * instance — blue or green), what it is doing, and where (tab, machine, account, worktree).
+ * At most one active run per card, across both colours during a deploy: a partial unique index
+ * `CREATE UNIQUE INDEX automation_runs_one_active_per_task ON automation_runs (task_id) WHERE status IN
+ * ('queued', 'starting', 'running', 'waiting')` (see the migration). Prisma's schema language has no
+ * partial-index syntax and `prisma migrate diff` ignores partial indexes (see ChatConversation), so it
+ * is not declared here. Deleting the card nulls `task_id`; the sweep (`cancelOrphaned`) cancels those runs.
+ */
+export type AutomationRun = Prisma.AutomationRunModel
+/**
+ * Model TabUsage
+ * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
+ * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
+ * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ */
+export type TabUsage = Prisma.TabUsageModel
+/**
+ * Model TabUsageDay
+ * Tokens a tab spent on one day (in its project owner's time zone at write time; UTC when unknown) and
+ * their API-equivalent cost estimate (null = no priced model). Counts only, never transcript content.
+ * `task_id` and `account_id` are those of the tab's automation run and AI account at the last write.
+ */
+export type TabUsageDay = Prisma.TabUsageDayModel
+/**
+ * Model AiAccountExhaustion
+ * An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
+ */
+export type AiAccountExhaustion = Prisma.AiAccountExhaustionModel
 /**
  * Model Note
  * 
@@ -304,12 +347,84 @@ export type DeviceToken = Prisma.DeviceTokenModel
  */
 export type DeviceChallenge = Prisma.DeviceChallengeModel
 /**
+ * Model AccessLog
+ * Access records the Marco Civil (art. 15) asks an application provider to keep for 6 months (TER-744):
+ * when, from which IP, who (when known) and which route. Never a query string, a body or anything a
+ * terminal or a chat carried. `user_id` has no foreign key on purpose: the record outlives an account
+ * deletion until its 6 months are over. Purged hourly past `ACCESS_LOG_RETENTION_MS`.
+ */
+export type AccessLog = Prisma.AccessLogModel
+/**
  * Model DeviceEvent
  * The device trail (spec §8). `meta` holds ids and names, never secrets. Kept 90 days.
  */
 export type DeviceEvent = Prisma.DeviceEventModel
 /**
+ * Model PushTicket
+ * One Expo push ticket waiting for its receipt (TER-924): APNs/FCM answers come later, through
+ * `getReceipts`. The sweeper reads them ~15 min after the send and deletes the row; Expo keeps a
+ * receipt 24 h, so an older row is dropped unread. `push_token` is the token the push went to, so a
+ * `DeviceNotRegistered` clears only that token, never a newer one.
+ */
+export type PushTicket = Prisma.PushTicketModel
+/**
  * Model UserNotification
  * Everything ever pushed to a person, for the app's Notificações tab (spec §9). Kept 30 days.
  */
 export type UserNotification = Prisma.UserNotificationModel
+/**
+ * Model AutomationSummary
+ * The daily summary of the automatic work, sent once per user and day (agentic board, spec D26): the
+ * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
+ */
+export type AutomationSummary = Prisma.AutomationSummaryModel
+/**
+ * Model LegalDocumentVersion
+ * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+ * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+ */
+export type LegalDocumentVersion = Prisma.LegalDocumentVersionModel
+/**
+ * Model LegalAcceptance
+ * One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+ */
+export type LegalAcceptance = Prisma.LegalAcceptanceModel
+/**
+ * Model DataExport
+ * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
+ * holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a
+ * link to Perfil, and removes the file once `expiresAt` passes (7 days after it is ready).
+ */
+export type DataExport = Prisma.DataExportModel
+/**
+ * Model ViewAsAudit
+ * Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
+ * per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin
+ * switches again or signs out; null means the period has not ended, or ended without an explicit switch
+ * (the browser dropped the session cookie). No foreign keys on purpose: the record outlives the deletion of
+ * either account until its retention is over (VIEW_AS_AUDIT_RETENTION_MS).
+ */
+export type ViewAsAudit = Prisma.ViewAsAuditModel
+/**
+ * Model SecurityEvent
+ * The security audit trail (TER-577): who signed in or failed to, changed a role or a permission, viewed
+ * as another person, minted or revoked a token, added or removed a machine or an integration, typed into
+ * a tab over the API. Append-only: a trigger refuses UPDATE (see the migration); rows only leave through
+ * the retention purge (SECURITY_EVENT_RETENTION_DAYS). No foreign keys, so the trail outlives the people
+ * and rows it names: `actor_email` and `target_label` are snapshots taken at the time. Metadata only,
+ * never typed text, passwords, codes or tokens.
+ */
+export type SecurityEvent = Prisma.SecurityEventModel
+/**
+ * Model FeatureFlag
+ * An instance-wide feature flag (TER-1040, docs/feature-flags.md): a feature that ships dark and an
+ * admin turns on in Configurações → Recursos em teste, without a deploy. No row = the flag's default
+ * in code (`FEATURE_FLAGS`, apps/server/src/features/flags.ts), which is off.
+ */
+export type FeatureFlag = Prisma.FeatureFlagModel
+/**
+ * Model FeatureFlagOverride
+ * One person's own value for a flag (testing a feature before it is released): wins over the
+ * instance-wide value for that person only.
+ */
+export type FeatureFlagOverride = Prisma.FeatureFlagOverrideModel

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { useTranslation } from '../i18n';
 
 // Open layers (modals, an image opened from the chat), innermost last: only the top one answers Escape,
 // so closing a nested dialog never closes the one under it too.
@@ -109,6 +110,7 @@ export function Modal({ title, open, onClose, children, width = 'max-w-md', dism
   useEscapeLayer(open, onClose, dismissible);
   const dialogRef = useRef<HTMLDivElement>(null);
   const onKeyDown = useDialogFocus(open, dialogRef);
+  const { t } = useTranslation();
 
   if (!open) return null;
   return (
@@ -125,7 +127,7 @@ export function Modal({ title, open, onClose, children, width = 'max-w-md', dism
       >
         <div className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3">
           <h2 className="text-sm font-semibold">{title}</h2>
-          <button className="text-fg-dim hover:text-fg" onClick={onClose} aria-label="Fechar">
+          <button className="text-fg-dim hover:text-fg" onClick={onClose} aria-label={t('Fechar')}>
             ✕
           </button>
         </div>
@@ -145,7 +147,8 @@ interface ConfirmProps {
   onCancel: () => void;
 }
 
-export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar', danger, onConfirm, onCancel }: ConfirmProps) {
+export function ConfirmDialog({ open, title, message, confirmLabel, danger, onConfirm, onCancel }: ConfirmProps) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -160,10 +163,10 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Confirmar'
       <div className="text-sm text-fg-muted">{message}</div>
       <div className="mt-4 flex justify-end gap-2">
         <button className="btn-ghost" onClick={onCancel}>
-          Cancelar
+          {t('Cancelar')}
         </button>
         <button className={danger ? 'btn-danger' : 'btn-primary'} onClick={() => void onConfirm()} autoFocus>
-          {confirmLabel}
+          {confirmLabel ?? t('Confirmar')}
         </button>
       </div>
     </Modal>

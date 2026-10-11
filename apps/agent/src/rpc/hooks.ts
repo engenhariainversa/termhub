@@ -7,6 +7,8 @@ import {
   CODEX_HOOKS_REL,
   HOOK_ENV_REL,
   HOOK_MARK,
+  GUARD_SCRIPT,
+  GUARD_SCRIPT_REL,
   HOOK_SCRIPT,
   HOOK_SCRIPT_REL,
   claudeConfigDirs,
@@ -22,6 +24,8 @@ import {
   stripCodexConfig,
   stripCodexHooks,
   stripCursorHooks,
+  hooksStatus,
+  type HookFile,
 } from '@termhub/machine-ops';
 import { discoverClaudeDirs } from '../claude-dirs.js';
 import { RpcFailure } from '../exec.js';
@@ -186,6 +190,11 @@ export async function install(params: RpcParams<'hooks.install'>, home = os.home
     await writeAtomic(path.join(home, HOOK_ENV_REL), hookEnvFile(params.hooks_url, params.token), 0o600);
     current = `~/${HOOK_SCRIPT_REL}`;
     await writeAtomic(scriptPath, HOOK_SCRIPT, 0o755);
+    // The hard-lock PreToolUse hook for automatic runs (TER-993). Written next to the monitor hook; a
+    // run's launch line points `--settings` at it. Harmless on a machine that never runs automatic work.
+    current = `~/${GUARD_SCRIPT_REL}`;
+    await writeAtomic(path.join(home, GUARD_SCRIPT_REL), GUARD_SCRIPT, 0o755);
+    current = `~/${HOOK_SCRIPT_REL}`;
     for (const { target, body } of merged) {
       current = target.shown;
       await mkdir(target.dir, { recursive: true });
@@ -236,6 +245,10 @@ export async function heal(home = os.homedir()): Promise<string[]> {
   // only when it really differs (same atomic 0o755 write `install` uses; comparing the content, not
   // a version, is what keeps every later change to the script reaching machines by itself).
   if (script !== HOOK_SCRIPT) await writeAtomic(scriptPath, HOOK_SCRIPT, 0o755);
+  // The guard script (TER-993) ships with the agent too: bring it up to what this agent carries, so a
+  // change to it reaches machines on the next reconnect, like the monitor hook above.
+  const guardPath = path.join(home, GUARD_SCRIPT_REL);
+  if ((await readOrEmpty(guardPath)) !== GUARD_SCRIPT) await writeAtomic(guardPath, GUARD_SCRIPT, 0o755);
 
   // One failing repair must not take the others down: a settings.json on a read-only mount, or one
   // owned by somebody else, would otherwise reject before Cursor and Codex are even looked at, and
@@ -340,6 +353,40 @@ async function healCodex(home: string, scriptPath: string): Promise<string[]> {
     logHealSkip(shown, err, configFile);
   }
   return healed ? [shown] : [];
+}
+
+/** A file for `hooksStatus`: absent, present with its content, or unreadable — a dangling link included, as the ssh probe reads it. */
+async function probe(file: string): Promise<HookFile> {
+  try {
+    return { status: 'present', content: await readFile(file, 'utf8') };
+  } catch (err) {
+    return isEnoent(err) && !(await isDanglingLink(file)) ? { status: 'absent', content: '' } : { status: 'unreadable', content: '' };
+  }
+}
+
+/**
+ * What the hooks look like here (TER-1023): the same Claude dirs `install` would hook, Codex and the Cursor
+ * CLI when their dirs exist. Reads only; answers states, never a file's content.
+ */
+export async function status(params: RpcParams<'hooks.status'>, home = os.homedir()): Promise<RpcResult<'hooks.status'>> {
+  const claude: { dir: string; settings: HookFile }[] = [];
+  for (const target of await claudeTargets(params.claude_dirs, home)) {
+    // `claudeTargets` keeps ~/.claude even when it is not there (install creates it): here it is "no Claude"
+    if (!(await isDir(target.dir))) continue;
+    claude.push({ dir: target.shown.replace(/\/settings\.json$/, ''), settings: await probe(target.file) });
+  }
+  const hasCodex = await isDir(path.join(home, CODEX_DIR_REL));
+  const hasCursor = await isDir(path.join(home, CURSOR_DIR_REL));
+  return hooksStatus({
+    scriptPath: path.join(home, HOOK_SCRIPT_REL),
+    script: await probe(path.join(home, HOOK_SCRIPT_REL)),
+    env: await probe(path.join(home, HOOK_ENV_REL)),
+    claude,
+    codex: hasCodex
+      ? { config: await probe(path.join(home, CODEX_CONFIG_REL)), hooks: await probe(path.join(home, CODEX_HOOKS_REL)), hooksPath: path.join(home, CODEX_HOOKS_REL) }
+      : null,
+    cursor: hasCursor ? { hooks: await probe(path.join(home, CURSOR_HOOKS_REL)) } : null,
+  });
 }
 
 export async function uninstall(params: RpcParams<'hooks.uninstall'>, home = os.homedir()): Promise<RpcResult<'hooks.uninstall'>> {

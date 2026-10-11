@@ -65,6 +65,7 @@ async function buildTestApp(repos: ReturnType<typeof fakeRepos>, minAppVersion: 
   app.get('/api/m/v1/open', { config: { mobileAuth: 'none' } }, async () => ({ ok: true }));
   app.get('/api/m/v1/me', async (req) => ({ user: req.user?.id, scope: req.scope, device: req.mobile && 'device' in req.mobile ? req.mobile.device.id : null }));
   app.get('/api/m/v1/chat', { config: { resource: 'chat', action: 'read' } }, async () => ({ ok: true }));
+  app.get('/api/m/v1/account/deletion', { config: { allowPendingDeletion: true } }, async () => ({ ok: true }));
   app.post('/api/m/v1/enrol', { config: { mobileAuth: 'proof' } }, async (req) => ({ thumb: req.mobile && 'jwkThumbprint' in req.mobile ? req.mobile.jwkThumbprint : null }));
   await app.ready();
   return app;
@@ -86,6 +87,15 @@ describe('buildMobileAuthHook', () => {
   afterEach(async () => {
     await app.close();
     vi.mocked(canAccess).mockClear();
+  });
+
+  it('a deactivated account (deletion pending) reaches only the routes that allow it', async () => {
+    repos.users.findById.mockResolvedValue({ ...user, deletion_scheduled_at: '2026-10-31T12:00:00.000Z' } as never);
+    const blocked = await app.inject({ method: 'GET', url: '/api/m/v1/me', headers: await deviceHeaders('/api/m/v1/me') });
+    expect(blocked.statusCode).toBe(403);
+    expect(blocked.json().code).toBe('ACCOUNT_PENDING_DELETION');
+    const allowed = await app.inject({ method: 'GET', url: '/api/m/v1/account/deletion', headers: await deviceHeaders('/api/m/v1/account/deletion') });
+    expect(allowed.statusCode).toBe(200);
   });
 
   it("answers a 'none' route without any header", async () => {

@@ -8,6 +8,7 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGo
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
 
 import type { TChatDecision, TConciergeNote, TDecisionsResponse, TLessonItem } from '@/services/api/contract';
+import { setLocale } from '@/i18n';
 import { TERMHUB_URL } from '@/services/api/config';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
@@ -343,5 +344,35 @@ describe('Memória do chat', () => {
       expect(screen.getByText('Sintoma Y')).toBeTruthy();
       expect(spy).toHaveBeenLastCalledWith(expect.anything(), 'Y');
     });
+  });
+});
+
+describe('Memória do chat in English (i18n)', () => {
+  beforeEach(() => setLocale('en'));
+  afterEach(() => setLocale(null));
+
+  it('shows the screen, the decision rows and the lessons in English', async () => {
+    jest.spyOn(stores.api, 'chatLessons').mockResolvedValue({ lessons: [lesson({ id: 'l1', title: 'Pod sem Node', verified: true })], next_cursor: null });
+    await render(<ChatMemoryScreen />);
+    expect(await screen.findByText('Usar worktree para essa tarefa?', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText('Chat memory')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeTruthy();
+    expect(screen.getByText(/termhub · .+ · suggested 3× · accepted 2×/)).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Forget' }).length).toBeGreaterThan(0);
+    expect(screen.getByText('Concierge notes')).toBeTruthy();
+    expect(screen.getByText('Lessons')).toBeTruthy();
+    expect(await screen.findByText(/^no project · file docs\/lessons\/x\.md · observed · .+ · verified$/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Undo verification' })).toBeTruthy();
+  });
+
+  it('asks before forgetting a decision, in English', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await render(<ChatMemoryScreen />);
+    await screen.findByText('Usar worktree para essa tarefa?', undefined, LOAD);
+    await fireEvent.press(screen.getAllByRole('button', { name: 'Forget' })[0]!);
+    expect(alert).toHaveBeenCalledWith('Forget this decision?', expect.any(String), [
+      expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
+      expect.objectContaining({ text: 'Forget', style: 'destructive' }),
+    ]);
   });
 });

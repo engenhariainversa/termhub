@@ -6,6 +6,7 @@ import { canAccess } from '../auth/permissions.js';
 import { resolveScope, type Scope } from '../auth/scope.js';
 import type { User } from '../db/repositories/types.js';
 import type { Lifecycle } from './drain.js';
+import { isPendingDeletion } from '../account/deletion.js';
 
 export interface UpgradeContext {
   req: IncomingMessage;
@@ -15,6 +16,11 @@ export interface UpgradeContext {
   params: string[];
   user: User;
   scope: Scope;
+  /**
+   * Whether the user holds terminals:write: may type into a terminal or act on a simulator. Without
+   * it the socket still opens (terminals:read is enough to watch), and the route drops the input.
+   */
+  canWrite: boolean;
 }
 export type UpgradeHandler = (ctx: UpgradeContext) => void | Promise<void>;
 
@@ -54,8 +60,21 @@ function originAllowed(req: IncomingMessage): boolean {
   return false;
 }
 
+/** One upgrade's outcome for the access log (TER-744): the path (never the query), who, and the status. */
+export interface UpgradeAccess {
+  req: IncomingMessage;
+  path: string;
+  userId: string | null;
+  /** 101 once handed to an authenticated route, the refusal's status otherwise; null for a public route,
+   *  which authenticates itself (its own outcome is not seen here). */
+  status: number | null;
+}
+
 /** Um único listener de `upgrade`: casa o path, checa origem e auth, e delega ao handler. */
-export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContext; lifecycle?: Lifecycle }) {
+export function createUpgradeRouter(
+  server: HttpServer,
+  deps: { auth: AuthContext; lifecycle?: Lifecycle; onAccess?: (access: UpgradeAccess) => void },
+) {
   const routes: { pattern: RegExp; handler: UpgradeHandler }[] = [];
   const publicRoutes: { pattern: RegExp; handler: PublicUpgradeHandler }[] = [];
   server.on('upgrade', async (req, socket, head) => {
@@ -68,12 +87,24 @@ export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContex
     // Draining for a shutdown (spec 2026-09-27 §5.2): the client retries and lands on the other colour.
     if (deps.lifecycle?.draining) return rejectUpgrade(socket, 503, 'Service Unavailable');
     const url = new URL(req.url ?? '/', 'http://localhost');
+    const access = (status: number | null, userId: string | null = null) => {
+      try {
+        deps.onAccess?.({ req, path: url.pathname, userId, status });
+      } catch {
+        /* the access log never stands in an upgrade's way */
+      }
+    };
+    const refuse = (status: number, text: string, userId: string | null = null) => {
+      access(status, userId);
+      rejectUpgrade(socket, status, text);
+    };
 
     // Public routes match first and authenticate themselves (bearer token, not cookie):
     // they skip originAllowed() too — agents send no Origin, and a browser can't set
     // Authorization on a WebSocket, so cross-site WebSocket hijacking doesn't apply here.
     const pub = publicRoutes.map((r) => ({ r, m: url.pathname.match(r.pattern) })).find((x) => x.m);
     if (pub?.m) {
+      access(null);
       try {
         await pub.r.handler({ req, socket, head, url, params: pub.m.slice(1) });
       } catch {
@@ -84,7 +115,7 @@ export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContex
 
     const route = routes.map((r) => ({ r, m: url.pathname.match(r.pattern) })).find((x) => x.m);
     if (!route?.m) return rejectUpgrade(socket, 404, 'Not Found');
-    if (!originAllowed(req)) return rejectUpgrade(socket, 403, 'Forbidden');
+    if (!originAllowed(req)) return refuse(403, 'Forbidden');
     const cookies = parseCookies(req.headers.cookie);
     let user: User | null = null;
     try {
@@ -92,17 +123,23 @@ export function createUpgradeRouter(server: HttpServer, deps: { auth: AuthContex
     } catch {
       user = null;
     }
-    if (!user) return rejectUpgrade(socket, 401, 'Unauthorized');
+    if (!user) return refuse(401, 'Unauthorized');
+    // A deactivated account (deletion pending, TER-720) opens no socket: only the cancel path is left.
+    if (isPendingDeletion(user)) return refuse(403, 'Forbidden', user.id);
     const scope = await resolveScope(deps.auth.repos, user, cookies);
     // One gate for every WebSocket here: terminals:read. It fits the terminal and simulator streams
     // it was written for, and /ws/chat rides on it too — the chat is the global terminal as a
     // conversation, so nobody who cannot read a terminal has any business on it either.
     // (The chat's own per-user filter lives in chat/ws.ts; this only decides who may connect.)
-    if (!(await canAccess(deps.auth.repos, user, 'terminals', 'read'))) return rejectUpgrade(socket, 403, 'Forbidden');
+    // Reading only lets someone watch: typing into a terminal or acting on a simulator takes
+    // terminals:write (TER-576), which the routes enforce per message from `canWrite`.
+    if (!(await canAccess(deps.auth.repos, user, 'terminals', 'read'))) return refuse(403, 'Forbidden', user.id);
+    const canWrite = await canAccess(deps.auth.repos, user, 'terminals', 'write');
     // The awaits above give a drain time to start: a socket admitted now would miss its handover.
     if (deps.lifecycle?.draining) return rejectUpgrade(socket, 503, 'Service Unavailable');
+    access(101, user.id);
     try {
-      await route.r.handler({ req, socket, head, url, params: route.m.slice(1), user, scope });
+      await route.r.handler({ req, socket, head, url, params: route.m.slice(1), user, scope, canWrite });
     } catch {
       rejectUpgrade(socket, 500, 'Internal Server Error');
     }

@@ -1,6 +1,7 @@
-import { CAPABILITY_SIM, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { AI_LOGIN_MIN_AGENT_VERSION, CAPABILITY_AI_LOGIN, CAPABILITY_FILE_READ, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
+import { msg } from '../i18n/index.js';
 import { AgentClosedError, AgentRpcError, AgentTimeoutError } from './connection.js';
 import { AgentOfflineError, agents } from './registry.js';
 
@@ -28,6 +29,11 @@ export function toHttpError(err: unknown): HttpError {
       case 'failed':
         // The operation ran on the machine and reported why it failed (a message meant for the user).
         return new HttpError(502, err.rpcError.message, 'MACHINE_FAILED');
+      case 'worktree_conflict':
+        // `git.worktree.ensure`: the path holds another branch, or the branch is open elsewhere.
+        return new HttpError(409, err.rpcError.message, 'WORKTREE_CONFLICT');
+      case 'path_outside_root':
+        return new HttpError(400, 'Caminho fora da pasta de worktrees', 'PATH_OUTSIDE_ROOT');
       default:
         return new HttpError(502, 'Falha na máquina', 'MACHINE_FAILED');
     }
@@ -55,9 +61,12 @@ export function versionAtLeast(a: string, b: string): boolean {
 export function requireAgentVersion(machine: Machine, min: string): void {
   const info = agents.info(machine.id);
   if (info && !versionAtLeast(info.agent_version, min)) {
-    throw new HttpError(409, `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${min} ou mais nova)`, 'AGENT_OUTDATED');
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova)', { version: min }), 'AGENT_OUTDATED');
   }
 }
+
+/** First agent release that answers `ai.usage` (spec 2026-10-07 ai-usage-on-machine, D2). */
+export const AI_USAGE_MIN_AGENT_VERSION = '0.20.0';
 
 /** First agent release that advertises `sim` (simulator rpcs + tcp channels). */
 export const SIM_MIN_AGENT_VERSION = '0.5.0';
@@ -75,7 +84,59 @@ export function requireSimCapable(machine: Machine): void {
   if ((agents.info(machine.id)?.os ?? machine.os) !== 'macos') throw new HttpError(400, 'Esta máquina não é um Mac com Xcode', 'NOT_MAC');
   const capabilities = agents.capabilities(machine.id) ?? [];
   if (!capabilities.includes(CAPABILITY_SIM)) {
-    throw new HttpError(409, `Atualize o agente desta máquina (npm i -g @termhub/agent, versão ${SIM_MIN_AGENT_VERSION} ou mais nova) para usar o simulador`, 'AGENT_OUTDATED');
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para usar o simulador', { version: SIM_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
+  }
+}
+
+/** First agent release that advertises `transcript` (`transcript.read` and the `BTab` key). */
+export const TRANSCRIPT_MIN_AGENT_VERSION = '0.15.0';
+
+/**
+ * Reading a tab's transcript, or pressing Shift+Tab (`BTab`), needs an agent machine whose connected
+ * agent claims `transcript` (spec 2026-10-01 tab chat D7): an older agent drops the RPC, which would
+ * read as a timeout, and its schema refuses the key.
+ */
+export function requireTranscriptCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_TRANSCRIPT)) {
+    throw new HttpError(
+      409,
+      msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para abrir a sessão como chat', { version: TRANSCRIPT_MIN_AGENT_VERSION }),
+      'AGENT_OUTDATED',
+    );
+  }
+}
+
+/** First agent release that advertises `file_read` (`file.read`, spec 2026-10-04 file preview). */
+export const FILE_READ_MIN_AGENT_VERSION = '0.16.0';
+export const FILE_READ_OUTDATED_MESSAGE = msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para ver arquivos', { version: FILE_READ_MIN_AGENT_VERSION });
+
+/** Previewing a file needs an agent machine whose connected agent claims `file_read`: an older agent
+ *  drops the RPC, which would read as a timeout. */
+export function requireFileReadCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_FILE_READ)) throw new HttpError(409, FILE_READ_OUTDATED_MESSAGE, 'AGENT_OUTDATED');
+}
+
+/** Testing the hooks and MCP addresses from the machine (TER-586) needs an agent machine whose connected
+ *  agent claims `net_check`: an older agent drops the RPC, which would read as a timeout. */
+export function requireNetCheckCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, 'Esta máquina não usa o agente do termhub', 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_NET_CHECK)) {
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços', { version: NET_CHECK_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
+  }
+}
+
+/** Redoing an AI CLI login from the web or the app (TER-1047) needs an agent machine whose connected agent
+ *  claims `ai_login`: an older agent drops the RPC, which would read as a timeout. */
+export function requireAiLoginCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, msg('Refazer login pela tela só funciona em máquinas com o agente do termhub'), 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_AI_LOGIN)) {
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela', { version: AI_LOGIN_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
   }
 }
 

@@ -1,6 +1,7 @@
 // Every non-2xx answer of the mobile API (design spec §4). `ApiError` carries the wire `code` and
 // the pt-BR `error` text as its own `message`, plus the two fields the session store reacts to:
 // `retryAfter` (`423 DEVICE_LOCKED`) and `attemptsLeft` (a wrong PIN proof).
+import { t } from '@/i18n';
 import { errorBody } from './contract/local';
 
 /** Case-insensitive header lookup: `FetchTransport.fetch` lower-cases every header name, but a
@@ -44,12 +45,12 @@ export class ApiError extends Error {
     try {
       parsedJson = JSON.parse(text);
     } catch {
-      return new ApiError(status, `HTTP_${status}`, `Erro do servidor (${status})`, headerRetryAfter);
+      return new ApiError(status, `HTTP_${status}`, t('Erro do servidor ({{status}})', { status }), headerRetryAfter);
     }
 
     const result = errorBody.safeParse(parsedJson);
     if (!result.success) {
-      return new ApiError(status, `HTTP_${status}`, `Erro do servidor (${status})`, headerRetryAfter);
+      return new ApiError(status, `HTTP_${status}`, t('Erro do servidor ({{status}})', { status }), headerRetryAfter);
     }
 
     const body = result.data;

@@ -26,6 +26,8 @@ export const pullRequestBadge = z.object({
   ci_summary: z.object({ total: count, passed: count, failed: count, running: count, failing: z.array(z.string()) }),
   deploy_state: ciState,
   deploy_url: z.string().nullable(),
+  /** the project's release workflows on the merge commit (agentic board D22); absent from a server that predates it */
+  release_runs: z.array(z.object({ workflow: z.string(), state: ciState, url: z.string().nullable(), version: z.string().nullable() })).optional(),
 });
 
 export const agentOnCard = z.object({
@@ -37,17 +39,37 @@ export const agentOnCard = z.object({
   /**
    * An agent that ended its turn while its own background work runs (the tab's `waiting_background`,
    * TER-644) is sent as `working` with `background: true`: an app that predates the flag keeps parsing the
-   * state and shows it at work, never as waiting for the person.
+   * state and shows it at work, never as waiting for the person. One that ended its turn with a report
+   * and asks nothing (the tab's `finished`, TER-972) is sent as `idle` with `finished: true`, so an older
+   * app shows it stopped, never as waiting for the person. TER-1046: a run that reported itself blocked
+   * travels as `idle` with `blocked: true`, a login that expired as `error` with `auth_required: true` and
+   * the folder trust dialog as `waiting_input` with `trust_prompt: true`.
    */
   state: progressTabState.nullable(),
   state_at: z.string().nullable(),
   /** the agent waits on its own subagents, background shells or monitors (TER-644); only with `state: 'working'` */
   background: z.boolean().default(false),
+  /** the agent finished its work with a report and asks nothing (TER-972); only with `state: 'idle'` */
+  finished: z.boolean().default(false),
+  /** the tab's automatic run reported itself blocked: automation or the chat acts (TER-1046); only with `state: 'idle'` */
+  blocked: z.boolean().default(false),
+  /** Claude Code needs a new /login (TER-1046); only with `state: 'error'` */
+  auth_required: z.boolean().default(false),
+  /** Claude Code asks whether the folder is trusted (TER-1046); only with `state: 'waiting_input'` */
+  trust_prompt: z.boolean().default(false),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),
   rate_limited: z.boolean(),
+  /** the tab was started by an automatic run (agentic board): shown with the "automático" badge */
+  automatic: z.boolean().default(false),
 });
+
+/**
+ * Tokens of the automatic tabs and their API-equivalent cost estimate in US$ (agentic board, spec D23).
+ * `cost_usd` null = nothing priced (an unknown model, a Codex tab): shown as "—".
+ */
+export const progressUsage = z.object({ cost_usd: z.number().nullable(), tokens: count });
 
 export const cardProgress = z.object({
   id: z.string(),
@@ -65,6 +87,10 @@ export const cardProgress = z.object({
   /** null = the caller cannot read terminals */
   agents: z.array(agentOnCard).nullable(),
   pull_requests: z.array(pullRequestBadge).default([]),
+  /** tagged for automatic work (spec 2026-10-04); false from a server that predates it */
+  auto: z.boolean().default(false),
+  /** what the card's automatic tabs cost; null when none was metered (or from a server that predates it) */
+  usage: progressUsage.nullable().default(null),
 });
 
 export const epicProgress = z.object({
@@ -81,14 +107,60 @@ export const epicProgress = z.object({
   /** distinct PR numbers across the epic's cards; null when none has a PR */
   ci: z.object({ open: count, failed: count, running: count, deployed: count }).nullable().default(null),
   ci_error: z.string().nullable().default(null),
+  /** the epic's own automatic tabs (its integrator) plus its cards'; null when none was metered */
+  usage: progressUsage.nullable().default(null),
 });
 
-export const progressResponse = z.object({ epics: z.array(epicProgress), generated_at: z.string() });
+/**
+ * One line of the automatic work's feed (`automation_events`, newest first), resolved for display: the
+ * clients write the sentence from `kind` and these facts. `kind` stays a string so a kind a newer server
+ * adds still parses on an older app (the client skips what it has no line for).
+ */
+export const automationFeedEvent = z.object({
+  id: z.string(),
+  kind: z.string(),
+  created_at: z.string(),
+  project_id: z.string(),
+  task_id: z.string().nullable(),
+  run_id: z.string().nullable(),
+  tab_id: z.string().nullable(),
+  /** the card's reference ("TER-12") */
+  ref: z.string().nullable(),
+  /** the epic's title, for the deploy lines */
+  epic: z.string().nullable(),
+  machine: z.string().nullable(),
+  account: z.string().nullable(),
+  branch: z.string().nullable(),
+  /** the release workflow (the package), and the version it published */
+  workflow: z.string().nullable(),
+  version: z.string().nullable(),
+  pr: z.number().nullable(),
+  url: z.string().nullable(),
+  /** the account's limit ends / the work stays paused until (ISO) */
+  until: z.string().nullable(),
+  /** why a run needs the person, already in the reader's language */
+  reason_text: z.string().nullable(),
+  /** a failed deploy: the project's automatic work was paused by it (false when the pause could not be applied) */
+  paused: z.boolean().nullable().default(null),
+  /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
+  tool: z.string().nullable().default(null),
+  /** TER-1043: a decision automatic work took alone, "<question> → <choice>" in the agent's words (decided_by_recommendation) */
+  summary: z.string().nullable().optional(),
+});
+
+export const progressResponse = z.object({
+  epics: z.array(epicProgress),
+  /** the last 50 automatic events of the caller's projects; empty for someone with no automatic work */
+  feed: z.array(automationFeedEvent).default([]),
+  generated_at: z.string(),
+});
 
 export type ProgressScope = z.infer<typeof progressScope>;
 export type ProgressEstimate = z.infer<typeof progressEstimate>;
+export type ProgressUsage = z.infer<typeof progressUsage>;
 export type AgentOnCard = z.infer<typeof agentOnCard>;
 export type PullRequestBadge = z.infer<typeof pullRequestBadge>;
+export type AutomationFeedEvent = z.infer<typeof automationFeedEvent>;
 export type CardProgress = z.infer<typeof cardProgress>;
 export type EpicProgress = z.infer<typeof epicProgress>;
 export type ProgressResponse = z.infer<typeof progressResponse>;

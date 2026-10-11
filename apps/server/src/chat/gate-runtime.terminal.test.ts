@@ -79,7 +79,7 @@ beforeEach(() => {
   ]);
   tabsFind = vi.fn(async (ids: string[], o: string) => (o === 'u1' ? ids.flatMap((i) => (tabs.has(i) ? [{ ...tabs.get(i)! }] : [])) : []));
   const repos = {
-    chat: { getOrCreateForUser: vi.fn() },
+    chat: { getOrCreateForUser: vi.fn(), lastTypedAt: vi.fn(async () => null) },
     chatActions: actions,
     chatGrants: { findActive: vi.fn(async (c: string, t: string, tool: string) => tabGrants.find((g) => g.conversation_id === c && g.tab_id === t && g.tool === tool && active(g))) },
     chatProjectGrants: { findActive: vi.fn(async (c: string, p: string) => projectGrants.find((g) => g.conversation_id === c && g.project_id === p && active(g))) },

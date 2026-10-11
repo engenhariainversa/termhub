@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
+import { AutomationBadge } from './AutomationBadge';
+import { UsageCost } from './UsageCost';
+import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
+import { PauseBanner } from './PauseAutomationButton';
+import { feedLine } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
-import { BASIS_LABEL, ciLabel, epicCiLine, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from '../lib/progress';
+import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
-import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
+import { i18n, useTranslation } from '../i18n';
+import type { AgentOnCard, AutomationFeedEvent, AutomationUsage, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
 
 /** Percentages move at subtask pace; tab states come live from the monitor (spec D9). */
 export const PROGRESS_REFRESH_MS = 15_000;
@@ -17,6 +23,8 @@ const STATE_DOT: Record<string, string> = {
   error: 'bg-red-500',
   // waiting on its own background work: neutral, never the colour of "esperando você" (TER-644)
   background: 'bg-sky-400',
+  // done with a report, asking nothing: green, never the colour of "esperando você" (TER-972)
+  finished: 'bg-emerald-500',
 };
 
 function Bar({ percent, label }: { percent: number; label: string }) {
@@ -28,30 +36,33 @@ function Bar({ percent, label }: { percent: number; label: string }) {
 }
 
 function EstimateLine({ estimate }: { estimate: ProgressEstimate }) {
+  useTranslation(); // re-render on a language change
   return (
     <span className="text-xs text-zinc-500">
       {formatEstimate(estimate)}
-      {estimate.kind === 'range' && <span title={BASIS_LABEL[estimate.basis]}> · {BASIS_LABEL[estimate.basis]}</span>}
+      {estimate.kind === 'range' && <span title={basisLabel(estimate.basis)}> · {basisLabel(estimate.basis)}</span>}
     </span>
   );
 }
 
 function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string }) {
+  const { t } = useTranslation();
   const since = agent.state_at ? ` · ${relativeTime(agent.state_at)}` : '';
   return (
     <Link
       to={`/projects/${projectId}?tab=${agent.tab_id}`}
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${agent.needs_you ? 'border-amber-500 bg-amber-50 dark:bg-amber-950' : 'border-zinc-300 dark:border-zinc-700'}`}
     >
-      <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
+      <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.finished ? STATE_DOT.finished : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
       <span>{agent.tab_name}</span>
       <span>
-        {stateLabel(agent.state, agent.background)}
+        {stateLabel(fullStateOf(agent))}
         {agent.state === 'working' && !agent.background && agent.activity_verb ? ` (${agent.activity_verb})` : ''}
         {since}
       </span>
       {agent.subtask_ref && <span className="text-zinc-500">{agent.subtask_ref}</span>}
-      {agent.rate_limited && <span className="text-red-600">limite de uso</span>}
+      {agent.automatic && <AutomationBadge />}
+      {agent.rate_limited && <span className="text-red-600">{t('limite de uso')}</span>}
     </Link>
   );
 }
@@ -59,6 +70,7 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
 const CI_TONE: Record<string, string> = { passed: 'text-emerald-600', running: 'text-amber-600', failed: 'text-red-600', none: 'text-zinc-500' };
 
 export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
+  const { t } = useTranslation();
   if (pulls.length === 0) return null;
   return (
     <div className="flex flex-wrap gap-1">
@@ -67,8 +79,8 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
         return (
           <span key={p.number} className="inline-flex items-center gap-1 text-xs">
             <a href={p.url} target="_blank" rel="noreferrer" className="rounded border border-zinc-300 px-1.5 py-0.5 hover:underline dark:border-zinc-700" title={p.title}>
-              PR #{p.number}
-              {p.draft ? ' · rascunho' : ''}
+              {t('PR #{{number}}', { number: p.number })}
+              {p.draft ? ` · ${t('rascunho')}` : ''}
             </a>
             {p.state === 'merged' && p.deploy_url ? (
               <a href={p.deploy_url} target="_blank" rel="noreferrer" className={tone}>
@@ -77,6 +89,20 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
             ) : (
               <span className={tone}>{ciLabel(p)}</span>
             )}
+            {p.state === 'merged' &&
+              (p.release_runs ?? [])
+                .filter((r) => r.state !== 'none' || r.url)
+                .map((r) =>
+                  r.url ? (
+                    <a key={r.workflow} href={r.url} target="_blank" rel="noreferrer" className={CI_TONE[r.state]}>
+                      {releaseLabel(r)}
+                    </a>
+                  ) : (
+                    <span key={r.workflow} className={CI_TONE[r.state]}>
+                      {releaseLabel(r)}
+                    </span>
+                  ),
+                )}
           </span>
         );
       })}
@@ -85,19 +111,23 @@ export function PullRequestBadges({ pulls }: { pulls: PullRequestBadge[] }) {
 }
 
 function CardRow({ card, projectId }: { card: CardProgress; projectId: string }) {
+  const { t } = useTranslation();
   return (
     <li className="space-y-1 py-2">
       <div className="flex items-baseline gap-2">
         <Link to={`/project/${card.ref}`} className="font-medium hover:underline">
           {card.ref} {card.title}
         </Link>
-        <span className="text-xs text-zinc-500">{card.column_name ?? 'Backlog'}</span>
+        <span className="text-xs text-zinc-500">{card.column_name ?? t('Backlog')}</span>
         <span className="ml-auto text-xs tabular-nums">
           {card.units.done}/{card.units.total} · {card.percent}%
         </span>
       </div>
       <Bar percent={card.percent} label={`${card.ref} ${card.percent}%`} />
-      <EstimateLine estimate={card.estimate} />
+      <div className="flex flex-wrap gap-3">
+        <EstimateLine estimate={card.estimate} />
+        <UsageCost usage={card.usage} />
+      </div>
       <PullRequestBadges pulls={card.pull_requests} />
       {card.agents && card.agents.length > 0 && (
         <div className="flex flex-wrap gap-1">
@@ -111,6 +141,7 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
 }
 
 function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string }) {
+  const { t } = useTranslation();
   return (
     <section className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       <header className="flex items-baseline gap-2">
@@ -122,16 +153,21 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
       <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
         <span>
           {epic.units.done}/{epic.units.total}
-          {epic.units.backlog_total > 0 ? ` · backlog: ${epic.units.backlog_total}` : ''}
+          {epic.units.backlog_total > 0 ? ` · ${t('backlog: {{n}}', { n: epic.units.backlog_total })}` : ''}
         </span>
         <EstimateLine estimate={epic.estimate} />
-        {epic.cards_without_estimate > 0 && <span>{epic.cards_without_estimate} cards sem estimativa</span>}
+        {epic.cards_without_estimate > 0 && <span>{t('{{count}} cards sem estimativa', { count: epic.cards_without_estimate })}</span>}
         {epic.agents && (
           <span>
-            {epic.agents.working} trabalhando · {epic.agents.needs_you} esperando você · {epic.agents.idle} parados
+            {t('{{working}} trabalhando · {{waiting}} esperando você · {{idle}} parados', {
+              working: epic.agents.working,
+              waiting: epic.agents.needs_you,
+              idle: epic.agents.idle,
+            })}
           </span>
         )}
         {epic.ci && <span>{epicCiLine(epic.ci)}</span>}
+        <UsageCost usage={epic.usage} />
       </div>
       {epic.ci_error && <p className="text-xs text-red-600">{epic.ci_error}</p>}
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
@@ -143,11 +179,59 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
   );
 }
 
+/** The automatic work's feed (spec D25): what the agents did, newest first. Shown only when there is something to show. */
+export function AutomationFeed({ feed }: { feed: AutomationFeedEvent[] }) {
+  const { t } = useTranslation();
+  const lines = feed.map((e) => ({ e, text: feedLine(e) })).filter((l): l is { e: AutomationFeedEvent; text: string } => l.text !== null);
+  if (lines.length === 0) return null;
+  return (
+    <section aria-label={t('Automático')} className="space-y-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h2 className="text-base font-semibold">{t('Automático')}</h2>
+      <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+        {lines.map(({ e, text }) => (
+          <li key={e.id} className="flex flex-wrap items-baseline gap-x-2 py-1.5 text-sm">
+            <span className={e.kind === 'escalated' || e.kind === 'deploy_failed' || e.kind === 'release_failed' || e.kind === 'run_blocked' ? 'text-amber-700 dark:text-amber-400' : ''}>{text}</span>
+            {e.url && (
+              <a href={e.url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+                {e.pr !== null ? t('PR #{{number}}', { number: e.pr }) : t('abrir')}
+              </a>
+            )}
+            {e.tab_id && (
+              <Link to={`/projects/${e.project_id}?tab=${e.tab_id}`} className="text-xs text-accent hover:underline">
+                {t('abrir aba')}
+              </Link>
+            )}
+            {e.run_id && <span className="text-xs text-zinc-500" title={t('execução {{id}}', { id: e.run_id })}>{`#${e.run_id.slice(-6)}`}</span>}
+            <span className="ml-auto text-xs text-zinc-500">{relativeTime(e.created_at)}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** The automatic tabs' estimated cost per AI account (spec D23). Nothing until a token was counted. */
+export function UsageByAccount({ usage }: { usage: AutomationUsage | null }) {
+  const { t } = useTranslation();
+  if (!usage || !hasTokens(usage.total)) return null;
+  return (
+    <p className="text-xs text-zinc-500" title={t('Estimativa em preço de API (equivalente em API); contas de assinatura não pagam por token.')}>
+      {t('Custo estimado: {{cost}}', { cost: formatCost(usage.total.cost_usd) })}
+      {usage.accounts
+        .filter(hasTokens)
+        .map((a) => ` · ${a.label ?? t('conta removida')} ${formatCost(a.cost_usd)}`)
+        .join('')}
+    </p>
+  );
+}
+
 /** Project section "Progresso" (spec 2026-09-26 progress-panel §4.6). Read-only. */
 export function ProgressPanel({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const [scope, setScope] = useState<ProgressScope>('active');
   const [data, setData] = useState<ProgressResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<AutomationUsage | null>(null);
   const { tabState } = useMonitor();
   // Only the latest request may write: a "Só ativos"/"Todos" toggle or a poll can overtake one in flight.
   const latest = useRef(0);
@@ -159,9 +243,14 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       if (mine !== latest.current) return;
       setData(res);
       setError(null);
+      // The per-account line is asked only where something was metered (an epic carries a cost): nobody else pays for it.
+      if (res.epics.some((e) => e.usage)) {
+        const u = await loadUsage(projectId);
+        if (mine === latest.current) setUsage(u);
+      } else setUsage(null);
     } catch {
       if (mine !== latest.current) return;
-      setError('Não foi possível carregar o progresso.');
+      setError(i18n.t('Não foi possível carregar o progresso.'));
     }
   }, [projectId, scope]);
 
@@ -186,19 +275,20 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
   return (
     <div className="h-full space-y-4 overflow-y-auto p-4">
       <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold">Progresso</h1>
+        <h1 className="text-lg font-semibold">{t('Progresso')}</h1>
         <div className="ml-auto flex gap-1">
           {(['active', 'all'] as const).map((s) => (
             <button key={s} type="button" aria-pressed={scope === s} onClick={() => setScope(s)} className={`rounded px-2 py-1 text-sm ${scope === s ? 'bg-indigo-600 text-white' : 'border border-zinc-300 dark:border-zinc-700'}`}>
-              {s === 'active' ? 'Só ativos' : 'Todos'}
+              {s === 'active' ? t('Só ativos') : t('Todos')}
             </button>
           ))}
         </div>
       </div>
+      <PauseBanner projectId={projectId} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {waiting.length > 0 && (
         <div className="rounded-lg border border-amber-500 bg-amber-50 p-3 dark:bg-amber-950">
-          <p className="text-sm font-medium">{waiting.length === 1 ? '1 agente esperando você' : `${waiting.length} agentes esperando você`}</p>
+          <p className="text-sm font-medium">{t('{{count}} agentes esperando você', { count: waiting.length })}</p>
           <div className="mt-2 flex flex-wrap gap-1">
             {waiting.map((a) => (
               <AgentChip key={a.tab_id} agent={a} projectId={projectId} />
@@ -206,7 +296,9 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
           </div>
         </div>
       )}
-      {data && epics.length === 0 && <p className="text-sm text-zinc-500">Nenhum épico em andamento</p>}
+      {data && epics.length === 0 && <p className="text-sm text-zinc-500">{t('Nenhum épico em andamento')}</p>}
+      <AutomationFeed feed={data?.feed ?? []} />
+      <UsageByAccount usage={usage} />
       {epics.map((e) => (
         <EpicBlock key={e.id} epic={e} projectId={projectId} />
       ))}

@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { Project, ProjectAi, ProjectAiOption } from '../lib/types';
+import { useTranslation } from '../i18n';
+import { ExclusiveBadge } from './AiAccountsView';
+import { ConfirmDialog } from './Modal';
 
 const PROVIDERS = [
   { key: 'claude', label: 'Claude Code', aliases: ['opus', 'sonnet', 'haiku'] },
@@ -23,6 +26,7 @@ function sameAi(a: ProjectAi, b: ProjectAi): boolean {
  * its own endpoint, apart from the rest of the setup.
  */
 export function ProjectAiCard({ project }: { project: Project }) {
+  const { t } = useTranslation();
   const [available, setAvailable] = useState<ProjectAiOption[] | null>(null);
   const [ai, setAi] = useState<ProjectAi | null>(null);
   const [saved, setSaved] = useState<ProjectAi | null>(null);
@@ -30,6 +34,8 @@ export function ProjectAiCard({ project }: { project: Project }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // TER-990: the account whose exclusivity to this project is being set or cleared
+  const [marking, setMarking] = useState<ProjectAiOption | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,7 +46,7 @@ export function ProjectAiCard({ project }: { project: Project }) {
         setAi(r.ai);
         setSaved(r.ai);
       },
-      (e) => !cancelled && setLoadError(e instanceof ApiError ? e.message : 'Erro ao carregar as contas'),
+      (e) => !cancelled && setLoadError(e instanceof ApiError ? e.message : t('Erro ao carregar as contas')),
     );
     return () => {
       cancelled = true;
@@ -48,11 +54,13 @@ export function ProjectAiCard({ project }: { project: Project }) {
   }, [project.id]);
 
   if (loadError) return <Section><p className="text-xs text-danger">{loadError}</p></Section>;
-  if (!ai || !available || !saved) return <Section><p className="text-xs text-fg-dim">Carregando contas…</p></Section>;
+  if (!ai || !available || !saved) return <Section><p className="text-xs text-fg-dim">{t('Carregando contas…')}</p></Section>;
 
+  // TER-990: an account exclusive to another project is never this project's: shown disabled, dropped from the list
+  const blocked = (a: ProjectAiOption) => !!a.exclusive_project && a.exclusive_project.id !== project.id;
   const byId = new Map(available.map((a) => [a.id, a]));
-  const included = ai.accounts.filter((id) => byId.has(id));
-  const excluded = available.filter((a) => !ai.accounts.includes(a.id));
+  const included = ai.accounts.filter((id) => byId.has(id) && !blocked(byId.get(id)!));
+  const excluded = available.filter((a) => !included.includes(a.id));
   const setAccounts = (accounts: string[]) => setAi({ ...ai, accounts });
   const move = (i: number, by: -1 | 1) => {
     const next = [...included];
@@ -72,39 +80,59 @@ export function ProjectAiCard({ project }: { project: Project }) {
       setAvailable(r.available);
       setAi(r.ai);
       setSaved(r.ai);
-      setMsg({ ok: true, text: 'Contas e modelo salvos.' });
+      setMsg({ ok: true, text: t('Contas e modelo salvos.') });
     } catch (e) {
-      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Erro ao salvar' });
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : t('Erro ao salvar') });
     } finally {
       setBusy(false);
     }
   };
 
-  const label = (a: ProjectAiOption) => `${a.label}${a.default ? ' (login padrão)' : ''} · ${a.provider === 'claude' ? 'Claude' : 'Codex'} · ${a.machine_name}`;
+  const toggleExclusive = async (a: ProjectAiOption) => {
+    setMsg(null);
+    try {
+      const mine = a.exclusive_project?.id === project.id;
+      const r = await api.aiAccounts.update(a.id, { exclusive_project_id: mine ? null : project.id });
+      setAvailable((list) => (list ?? []).map((x) => (x.id === a.id ? { ...x, exclusive_project: r.account.exclusive_project ?? null } : x)));
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : t('Erro ao salvar') });
+    }
+  };
+  const exclusiveButton = (a: ProjectAiOption) => (
+    <button type="button" className="btn-ghost shrink-0 px-1 text-xs" onClick={() => setMarking(a)}>
+      {a.exclusive_project?.id === project.id ? t('Liberar') : t('Tornar exclusiva')}
+    </button>
+  );
+
+  const label = (a: ProjectAiOption) => `${a.label}${a.default ? t(' (login padrão)') : ''} · ${a.provider === 'claude' ? 'Claude' : 'Codex'} · ${a.machine_name}`;
 
   return (
     <Section>
       {available.length === 0 ? (
-        <p className="text-xs text-fg-dim">Nenhuma conta do Claude ou do Codex nas máquinas deste projeto. Cadastre em Configurações → Contas de IA.</p>
+        <p className="text-xs text-fg-dim">{t('Nenhuma conta do Claude ou do Codex nas máquinas deste projeto. Cadastre em Configurações → Contas de IA.')}</p>
       ) : (
         <div className="space-y-2">
-          <p className="label">Contas do projeto, em ordem de prioridade</p>
+          <p className="label">{t('Contas do projeto, em ordem de prioridade')}</p>
           {included.length === 0 && (
-            <p className="text-xs text-fg-dim">Sem contas escolhidas, cada início de agente pede a conta, como hoje.</p>
+            <p className="text-xs text-fg-dim">{t('Sem contas escolhidas, cada início de agente pede a conta, como hoje.')}</p>
           )}
           <ol className="space-y-1">
             {included.map((id, i) => (
               <li key={id} className="flex items-center gap-2 text-sm">
                 <span className="w-5 text-right text-xs text-fg-dim">{i + 1}.</span>
-                <span className="flex-1 truncate">{label(byId.get(id)!)}</span>
-                <button type="button" className="btn-ghost px-1 text-xs" aria-label="Subir" disabled={i === 0} onClick={() => move(i, -1)}>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="truncate">{label(byId.get(id)!)}</span>
+                  {byId.get(id)!.exclusive_project && <ExclusiveBadge name={byId.get(id)!.exclusive_project!.name} />}
+                </span>
+                {exclusiveButton(byId.get(id)!)}
+                <button type="button" className="btn-ghost px-1 text-xs" aria-label={t('Subir')} disabled={i === 0} onClick={() => move(i, -1)}>
                   ↑
                 </button>
-                <button type="button" className="btn-ghost px-1 text-xs" aria-label="Descer" disabled={i === included.length - 1} onClick={() => move(i, 1)}>
+                <button type="button" className="btn-ghost px-1 text-xs" aria-label={t('Descer')} disabled={i === included.length - 1} onClick={() => move(i, 1)}>
                   ↓
                 </button>
                 <button type="button" className="btn-ghost px-1 text-xs" onClick={() => setAccounts(included.filter((x) => x !== id))}>
-                  Remover
+                  {t('Remover')}
                 </button>
               </li>
             ))}
@@ -112,15 +140,19 @@ export function ProjectAiCard({ project }: { project: Project }) {
           {excluded.length > 0 && (
             <div className="space-y-1 pt-1">
               {excluded.map((a) => (
-                <label key={a.id} className="flex items-center gap-2 text-sm text-fg-muted">
-                  <input type="checkbox" checked={false} onChange={() => setAccounts([...included, a.id])} className="accent-accent" />
-                  {label(a)}
-                </label>
+                <div key={a.id} className="flex items-center gap-2 text-sm text-fg-muted">
+                  <label className={`flex min-w-0 flex-1 items-center gap-2 ${blocked(a) ? 'opacity-60' : ''}`}>
+                    <input type="checkbox" checked={false} disabled={blocked(a)} onChange={() => setAccounts([...included, a.id])} className="accent-accent" />
+                    <span className="truncate">{label(a)}</span>
+                    {a.exclusive_project && <ExclusiveBadge name={a.exclusive_project.name} />}
+                  </label>
+                  {!blocked(a) && exclusiveButton(a)}
+                </div>
               ))}
             </div>
           )}
           <p className="text-xs text-fg-dim">
-            A primeira conta com limite livre inicia os agentes e o chat do projeto; quando ela bate o limite, a troca vai para a próxima da lista.
+            {t('A primeira conta com limite livre inicia os agentes e o chat do projeto; quando ela bate o limite, a troca vai para a próxima da lista.')}
           </p>
         </div>
       )}
@@ -131,7 +163,7 @@ export function ProjectAiCard({ project }: { project: Project }) {
         return (
           <div key={p.key}>
             <label className="label" htmlFor={`model-${p.key}`}>
-              Modelo padrão — {p.label}
+              {t('Modelo padrão — {{provider}}', { provider: p.label })}
             </label>
             <div className="flex gap-2">
               <select
@@ -144,27 +176,28 @@ export function ProjectAiCard({ project }: { project: Project }) {
                   if (v !== OTHER) setModel(p.key, v === '' ? null : v);
                 }}
               >
-                <option value="">Padrão do CLI</option>
+                <option value="">{t('Padrão do CLI')}</option>
                 {p.aliases.map((a) => (
                   <option key={a} value={a}>
                     {a}
                   </option>
                 ))}
-                <option value={OTHER}>Outro id…</option>
+                <option value={OTHER}>{t('Outro id…')}</option>
               </select>
               {custom && (
                 <input
                   className="input font-mono"
-                  aria-label={`Id do modelo — ${p.label}`}
+                  aria-label={t('Id do modelo — {{provider}}', { provider: p.label })}
                   value={value ?? ''}
                   onChange={(e) => setModel(p.key, e.target.value.trim() || null)}
+                  // i18n-ignore: model ids
                   placeholder={p.key === 'claude' ? 'claude-opus-5-5' : 'gpt-5-codex'}
                 />
               )}
             </div>
-            {value !== null && !MODEL_RE.test(value) && <p className="mt-1 text-xs text-danger">Use só letras, números, ponto, hífen, dois-pontos ou colchetes.</p>}
+            {value !== null && !MODEL_RE.test(value) && <p className="mt-1 text-xs text-danger">{t('Use só letras, números, ponto, hífen, dois-pontos ou colchetes.')}</p>}
             {p.key === 'claude' && value !== null && MODEL_RE.test(value) && !isAlias(value) && (
-              <p className="mt-1 text-xs text-warn">Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.</p>
+              <p className="mt-1 text-xs text-warn">{t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.')}</p>
             )}
           </div>
         );
@@ -172,19 +205,36 @@ export function ProjectAiCard({ project }: { project: Project }) {
 
       <div className="flex items-center gap-3">
         <button type="button" className="btn-primary" disabled={!dirty || busy || invalid} onClick={() => void save()}>
-          Salvar contas e modelo
+          {t('Salvar contas e modelo')}
         </button>
         {msg && <span className={`text-sm ${msg.ok ? 'text-ok' : 'text-danger'}`}>{msg.text}</span>}
       </div>
+      <ConfirmDialog
+        open={!!marking}
+        title={marking?.exclusive_project?.id === project.id ? t('Liberar a conta') : t('Tornar a conta exclusiva')}
+        message={
+          marking?.exclusive_project?.id === project.id
+            ? t('A conta "{{account}}" volta a poder rodar em qualquer projeto.', { account: marking?.label ?? '' })
+            : t('A conta "{{account}}" passa a rodar só no projeto {{project}}: nenhum outro projeto, troca automática ou chat poderá usá-la.', { account: marking?.label ?? '', project: project.name })
+        }
+        confirmLabel={marking?.exclusive_project?.id === project.id ? t('Liberar') : t('Tornar exclusiva')}
+        onCancel={() => setMarking(null)}
+        onConfirm={async () => {
+          const a = marking;
+          setMarking(null);
+          if (a) await toggleExclusive(a);
+        }}
+      />
     </Section>
   );
 }
 
 function Section({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   return (
     <section className="rounded-lg border border-line bg-bg-2 p-4">
-      <h3 className="text-sm font-semibold">Contas de IA e modelo</h3>
-      <p className="mb-3 text-xs text-fg-dim">Quais contas os agentes e o chat deste projeto usam, em que ordem, e o modelo com que as conversas começam.</p>
+      <h3 className="text-sm font-semibold">{t('Contas de IA e modelo')}</h3>
+      <p className="mb-3 text-xs text-fg-dim">{t('Quais contas os agentes e o chat deste projeto usam, em que ordem, e o modelo com que as conversas começam.')}</p>
       <div className="space-y-3">{children}</div>
     </section>
   );

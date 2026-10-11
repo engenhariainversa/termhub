@@ -1,3 +1,4 @@
+import { tk, useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 
 /**
@@ -6,19 +7,21 @@ import { useAuth } from '../lib/auth';
  * termhub.dev's documents, so with neither set nothing renders.
  */
 export function LegalLinks({ className = '' }: { className?: string }) {
+  const { t } = useTranslation();
   const { config } = useAuth();
-  const links = [
-    { href: config?.terms_url, label: 'Termos de uso' },
-    { href: config?.privacy_url, label: 'Política de privacidade' },
-  ].filter((l): l is { href: string; label: string } => !!l.href);
+  const all: { href: string | null | undefined; label: string }[] = [
+    { href: config?.terms_url, label: tk('Termos de uso') },
+    { href: config?.privacy_url, label: tk('Política de privacidade') },
+  ];
+  const links = all.filter((l): l is { href: string; label: string } => !!l.href);
   if (links.length === 0) return null;
   return (
-    <nav aria-label="Documentos legais" className={`flex flex-wrap items-center gap-x-2 text-xs text-fg-dim ${className}`}>
+    <nav aria-label={t('Documentos legais')} className={`flex flex-wrap items-center gap-x-2 text-xs text-fg-dim ${className}`}>
       {links.map((l, i) => (
         <span key={l.href} className="flex items-center gap-x-2">
           {i > 0 && <span aria-hidden="true">·</span>}
           <a href={l.href} target="_blank" rel="noopener noreferrer" className="underline-offset-2 hover:text-fg hover:underline">
-            {l.label}
+            {t(l.label)}
           </a>
         </span>
       ))}

@@ -1,4 +1,6 @@
-import { TASK_TYPE_LABEL, type TaskType } from '../lib/types';
+import { taskTypeLabel } from '../lib/board';
+import type { TaskType } from '../lib/types';
+import { useTranslation } from '../i18n';
 
 const STYLE: Record<TaskType, { mark: string; className: string }> = {
   epic: { mark: 'É', className: 'bg-accent/20 text-accent' },
@@ -11,12 +13,14 @@ const STYLE: Record<TaskType, { mark: string; className: string }> = {
 
 /** A card's type as a small letter; the full name is its tooltip and accessible label. */
 export function TypeBadge({ type }: { type: TaskType }) {
+  useTranslation(); // re-render on a language change
   const s = STYLE[type];
+  const label = taskTypeLabel(type);
   return (
     <span
       role="img"
-      aria-label={TASK_TYPE_LABEL[type]}
-      title={TASK_TYPE_LABEL[type]}
+      aria-label={label}
+      title={label}
       className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-[10px] font-semibold ${s.className}`}
     >
       {s.mark}

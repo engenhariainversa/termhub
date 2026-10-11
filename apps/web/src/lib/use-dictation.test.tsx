@@ -61,6 +61,10 @@ vi.mock('./voice-store', () => ({
 /** Reloads the module fresh so its module-level `isVoiceEnabled()` cache doesn't leak between tests. */
 async function load() {
   vi.resetModules();
+  // The reset also reloads the i18n module, which starts in the runtime's language: pin pt-BR again,
+  // as test-setup does, since these tests read the Portuguese notices.
+  const { i18n } = await import('../i18n');
+  await i18n.changeLanguage('pt-BR');
   return import('./use-dictation');
 }
 

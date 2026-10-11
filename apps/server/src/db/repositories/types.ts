@@ -12,9 +12,11 @@ import type {
   Ticket as PrismaTicket,
 } from '../../generated/prisma/client.js';
 import { publicId } from '../../public/public-id.js';
+import { parseLocale, type Locale } from '../../i18n/index.js';
 
 export type UserRole = 'owner' | 'member';
 export type MachineType = 'local' | 'ssh' | 'agent';
+export type AgentCredential = 'key' | 'bearer' | null;
 export type ProjectStatus = 'active' | 'paused' | 'archived';
 export type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
 /** Kind of card (spec 2026-09-24 §3): epics group work, subtasks are a checklist inside a story or task. */
@@ -23,7 +25,17 @@ export type TaskType = 'epic' | 'story' | 'task' | 'subtask' | 'bug' | 'spike';
 export type ColumnCategory = Exclude<TaskStatus, 'backlog'>;
 export type TabKind = 'terminal' | 'simulator';
 /** Monitor state of the tool running in a tab (see monitor/state.ts). */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background';
+export type TabState =
+  | 'working'
+  | 'waiting_input'
+  | 'waiting_permission'
+  | 'idle'
+  | 'error'
+  | 'waiting_background'
+  | 'finished'
+  | 'blocked'
+  | 'auth_required'
+  | 'trust_prompt';
 /** What a working agent is doing, from the tool it is about to call (monitor/activity.ts). */
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 export const TAB_ACTIVITIES: readonly TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];
@@ -56,6 +68,12 @@ export interface User {
   review_enabled_until: string | null;
   /** the admin who last set review_enabled_until */
   review_enabled_by: string | null;
+  /** self-service deletion (TER-720): when it was asked; the account is deactivated while this is set */
+  deletion_requested_at: string | null;
+  /** when the deletion job removes the account for good; null = no deletion pending */
+  deletion_scheduled_at: string | null;
+  /** the language this person chose (TER-405); null = automatic (pt-BR for e-mails and push) */
+  locale: Locale | null;
   created_at: string;
 }
 
@@ -85,8 +103,18 @@ export interface Machine {
   agent_last_seen_at: string | null;
   /** newer agent versions are installed automatically while the machine has no open terminal */
   agent_auto_update: boolean;
+  /**
+   * TER-1017: how the agent proves itself. `key` = a device key paired through a single-use token;
+   * `bearer` = the permanent token of agents paired before (works until the machine is paired again);
+   * null = nothing usable yet (a pairing token not used, or local/ssh). Optional only for test fixtures.
+   */
+  agent_credential?: AgentCredential;
   /** swap a tab's Claude to another account of this machine by itself on a usage limit (opt-in) */
   claude_auto_swap: boolean;
+  /** TER-735: false = termhub never reads the AI CLI credential on this machine (no usage bars) */
+  ai_usage_query: boolean;
+  /** R6: false = the dispatcher never places automatic runs here */
+  automation_allowed: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
   is_local: boolean;
   /** null = orphan (only visible to admins viewing "all") */
@@ -163,6 +191,8 @@ export interface Tab {
   ai_account_id: string | null;
   /** when the tab's Claude stopped on a usage limit (StopFailure rate_limit); cleared when it runs again */
   rate_limited_at: string | null;
+  /** where the tab's session runs when not in the project's folder (a card's worktree); null = the project's */
+  cwd: string | null;
   created_at: string;
 }
 
@@ -200,6 +230,8 @@ export interface Task {
   epic_id: string | null;
   /** Board column; null in the backlog and on subtasks. */
   column_id: string | null;
+  /** Tagged "automático" (eligible for automatic work); always false on subtasks. */
+  auto: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -288,6 +320,9 @@ export const mapUser = (u: PrismaUser): User => ({
   last_login_at: u.lastLoginAt?.toISOString() ?? null,
   review_enabled_until: u.reviewEnabledUntil?.toISOString() ?? null,
   review_enabled_by: u.reviewEnabledBy,
+  deletion_requested_at: u.deletionRequestedAt?.toISOString() ?? null,
+  deletion_scheduled_at: u.deletionScheduledAt?.toISOString() ?? null,
+  locale: parseLocale(u.locale),
   created_at: u.createdAt.toISOString(),
 });
 
@@ -313,7 +348,10 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   agent_version: m.agentVersion ?? null,
   agent_last_seen_at: m.agentLastSeenAt?.toISOString() ?? null,
   agent_auto_update: m.agentAutoUpdate,
+  agent_credential: m.agentPublicKey ? 'key' : m.agentTokenHash ? 'bearer' : null,
   claude_auto_swap: m.claudeAutoSwap,
+  ai_usage_query: m.aiUsageQuery,
+  automation_allowed: m.automationAllowed,
   is_local: m.isLocal,
   owner_id: m.ownerId,
   owner_name: m.owner?.name ?? null,
@@ -365,6 +403,7 @@ export const mapTab = (t: PrismaTab): Tab => ({
   agent_transcript_path: t.agentTranscriptPath,
   ai_account_id: t.aiAccountId,
   rate_limited_at: iso(t.rateLimitedAt),
+  cwd: t.cwd,
   created_at: t.createdAt.toISOString(),
 });
 
@@ -395,6 +434,7 @@ export const mapTask = (t: PrismaTask, key: string): Task => ({
   parent_id: t.parentId,
   epic_id: t.epicId,
   column_id: t.columnId,
+  auto: t.auto,
   created_at: t.createdAt.toISOString(),
   updated_at: t.updatedAt.toISOString(),
 });
@@ -453,9 +493,27 @@ export interface AiAccount {
   label: string;
   machine_id: string;
   config_dir: string | null;
+  /** TER-990: the only project this account may run in; null = any project of the owner. */
+  exclusive_project: { id: string; name: string } | null;
   created_at: string;
 }
 
-export function mapAiAccount(a: { id: string; provider: AiProvider; label: string; machineId: string; configDir: string | null; createdAt: Date }): AiAccount {
-  return { id: a.id, provider: a.provider, label: a.label, machine_id: a.machineId, config_dir: a.configDir, created_at: a.createdAt.toISOString() };
+export function mapAiAccount(a: {
+  id: string;
+  provider: AiProvider;
+  label: string;
+  machineId: string;
+  configDir: string | null;
+  createdAt: Date;
+  exclusiveProject?: { id: string; name: string } | null;
+}): AiAccount {
+  return {
+    id: a.id,
+    provider: a.provider,
+    label: a.label,
+    machine_id: a.machineId,
+    config_dir: a.configDir,
+    exclusive_project: a.exclusiveProject ? { id: a.exclusiveProject.id, name: a.exclusiveProject.name } : null,
+    created_at: a.createdAt.toISOString(),
+  };
 }

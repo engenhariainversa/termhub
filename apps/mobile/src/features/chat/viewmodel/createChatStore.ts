@@ -15,20 +15,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { SessionState } from '@/features/session/model/session.types';
 import { appBackgrounded, messageSent, sessionEnded } from '@/features/shared/signals';
-import { STANDING_KIND_LABEL, standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody } from '@/services/api/contract';
+import { standingKindOf, type TChatAttachment, type TChatProjectItem, type THostOptionsResponse, type TTabQuestionAnswerBody, type TTabQuestionScreenResponse } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { randomId } from '@/services/crypto/random';
 import type { MobileApi } from '@/services/api/types';
 import { mmkvStateStorage } from '@/services/storage';
 import { applyEvent, applyStandingGrantEvent, droppedRows, mergeThread, settlePending, upsertTabQuestion } from '../model/events';
 import { belongsTo } from '../model/filter';
-import { CHAT_MSG } from '../model/messages';
+import { approveAlwaysLabel, CHAT_MSG } from '../model/messages';
 import { upsertTabLimit } from '../model/tab-limit-text';
 import { closeLive, emptyFold, pruneLive, seedLive, type LiveFold } from '../model/live';
 import type { PickedFile } from './attachments';
 import { createThrottledStorage } from './throttled-storage';
 import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabLimit, TabQuestion, TabSuggestion } from '../model/types';
-import type { ReplyRef } from '../model/reply';
+import { replyBody, replyOnRow, replyRefOfRow, type ReplyRef } from '../model/reply';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba");
  * `approve_project` approves it *and* trusts its project's board ("Permitir sempre neste projeto");
@@ -70,6 +70,9 @@ export interface ConversationSlot {
    * 404, a 5xx, a dropped connection) marked the same way — cleared once a fresh `subagent` event
    * for that id arrives. */
   cancelFailed: string[];
+  /** The person's own context limit (TER-1038, Memória do chat): what the header's meter measures
+   *  against instead of the model's window. Absent from a slot persisted before it. */
+  contextLimit?: number | null;
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -124,12 +127,15 @@ export interface ChatState {
   openByRoute(id: string): Promise<void>;
   close(): void;
   /** Resolves `true` once the server accepted the message (`202`). `text` may be empty with attachments.
-   *  `replyTo` is the message it answers (TER-447): shown on the row at once, its id sent with it. */
+   *  `replyTo` is the message (TER-447) or card (TER-849) it answers: shown on the row at once, its id sent with it. */
   send(text: string, attachments?: TChatAttachment[], replyTo?: ReplyRef): Promise<boolean>;
   /** Uploads one picked file into the open conversation; the composer's chip follows `onProgress`. */
   uploadAttachment(file: PickedFile, onProgress: (fraction: number) => void): Promise<TChatAttachment>;
   /** Drops an unsent attachment (a chip's ✕). Already gone (404) or already sent (409): nothing to do. */
   deleteAttachment(id: string): Promise<void>;
+  /** "Tentar de novo" on a sent clip whose transcription was unavailable (TER-1035). The bubble follows
+   *  the `attachment_status` the server publishes; a refusal is thrown for the bubble to show. */
+  retryAttachment(id: string): Promise<void>;
   /** `<Image source>` for a sent image: the url plus signed headers. */
   attachmentSource(id: string): Promise<{ uri: string; headers: Record<string, string> }>;
   /** "Tentar de novo" on a row whose send failed: the row goes, and its text is sent again as a new one. */
@@ -149,7 +155,8 @@ export interface ChatState {
    * reads as its own sentence, in the card like `answerTabQuestion`'s own failures. */
   cancelAutoAnswer(questionId: string): Promise<void>;
   /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
-  loadTabQuestionScreen(questionId: string): Promise<string | null>;
+  /** The excerpt and the dialog's options (TER-995); null once the card's tab moved on. */
+  loadTabQuestionScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
   /** Sends a tab's suggestion, as edited — no PIN. A suggestion the tab moved past (409) says so in its card and re-reads. */
   sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
   /** "Dispensar": the card closes; the tab is not touched. */
@@ -256,6 +263,16 @@ export function createChatStore(deps: ChatDeps) {
    * through the same path as live ones; the others go. Emptied when another conversation opens.
    */
   let early: { key: string; events: ChatEvent[] } | null = null;
+  /**
+   * The open slot's conversation may have been replaced elsewhere ("Nova conversa" on another device,
+   * TER-469): the events of the new one carry an id no slot knows, and used to be dropped until the
+   * next read. The first such event starts one re-read of the open slot, holding that conversation's
+   * events meanwhile. If the slot then shows it, they are replayed as `early`'s are; otherwise the id
+   * is another conversation's (another project, one this device never opened), remembered in
+   * `foreign`, and its later events go without another read.
+   */
+  let switched: { key: string; id: string; events: ChatEvent[] } | null = null;
+  const foreign = new Set<string>();
   /** App-level taps into every raw event (`subscribeEvents`), independent of the open conversation
    * and never cleared by `close()`/`generation` — a subscriber outlives any one socket connection. */
   const eventListeners = new Set<(e: ChatEvent) => void>();
@@ -294,7 +311,8 @@ export function createChatStore(deps: ChatDeps) {
           return isApiError(e) ? e.message : CHAT_MSG.network;
         };
 
-        const reread = async (key: string): Promise<void> => {
+        /** Re-reads slot `key`. True when this read's snapshot was applied (not superseded, not failed). */
+        const reread = async (key: string): Promise<boolean> => {
           const gen = generation;
           const seq = (readSeq.get(key) ?? 0) + 1;
           readSeq.set(key, seq);
@@ -304,7 +322,7 @@ export function createChatStore(deps: ChatDeps) {
           reads.set(key, inFlight.add(arrived));
           try {
             const res = await api.chat(session().auth(), projectOf(key));
-            if (stale()) return;
+            if (stale()) return false;
             // The same conversation: the snapshot merges into the thread by id (spec 2026-09-29 §5):
             // a row that ended or was removed while the GET was in flight is not brought back, a row
             // whose `message` event landed meanwhile (a final answer, the person's row renamed on its
@@ -325,6 +343,7 @@ export function createChatStore(deps: ChatDeps) {
               tabSuggestions: res.tab_suggestions,
               tabLimits: res.tab_limits,
               subagents: res.subagents,
+              contextLimit: res.context_limit ?? null,
               host: res.host,
               loaded: true,
               error: null,
@@ -344,9 +363,11 @@ export function createChatStore(deps: ChatDeps) {
                 for (const e of held) if ('conversation_id' in e && e.conversation_id === res.conversation.id) applyOwn(key, e);
               }
             }
+            return true;
           } catch (e) {
-            if (stale() || isLocked(e) || session().handleApiError(e)) return;
+            if (stale() || isLocked(e) || session().handleApiError(e)) return false;
             patchSlot(key, () => ({ error: isApiError(e) ? e.message : CHAT_MSG.network }));
+            return false;
           } finally {
             // Not a `.finally` on the GET: that would add a tick between its answer and the merge.
             inFlight.delete(arrived);
@@ -382,8 +403,34 @@ export function createChatStore(deps: ChatDeps) {
             early = { key, events: [...events.slice(-(EARLY_EVENTS_CAP - 1)), e] };
             return;
           }
-          if (!belongsTo(conversationId)(e)) return;
+          if (!belongsTo(conversationId)(e)) {
+            if ('conversation_id' in e) checkSwitched(key, e.conversation_id, e);
+            return;
+          }
           applyOwn(key, e);
+        };
+
+        /** An event of conversation `id`, which is not the open slot's: see `switched`. */
+        const checkSwitched = (key: string, id: string, e: ChatEvent): void => {
+          if (foreign.has(id) || Object.values(get().conversations).some((slot) => slot.conversation?.id === id)) return;
+          if (switched !== null) {
+            // One check at a time; another conversation's event waits for its own after this one.
+            if (switched.key === key && switched.id === id) switched.events = [...switched.events.slice(-(EARLY_EVENTS_CAP - 1)), e];
+            return;
+          }
+          const check = { key, id, events: [e] };
+          switched = check;
+          const gen = generation;
+          void reread(key).then((applied) => {
+            if (switched === check) switched = null;
+            if (!applied || gen !== generation || activeKey() !== key) return;
+            if (get().conversations[key]?.conversation?.id !== id) {
+              foreign.add(id);
+              return;
+            }
+            // Same tick as the snapshot: no live event of this conversation landed in between.
+            for (const held of check.events) applyOwn(key, held);
+          });
         };
 
         /** One event of the open conversation, live or held: the slice takes it, then its side effects. */
@@ -440,6 +487,14 @@ export function createChatStore(deps: ChatDeps) {
             }));
           }
           if (e.type === 'message') arrivedDuringReads(key, e.message.id);
+          // The header's context meter (TER-315/TER-1038): the fill lives on the conversation row, as
+          // `GET chat` sends it. `compacted_at` is absent from an older server: the last one stays.
+          if (e.type === 'context')
+            patchSlot(key, (slot) =>
+              slot.conversation
+                ? { conversation: { ...slot.conversation, context_tokens: e.tokens, context_window: e.window, ...(e.compacted_at !== undefined ? { context_compacted_at: e.compacted_at } : {}) } }
+                : {},
+            );
           if (e.type === 'attachment_status') set((s) => ({ attachmentStatuses: { ...s.attachmentStatuses, [e.attachment.id]: e.attachment } }));
           // The answer is complete (or failed): what streamed in is worth an MMKV write now.
           if (e.type === 'run_finished') storage.flush();
@@ -613,6 +668,7 @@ export function createChatStore(deps: ChatDeps) {
           close() {
             generation++;
             early = null;
+            switched = null;
             closeSocket?.();
             closeSocket = null;
             readSeq.clear();
@@ -637,24 +693,29 @@ export function createChatStore(deps: ChatDeps) {
               error_code: null,
               created_at: new Date().toISOString(),
               ...(attachments.length > 0 ? { attachments } : {}),
-              ...(replyTo ? { reply_to: replyTo } : {}),
+              ...(replyTo ? { reply_to: replyOnRow(replyTo) } : {}),
               local: 'sending',
             };
             set({ sending: true, error: null });
             patchSlot(key, (slot) => ({ messages: [...slot.messages, row] }));
             try {
               // A `409 ATTACHMENT_UNAVAILABLE` takes the generic path below: its pt-BR message is the server's.
-              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}), ...(replyTo ? { reply_to_id: replyTo.id } : {}) });
+              const accepted = await api.sendMessage(session().auth(), { text: body, project_id: projectId, ...(attachments.length > 0 ? { attachment_ids: attachments.map((a) => a.id) } : {}), ...(replyTo ? replyBody(replyTo) : {}) });
               if (gen !== generation) return false;
               // Accepted: the row exists on the server now, newer than any snapshot still in flight.
               arrivedDuringReads(key, accepted.user_message_id);
-              patchSlot(key, (slot) => ({
-                // The socket's echo may have landed first: then the local row simply goes; otherwise
-                // it becomes the server's row where it is, and the echo merges into it by id.
-                messages: slot.messages.some((m) => m.id === accepted.user_message_id)
-                  ? slot.messages.filter((m) => m.id !== localId)
-                  : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined } : m)),
-              }));
+              patchSlot(key, (slot) => {
+                // The socket's echo may have landed first: then the echo takes the local row's place
+                // and the duplicate goes; otherwise the local row becomes the server's row where it
+                // is, and the echo merges into it by id. Either way the row keeps its list key, so it
+                // is not remounted (TER-1001).
+                const echo = slot.messages.find((m) => m.id === accepted.user_message_id);
+                return {
+                  messages: echo
+                    ? slot.messages.flatMap((m) => (m.id === localId ? [{ ...echo, row_key: localId }] : m === echo ? [] : [m]))
+                    : slot.messages.map((m) => (m.id === localId ? { ...m, id: accepted.user_message_id, local: undefined, row_key: localId } : m)),
+                };
+              });
               set({ sending: false });
               messageSent.emit();
               // Events no longer re-read the thread; with the socket down nothing else would show the answer.
@@ -679,9 +740,8 @@ export function createChatStore(deps: ChatDeps) {
             const row = get().conversations[key]?.messages.find((m) => m.id === messageId && m.local === 'failed');
             if (!row) return false;
             patchSlot(key, (slot) => ({ messages: slot.messages.filter((m) => m.id !== messageId) }));
-            // A failed reply is sent again as the same reply: a local row's quote always has its id.
-            const replyTo = row.reply_to && row.reply_to.id !== null ? { ...row.reply_to, id: row.reply_to.id } : undefined;
-            return get().send(row.text, row.attachments, replyTo);
+            // A failed reply is sent again as the same reply: a local row's quote always names what it answers.
+            return get().send(row.text, row.attachments, replyRefOfRow(row.reply_to));
           },
 
           async decide(actionId, decision) {
@@ -698,7 +758,7 @@ export function createChatStore(deps: ChatDeps) {
                 const card = get().conversations[key]?.actions.find((a) => a.id === actionId);
                 // "Liberar sem prazo": the PIN sheet's title is the card's button label, kind included.
                 const standingKind = word === 'approve_project_always' && card ? standingKindOf({ tool: card.tool, args: card.args, tab_id: card.tab_id, project_id: card.project_id }) : null;
-                const title = standingKind ? `Liberar sem prazo: ${STANDING_KIND_LABEL[standingKind]} neste projeto` : undefined;
+                const title = standingKind ? approveAlwaysLabel(standingKind) : undefined;
                 const withPin = () => session().requestPinProof(actionId, (proof) => api.decide(session().auth(), actionId, { decision: word, ...proof }), word, title);
                 // TER-92: a write card approves with the unlocked session; the server is the judge and
                 // answers PIN_REQUIRED when it disagrees, which falls back to the sheet. A server rolled
@@ -730,7 +790,11 @@ export function createChatStore(deps: ChatDeps) {
               if (decision !== 'approve' && decision !== 'deny') void reread(key);
             } catch (e) {
               if (gen !== generation || isCancelled(e)) return;
-              if (isApiError(e) && e.status === 409) {
+              if (isApiError(e, 'TAB_GONE')) {
+                // TER-986: the card's tab was closed, so the server retired it instead of deciding it. The
+                // card itself says so ("expirou: a aba foi fechada", with "Propor de novo"), even before the event.
+                patchSlot(key, (slot) => ({ actions: slot.actions.map((a) => (a.id === actionId && a.status === 'pending' ? { ...a, status: 'failed', error_code: 'TAB_GONE' } : a)) }));
+              } else if (isApiError(e) && e.status === 409) {
                 set({ error: CHAT_MSG.alreadyDecided });
                 void reread(key); // show how it was decided
               } else {
@@ -854,7 +918,7 @@ export function createChatStore(deps: ChatDeps) {
 
           async loadTabQuestionScreen(questionId) {
             try {
-              return (await api.tabQuestionScreen(session().auth(), questionId)).text;
+              return await api.tabQuestionScreen(session().auth(), questionId);
             } catch {
               return null;
             }
@@ -915,6 +979,16 @@ export function createChatStore(deps: ChatDeps) {
               if (isApiError(e) && (e.status === 404 || e.status === 409)) return;
               throw e;
             });
+          },
+
+          retryAttachment(id) {
+            return api.retryAttachment(session().auth(), id).then(
+              () => undefined,
+              (e: unknown) => {
+                session().handleApiError(e);
+                throw e;
+              },
+            );
           },
 
           async attachmentSource(id) {

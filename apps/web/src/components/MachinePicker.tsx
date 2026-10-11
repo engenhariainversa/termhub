@@ -2,6 +2,7 @@ import type { Machine, Project } from '../lib/types';
 import { readLastMachine } from '../lib/last-machine';
 import { machineLabel } from '../lib/machine-labels';
 import { Modal } from './Modal';
+import { useTranslation } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -13,8 +14,9 @@ interface Props {
 
 /** "Abrir em qual máquina?" — shared by TerminalsView (new tab) and TasksBoard (task terminal). */
 export function MachinePicker({ open, project, machines, onPick, onClose }: Props) {
+  const { t } = useTranslation();
   return (
-    <Modal title="Abrir em qual máquina?" open={open} onClose={onClose}>
+    <Modal title={t('Abrir em qual máquina?')} open={open} onClose={onClose}>
       <ul className="space-y-1">
         {machines.map((m) => (
           <li key={m.id}>

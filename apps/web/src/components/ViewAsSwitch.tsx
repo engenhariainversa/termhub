@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from '../i18n';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { User } from '../lib/types';
@@ -9,6 +10,7 @@ import { viewAsLabel } from '../lib/view-as';
  * here they can look at the app as another user (support) or at everything at once.
  */
 export function ViewAsSwitch() {
+  const { t } = useTranslation();
   const { user, viewAs, setViewAs } = useAuth();
   const [users, setUsers] = useState<User[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -42,16 +44,16 @@ export function ViewAsSwitch() {
       <button
         className={`flex w-full items-center gap-1 rounded px-2 py-1 text-left text-xs ${viewAs ? 'text-warn' : 'text-fg-muted hover:bg-bg-3 hover:text-fg'}`}
         onClick={() => setOpen((v) => !v)}
-        title="Administrador: ver o app como outro usuário"
+        title={t('Administrador: ver o app como outro usuário')}
       >
-        <span className="flex-1 truncate">{label ?? 'Ver como…'}</span>
+        <span className="flex-1 truncate">{label ?? t('Ver como…')}</span>
         <span className="text-[10px] text-fg-dim">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
         <div className="mt-1 space-y-1">
           <select className="input w-full py-1 text-xs" value={current} disabled={busy} onChange={(e) => void choose(e.target.value)}>
-            <option value="me">Eu ({user?.name})</option>
-            <option value="all">Todas as máquinas (todos os usuários)</option>
+            <option value="me">{t('Eu ({{name}})', { name: user?.name ?? '' })}</option>
+            <option value="all">{t('Todas as máquinas (todos os usuários)')}</option>
             {(users ?? []).filter((u) => u.id !== user?.id).map((u) => (
               <option key={u.id} value={u.id}>
                 {u.name} — {u.email}
@@ -60,7 +62,7 @@ export function ViewAsSwitch() {
           </select>
           {viewAs && (
             <button className="w-full rounded px-2 py-1 text-xs text-fg-muted hover:bg-bg-3 hover:text-fg" disabled={busy} onClick={() => void choose('me')}>
-              Voltar a ver como eu
+              {t('Voltar a ver como eu')}
             </button>
           )}
         </div>

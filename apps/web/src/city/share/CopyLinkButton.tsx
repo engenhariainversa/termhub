@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from '../../i18n';
 
 /** "Copiar link", with its own feedback. Used by the share panel and, when the scene cannot draw, by the top bar. */
 export function CopyLinkButton({ url, className }: { url: string; className?: string }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   useEffect(() => {
@@ -22,7 +24,7 @@ export function CopyLinkButton({ url, className }: { url: string; className?: st
 
   return (
     <button type="button" className={className} onClick={() => void copy()} title={url}>
-      {status === 'copied' ? 'Link copiado' : status === 'failed' ? `Copie: ${url}` : 'Copiar link'}
+      {status === 'copied' ? t('Link copiado') : status === 'failed' ? t('Copie: {{url}}', { url }) : t('Copiar link')}
     </button>
   );
 }

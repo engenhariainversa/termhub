@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, 'epic/**']
   workflow_dispatch:
 
 concurrency:
@@ -13,96 +13,9 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # ── Verificação: typecheck + build (GitHub-hosted) ─────────────────
+  # ── Verificação: typecheck + build (GitHub-hosted, .github/workflows/check.yml) ──
   check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Instalar dependências
-        run: npm ci
-      - name: Gerar Prisma Client
-        run: npm run prisma:generate
-      - name: Generated Prisma client is committed
-        run: |
-          stale="$(git status --porcelain -- apps/server/src/generated)"
-          if [ -n "$stale" ]; then
-            echo "The committed Prisma client is stale; run npm run prisma:generate -w @termhub/server and commit:"
-            echo "$stale"
-            exit 1
-          fi
-      - name: Build dos pacotes compartilhados
-        run: npm run build:packages
-      - name: Testes agent
-        run: npm test -w @termhub/agent
-      - name: Typecheck agent
-        run: npm run typecheck -w @termhub/agent
-      - name: Build agent
-        run: npm run build -w @termhub/agent
-      - name: Testes concierge
-        run: npm test -w @termhub/concierge
-      - name: Typecheck + build concierge
-        run: npm run typecheck -w @termhub/concierge && npm run build -w @termhub/concierge
-      - name: Instalar tmux (teste e2e do agente)
-        run: sudo apt-get update && sudo apt-get install -y tmux
-      - name: Aplicar migrations (testes de repositório usam o Postgres)
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
-        run: cd apps/server && npx prisma migrate deploy
-      - name: Testes server
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
-          TERMHUB_DB_TESTS: '1'
-        run: npm test -w @termhub/server
-      # Ahead of the web tests on purpose: the public city ships as its own bundle, and the test
-      # that proves it carries nothing of the private app greps that bundle's built output.
-      - name: Build do bundle público da cidade
-        run: npm run build:city -w @termhub/web
-      - name: Testes web
-        run: npm test -w @termhub/web
-      - name: Testes landing
-        run: npm test -w @termhub/landing
-      - name: Typecheck mobile
-        run: npm run typecheck -w @termhub/mobile
-      - name: Testes mobile
-        run: npm test -w @termhub/mobile
-      - name: Testes protocolo do agente
-        run: npm test -w @termhub/agent-protocol
-      - name: Testes machine-ops
-        run: npm test -w @termhub/machine-ops
-      - name: Testes claude-cli
-        run: npm test -w @termhub/claude-cli
-      - name: Testes mobile-api
-        run: npm test -w @termhub/mobile-api
-      - name: Typecheck server
-        run: npm run typecheck -w @termhub/server
-      - name: Typecheck + build web
-        run: npm run build -w @termhub/web
-      - name: Build server
-        run: npm run build -w @termhub/server
-      - name: Typecheck + build landing
-        run: npm run build -w @termhub/landing
-      - name: Migrations aplicadas batem com o schema (sem drift)
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
-        run: |
-          cd apps/server
-          npx prisma migrate deploy
-          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
-    services:
-      postgres:
-        # pgvector/pgvector:pg16: the check job needs the `vector` extension for the chat_decisions migration.
-        image: pgvector/pgvector:pg16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: termhub
-        ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
+    uses: ./.github/workflows/check.yml
 
   # ── Deploy no jarvis (runner self-hosted) ──────────────────────────
   deploy:
@@ -119,16 +32,35 @@ jobs:
       - uses: actions/checkout@v4
       - name: Conferir .env do servidor
         run: test -f "$ENV_FILE" || { echo "faltando $ENV_FILE (copie de .env.example)"; exit 1; }
+      # whisper refuses every request without a shared secret (TER-585); an .env nobody edited turned
+      # voice off in production (TER-1035). Generated once, before whisper and the app read it.
+      - name: Shared secrets (generate the missing ones)
+        run: bash deploy/ensure-secrets.sh "$ENV_FILE" WHISPER_SECRET
       - name: Landing (build + recreate the static container)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps landing
       - name: Whisper (speech-to-text service; recreated only when its image or config changes)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps whisper
       - name: Embed (text embeddings for the chat memory; recreated only when its image or config changes)
         run: docker compose --env-file "$ENV_FILE" -f docker-compose.yml -f docker-compose.proxy.yml --profile prod up -d --build --no-deps embed
+      # The chat runs on the user's own machine now; the concierge service left docker-compose.yml
+      # (TER-748), so remove the container a previous deploy left behind. A no-op once it is gone.
+      - name: Retire the legacy concierge container
+        run: |
+          ids=$(docker ps -aq --filter label=com.docker.compose.project=termhub --filter label=com.docker.compose.service=concierge)
+          if [ -n "$ids" ]; then docker rm -f $ids; fi
       - name: Deploy blue-green (build, healthcheck, switch nginx, retire old)
+        id: bluegreen
         run: bash deploy/blue-green.sh
       - name: Conferir migrations aplicadas
         run: docker exec "termhub-app-$(cat "$STATE_FILE")" npx --prefix apps/server prisma migrate status --config apps/server/prisma.config.ts
+      # Smoke test through the proxy; when the app does not answer, roll back one step if safe and fail the job
+      # (deploy/README.md). Runs only after a successful switch. DEPLOY_AUTO_ROLLBACK=0 (repository variable) turns
+      # the rollback off and keeps the smoke test.
+      - name: Smoke test (rollback automático se falhar)
+        if: ${{ !cancelled() && steps.bluegreen.outcome == 'success' }}
+        env:
+          AUTO_ROLLBACK: ${{ vars.DEPLOY_AUTO_ROLLBACK || '1' }}
+        run: bash deploy/post-deploy.sh
       - name: Limpar imagens antigas
         if: always()
         run: docker image prune -f

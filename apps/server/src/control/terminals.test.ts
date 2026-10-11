@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from '../lib/errors.js';
 
-const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentVersion, sendKeyToSession, sendTextToSession, waitForState } = vi.hoisted(() => ({
+const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentVersion, sendKeyToSession, sendTextToSession, typeCommandLine, waitForState } = vi.hoisted(() => ({
   captureScreen: vi.fn(),
   ensureSession: vi.fn(),
   awaitAgent: vi.fn(async () => true),
@@ -9,12 +9,13 @@ const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentV
   requireAgentVersion: vi.fn(),
   sendKeyToSession: vi.fn(),
   sendTextToSession: vi.fn(),
+  typeCommandLine: vi.fn(),
   waitForState: vi.fn(),
 }));
 vi.mock('../agent/screen.js', () => ({ captureScreen }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../agent/errors.js', () => ({ requireAgentVersion }));
-vi.mock('../terminal/session-ops.js', () => ({ ensureSession, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
+vi.mock('../terminal/session-ops.js', () => ({ ensureSession, sendKeyToSession, sendTextToSession, typeCommandLine, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
 vi.mock('../terminal/machine-exec.js', () => ({ killTmuxSession }));
 const { removeTabMcp } = vi.hoisted(() => ({ removeTabMcp: vi.fn(async () => undefined) }));
 vi.mock('../terminal/tab-mcp.js', () => ({ removeTabMcp }));
@@ -25,7 +26,8 @@ vi.mock('./screen.js', async (importOriginal) => {
   return { ...actual, waitForState };
 });
 
-const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey } = await import('./terminals.js');
+const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey, typeCommandInTab } = await import('./terminals.js');
+const { resetInputOrigins, takeInputOrigin } = await import('../terminal/input-origin.js');
 
 const machine = { id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux'], owner_id: 'u1' };
 const machine2 = { id: 'm2', name: 'mac mini', type: 'agent', os: 'macos', capabilities: ['tmux'], owner_id: 'u1' };
@@ -48,8 +50,8 @@ function ctxWith(over: Record<string, unknown> = {}) {
     ...(over.projectMachines as object),
   };
   return {
-    repos: { tabs, projectMachines },
-    scope: { ownerId: 'u1', createAs: 'u1' },
+    repos: { tabs, projectMachines, ...(over.repos as object) },
+    scope: { user: { id: 'u1' }, ownerId: 'u1', createAs: 'u1' },
     scoped: {
       project: vi.fn(async () => ({ project })),
       projectMachine: vi.fn(async () => ({ project, machine, link })),
@@ -69,7 +71,8 @@ function ctxWith(over: Record<string, unknown> = {}) {
       tab: vi.fn(async () => ({ tab: (over.tab as object) ?? tab(), machine, cwd: link.cwd })),
     },
     can: vi.fn(async () => true),
-    token: { id: 'tok1', scopes: ['terminals'] },
+    token: 'token' in over ? over.token : { id: 'tok1', scopes: ['terminals'] },
+    ...(over.approval ? { approval: over.approval } : {}),
   } as never;
 }
 
@@ -89,6 +92,23 @@ describe('openTab', () => {
     expect(ctx.repos.tabs.create).toHaveBeenCalledWith('p1', 'm1', expect.stringMatching(/^[A-Z][a-z]+$/), { created_by_token_id: 'tok1' });
     expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', '/home/u/app');
     expect(r).toMatchObject({ tab_id: 't1', machine_id: 'm1', created: true });
+  });
+
+  it('with a cwd from the server, keeps it on the tab and starts the session there (TER-870)', async () => {
+    const ctx = ctxWith();
+    await openTab(ctx, { project_id: 'p1' }, { cwd: '/home/u/.termhub/worktrees/APP-7' });
+    expect(ctx.repos.tabs.create).toHaveBeenCalledWith('p1', 'm1', expect.any(String), { created_by_token_id: 'tok1', cwd: '/home/u/.termhub/worktrees/APP-7' });
+    expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', '/home/u/.termhub/worktrees/APP-7');
+  });
+
+  it('without a cwd (manual and MCP tabs), the tab row and the session folder are as before (TER-870)', async () => {
+    for (const internal of [undefined, {}]) {
+      vi.clearAllMocks();
+      const ctx = ctxWith();
+      await openTab(ctx, { project_id: 'p1' }, internal);
+      expect(ctx.repos.tabs.create.mock.calls[0][3]).toStrictEqual({ created_by_token_id: 'tok1' });
+      expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', '/home/u/app');
+    }
   });
 
   it('openTab needs machine_id when the project has two machines and reports it in the result', async () => {
@@ -176,6 +196,106 @@ describe('sendInput', () => {
   it('refuses a tab that is not a terminal', async () => {
     const ctx = ctxWith({ tab: tab({ kind: 'simulator', tmux_session: null }) });
     await expect(sendInput(ctx, { tab_id: 't1', text: 'oi' })).rejects.toMatchObject({ code: 'NOT_A_TERMINAL' });
+  });
+});
+
+// TER-988: the line that resumes an exited agent runs in the shell through typeCommandLine (a file past 900
+// bytes, session-ops.test.ts), past sendInput's 4000-character cap and with no origin recorded.
+describe('typeCommandInTab', () => {
+  it('makes sure the session is there, then hands the whole line to typeCommandLine', async () => {
+    const line = `claude --resume x -- '${'a'.repeat(5000)}'`;
+    await typeCommandInTab(ctxWith(), 't1', line);
+    expect(ensureSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', link.cwd);
+    expect(typeCommandLine).toHaveBeenCalledWith(machine, 'termhub-p1-t1', line);
+    expect(sendTextToSession).not.toHaveBeenCalled();
+    expect(takeInputOrigin('t1', line)).toBeNull();
+  });
+
+  it('refuses a tab that is not a terminal, or a machine that is offline', async () => {
+    await expect(typeCommandInTab(ctxWith({ tab: tab({ kind: 'simulator', tmux_session: null }) }), 't1', 'claude --continue')).rejects.toMatchObject({ code: 'NOT_A_TERMINAL' });
+    awaitAgent.mockResolvedValueOnce(false);
+    await expect(typeCommandInTab(ctxWith(), 't1', 'claude --continue')).rejects.toBeTruthy();
+    expect(typeCommandLine).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendInput: who wrote the text (TER-851)', () => {
+  const HOUR = 60 * 60_000;
+  const memoryRepos = (createdAgo = HOUR, over: Record<string, unknown> = {}) => ({
+    memoryItems: {
+      findManyForOwner: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' ? ids.filter((i) => i.startsWith('mi')).map((i) => ({ id: i, kind: 'message', trust: 'person', source_id: `cm-${i}`, ...over })) : [])),
+      // A chat message `cmN` the person typed is indexed by the item `ixN` (TER-1037).
+      findMessagesBySource: vi.fn(async (ids: string[], owner: string) => (owner === 'u1' ? ids.filter((i) => /^cm\d+$/.test(i)).map((i) => ({ id: `ix${i.slice(2)}`, kind: 'message', trust: 'person', source_id: i, ...over })) : [])),
+    },
+    chat: { findUserMessagesForUser: vi.fn(async (ids: string[]) => ids.map((i) => ({ id: i, role: 'user', created_at: new Date(Date.now() - createdAgo).toISOString() }))) },
+  });
+  const gated = { id: 'chat-tok', scopes: ['terminals'], gated: true };
+  beforeEach(() => resetInputOrigins());
+
+  it('marks the chat assistant when it sends on its own', async () => {
+    await sendInput(ctxWith({ token: gated }), { tab_id: 't1', text: 'rode os testes' });
+    expect(takeInputOrigin('t1', 'rode os testes')).toEqual({ level: 'assistant', userId: 'u1' });
+  });
+
+  it('marks the person’s request, with their messages, when on_behalf_of checks out', async () => {
+    await sendInput(ctxWith({ token: gated, repos: memoryRepos() }), { tab_id: 't1', text: 'pode mesclar', on_behalf_of: ['message:mi1', 'message:mi2'] });
+    expect(takeInputOrigin('t1', 'pode mesclar')).toEqual({ level: 'person_requested', userId: 'u1', messageIds: ['cm-mi1', 'cm-mi2'] });
+  });
+
+  it('takes the ref of the chat message itself, the one the chat hands the concierge (TER-1037)', async () => {
+    await sendInput(ctxWith({ token: gated, repos: memoryRepos() }), { tab_id: 't1', text: 'pode mesclar', on_behalf_of: ['message:cm7', 'message:mi1'] });
+    expect(takeInputOrigin('t1', 'pode mesclar')).toEqual({ level: 'person_requested', userId: 'u1', messageIds: ['cm7', 'cm-mi1'] });
+  });
+
+  it('refuses the ref of a chat message nothing indexed (a wake, an injected decision)', async () => {
+    const repos = memoryRepos();
+    repos.memoryItems.findMessagesBySource.mockResolvedValueOnce([]);
+    await expect(sendInput(ctxWith({ token: gated, repos }), { tab_id: 't1', text: 'x', on_behalf_of: ['message:cm7'] })).rejects.toMatchObject({ code: 'ON_BEHALF_INVALID' });
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('marks a clicked confirmation card as the person’s approval, even under the chat token', async () => {
+    const approvedAt = new Date('2026-10-04T20:00:00Z');
+    await sendInput(ctxWith({ token: gated, approval: { actionId: 'a1', approvedAt } }), { tab_id: 't1', text: 'pode mesclar' });
+    expect(takeInputOrigin('t1', 'pode mesclar')).toEqual({ level: 'person_approved', userId: 'u1', actionId: 'a1', approvedAt });
+  });
+
+  it('marks any other token as an MCP client', async () => {
+    await sendInput(ctxWith(), { tab_id: 't1', text: 'oi' });
+    expect(takeInputOrigin('t1', 'oi')).toEqual({ level: 'mcp_client', userId: 'u1', tokenId: 'tok1' });
+  });
+
+  it('takes the origin a termhub screen gives, and records nothing for null', async () => {
+    await sendInput(ctxWith({ token: undefined }), { tab_id: 't1', text: 'oi' }, { level: 'person_typed', userId: 'u1', surface: 'app' });
+    expect(takeInputOrigin('t1', 'oi')).toEqual({ level: 'person_typed', userId: 'u1', surface: 'app' });
+    await sendInput(ctxWith(), { tab_id: 't1', text: '/clear' }, null);
+    expect(takeInputOrigin('t1', '/clear')).toBeNull();
+  });
+
+  it('refuses on_behalf_of outside the chat token', async () => {
+    await expect(sendInput(ctxWith({ repos: memoryRepos() }), { tab_id: 't1', text: 'x', on_behalf_of: ['message:mi1'] })).rejects.toMatchObject({ code: 'ON_BEHALF_NOT_ALLOWED' });
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['another kind of ref', ['note:mi1'], memoryRepos()],
+    ['someone else’s or a missing message', ['message:zz1'], memoryRepos()],
+    ['an item that is not the person’s', ['message:mi1'], memoryRepos(HOUR, { trust: 'derived' })],
+    ['a message older than 24 h', ['message:mi1'], memoryRepos(25 * HOUR)],
+  ])('refuses %s, typing nothing', async (_label, refs, repos) => {
+    await expect(sendInput(ctxWith({ token: gated, repos }), { tab_id: 't1', text: 'x', on_behalf_of: refs })).rejects.toMatchObject({ code: 'ON_BEHALF_INVALID' });
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses a memory item whose chat message is not the person’s (an assistant answer, another user)', async () => {
+    const repos = { ...memoryRepos(), chat: { findUserMessagesForUser: vi.fn(async () => []) } };
+    await expect(sendInput(ctxWith({ token: gated, repos }), { tab_id: 't1', text: 'x', on_behalf_of: ['message:mi1'] })).rejects.toMatchObject({ code: 'ON_BEHALF_INVALID' });
+  });
+
+  it('records what run_command types too', async () => {
+    captureScreen.mockResolvedValue('$');
+    await runCommand(ctxWith({ token: gated }), { tab_id: 't1', command: 'ls', timeout_seconds: 1 });
+    expect(takeInputOrigin('t1', 'ls')).toEqual({ level: 'assistant', userId: 'u1' });
   });
 });
 

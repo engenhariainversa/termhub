@@ -97,6 +97,7 @@ export class LiveRun {
   /** Whether this process put a turn back because of the usage limit (see `consume`). */
   private limited = false;
   private dir: string | null = null;
+  private runModel: string | null = null;
   /** What each answer says besides its text, stored with it (an account that took over, a limit). */
   private notices = new Map<string, ChatNotice>();
   /** The process was ended on purpose (`stop`): a turn of its own that was cut is not a failed answer. */
@@ -130,6 +131,10 @@ export class LiveRun {
   /** Where the session lives on the machine, as the last process's `init` said. */
   get sessionDir(): string | null {
     return this.dir;
+  }
+  /** The model the last process's `init` said it runs on (TER-837). */
+  get model(): string | null {
+    return this.runModel;
   }
 
   /** Takes a turn: written now to the live process, or kept for `initialText` before it starts. False
@@ -277,12 +282,16 @@ export class LiveRun {
           // unfinished writes a `result` that ended no turn before its first replay (Claude Code 2.1.285).
           if (answered && !this.replayed && (this.waiting.length > 0 || this.notes.size > 0)) await this.failWaiting('RUN_FAILED');
           this.endInputIfIdle();
+        } else if (frame.type === 'compacted') {
+          // Auto-compact (TER-1038): the meter drops now and remembers when; `done` writes the turn's fill.
+          if (frame.tokens !== undefined) await saveContext(this.deps.chat, this.deps.userId, this.deps.conversationId, { tokens: frame.tokens, compacted: true });
         } else if (frame.type === 'api_error') {
           this.turnReason = frame.reason;
         } else if (frame.type === 'usage_limit') {
           this.limitHit = { resets_at: frame.resets_at };
-        } else if (frame.type === 'session_dir') {
-          this.dir = frame.dir;
+        } else if (frame.type === 'init') {
+          this.dir = frame.dir ?? this.dir;
+          this.runModel = frame.model ?? this.runModel;
         } else if (frame.type === 'error') {
           await this.saveSession(frame.session_id);
           if (frame.turn_ended) {
@@ -379,7 +388,12 @@ export class LiveRun {
    * with `notice` when it ends.
    */
   async retryElsewhere(opts: { fresh: boolean; notice: ChatNotice }): Promise<void> {
+    // Every line goes again under a new uuid: the process that met the limit already wrote the turn to
+    // the session, and a resumed CLI that reads a uuid it has on file replays it and answers nothing —
+    // with the input open, the run then waits forever (TER-837). A restarted server does the same.
+    this.notes = new Map([...this.notes.values()].map((text) => [randomUUID(), text]));
     for (const t of this.waiting) {
+      t.uuid = randomUUID();
       this.notices.set(t.answer.id, opts.notice);
       if (opts.fresh) chatBus.publish({ type: 'reset', user_id: this.deps.userId, conversation_id: this.deps.conversationId, message_id: t.answer.id });
       this.announce(t.answer.id);

@@ -1,9 +1,9 @@
 import { chmod, lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { HOOK_SCRIPT } from '@termhub/machine-ops';
+import { GUARD_SCRIPT, HOOK_SCRIPT, HOOK_SCRIPT_VERSION } from '@termhub/machine-ops';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { heal, install, uninstall } from './hooks.js';
+import { heal, install, status, uninstall } from './hooks.js';
 
 let home: string;
 const params = { hooks_url: 'https://app.termhub.dev/api/hooks', token: 'thb_hk_abc-123' };
@@ -22,6 +22,8 @@ describe('hooks.install', () => {
     await expect(install(params, home)).resolves.toEqual({ home, claude: 'installed', codex: 'skipped', cursor: 'skipped', claude_dirs: ['~/.claude'] });
     expect(await read('.termhub/bin/termhub-hook')).toBe(HOOK_SCRIPT);
     expect(await mode('.termhub/bin/termhub-hook')).toBe(0o755);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
     expect(await read('.termhub/hook.env')).toBe("TERMHUB_HOOK_URL='https://app.termhub.dev/api/hooks'\nTERMHUB_HOOK_TOKEN='thb_hk_abc-123'\n");
     expect(await mode('.termhub/hook.env')).toBe(0o600);
     const settings = JSON.parse(await read('.claude/settings.json')) as { hooks: Record<string, { hooks: { command: string }[] }[]> };
@@ -303,6 +305,14 @@ describe('heal', () => {
     expect(await read('.claude/settings.json')).toBe(before);
   });
 
+  it('rewrites the guard script when an older agent left a different one (TER-993)', async () => {
+    await install(params, home);
+    await writeFile(path.join(home, '.termhub/bin/termhub-guard'), '#!/bin/sh\n# old\n');
+    await heal(home);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
+  });
+
   it('leaves a settings file it cannot parse where it is', async () => {
     await install(params, home);
     await mkdir(path.join(home, '.claude-broken'), { recursive: true });
@@ -424,6 +434,8 @@ describe('heal', () => {
 
     expect(await read('.termhub/bin/termhub-hook')).toBe(HOOK_SCRIPT);
     expect(await mode('.termhub/bin/termhub-hook')).toBe(0o755);
+    expect(await read('.termhub/bin/termhub-guard')).toBe(GUARD_SCRIPT);
+    expect(await mode('.termhub/bin/termhub-guard')).toBe(0o755);
   });
 
   it('leaves a script that already matches where it is', async () => {
@@ -551,5 +563,44 @@ describe('Codex hooks.json', () => {
     await expect(heal(home)).resolves.toEqual(['~/.codex']);
     log.mockRestore();
     expect(await read('.codex/hooks.json')).toContain(script());
+  });
+});
+
+describe('hooks.status', () => {
+  it('reads a bare home as nothing installed and no CLI there', async () => {
+    const s = await status({}, home);
+    expect(s.script).toEqual({ installed: false, version: null, expected_version: HOOK_SCRIPT_VERSION, outdated: false });
+    expect(s.claude).toEqual({ present: false, state: 'missing', dirs: [] });
+    expect(s.codex.present).toBe(false);
+    expect(s.cursor.present).toBe(false);
+  });
+
+  it('reads what install wrote as current, account dirs included, and never answers the token', async () => {
+    await mkdir(path.join(home, '.claude_pedro'), { recursive: true });
+    await mkdir(path.join(home, '.codex'), { recursive: true });
+    await mkdir(path.join(home, '.cursor'), { recursive: true });
+    await install({ ...params, claude_dirs: ['~/.claude_pedro'] }, home);
+    const s = await status({ claude_dirs: ['~/.claude_pedro'] }, home);
+    expect(s.script).toMatchObject({ installed: true, version: HOOK_SCRIPT_VERSION, outdated: false });
+    expect(s.claude).toEqual({ present: true, state: 'current', dirs: [{ dir: '~/.claude', state: 'current' }, { dir: '~/.claude_pedro', state: 'current' }] });
+    expect(s.codex).toEqual({ present: true, state: 'current', notify: true, trusted: 'none' });
+    expect(s.cursor).toEqual({ present: true, state: 'current' });
+    expect(JSON.stringify(s)).not.toContain(params.token);
+  });
+
+  it('says missing for a CLI that showed up after the install, and unreadable for a link to nothing', async () => {
+    await install(params, home);
+    await mkdir(path.join(home, '.cursor'), { recursive: true });
+    await symlink(path.join(home, 'nowhere.json'), path.join(home, '.cursor/hooks.json'));
+    const s = await status({}, home);
+    expect(s.cursor).toEqual({ present: true, state: 'unreadable' });
+    await rm(path.join(home, '.cursor/hooks.json'));
+    expect((await status({}, home)).cursor).toEqual({ present: true, state: 'missing' });
+  });
+
+  it('flags a script left by another release', async () => {
+    await install(params, home);
+    await writeFile(path.join(home, '.termhub/bin/termhub-hook'), '#!/bin/sh\n# older\n');
+    expect((await status({}, home)).script).toMatchObject({ installed: true, outdated: true });
   });
 });

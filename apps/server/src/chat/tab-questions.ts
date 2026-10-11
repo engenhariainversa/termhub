@@ -1,5 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { expireTabLimits } from './tab-limits.js';
+import { automaticRunOfTab } from '../automation/pause.js';
+import { expectVerdict, settleQuestion } from '../automation/question-hold.js';
 import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { CloseScope, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
@@ -51,12 +53,20 @@ export function closingScope(next: Interpreted): CloseScope | null {
  * Tells every open screen of each row's conversation owner. Resolves the views it published. A
  * suggestion row goes out on its own events (spec 2026-09-25 tab suggestions §6.2) — `tab_suggestion`
  * when it opens, `tab_suggestion_closed` for anything after — so every close path here also closes it.
+ * `update` marks a still-open card republished because it changed, not because it opened: screens
+ * redraw it, the phone is not pushed again (TER-919).
  */
-export async function publishTabQuestions(repos: Pick<Repositories, 'tabs' | 'chatDecisions'>, type: TabQuestionEventType, rows: TabQuestion[]): Promise<TabQuestionView[]> {
+export async function publishTabQuestions(
+  repos: Pick<Repositories, 'tabs' | 'chatDecisions'>,
+  type: TabQuestionEventType,
+  rows: TabQuestion[],
+  opts: { update?: boolean } = {},
+): Promise<TabQuestionView[]> {
   const views: TabQuestionView[] = [];
   for (const row of rows) {
     const [view] = await describeTabQuestions(repos, [row], row.user_id);
     if (row.kind === 'suggestion') chatBus.publish({ type: type === 'tab_question' ? 'tab_suggestion' : 'tab_suggestion_closed', user_id: row.user_id, conversation_id: row.conversation_id, suggestion: view });
+    else if (type === 'tab_question' && opts.update) chatBus.publish({ type, user_id: row.user_id, conversation_id: row.conversation_id, question: view, update: true });
     else chatBus.publish({ type, user_id: row.user_id, conversation_id: row.conversation_id, question: view });
     views.push(view);
   }
@@ -102,7 +112,10 @@ export async function closeTabQuestions(repos: Repositories, tabId: string, stat
  * Once the card is out (published), a fresh `choice` card that got no automatic answer — no repeat
  * countdown from `maybeScheduleRepeat` above — wakes the project's concierge (spec 2026-09-26
  * concierge memory §7, D9b), fire-and-forget (`void`): the hook POST that got us here never waits for
- * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws.
+ * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws. In a tab with a live
+ * automatic run (`automaticRunOfTab`) the card goes to `automationAnswer` instead (agentic board spec
+ * D18: repeat, recommended option, wake, escalate), fire-and-forget too; a `permission` card there goes to
+ * `answerPermissionAutomatically` (§9.2: "allow" by the project's rules, or escalate).
  */
 export async function openTabQuestion(
   repos: Repositories,
@@ -116,6 +129,21 @@ export async function openTabQuestion(
   const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
   const { question, closed } = await repos.tabQuestions.open({ tab_id: tab.id, project_id: tab.project_id, conversation_id: conversation?.id ?? null, kind: input.kind, payload: input.payload, tool_use_id: input.tool_use_id, agent_id: deps?.agentId ?? null });
   await publishTabQuestions(repos, 'tab_question_closed', closed);
+  // A permission with no card because one is already open (queued behind it) is that card's business; only
+  // one with no conversation at all is parked.
+  if (!question && (input.kind === 'choice' || !conversation)) {
+    // No card (no active conversation of the owner's): in a tab with a live automatic run the run is
+    // parked for the person before anything else looks at the tab, so nothing is ever typed into the
+    // question (agentic board review I1). A manual tab keeps the question in the tab, as before.
+    const run = await automaticRunOfTab(repos, tab.id).catch(() => null);
+    if (run) {
+      const log = deps?.log ?? silentLog;
+      // loaded lazily: automation/answers reaches the follower, whose imports lead back here
+      await import('../automation/answers.js')
+        .then(({ questionWithoutCard }) => questionWithoutCard(repos, run, log, input.kind))
+        .catch((err) => log.warn({ tabId: tab.id, code: failureLabel(err) }, 'automation: question with no card not parked'));
+    }
+  }
   let shown = question;
   if (question?.kind === 'choice') {
     const embedder = deps?.embedder !== undefined ? deps.embedder : defaultEmbedder();
@@ -143,8 +171,38 @@ export async function openTabQuestion(
     }
   }
   if (shown) {
+    // A tab with a live automatic run answers by the agentic board's own order (spec D18, §9.2); every other
+    // tab — a manual one, a paused or disabled project — exactly as before. Read before the card goes out:
+    // for a running run the card's own push waits for automatic work's verdict (`expectVerdict`, D25) and
+    // goes out unless automatic work took the card over.
+    const run = shown.kind === 'choice' || shown.kind === 'permission' ? await automaticRunOfTab(repos, tab.id).catch(() => null) : null;
+    if (run?.status === 'running') expectVerdict(shown.id);
     await publishTabQuestions(repos, 'tab_question', [shown]);
-    if (shown.kind === 'choice' && !shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
+    const log = deps?.log ?? silentLog;
+    const card = shown;
+    const settle = (owned: boolean) => settleQuestion(card.id, owned);
+    if (shown.kind === 'choice') {
+      if (run) {
+        // loaded lazily: automation/answers reaches the follower, whose imports lead back here
+        void import('../automation/answers.js')
+          .then(({ automationAnswer }) => automationAnswer({ repos, waker: deps?.waker, log }, card, run))
+          .then((outcome) => settle(outcome !== 'left'))
+          .catch((err) => {
+            settle(false);
+            log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: question not handled');
+          });
+      } else if (!shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
+    } else if (shown.kind === 'permission' && run) {
+      // "allow" when the project's rules allow it, or escalate (agentic board spec §9.2); in any other tab the
+      // card waits for the person, as before. Loaded lazily, like automationAnswer above.
+      void import('../automation/answers.js')
+        .then(({ answerPermissionAutomatically }) => answerPermissionAutomatically({ repos, log }, card, run))
+        .then((outcome) => settle(outcome !== 'left'))
+        .catch((err) => {
+          settle(false);
+          log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: permission not handled');
+        });
+    }
   }
   return shown;
 }

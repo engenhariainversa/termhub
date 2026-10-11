@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import { writeConsent } from '../lib/consent';
 
 /**
@@ -8,6 +9,7 @@ import { writeConsent } from '../lib/consent';
  * closes the banner and (on "Aceitar") starts analytics.
  */
 export function CookieBanner({ open }: { open: boolean }) {
+  const { t } = useTranslation();
   if (!open) return null;
   return (
     <div
@@ -17,17 +19,19 @@ export function CookieBanner({ open }: { open: boolean }) {
       className="fixed inset-x-4 bottom-4 z-30 rounded-md border border-line bg-bg-2 p-4 text-sm shadow-lg md:left-auto md:right-6 md:max-w-md"
     >
       <h2 id="cookie-title" className="font-medium text-fg">
-        Cookies
+        {t('Cookies')}
       </h2>
       <p className="mt-1 text-xs text-fg-muted">
-        Usamos o Google Analytics para entender como o termhub é usado: telas visitadas e ações como conectar uma máquina. Nada do que você digita nos terminais, nem seu e-mail, é enviado.
+        {t(
+          'Usamos o Google Analytics para entender como o termhub é usado: telas visitadas e ações como conectar uma máquina. Nada do que você digita nos terminais, nem seu e-mail, é enviado.',
+        )}
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" className="btn-primary" onClick={() => writeConsent('granted')}>
-          Aceitar
+          {t('Aceitar')}
         </button>
         <button type="button" className="btn-ghost" onClick={() => writeConsent('denied')}>
-          Recusar
+          {t('Recusar')}
         </button>
       </div>
     </div>

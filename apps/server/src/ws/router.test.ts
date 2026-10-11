@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { AuthContext } from '../auth/index.js';
 import { createLifecycle } from './drain.js';
-import { createUpgradeRouter } from './router.js';
+import { createUpgradeRouter, type UpgradeAccess } from './router.js';
 
 const { resolveUserMock, canAccessMock } = vi.hoisted(() => ({ resolveUserMock: vi.fn(), canAccessMock: vi.fn() }));
 
@@ -153,6 +153,45 @@ describe('createUpgradeRouter', () => {
     const outcome = await attempt(`ws://127.0.0.1:${port}/ws/ok/abc123`);
     expect(outcome.opened).toBe(true);
     expect(outcome.firstMessage).toBe('abc123');
+  });
+
+  describe('canWrite', () => {
+    let cwServer: http.Server;
+    let cwWss: WebSocketServer;
+    let cwPort: number;
+
+    beforeEach(async () => {
+      cwServer = http.createServer();
+      const router = createUpgradeRouter(cwServer, { auth: {} as AuthContext });
+      cwWss = new WebSocketServer({ noServer: true });
+      router.add(/^\/ws\/cw$/, ({ req, socket, head, canWrite }) => {
+        cwWss.handleUpgrade(req, socket, head, (ws) => {
+          cwWss.emit('connection', ws, req);
+          ws.send(String(canWrite));
+        });
+      });
+      cwPort = await listen(cwServer);
+    });
+
+    afterEach(async () => {
+      cwWss.close();
+      await shutdown(cwServer);
+    });
+
+    it('hands the handler canWrite: true for a user with terminals:write', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      const outcome = await attempt(`ws://127.0.0.1:${cwPort}/ws/cw`);
+      expect(outcome.firstMessage).toBe('true');
+      expect(canAccessMock).toHaveBeenCalledWith(undefined, { id: 'u1' }, 'terminals', 'write');
+    });
+
+    it('still opens for a user with terminals:read only, with canWrite: false', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      canAccessMock.mockImplementation(async (_r: unknown, _u: unknown, _res: string, action: string) => action === 'read');
+      const outcome = await attempt(`ws://127.0.0.1:${cwPort}/ws/cw`);
+      expect(outcome.opened).toBe(true);
+      expect(outcome.firstMessage).toBe('false');
+    });
   });
 
   describe('addPublic', () => {
@@ -306,6 +345,56 @@ describe('createUpgradeRouter', () => {
       });
     }
   });
+  // TER-744: every upgrade the router decides leaves an access record (path only, never the query).
+  describe('onAccess', () => {
+    let accServer: http.Server;
+    let accWss: WebSocketServer;
+    let accPort: number;
+    let seen: Omit<UpgradeAccess, 'req'>[];
+
+    beforeEach(async () => {
+      seen = [];
+      accServer = http.createServer();
+      const router = createUpgradeRouter(accServer, {
+        auth: {} as AuthContext,
+        onAccess: ({ req: _req, ...a }) => seen.push(a),
+      });
+      accWss = new WebSocketServer({ noServer: true });
+      const open = ({ req, socket, head }: { req: http.IncomingMessage; socket: Duplex; head: Buffer }) =>
+        accWss.handleUpgrade(req, socket, head, (ws) => ws.send('opened'));
+      router.add(/^\/ws\/ok$/, open);
+      router.addPublic(/^\/agent\/ok$/, open);
+      accPort = await listen(accServer);
+    });
+
+    afterEach(async () => {
+      accWss.close();
+      await shutdown(accServer);
+    });
+
+    it('an admitted upgrade: 101 with the user, and the path without its query', async () => {
+      resolveUserMock.mockResolvedValue({ id: 'u1' });
+      await attempt(`ws://127.0.0.1:${accPort}/ws/ok?token=secret`);
+      expect(seen).toEqual([{ path: '/ws/ok', userId: 'u1', status: 101 }]);
+    });
+
+    it('a refused upgrade: its status, no user', async () => {
+      resolveUserMock.mockResolvedValue(null);
+      await attempt(`ws://127.0.0.1:${accPort}/ws/ok`);
+      expect(seen).toEqual([{ path: '/ws/ok', userId: null, status: 401 }]);
+    });
+
+    it('a public route: recorded with no status, the route authenticates itself', async () => {
+      await attempt(`ws://127.0.0.1:${accPort}/agent/ok`);
+      expect(seen).toEqual([{ path: '/agent/ok', userId: null, status: null }]);
+    });
+
+    it('an unknown path is not recorded', async () => {
+      await attempt(`ws://127.0.0.1:${accPort}/ws/nope`);
+      expect(seen).toEqual([]);
+    });
+  });
+
   describe('while draining', () => {
     let drainServer: http.Server;
     let drainWss: WebSocketServer;

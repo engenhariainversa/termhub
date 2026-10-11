@@ -19,6 +19,20 @@ describe('CardPullRequests', () => {
     expect(listMock).toHaveBeenCalledWith('t1');
   });
 
+  it('shows the release runs of a merged PR with the published version', async () => {
+    listMock.mockResolvedValue({
+      pull_requests: [
+        {
+          number: 7, url: 'https://github.com/acme/app/pull/7', title: 'x', state: 'merged', draft: false, ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'passed', deploy_url: 'd',
+          release_runs: [{ workflow: 'publish-agent.yml', state: 'passed', url: 'https://github.com/acme/app/actions/runs/9', version: '0.19.0' }, { workflow: 'ota.yml', state: 'failed', url: null, version: null }],
+        },
+      ],
+    });
+    render(<CardPullRequests taskId="t1" />);
+    expect(await screen.findByRole('link', { name: 'publicado v0.19.0' })).toHaveAttribute('href', 'https://github.com/acme/app/actions/runs/9');
+    expect(screen.getByText('publicação falhou: ota.yml')).toBeInTheDocument();
+  });
+
   it('renders nothing without PRs', async () => {
     listMock.mockResolvedValue({ pull_requests: [] });
     const { container } = render(<CardPullRequests taskId="t1" />);

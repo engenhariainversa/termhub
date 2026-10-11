@@ -1,5 +1,6 @@
 /** What the overlay says at a given zoom, and what a building's sign says. Pure: no PixiJS, so it can be tested alone. */
 import type { BuildingModel, FocusTarget } from '../model';
+import { i18n, tk } from '../../i18n';
 
 /** Zoom from which a sign keeps its full size; below it, it gives way a little (see Overlay.ts). */
 export const SIGN_SCALE = 0.7;
@@ -16,8 +17,9 @@ export function deskLabelsVisible(target: FocusTarget, scale: number, buildingId
   return scale >= LABEL_SCALE || (target.kind === 'building' && target.projectId === buildingId);
 }
 
-const NOTICE = { offline: 'offline', silent: 'sem resposta' } as const;
-const needsYouText = (n: number) => (n === 1 ? '1 precisa de você' : `${n} precisam de você`);
+/** pt-BR keys, shown with `i18n.t(NOTICE[notice])`. */
+const NOTICE = { offline: tk('offline'), silent: tk('sem resposta') } as const;
+const needsYouText = (n: number) => i18n.t('{{count}} precisam de você', { count: n });
 
 /**
  * The building sign's three texts (city-by-project §3.2): the name, a muted detail line — the
@@ -27,9 +29,9 @@ const needsYouText = (n: number) => (n === 1 ? '1 precisa de você' : `${n} prec
  */
 export function buildingSignText(b: Pick<BuildingModel, 'label' | 'notice' | 'progress' | 'needsYou' | 'desks'>): { name: string; detail: string; count: string } {
   const parts: string[] = [];
-  if (b.notice) parts.push(NOTICE[b.notice]);
-  if (b.progress) parts.push(`${b.progress.done}/${b.progress.total} tarefas`);
-  if (b.desks.length === 0) parts.push('sem agentes agora');
+  if (b.notice) parts.push(i18n.t(NOTICE[b.notice]));
+  if (b.progress) parts.push(i18n.t('{{done}}/{{total}} tarefas', { done: b.progress.done, total: b.progress.total }));
+  if (b.desks.length === 0) parts.push(i18n.t('sem agentes agora'));
   const count = b.needsYou > 0 ? needsYouText(b.needsYou) : '';
   const detail = parts.join(' · ');
   return { name: b.label, detail: detail && count ? `${detail} ·` : detail, count };

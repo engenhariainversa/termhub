@@ -6,8 +6,25 @@ import type { z } from 'zod';
 import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
+  ACCOUNT_PENDING_DELETION,
+  pushSettings,
+  pushTestResponse,
+  type PushSettings,
+  type PushTestBody,
+  accountDeletionStatus,
+  legalStatusResponse,
+  aiLoginCancelResponse,
+  aiLoginResumeResponse,
+  aiLoginStartResponse,
+  aiLoginStatusResponse,
+  aiLoginSubmitResponse,
+  automationSetupResponse,
+  cardAutoResponse,
+  pauseResponse,
+  pauseState,
   canonicalHtu,
   challengeResponse,
+  decisionChallengesResponse,
   cancelSubagentResponse,
   chatAttachmentResponse,
   chatGrantListResponse,
@@ -20,6 +37,8 @@ import {
   deviceRequestResponse,
   deviceSelf as deviceSelfSchema,
   emptyResponse,
+  filePreviewResponse,
+  fileRecentResponse,
   hostOptionsResponse,
   lessonForgetSchema,
   lessonItemSchema,
@@ -33,24 +52,38 @@ import {
   tabLimitAnswerResponse,
   tabQuestionAutoAnswerCancelResponse,
   tabQuestionScreenResponse,
+  startSessionResponse,
+  tabActionResponse,
+  tabChatPage,
+  tabFileResponse,
+  tabScreenResponse,
+  tabsResponse,
   tokenResponse,
   transcriptionConfigResponse,
   transcriptionResponse,
+  type AccountDeletionBody,
   type TChallengeBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
   type TMobileBatchDecisionBody,
+  type TDecisionChallengesBody,
   type TMobileDecisionBody,
   type TMobileMessageBody,
+  type TAutomationSetup,
   type TProjectAi,
   type TSetHostBody,
+  type TStartSessionBody,
+  type TTabChatAction,
+  type TFilePreviewQuery,
   type TTabQuestionAnswerBody,
   type TTabSuggestionSendBody,
   type TTokenBody,
 } from './contract';
 import { buildProof } from './dpop';
+import { t } from '@/i18n';
 import { ApiError } from './errors';
 import { createChatSocket } from './socket';
+import { createTabSocket } from './tab-socket';
 import type { Transport } from './transport';
 import type { Auth, MobileApi } from './types';
 
@@ -81,6 +114,13 @@ export type CreateHttpMobileApiOptions = {
    * refused socket renews only then; a refusal with a fresh token is not a token problem and only
    * backs off (TER-93: the Origin refusal used to renew every 1–30 s). Defaults to always stale. */
   tokenStale?: () => boolean;
+  /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
+   * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
+  onAccountPendingDeletion?: () => void;
+  /** The language the app shows (`'pt-BR'` | `'en'` | `'es'`), sent as `Accept-Language` on every call and
+   * socket upgrade so the server answers its errors in it (i18n spec §2). Read per request: a
+   * change in Ajustes applies to the next call. */
+  language?: () => string;
 };
 
 type CallOptions = {
@@ -131,8 +171,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
 
   // `/ws/m/chat?v=1` (P§6.1). `canonicalHtu` drops the query, so the DPoP proof is signed over
   // the bare path regardless of what `wsUrl` appends to it.
+  const languageHeader = (): Record<string, string> => (o.language ? { 'Accept-Language': o.language() } : {});
   const wsUrl = (base: string) => `${base.replace(/^http/, 'ws')}/ws/m/chat?v=1`;
   const socketHeaders = async (a: Auth): Promise<Record<string, string>> => ({
+    ...languageHeader(),
     Authorization: `Bearer ${a.accessToken}`,
     DPoP: await proofFor('GET', '/ws/m/chat', a.accessToken),
   });
@@ -152,6 +194,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     return renewing;
   };
 
+  const pendingDeletion = (err: ApiError) => {
+    if (err.status === 403 && err.code === ACCOUNT_PENDING_DELETION) o.onAccountPendingDeletion?.();
+  };
+
   // `z.ZodType<T, z.ZodTypeDef, any>`, not the one-arg `z.ZodType<T>`: a schema with a `.default(...)`
   // field (e.g. `chatResponse.grants`) has an Input type stricter (optional) than its Output type T,
   // and pinning T's Input parameter to T too — what `z.ZodType<T>` does — makes inference pick up that
@@ -165,15 +211,15 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     try {
       json = text ? JSON.parse(text) : {};
     } catch {
-      throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+      throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     }
     const parsed = schema.safeParse(json);
-    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', 'Resposta inesperada do servidor');
+    if (!parsed.success) throw new ApiError(502, 'BAD_RESPONSE', t('Resposta inesperada do servidor'));
     return parsed.data;
   }
 
   async function call<T>(htm: string, path: string, schema: z.ZodType<T, z.ZodTypeDef, any>, opts: CallOptions = {}): Promise<T> {
-    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json' };
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader() };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
     if (opts.proof !== false) headers.DPoP = await proofFor(htm, path, opts.token ?? null, opts.chal);
@@ -189,6 +235,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     if (res.status >= 200 && res.status < 300) return decode(res.text, schema);
 
     const err = ApiError.fromBody(res.status, res.headers, res.text);
+    pendingDeletion(err);
     if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && opts.token && opts.retry !== false) {
       if (latestToken && latestToken !== opts.token) {
         // Someone else already renewed while this call was in flight; reuse that token instead
@@ -208,11 +255,12 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
    * query is not part of the proof, `canonicalHtu` drops it), the same single retry on a renewed
    * token. Only ever with a token: nothing is uploaded before enrolment. */
   async function uploadCall<T>(path: string, fileUri: string, mime: string, schema: z.ZodType<T, z.ZodTypeDef, any>, token: string, onProgress?: (fraction: number) => void, retry = true): Promise<T> {
-    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', Authorization: `Bearer ${token}`, DPoP: await proofFor('POST', path, token) };
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader(), Authorization: `Bearer ${token}`, DPoP: await proofFor('POST', path, token) };
     const res = await o.transport.upload(o.baseUrl + path, fileUri, mime, headers, onProgress);
     if (res.status >= 200 && res.status < 300) return decode(res.body, schema);
 
     const err = ApiError.fromBody(res.status, {}, res.body);
+    pendingDeletion(err);
     if (err.status === 401 && err.code === 'TOKEN_EXPIRED' && retry) {
       const fresh = latestToken && latestToken !== token ? latestToken : await renewOnce();
       if (fresh) {
@@ -244,6 +292,17 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     deviceSelf: (a: Auth) => call('GET', '/api/m/v1/devices/self', deviceSelfSchema, { token: a.accessToken }),
     revokeSelf: (a: Auth) => empty('POST', '/api/m/v1/devices/self/revoke', { token: a.accessToken }),
     setPushToken: (a: Auth, token: string) => empty('PUT', '/api/m/v1/push-token', { token: a.accessToken, body: { token } }),
+    pushTest: (a: Auth, body: PushTestBody) => call('POST', '/api/m/v1/push-test', pushTestResponse, { token: a.accessToken, body }),
+    pushSettings: (a: Auth) => call('GET', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken }),
+    setPushSettings: (a: Auth, body: PushSettings) => call('PUT', '/api/m/v1/push-settings', pushSettings, { token: a.accessToken, body }),
+
+    accountDeletion: (a: Auth) => call('GET', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
+    requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
+    cancelAccountDeletion: (a: Auth) => call('DELETE', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
+
+    legalStatus: (a: Auth) => call('GET', '/api/m/v1/legal', legalStatusResponse, { token: a.accessToken }),
+    acceptLegal: (a: Auth, versionIds: string[]) =>
+      call('POST', '/api/m/v1/legal/accept', legalStatusResponse, { token: a.accessToken, body: { version_ids: versionIds } }),
 
     chatProjects: (a: Auth) => call('GET', '/api/m/v1/chat/projects', chatProjectsResponse, { token: a.accessToken }),
     setProjectFavorite: (a: Auth, projectId: string, favorite: boolean) =>
@@ -257,6 +316,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
     decideMany: (a: Auth, body: TMobileBatchDecisionBody) => empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body }),
+    decisionChallenges: (a: Auth, body: TDecisionChallengesBody) => call('POST', '/api/m/v1/chat/actions/challenges', decisionChallengesResponse, { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
     // `kinds=all_standing` unconditionally: "Permissões do chat" always wants tab, project and standing
     // grants together (design spec 2026-09-26 §7, TER-386).
@@ -276,6 +336,26 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     getProjectAi: (a: Auth, projectId: string) => call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken }),
     saveProjectAi: (a: Auth, projectId: string, ai: TProjectAi) =>
       call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken, body: { ai } }),
+    getAutomationSetup: (a: Auth, projectId: string) =>
+      call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken }).then((r) => r.automation),
+    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }) =>
+      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken, body: { automation, ...proof } }).then((r) => r.automation),
+    getPauseState: (a: Auth) => call('GET', '/api/m/v1/automation/state', pauseState, { token: a.accessToken }),
+    pauseAutomation: (a: Auth, scope: string, interrupt = false) =>
+      call('POST', '/api/m/v1/automation/pause', pauseResponse, { token: a.accessToken, body: { scope, interrupt } }).then((r) => r.paused_at),
+    resumeAutomation: (a: Auth, scope: string) => empty('POST', '/api/m/v1/automation/resume', { token: a.accessToken, body: { scope } }),
+    setCardAuto: (a: Auth, taskId: string, auto: boolean) =>
+      call('PUT', `/api/m/v1/tasks/${encodeURIComponent(taskId)}/auto`, cardAutoResponse, { token: a.accessToken, body: { auto } }).then((r) => r.auto),
+    aiLoginStatus: (a: Auth, refresh = false) =>
+      call('GET', `/api/m/v1/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`, aiLoginStatusResponse, { token: a.accessToken }),
+    startAiLogin: (a: Auth, accountId: string) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login`, aiLoginStartResponse, { token: a.accessToken, body: {} }),
+    submitAiLogin: (a: Auth, accountId: string, loginId: string, code: string | null) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}/submit`, aiLoginSubmitResponse, { token: a.accessToken, body: { code } }),
+    cancelAiLogin: (a: Auth, accountId: string, loginId: string) =>
+      call('DELETE', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}`, aiLoginCancelResponse, { token: a.accessToken }).then(() => undefined),
+    resumeAiLoginTabs: (a: Auth, accountId: string, tabIds: string[]) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/resume`, aiLoginResumeResponse, { token: a.accessToken, body: { tab_ids: tabIds } }),
     cancelSubagent: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/subagents/${encodeURIComponent(id)}/cancel`, cancelSubagentResponse, { token: a.accessToken }).then((r) => r.subagent),
     // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof
@@ -283,11 +363,13 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     uploadAttachment: (a: Auth, file, projectId, onProgress) =>
       uploadCall(`/api/m/v1/chat/attachments?name=${encodeURIComponent(file.name)}${projectId ? `&project_id=${encodeURIComponent(projectId)}` : ''}`, file.uri, file.mime, chatAttachmentResponse, a.accessToken, onProgress).then((r) => r.attachment),
     deleteAttachment: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`, { token: a.accessToken }),
+    retryAttachment: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/attachments/${encodeURIComponent(id)}/retry`, chatAttachmentResponse, { token: a.accessToken }).then((r) => r.attachment),
     attachmentSource: async (a: Auth, id: string) => {
       const path = `/api/m/v1/chat/attachments/${encodeURIComponent(id)}`;
       return {
         uri: o.baseUrl + path,
-        headers: { 'X-Termhub-App': o.app, Authorization: `Bearer ${a.accessToken}`, DPoP: await proofFor('GET', path, a.accessToken) },
+        headers: { 'X-Termhub-App': o.app, ...languageHeader(), Authorization: `Bearer ${a.accessToken}`, DPoP: await proofFor('GET', path, a.accessToken) },
       };
     },
     transcriptionConfig: (a: Auth) => call('GET', '/api/m/v1/transcriptions/config', transcriptionConfigResponse, { token: a.accessToken }),
@@ -304,7 +386,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     },
     forgetChatDecision: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}`, { token: a.accessToken }),
     chatMemory: (a: Auth) => call('GET', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken }),
-    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
       call('PATCH', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken, body: typeof body === 'boolean' ? { enabled: body } : body }),
     chatNotes: (a: Auth, cursor) => {
       const params = new URLSearchParams();
@@ -331,6 +413,64 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     markRead: (a: Auth, id: string) => empty('POST', `/api/m/v1/notifications/${id}/read`, { token: a.accessToken }),
 
     progress: (a: Auth, scope: 'active' | 'all' = 'active') => call('GET', `/api/m/v1/progress?scope=${scope}`, progressResponse, { token: a.accessToken }),
+
+    filePreview: (a: Auth, q: TFilePreviewQuery) => {
+      const p = new URLSearchParams({ path: q.path });
+      if (q.tab_id) p.set('tab_id', q.tab_id);
+      if (q.project_id) p.set('project_id', q.project_id);
+      if (q.machine_id) p.set('machine_id', q.machine_id);
+      return call('GET', `/api/m/v1/file-preview?${p.toString()}`, filePreviewResponse, { token: a.accessToken });
+    },
+    fileRecent: (a: Auth, projectId: string) =>
+      call('GET', `/api/m/v1/file-recent?project_id=${encodeURIComponent(projectId)}`, fileRecentResponse, { token: a.accessToken }),
+    tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
+    startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
+    tabChat: (a: Auth, tabId: string, before?: string) =>
+      call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`, tabChatPage, { token: a.accessToken }),
+    sendTabMessage: (a: Auth, tabId: string, text: string) => empty('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/messages`, { token: a.accessToken, body: { text } }),
+    tabAction: (a: Auth, tabId: string, action: TTabChatAction) =>
+      call('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/actions`, tabActionResponse, { token: a.accessToken, body: { action } }),
+    // Always sent as octet-stream: the server saves the bytes under `name` and never reads the type, and a
+    // JSON file sent as `application/json` would be parsed as a request body instead of saved.
+    uploadTabFile: (a: Auth, tabId: string, fileUri: string, name: string, _mime: string) =>
+      uploadCall(`/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/files?name=${encodeURIComponent(name)}`, fileUri, 'application/octet-stream', tabFileResponse, a.accessToken),
+    tabScreen: (a: Auth, tabId: string, lines?: number) =>
+      call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/screen${lines ? `?lines=${lines}` : ''}`, tabScreenResponse, { token: a.accessToken }),
+
+    tabEvents: (auth, tabId, handlers) => {
+      // The same renewal rule as `events` below: a refused upgrade or a 1008 renews only a stale token.
+      const path = `/ws/m/tabs/${encodeURIComponent(tabId)}`;
+      let renewBeforeNext = false;
+      const refusedByServer = () => {
+        if (o.tokenStale?.() ?? true) renewBeforeNext = true;
+      };
+      const headers = async (): Promise<Record<string, string>> => {
+        let fresh: string | null = null;
+        if (renewBeforeNext) {
+          renewBeforeNext = false;
+          fresh = await renewOnce();
+          if (fresh) latestToken = fresh;
+        }
+        const token = fresh ?? auth().accessToken;
+        return { ...languageHeader(), Authorization: `Bearer ${token}`, DPoP: await proofFor('GET', path, token) };
+      };
+      const socket = createTabSocket({
+        transport: o.transport,
+        url: (after) => `${o.baseUrl.replace(/^http/, 'ws')}${path}?v=1${after ? `&after=${encodeURIComponent(after)}` : ''}`,
+        headers,
+        after: handlers.after,
+        onFrame: handlers.onFrame,
+        onRefused: refusedByServer,
+        onClose: (code, final) => {
+          if (code === 1008) refusedByServer();
+          handlers.onClose(code, final);
+        },
+        onServerTime: learnFrom,
+        backoff: o.backoff,
+        foreground: o.foreground,
+      });
+      return () => socket.close();
+    },
 
     events: (a, handlers) => {
       const current = typeof a === 'function' ? a : () => a;

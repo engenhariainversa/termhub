@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Upload } from '../db/repositories/uploads.js';
-import { HttpError, conflict, notFound } from '../lib/errors.js';
+import { HttpError, conflict, localizedOf, notFound } from '../lib/errors.js';
 import { assertUploadName, deletePasteFile, listPasteDir, type DiskFile } from '../terminal/uploads.js';
+import { requestLocale, t, tk } from '../i18n/index.js';
 
 const fileParams = z.object({ machineId: z.string().min(1).max(64), name: z.string().min(1).max(160) });
 
@@ -43,7 +44,7 @@ export async function uploadRoutes(app: FastifyInstance, repos: Repositories) {
         const listing = await listPasteDir(m);
         const known = new Map((byMachine.get(m.id) ?? []).map((r) => [r.name, r]));
         if (!listing.ok) {
-          statuses.push({ id: m.id, name: m.name, owner_id: m.owner_id, owner_name: m.owner_name, ok: false, error: listing.error });
+          statuses.push({ id: m.id, name: m.name, owner_id: m.owner_id, owner_name: m.owner_name, ok: false, error: t(requestLocale(request), listing.error) });
           for (const r of known.values()) files.push({ machine_id: m.id, name: r.name, bytes: r.bytes, modified_at: r.created_at, on_disk: false, upload: view(r) });
           return;
         }
@@ -71,7 +72,7 @@ export async function uploadRoutes(app: FastifyInstance, repos: Repositories) {
     try {
       existed = await deletePasteFile(machine, name);
     } catch (err) {
-      throw new HttpError(502, err instanceof Error ? err.message : 'Falha ao remover o arquivo');
+      throw new HttpError(502, err instanceof Error ? localizedOf(err) : tk('Falha ao remover o arquivo'));
     }
     await repos.uploads.deleteByName(machineId, name);
     request.log.info({ machineId, name, existed }, 'upload deleted');

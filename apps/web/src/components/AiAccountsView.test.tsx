@@ -2,13 +2,14 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AiAccount, Machine } from '../lib/types';
+import type { AiAccount, AiAccountUsage, Machine } from '../lib/types';
 
 const listMock = vi.fn();
 const usageMock = vi.fn();
 const usageOfMock = vi.fn();
 const createMock = vi.fn();
 const updateMock = vi.fn();
+const loginStatusMock = vi.fn();
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
@@ -20,6 +21,7 @@ vi.mock('../lib/api', () => {
         usageOf: (...a: unknown[]) => usageOfMock(...a),
         create: (...a: unknown[]) => createMock(...a),
         update: (...a: unknown[]) => updateMock(...a),
+        loginStatus: (...a: unknown[]) => loginStatusMock(...a),
       },
     },
   };
@@ -29,10 +31,13 @@ const machines = [
   { id: 'm2', name: 'jarvis', subtitle: 'servidor de casa' },
   { id: 'm3', name: 'hulk', subtitle: null },
 ] as Machine[];
-vi.mock('../lib/data', () => ({ useData: () => ({ machines, statuses: { m1: 'online', m2: 'offline' } }) }));
+const projects = [{ id: 'p9', name: 'DR Horton' }, { id: 'p1', name: 'termhub' }];
+vi.mock('../lib/data', () => ({ useData: () => ({ machines, projects, statuses: { m1: 'online', m2: 'offline' } }) }));
 vi.mock('./AutoSwapSettings', () => ({ AutoSwapSettings: () => null }));
+vi.mock('./AiUsageQueryCard', () => ({ AiUsageQuerySettings: () => null }));
 
 import { AiAccountsView } from './AiAccountsView';
+import { resetAiLoginStatusForTests } from '../lib/ai-login-status';
 
 const account = (over: Partial<AiAccount> & { id: string }): AiAccount => ({ provider: 'claude', label: over.id, machine_id: 'm1', config_dir: null, created_at: '', ...over });
 
@@ -40,6 +45,7 @@ beforeEach(() => {
   localStorage.clear();
   listMock.mockResolvedValue({ accounts: [] });
   usageMock.mockResolvedValue({ usage: [] });
+  loginStatusMock.mockResolvedValue({ accounts: [] });
   usageOfMock.mockResolvedValue({ usage: { account_id: 'x', ok: false, windows: [], error: null, hint: null, plan: null, fetched_at: '', stale: false } });
   createMock.mockImplementation(async (input: Partial<AiAccount>) => ({ account: account({ id: 'new', ...input }) }));
   updateMock.mockImplementation(async (id: string, input: Partial<AiAccount>) => ({ account: account({ id, ...input }) }));
@@ -48,6 +54,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  resetAiLoginStatusForTests();
 });
 
 async function openNew() {
@@ -156,7 +163,7 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     await screen.findAllByRole('listitem');
     fireEvent.click(within(screen.getByRole('region', { name: 'hulk' })).getByRole('button', { name: 'Adicionar conta em hulk' }));
     const form = within(screen.getByRole('dialog'));
-    expect(form.getByRole('combobox')).toHaveValue('m3');
+    expect(form.getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
     fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
     await waitFor(() => expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ machine_id: 'm3' })));
   });
@@ -165,6 +172,99 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     listMock.mockResolvedValue({ accounts: [account({ id: 'b', machine_id: 'm3' })] });
     render(<AiAccountsView />);
     fireEvent.click(await within(await screen.findByRole('region', { name: 'hulk' })).findByTitle('Editar'));
-    expect(within(screen.getByRole('dialog')).getByRole('combobox')).toHaveValue('m3');
+    expect(within(screen.getByRole('dialog')).getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
+  });
+});
+
+describe('AiAccountsView: accounts exclusive to a project (TER-990)', () => {
+  it('shows the badge on the card', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'drh', exclusive_project: { id: 'p9', name: 'DR Horton' } }), account({ id: 'free' })] });
+    render(<AiAccountsView />);
+    const [drh, free] = await screen.findAllByRole('listitem');
+    expect(within(drh).getByText('Exclusiva: DR Horton')).toBeInTheDocument();
+    expect(free).not.toHaveTextContent('Exclusiva');
+  });
+
+  it('marks an account exclusive from its form, and only sends the field when it changed', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'drh' })] });
+    render(<AiAccountsView />);
+    fireEvent.click(await screen.findByTitle('Editar'));
+    let form = within(screen.getByRole('dialog'));
+    expect(form.getByLabelText('Exclusiva de um projeto')).toHaveValue('');
+    fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null }));
+    fireEvent.click(await screen.findByTitle('Editar'));
+    form = within(screen.getByRole('dialog'));
+    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenLastCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null, exclusive_project_id: 'p9' }));
+  });
+
+  it('a new account is created free, then marked exclusive', async () => {
+    const form = await openNew();
+    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('new', { exclusive_project_id: 'p9' }));
+    expect(createMock).toHaveBeenCalledWith({ provider: 'claude', label: 'Claude', machine_id: 'm1', config_dir: null });
+  });
+});
+
+describe('AiAccountsView: usage that is off or needs a newer agent (TER-735)', () => {
+  const reading = (account_id: string, over: Partial<AiAccountUsage>): AiAccountUsage => ({
+    account_id, ok: false, windows: [], error: null, hint: null, plan: null, fetched_at: new Date().toISOString(), ...over,
+  });
+
+  it('shows a neutral note instead of the error box, pointing to the machine when the query is off', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'off' }), account({ id: 'old', machine_id: 'm3' }), account({ id: 'bad', machine_id: 'm2' })] });
+    usageMock.mockResolvedValue({
+      usage: [
+        reading('off', { reason: 'disabled', error: 'disabled' }),
+        reading('old', { reason: 'agent_outdated', error: 'outdated' }),
+        reading('bad', { error: 'Token expirado' }),
+      ],
+    });
+    render(<AiAccountsView />);
+    const off = await screen.findByText('Consulta de uso desligada nesta máquina');
+    expect(screen.getByText('Ligue em Máquinas › mac')).toBeInTheDocument();
+    expect(off.closest('div')).not.toHaveClass('text-danger');
+    expect(screen.getByText('Atualize o agente desta máquina para ver o uso')).toBeInTheDocument();
+    expect(screen.queryByText('disabled')).not.toBeInTheDocument();
+    expect(screen.queryByText('outdated')).not.toBeInTheDocument();
+    expect(screen.getByText('Token expirado')).toHaveClass('text-danger');
+  });
+});
+
+describe('AiAccountsView: expired CLI login (TER-1047)', () => {
+  const row = (account_id: string, state: 'ok' | 'login_required' | 'unknown', supported = true) => ({
+    account_id,
+    label: account_id,
+    provider: 'claude' as const,
+    machine_id: 'm1',
+    machine_name: 'mac',
+    state,
+    checked_at: null,
+    supported,
+  });
+
+  it('marks the account whose login expired and offers to log in again', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'home' }), account({ id: 'work', config_dir: '~/.claude-work' })] });
+    loginStatusMock.mockResolvedValue({ accounts: [row('home', 'ok'), row('work', 'login_required')] });
+    render(<AiAccountsView />);
+    await waitFor(() => expect(screen.getByText('Login necessário')).toBeInTheDocument());
+    const [home, work] = screen.getAllByRole('listitem');
+    expect(within(work!).getByText('Login necessário')).toBeInTheDocument();
+    expect(within(work!).getByRole('button', { name: 'Refazer login' })).toBeInTheDocument();
+    expect(within(home!).queryByText('Login necessário')).not.toBeInTheDocument();
+    // a logged-in account keeps a small way to log in again
+    expect(within(home!).getByRole('button', { name: 'Refazer login' })).toBeInTheDocument();
+  });
+
+  it('offers nothing where the login cannot be redone from here', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'home' })] });
+    loginStatusMock.mockResolvedValue({ accounts: [row('home', 'unknown', false)] });
+    render(<AiAccountsView />);
+    await screen.findAllByRole('listitem');
+    await waitFor(() => expect(loginStatusMock).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Refazer login' })).not.toBeInTheDocument();
   });
 });

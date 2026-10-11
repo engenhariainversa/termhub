@@ -2,17 +2,22 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { STATUS_DOT, STATUS_LABEL } from '../lib/machine-status';
-import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
+import { KeyRound } from 'lucide-react';
+import { useAiLoginStatus } from '../lib/ai-login-status';
+import { AI_PROVIDER_LABEL, type AiAccount, type AiAccountUsage, type AiLoginStatusRow, type AiProvider, type AiUsageWindow, type Machine } from '../lib/types';
+import { AiLoginDialog, type AiLoginTarget } from './AiLoginDialog';
 import { AutoSwapSettings } from './AutoSwapSettings';
+import { AiUsageQuerySettings } from './AiUsageQueryCard';
 import { ConfirmDialog, Modal } from './Modal';
+import { i18n, tk, Trans, useTranslation } from '../i18n';
 
 const PROVIDERS: AiProvider[] = ['claude', 'chatgpt', 'gemini', 'antigravity'];
 
 const PROVIDER_HINT: Record<AiProvider, string> = {
-  claude: 'Lê o login do Claude Code na máquina (~/.claude). Para uma segunda conta (ex.: a da empresa), faça login com CLAUDE_CONFIG_DIR=~/.claude-work claude e escolha "Outro diretório de config" abaixo.',
-  chatgpt: 'Lê o login do Codex CLI na máquina (~/.codex). Entre com "Sign in with ChatGPT" — login por API key não tem limite de plano.',
-  gemini: 'Lê o login do Gemini CLI na máquina (~/.gemini). Entre com a conta Google — login por API key não tem cota de plano.',
-  antigravity: 'Lê o login do Antigravity CLI na máquina (~/.gemini/antigravity-cli/antigravity-oauth-token; o diretório de config é ~/.gemini). Rode `agy` e entre com a conta Google do plano AI Pro/Ultra — login por API key não tem cota de plano.',
+  claude: tk('Lê o login do Claude Code na máquina (~/.claude). Para uma segunda conta (ex.: a da empresa), faça login com CLAUDE_CONFIG_DIR=~/.claude-work claude e escolha "Outro diretório de config" abaixo.'),
+  chatgpt: tk('Lê o login do Codex CLI na máquina (~/.codex). Entre com "Sign in with ChatGPT" — login por API key não tem limite de plano.'),
+  gemini: tk('Lê o login do Gemini CLI na máquina (~/.gemini). Entre com a conta Google — login por API key não tem cota de plano.'),
+  antigravity: tk('Lê o login do Antigravity CLI na máquina (~/.gemini/antigravity-cli/antigravity-oauth-token; o diretório de config é ~/.gemini). Rode `agy` e entre com a conta Google do plano AI Pro/Ultra — login por API key não tem cota de plano.'),
 };
 
 const PROVIDER_STYLE: Record<AiProvider, string> = {
@@ -33,20 +38,20 @@ const OTHER_DIR_EXAMPLE: Record<AiProvider, string> = {
 function countdown(iso: string | null, now: number): string | null {
   if (!iso) return null;
   const ms = new Date(iso).getTime() - now;
-  if (ms <= 0) return 'agora';
+  if (ms <= 0) return i18n.t('agora');
   const m = Math.ceil(ms / 60000);
-  if (m < 60) return `${m} min`;
+  if (m < 60) return i18n.t('{{m}} min', { m });
   const h = Math.floor(m / 60);
-  if (h < 48) return `${h} h ${m % 60 ? `${m % 60} min` : ''}`.trim();
+  if (h < 48) return m % 60 ? i18n.t('{{h}} h {{m}} min', { h, m: m % 60 }) : i18n.t('{{h}} h', { h });
   const d = Math.floor(h / 24);
-  return `${d} d ${h % 24} h`;
+  return i18n.t('{{d}} d {{h}} h', { d, h: h % 24 });
 }
 
 function relative(iso: string, now: number): string {
   const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (s < 5) return 'agora';
-  if (s < 60) return `há ${s} s`;
-  return `há ${Math.round(s / 60)} min`;
+  if (s < 5) return i18n.t('agora');
+  if (s < 60) return i18n.t('há {{n}} s', { n: s });
+  return i18n.t('há {{n}} min', { n: Math.round(s / 60) });
 }
 
 function barColor(pct: number): string {
@@ -56,6 +61,7 @@ function barColor(pct: number): string {
 }
 
 function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
+  const { t } = useTranslation();
   const pct = Math.round(w.utilization);
   const reset = countdown(w.resets_at, now);
   return (
@@ -64,7 +70,7 @@ function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
         <span className="text-fg-muted">{w.label}</span>
         <span className="tabular-nums">
           <span className={pct >= 90 ? 'text-danger' : pct >= 70 ? 'text-warn' : 'text-fg'}>{pct}%</span>
-          {reset && <span className="text-fg-dim"> · reseta em {reset}</span>}
+          {reset && <span className="text-fg-dim">{t(' · reseta em {{time}}', { time: reset })}</span>}
         </span>
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-bg-4">
@@ -74,33 +80,60 @@ function WindowBar({ w, now }: { w: AiUsageWindow; now: number }) {
   );
 }
 
+/** TER-990: the account runs only in this project. */
+export function ExclusiveBadge({ name }: { name: string }) {
+  const { t } = useTranslation();
+  return (
+    <span className="shrink-0 truncate rounded bg-warn/15 px-1.5 py-0.5 text-[10px] font-medium text-warn" title={t('Só roda no projeto {{project}}; nenhum outro projeto pode usá-la', { project: name })}>
+      {t('Exclusiva: {{project}}', { project: name })}
+    </span>
+  );
+}
+
 function AccountCard({
   account,
+  machineName,
   usage,
+  login,
   now,
   onRefresh,
+  onRelogin,
   onEdit,
   onDelete,
 }: {
   account: AiAccount;
+  /** the account's machine, for the "turn it on in Máquinas" pointer; null when the machine is out of view */
+  machineName: string | null;
   usage: AiAccountUsage | undefined;
+  /** TER-1047: whether its CLI is still logged in; undefined until the first read */
+  login: AiLoginStatusRow | undefined;
   now: number;
   onRefresh: () => void;
+  onRelogin: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const { t } = useTranslation();
   const [refreshing, setRefreshing] = useState(false);
   const worst = usage?.ok ? Math.max(...usage.windows.map((w) => w.utilization)) : null;
+  const loginRequired = login?.state === 'login_required';
   return (
-    <li className={`flex flex-col rounded-lg border bg-bg-2 p-4 ${worst !== null && worst >= 90 ? 'border-danger/50' : 'border-line'}`}>
+    <li className={`flex flex-col rounded-lg border bg-bg-2 p-4 ${loginRequired || (worst !== null && worst >= 90) ? 'border-danger/50' : 'border-line'}`}>
       <div className="flex items-center gap-2">
         <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${PROVIDER_STYLE[account.provider]}`}>{AI_PROVIDER_LABEL[account.provider]}</span>
         <span className="truncate font-medium">{account.label}</span>
+        {account.exclusive_project && <ExclusiveBadge name={account.exclusive_project.name} />}
         {usage?.plan && <span className="rounded bg-bg-4 px-1.5 text-[10px] uppercase tracking-wide text-fg-muted">{usage.plan}</span>}
+        {loginRequired && <span className="shrink-0 rounded bg-danger/15 px-1.5 py-0.5 text-[10px] font-medium text-danger">{t('Login necessário')}</span>}
         <span className="ml-auto flex shrink-0 items-center gap-0.5">
+          {login?.supported && !loginRequired && (
+            <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Refazer login')} aria-label={t('Refazer login')} onClick={onRelogin}>
+              <KeyRound size={12} aria-hidden="true" />
+            </button>
+          )}
           <button
             className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-50"
-            title="Atualizar agora"
+            title={t('Atualizar agora')}
             disabled={refreshing}
             onClick={() => {
               setRefreshing(true);
@@ -109,21 +142,38 @@ function AccountCard({
           >
             {refreshing ? '…' : '↻'}
           </button>
-          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title="Editar" onClick={onEdit}>
+          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Editar')} onClick={onEdit}>
             ✎
           </button>
-          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger" title="Remover" onClick={onDelete}>
+          <button className="rounded px-1 text-xs text-fg-dim hover:bg-bg-3 hover:text-danger" title={t('Remover')} onClick={onDelete}>
             ✕
           </button>
         </span>
       </div>
       <div className="mt-0.5 truncate font-mono text-[11px] text-fg-dim" title={account.config_dir ?? undefined}>
-        {account.config_dir ?? 'login padrão'}
+        {account.config_dir ?? t('login padrão')}
       </div>
 
+      {loginRequired && (
+        <div className="mt-3 flex items-center gap-2 rounded border border-danger/40 bg-danger/10 p-2 text-xs">
+          <p className="flex-1 text-danger">{t('O login do CLI expirou nesta máquina.')}</p>
+          <button type="button" className="btn-danger shrink-0 px-2 py-1 text-xs" onClick={onRelogin}>
+            {t('Refazer login')}
+          </button>
+        </div>
+      )}
+
       <div className="mt-3 flex-1">
-        {!usage && <p className="text-xs text-fg-dim">Consultando…</p>}
-        {usage && !usage.ok && (
+        {!usage && <p className="text-xs text-fg-dim">{t('Consultando…')}</p>}
+        {usage && !usage.ok && usage.reason && (
+          <div className="rounded border border-line bg-bg p-2 text-xs text-fg-muted">
+            <p>{usage.reason === 'disabled' ? t('Consulta de uso desligada nesta máquina') : t('Atualize o agente desta máquina para ver o uso')}</p>
+            {usage.reason === 'disabled' && machineName && (
+              <p className="mt-1 text-fg-dim">{t('Ligue em Máquinas › {{machine}}', { machine: machineName })}</p>
+            )}
+          </div>
+        )}
+        {usage && !usage.ok && !usage.reason && (
           <div className="rounded border border-danger/40 bg-danger/10 p-2 text-xs">
             <p className="text-danger">{usage.error}</p>
             {usage.hint && <p className="mt-1 break-all text-fg-muted">{usage.hint}</p>}
@@ -140,8 +190,8 @@ function AccountCard({
 
       {usage && (
         <div className="mt-3 border-t border-line pt-2 text-[11px] text-fg-dim">
-          atualizado {relative(usage.fetched_at, now)}
-          {usage.stale && <span className="text-warn"> · limite de consultas do provedor; mostrando a última leitura</span>}
+          {t('atualizado {{when}}', { when: relative(usage.fetched_at, now) })}
+          {usage.stale && <span className="text-warn">{t(' · limite de consultas do provedor; mostrando a última leitura')}</span>}
         </div>
       )}
     </li>
@@ -160,7 +210,8 @@ function AccountForm({
   onClose: () => void;
   onSaved: (a: AiAccount) => void;
 }) {
-  const { machines } = useData();
+  const { t } = useTranslation();
+  const { machines, projects } = useData();
   const [provider, setProvider] = useState<AiProvider>(account?.provider ?? 'claude');
   const [label, setLabel] = useState(account?.label ?? '');
   const [machineId, setMachineId] = useState(account?.machine_id ?? initialMachineId ?? machines[0]?.id ?? '');
@@ -168,6 +219,8 @@ function AccountForm({
   // another one kept in its own config dir.
   const [custom, setCustom] = useState(!!account?.config_dir);
   const [configDir, setConfigDir] = useState(account?.config_dir ?? '');
+  // TER-990: the only project the account may run in ('' = any project)
+  const [exclusive, setExclusive] = useState(account?.exclusive_project?.id ?? '');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -177,20 +230,24 @@ function AccountForm({
     setError(null);
     try {
       const input = { label: label || AI_PROVIDER_LABEL[provider], machine_id: machineId, config_dir: custom ? configDir.trim() : null };
-      const r = account ? await api.aiAccounts.update(account.id, input) : await api.aiAccounts.create({ provider, ...input });
+      const exclusiveId = exclusive || null;
+      const changed = exclusiveId !== (account?.exclusive_project?.id ?? null);
+      let r = account ? await api.aiAccounts.update(account.id, { ...input, ...(changed ? { exclusive_project_id: exclusiveId } : {}) }) : await api.aiAccounts.create({ provider, ...input });
+      // an account is created free; its exclusivity is a change of its own (audited as one)
+      if (!account && exclusiveId) r = await api.aiAccounts.update(r.account.id, { exclusive_project_id: exclusiveId });
       onSaved(r.account);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao salvar');
+      setError(err instanceof ApiError ? err.message : t('Erro ao salvar'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Modal title={account ? 'Editar conta de IA' : 'Nova conta de IA'} open onClose={onClose}>
+    <Modal title={account ? t('Editar conta de IA') : t('Nova conta de IA')} open onClose={onClose}>
       <form onSubmit={submit} className="space-y-3">
         <div>
-          <label className="label">Provedor</label>
+          <label className="label">{t('Provedor')}</label>
           <div className="flex gap-1 rounded-md border border-line bg-bg p-1">
             {PROVIDERS.map((p) => (
               <button
@@ -204,15 +261,17 @@ function AccountForm({
               </button>
             ))}
           </div>
-          <p className="mt-1 text-xs text-fg-dim">{PROVIDER_HINT[provider]}</p>
+          <p className="mt-1 text-xs text-fg-dim">{t(PROVIDER_HINT[provider])}</p>
         </div>
         <div>
-          <label className="label">Nome</label>
-          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`ex.: ${AI_PROVIDER_LABEL[provider]} pessoal`} autoFocus />
+          <label className="label">{t('Nome')}</label>
+          <input className="input" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('ex.: {{provider}} pessoal', { provider: AI_PROVIDER_LABEL[provider] })} autoFocus />
         </div>
         <div>
-          <label className="label">Máquina onde o CLI está logado</label>
-          <select className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
+          <label className="label" htmlFor="ai-account-machine">
+            {t('Máquina onde o CLI está logado')}
+          </label>
+          <select id="ai-account-machine" className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.name}
@@ -221,38 +280,53 @@ function AccountForm({
           </select>
         </div>
         <fieldset>
-          <legend className="label">Login</legend>
+          <legend className="label">{t('Login')}</legend>
           <label className="flex items-start gap-2 text-sm">
             <input type="radio" name="ai-account-login" className="mt-1" checked={!custom} onChange={() => setCustom(false)} />
             <span>
-              Conta padrão da máquina
-              <span className="block text-xs text-fg-dim">O login que o CLI usa quando nenhum diretório de config é definido.</span>
+              {t('Conta padrão da máquina')}
+              <span className="block text-xs text-fg-dim">{t('O login que o CLI usa quando nenhum diretório de config é definido.')}</span>
             </span>
           </label>
           <label className="mt-2 flex items-start gap-2 text-sm">
             <input type="radio" name="ai-account-login" className="mt-1" checked={custom} onChange={() => setCustom(true)} />
             <span>
-              Outro diretório de config
-              <span className="block text-xs text-fg-dim">Uma segunda conta do mesmo CLI, logada em um diretório próprio.</span>
+              {t('Outro diretório de config')}
+              <span className="block text-xs text-fg-dim">{t('Uma segunda conta do mesmo CLI, logada em um diretório próprio.')}</span>
             </span>
           </label>
           {custom && (
             <input
               className="input mt-2 font-mono"
-              aria-label="Diretório de config"
+              aria-label={t('Diretório de config')}
               value={configDir}
               onChange={(e) => setConfigDir(e.target.value)}
               placeholder={OTHER_DIR_EXAMPLE[provider]}
             />
           )}
         </fieldset>
+        <div>
+          <label className="label" htmlFor="ai-account-exclusive">
+            {t('Exclusiva de um projeto')}
+          </label>
+          <select id="ai-account-exclusive" className="input" value={exclusive} onChange={(e) => setExclusive(e.target.value)}>
+            <option value="">{t('Não: qualquer projeto pode usar')}</option>
+            {account?.exclusive_project && !projects.some((p) => p.id === account.exclusive_project!.id) && <option value={account.exclusive_project.id}>{account.exclusive_project.name}</option>}
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-fg-dim">{t('Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.')}</p>
+        </div>
         {error && <p className="text-sm text-danger">{error}</p>}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn-ghost" onClick={onClose}>
-            Cancelar
+            {t('Cancelar')}
           </button>
           <button type="submit" className="btn-primary" disabled={busy || !machineId || (custom && !configDir.trim())}>
-            {account ? 'Salvar' : 'Adicionar'}
+            {account ? t('Salvar') : t('Adicionar')}
           </button>
         </div>
       </form>
@@ -275,7 +349,6 @@ export function groupAccountsByMachine(machines: Machine[], accounts: AiAccount[
 }
 
 const OPEN_KEY = 'termhub:ai-accounts-open';
-const UNKNOWN_MACHINE = 'Máquina desconhecida';
 
 function readOpen(): Record<string, boolean> {
   try {
@@ -286,8 +359,9 @@ function readOpen(): Record<string, boolean> {
 }
 
 function MachineSection({ machine, count, open, onToggle, onAdd, children }: { machine: Machine | null; count: number; open: boolean; onToggle: () => void; onAdd?: () => void; children: ReactNode }) {
+  const { t } = useTranslation();
   const { statuses } = useData();
-  const name = machine?.name ?? UNKNOWN_MACHINE;
+  const name = machine?.name ?? t('Máquina desconhecida');
   const status = machine ? (statuses[machine.id] ?? 'checking') : null;
   return (
     <section aria-label={name} className="rounded-lg border border-line bg-bg-2">
@@ -296,14 +370,14 @@ function MachineSection({ machine, count, open, onToggle, onAdd, children }: { m
           <span className={`text-[10px] text-fg-dim transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden>
             ▶
           </span>
-          {status && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} title={STATUS_LABEL[status]} />}
+          {status && <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status]}`} title={t(STATUS_LABEL[status])} />}
           <span className="truncate font-medium">{name}</span>
           {machine?.subtitle && <span className="truncate text-xs text-fg-muted">{machine.subtitle}</span>}
-          <span className="text-xs text-fg-dim">{count === 1 ? '1 conta' : `${count} contas`}</span>
+          <span className="text-xs text-fg-dim">{t('{{count}} contas', { count })}</span>
         </button>
         {onAdd && (
-          <button type="button" className="btn-ghost shrink-0 text-xs" aria-label={`Adicionar conta em ${name}`} title={`Adicionar conta em ${name}`} onClick={onAdd}>
-            + conta
+          <button type="button" className="btn-ghost shrink-0 text-xs" aria-label={t('Adicionar conta em {{name}}', { name })} title={t('Adicionar conta em {{name}}', { name })} onClick={onAdd}>
+            {t('+ conta')}
           </button>
         )}
       </div>
@@ -316,6 +390,7 @@ function MachineSection({ machine, count, open, onToggle, onAdd, children }: { m
 const POLL_MS = 5 * 60_000;
 
 export function AiAccountsView() {
+  const { t } = useTranslation();
   const { machines } = useData();
   const [accounts, setAccounts] = useState<AiAccount[] | null>(null);
   const [usage, setUsage] = useState<Record<string, AiAccountUsage>>({});
@@ -324,13 +399,16 @@ export function AiAccountsView() {
   const [deleting, setDeleting] = useState<AiAccount | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const { accounts: loginRows } = useAiLoginStatus();
+  const loginOf = useMemo(() => new Map((loginRows ?? []).map((r) => [r.account_id, r])), [loginRows]);
+  const [relogin, setRelogin] = useState<AiLoginTarget | null>(null);
 
   const loadUsage = useCallback(async (refresh = false) => {
     try {
       const r = await api.aiAccounts.usage(refresh);
       setUsage(Object.fromEntries(r.usage.map((u) => [u.account_id, u])));
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao consultar os limites');
+      setError(err instanceof ApiError ? err.message : t('Erro ao consultar os limites'));
     }
   }, []);
 
@@ -340,7 +418,7 @@ export function AiAccountsView() {
       setAccounts(r.accounts);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao carregar as contas');
+      setError(err instanceof ApiError ? err.message : t('Erro ao carregar as contas'));
     }
   }, []);
 
@@ -382,22 +460,22 @@ export function AiAccountsView() {
     <div>
       <div className="mb-5 flex items-end gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Contas de IA</h2>
-          <p className="text-sm text-fg-muted">Limites de uso das suas assinaturas, lidos do login dos CLIs nas máquinas. Atualiza a cada minuto.</p>
+          <h2 className="text-lg font-semibold">{t('Contas de IA')}</h2>
+          <p className="text-sm text-fg-muted">{t('Limites de uso das suas assinaturas, lidos do login dos CLIs nas máquinas. Atualiza a cada minuto.')}</p>
         </div>
         <span className="ml-auto flex gap-2">
-          <button className="btn-ghost text-xs" onClick={() => void loadUsage(true)} title="Consultar todas agora">
-            ↻ atualizar
+          <button className="btn-ghost text-xs" onClick={() => void loadUsage(true)} title={t('Consultar todas agora')}>
+            {t('↻ atualizar')}
           </button>
           <button className="btn-primary text-xs" onClick={() => setForm({ open: true, account: null })}>
-            + conta
+            {t('+ conta')}
           </button>
         </span>
       </div>
 
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
       {accounts && accounts.length === 0 && (
-        <p className="text-sm text-fg-dim">Nenhuma conta cadastrada. Adicione uma conta apontando para a máquina onde o Claude Code, Codex, Gemini CLI ou Antigravity CLI está logado.</p>
+        <p className="text-sm text-fg-dim">{t('Nenhuma conta cadastrada. Adicione uma conta apontando para a máquina onde o Claude Code, Codex, Gemini CLI ou Antigravity CLI está logado.')}</p>
       )}
 
       <div className="space-y-3">
@@ -417,9 +495,14 @@ export function AiAccountsView() {
                 <AccountCard
                   key={a.id}
                   account={a}
+                  machineName={m?.name ?? null}
                   usage={usage[a.id]}
+                  login={loginOf.get(a.id)}
                   now={now}
                   onRefresh={() => refreshOne(a.id)}
+                  onRelogin={() =>
+                    setRelogin({ account_id: a.id, label: a.label, provider: a.provider, machine_name: m?.name ?? null, supported: loginOf.get(a.id)?.supported ?? false })
+                  }
                   onEdit={() => setForm({ open: true, account: a })}
                   onDelete={() => setDeleting(a)}
                 />
@@ -431,6 +514,7 @@ export function AiAccountsView() {
       </div>
 
       {accounts && <AutoSwapSettings machines={machines} accounts={accounts} />}
+      {accounts && <AiUsageQuerySettings machines={machines} accounts={accounts} />}
 
       {form.open && (
         <AccountForm
@@ -448,15 +532,18 @@ export function AiAccountsView() {
           }}
         />
       )}
+      {relogin && <AiLoginDialog account={relogin} onClose={() => setRelogin(null)} onLoggedIn={() => void refreshOne(relogin.account_id)} />}
       <ConfirmDialog
         open={!!deleting}
-        title="Remover conta"
+        title={t('Remover conta')}
         message={
-          <>
-            Remover <strong>{deleting?.label}</strong> da lista? O login na máquina não é alterado.
-          </>
+          <Trans
+            i18nKey="Remover <0>{{label}}</0> da lista? O login na máquina não é alterado."
+            values={{ label: deleting?.label ?? '' }}
+            components={[<strong key="l" />]}
+          />
         }
-        confirmLabel="Remover"
+        confirmLabel={t('Remover')}
         danger
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
@@ -465,7 +552,7 @@ export function AiAccountsView() {
             await api.aiAccounts.remove(deleting.id);
             setAccounts((l) => (l ?? []).filter((x) => x.id !== deleting.id));
           } catch (err) {
-            setError(err instanceof ApiError ? err.message : 'Erro ao remover');
+            setError(err instanceof ApiError ? err.message : t('Erro ao remover'));
           }
           setDeleting(null);
         }}

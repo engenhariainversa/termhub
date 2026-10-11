@@ -672,6 +672,7 @@ describe('answerTabQuestionTool', () => {
     expect(id).toBe('q1');
     expect(suggestion.items).toEqual([{ question_index: 0, decision_id: decisionId, similarity: 0, selected: [0], by: 'concierge', reason: 'Você sempre usa worktree', sources, source }]);
     expect(publishTabQuestions).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(publishTabQuestions).mock.calls[0]![3]).toEqual({ update: true });
   };
   const d1Source = { question: 'Usar git worktree para isolar o trabalho?', project_name: 'termhub', answered_at: '2026-09-24T10:00:00.000Z' };
 

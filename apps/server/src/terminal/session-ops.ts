@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { type TmuxKey } from '@termhub/agent-protocol';
 import { buildPaneForegroundScript, buildScrollScript, parsePaneForeground, type PaneForeground } from '@termhub/machine-ops';
-import { agentRpc, requireAgentVersion } from '../agent/errors.js';
+import { agentRpc, requireAgentVersion, requireTranscriptCapable } from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { REMOTE_PATH_PREFIX, assertSessionName, runOnMachine, shellQuote } from './machine-exec.js';
+import { saveFileOnMachine } from './paste-file.js';
+import { tk } from '../i18n/index.js';
 
 /** The agent release that answers tmux.ensure / tmux.sendText / tmux.sendKey (spec §4.3). */
 export const TERMINAL_RPC_MIN_AGENT_VERSION = '0.2.0';
@@ -33,7 +35,7 @@ const TIMEOUT_MS = 10_000;
 async function shell(machine: Machine, script: string): Promise<string> {
   const r = await runOnMachine(machine, { file: 'sh', args: ['-c', script] }, `${REMOTE_PATH_PREFIX}${script}`, TIMEOUT_MS);
   if (r.timedOut) throw new HttpError(504, 'A máquina não respondeu', 'MACHINE_TIMEOUT');
-  if (r.code !== 0) throw new HttpError(502, r.stderr.trim().split('\n')[0] || 'Falha ao falar com o tmux da máquina', 'MACHINE_FAILED');
+  if (r.code !== 0) throw new HttpError(502, r.stderr.trim().split('\n')[0] || tk('Falha ao falar com o tmux da máquina'), 'MACHINE_FAILED');
   return r.stdout;
 }
 
@@ -92,11 +94,32 @@ export async function sendTextToSession(machine: Machine, session: string, text:
   await shell(machine, parts.join(' && '));
 }
 
+/**
+ * The longest shell line typed into a tab as keystrokes, in bytes (TER-987). One `tmux.sendText` carries at
+ * most 4000 characters, and a fresh tab's shell may still be starting when the line arrives: until it reads,
+ * the tty holds the bytes, and macOS keeps about 1 KB there (the rest is lost, often the start of the line).
+ */
+export const TYPED_LINE_MAX_BYTES = 900;
+
+/**
+ * Types a shell command line into the session and runs it. A line longer than `TYPED_LINE_MAX_BYTES` (an
+ * automatic launch line with its prompt, allow and deny lists runs to 4–7 KB) is written to a file in the
+ * machine's paste folder instead, and only `. '<file>'` is typed: the person's own shell sources it, so
+ * their alias or function for the CLI still applies, and the file is removed once the command returns.
+ */
+export async function typeCommandLine(machine: Machine, session: string, line: string): Promise<void> {
+  if (Buffer.byteLength(line, 'utf8') <= TYPED_LINE_MAX_BYTES) return sendTextToSession(machine, session, line, true);
+  const file = shellQuote((await saveFileOnMachine(machine, Buffer.from(`${line}\n`, 'utf8'), 'launch.sh')).path);
+  await sendTextToSession(machine, session, `. ${file}; command rm -f -- ${file}`, true);
+}
+
 /** Presses one key from the closed list (spec §4.2) in the session. */
 export async function sendKeyToSession(machine: Machine, session: string, key: TmuxKey): Promise<void> {
   assertSessionName(session);
   if (machine.type === 'agent') {
     requireAgentVersion(machine, TERMINAL_RPC_MIN_AGENT_VERSION);
+    // Shift+Tab joined the key list with the transcript capability; an older agent refuses it.
+    if (key === 'BTab') requireTranscriptCapable(machine);
     await agentRpc(machine, 'tmux.sendKey', { session, key });
     return;
   }

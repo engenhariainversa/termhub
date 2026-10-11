@@ -44,6 +44,24 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
     for (const r of [a, c]) await repo.decide(r.id, userId, 'denied');
   });
 
+  it('a server card (automation_merge) is born injected, never re-injected, and found by its key in the project whatever its status', async () => {
+    const projectId = newId();
+    await db.project.create({ data: { id: projectId, ownerId: userId, key: 'M' + projectId.replace(/[^a-z0-9]/gi, '').slice(0, 6).toUpperCase(), name: 'p' } });
+    const conv = await new ChatRepository(db).getOrCreateForProject(userId, projectId);
+    const key = 'automation_merge:acme/app#7@h1';
+    const row = await repo.insertPending({ conversation_id: conv.id, tool: 'automation_merge', args: { number: 7 }, class: 'irreversible', idempotency_key: key, project_id: projectId, injected: true });
+    expect(row.injected_at).not.toBeNull();
+    await repo.decide(row.id, userId, 'approved');
+    expect(await repo.listToInject(conv.id)).toEqual([]);
+    expect((await repo.findById(row.id))?.status).toBe('approved');
+    expect(await repo.claimApproved(row.id)).toBe(true);
+    expect(await repo.claimApproved(row.id)).toBe(false);
+    expect((await repo.findLatestByKeyInProject(userId, projectId, key))?.id).toBe(row.id);
+    expect(await repo.findLatestByKeyInProject(newId(), projectId, key)).toBeUndefined();
+    expect(await repo.findLatestByKeyInProject(userId, newId(), key)).toBeUndefined();
+    await db.project.delete({ where: { id: projectId } });
+  });
+
   it('finds an open row by its key and does not see a decided one', async () => {
     const row = await pending('k1');
     expect(row.status).toBe('pending');
@@ -402,5 +420,28 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatActionsRepository (Po
       expect(counts.get(otherConversationId)).toBe(1);
       expect(counts.get(conversationId) ?? 0).toBe(0);
     });
+  });
+
+  // TER-986. Last on purpose: the orphan sweep is global, and the rows this file left pending point at
+  // tabs that never existed — they are swept too, which nothing above relies on any more.
+  it('a closed tab retires its pending cards as TAB_GONE, and only those; the orphan sweep catches the rest', async () => {
+    const gone = `t-gone-${newId()}`;
+    const mk = (key: string, tabId: string) => repo.insertPending({ conversation_id: conversationId, tool: 'send_input', args: { tab_id: tabId, text: 'oi' }, idempotency_key: key, class: 'write', tab_id: tabId });
+    const a = await mk(`tg-a-${gone}`, gone);
+    const decided = await mk(`tg-b-${gone}`, gone);
+    await repo.decide(decided.id, userId, 'approved');
+    const other = await mk(`tg-c-${gone}`, `${gone}-other`);
+
+    const moved = await repo.failPendingForTab(gone);
+    expect(moved).toEqual([{ action: expect.objectContaining({ id: a.id, status: 'failed', error_code: 'TAB_GONE' }), user_id: userId }]);
+    expect((await repo.findById(decided.id))?.status).toBe('approved');
+    expect((await repo.findById(other.id))?.status).toBe('pending');
+    expect(await repo.failPendingForTab(gone)).toEqual([]);
+
+    expect(await repo.failPendingTabGone(a.id)).toBeUndefined(); // no longer pending
+    const swept = await repo.failOrphanPending();
+    expect(swept.map((r) => r.action.id)).toContain(other.id);
+    expect(swept.find((r) => r.action.id === other.id)).toMatchObject({ user_id: userId, action: { status: 'failed', error_code: 'TAB_GONE' } });
+    expect(swept.map((r) => r.action.id)).not.toContain(decided.id);
   });
 });

@@ -21,7 +21,10 @@ const { authState, analytics, openCookieBanner } = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
-vi.mock('../lib/api', () => ({ api: { users: { list: () => new Promise(() => {}) } } }));
+vi.mock('../lib/api', () => ({
+  api: { users: { list: () => new Promise(() => {}) }, account: { dataExport: () => new Promise(() => {}), dataExportUrl: (id: string) => id } },
+  ApiError: class ApiError extends Error {},
+}));
 vi.mock('../lib/analytics', () => ({
   get ANALYTICS_ENABLED() {
     return analytics.enabled;
@@ -89,6 +92,13 @@ describe('ProfileView', () => {
     });
     expect(authState.current.logout).toHaveBeenCalledTimes(1);
     expect(screen.getByText('login-page')).toBeInTheDocument();
+  });
+
+  it('opens the account deletion dialog from the danger zone', () => {
+    mount();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir minha conta' }));
+    expect(screen.getByRole('dialog', { name: 'Excluir minha conta' })).toBeInTheDocument();
   });
 
   it('offers the cookie preferences only when analytics is on', () => {

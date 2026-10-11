@@ -11,7 +11,8 @@ const { getAccountUsage, linkClaudeSession, sendKeyToSession, sendTextToSession,
 }));
 vi.mock('../ai/index.js', () => ({ getAccountUsage }));
 vi.mock('../ai/claude-session.js', () => ({ linkClaudeSession }));
-vi.mock('../terminal/session-ops.js', () => ({ sendKeyToSession, sendTextToSession }));
+// typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
+vi.mock('../terminal/session-ops.js', () => ({ sendKeyToSession, sendTextToSession, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../monitor/ingest.js', () => ({ applyState }));
 vi.mock('../chat/tab-limits.js', () => ({ notifyLimitInChat }));
@@ -22,7 +23,8 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { RESUME_PROMPT, resumeLine } from './agents.js';
+import { DEFAULT_AUTOMATION_TOOLS, RESUME_PROMPT, resumeLine } from './agents.js';
+import { serverMessage } from '../automation/prompts.js';
 import {
   AUTO_SWAP_COOLDOWN_MS,
   AUTO_SWAP_DELAY_MS,
@@ -42,7 +44,7 @@ const SID = '6d127d73-4bd0-42d6-b4a6-d96899507e62';
 const TRANSCRIPT = `/home/p/.claude_a/projects/-src-app/${SID}.jsonl`;
 
 const machine = (over: Partial<Machine> = {}): Machine =>
-  ({ id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux', 'claude'], owner_id: 'u1', claude_auto_swap: false, ...over }) as Machine;
+  ({ id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux', 'claude'], owner_id: 'u1', claude_auto_swap: false, ai_usage_query: true, ...over }) as Machine;
 const account = (over: Partial<AiAccount> & { id: string; machine_id: string }): AiAccount => ({ provider: 'claude', label: over.id, config_dir: null, created_at: '', ...over });
 const accounts = [
   account({ id: 'a1', machine_id: 'm1', config_dir: '~/.claude_a' }),
@@ -83,6 +85,7 @@ function makeRepos() {
     aiAccounts: { list: vi.fn(async () => accounts) },
     machines: { findById: vi.fn(async () => machine()) },
     apiTokens: { hasLiveForTab: vi.fn(async () => false) },
+    automationRuns: { activeByTab: vi.fn(async (): Promise<{ project_id: string } | null> => null) },
     projectSetup: { get: vi.fn(async (projectId: string) => ({ project_id: projectId, version: 2, data: normalizeSetup(projectSetup, 2), updated_at: null })) },
     projectMachines: { find: vi.fn(async (_p: string, m: string) => (linked.includes(m) ? { machine_id: m } : undefined)) },
   };
@@ -124,6 +127,39 @@ describe('peakUtilization', () => {
     expect(peakUtilization(usage('a', null))).toBeNull();
     expect(peakUtilization({ ...usage('a', []), ok: true })).toBeNull();
     expect(peakUtilization(undefined)).toBeNull();
+  });
+});
+
+describe('peakUtilization with the run model (TER-837)', () => {
+  const reading = (windows: { utilization: number; model?: string }[]): AiAccountUsage => ({
+    account_id: 'a', fetched_at: '', ok: true, plan: null, error: null, hint: null,
+    windows: windows.map((w, i) => ({ key: `k${i}`, label: '', resets_at: null, ...w })),
+  });
+  // the login padrão of the report: room on the account, its Fable allowance used up
+  const u = reading([{ utilization: 13 }, { utilization: 69 }, { utilization: 100, model: 'fable' }]);
+
+  it('leaves out the windows of another model', () => {
+    expect(peakUtilization(u, 'claude-opus-5-5')).toBe(69);
+    expect(peakUtilization(u, 'opus')).toBe(69);
+    expect(peakUtilization(u, 'fable')).toBe(100);
+    expect(peakUtilization(u, 'claude-fable-5-1')).toBe(100);
+  });
+
+  it('counts every window when the model is unknown', () => {
+    expect(peakUtilization(u)).toBe(100);
+    expect(peakUtilization(u, null)).toBe(100);
+  });
+
+  it('is 0, not unknown, when only other models have windows', () => {
+    expect(peakUtilization(reading([{ utilization: 100, model: 'fable' }]), 'opus')).toBe(0);
+  });
+
+  it('lets rankCandidates take an account whose full window caps another model', () => {
+    const accs = [account({ id: 'a2', machine_id: 'm1' })];
+    const map = new Map([['a2', { ...u, account_id: 'a2' }]]);
+    expect(rankCandidates(accs, map, { explicit: false, model: 'claude-opus-5-5' }).map((a) => a.id)).toEqual(['a2']);
+    expect(rankCandidates(accs, map, { explicit: false, model: 'fable' })).toEqual([]);
+    expect(rankCandidates(accs, map, { explicit: false })).toEqual([]);
   });
 });
 
@@ -219,6 +255,17 @@ describe('swapAccount', () => {
     expect(repos.apiTokens.hasLiveForTab).toHaveBeenCalledWith('t1');
     const line = resumeLine(null, SID, RESUME_PROMPT, 't1');
     expect(line).toContain("--mcp-config \"$HOME\"/'.termhub/tabs/t1/mcp.json'");
+    expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
+  });
+
+  it('a tab running automatic work keeps the auto mode (TER-993) and the allow list on the new account, its prompt marked (F-12, D27)', async () => {
+    const { repos, r } = makeRepos();
+    repos.automationRuns.activeByTab.mockResolvedValue({ project_id: 'p1' });
+    stored = baseTab({ state: 'idle' });
+    await drive(swapAccount(r, log, baseTab(), machine(), { auto: false }));
+    const line = resumeLine(null, SID, serverMessage(RESUME_PROMPT), null, undefined, { mode: 'auto', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: null });
+    expect(line).toContain('--permission-mode auto ');
+    expect(line).toContain('[termhub automático] A conta anterior');
     expect(sendTextToSession).toHaveBeenLastCalledWith(expect.anything(), 'th-t1', line, true);
   });
 
@@ -689,5 +736,46 @@ describe('autoSwapOnLimit', () => {
     // let the manual swap finish so its lock and subscription go away
     monitorBus.publish({ tab: { ...stored, state: 'idle' }, project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
     await expect(drive(manual)).resolves.toMatchObject({ to: { id: 'a3' } });
+  });
+});
+
+describe('swapAccount with an account exclusive to a project (TER-990)', () => {
+  const a3 = accounts.find((a) => a.id === 'a3')!;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // a3, the emptiest account (the machine's default login), is exclusive to DR Horton (p9)
+    a3.exclusive_project = { id: 'p9', name: 'DR Horton' };
+  });
+  afterEach(() => {
+    a3.exclusive_project = null;
+  });
+
+  it('never swaps a tab of another project onto it: the next account with room takes over', async () => {
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+    expect(getAccountUsage.mock.calls.map((c) => c[0].id)).toEqual(['a2']);
+  });
+
+  it('refuses it picked by hand, before the tab is touched', async () => {
+    const { r } = makeRepos();
+    await expect(drive(swapAccount(r, log, baseTab(), machine(), { accountId: 'a3', auto: false }))).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+    expect(linkClaudeSession).not.toHaveBeenCalled();
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a3', attemptedProjectId: 'p1', path: 'account_swap', tabId: 't1' }), 'exclusive account: use refused');
+  });
+
+  it('is not taken from the project priority either', async () => {
+    projectSetup = { ai: { accounts: ['a3', 'a2'] } };
+    const { r } = makeRepos();
+    const result = await drive(swapAccount(r, log, baseTab(), machine(), { auto: true }));
+    expect(result.to.id).toBe('a2');
+  });
+
+  it('swaps onto it in its own project', async () => {
+    const { r } = makeRepos();
+    stored = baseTab({ project_id: 'p9' });
+    const result = await drive(swapAccount(r, log, stored, machine(), { auto: true }));
+    expect(result.to.id).toBe('a3');
   });
 });

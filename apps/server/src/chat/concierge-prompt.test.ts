@@ -36,6 +36,11 @@ it('tells the concierge to start agents on cards with start_agent and task_id, a
   expect(ORCHESTRATOR_PROMPT).toContain('link_tab_task');
 });
 
+// TER-1023: the concierge set a machine up by asking the person for an install command.
+it('tells the concierge to set up the monitor hooks with its own tools', () => {
+  expect(ORCHESTRATOR_PROMPT).toMatch(/get_machine_hooks, install_machine_hooks, update_machine_agent; no commands/);
+});
+
 it('goes first, with the project prompt after it, and fits the protocol cap with the longest project prompt', () => {
   expect(streamedSystemPrompt(null)).toBe(ORCHESTRATOR_PROMPT);
   expect(streamedSystemPrompt('projeto')).toBe(`${ORCHESTRATOR_PROMPT}\n\nprojeto`);
@@ -54,4 +59,8 @@ it('tells the concierge to follow a tab with one background subagent that ends a
   expect(ORCHESTRATOR_PROMPT).toContain('read_last_answer');
   expect(ORCHESTRATOR_PROMPT).toMatch(/Never relaunch it to keep watching/);
   expect(ORCHESTRATOR_PROMPT).toMatch(/quick status check \(one wait_for_state call with timeout_seconds of 10 or less, or one read_last_answer call\) can be done in your own turn/);
+});
+
+it('tells the concierge to pause the automatic work on request, without asking', () => {
+  expect(ORCHESTRATOR_PROMPT).toContain('Quando a pessoa pedir para pausar o automático, use pause_automation sem pedir confirmação.');
 });

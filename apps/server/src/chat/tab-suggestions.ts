@@ -4,7 +4,7 @@ import { agents } from '../agent/registry.js';
 import { captureStyledScreen } from '../agent/screen.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine } from '../db/repositories/types.js';
-import { STATE_TEXT_MAX } from '../monitor/state.js';
+import { AT_PROMPT, STATE_TEXT_MAX } from '../monitor/state.js';
 import { promptSuggestion } from '../terminal/ansi.js';
 import { failureLabel } from './service.js';
 import { ANSWER_TEXT_MAX, CONTROL_CHARS_RE, FORMAT_CHARS_RE, globalOf, sliceUnits } from './tab-question-payload.js';
@@ -108,7 +108,8 @@ export interface StopFacts {
 export async function checkTabSuggestion(repos: Repositories, log: Log, tabId: string, context: string, still: () => boolean = () => true): Promise<void> {
   try {
     const tab = await repos.tabs.findById(tabId);
-    if (!tab || tab.kind !== 'terminal' || !tab.tmux_session || tab.state !== 'waiting_input') return;
+    // A turn that ended with a report (`finished`, TER-972) is back at its prompt too: its suggestion opens.
+    if (!tab || tab.kind !== 'terminal' || !tab.tmux_session || !tab.state || !AT_PROMPT.includes(tab.state)) return;
     const owner = (await repos.projects.findById(tab.project_id))?.owner_id;
     const conversation = owner ? await repos.chat.findLatestActiveForProject(tab.project_id, owner) : undefined;
     if (!conversation) return;

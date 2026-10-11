@@ -20,6 +20,7 @@ const action = (over: Partial<ChatAction>): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: null,
+  tab_name: null,
   grant_id: null,
   error_code: null,
   duration_ms: null,
@@ -386,6 +387,40 @@ it('renders "does not exist" for a tab belonging to another user, and never leak
   expect(card.summary).not.toContain(foreignTab.id);
 });
 
+it('a closed tab\'s card still names the project the row kept when it was asked (TER-986)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', project_id: project.id })], OWNER);
+  expect(card.summary).toBe('digitar `oi` numa aba que não existe mais do projeto reactivando');
+});
+
+it('a closed tab\'s card never names a foreign project the row names (TER-986)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', project_id: foreignProject.id })], OWNER);
+  expect(card.summary).toBe('digitar `oi` numa aba que não existe mais');
+});
+
+it('a closed tab\'s card names the tab by the name the row kept when it was asked (TER-1024)', async () => {
+  const repos = fakeRepos();
+  const [send, close, bare] = await describeActions(
+    repos,
+    [
+      action({ id: 'a1', tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', tab_name: 'Figma 849/851', project_id: project.id }),
+      action({ id: 'a2', tool: 'close_tab', args: { tab_id: 'gone' }, tab_id: 'gone', tab_name: 'Figma 849/851', project_id: project.id, status: 'executed' }),
+      action({ id: 'a3', tool: 'close_tab', args: { tab_id: 'gone' }, tab_id: 'gone', tab_name: 'Figma 849/851' }),
+    ],
+    OWNER,
+  );
+  expect(send.summary).toBe('digitar `oi` na aba «Figma 849/851», já fechada, do projeto reactivando');
+  expect(close.summary).toBe('fechar a aba «Figma 849/851» do projeto reactivando');
+  expect(bare.summary).toBe('fechar a aba «Figma 849/851»');
+});
+
+it('a live tab is named by its current name, not the one the row kept (TER-1024)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: tab.id, text: 'oi' }, tab_id: tab.id, tab_name: 'Nome antigo' })], OWNER);
+  expect(card.summary).toBe('digitar `oi` na aba Terminal 2 do projeto reactivando, no macbook m3');
+});
+
 it('renders "does not exist" for a project belonging to another user, and never leaks its name', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'open_tab', args: { project_id: foreignProject.id }, project_id: foreignProject.id })], OWNER);
@@ -678,6 +713,16 @@ it("set_project_repo says when deploy is cleared, and never names another owner'
   expect(card.summary).not.toContain('Integração Alheia');
 });
 
+// automation_merge (agentic board D7): the merge executor's own card for a PR above the project's level.
+it('automation_merge names the PR, the repository, why it asks and the project', async () => {
+  const repos = fakeRepos();
+  const args = { project_id: 'p1', repo: 'acme/api', number: 7, head_sha: 'h1', title: 'Board: drag cards', url: 'u', base: 'main', needed: 'deploy' };
+  const [card] = await describeActions(repos, [action({ tool: 'automation_merge', args, project_id: 'p1', class: 'irreversible' })], OWNER);
+  expect(card.summary).toBe('mesclar o PR #7 "Board: drag cards" de `acme/api` (precisa do nível Deploy) no projeto reactivando');
+  const [store] = await describeActions(repos, [action({ tool: 'automation_merge', args: { ...args, needed: 'store' }, project_id: 'p1', class: 'irreversible' })], OWNER);
+  expect(store.summary).toContain('(precisa de build nas lojas)');
+});
+
 it('looks up integrations only when a set_project_repo card needs one', async () => {
   const repos = fakeRepos();
   await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 't1', text: 'x' }, tab_id: 't1' })], OWNER);
@@ -757,4 +802,19 @@ it('reads nothing from memory when no card cites a precedent', async () => {
   const repos = fakeRepos();
   await describeActions(repos, [action({ args: { tab_id: 't1', text: 'oi', sources: 'decision:d1' }, tab_id: 't1' })], OWNER);
   expect((repos as { chatDecisions: { findManyForUser: { mock: { calls: unknown[] } } } }).chatDecisions.findManyForUser.mock.calls).toHaveLength(0);
+});
+
+it('spells out what a set_automation_policy card turns on or widens, with the level by its Setup name (TER-975)', async () => {
+  const repos = fakeRepos();
+  const on = action({ tool: 'set_automation_policy', args: { project_id: 'p1', enabled: true, autonomy: 'deploy', max_parallel: 2 }, project_id: 'p1' });
+  const paths = action({ tool: 'set_automation_policy', args: { project_id: 'p1', release_paths: ['apps/agent/package.json'], required_checks: [], max_parallel: null }, project_id: 'p1' });
+  const [a, b] = await describeActions(repos, [on, paths], OWNER);
+  expect(a.summary).toBe('ligar o trabalho automático do projeto; nível "Deploy"; máximo em paralelo: 2 no projeto reactivando');
+  expect(b.summary).toBe('mudar o Setup do trabalho automático (caminhos de release: `apps/agent/package.json`; checks obrigatórios: nenhum; máximo em paralelo: sem limite) no projeto reactivando');
+});
+
+it('names the machine on a set_machine_automation card (TER-975)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'set_machine_automation', args: { machine_id: 'm1', accept: true }, machine_id: 'm1' })], OWNER);
+  expect(card.summary).toBe('fazer a máquina aceitar trabalho automático no macbook m3');
 });

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { DataProvider } from '../lib/data';
 import { FocusProvider, useFocusMode } from '../lib/focus';
@@ -11,11 +12,14 @@ import { isSettingsPath, useSettingsExit } from '../lib/settings-nav';
 import { ToastProvider, Toaster } from '../lib/toast';
 import { ChatDock } from './chat/ChatDock';
 import { DeviceRequestBanner } from './DeviceRequestBanner';
+import { LegalAcceptancePage } from './LegalAcceptancePage';
+import { LegalNoticeBanner } from './LegalNoticeBanner';
 import { NeedsYouToasts } from './NeedsYouToasts';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SidebarRail } from './SidebarRail';
 import { Sidebar } from './Sidebar';
 import { NicknamePrompt } from './NicknamePrompt';
+import { PendingDeletionPage } from './PendingDeletionPage';
 import { useEscapeLayer } from './Modal';
 
 const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
@@ -27,10 +31,15 @@ const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
  * still receives monitor pushes and toasts.
  */
 export function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading, legal } = useAuth();
+  const { t } = useTranslation();
 
-  if (loading) return <FullScreenMessage>Carregando…</FullScreenMessage>;
+  if (loading) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
   if (!user) return <Navigate to="/login" replace />;
+  // A deactivated account (deletion pending) gets only the page that lets it cancel.
+  if (user.deletion_scheduled_at) return <PendingDeletionPage scheduledAt={user.deletion_scheduled_at} />;
+  // A version in force of the Terms or the Privacy Policy not accepted yet (TER-742): only the acceptance page.
+  if (legal.pending.length > 0) return <LegalAcceptancePage pending={legal.pending} />;
   return (
     <DataProvider>
       <MonitorProvider>
@@ -92,6 +101,7 @@ function LayoutRow({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: bo
       <Chrome collapsed={collapsed} setCollapsed={setCollapsed} onLeaveSettings={onLeaveSettings} />
       <main className={`relative min-w-0 flex-1 ${maximized ? 'hidden' : ''}`}>
         <DeviceRequestBanner />
+        <LegalNoticeBanner />
         <Outlet />
       </main>
       {can('chat') && <ChatDock />}
@@ -107,6 +117,7 @@ function LayoutRow({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: bo
  * it) instead of pushing the content aside; the stored preference is left for wide windows.
  */
 export function Chrome({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: boolean; setCollapsed: (v: boolean) => void; onLeaveSettings: () => void }) {
+  const { t } = useTranslation();
   const { focus } = useFocusMode();
   const { pathname } = useLocation();
   const settings = isSettingsPath(pathname);
@@ -125,7 +136,7 @@ export function Chrome({ collapsed, setCollapsed, onLeaveSettings }: { collapsed
         {overlay && (
           <>
             <div data-testid="sidebar-backdrop" aria-hidden="true" className="fixed inset-0 z-40 bg-black/50" onClick={closeOverlay} />
-            <div role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-y-0 left-0 z-50 flex max-w-[85vw] shadow-2xl">
+            <div role="dialog" aria-modal="true" aria-label={t('Menu')} className="fixed inset-y-0 left-0 z-50 flex max-w-[85vw] shadow-2xl">
               {settings ? <SettingsSidebar onBack={onLeaveSettings} onCollapse={closeOverlay} /> : <Sidebar onCollapse={closeOverlay} />}
             </div>
           </>

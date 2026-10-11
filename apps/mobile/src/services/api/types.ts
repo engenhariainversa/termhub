@@ -2,6 +2,15 @@
 // zod-inferred types. `HttpMobileApi` (`client.ts`) is the one implementation that talks to a
 // real (or mocked) server through a `Transport`.
 import type {
+  AccountDeletionBody,
+  AiLoginResumeResponse,
+  AiLoginStartResponse,
+  AiLoginStatusResponse,
+  AiLoginSubmitResponse,
+  PushSettings,
+  PushTestBody,
+  PushTestResponse,
+  AccountDeletionStatus,
   TChallengeBody,
   TChallengeResponse,
   TChatAttachment,
@@ -23,16 +32,33 @@ import type {
   TLessonsResponse,
   TMeResponse,
   TMobileBatchDecisionBody,
+  TLegalStatus,
+  TDecisionChallengesBody,
+  TDecisionChallengesResponse,
   TMobileDecisionBody,
   TMobileMessageBody,
   TNotesResponse,
   TNotificationsResponse,
   TProgressResponse,
+  TAutomationSetup,
+  TPauseState,
   TProjectAi,
   TProjectAiResponse,
   TSendAccepted,
   TSetHostBody,
+  TStartSessionBody,
+  TStartSessionResponse,
   TSubagentView,
+  TTabActionResponse,
+  TTabChatAction,
+  TTabChatFrame,
+  TTabChatPage,
+  TFilePreviewQuery,
+  TFilePreviewResponse,
+  TFileRecentResponse,
+  TTabFileResponse,
+  TTabScreenResponse,
+  TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
   TTabLimit,
@@ -73,6 +99,26 @@ export interface MobileApi {
   deviceSelf(auth: Auth): Promise<TDeviceSelf>;
   revokeSelf(auth: Auth): Promise<void>;
   setPushToken(auth: Auth, token: string): Promise<void>;
+  /** A sample push to this device (TER-913). 409 NO_PUSH_TOKEN, 429 PUSH_TEST_RATE_LIMITED. */
+  pushTest(auth: Auth, body: PushTestBody): Promise<PushTestResponse>;
+  /** The account's opt-in pushes (TER-925). */
+  pushSettings(auth: Auth): Promise<PushSettings>;
+  setPushSettings(auth: Auth, body: PushSettings): Promise<PushSettings>;
+
+  // account deletion (TER-720): the only routes, besides the session ones, that answer while a
+  // deletion is pending — every other one is `403 ACCOUNT_PENDING_DELETION` until it is cancelled.
+  accountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
+  /** Needs a PIN proof over a decision challenge for `ACCOUNT_DELETION_ACTION_ID`, signed with
+   * `delete_account`. Same errors as an approval (PIN_INVALID, DEVICE_LOCKED, DEVICE_REVOKED,
+   * CHALLENGE_INVALID), plus `409 LAST_ADMIN`. */
+  requestAccountDeletion(auth: Auth, body: AccountDeletionBody): Promise<AccountDeletionStatus>;
+  cancelAccountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
+
+  // legal acceptance (TER-742): the Terms and Privacy Policy versions in force still to accept.
+  // A server that predates them answers 404; the app reads that as nothing pending.
+  legalStatus(auth: Auth): Promise<TLegalStatus>;
+  /** Records the acceptance of `versionIds` (channel `mobile`, set by the server); answers the new status. */
+  acceptLegal(auth: Auth, versionIds: string[]): Promise<TLegalStatus>;
 
   // chat (P§6, §6.1)
   chatProjects(auth: Auth): Promise<TChatProjectsResponse>;
@@ -87,6 +133,8 @@ export interface MobileApi {
   /** A grouped confirmation: every approval carries its own proof, all checked before anything is
    * decided (a wrong PIN is a 401 and leaves the whole batch pending). */
   decideMany(auth: Auth, body: TMobileBatchDecisionBody): Promise<void>;
+  /** One decision challenge per action of a grouped confirmation, in one call (TER-530). */
+  decisionChallenges(auth: Auth, body: TDecisionChallengesBody): Promise<TDecisionChallengesResponse>;
   /** "Revogar" a trusted tab (no PIN: it only takes power away). 404 unknown, 409 already revoked. */
   revokeGrant(auth: Auth, grantId: string): Promise<void>;
   /** "Permissões do chat": active grants (no paging) or the ended/expired/revoked history (paged,
@@ -121,11 +169,43 @@ export interface MobileApi {
   /** Saves them; answers the same shape. 400 with a pt-BR `error` for an account or model the server refuses. */
   saveProjectAi(auth: Auth, projectId: string, ai: TProjectAi): Promise<TProjectAiResponse>;
 
+  // Trabalho automático (spec 2026-10-04)
+  /** The project's automation block, whole (the app sends it back as it got it). 404 outside the scope. */
+  getAutomationSetup(auth: Auth, projectId: string): Promise<TAutomationSetup>;
+  /** Saves the block. Turning it on, or raising the level to deploy/release, needs `proof` (a PIN proof over a
+   * decision challenge for `automationSetupActionId(projectId)`, signed `automation_setup`): without one the
+   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. */
+  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }): Promise<TAutomationSetup>;
+  /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
+  setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
+  /** The pause switch ("Pausar tudo"): the person's pause and the projects paused on their own. */
+  getPauseState(auth: Auth): Promise<TPauseState>;
+  /** Pauses `scope` (`all` or a project id); answers when. `interrupt` asks to stop the tabs running now. No PIN. */
+  pauseAutomation(auth: Auth, scope: string, interrupt?: boolean): Promise<string>;
+  /** Lifts a pause. No PIN: the app confirms before calling it. */
+  resumeAutomation(auth: Auth, scope: string): Promise<void>;
+
+  // "Refazer login" of an AI CLI account (TER-1047, spec 2026-10-08). Only the machine's owner may start or
+  // continue a flow (403 otherwise); every error carries the server's own sentence.
+  /** The login state of every account in scope; `refresh` asks the machines again. */
+  aiLoginStatus(auth: Auth, refresh?: boolean): Promise<AiLoginStatusResponse>;
+  /** Runs the CLI's login in a hidden session on the machine and answers the page to open (and Codex's
+   * device code). 400 `UNSUPPORTED_*`, 409 `AGENT_OUTDATED`, 503 when the machine cannot be reached. */
+  startAiLogin(auth: Auth, accountId: string): Promise<AiLoginStartResponse>;
+  /** Claude: the code the page showed; Codex: `null` ("Já autorizei"). `ok: false` names why. */
+  submitAiLogin(auth: Auth, accountId: string, loginId: string, code: string | null): Promise<AiLoginSubmitResponse>;
+  /** Leaving before the end: the server kills the hidden session. */
+  cancelAiLogin(auth: Auth, accountId: string, loginId: string): Promise<void>;
+  /** Types `continue` into each tab still stuck on this account's login error; answers the ones it did. */
+  resumeAiLoginTabs(auth: Auth, accountId: string, tabIds: string[]): Promise<AiLoginResumeResponse>;
+
   // attachments (spec 2026-09-26 §5.3, §5.6)
   /** Streams the file as the raw body; `onProgress` is 0..1. 415 ATTACHMENT_TYPE, 413 ATTACHMENT_TOO_LARGE / ATTACHMENT_QUOTA. */
   uploadAttachment(auth: Auth, file: UploadFile, projectId: string | null, onProgress?: (fraction: number) => void): Promise<TChatAttachment>;
   /** Only while unsent: 404 unknown, 409 once it was sent with a message. */
   deleteAttachment(auth: Auth, id: string): Promise<void>;
+  /** A transcription whisper could not do goes back to the queue (TER-1035): answers the row pending; 409 when a retry cannot help. */
+  retryAttachment(auth: Auth, id: string): Promise<TChatAttachment>;
   /** The download url plus the headers a `<Image source>` needs to fetch it (bearer and a fresh DPoP proof). */
   attachmentSource(auth: Auth, id: string): Promise<{ uri: string; headers: Record<string, string> }>;
 
@@ -150,7 +230,7 @@ export interface MobileApi {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with neither key. */
-  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }): Promise<TChatMemory>;
+  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }): Promise<TChatMemory>;
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, `cursor` is `next_cursor`. */
   chatNotes(auth: Auth, cursor?: string | null): Promise<TNotesResponse>;
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other
@@ -175,6 +255,37 @@ export interface MobileApi {
 
   // progress panel (spec 2026-09-26 progress-panel D10)
   progress(auth: Auth, scope?: 'active' | 'all'): Promise<TProgressResponse>;
+
+  // sessions: a terminal tab read as a conversation (spec 2026-10-01 tab chat §5.4, §5.5). Reads need
+  // `terminals:read`, the rest `terminals:write`; a tab outside the person's scope is a 404.
+  /** A file an agent wrote, read on its machine (spec 2026-10-04 file preview): the body, or why not.
+   *  409 `AGENT_OUTDATED` when the machine's agent cannot read files yet. */
+  filePreview(auth: Auth, q: TFilePreviewQuery): Promise<TFilePreviewResponse>;
+  /** A project's recent Markdown files across its machines (spec 2026-10-04 recent Markdown files), and
+   *  the machines left out with why. Names, sizes and dates only. */
+  fileRecent(auth: Auth, projectId: string): Promise<TFileRecentResponse>;
+  /** The terminal tabs of the person's projects, with each one's state and availability. */
+  tabs(auth: Auth): Promise<TTabsResponse>;
+  /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */
+  startSession(auth: Auth, body: TStartSessionBody): Promise<TStartSessionResponse>;
+  /** The newest page of the conversation, or the one before `before` (an opaque cursor). */
+  tabChat(auth: Auth, tabId: string, before?: string): Promise<TTabChatPage>;
+  /** Types `text` into the tab. 409 `WAITING_PERMISSION` while the tab waits on a permission dialog. */
+  sendTabMessage(auth: Auth, tabId: string, text: string): Promise<void>;
+  /** Escape, Shift+Tab, `/clear` or `/compact`; `cycle_mode` answers the mode the footer shows then. */
+  tabAction(auth: Auth, tabId: string, action: TTabChatAction): Promise<TTabActionResponse>;
+  /** Saves a file on the tab's machine (raw body, its mime as content type); answers its path there. */
+  uploadTabFile(auth: Auth, tabId: string, fileUri: string, name: string, mime: string): Promise<TTabFileResponse>;
+  /** The last `lines` lines of the tab's pane, as plain text. */
+  tabScreen(auth: Auth, tabId: string, lines?: number): Promise<TTabScreenResponse>;
+  /** The tab's live socket (`/ws/m/tabs/:id`), opened from `after()` on every (re)connect. `onClose`'s
+   * `final` is true for 4400, 4401, 4403 and 4404. A refused upgrade renews a stale token before the next
+   * attempt, as `events` does. Returns the socket's `close`. */
+  tabEvents(
+    auth: () => Auth,
+    tabId: string,
+    handlers: { after(): string | null; onFrame(f: TTabChatFrame): void; onClose(code: number, final: boolean): void },
+  ): () => void;
 
   // the socket (P§6.1): server -> client events, filtered by user on the server. `onReconnect`
   // fires on every (re)open, before `hello` arrives, so the store re-reads `GET chat` (no

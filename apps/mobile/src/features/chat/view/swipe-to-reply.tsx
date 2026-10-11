@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
 
 /** Released past this, the drag answers the message. */
@@ -29,20 +30,25 @@ function travel(t: number): number {
 }
 
 /**
- * WhatsApp's drag-to-answer around one message row (TER-447). The bubble follows the finger to the
- * right on the UI thread; a reply icon grows in behind it; crossing the threshold gives one light tap,
- * and a release past it calls `onReply`. The recognizer only starts on a clear move to the right and
+ * WhatsApp's drag-to-answer around one row of the thread: a message (TER-447), or a confirmation or
+ * a tab's question card (TER-849). The row follows the finger to the right on the UI thread; a reply
+ * icon grows in behind it; crossing the threshold gives one light tap, and a release past it calls
+ * `onReply`. The recognizer only starts on a clear move to the right and
  * gives up on a vertical one, so the thread's own scroll wins every vertical drag; a touch that begins
  * at the screen's left edge is left to the system's back gesture. A drag cannot be made with VoiceOver
  * or TalkBack, so the row also offers "Responder" as an accessibility action.
+ * `enabled={false}` keeps the wrapper but answers nothing: a row that cannot be answered yet (a message
+ * still being sent) keeps the same tree when it can, so it is not remounted, a flash (TER-1001).
  */
-export function SwipeToReply({ onReply, children }: { onReply(): void; children: ReactNode }) {
+export function SwipeToReply({ onReply, enabled = true, children }: { onReply(): void; enabled?: boolean; children: ReactNode }) {
+  const { t } = useTranslation();
   const x = useSharedValue(0);
   const armed = useSharedValue(false);
   const still = useReducedMotion();
 
   const pan = Gesture.Pan()
     .withTestId('swipe-to-reply')
+    .enabled(enabled)
     .activeOffsetX(replyPanConfig.activeOffsetX)
     .failOffsetY(replyPanConfig.failOffsetY)
     .failOffsetX(replyPanConfig.failOffsetX)
@@ -72,10 +78,10 @@ export function SwipeToReply({ onReply, children }: { onReply(): void; children:
   return (
     <GestureDetector gesture={pan}>
       <View
-        testID="swipe-to-reply-row"
-        accessibilityActions={[{ name: 'reply', label: 'Responder' }]}
+        testID={enabled ? 'swipe-to-reply-row' : undefined}
+        accessibilityActions={enabled ? [{ name: 'reply', label: t('Responder') }] : undefined}
         onAccessibilityAction={(e) => {
-          if (e.nativeEvent.actionName === 'reply') onReply();
+          if (enabled && e.nativeEvent.actionName === 'reply') onReply();
         }}
       >
         <Animated.View pointerEvents="none" style={[{ position: 'absolute', left: 0, top: 0, bottom: 0, justifyContent: 'center' }, iconStyle]}>

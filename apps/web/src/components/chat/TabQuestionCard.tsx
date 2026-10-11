@@ -1,18 +1,20 @@
+import { useTranslation } from '../../i18n';
 import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import type { TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionSuggestionItem } from '../../lib/types';
+import type { PermissionOption, TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionScreen, TabQuestionSuggestionItem } from '../../lib/types';
 import { AutoDecisionBadge } from './AutoDecisionBadge';
-import { answerSummary, autoAnswerFailureText, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
+import { ChatReplyButton } from './ChatReplyButton';
+import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
 
 export interface TabQuestionCardProps {
   question: TabQuestion;
   /** This card's answer is in flight: every control is disabled. */
   answering: boolean;
-  /** Why the last answer did not go through (pt-BR). */
+  /** Why the last answer did not go through (the server's text, or the panel's own translated one). */
   error?: string | null;
   /** Takes the question's id, so the panel can pass one stable callback to every card. */
   onAnswer: (id: string, body: TabQuestionAnswer) => void;
-  /** The tab's live excerpt, for a permission card while it is open. Stable across renders. */
-  loadScreen?: (id: string) => Promise<string>;
+  /** The tab's live excerpt and its dialog's options, for a permission card while it is open. Stable across renders. */
+  loadScreen?: (id: string) => Promise<TabQuestionScreen>;
   /** "Esquecer esta decisão" on a suggestion line (chat decision memory spec §5.1): forgets the past
    *  decision it came from, then the card clears that question's pre-selection. */
   onForget?: (decisionId: string) => Promise<void>;
@@ -20,6 +22,8 @@ export interface TabQuestionCardProps {
    *  `ChatPanel` calls the API, updates this question from the response and surfaces a failure through
    *  `error` (409 `NOT_SCHEDULED` — the countdown already sent — gets its own sentence). */
   onCancelAutoAnswer?: (id: string) => void;
+  /** "Responder no chat" (TER-849): quotes this card in the composer, where "Responder" answers the tab. */
+  onReply?: (question: TabQuestion) => void;
 }
 
 /**
@@ -27,11 +31,17 @@ export interface TabQuestionCardProps {
  * the request and the error handling live in `ChatPanel`. Everything shown is plain text — never HTML.
  */
 export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionCardProps) {
+  const { t } = useTranslation();
   const { question, error } = props;
   return (
     // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477).
-    <li data-chat-card={question.id} className="chat-enter rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    <li data-chat-card={question.id} className="chat-enter group rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
+      {props.onReply && (
+        <div className="mt-1 flex justify-end">
+          <ChatReplyButton label={t('Responder no chat')} onClick={() => props.onReply?.(question)} />
+        </div>
+      )}
       {/* TER-641: the countdown decides (or decided) this card by itself, from memory. */}
       {question.auto_decision && <AutoDecisionBadge decision={question.auto_decision} />}
       {question.status !== 'open' && <p className="mt-1 text-xs text-fg-dim">{statusLabel(question)}</p>}
@@ -41,6 +51,7 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionC
 });
 
 function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswer }: TabQuestionCardProps & { question: TabQuestionChoice }) {
+  const { t } = useTranslation();
   const items = question.payload.questions;
   const [current, setCurrent] = useState(0);
   // Pre-selected from a similar past decision (spec 2026-09-26 §4.2/§5.1): only present while the card
@@ -120,9 +131,9 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
         </ul>
         {autoAnswered && (
           <>
-            <p className="mt-1 text-fg-dim">{`Respondida automaticamente: «${choiceAnswerLabel(question.payload, question.auto_answer!.answer)}» — motivo ${question.auto_answer!.reason}`}</p>
+            <p className="mt-1 text-fg-dim">{t('Respondida automaticamente: «{{answer}}» — motivo {{reason}}', { answer: choiceAnswerLabel(question.payload, question.auto_answer!.answer), reason: autoAnswerReason(question.auto_answer!) })}</p>
             <button type="button" className="btn-ghost mt-1 text-xs" disabled={forgettingPrecedent} onClick={() => void forgetPrecedent()}>
-              Esquecer o precedente
+              {t('Esquecer o precedente')}
             </button>
           </>
         )}
@@ -138,29 +149,32 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
   const counting = auto?.status === 'scheduled';
   if (counting || sending) {
     const description = choiceAnswerDescription(question.payload, auto!.answer);
-    let line = `Resposta automática em ${formatCountdown(seconds)} — «${choiceAnswerLabel(question.payload, auto!.answer)}»${description ? ` (${description})` : ''}. Motivo: ${auto!.reason}`;
+    const lineValues = { time: formatCountdown(seconds), answer: choiceAnswerLabel(question.payload, auto!.answer), reason: autoAnswerReason(auto!) };
+    let line = description
+      ? t('Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', { ...lineValues, description })
+      : t('Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}', lineValues);
     if (auto!.by === 'memory') {
       const decisionIds = new Set(auto!.sources.filter((s) => s.kind === 'decision').map((s) => s.id));
       const idx = items.findIndex((_, i) => hint.some((h) => h.question_index === i && decisionIds.has(h.decision_id)));
       const backing = idx === -1 ? undefined : hint.find((h) => h.question_index === idx);
-      if (backing) line += ` Fonte: ${suggestionSourceSentence(items[idx]!, backing)}`;
+      if (backing) line = t('{{line}} Fonte: {{source}}', { line, source: suggestionSourceSentence(items[idx]!, backing) });
     }
     return (
       <>
         {title}
         {sending ? (
-          <p className="mt-1 text-fg-dim">Enviando…</p>
+          <p className="mt-1 text-fg-dim">{t('Enviando…')}</p>
         ) : (
           <>
             <p className="mt-1 whitespace-pre-wrap text-fg">{line}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="button" className="btn-ghost" disabled={answering} onClick={() => onCancelAutoAnswer?.(question.id)}>
-                Cancelar
+                {t('Cancelar')}
               </button>
               <button type="button" className="btn-primary" disabled={answering} onClick={() => onAnswer(question.id, auto!.answer)}>
-                Responder agora
+                {t('Responder agora')}
               </button>
-              {seconds <= 0 && <span className="text-xs text-fg-dim">Enviando…</span>}
+              {seconds <= 0 && <span className="text-xs text-fg-dim">{t('Enviando…')}</span>}
             </div>
           </>
         )}
@@ -202,7 +216,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
     const clear = () => {
       setHint((prev) => prev.filter((s) => s !== h));
       setSelected((prev) => prev.map((s, j) => (j === h.question_index ? [] : s)));
-      setTexts((prev) => prev.map((t, j) => (j === h.question_index ? '' : t)));
+      setTexts((prev) => prev.map((v, j) => (j === h.question_index ? '' : v)));
     };
     // An empty id (a concierge suggestion that cited no decision): forgetting only clears the pre-selection.
     const result = h.decision_id ? onForget?.(h.decision_id) : undefined;
@@ -213,7 +227,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
     <>
       {title}
       {tabs && (
-        <div role="tablist" aria-label="Perguntas" className="mt-2 flex flex-wrap gap-1" onKeyDown={onTabKey}>
+        <div role="tablist" aria-label={t('Perguntas')} className="mt-2 flex flex-wrap gap-1" onKeyDown={onTabKey}>
           {items.map((it, i) => (
             <button
               key={i}
@@ -226,7 +240,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
               className={i === current ? 'btn-primary' : 'btn-ghost'}
               onClick={() => show(i)}
             >
-              {`${it.header || `Pergunta ${i + 1}`}${hint.some((h) => h.question_index === i) ? ' · sugerida' : ''}`}
+              {hint.some((h) => h.question_index === i) ? t('{{label}} · sugerida', { label: it.header || t('Pergunta {{n}}', { n: i + 1 }) }) : it.header || t('Pergunta {{n}}', { n: i + 1 })}
             </button>
           ))}
         </div>
@@ -238,7 +252,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
             <input
               type={item.multi_select ? 'checkbox' : 'radio'}
               name={`${question.id}-${current}`}
-              aria-label={o.recommended ? `${o.label}, recomendada` : o.label}
+              aria-label={o.recommended ? t('{{label}}, recomendada', { label: o.label }) : o.label}
               aria-describedby={o.description ? descriptionId(oi) : undefined}
               checked={selected[current]!.includes(oi)}
               disabled={typing}
@@ -246,7 +260,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
             />
             <span>
               <span className="text-fg">{o.label}</span>
-              {o.recommended && <span className="ml-2 rounded bg-accent/20 px-1 text-xs text-fg">Recomendada</span>}
+              {o.recommended && <span className="ml-2 rounded bg-accent/20 px-1 text-xs text-fg">{t('Recomendada')}</span>}
               {o.description && (
                 <span id={descriptionId(oi)} className="block text-xs text-fg-dim">
                   {o.description}
@@ -256,7 +270,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
           </label>
         ))}
         <label className="mt-2 block text-xs text-fg-dim">
-          Outra resposta
+          {t('Outra resposta')}
           <input
             type="text"
             className="input mt-1"
@@ -264,7 +278,7 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
             value={texts[current]}
             onChange={(e) => {
               touched.current = true;
-              setTexts((prev) => prev.map((t, j) => (j === current ? e.target.value : t)));
+              setTexts((prev) => prev.map((v, j) => (j === current ? e.target.value : v)));
             }}
           />
         </label>
@@ -275,13 +289,13 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
           {/* A concierge suggestion that cited no decision (`decision_id: ""`) has nothing to forget. */}
           {!(currentHint.by === 'concierge' && !currentHint.decision_id) && (
             <button type="button" className="btn-ghost mt-1 text-xs" disabled={answering} onClick={() => forget(currentHint)}>
-              Esquecer esta decisão
+              {t('Esquecer esta decisão')}
             </button>
           )}
         </div>
       )}
       <button type="button" className="btn-primary mt-2" disabled={answering || !complete || suggestedUnseen} onClick={() => onAnswer(question.id, { answers })}>
-        Responder
+        {t('Responder')}
       </button>
       {auto?.status === 'failed' && <p className="mt-2 text-xs text-danger">{autoAnswerFailureText(auto.error_code)}</p>}
     </>
@@ -289,9 +303,13 @@ function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswe
 }
 
 function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuestionCardProps & { question: TabQuestionPermission }) {
+  const { t } = useTranslation();
   const open = question.status === 'open';
   const codex = question.payload.agent === 'codex';
   const [screen, setScreen] = useState<string | null>(null);
+  // The dialog's own options (TER-995): one button each, so "don't ask again" or "auto mode" can be
+  // chosen from here. Empty until the screen is read, or when it shows no menu this card can trust.
+  const [options, setOptions] = useState<PermissionOption[]>([]);
   const [denying, setDenying] = useState(false);
   const [text, setText] = useState('');
   useEffect(() => {
@@ -299,8 +317,10 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
     let alive = true;
     // A card whose tab moved on answers 409 here: it simply shows no excerpt.
     loadScreen(question.id).then(
-      (t) => {
-        if (alive) setScreen(t);
+      (read) => {
+        if (!alive) return;
+        setScreen(read.text);
+        setOptions(read.options ?? []);
       },
       () => {},
     );
@@ -319,28 +339,45 @@ function PermissionBody({ question, answering, onAnswer, loadScreen }: TabQuesti
       )}
       {open && screen !== null && (
         <details className="mt-2" open>
-          <summary className="cursor-pointer text-xs text-fg-dim">Tela da aba</summary>
+          <summary className="cursor-pointer text-xs text-fg-dim">{t('Tela da aba')}</summary>
           <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs text-fg">{screen}</pre>
         </details>
       )}
       {open ? (
         <>
+          {options.length > 0 && (
+            <div role="group" aria-label={t('Opções da aba')} className="mt-2 flex flex-wrap gap-2">
+              {options.map((o) => (
+                <button
+                  key={o.number}
+                  type="button"
+                  title={o.label}
+                  className={o.highlight ? 'btn-primary' : o.allow ? 'btn-ghost' : 'btn-danger'}
+                  disabled={answering}
+                  onClick={() => onAnswer(question.id, { allow: o.allow, option: { number: o.number, label: o.label } })}
+                >
+                  {`${o.number}. ${o.summary}`}
+                </button>
+              ))}
+            </div>
+          )}
+          {/* "Permitir" and "Negar" stay as shortcuts: the dialog's first option, and Escape (its last). */}
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className="btn-primary" disabled={answering} onClick={() => onAnswer(question.id, { allow: true })}>
-              Permitir
+              {t('Permitir')}
             </button>
             <button type="button" className="btn-danger" disabled={answering} onClick={() => onAnswer(question.id, { allow: false })}>
-              Negar
+              {t('Negar')}
             </button>
             <button type="button" className="btn-ghost" disabled={answering} onClick={() => setDenying(true)}>
-              Negar e dizer…
+              {t('Negar e dizer…')}
             </button>
           </div>
           {denying && (
             <div className="mt-2 flex gap-2">
-              <input aria-label="O que dizer à aba" className="input" maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />
+              <input aria-label={t('O que dizer à aba')} className="input" maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} />
               <button type="button" className="btn-danger" disabled={answering || !text.trim()} onClick={() => onAnswer(question.id, { allow: false, text: text.trim() })}>
-                Enviar
+                {t('Enviar')}
               </button>
             </div>
           )}

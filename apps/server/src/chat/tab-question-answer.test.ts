@@ -5,6 +5,7 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from './bus.js';
+import { permissionToolOnScreen } from './permission-dialog.js';
 
 const sendKey = vi.fn(async (_ctx: unknown, input: { tab_id: string; key: string }) => ({ tab_id: input.tab_id, key: input.key, sent: true }));
 const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }) => ({ tab_id: input.tab_id, sent: true }));
@@ -125,6 +126,40 @@ describe('answerTabQuestion', () => {
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
     await answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep });
     expect(steps()).toEqual(['key:1']);
+  });
+
+  it('an option of the dialog (TER-995): its digit, stored as the screen shows it', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    const label = 'Yes, and switch to auto mode · auto mode handles these prompts for you';
+    // `allow` comes from the screen's option, whatever the request said.
+    await answerTabQuestion(ctx, 'q2', { allow: false, option: { number: 3, label } }, { log: log(), sleep: noSleep });
+    expect(steps()).toEqual(['key:3']);
+    expect(tabQuestions.claim).toHaveBeenCalledWith('q2', 'u1', { allow: true, option: { number: 3, label, summary: 'Yes, and switch to auto mode' } }, undefined, 'card');
+  });
+
+  it('an option whose text changed on screen: 409, nothing claimed nor typed, the card stays open', async () => {
+    const { ctx, tabQuestions } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true, option: { number: 2, label: "Yes, and don't ask again for npm commands" } }, { log: log(), sleep: noSleep }), 409, 'TAB_OPTION_CHANGED');
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true, option: { number: 5, label: 'No' } }, { log: log(), sleep: noSleep }), 409, 'TAB_OPTION_CHANGED');
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+    expect(steps()).toEqual([]);
+  });
+
+  it('an option and a text together are refused', async () => {
+    const { ctx } = ctxFor(permission());
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    await expect(answerTabQuestion(ctx, 'q2', { allow: false, text: 'x', option: { number: 4, label: 'No' } }, { log: log(), sleep: noSleep })).rejects.toThrow();
+    expect(steps()).toEqual([]);
+  });
+
+  it('a Codex option: the arrows from the cursor, then Enter', async () => {
+    const codexPerm = permission({ payload: { tool_name: 'Bash', agent: 'codex' } });
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: codexFx('permission-dialogs/codex-command.txt'), styled: false });
+    await answerTabQuestion(ctxFor(codexPerm).ctx, 'q2', { allow: true, option: { number: 2, label: "Yes, and don't ask again for commands that start with `npm test` (p)" } }, { log: log(), sleep: noSleep });
+    expect(steps()).toEqual(['key:Down', 'key:Enter']);
   });
 
   it('a Codex approval: "y" on its own screen; a Claude screen for it is stale', async () => {
@@ -399,6 +434,72 @@ describe('automatic answers (spec 2026-09-26 concierge memory §6, D11)', () => 
   });
 });
 
+describe("an automatic allow (via 'automation', agentic board spec §9.2, review I1)", () => {
+  const dialog = (name: string) => `${readFileSync(join(import.meta.dirname, 'fixtures/permission-dialogs', name), 'utf8').trimEnd()}\n Esc to cancel`;
+  const fetchCard = (over: Partial<TabQuestion> = {}) => permission({ payload: { tool_name: 'WebFetch' }, ...over });
+  const RULE = '─'.repeat(80);
+  /** A dialog whose title the server does not know (an MCP tool), asking the usual question. */
+  const mcpDialog = `● termhub - delete_task (MCP)\n${RULE}\n Tool use\n   termhub - delete_task(id: "TER-1") (MCP)\n Do you want to proceed?\n ❯ 1. Yes\n   2. No\n Esc to cancel`;
+  const screen = (text: string) => readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text, styled: false });
+  const nothingSent = (tabQuestions: ReturnType<typeof ctxFor>['tabQuestions']) => {
+    expect(tabQuestions.claim).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(sendInput).not.toHaveBeenCalled();
+    // the card stays open for the person
+    expect(tabQuestions.closeOne).not.toHaveBeenCalled();
+  };
+
+  it('the dialog the card names, identified on screen: "allow" is sent and stored as answered_via automation', async () => {
+    screen(dialog('claude-webfetch.txt'));
+    const { ctx, tabQuestions } = ctxFor(fetchCard());
+    await answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed });
+    expect(tabQuestions.claim).toHaveBeenCalledWith('q2', 'u1', { allow: true }, undefined, 'automation');
+    expect(steps().length).toBeGreaterThan(0);
+  });
+
+  it('an unknown-title dialog on screen (an MCP tool): nothing is sent, although a click would pass', async () => {
+    screen(mcpDialog);
+    const card = fetchCard();
+    expect(promptVisible(mcpDialog, card)).toBe(true);
+    const { ctx, tabQuestions } = ctxFor(card);
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+    nothingSent(tabQuestions);
+  });
+
+  it('a dialog swapped in during the settle (the next queued one, a subagent\'s): nothing is sent', async () => {
+    for (const text of [mcpDialog, dialog('claude-bash-subagent.txt'), dialog('claude-skill.txt')]) {
+      vi.clearAllMocks();
+      screen(text);
+      const { ctx, tabQuestions } = ctxFor(fetchCard());
+      await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+      nothingSent(tabQuestions);
+    }
+  });
+
+  it('a forged hook naming an allowed tool while another dialog is shown: nothing is sent', async () => {
+    // the card says WebFetch; the real dialog is a Bash command, or a WebFetch of a subagent's
+    for (const text of [screens.permission, dialog('claude-webfetch.txt').replace(' Fetch\n', ' Fetch · from the general-purpose agent\n')]) {
+      vi.clearAllMocks();
+      screen(text);
+      const { ctx, tabQuestions } = ctxFor(fetchCard());
+      await rejects(answerTabQuestion(ctx, 'q2', { allow: true }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+      nothingSent(tabQuestions);
+    }
+  });
+
+  it("only an allow on a permission card goes out via 'automation'", async () => {
+    screen(dialog('claude-webfetch.txt'));
+    const { ctx, tabQuestions } = ctxFor(fetchCard());
+    await rejects(answerTabQuestion(ctx, 'q2', { allow: false }, { log: log(), sleep: noSleep, via: 'automation', ...noEmbed }), 409, 'TAB_PROMPT_NOT_SEEN');
+    nothingSent(tabQuestions);
+  });
+
+  it('a Codex card is never identified for an automatic allow', () => {
+    expect(permissionToolOnScreen(dialog('claude-webfetch.txt'), fetchCard({ payload: { tool_name: 'WebFetch', agent: 'codex' } }))).toBe(false);
+    expect(permissionToolOnScreen(dialog('claude-webfetch.txt'), fetchCard())).toBe(true);
+  });
+});
+
 const CHOICE_FOOTER = 'Enter to select · Tab/Arrow keys to navigate · Esc to cancel';
 const PERMISSION_FOOTER = 'Esc to cancel · Tab to amend';
 
@@ -471,6 +572,13 @@ describe('tabQuestionScreen', () => {
     readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: Array.from({ length: 30 }, (_, i) => `l${i}\n`).join('\n'), styled: false });
     const { text } = await tabQuestionScreen(ctx, 'q2');
     expect(text.split('\n')).toEqual(Array.from({ length: 20 }, (_, i) => `l${i + 10}`));
+  });
+  it('lists the dialog’s options while it is this card’s, none otherwise (TER-995)', async () => {
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.permission, styled: false });
+    const { options } = await tabQuestionScreen(ctxFor(permission()).ctx, 'q2');
+    expect(options.map((o) => o.summary)).toEqual(['Yes', 'Yes, and always allow access to /home/dev/project from this project', 'Yes, and switch to auto mode', 'No']);
+    readScreen.mockResolvedValue({ tab_id: 't1', lines: 60, text: screens.choice, styled: false });
+    expect((await tabQuestionScreen(ctxFor(permission()).ctx, 'q2')).options).toEqual([]);
   });
   it('the excerpt is the plain screen', async () => {
     const { ctx } = ctxFor(permission());

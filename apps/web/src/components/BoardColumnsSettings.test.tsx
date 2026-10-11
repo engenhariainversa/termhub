@@ -25,6 +25,7 @@ vi.mock('../lib/api', () => {
 
 import { ApiError } from '../lib/api';
 import { BoardColumnsSettings } from './BoardColumnsSettings';
+import { actRightAfterCommit } from '../test-commit';
 
 const col = (id: string, name: string, category: TaskColumn['category'], position: number): TaskColumn => ({ id, project_id: 'p1', name, category, position, created_at: '' });
 const columns = [col('c1', 'A fazer', 'todo', 0), col('c2', 'Fazendo', 'doing', 1), col('c4', 'QA', 'doing', 2), col('c3', 'Feito', 'done', 3)];
@@ -69,6 +70,19 @@ describe('BoardColumnsSettings', () => {
     const qa = await screen.findByDisplayValue('QA');
     fireEvent.change(qa, { target: { value: 'Em revisão' } });
     fireEvent.blur(qa);
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith('c4', { name: 'Em revisão' }));
+    await reloaded();
+  });
+
+  it('keeps a name typed the moment the columns appear', async () => {
+    render(<BoardColumnsSettings project={project} />);
+    await actRightAfterCommit(
+      () => !!screen.queryByDisplayValue('QA'),
+      () => fireEvent.change(screen.getByDisplayValue('QA'), { target: { value: 'Em revisão' } }),
+    );
+    await act(async () => {});
+    const input = screen.getByDisplayValue('Em revisão');
+    fireEvent.blur(input);
     await waitFor(() => expect(mocks.update).toHaveBeenCalledWith('c4', { name: 'Em revisão' }));
     await reloaded();
   });

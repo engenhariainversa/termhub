@@ -4,6 +4,7 @@ import { agentRpc } from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../lib/errors.js';
 import { runOnMachine, shellQuote } from './machine-exec.js';
+import { tk } from '../i18n/index.js';
 
 export interface FsRoot {
   kind: 'home' | 'disk';
@@ -109,7 +110,7 @@ export async function browseMachine(machine: Machine, path: string | undefined):
     const script = buildFsListScript(shellQuote(raw));
     const r = await runOnMachine(machine, { file: '/bin/sh', args: ['-c', script] }, script, 10000);
     if (r.timedOut) throw new HttpError(504, 'A máquina demorou para responder');
-    if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? 'Máquina inacessível via SSH' : 'Falha ao listar diretórios');
+    if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? tk('Máquina inacessível via SSH') : tk('Falha ao listar diretórios'));
     stdout = r.stdout;
   }
 
@@ -145,7 +146,7 @@ export function assertDirName(name: string): void {
 async function runFsScript(machine: Machine, script: string): Promise<string> {
   const r = await runOnMachine(machine, { file: '/bin/sh', args: ['-c', script] }, script, 10000);
   if (r.timedOut) throw new HttpError(504, 'A máquina demorou para responder');
-  if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? 'Máquina inacessível via SSH' : 'Falha ao acessar o sistema de arquivos');
+  if (r.code !== 0) throw new HttpError(502, machine.type === 'ssh' ? tk('Máquina inacessível via SSH') : tk('Falha ao acessar o sistema de arquivos'));
   return r.stdout;
 }
 

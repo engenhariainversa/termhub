@@ -1,6 +1,9 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
+import { useTranslation } from './i18n';
+import { NavigatorBridge } from './lib/app-navigate';
+import { FilePage } from './pages/FilePage';
 import { AnalyticsGate } from './components/AnalyticsGate';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AppShell, FullScreenMessage, Layout } from './components/Layout';
@@ -20,9 +23,10 @@ const OfficePage = lazy(retryOnceOnImportFailure(() => import('./pages/OfficePag
 
 /** The one lazy route: a failed import must show a way out, not unmount the app. */
 function OfficeRoute() {
+  const { t } = useTranslation();
   return (
     <ErrorBoundary fallback={<RouteFailed />}>
-      <Suspense fallback={<FullScreenMessage>Carregando…</FullScreenMessage>}>
+      <Suspense fallback={<FullScreenMessage>{t('Carregando…')}</FullScreenMessage>}>
         <OfficePage />
       </Suspense>
     </ErrorBoundary>
@@ -30,11 +34,12 @@ function OfficeRoute() {
 }
 
 function RouteFailed() {
+  const { t } = useTranslation();
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center text-sm text-fg-muted">
-      <span>Não foi possível carregar esta página.</span>
+      <span>{t('Não foi possível carregar esta página.')}</span>
       <button className="rounded border border-line px-3 py-1 hover:bg-bg-3 hover:text-fg" onClick={() => location.reload()}>
-        Recarregar
+        {t('Recarregar')}
       </button>
     </div>
   );
@@ -63,6 +68,7 @@ export function AppRoutes() {
           <Route path="/project/:ref" element={<CardPage />} />
           <Route path="/office" element={<OfficeRoute />} />
           <Route path="/office/:projectId" element={<OfficeRoute />} />
+          <Route path="/files" element={<FilePage />} />
         </Route>
         <Route element={<ChatLayout />}>
           <Route path="/chat" element={<ChatPage />} />
@@ -77,6 +83,7 @@ export function AppRoutes() {
 export function App() {
   return (
     <BrowserRouter>
+      <NavigatorBridge />
       <AuthProvider>
         <AnalyticsGate>
           <AppRoutes />

@@ -24,6 +24,8 @@ import {
   chatStandingGrantSchema,
   chatProjectsResponse,
   conciergeNoteView,
+  decisionChallengesBody,
+  decisionChallengesResponse,
   decisionsResponse,
   decisionViewSchema,
   deviceActivateBody,
@@ -113,6 +115,11 @@ export const chatConversationSchema = z.object({
   ai_account_id: z.string().nullable().optional(),
   archived_at: z.string().nullable(),
   last_message_at: z.string().nullable(),
+  /** How full the CLI session is (TER-315) and when it was last compacted (TER-1038): the header's
+   *  context meter. Optional: an older server never sends them. */
+  context_tokens: z.number().nullable().optional(),
+  context_window: z.number().nullable().optional(),
+  context_compacted_at: z.string().nullable().optional(),
 });
 
 /** `GET chat` and `POST chat/host`'s payload (P§6). `subagents` (spec 2026-09-26 panel §4) defaults
@@ -137,6 +144,9 @@ export const chatResponse = z.object({
   /** The answer rows still to be answered (spec 2026-09-29): what the screen shows as "pensando…"
    * when it opens in the middle of a run. Defaulted: an older server never sends the field. */
   open_answer_ids: z.array(z.string()).default([]),
+  /** The person's own context limit for the meter (TER-1038); null = the model's window, and so does an
+   * older server, which never sends the field. */
+  context_limit: z.number().nullable().optional(),
   host: chatHostStateSchema,
 });
 
@@ -147,6 +157,9 @@ export const cancelSubagentResponse = z.object({ subagent: subagentViewSchema })
 export const meResponse = z.object({
   user: z.object({ id: z.string(), email: z.string(), name: z.string() }),
   permissions: z.array(z.string()),
+  /** Feature flags resolved for this person (TER-1040, docs/feature-flags.md). Defaulted: an older
+   * server never sends them, and a flag it does not send is off. */
+  features: z.object({ subscriptions: z.boolean().default(false) }).default({}),
   device: deviceSelf,
 });
 
@@ -190,6 +203,28 @@ export const transcriptionConfigResponse = z.object({ enabled: z.boolean() });
 /** `POST chat/attachments`' answer (spec 2026-09-26 §5.3), and `GET chat/attachments/:id/status`. */
 export const chatAttachmentResponse = z.object({ attachment: chatAttachment });
 
+/** One version of a legal document (TER-742, spec 2026-10-07 legal acceptance): the server's
+ * `LegalVersionView`, the same object `/auth/me`'s `legal` carries to the web. */
+export const legalVersionSchema = z.object({
+  id: z.string(),
+  document: z.enum(['terms', 'privacy']),
+  version: z.string(),
+  effective_at: z.string(),
+  url: z.string(),
+  requires_acceptance: z.boolean(),
+  summary: z.string().nullable(),
+});
+
+/** `GET legal` and `POST legal/accept`: the versions in force the person still has to accept, and
+ * the ones announced for later. `upcoming` defaults to `[]`, so a lean answer still parses. */
+export const legalStatusResponse = z.object({
+  pending: z.array(legalVersionSchema),
+  upcoming: z.array(legalVersionSchema).default([]),
+});
+
+/** `POST legal/accept`'s body: the ids the screen showed (the server records channel `mobile`). */
+export const legalAcceptBody = z.object({ version_ids: z.array(z.string().min(1)).min(1) });
+
 // `z.infer` companions for every schema of the contract, prefixed `T` — including the ones of
 // `@termhub/mobile-api`, which exports its schemas but not these app-side type names.
 export type TVerificationCode = z.infer<typeof verificationCodeSchema>;
@@ -212,6 +247,8 @@ export type TMobileMessageBody = z.infer<typeof mobileMessageBody>;
 export type TSendAccepted = z.infer<typeof sendAccepted>;
 export type TMobileDecisionBody = z.infer<typeof mobileDecisionBody>;
 export type TMobileBatchDecisionBody = z.infer<typeof mobileBatchDecisionBody>;
+export type TDecisionChallengesBody = z.infer<typeof decisionChallengesBody>;
+export type TDecisionChallengesResponse = z.infer<typeof decisionChallengesResponse>;
 export type TChatProjectItem = z.infer<typeof chatProjectItem>;
 export type TChatProjectsResponse = z.infer<typeof chatProjectsResponse>;
 export type THostOptionsResponse = z.infer<typeof hostOptionsResponse>;
@@ -264,6 +301,8 @@ export type TProjectAi = z.infer<typeof projectAiSchema>;
 export type TProjectAiOption = z.infer<typeof projectAiOption>;
 export type TProjectAiResponse = z.infer<typeof projectAiResponse>;
 export type TProjectAiBody = z.infer<typeof projectAiBody>;
+// Trabalho automático (spec 2026-10-04): `@termhub/mobile-api`'s automation schemas.
+export type { AutomationAutonomy as TAutomationAutonomy, AutomationSetup as TAutomationSetup, AutomationSetupResponse as TAutomationSetupResponse, CardAutoResponse as TCardAutoResponse, PauseState as TPauseState } from '@termhub/mobile-api';
 export type TChatConversation = z.infer<typeof chatConversationSchema>;
 export type TChatResponse = z.infer<typeof chatResponse>;
 export type TMeResponse = z.infer<typeof meResponse>;
@@ -283,6 +322,11 @@ export type TProgressResponse = z.infer<typeof progressResponse>;
 export type TEpicProgress = z.infer<typeof epicProgress>;
 export type TCardProgress = z.infer<typeof cardProgress>;
 export type TAgentOnCard = z.infer<typeof agentOnCard>;
+export type { AutomationFeedEvent as TAutomationFeedEvent } from '@termhub/mobile-api';
 export type TProgressEstimate = z.infer<typeof progressEstimate>;
 export type TPullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type TCancelSubagentResponse = z.infer<typeof cancelSubagentResponse>;
+// Legal acceptance (TER-742).
+export type TLegalVersion = z.infer<typeof legalVersionSchema>;
+export type TLegalStatus = z.infer<typeof legalStatusResponse>;
+export type TLegalAcceptBody = z.infer<typeof legalAcceptBody>;

@@ -20,12 +20,21 @@ interface Deps {
 const MAX_BUFFERED = 1024 * 1024;
 const BUTTON_NAME: Record<string, string> = { home: 'home', lock: 'lock', volumeUp: 'volumeUp', volumeDown: 'volumeDown' };
 
+export const RECONNECTING_TOAST = 'Simulador reconectando; tente de novo em instantes.';
+
+/** The toast for a failed command. undici's bare "fetch failed" means the tunnel under the client closed. */
+export function commandErrorMessage(err: unknown): string {
+  if (err instanceof WdaError) return `WDA: ${err.message}`;
+  if (err instanceof TypeError && err.message === 'fetch failed') return RECONNECTING_TOAST;
+  return err instanceof Error ? err.message : 'Comando falhou';
+}
+
 export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRouter>, deps: Deps) {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
   const log = deps.log.child({ mod: 'sim-ws' });
   const byTab = new Map<string, Set<WebSocket>>();
 
-  router.add(/^\/ws\/sim\/([a-z0-9]+)\/?$/, async ({ req, socket, head, params, scope }) => {
+  router.add(/^\/ws\/sim\/([a-z0-9]+)\/?$/, async ({ req, socket, head, params, scope, canWrite }) => {
     // ownership: a tab outside the caller's scope is a 404, like a missing one
     const found = await new Scoped(deps.repos, scope).tab(params[0]).catch(() => null);
     if (!found || found.tab.kind !== 'simulator') return rejectUpgrade(socket, 404, 'Not Found');
@@ -39,7 +48,7 @@ export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRoute
         set.delete(ws);
         if (set.size === 0) byTab.delete(tab.id);
       });
-      void handleConnection(ws, tab, machine, deps, log);
+      void handleConnection(ws, tab, machine, !canWrite, deps, log);
     });
   });
 
@@ -65,13 +74,26 @@ export function registerSimulatorWs(router: ReturnType<typeof createUpgradeRoute
   };
 }
 
-async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<SimulatorSessionManager['acquire']>[0], deps: Deps, log: FastifyBaseLogger) {
+/** What a read-only viewer (no terminals:write, TER-576) may still send: its own stream controls. */
+const VIEWER_MESSAGES = new Set(['ping', 'pause', 'resume', 'settings']);
+
+async function handleConnection(
+  ws: WebSocket,
+  tab: Tab,
+  machine: Parameters<SimulatorSessionManager['acquire']>[0],
+  readonly: boolean,
+  deps: Deps,
+  log: FastifyBaseLogger,
+) {
   const w = ws as WebSocket & { isAlive?: boolean };
   w.isAlive = true;
   ws.on('pong', () => (w.isAlive = true));
   const send = (msg: object) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   };
+  // A read-only viewer is told so before anything else, so the page can disable its controls; the
+  // server drops tap, drag, keys, key, button and rotate from it either way. A writer gets nothing.
+  if (readonly) send({ type: 'readonly' });
 
   if (!tab.simulator_udid) {
     send({ type: 'status', state: 'no_device' });
@@ -137,7 +159,7 @@ async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<Sim
 
   const toast = (message: string) => send({ type: 'toast', message });
   const run = (p: Promise<unknown>) =>
-    p.catch((err) => toast(err instanceof WdaError ? `WDA: ${err.message}` : err instanceof Error ? err.message : 'Comando falhou'));
+    p.catch((err) => toast(commandErrorMessage(err)));
 
   ws.on('message', (raw, isBinary) => {
     if (isBinary) return;
@@ -150,6 +172,7 @@ async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<Sim
     const r = clientMessageSchema.safeParse(parsed);
     if (!r.success) return;
     const m = r.data;
+    if (readonly && !VIEWER_MESSAGES.has(m.type)) return;
     if (m.type === 'pause') {
       wantPaused = true;
       paused = true;
@@ -198,7 +221,7 @@ async function handleConnection(ws: WebSocket, tab: Tab, machine: Parameters<Sim
     } catch (err) {
       // Seguro barato: uma exceção síncrona aqui (ex.: montar as W3C actions) derrubaria o
       // processo, já que é um listener de evento do `ws` — nunca deixa escapar, vira toast.
-      toast(err instanceof WdaError ? `WDA: ${err.message}` : err instanceof Error ? err.message : 'Comando falhou');
+      toast(commandErrorMessage(err));
     }
   });
 

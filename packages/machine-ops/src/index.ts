@@ -13,3 +13,7 @@ export * from './discover.js';
 export * from './simulator.js';
 export * from './scroll-script.js';
 export * from './pane-script.js';
+export * from './guard-script.js';
+export * from './hooks-status.js';
+export * from './ai-usage.js';
+export * from './ai-usage-script.js';

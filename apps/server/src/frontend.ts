@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Repositories } from './db/repositories/index.js';
 import { cityMetaFor, renderCityDocument, renderCityPage } from './public/city-page.js';
+import { sendError } from './lib/errors.js';
 
 /** Where the two web bundles are built to: `npm run build` and `npm run build:city` (apps/web). */
 export function defaultFrontendDirs(rootDir: string): { webDist: string; cityDist: string } {
@@ -44,10 +45,10 @@ export async function registerFrontend(
   // URL points at (public/city-page.ts); every other route gets the app's own.
   fastify.setNotFoundHandler(async (request, reply) => {
     if (request.url.startsWith('/api/') || request.url.startsWith('/ws/') || request.url.startsWith('/mcp')) {
-      return reply.code(404).send({ error: 'Não encontrado' });
+      return sendError(request, reply, 404, 'Não encontrado');
     }
     if (request.url.startsWith('/city/')) {
-      if (!cityTemplate) return reply.code(404).send({ error: 'Não encontrado' });
+      if (!cityTemplate) return sendError(request, reply, 404, 'Não encontrado');
       try {
         const html = await renderCityPage(deps.repos, cityTemplate, request.url, deps.publicCityUrl);
         // Short: an unpublished room must drop out of link previews soon, and the memo behind this
@@ -62,7 +63,7 @@ export async function registerFrontend(
         return reply.code(503).type('text/html').send(renderCityDocument(cityTemplate, cityMetaFor(undefined, {}, deps.publicCityUrl)));
       }
     }
-    if (!hasApp) return reply.code(404).send({ error: 'Não encontrado' });
+    if (!hasApp) return sendError(request, reply, 404, 'Não encontrado');
     return reply.sendFile('index.html');
   });
   return true;

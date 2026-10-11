@@ -4,7 +4,7 @@ import { ciLabel, epicCiLine, formatDuration, formatEstimate, needsYouAgents, st
 
 const agent = (over: Partial<AgentOnCard> = {}): AgentOnCard => ({
   tab_id: 't1', tab_name: 'agent', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T12:00:00.000Z',
-  background: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false, ...over,
+  background: false, finished: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false, ...over,
 });
 
 describe('formatDuration', () => {
@@ -41,6 +41,11 @@ describe('stateLabel', () => {
     expect(stateLabel('working', true)).toBe('aguardando segundo plano');
     expect(stateLabel('working', false)).toBe('trabalhando');
   });
+  it('names an agent that finished with a report as concluído, never as waiting for you (TER-972)', () => {
+    expect(stateLabel('idle', false, true)).toBe('concluído');
+    expect(stateLabel('idle', false, false)).toBe('parado');
+    expect(stateLabel('finished')).toBe('concluído');
+  });
 });
 
 describe('withLiveTab', () => {
@@ -53,6 +58,12 @@ describe('withLiveTab', () => {
     expect(withLiveTab(agent(), live)).toMatchObject({ state: 'working', background: true, needs_you: false });
     const working = { ...live, state: 'working' } as Tab;
     expect(withLiveTab({ ...agent(), background: true }, working)).toMatchObject({ state: 'working', background: false });
+  });
+  it('turns a live finished into the shape the server sends: idle, finished, not needing you (TER-972)', () => {
+    const live = { id: 't1', state: 'finished', state_at: '2026-09-27T12:05:00.000Z', activity: null, activity_verb: null, rate_limited_at: null } as Tab;
+    expect(withLiveTab(agent(), live)).toMatchObject({ state: 'idle', finished: true, background: false, needs_you: false });
+    const idle = { ...live, state: 'idle' } as Tab;
+    expect(withLiveTab({ ...agent(), state: 'idle', finished: true }, idle)).toMatchObject({ state: 'idle', finished: false });
   });
   it('keeps the server value when the monitor does not know the tab', () => {
     expect(withLiveTab(agent(), undefined)).toEqual(agent());

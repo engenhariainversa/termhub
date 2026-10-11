@@ -1,3 +1,4 @@
+import { tk } from '../i18n';
 import type { Project, ProjectGroup } from './types';
 
 export type SectionId = string; // 'running' | 'others' | a group id
@@ -15,9 +16,9 @@ export function buildSections(projects: Project[], groups: ProjectGroup[], runni
   const grouped = new Set(sorted.flatMap((g) => g.project_ids));
   const out: Section[] = [];
   const running = visible.filter((p) => runningIds.has(p.id));
-  if (running.length) out.push({ id: 'running', kind: 'running', label: 'Em execução', projects: running });
+  if (running.length) out.push({ id: 'running', kind: 'running', label: tk('Em execução'), projects: running });
   for (const g of sorted) out.push({ id: g.id, kind: g.kind, label: g.name, projects: pick(g.project_ids) });
-  out.push({ id: 'others', kind: 'others', label: 'Outros', projects: visible.filter((p) => !grouped.has(p.id)) });
+  out.push({ id: 'others', kind: 'others', label: tk('Outros'), projects: visible.filter((p) => !grouped.has(p.id)) });
   return out;
 }
 

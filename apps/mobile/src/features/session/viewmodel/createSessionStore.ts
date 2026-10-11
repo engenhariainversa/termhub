@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
-import type { PinDecision } from '@/services/api/contract';
+import { ACCOUNT_PENDING_DELETION, type PinDecision } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { socketWake } from '@/services/api/wake';
 import { b64url, fromB64url } from '@/services/crypto/encoding';
@@ -164,6 +164,27 @@ export function createSessionStore(deps: SessionDeps) {
           set({ error: e instanceof ApiError ? e.message : MSG.network, busy: false });
         };
 
+        /** The decision challenges of `actionIds`, by action id. A batch takes them in one authenticated
+         * call (TER-530): one `session/challenge` per action ran into that anonymous route's tight
+         * per-client budget and answered 429 from the sixth card on, which left the batch unapprovable.
+         * A server without that route (404, a rollback) still gets the old one-by-one calls. */
+        const decisionChallenges = async (actionIds: string[]): Promise<Map<string, string>> => {
+          if (actionIds.length > 1) {
+            try {
+              const { challenges } = await api.decisionChallenges(get().auth(), { action_ids: actionIds });
+              return new Map(challenges.map((c) => [c.action_id, c.challenge]));
+            } catch (e) {
+              if (!(e instanceof ApiError && e.status === 404)) throw e;
+            }
+          }
+          const out = new Map<string, string>();
+          for (const actionId of actionIds) {
+            const { challenge } = await api.challenge({ device_id: get().deviceId!, purpose: 'decision', action_id: actionId });
+            out.set(actionId, challenge);
+          }
+          return out;
+        };
+
         /** `challenge` + `token` for a candidate secret, kept only once the server accepts it. */
         const redeem = async (gen: number, candidate: Uint8Array) => {
           const deviceId = get().deviceId!;
@@ -210,6 +231,9 @@ export function createSessionStore(deps: SessionDeps) {
               set({ error: MSG.pinInvalid, attemptsLeft: e.attemptsLeft ?? null, busy: false });
               return true;
             }
+            // The account is pending deletion (TER-720): the client already told the account store,
+            // which swaps the tabs for the blocking screen — no error text of its own here.
+            if (isApiError(e, ACCOUNT_PENDING_DELETION)) return true;
             return false;
           },
 
@@ -402,9 +426,11 @@ export function createSessionStore(deps: SessionDeps) {
               if (superseded()) return patch({ busy: false });
               if (!secret) return patch({ busy: false, error: MSG.usePin });
               // One PIN entry, one challenge per action: each is bound to its own action id.
+              const challenges = await decisionChallenges(waiting.actionIds);
+              if (superseded()) return patch({ busy: false });
               for (const actionId of waiting.actionIds) {
-                const { challenge } = await api.challenge({ device_id: get().deviceId!, purpose: 'decision', action_id: actionId });
-                if (superseded()) return patch({ busy: false });
+                const challenge = challenges.get(actionId);
+                if (!challenge) throw new ApiError(500, 'CHALLENGE_MISSING', MSG.network);
                 proofs[actionId] = { challenge, pin_proof: decisionProof(secret, challenge, actionId, waiting.decision) };
               }
             } catch (e) {

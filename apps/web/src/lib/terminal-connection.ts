@@ -1,3 +1,4 @@
+import { terminalGate, type ConnectGate, type GateTicket } from './connect-gate';
 import { RESTART_CLOSE, reconnectDelay } from './reconnect';
 
 export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'offline' | 'closed';
@@ -8,6 +9,8 @@ export interface TerminalConnectionHandlers {
   onExit?: (code: number) => void;
   /** what the server said went wrong (e.g. the machine could not start the terminal) */
   onError?: (message: string) => void;
+  /** on every `ready`: whether the server treats this socket as read-only (no terminals:write) */
+  onReadonly?: (readonly: boolean) => void;
 }
 
 const MAX_ATTEMPTS = 8;
@@ -15,6 +18,8 @@ const MAX_ATTEMPTS = 8;
 const SCROLL_MAX_LINES = 500;
 const BASE_DELAY = 500;
 const MAX_DELAY = 15_000;
+/** A handshake still pending after this is abandoned and retried: it would otherwise hold its slot in the gate. */
+const HANDSHAKE_TIMEOUT = 10_000;
 
 /**
  * WebSocket de um terminal com reconexão automática (backoff exponencial + jitter).
@@ -36,11 +41,30 @@ export class TerminalConnection {
    * until then and for an older server or agent — the wheel then stays with xterm.js, as before.
    */
   canScroll = false;
+  /** The client knows the user lacks terminals:write (TER-576): set by the view from the role. */
+  private writable = true;
+  /** The server said so in `ready` (`readonly: true`): it drops input, resize and scroll from this socket. */
+  private serverReadonly = false;
+  /** Our place in the handshake gate (TER-902): waiting for a slot, or holding one until the handshake settles. */
+  private ticket: GateTicket | null = null;
+  /** The terminal is on screen: its handshake goes ahead of the hidden ones. */
+  private priority = false;
 
   constructor(
     private tabId: string,
     private handlers: TerminalConnectionHandlers,
+    private gate: ConnectGate = terminalGate,
   ) {}
+
+  /** Visible terminals connect first; set it as the tab shows or hides. */
+  setPriority(visible: boolean) {
+    this.priority = visible;
+  }
+
+  private dropTicket() {
+    this.ticket?.release();
+    this.ticket = null;
+  }
 
   private setState(s: ConnectionState) {
     this.state = s;
@@ -53,29 +77,64 @@ export class TerminalConnection {
     this.open();
   }
 
+  /** Waits for a slot in the gate (Chromium handshakes one socket per host at a time anyway), then opens. */
   private open() {
     if (this.stopped) return;
+    this.canScroll = false;
+    this.setState(this.attempt === 0 && !this.restarting ? 'connecting' : 'reconnecting');
+    this.dropTicket();
+    let ticket: GateTicket | null = null;
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      ticket?.release();
+      if (this.ticket === ticket) this.ticket = null;
+    };
+    ticket = this.gate.enqueue(() => this.openSocket(settle), () => this.priority);
+    // the gate may have started (and settled) the socket before enqueue returned
+    if (settled) ticket.release();
+    else this.ticket = ticket;
+  }
+
+  private openSocket(settle: () => void) {
+    if (this.stopped) {
+      settle();
+      return;
+    }
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const url = `${proto}://${location.host}/ws/tabs/${this.tabId}?cols=${this.size.cols}&rows=${this.size.rows}`;
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
-    this.canScroll = false;
-    this.setState(this.attempt === 0 && !this.restarting ? 'connecting' : 'reconnecting');
+
+    const handshake = setTimeout(() => {
+      if (this.ws !== ws || ws.readyState !== WebSocket.CONNECTING) return;
+      this.ws = null;
+      settle();
+      ws.close();
+      this.scheduleReconnect();
+    }, HANDSHAKE_TIMEOUT);
 
     // The socket opens before the server has started the terminal, which can still fail on the
     // machine: only `ready` counts as connected and resets the backoff. Resetting on open made a
-    // terminal that never starts retry about once a second, forever.
-    ws.onopen = () => {};
+    // terminal that never starts retry about once a second, forever. The handshake is over, though:
+    // the next terminal may start its own.
+    ws.onopen = () => {
+      clearTimeout(handshake);
+      settle();
+    };
     ws.onmessage = (ev) => {
       if (ev.data instanceof ArrayBuffer) {
         this.handlers.onData(new Uint8Array(ev.data));
         return;
       }
       try {
-        const msg = JSON.parse(String(ev.data)) as { type: string; code?: number; message?: string; scroll?: boolean };
+        const msg = JSON.parse(String(ev.data)) as { type: string; code?: number; message?: string; scroll?: boolean; readonly?: boolean };
         if (msg.type === 'ready') {
           this.canScroll = msg.scroll === true;
+          this.serverReadonly = msg.readonly === true;
+          this.handlers.onReadonly?.(this.serverReadonly);
           this.attempt = 0;
           this.restarting = false;
           this.setState('connected');
@@ -93,6 +152,8 @@ export class TerminalConnection {
       }
     };
     ws.onclose = (ev) => {
+      clearTimeout(handshake);
+      settle();
       if (this.ws !== ws) return;
       this.ws = null;
       this.canScroll = false;
@@ -140,6 +201,7 @@ export class TerminalConnection {
     this.attempt = 0;
     this.exited = false;
     this.restarting = false;
+    this.dropTicket();
     if (this.ws) {
       const ws = this.ws;
       this.ws = null;
@@ -148,18 +210,32 @@ export class TerminalConnection {
     this.open();
   }
 
+  /**
+   * Read-only terminal (TER-576): nothing typed, no resize, no scroll goes out — the user can only watch.
+   * True when the role lacks terminals:write (`setWritable(false)`) or the last `ready` said `readonly`.
+   */
+  get readonly(): boolean {
+    return !this.writable || this.serverReadonly;
+  }
+
+  setWritable(writable: boolean) {
+    this.writable = writable;
+  }
+
   send(data: string) {
+    if (this.readonly) return;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(this.encoder.encode(data));
   }
 
   sendResize(cols: number, rows: number) {
     this.size = { cols, rows };
+    if (this.readonly) return;
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ type: 'resize', cols, rows }));
   }
 
   /** Scrolls the tab's tmux pane by `lines` (< 0 up, > 0 down); does nothing unless `canScroll`. */
   sendScroll(lines: number) {
-    if (!this.canScroll || lines === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
+    if (!this.canScroll || this.readonly || lines === 0 || this.ws?.readyState !== WebSocket.OPEN) return;
     const capped = Math.max(-SCROLL_MAX_LINES, Math.min(SCROLL_MAX_LINES, Math.trunc(lines)));
     if (capped !== 0) this.ws.send(JSON.stringify({ type: 'scroll', lines: capped }));
   }
@@ -168,6 +244,7 @@ export class TerminalConnection {
     this.stopped = true;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.dropTicket();
     const ws = this.ws;
     this.ws = null;
     ws?.close();

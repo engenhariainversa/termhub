@@ -14,6 +14,8 @@ export const DEVICE_EVENT_KINDS = [
   'pin_locked',
   'device_revoked',
   'push_token_set',
+  'push_failed',
+  'push_test',
   'review_auto_approved',
   'review_changed',
 ] as const;

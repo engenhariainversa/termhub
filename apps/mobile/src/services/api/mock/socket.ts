@@ -4,7 +4,8 @@
 // `handlers/chat.ts`'s `broadcast`, `revokeDevice` and `controls.dropSocket` can all reach it.
 import { canonicalHtu } from '../contract';
 import type { Transport, TransportSocket, TransportSocketHandlers } from '../transport';
-import { type MockSocket, type MockState, verifyAuth } from './state';
+import { catchUp } from './handlers/tabs';
+import { type MockSocket, type MockState, type MockTabSocket, verifyAuth } from './state';
 
 function lowerCaseHeaders(headers: Record<string, string>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -23,19 +24,23 @@ export function createFakeSocketConnect(state: MockState, now: () => number): Tr
   return (url: string, headers: Record<string, string>, handlers: TransportSocketHandlers): TransportSocket => {
     let entry: MockSocket | null = null;
 
+    let tabEntry: MockTabSocket | null = null;
+
     const timer = setTimeout(() => {
       const parsed = new URL(url);
       if (parsed.searchParams.get('v') !== '1') {
         handlers.onClose(4400);
         return;
       }
+      // `/ws/m/tabs/:id` (spec 2026-10-01 tab chat §5.5): the proof is over that path.
+      const tabMatch = /^\/ws\/m\/tabs\/([^/]+)$/.exec(parsed.pathname);
 
       let auth;
       try {
         auth = verifyAuth(state, {
           headers: lowerCaseHeaders(headers),
           htm: 'GET',
-          htu: canonicalHtu(httpOrigin(url), '/ws/m/chat'),
+          htu: canonicalHtu(httpOrigin(url), tabMatch ? parsed.pathname : '/ws/m/chat'),
           now: now(),
         });
       } catch {
@@ -48,6 +53,29 @@ export function createFakeSocketConnect(state: MockState, now: () => number): Tr
       }
 
       handlers.onOpen();
+      if (tabMatch) {
+        const tabId = decodeURIComponent(tabMatch[1]!);
+        const tab = state.tabs.get(tabId);
+        if (!tab) {
+          handlers.onClose(4404);
+          return;
+        }
+        const tabSocket: MockTabSocket = {
+          tabId,
+          send: (frame) => handlers.onMessage(JSON.stringify(frame)),
+          close: (code) => {
+            if (!state.tabSockets.has(tabSocket)) return;
+            state.tabSockets.delete(tabSocket);
+            handlers.onClose(code);
+          },
+        };
+        tabEntry = tabSocket;
+        state.tabSockets.add(tabSocket);
+        tabSocket.send({ type: 'hello', protocol: 1, server_time: new Date(now()).toISOString(), availability: tab.summary.availability });
+        const missed = catchUp(state, tabId, parsed.searchParams.get('after'));
+        if (missed) tabSocket.send(missed);
+        return;
+      }
       const socket: MockSocket = {
         deviceId: auth.device.id,
         send: (event) => handlers.onMessage(JSON.stringify(event)),
@@ -68,6 +96,10 @@ export function createFakeSocketConnect(state: MockState, now: () => number): Tr
       // rather than the caller invoking anything itself.
       close: () => {
         clearTimeout(timer);
+        if (tabEntry) {
+          state.tabSockets.delete(tabEntry);
+          tabEntry = null;
+        }
         if (entry) {
           state.sockets.delete(entry);
           entry = null;

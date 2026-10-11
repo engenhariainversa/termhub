@@ -4,7 +4,7 @@ export const TAB_MCP_DIR_REL = '.termhub/tabs';
 /** A tab id, as minted by the server: lowercase alphanumerics only, no path separators. */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
 
-export type TabMcpFile = 'mcp.json' | 'token';
+export type TabMcpFile = 'mcp.json' | 'token' | 'guard.json';
 
 function tabDir(tabId: string): string {
   if (!TAB_ID_RE.test(tabId)) throw new Error('tab id inválido');

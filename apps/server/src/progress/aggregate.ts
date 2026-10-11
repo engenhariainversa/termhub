@@ -1,6 +1,9 @@
-import type { AgentOnCard, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, PullRequestBadge } from '@termhub/mobile-api';
+import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
 import type { TabState } from '../db/repositories/types.js';
-import { NEEDS_YOU } from '../monitor/state.js';
+import type { AutomationEvent } from '../db/repositories/index.js';
+import { escalationEventText } from '../automation/escalation-text.js';
+import { t, type Locale } from '../i18n/index.js';
+import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
 type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -15,6 +18,8 @@ export interface ProgressTabRow {
   activity: string | null;
   activity_verb: string | null;
   rate_limited_at: Date | null;
+  /** started by an automatic run (any `automation_runs` row names it) */
+  automatic: boolean;
 }
 export interface ProgressSubtaskRow { id: string; ref: string; status: TaskStatus; done_at: Date | null; tab: ProgressTabRow | null }
 export interface ProgressCardRow {
@@ -31,6 +36,7 @@ export interface ProgressCardRow {
   tab: ProgressTabRow | null;
   subtasks: ProgressSubtaskRow[];
   pull_requests: PullRequestBadge[];
+  auto: boolean;
 }
 export interface ProgressEpicRow { id: string; ref: string; title: string; project: { id: string; key: string; name: string }; cards: ProgressCardRow[] }
 
@@ -52,14 +58,14 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644)
-    state: tab.state === 'waiting_background' ? 'working' : tab.state,
+    // the contract's state predates the newer states: each travels as an older one, flagged (contractStateOf)
+    ...contractStateOf(tab.state),
     state_at: iso(tab.state_at),
-    background: tab.state === 'waiting_background',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,
     rate_limited: tab.rate_limited_at !== null,
+    automatic: tab.automatic,
   };
 }
 
@@ -89,6 +95,8 @@ export function aggregateCard(card: ProgressCardRow, includeAgents: boolean): Ca
     estimate: estimateCard({ status: card.status, units, active_seconds: card.active_seconds, started_at: card.started_at, unit_done_at: finished }),
     agents: includeAgents ? agentsOf(card) : null,
     pull_requests: card.pull_requests,
+    auto: card.auto,
+    usage: null,
   };
 }
 
@@ -127,7 +135,7 @@ function ciSummary(cards: CardProgress[]): EpicProgress['ci'] {
   const ci = { open: 0, failed: 0, running: 0, deployed: 0 };
   for (const p of byNumber.values()) {
     if (p.state === 'open') ci.open++;
-    if ((p.state === 'open' && p.ci_state === 'failed') || p.deploy_state === 'failed') ci.failed++;
+    if ((p.state === 'open' && p.ci_state === 'failed') || p.deploy_state === 'failed' || p.release_runs?.some((r) => r.state === 'failed')) ci.failed++;
     if ((p.state === 'open' && p.ci_state === 'running') || p.deploy_state === 'running') ci.running++;
     if (p.deploy_state === 'passed') ci.deployed++;
   }
@@ -156,7 +164,30 @@ export function aggregateEpic(epic: ProgressEpicRow, includeAgents: boolean): Ep
     cards,
     ci: ciSummary(cards),
     ci_error: null,
+    usage: null,
   };
+}
+
+/**
+ * The automatic tabs' tokens and cost (spec D23) on each card, and on the epic: its own (the integrator's)
+ * plus its cards'. A card or epic with nothing metered keeps `usage: null`. `cost_usd` is the sum of the
+ * priced parts, null when nothing was priced (a Codex tab, an unknown model): "—" on screen.
+ */
+export function withUsage(epic: EpicProgress, totals: Map<string, ProgressUsage>): EpicProgress {
+  if (totals.size === 0) return epic;
+  let sum: ProgressUsage | null = null;
+  const add = (u: ProgressUsage | undefined) => {
+    if (!u) return;
+    const cost = sum?.cost_usd ?? null;
+    sum = { tokens: (sum?.tokens ?? 0) + u.tokens, cost_usd: u.cost_usd === null ? cost : (cost ?? 0) + u.cost_usd };
+  };
+  add(totals.get(epic.id));
+  const cards = epic.cards.map((c) => {
+    const u = totals.get(c.id);
+    add(u);
+    return u ? { ...c, usage: u } : c;
+  });
+  return { ...epic, cards, usage: sum };
 }
 
 /** active: epics with a card in doing; all: every epic with cards, finished last. Needs-you first, then working agents, then ref. */
@@ -170,4 +201,74 @@ export function selectEpics(epics: EpicProgress[], scope: ProgressScope): EpicPr
       (b.agents?.working ?? 0) - (a.agents?.working ?? 0) ||
       a.ref.localeCompare(b.ref, undefined, { numeric: true }),
   );
+}
+
+/** The kinds the clients have a line for: the feed's 50 count only these (an event the clients would skip must not use a slot). */
+export const FEED_KINDS = [
+  'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
+  'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
+  'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
+  // TER-1025
+  'deploy_retried', 'github_wait', 'trust_auto_accepted',
+] as const satisfies readonly AutomationEvent['kind'][];
+
+/** An event with what its sentence names, looked up by the repository. */
+export interface FeedRow {
+  event: AutomationEvent;
+  ref: string | null;
+  epic: string | null;
+  machine: string | null;
+  account: string | null;
+  tab_id: string | null;
+  branch: string | null;
+}
+
+const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+
+/** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
+function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
+  if (p.stage !== 'start') return null;
+  return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
+}
+
+/** A blocked run a PR from its branch took over (TER-1049, follower's ADOPTED_VIA): what its `run_done` line says. */
+function adoptedOf(p: Record<string, unknown>, locale: Locale): string | null {
+  return p.via === 'pull_request_after_blocked' ? t(locale, 'PR aberto depois do bloqueio; o automático acompanha até o merge') : null;
+}
+
+/**
+ * The feed lines (newest first, as read): the facts of each event, the escalation reason in the reader's language.
+ * Without `includeAgents` (no terminals:read) the machine, the tab and the branch stay out, like the agents' chips.
+ */
+export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): AutomationFeedEvent[] {
+  return rows.map(({ event: e, ref, epic, machine, account, tab_id, branch }) => {
+    const p = e.payload;
+    return {
+      id: e.id,
+      kind: e.kind,
+      created_at: e.created_at,
+      project_id: e.project_id,
+      task_id: e.task_id,
+      run_id: e.run_id,
+      tab_id: includeAgents ? (str(p.tab_id) ?? tab_id) : null,
+      ref,
+      epic,
+      machine: includeAgents ? machine : null,
+      account,
+      // a merge names the branch it landed on; every other line, the run's own
+      branch: e.kind === 'merged' ? str(p.base) : includeAgents ? (str(p.branch) ?? branch) : null,
+      workflow: str(p.workflow),
+      version: str(p.version),
+      pr: num(p.pr) ?? num(p.number),
+      url: str(p.url) ?? str(p.pr_url),
+      until: str(p.until),
+      paused: typeof p.paused === 'boolean' ? p.paused : null,
+      reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : e.kind === 'run_done' ? adoptedOf(p, locale) : null,
+      // the tool a permission_auto_approved / guard_blocked line names (TER-993)
+      tool: str(p.tool),
+      // the decision a decided_by_recommendation line names (TER-1043)
+      summary: str(p.summary),
+    };
+  });
 }

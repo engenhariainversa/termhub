@@ -3,7 +3,10 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { authState } = vi.hoisted(() => ({ authState: { current: { can: (() => true) as (resource: string, action?: string) => boolean } } }));
+const { authState, usersList } = vi.hoisted(() => ({
+  authState: { current: { can: (() => true) as (resource: string, action?: string) => boolean } as { can: (resource: string, action?: string) => boolean; user?: unknown } },
+  usersList: { current: (() => new Promise(() => {})) as () => Promise<unknown>, roles: (() => new Promise(() => {})) as () => Promise<unknown> },
+}));
 
 vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
 // Each section loads its own data; only which section is picked, and its header, matter here.
@@ -16,8 +19,8 @@ vi.mock('../components/ApiTokensView', () => ({ ApiTokensView: () => null }));
 vi.mock('../lib/api', () => ({
   ApiError: class extends Error {},
   api: {
-    users: { list: () => new Promise(() => {}), access: () => new Promise(() => {}) },
-    roles: { list: () => new Promise(() => {}) },
+    users: { list: () => usersList.current(), access: () => new Promise(() => {}) },
+    roles: { list: () => usersList.roles() },
   },
 }));
 
@@ -44,6 +47,8 @@ const titles = () => screen.getAllByRole('heading', { level: 1 }).map((h) => h.t
 
 afterEach(() => {
   cleanup();
+  usersList.current = () => new Promise(() => {});
+  usersList.roles = () => new Promise(() => {});
 });
 
 describe('SettingsPage', () => {
@@ -81,6 +86,21 @@ describe('SettingsPage', () => {
     renderAt('/settings/users');
     expect(titles()).toEqual(['Usuários']);
     expect(screen.getByRole('button', { name: 'Convidar' }).closest('header')).not.toBeNull();
+  });
+
+  it('marks a user whose account deletion is pending', async () => {
+    authState.current = { can: () => true };
+    const base = { avatar_url: null, role: 'member', role_info: null, permissions: [], has_password: false, has_google: true, invited_at: null, last_login_at: '2026-09-01T00:00:00.000Z', nickname: null, review_enabled_until: null, deletion_requested_at: null };
+    usersList.current = async () => ({
+      users: [
+        { ...base, id: 'u1', email: 'a@x.com', name: 'Ana', deletion_scheduled_at: null },
+        { ...base, id: 'u2', email: 'b@x.com', name: 'Bia', deletion_requested_at: '2026-10-01T12:00:00.000Z', deletion_scheduled_at: '2026-10-31T12:00:00.000Z' },
+      ],
+    });
+    usersList.roles = async () => ({ roles: [] });
+    renderAt('/settings/users');
+    expect(await screen.findByText('Exclusão em 31/10/2026')).toBeTruthy();
+    expect(screen.getAllByText(/^Exclusão em/)).toHaveLength(1);
   });
 
   it('puts Roles under one header, with + role among its actions', () => {

@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
+import { Keyboard, Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
+import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
+import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
-import { useVoice } from '../viewmodel/use-voice';
+import { useVoice, type RecordedClip } from '../viewmodel/use-voice';
+import { useVoiceNote, type VoiceNote } from '../viewmodel/use-voice-note';
 import type { ReplyRef } from '../model/reply';
 import { AttachmentChip } from './attachment-chip';
-import { AttachmentMenu, type MenuAnchor } from './attachment-menu';
+import { AttachmentMenu } from './attachment-menu';
 import { RecordingWave } from './recording-wave';
 import { ReplyPreview } from './reply-preview';
 
@@ -71,6 +74,9 @@ const SEND_ICON: IconName = { ios: 'arrow.up', android: 'arrow_upward' };
 const STOP_ICON: IconName = { ios: 'stop.fill', android: 'stop' };
 const CANCEL_ICON: IconName = { ios: 'xmark', android: 'close' };
 const ATTACH_ICON: IconName = { ios: 'plus', android: 'add' };
+const LOCK_ICON: IconName = { ios: 'lock.fill', android: 'lock' };
+const LOCK_UP_ICON: IconName = { ios: 'chevron.up', android: 'keyboard_arrow_up' };
+const DISCARD_ICON: IconName = { ios: 'trash', android: 'delete' };
 
 /**
  * Appends a transcription to whatever is already in the box — the web's `appendDictated`, verbatim.
@@ -88,6 +94,9 @@ export function appendDictated(current: string, text: string): string {
 /** Whole seconds as `m:ss` — 65 reads as `1:05`, the way a stopwatch is read. */
 const formatClock = (total: number) => `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 
+/** A voice note's file name: when it was recorded, as the old "Gravar áudio" named its clips. */
+const voiceNoteName = () => `audio-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.m4a`;
+
 type Props = {
   sending: boolean;
   /** Resolves `true` once the server accepted the message: the chips clear then (the text cleared already). */
@@ -100,10 +109,17 @@ type Props = {
   replyTo?: ReplyRef | null;
   /** ✕ on the preview. */
   onCancelReply?(): void;
+  /** Nothing can be typed or sent (a session whose machine is offline, spec 2026-10-01 tab chat §7). */
+  disabled?: boolean;
+  /** Set while the other side works (a terminal session): ↑ becomes "Interromper", always shown, and a
+   * long press on it still sends what is typed (Claude Code queues it). */
+  onInterrupt?(): void;
+  /** The chat this box belongs to (`inboxKey`): files sent here from a file preview land as chips. */
+  inbox?: string;
 };
 
 /** A round button of the pill: the symbol on a filled circle (`fill`) or bare. */
-function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { label: string; icon: IconName; onPress(): void; disabled?: boolean; fill?: string; tone: string }) {
+function RoundButton({ label, icon, onPress, onLongPress, disabled = false, fill, tone }: { label: string; icon: IconName; onPress(): void; onLongPress?(): void; disabled?: boolean; fill?: string; tone: string }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -111,6 +127,7 @@ function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { l
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
+      onLongPress={onLongPress}
       hitSlop={4}
       className={`h-9 w-9 items-center justify-center rounded-full ${fill ?? ''} ${disabled ? 'opacity-40' : ''}`}
     >
@@ -120,16 +137,69 @@ function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { l
 }
 
 /**
+ * The microphone of an empty box (TER-1036): a voice note is recorded while it is held. It is a bare
+ * responder view rather than a `Pressable`, because the finger has to be followed after it goes down
+ * (left drops the clip, up locks it) and the touch must not be handed to anyone else while it records.
+ * Above it, while held, the lock it slides up to. A screen reader cannot hold, so its activation starts
+ * a locked recording straight away, with ✕ and ↑ to end it.
+ */
+function HoldMic({ note, disabled }: { note: VoiceNote; disabled: boolean }) {
+  const { t } = useTranslation();
+  const origin = useRef({ x: 0, y: 0 });
+  const holding = note.state === 'holding';
+  return (
+    <View>
+      {holding ? (
+        <View pointerEvents="none" testID="voice-note-lock" style={{ position: 'absolute', bottom: ROW_HEIGHT + 12, left: 0, right: 0 }} className="items-center gap-1 rounded-full bg-app-surface py-2">
+          <Icon name={LOCK_ICON} size={14} tone="muted" />
+          <Icon name={LOCK_UP_ICON} size={12} tone="muted" />
+        </View>
+      ) : null}
+      <View
+        accessible
+        accessibilityRole="button"
+        accessibilityLabel={t('Gravar áudio')}
+        accessibilityHint={t('Segure para gravar')}
+        accessibilityState={{ disabled }}
+        accessibilityActions={[{ name: 'activate' }]}
+        onAccessibilityAction={(e) => {
+          if (!disabled && e.nativeEvent.actionName === 'activate') note.startLocked();
+        }}
+        onStartShouldSetResponder={() => !disabled}
+        onResponderTerminationRequest={() => false}
+        onResponderGrant={(e) => {
+          origin.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+          note.press();
+        }}
+        onResponderMove={(e) => note.move(e.nativeEvent.pageX - origin.current.x, e.nativeEvent.pageY - origin.current.y)}
+        onResponderRelease={note.release}
+        onResponderTerminate={note.interrupt}
+        hitSlop={4}
+        className={`h-9 w-9 items-center justify-center rounded-full ${holding ? 'bg-app-danger' : ''} ${disabled ? 'opacity-40' : ''}`}
+      >
+        <Icon name={MIC_ICON} size={20} tone={holding ? 'bg' : 'text'} />
+      </View>
+    </View>
+  );
+}
+
+/**
  * The message box (chat redesign spec §4.2 "Composer", attachments spec 2026-09-26 §5.6): one rounded
  * pill holding the attachment chips on top and a `TextInput` whose height follows its content between
  * `MIN_ROWS` and `MAX_ROWS` lines. While the text fits on one line, +, the text and the buttons on the
- * right (the microphone, and ↑ beside it once there is text or a chip — ChatGPT's pair) sit side by
+ * right (the microphone while the box is empty, ↑ once there is text or a chip) sit side by
  * side; once it wraps (or with a status to show) the text takes the pill's whole width and the buttons
  * get a row of their own under it, inside the pill — the web composer's "one box, two rows". The
  * buttons' row stays pinned to the pill's bottom, next to the keyboard: the pill grows upwards and the
  * text glides between the two places (`GLIDE`), line by line, unless the system asks for reduced motion.
  *
- * + opens the attachment menu above it. While dictating, the whole pill is the recording row (ChatGPT's):
+ * The microphone records a voice note while it is held (TER-1036, WhatsApp's): let go and it is sent,
+ * slide left and it is dropped, slide up and it locks, recording on with ✕ and ↑ to end it. The clip
+ * goes into the box as an audio chip and leaves on its own, without text, once it has uploaded; the
+ * server transcribes it like any audio attachment. A failed upload leaves the chip, to retry or send.
+ *
+ * + opens the attachment sheet from the bottom of the screen (the keyboard goes down first), which also holds dictation ("Ditar"; the phone's keyboard has
+ * its own). While dictating, the whole pill is the recording row (ChatGPT's):
  * ✕ drops the clip, the wave follows the microphone, ■ stops and puts the transcription in the box to
  * be read first (what dictation always did), and ↑ stops and sends the box with the transcription once
  * it arrives — a send the person asked for, like tapping ↑; a clip that fails or hears nothing sends
@@ -138,15 +208,17 @@ function RoundButton({ label, icon, onPress, disabled = false, fill, tone }: { l
  * (TER-447) is previewed on top of the pill, with ✕; the screen keeps the reference and sends it. The text clears as soon as it is
  * sent and comes back if the send fails; the chips only go once the server accepted.
  */
-export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply }: Props) {
+export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox }: Props) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [height, setHeight] = useState(MIN_HEIGHT);
   // Latched: once the text wraps the buttons stay below until the box is emptied. Leaving as soon as
   // the text fit on one line again would flap, since the text gets wider when the buttons move out.
   const [wrapped, setWrapped] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
-  const attachRef = useRef<View>(null);
+  /** The box had the focus when + was tapped: closing the sheet without a choice gives it back. */
+  const focusedBeforeMenu = useRef(false);
+  const refocusAfterMenu = useRef(false);
   const inputRef = useRef<TextInput>(null);
   /** The box as last rendered, for the transcription callback (it runs outside React's render cycle). */
   const textRef = useRef(text);
@@ -164,18 +236,56 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
     }
   }, []);
   const voice = useVoice(onDictated);
+  /** The chip of the voice note that leaves once it has uploaded. */
+  const voiceNoteKey = useRef<string | null>(null);
+  const onVoiceNote = useCallback((clip: RecordedClip) => {
+    const [key] = addRef.current([{ uri: clip.uri, name: voiceNoteName(), mime: clip.mime, bytes: null }]);
+    voiceNoteKey.current = key ?? null;
+  }, []);
+  const note = useVoiceNote(onVoiceNote);
   // Answering is about to be typed: the keyboard comes up with the preview, as in WhatsApp.
   const replyId = replyTo?.id;
   useEffect(() => {
     if (replyId) inputRef.current?.focus();
   }, [replyId]);
   const attachments = useAttachmentDrafts({ upload: uploadAttachment, remove: deleteAttachment, statuses: attachmentStatuses });
+  // A file sent from a preview ("Mandar para o chat") lands as a chip, like a picked one.
+  const addRef = useRef(attachments.add);
+  addRef.current = attachments.add;
+  useEffect(() => {
+    if (inbox === undefined) return;
+    const take = (key: string) => {
+      if (key !== inbox) return;
+      const files = takeChatFiles(inbox);
+      if (files.length > 0) addRef.current(files);
+    };
+    take(inbox);
+    return onChatFiles(take);
+  }, [inbox]);
+
+  // The voice note leaves on its own once its chip has uploaded: alone, whatever was typed meanwhile
+  // stays in the box. A failed upload keeps the chip (retry, or ↑), and a refused send leaves it too.
+  const clearDrafts = attachments.clear;
+  useEffect(() => {
+    const key = voiceNoteKey.current;
+    if (key === null) return;
+    const draft = attachments.drafts.find((d) => d.key === key);
+    if (!draft || draft.phase === 'failed') {
+      voiceNoteKey.current = null;
+      return;
+    }
+    if (draft.phase !== 'uploaded' || !draft.attachment || sending || disabled) return;
+    voiceNoteKey.current = null;
+    void onSend('', [draft.attachment]).then((ok) => {
+      if (ok) clearDrafts([key]);
+    });
+  }, [attachments.drafts, sending, disabled, onSend, clearDrafts]);
 
   const hasText = text.trim().length > 0;
   /** A chip that is (or will be) part of the message: uploading or uploaded; a refused one is not. */
   const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
   const invalid = attachments.invalid.length > 0;
-  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending;
+  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending && !disabled;
   const canSend = sendable(text);
 
   // The box empties at once (the row is already on screen) and gets its text back if the send
@@ -211,6 +321,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   };
 
   const recording = voice.state === 'recording';
+  /** A voice note is being recorded: the pill is its row, as it is dictation's. */
+  const holding = note.state === 'holding';
+  const noting = holding || note.state === 'locked';
   /** The clip is on its way to the server: nothing else can be done with the box's content yet. */
   const busy = voice.state === 'uploading' || voice.state === 'transcribing';
   // A clip that ended without a transcription (cancelled, too short, failed, silent) sends nothing:
@@ -220,18 +333,19 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   }, [recording, busy]);
   // The text folds away while recording, so the keyboard goes with it: nothing types into a hidden box.
   useEffect(() => {
-    if (recording) inputRef.current?.blur();
-  }, [recording]);
+    if (recording || noting) inputRef.current?.blur();
+  }, [recording, noting]);
 
-  // ChatGPT's pair on the right: the microphone is always there (dictating adds to what is typed),
-  // and ↑ joins it once there is text or a chip. With dictation off there is no microphone and the
-  // empty box keeps the (disabled) ↑. While `checking` or `starting` the microphone is there, disabled.
-  const showMic = voice.state !== 'off';
-  const micDisabled = busy || voice.state === 'checking' || voice.state === 'starting';
-  const showSend = hasText || hasChips || voice.state === 'off';
+  // WhatsApp's single button on the right: the microphone while the box is empty, ↑ once there is
+  // text or a chip. Without transcription on the server there is no microphone (a voice note nobody
+  // can read) and the empty box keeps the (disabled) ↑. While `checking` or dictation is `starting` the
+  // microphone is there, disabled.
+  const showMic = voice.state !== 'off' && !hasText && !hasChips;
+  const micDisabled = busy || disabled || voice.state === 'checking' || voice.state === 'starting';
+  const showSend = !showMic;
   const sendDisabled = !canSend || busy;
   const statusText = busy
-    ? 'transcrevendo…'
+    ? t('transcrevendo…')
     : attachments.uploading
       ? CHAT_MSG.attachmentUploading
       : invalid
@@ -239,17 +353,30 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         : (attachments.notice ?? '');
   // No + while dictation holds the microphone or its clip: the menu's recorder would release the
   // audio session under it (one recorder at a time), and five chips is the message's limit.
-  const attachOff = attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy;
+  const attachOff = disabled || attachments.drafts.length >= MAX_CHIPS || voice.state === 'starting' || recording || busy || note.state !== 'idle';
+  // The sheet stands on the bottom edge of the screen, so the keyboard goes down first, on purpose,
+  // and nothing depends on where it was (TER-1041).
   const openMenu = () => {
-    // Where the button is now (the pill moves with the keyboard); unmeasured, the menu uses a default place.
-    attachRef.current?.measureInWindow((x, y) => setAnchor({ x, y }));
+    focusedBeforeMenu.current = inputRef.current?.isFocused() ?? false;
+    refocusAfterMenu.current = false;
+    Keyboard.dismiss();
     setPicking(true);
   };
+  const closeMenu = (chose: boolean) => {
+    refocusAfterMenu.current = !chose && focusedBeforeMenu.current;
+    focusedBeforeMenu.current = false;
+    setPicking(false);
+  };
+  const menuHidden = useCallback(() => {
+    if (!refocusAfterMenu.current) return;
+    refocusAfterMenu.current = false;
+    inputRef.current?.focus();
+  }, []);
 
   // The status line needs the row's middle, which the text covers while it shares the row.
   const stacked = wrapped || statusText !== '';
   const still = useReducedMotion();
-  const frame = recording ? RECORDING_FRAME : textFrame(stacked, height, (showMic ? 1 : 0) + (showSend ? 1 : 0));
+  const frame = recording || noting ? RECORDING_FRAME : textFrame(stacked, height, (showMic ? 1 : 0) + (showSend || onInterrupt ? 1 : 0));
   const left = useGlide(frame.left, still);
   const right = useGlide(frame.right, still);
   const top = useGlide(frame.top, still);
@@ -284,14 +411,14 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         >
           {recording ? (
             <>
-              <RoundButton label="Cancelar gravação" icon={CANCEL_ICON} onPress={voice.cancel} fill="bg-app-surface" tone="text" />
+              <RoundButton label={t('Cancelar gravação')} icon={CANCEL_ICON} onPress={voice.cancel} fill="bg-app-surface" tone="text" />
               <View className="flex-1 flex-row items-center gap-2">
                 <RecordingWave level={voice.level} seconds={voice.seconds} />
                 <Text className="text-xs text-app-muted">{formatClock(voice.seconds)}</Text>
               </View>
-              <RoundButton label="Parar" icon={STOP_ICON} onPress={voice.stop} fill="bg-app-bg" tone="text" />
+              <RoundButton label={t('Parar')} icon={STOP_ICON} onPress={voice.stop} fill="bg-app-bg" tone="text" />
               <RoundButton
-                label="Parar e enviar"
+                label={t('Parar e enviar')}
                 icon={SEND_ICON}
                 onPress={() => {
                   sendAfterDictation.current = true;
@@ -301,30 +428,59 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
                 tone="bg"
               />
             </>
+          ) : note.state === 'locked' ? (
+            <>
+              <RoundButton label={t('Descartar áudio')} icon={DISCARD_ICON} onPress={note.discard} fill="bg-app-surface" tone="text" />
+              <View className="flex-1 flex-row items-center gap-2">
+                <View className="h-2 w-2 rounded-full bg-app-danger" />
+                <Text className="text-xs text-app-muted">{formatClock(note.seconds)}</Text>
+                <RecordingWave level={note.level} seconds={note.seconds} />
+              </View>
+              <RoundButton label={t('Enviar áudio')} icon={SEND_ICON} onPress={note.send} fill="bg-app-text" tone="bg" />
+            </>
           ) : (
             <>
-              <Pressable
-                ref={attachRef}
-                accessibilityRole="button"
-                accessibilityLabel="Anexar"
-                accessibilityState={{ disabled: attachOff }}
-                disabled={attachOff}
-                onPress={openMenu}
-                hitSlop={8}
-                className={`h-9 w-9 items-center justify-center rounded-full ${attachOff ? 'opacity-50' : ''}`}
-              >
-                <Icon name={ATTACH_ICON} size={22} tone="text" />
-              </Pressable>
-              <View pointerEvents="none" className="flex-1" />
-              {statusText ? (
-                <Text className="shrink text-xs text-app-muted" numberOfLines={1}>
-                  {statusText}
-                </Text>
+              {/* Held, the left of the row is the recording's; the microphone keeps its place in this
+                  list in both shapes, so it is the same element under the finger the whole time — a
+                  remounted responder would drop the touch it is following. */}
+              {holding ? (
+                <View className="flex-1 flex-row items-center gap-2 pl-2">
+                  <View className="h-2 w-2 rounded-full bg-app-danger" />
+                  <Text className="text-xs text-app-muted">{formatClock(note.seconds)}</Text>
+                  <RecordingWave level={note.level} seconds={note.seconds} />
+                  <Text style={{ transform: [{ translateX: note.slide }] }} className="text-xs text-app-muted" numberOfLines={1}>
+                    {t('‹ deslize para cancelar')}
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={t('Anexar')}
+                    accessibilityState={{ disabled: attachOff }}
+                    disabled={attachOff}
+                    onPress={openMenu}
+                    hitSlop={8}
+                    className={`h-9 w-9 items-center justify-center rounded-full ${attachOff ? 'opacity-50' : ''}`}
+                  >
+                    <Icon name={ATTACH_ICON} size={22} tone="text" />
+                  </Pressable>
+                  <View pointerEvents="none" className="flex-1" />
+                  {statusText ? (
+                    <Text className="shrink text-xs text-app-muted" numberOfLines={1}>
+                      {statusText}
+                    </Text>
+                  ) : null}
+                </>
+              )}
+              {/* The microphone is a plain symbol; ↑ is the filled circle in the text colour, so it
+                  inverts with the theme (white on the dark one). */}
+              {showMic || holding ? <HoldMic note={note} disabled={micDisabled && !holding} /> : null}
+              {holding ? null : onInterrupt ? (
+                <RoundButton label={t('Interromper')} icon={STOP_ICON} onPress={onInterrupt} onLongPress={() => void submit()} disabled={disabled} fill="bg-app-text" tone="bg" />
+              ) : showSend ? (
+                <RoundButton label={t('Enviar')} icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" />
               ) : null}
-              {/* The microphone is a plain symbol, like the one next to ChatGPT's box; ↑ is the filled
-                  circle in the text colour, so it inverts with the theme (white on the dark one). */}
-              {showMic ? <RoundButton label="Ditar" icon={MIC_ICON} onPress={voice.start} disabled={micDisabled} tone="text" /> : null}
-              {showSend ? <RoundButton label="Enviar" icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" /> : null}
             </>
           )}
         </View>
@@ -337,8 +493,9 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               ref={inputRef}
               value={text}
               onChangeText={changeText}
-              placeholder="Mensagem"
-              accessibilityLabel="Mensagem"
+              editable={!disabled}
+              placeholder={t('Mensagem')}
+              accessibilityLabel={t('Mensagem')}
               multiline
               onLayout={onInputLayout}
               scrollEnabled={height >= MAX_HEIGHT}
@@ -355,17 +512,24 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         </Animated.View>
       </View>
       {/* Only when there is something to say: an empty line here would hold the pill off the keyboard. */}
-      {voice.error ? (
+      {(note.error ?? voice.error) ? (
         <Text className="px-1 pt-1 text-xs text-app-danger" numberOfLines={1}>
-          {voice.error}
+          {note.error ?? voice.error}
         </Text>
       ) : null}
-      {voice.notice ? (
+      {(note.hint ?? voice.notice) ? (
         <Text className="px-1 pt-1 text-xs text-app-muted" numberOfLines={1}>
-          {voice.notice}
+          {note.hint ?? voice.notice}
         </Text>
       ) : null}
-      <AttachmentMenu open={picking} anchor={anchor} room={Math.max(0, MAX_CHIPS - attachments.drafts.length)} onClose={() => setPicking(false)} onPicked={attachments.add} />
+      <AttachmentMenu
+        open={picking}
+        room={Math.max(0, MAX_CHIPS - attachments.drafts.length)}
+        onClose={closeMenu}
+        onHidden={menuHidden}
+        onPicked={attachments.add}
+        onDictate={voice.state === 'idle' ? voice.start : undefined}
+      />
     </View>
   );
 }

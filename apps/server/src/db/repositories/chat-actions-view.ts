@@ -97,6 +97,38 @@ function formatKeys(keys: string[]): string {
  * no single machine and naming one would be misleading. */
 const MACHINE_LINK_TOOLS = new Set(['link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine']);
 
+/** Why an `automation_merge` card asks: the level the PR needs, by name as the Setup shows it. */
+const MERGE_NEED: Record<string, string> = {
+  merge: 'precisa do nível Merge com CI verde',
+  deploy: 'precisa do nível Deploy',
+  release: 'precisa do nível Publicação',
+  store: 'precisa de build nas lojas',
+  files_incomplete: 'a lista de arquivos do PR veio incompleta',
+};
+
+/** The level names as the Setup shows them ("Até onde os agentes vão sozinhos"). */
+const AUTONOMY_LABEL: Record<string, string> = { pr: 'Só código e PR', merge: 'Merge com CI verde', deploy: 'Deploy', release: 'Publicação (npm, OTA)' };
+
+const listOf = (v: unknown): string => {
+  const items = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  return items.length ? items.map((x) => `\`${x}\``).join(', ') : 'nenhum';
+};
+
+/** What a `set_automation_policy` card changes (TER-975), field by field, in the order of the Setup screen. */
+function automationPolicyPhrase(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (args.enabled === true) parts.push('ligar o trabalho automático do projeto');
+  if (args.enabled === false) parts.push('desligar o trabalho automático do projeto');
+  if (typeof args.autonomy === 'string') parts.push(`nível "${AUTONOMY_LABEL[args.autonomy] ?? args.autonomy}"`);
+  if (args.release_paths !== undefined) parts.push(`caminhos de release: ${listOf(args.release_paths)}`);
+  if (args.store_paths !== undefined) parts.push(`caminhos das lojas: ${listOf(args.store_paths)}`);
+  if (args.release_workflows !== undefined) parts.push(`workflows de release: ${listOf(args.release_workflows)}`);
+  if (args.required_checks !== undefined) parts.push(`checks obrigatórios: ${listOf(args.required_checks)}`);
+  if (args.max_parallel !== undefined) parts.push(`máximo em paralelo: ${typeof args.max_parallel === 'number' ? args.max_parallel : 'sem limite'}`);
+  const what = parts.join('; ');
+  return args.enabled === undefined ? `mudar o Setup do trabalho automático (${what})` : what;
+}
+
 function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
@@ -130,6 +162,28 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return task ? `apagar a tarefa ${named(task)}` : 'apagar uma tarefa que não existe mais';
     case 'link_tab_task':
       return task ? `ligar a tarefa ${named(task)}` : 'ligar uma tarefa que não existe mais';
+    case 'pause_automation':
+      return `pausar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}${args.interrupt === true ? ' e interromper as abas que estão nele agora' : ''}`;
+    case 'resume_automation':
+      return `retomar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}`;
+    case 'set_automation_policy':
+      return automationPolicyPhrase(args);
+    case 'set_machine_automation':
+      return args.accept === true ? 'fazer a máquina aceitar trabalho automático' : 'fazer a máquina recusar trabalho automático';
+    case 'install_machine_hooks': {
+      const tools = Array.isArray(args.tools) ? args.tools.filter((x): x is string => typeof x === 'string') : [];
+      return `instalar ou atualizar os hooks do termhub (${tools.length ? tools.join(', ') : 'Claude Code, Codex e Cursor que estiverem lá'}), mexendo nos arquivos de configuração deles`;
+    }
+    case 'update_machine_agent':
+      return args.all === true ? 'atualizar o agente do termhub em todas as máquinas (o agente reinicia; as sessões do tmux continuam)' : 'atualizar o agente do termhub na máquina (o agente reinicia; as sessões do tmux continuam)';
+    case 'resume_automation_run':
+      return 'retomar o trabalho automático de um card';
+    case 'automation_merge': {
+      // The merge executor's own card (agentic board D7): args are the server's, never the concierge's.
+      const n = typeof args.number === 'number' ? `#${args.number}` : 'um PR';
+      const title = asString(args.title);
+      return `mesclar o PR ${n}${title ? ` "${title}"` : ''} de \`${asString(args.repo)}\` (${MERGE_NEED[asString(args.needed)] ?? 'acima do nível do projeto'})`;
+    }
     case 'sync_tickets':
       return 'sincronizar os tickets de todas as fontes';
     case 'import_tickets': {
@@ -151,6 +205,11 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
     }
     case 'create_integration':
       return `criar a integração do GitHub "${asString(args.name)}" com o login do gh (\`gh auth token\`)`;
+    // TER-1047: the card never shows the pasted code, only what is being done.
+    case 'start_ai_login':
+      return 'refazer o login de uma conta de IA na máquina (abre uma sessão de login escondida e devolve o link)';
+    case 'submit_ai_login_code':
+      return typeof args.code === 'string' ? 'concluir o login de uma conta de IA com o código que você colou' : 'concluir o login de uma conta de IA';
     case 'set_project_repo': {
       // The integration is named from the owner-scoped list `describeActions` read: another owner's
       // id reads exactly like one that does not exist.
@@ -181,6 +240,11 @@ interface Location {
   project?: string;
   machine?: string;
   missing?: 'tab' | 'project' | 'machine';
+  /** A gone tab's name as the row kept it when it was asked (TER-1024): the card names it rather than
+   * saying "uma aba que não existe mais". Only ever set alongside `missing: 'tab'`. */
+  goneTab?: string;
+  /** The action closes that tab itself: "fechar a aba «X»", not "fechar a aba na aba «X», já fechada". */
+  closesTab?: boolean;
   /** close_tab only: who opened the tab being closed, in parentheses right after its name — set by
    * `describeActions` from the tab's `created_by_token_id`, never resolved here (see there for why:
    * it takes an owner-scoped `apiTokens.listByUser` lookup that `describeActions` has a repos handle
@@ -192,7 +256,11 @@ interface Location {
  * "na aba X do projeto Y, no Z" when all three are known, degrading gracefully as fewer are; says so
  * plainly, in pt-BR, when the one reference the action actually named did not resolve. */
 function targetPhrase(loc: Location): string {
-  if (loc.missing === 'tab') return 'numa aba que não existe mais';
+  if (loc.missing === 'tab' && loc.goneTab) {
+    const tab = loc.closesTab ? `«${loc.goneTab}»` : `na aba «${loc.goneTab}», já fechada,`;
+    return loc.project ? `${tab} do projeto ${loc.project}` : tab.replace(/,$/, '');
+  }
+  if (loc.missing === 'tab') return loc.project ? `numa aba que não existe mais do projeto ${loc.project}` : 'numa aba que não existe mais';
   if (loc.missing === 'project') return 'num projeto que não existe mais';
   if (loc.missing === 'machine') return 'numa máquina que não existe mais';
   const parts: string[] = [];
@@ -331,7 +399,15 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
     let loc: Location;
     if (action.tab_id) {
       const tab = tabById.get(action.tab_id);
-      if (!tab) loc = { missing: 'tab' };
+      // A gone tab's card still names its project when the row kept it (TER-986: stored when asked).
+      // And its name (TER-1024), so a closed tab's card still says which tab it was.
+      if (!tab) {
+        loc = { missing: 'tab', project: action.project_id ? projectById.get(action.project_id)?.name : undefined };
+        if (action.tab_name) {
+          loc.goneTab = action.tab_name;
+          loc.closesTab = action.tool === 'close_tab';
+        }
+      }
       else {
         const project = projectById.get(tab.project_id);
         loc = { tab: tab.name, project: project?.name, machine: machineById.get(tab.machine_id)?.name };

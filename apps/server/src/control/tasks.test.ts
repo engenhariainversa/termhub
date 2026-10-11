@@ -15,7 +15,7 @@ const project = (over: Partial<Project> & { id: string; owner_id: string }): Pro
 });
 const task = (over: Partial<Task> & { id: string; project_id: string }): Task => ({
   title: over.id, description: null, status: 'todo', position: 0, external_ref: null, external_key: null, tab_id: null, parent_id: null,
-  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null,
+  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null, auto: false,
   created_at: '2026-09-20T10:00:00.000Z', updated_at: '2026-09-20T10:00:00.000Z', ...over,
 });
 const tree = (t: Task, subtasks: Task[] = []): TaskWithSubtasks => ({ ...t, subtasks, subtask_counts: { done: subtasks.filter((s) => s.status === 'done').length, total: subtasks.length } });
@@ -41,12 +41,14 @@ function ctx() {
       createWithSubtasks: vi.fn(),
       createSubtasks: vi.fn(),
       update: vi.fn(),
+      setAuto: vi.fn(async () => ({ changed: 1 })),
       move: vi.fn(),
       childIds: vi.fn(async () => [] as string[]),
       delete: vi.fn(async () => true),
     },
     taskColumns: { list: vi.fn(async (pid: string) => columns.filter((c) => c.project_id === pid)) },
     tickets: { unlinkTask: vi.fn(async () => {}) },
+    automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev1', created_at: '', ...e })) },
   };
   const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' } as const, ownerId: 'u1', createAs: 'u1' };
   const c: ControlContext = { repos: repos as unknown as Repositories, scope, scoped: new Scoped(repos as unknown as Repositories, scope), can: async () => true };
@@ -160,8 +162,37 @@ describe('updateTask', () => {
 
   it('requires at least one field', async () => {
     const { c, repos } = ctx();
-    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type ou epic_id'));
+    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto'));
     expect(repos.tasks.update).not.toHaveBeenCalled();
+  });
+
+  it('auto goes to setAuto (an epic propagates in the repository) and returns the fresh card', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.findById.mockResolvedValueOnce(k1).mockResolvedValueOnce({ ...k1, auto: true });
+    const r = await updateTask(c, { task_id: 'k1', auto: true });
+    expect(repos.tasks.setAuto).toHaveBeenCalledWith('k1', true);
+    expect(repos.tasks.update).not.toHaveBeenCalled();
+    expect(r.task).toMatchObject({ id: 'k1', auto: true });
+    // TER-975: the tag change is an automation event, with where it came from (a web context here)
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', task_id: 'k1', kind: 'tagged', payload: { via: 'web', cards: 1 } }));
+  });
+
+  it('untagging an epic records how many cards left automatic work; a call that changed nothing records nothing', async () => {
+    const { c, repos } = ctx();
+    const gated = { ...c, token: { id: 't', scopes: [], gated: true } } as ControlContext;
+    repos.tasks.setAuto.mockResolvedValueOnce({ changed: 4 });
+    await updateTask(gated, { task_id: 'k1', auto: false });
+    expect(repos.automationEvents.insert).toHaveBeenCalledWith(expect.objectContaining({ task_id: 'k1', kind: 'untagged', payload: { via: 'chat', cards: 4 } }));
+    repos.automationEvents.insert.mockClear();
+    repos.tasks.setAuto.mockResolvedValueOnce({ changed: 0 });
+    await updateTask(gated, { task_id: 'k1', auto: false });
+    expect(repos.automationEvents.insert).not.toHaveBeenCalled();
+  });
+
+  it('a refused tag (a subtask) says why in pt-BR', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.setAuto.mockRejectedValue(new TaskRuleError('AUTO_NOT_FOR_SUBTASK'));
+    await expect(updateTask(c, { task_id: 's1', auto: true })).rejects.toMatchObject({ code: 'AUTO_NOT_FOR_SUBTASK' });
   });
 
   it('clears the description with null', async () => {

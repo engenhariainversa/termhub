@@ -21,6 +21,8 @@ export interface ChatAction {
   machine_id: string | null;
   project_id: string | null;
   tab_id: string | null;
+  /** The tab's name when the action was asked (TER-1024): what a closed tab's card still calls it. */
+  tab_name: string | null;
   grant_id: string | null;
   error_code: string | null;
   duration_ms: number | null;
@@ -46,8 +48,12 @@ export interface InsertPendingInput {
   machine_id?: string | null;
   project_id?: string | null;
   tab_id?: string | null;
+  tab_name?: string | null;
   tool_use_id?: string | null;
   subagent_id?: string | null;
+  /** Born injected: a card the server asks itself (`automation_merge`), never a concierge proposal the
+   *  model must be told about — its decision is acted on by the server, not re-injected. */
+  injected?: boolean;
 }
 
 export interface InsertApprovedInput extends InsertPendingInput {
@@ -67,6 +73,7 @@ const mapAction = (a: PrismaChatAction): ChatAction => ({
   machine_id: a.machineId,
   project_id: a.projectId,
   tab_id: a.tabId,
+  tab_name: a.tabName,
   grant_id: a.grantId,
   error_code: a.errorCode,
   duration_ms: a.durationMs,
@@ -153,11 +160,25 @@ export class ChatActionsRepository {
         machineId: input.machine_id ?? null,
         projectId: input.project_id ?? null,
         tabId: input.tab_id ?? null,
+        tabName: input.tab_name ?? null,
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
+        injectedAt: input.injected ? new Date() : null,
       },
     });
     return mapAction(row);
+  }
+
+  /** A row by id, unscoped: for the server's own cards (`automation_merge`), never for a request's id. */
+  async findById(id: string): Promise<ChatAction | undefined> {
+    const row = await this.db.chatAction.findUnique({ where: { id } });
+    return row ? mapAction(row) : undefined;
+  }
+
+  /** The newest row of a key in any of the user's conversations of a project, whatever its status: a server card is asked once per key. */
+  async findLatestByKeyInProject(userId: string, projectId: string, idempotencyKey: string): Promise<ChatAction | undefined> {
+    const row = await this.db.chatAction.findFirst({ where: { idempotencyKey, conversation: { userId, projectId } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? mapAction(row) : undefined;
   }
 
   /**
@@ -180,6 +201,7 @@ export class ChatActionsRepository {
         machineId: input.machine_id ?? null,
         projectId: input.project_id ?? null,
         tabId: input.tab_id ?? null,
+        tabName: input.tab_name ?? null,
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
         grantId: input.grant_id,
@@ -264,6 +286,21 @@ export class ChatActionsRepository {
       where: { id },
       data: { status: ok ? 'executed' : 'failed', errorCode: errorCode ?? null, durationMs: durationMs ?? null },
     });
+  }
+
+  /** Closed rows (no longer pending or approved) of these tools: the ones a secret argument can leave (TER-1047). */
+  async listClosedByTools(tools: readonly string[], limit = 500): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: { tool: { in: [...tools] }, status: { notIn: OPEN_STATUSES } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return rows.map(mapAction);
+  }
+
+  /** Overwrites a row's `args`, for redacting a secret once the row is closed; only a closed row is touched. */
+  async replaceClosedArgs(id: string, args: unknown): Promise<void> {
+    await this.db.chatAction.updateMany({ where: { id, status: { notIn: OPEN_STATUSES } }, data: { args: args as never } });
   }
 
   /**
@@ -371,6 +408,50 @@ export class ChatActionsRepository {
       data: { status: 'expired' satisfies ChatActionStatus },
     });
     return count;
+  }
+
+  /**
+   * A pending card whose tab is gone (TER-986): nothing it asks can happen any more — not the call, not a
+   * grant on its tab or its tab's project — so it ends `failed` with `TAB_GONE`, the same way the gate ends
+   * an approval whose tab died, and the screens show it as stale. Conditional on `pending`: a card decided
+   * in the same instant is left alone. Resolves the row (with its owner, for the bus) or undefined.
+   */
+  async failPendingTabGone(id: string): Promise<{ action: ChatAction; user_id: string } | undefined> {
+    const { count } = await this.db.chatAction.updateMany({ where: { id, status: 'pending' satisfies ChatActionStatus }, data: { status: 'failed', errorCode: 'TAB_GONE' } });
+    if (count === 0) return undefined;
+    const row = await this.db.chatAction.findUnique({ where: { id }, include: { conversation: { select: { userId: true } } } });
+    return row ? { action: mapAction(row), user_id: row.conversation.userId } : undefined;
+  }
+
+  /** `failPendingTabGone` for every pending card of a tab that was just removed (closed from the UI, by
+   * the concierge, or with its machine or project). Resolves the rows it moved, with their owners. */
+  async failPendingForTab(tabId: string): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" SET "status" = 'failed', "error_code" = 'TAB_GONE'
+       WHERE "tab_id" = ${tabId} AND "status" = 'pending'
+      RETURNING "id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /**
+   * Every pending card whose tab row is gone without a lifecycle event saying so — the other color removed
+   * it during a blue/green switch, or this process was down — moved the same way. At boot and in the
+   * hourly purge, like `TabQuestionsRepository.expireOrphans`.
+   */
+  async failOrphanPending(): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" AS a SET "status" = 'failed', "error_code" = 'TAB_GONE'
+       WHERE a."status" = 'pending' AND a."tab_id" IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM "tabs" t WHERE t."id" = a."tab_id")
+      RETURNING a."id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /** The rows by id with their owners, oldest first. */
+  private async withOwners(ids: string[]): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.chatAction.findMany({ where: { id: { in: ids } }, include: { conversation: { select: { userId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
+    return rows.map((row) => ({ action: mapAction(row), user_id: row.conversation.userId }));
   }
 
   /** Reset closes every open question of the conversation it archives: nobody reads that session any

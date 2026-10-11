@@ -1,17 +1,31 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import { linkClaudeSession } from '../ai/claude-session.js';
-import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
+import { getAccountUsage, type AiAccountUsage, type AiUsageWindow } from '../ai/index.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
 import { applyState } from '../monitor/ingest.js';
-import { sendKeyToSession, sendTextToSession } from '../terminal/session-ops.js';
-import { RESUME_PROMPT, resumeLine } from './agents.js';
+import { sendKeyToSession, sendTextToSession, typeCommandLine } from '../terminal/session-ops.js';
+import { installRunGuard, RESUME_PROMPT, resumeLine } from './agents.js';
+import { activeRunPermission } from '../automation/permission.js';
+import { serverMessage } from '../automation/marker.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
+import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { notifyLimitInChat } from '../chat/tab-limits.js';
 import { ControlError } from './context.js';
 import { offline } from './screen.js';
+import { msg, tk } from '../i18n/index.js';
+
+/**
+ * How the tab's state text starts after a swap, while the resumed session may wait on Claude's "trust this
+ * folder" question (a person's answer): the automation never types into a tab in this state.
+ */
+export const ACCOUNT_SWAP_TEXT = 'Conta trocada';
+export const ACCOUNT_SWAP_AUTO_TEXT = `${ACCOUNT_SWAP_TEXT} automaticamente`;
+
+/** Whether the tab's state is the one a swap left (see ACCOUNT_SWAP_TEXT). */
+export const isAccountSwapState = (stateText: string | null | undefined): boolean => (stateText ?? '').startsWith(ACCOUNT_SWAP_TEXT);
 
 /** An account whose fullest window is at this utilization (0..100) or more is not a candidate. */
 export const SWAP_MAX_UTILIZATION = 90;
@@ -34,10 +48,20 @@ export interface SwapResult {
   to: { id: string; label: string };
 }
 
-/** The fullest window of the account, 0..100; null when the usage could not be read. */
-export function peakUtilization(u: AiAccountUsage | undefined): number | null {
+/**
+ * Whether a usage window limits a run on `model` (an alias or id, e.g. "opus", "claude-opus-5-5"). A window
+ * that caps one model (the weekly Fable allowance) does not stop a run on another one; with the model
+ * unknown (null: the CLI's own default) every window counts, as a full one may be the one it runs on.
+ */
+export function windowLimits(w: AiUsageWindow, model: string | null | undefined): boolean {
+  return !w.model || !model || model.toLowerCase().includes(w.model);
+}
+
+/** The fullest window of the account that limits `model`, 0..100; null when the usage could not be read. */
+export function peakUtilization(u: AiAccountUsage | undefined, model?: string | null): number | null {
   if (!u || !u.ok || u.windows.length === 0) return null;
-  return Math.max(...u.windows.map((w) => w.utilization));
+  const windows = u.windows.filter((w) => windowLimits(w, model));
+  return windows.length === 0 ? 0 : Math.max(...windows.map((w) => w.utilization));
 }
 
 /**
@@ -47,17 +71,19 @@ export function peakUtilization(u: AiAccountUsage | undefined): number | null {
  * With `priority` (the project's accounts, TER-589) the order is the project's, not the usage: only the
  * accounts it lists, in its order, the full ones still dropped and unknown usage kept in place — the owner
  * chose "the next one in the order", not "the emptiest".
+ *
+ * `model`: what the session runs on (TER-837) — a window capping another model is left out of the reading.
  */
-export function rankCandidates(accounts: AiAccount[], usage: Map<string, AiAccountUsage>, opts: { explicit: boolean; priority?: string[] }): AiAccount[] {
+export function rankCandidates(accounts: AiAccount[], usage: Map<string, AiAccountUsage>, opts: { explicit: boolean; priority?: string[]; model?: string | null }): AiAccount[] {
   const room = (a: AiAccount) => {
-    const peak = peakUtilization(usage.get(a.id));
+    const peak = peakUtilization(usage.get(a.id), opts.model);
     return opts.explicit || peak === null || peak < SWAP_MAX_UTILIZATION;
   };
   if (opts.priority) {
     const byId = new Map(accounts.map((a) => [a.id, a]));
     return opts.priority.map((id) => byId.get(id)).filter((a): a is AiAccount => !!a && room(a));
   }
-  const scored = accounts.map((a, i) => ({ a, i, peak: peakUtilization(usage.get(a.id)) }));
+  const scored = accounts.map((a, i) => ({ a, i, peak: peakUtilization(usage.get(a.id), opts.model) }));
   return scored
     .filter((s) => room(s.a))
     .sort((x, y) => (x.peak === null ? 1 : 0) - (y.peak === null ? 1 : 0) || (x.peak ?? 0) - (y.peak ?? 0) || x.i - y.i)
@@ -129,7 +155,7 @@ export async function swapAccount(
   }
   // an agent moving between instances (a deploy) gets a few seconds to attach before it is called offline
   if (!(await agents.awaitAgent(machine))) throw offline();
-  if (!machine.capabilities.includes('claude')) throw new ControlError('TOOL_MISSING', `claude não foi detectado em ${machine.name}`);
+  if (!machine.capabilities.includes('claude')) throw new ControlError('TOOL_MISSING', msg('claude não foi detectado em {{machine}}', { machine: machine.name }));
   if (swapping.has(tab.id)) throw new ControlError('SWAP_IN_PROGRESS', 'Já existe uma troca de conta em andamento nesta aba');
   swapping.add(tab.id);
   try {
@@ -140,19 +166,21 @@ export async function swapAccount(
     if (opts.accountId) {
       const chosen = owned.find((a) => a.id === opts.accountId);
       if (!chosen) throw new ControlError('ACCOUNT_NOT_FOUND', 'Conta não encontrada');
-      if (chosen.machine_id !== machine.id) throw new ControlError('ACCOUNT_OTHER_MACHINE', `A conta "${chosen.label}" é de outra máquina`);
+      if (chosen.machine_id !== machine.id) throw new ControlError('ACCOUNT_OTHER_MACHINE', msg('A conta "{{account}}" é de outra máquina', { account: chosen.label }));
       if (chosen.provider !== 'claude') throw new ControlError('PROVIDER_UNSUPPORTED', 'Só contas do Claude podem assumir esta sessão');
       if (chosen.id === tab.ai_account_id) throw new ControlError('SAME_ACCOUNT', 'Esta aba já roda nessa conta');
+      // TER-990: never onto an account exclusive to another project, even picked by hand
+      await guardAccount(repos, log, chosen, { project_id: tab.project_id, path: 'account_swap', machine_id: machine.id, tab_id: tab.id });
       pool = [chosen];
     } else {
-      pool = here.filter((a) => a.id !== tab.ai_account_id);
+      pool = here.filter((a) => a.id !== tab.ai_account_id && usableIn(a, tab.project_id));
     }
     // The project's order and model (TER-589). An account the person picked is taken as is, listed or not.
     const prefs = await swapPreferences(repos, tab, machine);
     // getAccountUsage never rejects: a failed reading comes back as `ok: false` and ranks last
     const usage = new Map<string, AiAccountUsage>();
     await Promise.all(pool.map(async (a) => usage.set(a.id, await getAccountUsage(a, machine, true))));
-    const ranked = rankCandidates(pool, usage, { explicit: !!opts.accountId, ...(opts.accountId ? {} : { priority: prefs.priority }) });
+    const ranked = rankCandidates(pool, usage, { explicit: !!opts.accountId, model: prefs.model, ...(opts.accountId ? {} : { priority: prefs.priority }) });
 
     // Link before touching the tab: a candidate that is the current account under another name
     // (same_account) or whose dir already holds something else (conflict) is skipped.
@@ -171,15 +199,22 @@ export async function swapAccount(
       throw new ControlError(
         'NO_CANDIDATE',
         ranked.length === 0
-          ? 'Nenhuma outra conta do Claude desta máquina tem limite disponível'
-          : 'Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)',
+          ? tk('Nenhuma outra conta do Claude desta máquina tem limite disponível')
+          : tk('Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)'),
       );
     }
     // built before the tab is touched: every check that can fail runs first (spec §5)
     // a tab started with its memory MCP keeps it: the config file is still on the machine while the
     // token lives (spec 2026-09-27 agent tab MCP D11); a failed lookup just resumes without it
     const hasTabMcp = await repos.apiTokens.hasLiveForTab(tab.id).catch(() => false);
-    const line = resumeLine(to.config_dir, sessionId, RESUME_PROMPT, hasTabMcp ? tab.id : null, prefs.model);
+    // a tab running automatic work keeps its permission profile on the new account (preflight F-12); a
+    // failed lookup resumes without it, which only makes the agent ask more
+    const permission = await activeRunPermission(repos, tab.id).catch(() => null);
+    // and its prompt says it comes from termhub, as every message typed into an automatic tab (spec D27)
+    const prompt = permission ? serverMessage(RESUME_PROMPT) : RESUME_PROMPT;
+    // and its hard-lock guard, written again before the line names it (TER-1005)
+    const guardTabId = await installRunGuard(machine, tab.id, permission);
+    const line = resumeLine(to.config_dir, sessionId, prompt, hasTabMcp ? tab.id : null, prefs.model, permission, guardTabId);
 
     // Claude waits for the reset on a usage limit (it does not exit): cancel that wait and leave.
     // Already idle means it ended on its own: the tab is at the shell and must not get these keys.
@@ -205,7 +240,7 @@ export async function swapAccount(
       const relinked = await linkClaudeSession(machine, { transcriptPath: movedTo ?? transcriptPath, sessionId, configDir: to.config_dir });
       log.info({ tabId: tab.id, machineId: machine.id, accountId: to.id, status: relinked }, 'account swap: relink after exit');
       if (relinked !== 'linked') {
-        throw new ControlError('RELINK_FAILED', `O Claude saiu, mas a sessão não pôde ser preparada na conta ${to.label} (${relinked}). Retome a sessão na aba.`);
+        throw new ControlError('RELINK_FAILED', msg('O Claude saiu, mas a sessão não pôde ser preparada na conta {{account}} ({{status}}). Retome a sessão na aba.', { account: to.label, status: relinked }));
       }
     }
     // Recorded before the line is typed, so the resumed session's first hooks (or a fast StopFailure)
@@ -214,9 +249,9 @@ export async function swapAccount(
     // them until the resumed session's SessionStart (run only once trusted) moves it to working. Should
     // typing fail, the tab already names the account the linked session will be resumed under.
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
-    const text = `${opts.auto ? 'Conta trocada automaticamente' : 'Conta trocada'}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
+    const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
-    await sendTextToSession(machine, session, line, true);
+    await typeCommandLine(machine, session, line);
 
     log.info({ tabId: tab.id, machineId: machine.id, from: from?.id ?? null, to: to.id, auto: opts.auto }, 'account swap: done');
     return { from: from && { id: from.id, label: from.label }, to: { id: to.id, label: to.label } };

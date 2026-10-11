@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { RPC, RPC_METHODS, docPath, isWdaPort, rpcErrorSchema } from './rpc.js';
+import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.update', 'ai.credential', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.paste', 'fs.list', 'fs.mkdir', 'hooks.install',
-      'hooks.uninstall', 'hw.probe', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
-      'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
+      'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
     ]);
   });
@@ -41,6 +41,23 @@ describe('rpc catalog', () => {
   });
   it('accepts refused as an rpc error code', () => {
     expect(rpcErrorSchema.safeParse({ code: 'refused', message: 'nothing listening' }).success).toBe(true);
+    expect(rpcErrorSchema.safeParse({ code: 'worktree_conflict', message: 'x' }).success).toBe(true);
+    expect(rpcErrorSchema.safeParse({ code: 'path_outside_root', message: 'x' }).success).toBe(true);
+  });
+  it('validates git.worktree params: branch names and machine paths', () => {
+    const ok = { repo_dir: '~/code/app', root: '~/.termhub/worktrees', path: '~/.termhub/worktrees/p1/TER-1', branch: 'TER-1-slug', base: 'epic/TER-2' };
+    const ensure = RPC['git.worktree.ensure'];
+    expect(ensure.timeoutMs).toBe(180_000);
+    expect(ensure.params.safeParse(ok).success).toBe(true);
+    for (const branch of ['--upload-pack=x', '-b', 'a..b', 'a b', 'a:b', 'a;rm', '', 'x'.repeat(201)]) {
+      expect(ensure.params.safeParse({ ...ok, branch }).success, branch).toBe(false);
+      expect(ensure.params.safeParse({ ...ok, base: branch }).success, branch).toBe(false);
+    }
+    expect(ensure.params.safeParse({ ...ok, path: 'relative/dir' }).success).toBe(false);
+    expect(ensure.result.safeParse({ path: '/x', head: 'a'.repeat(40), created: true }).success).toBe(true);
+    const remove = RPC['git.worktree.remove'];
+    expect(remove.params.safeParse({ repo_dir: ok.repo_dir, root: ok.root, path: ok.path }).success).toBe(true);
+    expect(remove.result.safeParse({ removed: false, dirty: true }).success).toBe(true);
   });
   it('validates agent.update versions', () => {
     expect(RPC['agent.update'].params.safeParse({ version: '0.2.1' }).success).toBe(true);
@@ -70,7 +87,42 @@ describe('rpc catalog', () => {
     expect(RPC['file.paste'].timeoutMs).toBe(60_000);
     expect(RPC['hw.probe'].timeoutMs).toBe(15_000);
     expect(RPC['tmux.list'].timeoutMs).toBe(8_000);
-    expect(RPC['ai.credential'].timeoutMs).toBe(10_000); // same as the ssh path's credential read
+  });
+  it('ai.usage answers bounded usage numbers, never a credential', () => {
+    const def = RPC['ai.usage'];
+    expect(def.timeoutMs).toBe(60_000); // up to four sequential 12 s provider calls
+    expect(def.params.safeParse({ provider: 'claude', config_dir: null }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: '~/.claude-work' }).success).toBe(true);
+    expect(def.params.safeParse({ provider: 'claude', config_dir: 'relative' }).success).toBe(false);
+    expect(def.params.safeParse({ provider: 'other', config_dir: null }).success).toBe(false);
+    const ok = { ok: true, plan: 'max', windows: [{ key: 'five_hour', label: '5 horas', utilization: 12.5, resets_at: '2026-10-07T12:00:00.000Z', model: 'opus' }], error: null, hint: null };
+    expect(def.result.safeParse(ok).success).toBe(true);
+    expect(def.result.safeParse({ ok: false, plan: null, windows: [], error: 'x', hint: null, rate_limited: true, retry_after_ms: null }).success).toBe(true);
+    expect(def.result.safeParse({ ...ok, windows: [{ ...ok.windows[0], utilization: 101 }] }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, windows: Array(51).fill(ok.windows[0]) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, error: 'x'.repeat(501) }).success).toBe(false);
+    expect(def.result.safeParse({ ...ok, retry_after_ms: -1 }).success).toBe(false);
+    expect('ai.credential' in RPC).toBe(false);
+  });
+  it('ai.login.* take a provider, a config dir and a tmux session name, and bound the code', () => {
+    expect(RPC['ai.login.status'].timeoutMs).toBe(20_000);
+    expect(RPC['ai.login.start'].timeoutMs).toBe(45_000);
+    expect(RPC['ai.login.submit'].timeoutMs).toBe(60_000);
+    expect(RPC['ai.login.status'].params.safeParse({ provider: 'chatgpt', config_dir: null }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: '~/.claude-work', session: 'termhub-login-abc' }).success).toBe(true);
+    expect(RPC['ai.login.start'].params.safeParse({ provider: 'claude', config_dir: null, session: 'bad name' }).success).toBe(false);
+    const submit = RPC['ai.login.submit'].params;
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'abc#def' }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'chatgpt', config_dir: null, session: 's', code: null }).success).toBe(true);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: '' }).success).toBe(false);
+    expect(submit.safeParse({ provider: 'claude', config_dir: null, session: 's', code: 'x'.repeat(2001) }).success).toBe(false);
+    expect(RPC['ai.login.start'].result.safeParse({ url: 'https://auth.openai.com/codex/device', user_code: 'LCWQ-WSPV8', needs_code: false }).success).toBe(true);
+    expect(RPC['ai.login.start'].result.safeParse({ url: '', user_code: null, needs_code: true }).success).toBe(false);
+    // TER-1054: an older agent leaves `logged_in` out; a newer one says the CLI finished on its own.
+    expect(RPC['ai.login.start'].result.parse({ url: 'https://x/oauth/authorize', user_code: null, needs_code: true })).toMatchObject({ logged_in: false });
+    expect(RPC['ai.login.start'].result.safeParse({ url: null, user_code: null, needs_code: false, logged_in: true }).success).toBe(true);
+    expect(RPC['ai.login.submit'].result.safeParse({ logged_in: false, message: null }).success).toBe(true);
+    expect(RPC['ai.login.cancel'].params.safeParse({ session: 'termhub-login-abc' }).success).toBe(true);
   });
   it('secret.read takes the gh_auth_token source only and bounds the value', () => {
     expect(RPC['secret.read'].params.safeParse({ source: 'gh_auth_token' }).success).toBe(true);
@@ -96,6 +148,8 @@ describe('rpc catalog', () => {
     expect(RPC['hooks.install'].params.safeParse({ hooks_url: 'https://x', token: "a'b" }).success).toBe(false);
     expect(RPC['hooks.install'].timeoutMs).toBe(15_000);
     expect(RPC['hooks.uninstall'].params.safeParse({}).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/.claude-work'] }).success).toBe(true);
+    expect(RPC['hooks.status'].params.safeParse({ claude_dirs: ['~/x\n'] }).success).toBe(false);
   });
   it('docs.scan takes an absolute/~ cwd and has a 15 s budget', () => {
     expect(RPC['docs.scan'].params.safeParse({ cwd: '/home/u/proj' }).success).toBe(true);
@@ -188,5 +242,95 @@ describe('terminal RPCs', () => {
     expect(RPC['tmux.ensure'].timeoutMs).toBe(10_000);
     expect(RPC['tmux.sendText'].timeoutMs).toBe(10_000);
     expect(RPC['tmux.sendKey'].timeoutMs).toBe(10_000);
+  });
+});
+
+const SID = '0f8fad5b-d9cb-469f-a165-70867728950e';
+const base = { transcript_path: `/home/u/.claude/projects/-w/${SID}.jsonl`, session_id: SID, direction: 'forward', offset: 0, max_bytes: 262_144, types: ['user', 'assistant'], max_string: 4000 };
+
+describe('transcript.read', () => {
+  it('accepts a forward and a backward read', () => {
+    expect(RPC['transcript.read'].params.safeParse(base).success).toBe(true);
+    expect(RPC['transcript.read'].params.safeParse({ ...base, direction: 'backward', offset: null }).success).toBe(true);
+  });
+  it('refuses a bad session id, a relative path, no types and an oversized window', () => {
+    for (const bad of [{ session_id: 'x' }, { transcript_path: 'a/b.jsonl' }, { types: [] }, { max_bytes: 600_000 }, { max_string: 10 }]) {
+      expect(RPC['transcript.read'].params.safeParse({ ...base, ...bad }).success).toBe(false);
+    }
+  });
+  it('validates the result', () => {
+    expect(RPC['transcript.read'].result.safeParse({ status: 'ok', lines: ['{}'], start: 0, end: 3, size: 3 }).success).toBe(true);
+    expect(RPC['transcript.read'].result.safeParse({ status: 'gone', lines: [], start: 0, end: 0, size: 0 }).success).toBe(false);
+  });
+});
+
+it('BTab is a key a terminal tool may press', () => {
+  expect(TMUX_KEYS).toContain('BTab');
+  expect(tmuxKey.safeParse('BTab').success).toBe(true);
+});
+
+describe('file.read', () => {
+  const ok = { status: 'ok', path: '/home/u/p/a.md', size: 3, mtime_ms: 1, content_b64: 'YWJj' };
+  it('takes an absolute or ~ path and up to 16 roots', () => {
+    expect(RPC['file.read'].params.safeParse({ path: '~/r.md', roots: ['/home/u/p'] }).success).toBe(true);
+    expect(RPC['file.read'].params.safeParse({ path: '/tmp/r.md', roots: [] }).success).toBe(true);
+  });
+  it('refuses a relative path, a newline and too many roots', () => {
+    for (const bad of [{ path: 'docs/a.md', roots: [] }, { path: '/a\n.md', roots: [] }, { path: '/a.md', roots: Array(17).fill('/x') }, { path: '/a.md', roots: ['rel'] }]) {
+      expect(RPC['file.read'].params.safeParse(bad).success).toBe(false);
+    }
+  });
+  it('validates both shapes of the result', () => {
+    expect(RPC['file.read'].result.safeParse(ok).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'too_large', size: 9_999_999 }).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'outside' }).success).toBe(true);
+    expect(RPC['file.read'].result.safeParse({ status: 'gone' }).success).toBe(false);
+    expect(RPC['file.read'].result.safeParse({ ...ok, size: FILE_READ_MAX_BYTES + 1 }).success).toBe(false);
+  });
+});
+
+describe('file.list', () => {
+  const params = { cwd: '/home/u/p', dirs: ['docs/lessons', 'docs/superpowers/specs'], paths: ['~/r.md', '/tmp/x.md'], roots: ['/home/u/p'] };
+  const entry = { path: '/home/u/p/docs/lessons/a.md', asked: '/home/u/p/docs/lessons/a.md', size: 3, mtime_ms: 1, too_large: false };
+  it('takes relative folders under a cwd, cited paths and roots', () => {
+    expect(RPC['file.list'].params.safeParse(params).success).toBe(true);
+    expect(RPC['file.list'].params.safeParse({ ...params, cwd: null, dirs: [] }).success).toBe(true);
+    expect(RPC['file.list'].params.safeParse({ ...params, dirs: ['docs/legal', 'a_b-c/d.e'] }).success).toBe(true);
+  });
+  it.each(['/docs', '~/docs', '../x', 'docs/../x', 'docs/.git', '.hidden', 'docs//x', 'docs/', '', 'docs/./x', 'a\nb', 'a b', 'docs\\x'])(
+    'refuses %j as a folder',
+    (dir) => {
+      expect(RPC['file.list'].params.safeParse({ ...params, dirs: [dir] }).success).toBe(false);
+    },
+  );
+  it('refuses a relative cited path, a relative cwd and too many of anything', () => {
+    for (const bad of [
+      { ...params, paths: ['docs/a.md'] },
+      { ...params, cwd: 'proj' },
+      { ...params, dirs: Array(9).fill('docs') },
+      { ...params, paths: Array(101).fill('/a.md') },
+      { ...params, roots: Array(17).fill('/x') },
+    ]) {
+      expect(RPC['file.list'].params.safeParse(bad).success).toBe(false);
+    }
+  });
+  it('validates the result and caps it at FILE_LIST_MAX_ENTRIES', () => {
+    expect(RPC['file.list'].result.safeParse({ entries: [entry, { ...entry, size: FILE_READ_MAX_BYTES + 1, too_large: true }] }).success).toBe(true);
+    expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES).fill(entry) }).success).toBe(true);
+    expect(RPC['file.list'].result.safeParse({ entries: Array(FILE_LIST_MAX_ENTRIES + 1).fill(entry) }).success).toBe(false);
+    expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, too_large: undefined }] }).success).toBe(false);
+    expect(RPC['file.list'].result.safeParse({ entries: [{ ...entry, size: -1 }] }).success).toBe(false);
+  });
+});
+
+describe('net.check', () => {
+  it('takes one to four http(s) urls', () => {
+    expect(RPC['net.check'].params.safeParse({ urls: ['https://termhub.dev/api/hooks/events', 'http://localhost:3000/mcp'] }).success).toBe(true);
+    expect(RPC['net.check'].params.safeParse({ urls: [] }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: Array(5).fill('https://termhub.dev/mcp') }).success).toBe(false);
+    expect(RPC['net.check'].params.safeParse({ urls: ['file:///etc/passwd'] }).success).toBe(false);
+  });
+  it('answers a status or an error per url', () => {
+    expect(RPC['net.check'].result.safeParse({ results: [{ url: 'https://termhub.dev/mcp', status: 401, error: null }, { url: 'https://x', status: null, error: 'ENOTFOUND' }] }).success).toBe(true);
   });
 });

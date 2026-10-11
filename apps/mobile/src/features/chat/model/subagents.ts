@@ -1,24 +1,27 @@
 // The subagents panel (spec 2026-09-26 §4): a line-for-line port of the web's `lib/subagents.ts`
 // (design spec §6) — same labels, same elapsed-time wording, same list op, so the two clients read
 // identically.
+import { t } from '@/i18n';
 import type { SubagentStatus, SubagentView } from './types';
 
-/** The subagents panel (spec 2026-09-26 §4): pt-BR status line for each row. */
+/** The subagents panel (spec 2026-09-26 §4): the status line for each row, in the language the app
+ * shows when it is read (each entry is a getter). */
 export const SUBAGENT_STATUS_LABEL: Record<SubagentStatus, string> = {
-  running: 'rodando',
-  stopping: 'cancelando…',
-  completed: 'concluído',
-  failed: 'falhou',
-  stopped: 'cancelado',
-  interrupted: 'interrompido',
+  get running() { return t('rodando'); },
+  get stopping() { return t('cancelando…'); },
+  get completed() { return t('concluído'); },
+  get failed() { return t('falhou'); },
+  get stopped() { return t('cancelado'); },
+  get interrupted() { return t('interrompido'); },
 };
 
 /** Still doing something (or being asked to stop) — the only ones the header button counts. */
 export const isActive = (s: SubagentView): boolean => s.status === 'running' || s.status === 'stopping';
 
-const minutesLabel = (ms: number): string => {
+/** Whole minutes, or null under one ("menos de 1 min"). */
+const wholeMinutes = (ms: number): number | null => {
   const minutes = Math.floor(ms / 60_000);
-  return minutes < 1 ? 'menos de 1 min' : `${minutes} min`;
+  return minutes < 1 ? null : minutes;
 };
 
 /**
@@ -31,7 +34,9 @@ export function elapsedLabel(s: SubagentView, now: number): string {
   const start = new Date(s.started_at).getTime();
   const end = running ? now : s.ended_at !== null ? new Date(s.ended_at).getTime() : now;
   const ms = Math.max(0, end - start);
-  return running ? `há ${minutesLabel(ms)}` : `levou ${minutesLabel(ms)}`;
+  const n = wholeMinutes(ms);
+  if (running) return n === null ? t('há menos de 1 min') : t('há {{n}} min', { n });
+  return n === null ? t('levou menos de 1 min') : t('levou {{n}} min', { n });
 }
 
 /** Replaces a row by id, or prepends a new one — the panel's own newest-first order. */

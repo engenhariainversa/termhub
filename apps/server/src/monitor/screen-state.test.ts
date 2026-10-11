@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { claudeScreenState } from './screen-state.js';
+import { claudeFooterMode, claudeScreenState } from './screen-state.js';
 
 /** Real captures of Claude Code 2.1.285 (TER-615), trailing blanks trimmed, paths replaced. */
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/claude-screens/${name}-2.1.285.txt`, import.meta.url), 'utf8');
@@ -54,6 +54,28 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
     expect(claudeScreenState(answer)).toBe('prompt');
   });
 
+  // TER-1046: real screens of 2026-10-08 (Claude Code 2.1.289), paths replaced
+  const screen289 = (name: string) => readFileSync(new URL(`./fixtures/claude-screens/${name}-2.1.289.txt`, import.meta.url), 'utf8');
+
+  it('the login error as the last answer above the input box is auth (TER-1046)', () => {
+    expect(claudeScreenState(screen289('login-expired'))).toBe('auth');
+    const invalid = ['❯ oi', '', '● Invalid API key · Please run /login', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(invalid)).toBe('auth');
+  });
+
+  it('a login error in an earlier answer, or quoted in a long one, is a plain prompt (TER-1046)', () => {
+    const later = ['⏺ Login expired · Please run /login', '', '❯ /login', '', '⏺ Login successful.', '', '✻ Worked for 1s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(later)).toBe('prompt');
+    const quoted = ['⏺ Documentei o caso "Login expired · Please run /login" no runbook.', ...Array.from({ length: 6 }, () => '  Mais detalhes sobre o que muda para quem usa o termhub no dia a dia, com exemplos.'), '', '✻ Brewed for 3s', '', '────────────', '❯ ', '────────────'].join('\n');
+    expect(claudeScreenState(quoted)).toBe('prompt');
+  });
+
+  it('the folder trust dialog is trust, whichever option is selected (TER-1046)', () => {
+    const screen = screen289('trust');
+    expect(claudeScreenState(screen)).toBe('trust');
+    expect(claudeScreenState(screen.replace('❯ 1.', '  1.').replace('  2. No', '❯ 2. No'))).toBe('trust');
+  });
+
   it('is unknown for a screen that is not Claude Code (a shell after it exited, an empty pane)', () => {
     expect(claudeScreenState('pedro@jarvis:~/termhub$ ')).toBeNull();
     expect(claudeScreenState('')).toBeNull();
@@ -61,5 +83,34 @@ describe('claudeScreenState — what a Claude Code tab shows (TER-615)', () => {
 
   it('never takes a typed "❯" inside the transcript for the input box', () => {
     expect(claudeScreenState('❯ Run the tests\n\n● Done.')).toBeNull();
+  });
+});
+
+describe('claudeFooterMode — the permission mode under the input box (spec 2026-10-01 tab chat §5.4)', () => {
+  const RULE = '─'.repeat(40);
+  const screen = (footer: string[], above: string[] = ['● Pronto.']) => [...above, '', RULE, '❯ ', RULE, '  Opus | ctx 4%', ...footer].join('\n');
+
+  it('reads each mode the footer names', () => {
+    expect(claudeFooterMode(screen(['  ⏵⏵ accept edits on (shift+tab to cycle)']))).toBe('acceptEdits');
+    expect(claudeFooterMode(screen(['  ⏸ plan mode on (shift+tab to cycle)']))).toBe('plan');
+    expect(claudeFooterMode(screen(['  ⏵⏵ bypass permissions on (shift+tab to cycle)']))).toBe('bypassPermissions');
+    // a real footer seen on 2026-10-04
+    expect(claudeFooterMode(screen(['  ⏵⏵ auto mode on (shift+tab to cycle)']))).toBe('auto');
+  });
+
+  it('a real capture: bypass permissions, with an agent running in the background', () => {
+    expect(claudeFooterMode(fixture('idle'))).toBe('bypassPermissions');
+  });
+
+  it('an input box with none of them is the default mode, even when the conversation mentions one', () => {
+    expect(claudeFooterMode(screen([], ['● Turn plan mode on with shift+tab.']))).toBe('default');
+    expect(claudeFooterMode(screen(['  ? for shortcuts']))).toBe('default');
+    // Claude Code 2.1.289 names the default mode in the footer
+    expect(claudeFooterMode(screen(['  ⏸ manual mode on · ← 1 agent']))).toBe('default');
+  });
+
+  it('a pane with no input box is unknown', () => {
+    expect(claudeFooterMode('$ ls\nfile.txt\n$ ')).toBe('unknown');
+    expect(claudeFooterMode('')).toBe('unknown');
   });
 });

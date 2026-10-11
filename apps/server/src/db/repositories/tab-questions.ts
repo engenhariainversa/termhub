@@ -1,6 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import type { Prisma, TabQuestion as PrismaTabQuestion } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
+import { AT_PROMPT } from '../../monitor/state.js';
 import type { TabQuestionSuggestion } from '../../chat/decision-text.js';
 import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, SuggestionAnswer, SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 import type { MemoryKind } from './memory-items.js';
@@ -16,20 +17,25 @@ export type TabQuestionCloseStatus = 'answered_in_tab' | 'expired';
  * `leavesQueue`: the agent has no dialog pending any more, so it also leaves the tab's permission queue.
  */
 export type CloseScope = { agent: string | null; leavesQueue: boolean } | 'all';
-/** How a `choice` question got its `answer`: a click on the card, or the countdown sending it by
- * itself (spec 2026-09-26 concierge memory §3.2). */
-export type AnsweredVia = 'card' | 'auto';
+/** How a question got its `answer`: a click on the card, the countdown sending it by itself (spec
+ * 2026-09-26 concierge memory §3.2), or an automatic tab's permission allowed by the project's rules
+ * (`'automation'`, agentic board spec §9.2 — never sent to clients as such: `ANSWERED_VIA_VIEW`). */
+export type AnsweredVia = 'card' | 'auto' | 'automation';
+
+/** Who scheduled an automatic answer (see `AutoAnswer`). */
+export type AutoAnswerBy = 'memory' | 'concierge' | 'automation';
 
 /**
  * A scheduled automatic answer on a still-open `choice` card (spec 2026-09-26 concierge memory §3.2,
  * §6): `by: 'memory'` is the repeat path (a near-verbatim precedent, no LLM call), `'concierge'` is the
- * wake path. `sources` cites what backed it — a `chat_decisions` row (`kind: 'decision'`) or a
+ * wake path, `'automation'` the option the agent marked "(Recomendado)" in a tab with an automatic run
+ * (agentic board spec D18). `sources` cites what backed it — a `chat_decisions` row (`kind: 'decision'`) or a
  * `memory_items` row — so the card can show and forget them. `due_at` is when the sweeper may send it;
  * `status` tracks the countdown itself, independent of the row's own `status`.
  */
 export interface AutoAnswer {
   answer: ChoiceAnswer;
-  by: 'memory' | 'concierge';
+  by: AutoAnswerBy;
   reason: string;
   sources: { kind: 'decision' | MemoryKind; id: string }[];
   due_at: string;
@@ -175,8 +181,8 @@ export class TabQuestionsRepository {
    * permission is answered in the tab. A choice is never held and clears every queue mark and list. The tab
    * row is locked first (`lockTab`), so two hooks of one tab land in order. A suggestion row never counts
    * here: it is not part of Claude Code's permission queue (spec 2026-09-25 tab suggestions §6.1). A
-   * suggestion is read seconds after the `Stop`, so it opens only if the tab, under that lock, still waits
-   * for input and shows no question (open, or answered from the chat but still on screen): otherwise
+   * suggestion is read seconds after the `Stop`, so it opens only if the tab, under that lock, is still at
+   * its prompt (`waiting_input` or `finished`) and shows no question (open, or answered from the chat but still on screen): otherwise
    * nothing opens and nothing closes. With no conversation (spec 2026-09-26 §4.1) the same rules run and
    * nothing is inserted; a choice still clears every queue mark and list.
    */
@@ -187,7 +193,9 @@ export class TabQuestionsRepository {
       // process that asked is gone, and the cards it left close below.
       const exited = input.kind === 'suggestion' && (input.payload as { exited?: unknown }).exited === true;
       if (input.kind === 'suggestion') {
-        if (input.conversation_id === null || tab?.state !== (exited ? 'idle' : 'waiting_input')) return { question: null, closed: [] };
+        // A tab that ended its turn with a report (`finished`, TER-972) is at its prompt like one that waits.
+        const atPrompt = !!tab?.state && (exited ? tab.state === 'idle' : (AT_PROMPT as readonly string[]).includes(tab.state));
+        if (input.conversation_id === null || !atPrompt) return { question: null, closed: [] };
         const question = exited ? null : await tx.tabQuestion.findFirst({ where: { tabId: input.tab_id, kind: { not: 'suggestion' }, closedAt: null, status: { in: ['open', 'answered'] } }, select: { id: true } });
         if (question) return { question: null, closed: [] };
       }
@@ -284,9 +292,35 @@ export class TabQuestionsRepository {
     return rows.map(mapQuestion);
   }
 
+  /** Whether the tab has an open question or permission card (suggestions do not count): the automation
+   *  follower leaves such a tab to the card's own answer (agentic board spec §9). */
+  async hasOpenQuestion(tabId: string): Promise<boolean> {
+    return (await this.db.tabQuestion.count({ where: { tabId, status: 'open', kind: { not: 'suggestion' } }, take: 1 })) > 0;
+  }
+
+  /** The tab's newest question or permission row, whatever its status (suggestions do not count): what the
+   *  automation follower reads to tell a card left unanswered from one still waiting (agentic board §9.1). */
+  async latestQuestionForTab(tabId: string): Promise<TabQuestion | undefined> {
+    const row = await this.db.tabQuestion.findFirst({ where: { tabId, kind: { not: 'suggestion' } }, include: withOwner, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? mapQuestion(row) : undefined;
+  }
+
   async findOpenForTab(tabId: string): Promise<TabQuestion | undefined> {
     const row = await this.db.tabQuestion.findFirst({ where: { tabId, status: 'open' }, include: withOwner, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
     return row ? mapQuestion(row) : undefined;
+  }
+
+  /**
+   * The tab's open rows (questions, permissions, suggestions) of this user's own conversations, oldest
+   * first: the cards a tab chat shows at the end of its conversation (spec 2026-10-01 tab chat D13).
+   */
+  async listOpenForTab(tabId: string, userId: string): Promise<TabQuestion[]> {
+    const rows = await this.db.tabQuestion.findMany({
+      where: { tabId, status: 'open', conversation: { userId } },
+      include: withOwner,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(mapQuestion);
   }
 
   async findByIdForUser(id: string, userId: string): Promise<TabQuestion | undefined> {

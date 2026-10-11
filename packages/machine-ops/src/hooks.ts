@@ -38,6 +38,9 @@ export function expandHome(dir: string, home: string): string {
 /** Claude Code hook events we subscribe to (see the server's monitor/state.ts for what each one means).
  * `PermissionRequest` is taken for its tool name only; the script prints nothing, which Claude Code
  * reads as "no decision" — our hook never allows or denies (hook-script.test.ts keeps stdout empty).
+ * The one exception to the empty stdout is `UserPromptSubmit` (TER-851): when the server answers with an
+ * origin note for a prompt termhub typed, the script prints it, and Claude Code adds it to the context
+ * (`hookSpecificOutput.additionalContext`). It never blocks the prompt.
  * `StopFailure` fires when an API error — a usage limit, an auth failure — ends the turn instead of
  * a normal `Stop` (spec 2026-09-26 account swap).
  * `SubagentStop` is taken for the subagent's id only (spec 2026-09-30 tab questions per subagent): it is
@@ -262,6 +265,22 @@ case "$KIND" in
     rm -f "$MARK"
     ;;
 esac
+# A prompt Claude Code is about to submit (TER-851) is the one event posted in the foreground, for at
+# most 2 s: when termhub typed that text, the server answers with a note saying who wrote it, and the
+# script prints it on stdout, where Claude Code reads it as context for the session. Only a 200 whose
+# body starts with {"hookSpecificOutput" is printed; anything else (no note, an error, a timeout, an
+# older server) prints nothing, exactly as before.
+if [ "$TOOL" = claude ] && [ "$KIND" = UserPromptSubmit ] && [ -z "$SUB" ]; then
+  OUT=$({ printf '{"tool":"%s","session":"%s","event":' "$TOOL" "$SESSION"; printf '%s' "$EVENT"; printf '}'; } |
+    curl -s -m 2 -w '\\n%{http_code}' -X POST "$TERMHUB_HOOK_URL" \\
+      -H "authorization: Bearer $TERMHUB_HOOK_TOKEN" -H 'content-type: application/json' --data-binary @- 2>/dev/null)
+  CODE=$(printf '%s\\n' "$OUT" | tail -n 1)
+  REPLY=$(printf '%s\\n' "$OUT" | sed '$d')
+  if [ "$CODE" = 200 ]; then
+    case "$REPLY" in '{"hookSpecificOutput"'*) printf '%s\\n' "$REPLY" ;; esac
+  fi
+  exit 0
+fi
 { printf '{"tool":"%s","session":"%s","event":' "$TOOL" "$SESSION"; printf '%s' "$EVENT"; printf '}'; } |
   curl -s -m 5 -o /dev/null -X POST "$TERMHUB_HOOK_URL" \\
     -H "authorization: Bearer $TERMHUB_HOOK_TOKEN" -H 'content-type: application/json' --data-binary @- >/dev/null 2>&1 &

@@ -4,7 +4,7 @@
 // a test can fire one event without the timing of a real socket connection.
 import type { TChatEvent } from '@/services/api/contract';
 import { mmkv } from '@/services/storage';
-import { sessionEnded } from '@/features/shared/signals';
+import { appForegrounded, sessionEnded } from '@/features/shared/signals';
 import { enrol, setupSession } from '../../../../test/helpers/enrolled-session';
 import { localRowId } from '../model/synthetic-row';
 import { createNotificationsStore } from './createNotificationsStore';
@@ -181,4 +181,43 @@ it('resets on sessionEnded', async () => {
   sessionEnded.emit();
 
   expect(store.getState()).toMatchObject({ items: [], unread: 0 });
+});
+
+describe('icon badge and notification center (TER-923)', () => {
+  async function setupOs() {
+    const ctx = setupSession();
+    await enrol(ctx);
+    const os = { setBadge: jest.fn(async () => undefined), dismissDelivered: jest.fn(async () => undefined) };
+    const store = createNotificationsStore({ api: ctx.api, session: () => ctx.store.getState(), events: fakeEvents(), os, refreshOnForeground: true });
+    return { ...ctx, os, store };
+  }
+
+  it('the badge follows unread, and a read row\'s delivered push is dismissed', async () => {
+    const { store, os } = await setupOs();
+    await store.getState().load();
+    expect(os.setBadge).toHaveBeenLastCalledWith(1);
+    const id = store.getState().items[0]!.id;
+    expect(os.dismissDelivered).toHaveBeenLastCalledWith(new Set());
+    await store.getState().markRead(id);
+    expect(os.setBadge).toHaveBeenLastCalledWith(0);
+    expect(os.dismissDelivered).toHaveBeenLastCalledWith(new Set([id]));
+  });
+
+  it('coming back to the app reloads the history', async () => {
+    const { store, api } = await setupOs();
+    const list = jest.spyOn(api, 'notifications');
+    appForegrounded.emit();
+    await jest.runOnlyPendingTimersAsync();
+    expect(list).toHaveBeenCalled();
+    expect(store.getState().unread).toBe(1);
+  });
+
+  it('the end of the session clears the center and the badge', async () => {
+    const { store, os } = await setupOs();
+    await store.getState().load();
+    sessionEnded.emit();
+    await jest.runOnlyPendingTimersAsync();
+    expect(os.dismissDelivered).toHaveBeenCalledWith('all');
+    expect(os.setBadge).toHaveBeenLastCalledWith(0);
+  });
 });

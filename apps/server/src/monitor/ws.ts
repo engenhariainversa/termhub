@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { FastifyBaseLogger } from 'fastify';
 import type { createUpgradeRouter } from '../ws/router.js';
 import { monitorBus, type TabLifecycle, type TabStateChange } from './bus.js';
+import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 
 /** Whether a change on a machine of `ownerId` belongs to the scope (null = an admin viewing "all"). */
 const inScope = (scopeOwner: string | null, ownerId: string | null) => scopeOwner === null || ownerId === scopeOwner;
@@ -19,9 +20,16 @@ export function lifecycleFrame(scopeOwner: string | null, event: TabLifecycle) {
   return { type: 'tab_removed' as const, tab_id: event.tab_id, project_id: event.project_id, machine_id: event.machine_id };
 }
 
+/** Something the automatic work did (`type: 'automation'`, agentic board); null when outside the scope. */
+export function automationFrame(scopeOwner: string | null, e: PublishedAutomationEvent) {
+  if (!inScope(scopeOwner, e.owner_id)) return null;
+  const { owner_id: _owner, ...event } = e;
+  return { type: 'automation' as const, event };
+}
+
 /**
  * `/ws/monitor`: pushes tab state changes (home list, tab bar dots) and tabs opened, renamed and
- * closed (the sidebar's open tabs) to the browser. One message per change, filtered by the
+ * closed (the sidebar's open tabs), and automation events (pauses, runs, PRs), to the browser. One message per change, filtered by the
  * caller's scope; the client fetches the snapshots over REST.
  * Only metadata and the tool's own message travel here — never terminal content.
  */
@@ -41,9 +49,11 @@ export function registerMonitorWs(router: ReturnType<typeof createUpgradeRouter>
       };
       const offState = monitorBus.subscribe((change) => send(stateFrame(scope.ownerId, change)));
       const offLifecycle = monitorBus.subscribeLifecycle((event) => send(lifecycleFrame(scope.ownerId, event)));
+      const offAutomation = automationBus.subscribe((e) => send(automationFrame(scope.ownerId, e)));
       const unsubscribe = () => {
         offState();
         offLifecycle();
+        offAutomation();
       };
       log.info({ userId: scope.user.id }, 'monitor conectado');
       ws.on('close', () => {

@@ -4,6 +4,7 @@ import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Mailer } from '../email/mailer.js';
 import { deviceRevokedMail } from '../email/templates.js';
+import { localeOf } from '../i18n/index.js';
 
 /** Why a device was revoked, and who did it; written to the device trail as `device_revoked`. */
 export interface RevokeInput {
@@ -108,7 +109,7 @@ export async function revokeDevice(
   if (input.reason === 'pin_bruteforce') {
     try {
       const owner = await repos.users.findById(device.user_id);
-      if (owner) await deps.mailer.send(deviceRevokedMail(owner.email, { deviceLabel: `${device.name} (${device.model})`, at: now }));
+      if (owner) await deps.mailer.send(deviceRevokedMail(owner.email, { deviceLabel: `${device.name} (${device.model})`, at: now }, localeOf(owner.locale)));
     } catch (err) {
       deps.log?.warn({ err: failureLabel(err), deviceId }, 'device revoked mail failed');
     }

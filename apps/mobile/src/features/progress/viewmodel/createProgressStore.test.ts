@@ -87,13 +87,22 @@ it('resets and stops polling on sessionEnded', async () => {
   expect(spy).toHaveBeenCalledTimes(calls);
 });
 
+it('keeps the feed of the last answer and clears it with the session', async () => {
+  const { progress, api } = await setup();
+  await progress.getState().load();
+  expect(progress.getState().feed.map((e) => e.kind)).toEqual(['pr_opened', 'run_started']);
+  sessionEnded.emit();
+  expect(progress.getState().feed).toEqual([]);
+  void api;
+});
+
 it('drops a response that lands after sessionEnded', async () => {
   const { progress, api } = await setup();
   const pending = deferred<TProgressResponse>();
   jest.spyOn(api, 'progress').mockReturnValueOnce(pending.promise);
   const load = progress.getState().load();
   sessionEnded.emit();
-  pending.resolve({ epics: [{ id: 'old' } as never], generated_at: '' });
+  pending.resolve({ epics: [{ id: 'old' } as never], feed: [], generated_at: '' });
   await load;
   expect(progress.getState().epics).toEqual([]);
 });
@@ -115,7 +124,7 @@ it('refresh() shows the spinner while the pull is in flight', async () => {
   jest.spyOn(api, 'progress').mockReturnValueOnce(pending.promise);
   const refresh = progress.getState().refresh();
   expect(progress.getState().refreshing).toBe(true);
-  pending.resolve({ epics: [], generated_at: '' });
+  pending.resolve({ epics: [], feed: [], generated_at: '' });
   await refresh;
   expect(progress.getState().refreshing).toBe(false);
 });
@@ -127,10 +136,33 @@ it('an older response never overwrites a newer one', async () => {
   jest.spyOn(api, 'progress').mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise);
   const first = progress.getState().load();
   const second = progress.getState().load();
-  newer.resolve({ epics: [{ id: 'new' } as never], generated_at: '' });
+  newer.resolve({ epics: [{ id: 'new' } as never], feed: [], generated_at: '' });
   await second;
-  older.resolve({ epics: [{ id: 'old' } as never], generated_at: '' });
+  older.resolve({ epics: [{ id: 'old' } as never], feed: [], generated_at: '' });
   await first;
   expect(progress.getState().epics.map((e) => e.id)).toEqual(['new']);
   expect(progress.getState().loading).toBe(false);
+});
+
+it('setAuto() tags a card through the API and shows the badge state', async () => {
+  const { progress, api } = await setup();
+  await progress.getState().load();
+  const card = progress.getState().epics[0]!.cards[0]!;
+  expect(card.auto).toBe(false);
+  const spy = jest.spyOn(api, 'setCardAuto');
+  expect(await progress.getState().setAuto(card.id, true)).toBe(true);
+  expect(spy).toHaveBeenCalledWith(expect.anything(), card.id, true);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(true);
+  expect(await progress.getState().setAuto(card.id, false)).toBe(true);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(false);
+});
+
+it('setAuto() keeps the card as it was and says so when the request fails', async () => {
+  const { progress, api } = await setup();
+  await progress.getState().load();
+  const card = progress.getState().epics[0]!.cards[0]!;
+  jest.spyOn(api, 'setCardAuto').mockRejectedValueOnce(new Error('boom'));
+  expect(await progress.getState().setAuto(card.id, true)).toBe(false);
+  expect(progress.getState().epics[0]!.cards[0]!.auto).toBe(false);
+  expect(progress.getState().error).toBe('Não foi possível marcar o card.');
 });

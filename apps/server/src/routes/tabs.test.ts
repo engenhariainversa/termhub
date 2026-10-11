@@ -18,6 +18,8 @@ vi.mock('../auth/permissions.js', async (orig) => ({ ...(await orig<typeof impor
 const { removeTabMcp, killTmuxSession } = vi.hoisted(() => ({ removeTabMcp: vi.fn(async () => undefined), killTmuxSession: vi.fn() }));
 vi.mock('../terminal/tab-mcp.js', () => ({ removeTabMcp }));
 vi.mock('../terminal/machine-exec.js', async (orig) => ({ ...(await orig<typeof import('../terminal/machine-exec.js')>()), killTmuxSession }));
+const { saveFileOnMachine } = vi.hoisted(() => ({ saveFileOnMachine: vi.fn() }));
+vi.mock('../terminal/paste-file.js', async (orig) => ({ ...(await orig<typeof import('../terminal/paste-file.js')>()), saveFileOnMachine }));
 
 import { tabRoutes } from './tabs.js';
 
@@ -152,6 +154,53 @@ describe('POST /tabs/:id/input', () => {
     const r = await app.inject({ method: 'POST', url: '/tabs/t1/input', payload: { text: 'oi', enter: false } });
     expect(r.statusCode).toBe(409);
     expect(r.json().error).toBe('tmux não respondeu');
+  });
+});
+
+// TER-576: typing into a terminal (or dropping a file into it) is terminals:write, not update.
+describe('input and paste-file need terminals:write', () => {
+  let store: Record<string, Tab>;
+  const grant = (...actions: string[]) =>
+    canAccess.mockImplementation(async (_r: unknown, _u: unknown, resource: string, action: string) => resource === 'terminals' && actions.includes(action));
+  const paste = (app: ReturnType<typeof buildApp>['app']) =>
+    app.inject({ method: 'POST', url: '/tabs/t1/paste-file?name=a.txt', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('oi') });
+  beforeEach(() => {
+    store = { t1: tab({ id: 't1' }) };
+    sendKeysToSession.mockReset().mockResolvedValue({ ok: true, error: null });
+    saveFileOnMachine.mockReset().mockResolvedValue({ path: '/tmp/a.txt', name: 'a.txt', mime: 'text/plain', bytes: 2 });
+  });
+
+  it('403s POST /input for a role with read and update but no write, without touching tmux', async () => {
+    grant('read', 'update');
+    const { app } = buildApp(store);
+    const r = await app.inject({ method: 'POST', url: '/tabs/t1/input', payload: { text: 'oi' } });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().error).toContain('terminals:write');
+    expect(sendKeysToSession).not.toHaveBeenCalled();
+  });
+
+  it('lets POST /input through with terminals:write', async () => {
+    grant('read', 'write');
+    const { app } = buildApp(store);
+    const r = await app.inject({ method: 'POST', url: '/tabs/t1/input', payload: { text: 'oi' } });
+    expect(r.statusCode).toBe(200);
+    expect(sendKeysToSession).toHaveBeenCalledOnce();
+  });
+
+  it('403s POST /paste-file for a role with read and update but no write, without writing the file', async () => {
+    grant('read', 'update');
+    const { app } = buildApp(store);
+    const r = await paste(app);
+    expect(r.statusCode).toBe(403);
+    expect(saveFileOnMachine).not.toHaveBeenCalled();
+  });
+
+  it('lets POST /paste-file through with terminals:write', async () => {
+    grant('read', 'write');
+    const { app } = buildApp(store);
+    const r = await paste(app);
+    expect(r.statusCode).toBe(200);
+    expect(r.json().path).toBe('/tmp/a.txt');
   });
 });
 

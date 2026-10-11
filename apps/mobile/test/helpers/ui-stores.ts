@@ -1,19 +1,25 @@
 // One mock transport, one session store, one chat store, one notifications store, one settings
-// store, one chat grants store, one chat-memory store, one progress store and one permissions store
+// store, one chat grants store, one chat-memory store, one progress store, one permissions store and one account store
 // over it, for the `ui` project: a screen test mocks `useSessionStore`, `useChatStore`,
 // `useNotificationsStore`, `useSettingsStore`, `useChatGrantsStore`, `useChatMemoryStore`,
-// `useProgressStore` and `usePermissionsStore` with these
+// `useProgressStore`, `usePermissionsStore`, `useAccountStore`, `useLegalStore`, `useSessionsStore`, `useAiLoginStore` and `makeTabChatStore` with these
 // (each `jest.mock` factory requires this module, and Jest's registry hands every store the same
 // instance within a test file).
 // `enrolStores()` leaves the session unlocked; run it once, in `beforeAll`.
+import { createAiLoginStore } from '@/features/ai-login/viewmodel/createAiLoginStore';
+import { createAccountStore } from '@/features/account/viewmodel/createAccountStore';
 import type { PermissionsDeps } from '@/features/permissions/model/permissions.types';
 import { createPermissionsStore } from '@/features/permissions/viewmodel/createPermissionsStore';
+import { createPauseStore } from '@/features/automation/viewmodel/createPauseStore';
+import { createLegalStore } from '@/features/legal/viewmodel/createLegalStore';
 import { createChatGrantsStore } from '@/features/chat-grants/viewmodel/createChatGrantsStore';
 import { createChatMemoryStore } from '@/features/chat/viewmodel/createChatMemoryStore';
 import { createChatStore } from '@/features/chat/viewmodel/createChatStore';
 import { createNotificationsStore } from '@/features/notifications/viewmodel/createNotificationsStore';
 import { createProgressStore } from '@/features/progress/viewmodel/createProgressStore';
 import { createSettingsStore } from '@/features/settings/viewmodel/createSettingsStore';
+import { createSessionsStore } from '@/features/tab-chat/viewmodel/createSessionsStore';
+import { createTabChatStore } from '@/features/tab-chat/viewmodel/createTabChatStore';
 import { enrol, setupSession } from './enrolled-session';
 
 const ctx = setupSession(Date.now());
@@ -43,9 +49,17 @@ export const stores = {
   settings: createSettingsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatGrants: createChatGrantsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatMemory: createChatMemoryStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  pause: createPauseStore({ api: ctx.api, session: () => ctx.store.getState(), events: { subscribe: (fn) => chat.getState().subscribeEvents(fn) } }),
   progress: createProgressStore({ api: ctx.api, session: () => ctx.store.getState() }),
   permissions: createPermissionsStore(permissionDeps),
   permissionDeps,
+  account: createAccountStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  legal: createLegalStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  sessions: createSessionsStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  /** The AI logins' status (TER-1047): a test mocks `useAiLoginStore` with this. */
+  aiLogin: createAiLoginStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  /** A session screen's store (spec 2026-10-01 tab chat): a test mocks `makeTabChatStore` with this. */
+  makeTabChat: (tabId: string) => createTabChatStore({ api: ctx.api, session: () => ctx.store.getState(), tabId }),
 };
 
 export async function enrolStores(): Promise<void> {

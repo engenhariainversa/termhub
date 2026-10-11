@@ -1,0 +1,158 @@
+import Fastify from 'fastify';
+import { describe, expect, it, vi } from 'vitest';
+import type { Repositories } from '../db/repositories/index.js';
+import { applyErrorHandler } from '../lib/errors.js';
+import { normalizeSetup } from '../setup/schema.js';
+import { automationPauseRoutes, projectAutomationEventRoutes } from './automation.js';
+
+async function build() {
+  const setupGet = vi.fn(async () => ({ data: normalizeSetup({}, 2) }));
+  const pauseProject = vi.fn(async (_id: string, at: Date) => ({ paused_at: at, fresh: true }));
+  const resumeUser = vi.fn(async () => true);
+  const userPausedAt = vi.fn(async () => new Date('2026-10-05T09:00:00.000Z') as Date | null);
+  const pausedProjects = vi.fn(async () => [{ id: 'p1', paused_at: new Date('2026-10-05T08:00:00.000Z') }]);
+  const listByProject = vi.fn(async () => [{ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '2026-10-05T10:00:00.000Z' }]);
+  const tok = (input: number, output = 0) => ({ input, output, cacheRead: 0, cacheWrite: 0 });
+  const usageSums = vi.fn(async () => [
+    { task_id: 'c1', account_id: 'a1', tokens: tok(100, 10), cost_usd: 0.5 },
+    { task_id: 'c2', account_id: 'a1', tokens: tok(5), cost_usd: null },
+    { task_id: 'e1', account_id: 'gone', tokens: tok(1), cost_usd: 0.25 },
+    { task_id: null, account_id: null, tokens: tok(7), cost_usd: 1 },
+  ]);
+  const repos = {
+    projects: {
+      findById: async (id: string) => (id === 'p1' ? { id, owner_id: 'u1' } : id === 'p9' ? { id, owner_id: 'u9' } : undefined),
+      list: async () => [{ id: 'p1', owner_id: 'u1' }],
+    },
+    projectSetup: { get: setupGet },
+    automationPauses: { pauseProject, resumeUser, userPausedAt, pausedProjects },
+    automationRuns: { activeByProject: async () => [] },
+    tabUsage: { sums: usageSums },
+    tasks: {
+      findByIds: async (ids: string[]) =>
+        [
+          { id: 'c1', project_id: 'p1', ref: 'TER-1', type: 'task', epic_id: 'e1' },
+          { id: 'c2', project_id: 'p1', ref: 'TER-2', type: 'bug', epic_id: 'e1' },
+          { id: 'e1', project_id: 'p1', ref: 'TER-9', type: 'epic', epic_id: null },
+        ].filter((t) => ids.includes(t.id)),
+    },
+    aiAccounts: { findById: async (id: string) => (id === 'a1' ? { id, label: 'Pessoal', machine_id: 'm1' } : undefined) },
+    machines: { findById: async (id: string) => (id === 'm1' ? { id, owner_id: 'u1' } : undefined) },
+    automationEvents: { insert: async () => ({ id: 'e1', project_id: 'p1', task_id: null, run_id: null, kind: 'paused', payload: {}, created_at: '' }), listByProject },
+  } as unknown as Repositories;
+  const app = Fastify();
+  applyErrorHandler(app);
+  const actions: Record<string, unknown> = {};
+  app.addHook('onRoute', (route) => {
+    actions[`${route.method} ${route.url}`] = (route.config as { action?: string } | undefined)?.action;
+  });
+  app.addHook('preHandler', async (request) => {
+    request.scope = { user: { id: 'u1', role: 'member' } as never, viewAs: { kind: 'self' }, ownerId: 'u1', createAs: 'u1' };
+  });
+  await app.register((a) => automationPauseRoutes(a, repos), { prefix: '/automation' });
+  await app.register((a) => projectAutomationEventRoutes(a, repos), { prefix: '/projects' });
+  await app.ready();
+  return { app, actions, pauseProject, resumeUser, listByProject, userPausedAt, pausedProjects, setupGet, usageSums };
+}
+
+describe('automation pause and event routes', () => {
+  it('serves the default prompt paragraphs as a read, not an update', async () => {
+    const { app, actions } = await build();
+    expect(actions['GET /automation/prompt-defaults']).toBeUndefined();
+    const res = await app.inject({ method: 'GET', url: '/automation/prompt-defaults' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, string>;
+    expect(Object.keys(body).sort()).toEqual(['fixer', 'implementer', 'integrator']);
+    expect(body.implementer).toContain('Implemente');
+    expect(body.fixer).toContain('conflitos');
+  });
+
+  it('pause and resume need projects:update, not create', async () => {
+    const { actions } = await build();
+    expect(actions['POST /automation/pause']).toBe('update');
+    expect(actions['POST /automation/resume']).toBe('update');
+  });
+
+  it('reads the pause state: the person\'s pause and the projects paused on their own', async () => {
+    const { app, pausedProjects } = await build();
+    const res = await app.inject({ method: 'GET', url: '/automation/state' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ paused_at: '2026-10-05T09:00:00.000Z', projects: [{ id: 'p1', paused_at: '2026-10-05T08:00:00.000Z' }], has_automation: false, can_update: false });
+    expect(pausedProjects).toHaveBeenCalledWith('u1');
+  });
+
+  it('the state of a person who paused nothing has a null paused_at', async () => {
+    const { app, userPausedAt, pausedProjects } = await build();
+    userPausedAt.mockResolvedValueOnce(null);
+    pausedProjects.mockResolvedValueOnce([]);
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json()).toEqual({ paused_at: null, projects: [], has_automation: false, can_update: false });
+  });
+
+  it('says whether the person has a project with automatic work on', async () => {
+    const { app, setupGet } = await build();
+    setupGet.mockResolvedValueOnce({ data: normalizeSetup({ automation: { enabled: true } }, 2) });
+    expect((await app.inject({ method: 'GET', url: '/automation/state' })).json().has_automation).toBe(true);
+  });
+
+  it('pauses a project and answers its timestamp', async () => {
+    const { app, pauseProject } = await build();
+    const res = await app.inject({ method: 'POST', url: '/automation/pause', payload: { scope: 'p1', interrupt: true } });
+    expect(res.statusCode).toBe(200);
+    expect(Number.isNaN(Date.parse(res.json().paused_at))).toBe(false);
+    expect(pauseProject).toHaveBeenCalledWith('p1', expect.any(Date));
+  });
+
+  it('a project outside the scope is a 404, a malformed body a 400', async () => {
+    const { app, pauseProject } = await build();
+    expect((await app.inject({ method: 'POST', url: '/automation/pause', payload: { scope: 'p9' } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/automation/pause', payload: { scope: '' } })).statusCode).toBe(400);
+    expect(pauseProject).not.toHaveBeenCalled();
+  });
+
+  it('resume all answers 204', async () => {
+    const { app, resumeUser } = await build();
+    const res = await app.inject({ method: 'POST', url: '/automation/resume', payload: { scope: 'all' } });
+    expect(res.statusCode).toBe(204);
+    expect(resumeUser).toHaveBeenCalledWith('u1');
+  });
+
+  it('lists a project\'s events, paging with before', async () => {
+    const { app, listByProject } = await build();
+    const res = await app.inject({ method: 'GET', url: '/projects/p1/automation/events?before=2026-10-05T10:00:00.000Z&limit=20' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().events).toHaveLength(1);
+    expect(listByProject).toHaveBeenCalledWith('p1', { before: new Date('2026-10-05T10:00:00.000Z'), limit: 20 });
+    expect((await app.inject({ method: 'GET', url: '/projects/p9/automation/events' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/events?before=yesterday' })).statusCode).toBe(400);
+  });
+
+  it('sums usage per card, epic and account; a cost with nothing priced is null', async () => {
+    const { app, usageSums } = await build();
+    const res = await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?from=2026-10-01&to=2026-10-05' });
+    expect(res.statusCode).toBe(200);
+    expect(usageSums).toHaveBeenCalledWith('p1', { from: '2026-10-01', to: '2026-10-05' });
+    const body = res.json();
+    expect(body.total).toMatchObject({ input_tokens: 113, output_tokens: 10, cost_usd: 1.75 });
+    expect(body.cards).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ task_id: 'c1', ref: 'TER-1', input_tokens: 100, cost_usd: 0.5 }),
+        expect.objectContaining({ task_id: 'c2', ref: 'TER-2', input_tokens: 5, cost_usd: null }),
+      ]),
+    );
+    expect(body.epics).toEqual([expect.objectContaining({ epic_id: 'e1', ref: 'TER-9', input_tokens: 106, cost_usd: 0.75 })]);
+    expect(body.accounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ account_id: 'a1', label: 'Pessoal', input_tokens: 105, cost_usd: 0.5 }),
+        expect.objectContaining({ account_id: 'gone', label: null, cost_usd: 0.25 }),
+      ]),
+    );
+  });
+
+  it('usage: another owner\'s project is a 404, a day that does not exist a 400', async () => {
+    const { app, usageSums } = await build();
+    expect((await app.inject({ method: 'GET', url: '/projects/p9/automation/usage' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?from=2026-02-30' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/projects/p1/automation/usage?to=hoje' })).statusCode).toBe(400);
+    expect(usageSums).not.toHaveBeenCalled();
+  });
+});

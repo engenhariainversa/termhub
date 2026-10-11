@@ -1,6 +1,7 @@
 import { ArrowLeft, ChevronsRight } from 'lucide-react';
 import { useMemo } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { useData } from '../lib/data';
 import { useMonitor } from '../lib/monitor';
@@ -22,17 +23,18 @@ const IDLE = 'text-fg-muted hover:bg-bg-3 hover:text-fg';
  * it lists the settings sections as icons, with a way back, instead of the projects.
  */
 export function SidebarRail({ mode, onExpand, onBack }: { mode: 'main' | 'settings'; onExpand: () => void; onBack: () => void }) {
+  const { t } = useTranslation();
   return (
-    <aside aria-label="Sidebar recolhida" className="flex h-full w-12 shrink-0 flex-col items-center border-r border-line bg-bg-2">
+    <aside aria-label={t('Sidebar recolhida')} className="flex h-full w-12 shrink-0 flex-col items-center border-r border-line bg-bg-2">
       <NavLink
         to="/"
         className="flex h-11 w-full shrink-0 items-center justify-center border-b border-line text-sm font-semibold text-accent"
-        title="termhub — início"
-        aria-label="termhub — início"
+        title={t('termhub — início')}
+        aria-label={t('termhub — início')}
       >
         ▮
       </NavLink>
-      <button type="button" className={`mt-1 ${SQUARE} text-fg-dim hover:bg-bg-3 hover:text-fg`} onClick={onExpand} title="Mostrar sidebar" aria-label="Mostrar sidebar">
+      <button type="button" className={`mt-1 ${SQUARE} text-fg-dim hover:bg-bg-3 hover:text-fg`} onClick={onExpand} title={t('Mostrar sidebar')} aria-label={t('Mostrar sidebar')}>
         <ChevronsRight size={18} aria-hidden="true" />
       </button>
       {mode === 'settings' ? <SettingsRail onBack={onBack} /> : <MainRail />}
@@ -41,6 +43,7 @@ export function SidebarRail({ mode, onExpand, onBack }: { mode: 'main' | 'settin
 }
 
 function MainRail() {
+  const { t } = useTranslation();
   const { projects } = useData();
   const { groups } = useProjectGroups();
   const { items } = useMonitor();
@@ -50,10 +53,10 @@ function MainRail() {
     <>
       <div className="mt-1 min-h-0 w-full flex-1 overflow-y-auto">
         {favorites.length > 0 && (
-          <nav aria-label="Favoritos" className="flex flex-col items-center gap-1 border-t border-line py-2">
+          <nav aria-label={t('Favoritos')} className="flex flex-col items-center gap-1 border-t border-line py-2">
             {favorites.map((p) => {
               const needsYou = (waiting.get(p.id) ?? 0) > 0;
-              const label = needsYou ? `${p.name}, precisa de você` : p.name;
+              const label = needsYou ? t('{{name}}, precisa de você', { name: p.name }) : p.name;
               return (
                 <NavLink
                   key={p.id}
@@ -77,17 +80,18 @@ function MainRail() {
 }
 
 function SettingsRail({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation();
   const { can } = useAuth();
   return (
     <>
-      <button type="button" className={`mt-1 ${SQUARE} ${IDLE}`} onClick={onBack} title="Voltar (Esc)" aria-label="Voltar de Configurações" data-chrome-focus="settings-back">
+      <button type="button" className={`mt-1 ${SQUARE} ${IDLE}`} onClick={onBack} title={t('Voltar (Esc)')} aria-label={t('Voltar de Configurações')} data-chrome-focus="settings-back">
         <ArrowLeft size={18} aria-hidden="true" />
       </button>
-      <nav aria-label="Seções de Configurações" className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-line py-2">
+      <nav aria-label={t('Seções de Configurações')} className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-line py-2">
         {visibleSettingsSections(can).map((s) => {
           const Icon = SETTINGS_ICONS[s.key];
           return (
-            <NavLink key={s.key} to={`/settings/${s.key}`} aria-label={s.label} title={s.label} className={({ isActive }) => `${SQUARE} ${isActive ? 'bg-bg-4 text-fg' : IDLE}`}>
+            <NavLink key={s.key} to={`/settings/${s.key}`} aria-label={t(s.label)} title={t(s.label)} className={({ isActive }) => `${SQUARE} ${isActive ? 'bg-bg-4 text-fg' : IDLE}`}>
               <Icon size={18} aria-hidden="true" />
             </NavLink>
           );

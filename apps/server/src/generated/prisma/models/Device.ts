@@ -338,6 +338,7 @@ export type DeviceWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"Device"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   request?: Prisma.XOR<Prisma.DeviceRequestNullableScalarRelationFilter, Prisma.DeviceRequestWhereInput> | null
+  pushTickets?: Prisma.PushTicketListRelationFilter
   tokens?: Prisma.DeviceTokenListRelationFilter
   challenges?: Prisma.DeviceChallengeListRelationFilter
 }
@@ -365,6 +366,7 @@ export type DeviceOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   request?: Prisma.DeviceRequestOrderByWithRelationInput
+  pushTickets?: Prisma.PushTicketOrderByRelationAggregateInput
   tokens?: Prisma.DeviceTokenOrderByRelationAggregateInput
   challenges?: Prisma.DeviceChallengeOrderByRelationAggregateInput
 }
@@ -395,6 +397,7 @@ export type DeviceWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"Device"> | Date | string
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   request?: Prisma.XOR<Prisma.DeviceRequestNullableScalarRelationFilter, Prisma.DeviceRequestWhereInput> | null
+  pushTickets?: Prisma.PushTicketListRelationFilter
   tokens?: Prisma.DeviceTokenListRelationFilter
   challenges?: Prisma.DeviceChallengeListRelationFilter
 }, "id" | "keyThumbprint" | "requestId">
@@ -474,6 +477,7 @@ export type DeviceCreateInput = {
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutDevicesInput
   request?: Prisma.DeviceRequestCreateNestedOneWithoutDeviceInput
+  pushTickets?: Prisma.PushTicketCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeCreateNestedManyWithoutDeviceInput
 }
@@ -499,6 +503,7 @@ export type DeviceUncheckedCreateInput = {
   lastIp?: string | null
   requestId?: string | null
   createdAt?: Date | string
+  pushTickets?: Prisma.PushTicketUncheckedCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenUncheckedCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeUncheckedCreateNestedManyWithoutDeviceInput
 }
@@ -524,6 +529,7 @@ export type DeviceUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutDevicesNestedInput
   request?: Prisma.DeviceRequestUpdateOneWithoutDeviceNestedInput
+  pushTickets?: Prisma.PushTicketUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUpdateManyWithoutDeviceNestedInput
 }
@@ -549,6 +555,7 @@ export type DeviceUncheckedUpdateInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pushTickets?: Prisma.PushTicketUncheckedUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUncheckedUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUncheckedUpdateManyWithoutDeviceNestedInput
 }
@@ -819,6 +826,20 @@ export type DeviceUpdateOneRequiredWithoutChallengesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.DeviceUpdateToOneWithWhereWithoutChallengesInput, Prisma.DeviceUpdateWithoutChallengesInput>, Prisma.DeviceUncheckedUpdateWithoutChallengesInput>
 }
 
+export type DeviceCreateNestedOneWithoutPushTicketsInput = {
+  create?: Prisma.XOR<Prisma.DeviceCreateWithoutPushTicketsInput, Prisma.DeviceUncheckedCreateWithoutPushTicketsInput>
+  connectOrCreate?: Prisma.DeviceCreateOrConnectWithoutPushTicketsInput
+  connect?: Prisma.DeviceWhereUniqueInput
+}
+
+export type DeviceUpdateOneRequiredWithoutPushTicketsNestedInput = {
+  create?: Prisma.XOR<Prisma.DeviceCreateWithoutPushTicketsInput, Prisma.DeviceUncheckedCreateWithoutPushTicketsInput>
+  connectOrCreate?: Prisma.DeviceCreateOrConnectWithoutPushTicketsInput
+  upsert?: Prisma.DeviceUpsertWithoutPushTicketsInput
+  connect?: Prisma.DeviceWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DeviceUpdateToOneWithWhereWithoutPushTicketsInput, Prisma.DeviceUpdateWithoutPushTicketsInput>, Prisma.DeviceUncheckedUpdateWithoutPushTicketsInput>
+}
+
 export type DeviceCreateWithoutUserInput = {
   id: string
   name: string
@@ -839,6 +860,7 @@ export type DeviceCreateWithoutUserInput = {
   lastIp?: string | null
   createdAt?: Date | string
   request?: Prisma.DeviceRequestCreateNestedOneWithoutDeviceInput
+  pushTickets?: Prisma.PushTicketCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeCreateNestedManyWithoutDeviceInput
 }
@@ -863,6 +885,7 @@ export type DeviceUncheckedCreateWithoutUserInput = {
   lastIp?: string | null
   requestId?: string | null
   createdAt?: Date | string
+  pushTickets?: Prisma.PushTicketUncheckedCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenUncheckedCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeUncheckedCreateNestedManyWithoutDeviceInput
 }
@@ -939,6 +962,7 @@ export type DeviceCreateWithoutRequestInput = {
   lastIp?: string | null
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutDevicesInput
+  pushTickets?: Prisma.PushTicketCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeCreateNestedManyWithoutDeviceInput
 }
@@ -963,6 +987,7 @@ export type DeviceUncheckedCreateWithoutRequestInput = {
   lastSeenAt?: Date | string | null
   lastIp?: string | null
   createdAt?: Date | string
+  pushTickets?: Prisma.PushTicketUncheckedCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenUncheckedCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeUncheckedCreateNestedManyWithoutDeviceInput
 }
@@ -1003,6 +1028,7 @@ export type DeviceUpdateWithoutRequestInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutDevicesNestedInput
+  pushTickets?: Prisma.PushTicketUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUpdateManyWithoutDeviceNestedInput
 }
@@ -1027,6 +1053,7 @@ export type DeviceUncheckedUpdateWithoutRequestInput = {
   lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pushTickets?: Prisma.PushTicketUncheckedUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUncheckedUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUncheckedUpdateManyWithoutDeviceNestedInput
 }
@@ -1052,6 +1079,7 @@ export type DeviceCreateWithoutTokensInput = {
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutDevicesInput
   request?: Prisma.DeviceRequestCreateNestedOneWithoutDeviceInput
+  pushTickets?: Prisma.PushTicketCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeCreateNestedManyWithoutDeviceInput
 }
 
@@ -1076,6 +1104,7 @@ export type DeviceUncheckedCreateWithoutTokensInput = {
   lastIp?: string | null
   requestId?: string | null
   createdAt?: Date | string
+  pushTickets?: Prisma.PushTicketUncheckedCreateNestedManyWithoutDeviceInput
   challenges?: Prisma.DeviceChallengeUncheckedCreateNestedManyWithoutDeviceInput
 }
 
@@ -1116,6 +1145,7 @@ export type DeviceUpdateWithoutTokensInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutDevicesNestedInput
   request?: Prisma.DeviceRequestUpdateOneWithoutDeviceNestedInput
+  pushTickets?: Prisma.PushTicketUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUpdateManyWithoutDeviceNestedInput
 }
 
@@ -1140,6 +1170,7 @@ export type DeviceUncheckedUpdateWithoutTokensInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pushTickets?: Prisma.PushTicketUncheckedUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUncheckedUpdateManyWithoutDeviceNestedInput
 }
 
@@ -1164,6 +1195,7 @@ export type DeviceCreateWithoutChallengesInput = {
   createdAt?: Date | string
   user: Prisma.UserCreateNestedOneWithoutDevicesInput
   request?: Prisma.DeviceRequestCreateNestedOneWithoutDeviceInput
+  pushTickets?: Prisma.PushTicketCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenCreateNestedManyWithoutDeviceInput
 }
 
@@ -1188,6 +1220,7 @@ export type DeviceUncheckedCreateWithoutChallengesInput = {
   lastIp?: string | null
   requestId?: string | null
   createdAt?: Date | string
+  pushTickets?: Prisma.PushTicketUncheckedCreateNestedManyWithoutDeviceInput
   tokens?: Prisma.DeviceTokenUncheckedCreateNestedManyWithoutDeviceInput
 }
 
@@ -1228,6 +1261,7 @@ export type DeviceUpdateWithoutChallengesInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   user?: Prisma.UserUpdateOneRequiredWithoutDevicesNestedInput
   request?: Prisma.DeviceRequestUpdateOneWithoutDeviceNestedInput
+  pushTickets?: Prisma.PushTicketUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUpdateManyWithoutDeviceNestedInput
 }
 
@@ -1252,7 +1286,124 @@ export type DeviceUncheckedUpdateWithoutChallengesInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pushTickets?: Prisma.PushTicketUncheckedUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUncheckedUpdateManyWithoutDeviceNestedInput
+}
+
+export type DeviceCreateWithoutPushTicketsInput = {
+  id: string
+  name: string
+  platform: string
+  model: string
+  osVersion: string
+  appVersion: string
+  publicKey: string
+  keyThumbprint: string
+  pinSecretEnc: string
+  pinFailures?: number
+  pinLockedUntil?: Date | string | null
+  status?: string
+  revokedAt?: Date | string | null
+  revokedReason?: string | null
+  pushToken?: string | null
+  lastSeenAt?: Date | string | null
+  lastIp?: string | null
+  createdAt?: Date | string
+  user: Prisma.UserCreateNestedOneWithoutDevicesInput
+  request?: Prisma.DeviceRequestCreateNestedOneWithoutDeviceInput
+  tokens?: Prisma.DeviceTokenCreateNestedManyWithoutDeviceInput
+  challenges?: Prisma.DeviceChallengeCreateNestedManyWithoutDeviceInput
+}
+
+export type DeviceUncheckedCreateWithoutPushTicketsInput = {
+  id: string
+  userId: string
+  name: string
+  platform: string
+  model: string
+  osVersion: string
+  appVersion: string
+  publicKey: string
+  keyThumbprint: string
+  pinSecretEnc: string
+  pinFailures?: number
+  pinLockedUntil?: Date | string | null
+  status?: string
+  revokedAt?: Date | string | null
+  revokedReason?: string | null
+  pushToken?: string | null
+  lastSeenAt?: Date | string | null
+  lastIp?: string | null
+  requestId?: string | null
+  createdAt?: Date | string
+  tokens?: Prisma.DeviceTokenUncheckedCreateNestedManyWithoutDeviceInput
+  challenges?: Prisma.DeviceChallengeUncheckedCreateNestedManyWithoutDeviceInput
+}
+
+export type DeviceCreateOrConnectWithoutPushTicketsInput = {
+  where: Prisma.DeviceWhereUniqueInput
+  create: Prisma.XOR<Prisma.DeviceCreateWithoutPushTicketsInput, Prisma.DeviceUncheckedCreateWithoutPushTicketsInput>
+}
+
+export type DeviceUpsertWithoutPushTicketsInput = {
+  update: Prisma.XOR<Prisma.DeviceUpdateWithoutPushTicketsInput, Prisma.DeviceUncheckedUpdateWithoutPushTicketsInput>
+  create: Prisma.XOR<Prisma.DeviceCreateWithoutPushTicketsInput, Prisma.DeviceUncheckedCreateWithoutPushTicketsInput>
+  where?: Prisma.DeviceWhereInput
+}
+
+export type DeviceUpdateToOneWithWhereWithoutPushTicketsInput = {
+  where?: Prisma.DeviceWhereInput
+  data: Prisma.XOR<Prisma.DeviceUpdateWithoutPushTicketsInput, Prisma.DeviceUncheckedUpdateWithoutPushTicketsInput>
+}
+
+export type DeviceUpdateWithoutPushTicketsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.StringFieldUpdateOperationsInput | string
+  model?: Prisma.StringFieldUpdateOperationsInput | string
+  osVersion?: Prisma.StringFieldUpdateOperationsInput | string
+  appVersion?: Prisma.StringFieldUpdateOperationsInput | string
+  publicKey?: Prisma.StringFieldUpdateOperationsInput | string
+  keyThumbprint?: Prisma.StringFieldUpdateOperationsInput | string
+  pinSecretEnc?: Prisma.StringFieldUpdateOperationsInput | string
+  pinFailures?: Prisma.IntFieldUpdateOperationsInput | number
+  pinLockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  revokedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  user?: Prisma.UserUpdateOneRequiredWithoutDevicesNestedInput
+  request?: Prisma.DeviceRequestUpdateOneWithoutDeviceNestedInput
+  tokens?: Prisma.DeviceTokenUpdateManyWithoutDeviceNestedInput
+  challenges?: Prisma.DeviceChallengeUpdateManyWithoutDeviceNestedInput
+}
+
+export type DeviceUncheckedUpdateWithoutPushTicketsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  platform?: Prisma.StringFieldUpdateOperationsInput | string
+  model?: Prisma.StringFieldUpdateOperationsInput | string
+  osVersion?: Prisma.StringFieldUpdateOperationsInput | string
+  appVersion?: Prisma.StringFieldUpdateOperationsInput | string
+  publicKey?: Prisma.StringFieldUpdateOperationsInput | string
+  keyThumbprint?: Prisma.StringFieldUpdateOperationsInput | string
+  pinSecretEnc?: Prisma.StringFieldUpdateOperationsInput | string
+  pinFailures?: Prisma.IntFieldUpdateOperationsInput | number
+  pinLockedUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  revokedReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  pushToken?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tokens?: Prisma.DeviceTokenUncheckedUpdateManyWithoutDeviceNestedInput
+  challenges?: Prisma.DeviceChallengeUncheckedUpdateManyWithoutDeviceNestedInput
 }
 
 export type DeviceCreateManyUserInput = {
@@ -1297,6 +1448,7 @@ export type DeviceUpdateWithoutUserInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   request?: Prisma.DeviceRequestUpdateOneWithoutDeviceNestedInput
+  pushTickets?: Prisma.PushTicketUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUpdateManyWithoutDeviceNestedInput
 }
@@ -1321,6 +1473,7 @@ export type DeviceUncheckedUpdateWithoutUserInput = {
   lastIp?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   requestId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  pushTickets?: Prisma.PushTicketUncheckedUpdateManyWithoutDeviceNestedInput
   tokens?: Prisma.DeviceTokenUncheckedUpdateManyWithoutDeviceNestedInput
   challenges?: Prisma.DeviceChallengeUncheckedUpdateManyWithoutDeviceNestedInput
 }
@@ -1353,11 +1506,13 @@ export type DeviceUncheckedUpdateManyWithoutUserInput = {
  */
 
 export type DeviceCountOutputType = {
+  pushTickets: number
   tokens: number
   challenges: number
 }
 
 export type DeviceCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  pushTickets?: boolean | DeviceCountOutputTypeCountPushTicketsArgs
   tokens?: boolean | DeviceCountOutputTypeCountTokensArgs
   challenges?: boolean | DeviceCountOutputTypeCountChallengesArgs
 }
@@ -1370,6 +1525,13 @@ export type DeviceCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exten
    * Select specific fields to fetch from the DeviceCountOutputType
    */
   select?: Prisma.DeviceCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * DeviceCountOutputType without action
+ */
+export type DeviceCountOutputTypeCountPushTicketsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PushTicketWhereInput
 }
 
 /**
@@ -1410,6 +1572,7 @@ export type DeviceSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs =
   createdAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   request?: boolean | Prisma.Device$requestArgs<ExtArgs>
+  pushTickets?: boolean | Prisma.Device$pushTicketsArgs<ExtArgs>
   tokens?: boolean | Prisma.Device$tokensArgs<ExtArgs>
   challenges?: boolean | Prisma.Device$challengesArgs<ExtArgs>
   _count?: boolean | Prisma.DeviceCountOutputTypeDefaultArgs<ExtArgs>
@@ -1492,6 +1655,7 @@ export type DeviceOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
 export type DeviceInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   request?: boolean | Prisma.Device$requestArgs<ExtArgs>
+  pushTickets?: boolean | Prisma.Device$pushTicketsArgs<ExtArgs>
   tokens?: boolean | Prisma.Device$tokensArgs<ExtArgs>
   challenges?: boolean | Prisma.Device$challengesArgs<ExtArgs>
   _count?: boolean | Prisma.DeviceCountOutputTypeDefaultArgs<ExtArgs>
@@ -1510,6 +1674,7 @@ export type $DevicePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs
   objects: {
     user: Prisma.$UserPayload<ExtArgs>
     request: Prisma.$DeviceRequestPayload<ExtArgs> | null
+    pushTickets: Prisma.$PushTicketPayload<ExtArgs>[]
     tokens: Prisma.$DeviceTokenPayload<ExtArgs>[]
     challenges: Prisma.$DeviceChallengePayload<ExtArgs>[]
   }
@@ -1939,6 +2104,7 @@ export interface Prisma__DeviceClient<T, Null = never, ExtArgs extends runtime.T
   readonly [Symbol.toStringTag]: "PrismaPromise"
   user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   request<T extends Prisma.Device$requestArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Device$requestArgs<ExtArgs>>): Prisma.Prisma__DeviceRequestClient<runtime.Types.Result.GetResult<Prisma.$DeviceRequestPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  pushTickets<T extends Prisma.Device$pushTicketsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Device$pushTicketsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PushTicketPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tokens<T extends Prisma.Device$tokensArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Device$tokensArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeviceTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   challenges<T extends Prisma.Device$challengesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Device$challengesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeviceChallengePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
@@ -2407,6 +2573,30 @@ export type Device$requestArgs<ExtArgs extends runtime.Types.Extensions.Internal
    */
   include?: Prisma.DeviceRequestInclude<ExtArgs> | null
   where?: Prisma.DeviceRequestWhereInput
+}
+
+/**
+ * Device.pushTickets
+ */
+export type Device$pushTicketsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PushTicket
+   */
+  select?: Prisma.PushTicketSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PushTicket
+   */
+  omit?: Prisma.PushTicketOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PushTicketInclude<ExtArgs> | null
+  where?: Prisma.PushTicketWhereInput
+  orderBy?: Prisma.PushTicketOrderByWithRelationInput | Prisma.PushTicketOrderByWithRelationInput[]
+  cursor?: Prisma.PushTicketWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PushTicketScalarFieldEnum | Prisma.PushTicketScalarFieldEnum[]
 }
 
 /**

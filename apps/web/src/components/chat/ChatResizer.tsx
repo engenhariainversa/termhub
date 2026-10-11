@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { CHAT_DEFAULT_WIDTH, CHAT_MAX_WIDTH, CHAT_MIN_WIDTH, clampChatWidth } from '../../lib/project-chat-prefs';
 
@@ -28,6 +29,7 @@ export function nudgeWidth(width: number, key: string): number | null {
  * the pointer.
  */
 export function ChatResizer({ width, onCommit }: { width: number; onCommit: (w: number) => void }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const right = useRef(0);
   const [dragX, setDragX] = useState<number | null>(null);
@@ -57,12 +59,12 @@ export function ChatResizer({ width, onCommit }: { width: number; onCommit: (w: 
         ref={ref}
         role="separator"
         tabIndex={0}
-        aria-label="Largura do chat"
+        aria-label={t('Largura do chat')}
         aria-orientation="vertical"
         aria-valuenow={width}
         aria-valuemin={CHAT_MIN_WIDTH}
         aria-valuemax={CHAT_MAX_WIDTH}
-        title="Arraste para mudar a largura (duplo clique volta ao padrão)"
+        title={t('Arraste para mudar a largura (duplo clique volta ao padrão)')}
         className="absolute inset-y-0 -left-[3px] z-10 w-1.5 cursor-col-resize hover:bg-accent/40 focus-visible:bg-accent/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
         onPointerDown={start}
         onPointerMove={move}

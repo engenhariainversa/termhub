@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage } = vi.hoisted(() => ({
@@ -11,7 +12,8 @@ const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAcco
 vi.mock('../config.js', () => ({ config: cfg }));
 vi.mock('../ai/index.js', () => ({ getAccountUsage }));
 vi.mock('./terminals.js', () => ({ openTab }));
-vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession }));
+// typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
+vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../terminal/tab-mcp.js', async (orig) => ({ ...(await orig<typeof import('../terminal/tab-mcp.js')>()), installTabMcp, tabMcpSupported }));
 
 import type { Repositories } from '../db/repositories/index.js';
@@ -20,7 +22,11 @@ import { TaskRuleError } from '../db/repositories/tasks.js';
 import { Scoped } from '../auth/scope.js';
 import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
-import { checkPrompt, CODEX_TAB_MCP_ENABLED, continueLine, launchLine, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder } from './agents.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, withLessonsReminder, withOriginReminder } from './agents.js';
+import { TEXT_MAX_CHARS } from '@termhub/agent-protocol';
+
+/** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
+const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
 
 const machine = (over: Partial<Machine> & { id: string }): Machine => ({
   name: over.id, host: null, ssh_user: null, ssh_port: 22, type: 'agent', os: 'macos', capabilities: ['tmux', 'claude', 'codex'], checked_at: null,
@@ -115,7 +121,18 @@ beforeEach(() => {
 
 const NOTE = 'O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat.';
 const MCP_URL = 'https://termhub.dev/mcp';
-const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson'`;
+/** The fixed deny list as typed (TER-968): every rule single-quoted. */
+const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;
+/** The fixed read rules every automatic tab's allow list starts with (TER-989). */
+const READ = AUTOMATION_READ_TOOLS.map((t) => `'${t}'`).join(' ');
+/** A Bash deny rule as Claude Code reads it (`*` anywhere, `X:*` = `X *`), to show the run's own pushes never match one. */
+const denyGlob = (rule: string) => {
+  const m = /^Bash\((.*)\)$/.exec(rule);
+  if (!m) return /$^/;
+  const spec = m[1]!.endsWith(':*') ? `${m[1]!.slice(0, -2)} *` : m[1]!;
+  return new RegExp(`^Bash\\(${spec.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}\\)$`);
+};
+const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
 /** What the line of an account without a config dir starts with: the CLI's variable cleared in the tab's shell (TER-499). */
 const CLEAR_CLAUDE = 'command -v unset >/dev/null 2>&1 && unset CLAUDE_CONFIG_DIR; ';
 const CLEAR_CODEX = 'command -v unset >/dev/null 2>&1 && unset CODEX_HOME; ';
@@ -219,6 +236,41 @@ describe('launchLine with a model (TER-589)', () => {
   });
 });
 
+describe('resume and continue lines of an automatic tab (preflight F-12)', () => {
+  const SID = '123e4567-e89b-12d3-a456-426614174000';
+  const permission = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
+
+  it('resumeLine keeps acceptEdits and the allow list, merged with the tab MCP\'s tools, ended by --', () => {
+    expect(resumeLine(null, SID, 'x', null, null, permission)).toBe(`${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
+    expect(resumeLine('/c', SID, 'x', 'abc', 'opus', permission)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --model 'opus' --permission-mode acceptEdits ${MCP_FLAGS} ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --resume ${SID} -- 'x'`);
+    expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'acceptEdits', allowedTools: ['--dangerously-skip-permissions'], branch: null })).toThrow(ControlError);
+    expect(() => resumeLine(null, SID, 'x', null, null, { mode: 'bypassPermissions' as 'acceptEdits', allowedTools: [], branch: null })).toThrow(ControlError);
+  });
+
+  it('continueLine of an automatic Claude tab carries the profile, the MCP and a first message; Codex is unchanged', () => {
+    expect(continueLine('claude', null, { permission, prompt: '[termhub automático] x', mcpTabId: null })).toBe(
+      `${CLEAR_CLAUDE}claude --permission-mode acceptEdits --allowedTools ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- '[termhub automático] x'`,
+    );
+    expect(continueLine('claude', null, { permission, prompt: 'x', mcpTabId: 'abc' })).toContain(`${MCP_FLAGS} ${READ} 'Bash(git status:*)' 'Bash(npm test:*)' ${DENY} --continue -- 'x'`);
+    expect(continueLine('chatgpt', '/home/u/.codex_b', { permission, prompt: 'x', mcpTabId: null })).toBe(`CODEX_HOME='/home/u/.codex_b' codex --no-alt-screen resume --last`);
+  });
+});
+
+describe('typed resume lines of an automatic tab stay under the input cap (TER-989)', () => {
+  // the resume runs them through typeCommandLine since TER-988 (a file past 900 bytes), with the run worktree's
+  // git -C forms too; without them (no worktree) a line still fits one send_input
+  it('with the read rules, the default list, the longest default branch and a long config dir, a resume or continue line stays under the 4000-character typed input cap', () => {
+    // `{ticket}-{slug}` with a five-digit ref and the 40-character slug cap (branches.ts)
+    const permission = { mode: 'acceptEdits' as const, allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: `TER-12345-${'a'.repeat(40)}` };
+    const prompt = '[termhub automático] Continue a tarefa do card de onde parou. Se terminou, abra o PR e chame report_card.';
+    const lines = [
+      resumeLine('~/.claude_someone_long', '123e4567-e89b-12d3-a456-426614174000', prompt, 'abcdefghijkl', 'opus', permission),
+      continueLine('claude', '~/.claude_someone_long', { permission, prompt, mcpTabId: 'abcdefghijkl' }),
+    ];
+    for (const line of lines) expect(line.length).toBeLessThan(TEXT_MAX_CHARS - 150);
+  });
+});
+
 describe('continueLine (TER-643)', () => {
   it('continues Claude\'s last session, or Codex\'s, under the tab\'s account', () => {
     expect(continueLine('claude', '~/.claude_b')).toBe(`CLAUDE_CONFIG_DIR="$HOME"/'.claude_b' claude --continue`);
@@ -279,6 +331,16 @@ describe('checkPrompt', () => {
   });
 });
 
+describe('withOriginReminder (TER-851)', () => {
+  it('appends the origin reminder after a blank line', () => {
+    expect(withOriginReminder('write a spec')).toBe(`write a spec\n\n${ORIGIN_REMINDER}`);
+  });
+
+  it('is not added to a resumed session', () => {
+    expect(resumeLine(null, '6d127d73-4bd0-42d6-b4a6-d96899507e62', RESUME_PROMPT)).not.toContain(ORIGIN_REMINDER);
+  });
+});
+
 describe('withLessonsReminder', () => {
   it('appends the reminder after a blank line', () => {
     expect(withLessonsReminder('write a spec')).toBe(`write a spec\n\n${LESSONS_REMINDER}`);
@@ -290,7 +352,7 @@ describe('startAgent', () => {
     const { c } = ctx();
     const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
     expect(openTab).toHaveBeenCalledWith(c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' });
-    expect(sendTextToSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'termhub-p1-t9', launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec')), true);
+    expect(sendTextToSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'termhub-p1-t9', launchLine('claude', '/Users/p/.claude-work', started('write a spec')), true);
     expect(r).toEqual({
       tab_id: 't9', tab_name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-t9', tab_url: 'https://app.test/projects/p1', command: 'claude', task_id: null, previous_tab_id: null,
       account: { id: 'a1', label: 'pedrogoiania' }, model: null,
@@ -318,7 +380,7 @@ describe('startAgent', () => {
       const token = parsed.mcpServers.termhub_tab.headers.Authorization.replace('Bearer ', '');
       expect(token).toMatch(/^thb_pat_/);
       const line = sendTextToSession.mock.calls[0][2] as string;
-      expect(line).toBe(launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec'), { tabId: 'abc', url: MCP_URL }));
+      expect(line).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec'), { tabId: 'abc', url: MCP_URL }));
       expect(line).not.toContain(token);
       expect(r.note).toBe(`${NOTE} A aba tem o MCP termhub_tab (search_memory) para consultar a memória do projeto.`);
       expect(repos.apiTokens.revokeForTab).not.toHaveBeenCalled();
@@ -349,7 +411,7 @@ describe('startAgent', () => {
       installTabMcp.mockRejectedValue(new Error('ssh down'));
       const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
       expect(repos.apiTokens.revokeForTab).toHaveBeenCalledWith('abc');
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), 'termhub-p1-abc', launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('write a spec')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), 'termhub-p1-abc', launchLine('claude', '/Users/p/.claude-work', started('write a spec')), true);
       expect(r.note).toBe(`${NOTE} A aba abriu sem o MCP de memória: não foi possível gravar a configuração na máquina.`);
       expect(log.info).toHaveBeenCalledWith({ tabId: 'abc', machineId: 'm1', installed: false, reason: 'install_failed' }, expect.any(String));
     });
@@ -360,7 +422,7 @@ describe('startAgent', () => {
       const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'p' });
       expect(installTabMcp).not.toHaveBeenCalled();
       expect(repos.apiTokens.revokeForTab).toHaveBeenCalledWith('abc');
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', started('p')), true);
       expect(r.note).toContain('A aba abriu sem o MCP de memória');
     });
 
@@ -369,7 +431,7 @@ describe('startAgent', () => {
       installTabMcp.mockRejectedValue(new Error('ssh down'));
       repos.apiTokens.revokeForTab.mockRejectedValue(new Error('db down'));
       await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'p' })).resolves.toMatchObject({ tab_id: 'abc' });
-      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p')), true);
+      expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), launchLine('claude', '/Users/p/.claude-work', started('p')), true);
     });
 
     it('mints nothing on an agent older than 0.10.0', async () => {
@@ -526,6 +588,13 @@ describe('startAgent', () => {
     expect(sendTextToSession).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.stringContaining(LESSONS_REMINDER), true);
   });
 
+  it('refuses a Claude prompt that fits with the lessons reminder but not with the origin reminder, before opening anything', async () => {
+    const { c } = ctx();
+    const prompt = 'x'.repeat(PROMPT_MAX_CHARS - withLessonsReminder('').length);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt })).rejects.toMatchObject({ code: 'PROMPT_TOO_LONG' });
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
   it('refuses a prompt that fits alone but not with the reminder, with the existing too-long error', async () => {
     const { c } = ctx();
     // fits PROMPT_MAX_CHARS by itself, but not once the reminder is appended
@@ -567,7 +636,7 @@ describe('startAgent with the project setup (TER-589)', () => {
   it('without account_id, starts on the first listed account of the machine with room', async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a6', 'a1'] } });
     const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
-    expect(lineOf()).toBe(launchLine('claude', '~/.claude-2', withLessonsReminder('p')));
+    expect(lineOf()).toBe(launchLine('claude', '~/.claude-2', started('p')));
     expect(r.account).toEqual({ id: 'a6', label: 'segunda' });
   });
 
@@ -607,7 +676,7 @@ describe('startAgent with the project setup (TER-589)', () => {
   it('passes the project model for the provider, and an explicit model over it', async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'opus', chatgpt: 'gpt-5-codex' } } });
     const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
-    expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', withLessonsReminder('p'), null, 'opus'));
+    expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', started('p'), null, 'opus'));
     expect(r.model).toBe('opus');
     expect(r.warning).toBeUndefined();
     sendTextToSession.mockClear();
@@ -639,6 +708,66 @@ describe('startAgent with the project setup (TER-589)', () => {
       expect(openTab).toHaveBeenCalledWith(c, expect.objectContaining({ machine_id: 'm1' }));
       const { c: plain } = ctx();
       await expect(startAgent(plain, { project_id: 'p1', prompt: 'p' })).rejects.toMatchObject({ code: 'MACHINE_REQUIRED' });
+    } finally {
+      links.pop();
+    }
+  });
+});
+
+describe('startAgent with an account exclusive to a project (TER-990)', () => {
+  const p2Only = { id: 'p2', name: 'DR Horton' };
+  // a7: a second Claude login on m1, exclusive to p2 (DR Horton); p1 must never start on it
+  const a7 = account({ id: 'a7', label: 'drhorton', machine_id: 'm1', config_dir: '~/.claude-drh', exclusive_project: p2Only });
+  beforeEach(() => accounts.push(a7));
+  afterEach(() => accounts.splice(accounts.indexOf(a7), 1));
+  const withEvents = (repos: object) => {
+    const insert = vi.fn(async (e: object) => ({ ...e, id: 'e1', created_at: '' }));
+    Object.assign(repos, { automationEvents: { insert } });
+    return insert;
+  };
+
+  it('refuses an explicit account_id of another project before any tab exists, and audits it', async () => {
+    const { c, repos, log } = ctx();
+    const insert = withEvents(repos);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a7', prompt: 'p' })).rejects.toEqual(
+      new ControlError('ACCOUNT_EXCLUSIVE', 'Conta exclusiva do projeto DR Horton: "drhorton" não pode rodar em outro projeto'),
+    );
+    expect(openTab).not.toHaveBeenCalled();
+    expect(log.warn).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'a7', attemptedProjectId: 'p1', path: 'start_agent' }), 'exclusive account: use refused');
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p2', kind: 'account_exclusive_blocked', payload: expect.objectContaining({ account_id: 'a7', attempted_project_id: 'p1', path: 'start_agent' }) }));
+  });
+
+  it('never chooses it from the project list, even listed first', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7', 'a1'] } });
+    expect((await startAgent(c, { project_id: 'p1', prompt: 'p' })).account.id).toBe('a1');
+  });
+
+  it('with only it listed, asks for an account instead, without naming it among the machine accounts', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+    const err = await startAgent(c, { project_id: 'p1', prompt: 'p' }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'ACCOUNT_REQUIRED' });
+    expect((err as Error).message).not.toContain('drhorton');
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it('refuses the machine default login (no config dir) when it is the exclusive one', async () => {
+    const a8 = account({ id: 'a8', label: 'padrão', machine_id: 'm1', config_dir: null, exclusive_project: p2Only });
+    accounts.push(a8);
+    try {
+      const { c } = ctx();
+      await expect(startAgent(c, { project_id: 'p1', account_id: 'a8', prompt: 'p' })).rejects.toMatchObject({ code: 'ACCOUNT_EXCLUSIVE' });
+      expect(openTab).not.toHaveBeenCalled();
+    } finally {
+      accounts.splice(accounts.indexOf(a8), 1);
+    }
+  });
+
+  it('runs on it in its own project', async () => {
+    links.push({ id: 'l8', position: 1, created_at: '', project_id: 'p2', machine_id: 'm1', cwd: '/src/p2' });
+    try {
+      const { c } = ctx(undefined, { ai: { accounts: ['a7'] } });
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', prompt: 'p' })).account.id).toBe('a7');
+      expect((await startAgent(c, { project_id: 'p2', machine_id: 'm1', account_id: 'a7', prompt: 'p' })).account.id).toBe('a7');
     } finally {
       links.pop();
     }
@@ -703,5 +832,320 @@ describe('linkTabTask', () => {
     await expect(linkTabTask(c, { tab_id: 'nope', task_id: 'k1' })).rejects.toMatchObject({ statusCode: 404, message: 'Tab não encontrada' });
     await expect(linkTabTask(c, { tab_id: 't1', task_id: 'kx' })).rejects.toMatchObject({ statusCode: 404, message: 'Tarefa não encontrada' });
     expect(repos.tasks.setTab).not.toHaveBeenCalled();
+  });
+});
+
+describe('automation launch: permission flags, cwd and setup command (TER-870)', () => {
+  const SID_GUARD = '123e4567-e89b-12d3-a456-426614174000';
+  const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
+  const TOOLS = `${READ} 'Bash(git status:*)' 'Bash(npm test:*)'`;
+  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
+  const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
+
+  it('the default allow list is the closed F-6 list: no push (only the run\'s own branch, TER-968), no generic npm run', () => {
+    expect(DEFAULT_AUTOMATION_TOOLS).toEqual([
+      'Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git add:*)', 'Bash(git commit:*)', 'Bash(git fetch)', 'Bash(git fetch origin)', 'Bash(git merge:*)', 'Bash(git log:*)',
+      'Bash(git checkout:*)', 'Bash(git restore:*)', 'Bash(git stash:*)',
+      'Bash(gh pr create:*)', 'Bash(gh pr view:*)', 'Bash(gh pr checks:*)', 'Bash(gh pr diff:*)', 'Bash(gh pr list:*)',
+      'Bash(gh run list:*)', 'Bash(gh run view:*)',
+      'Bash(npm test:*)', 'Bash(npm ci)', 'Bash(npm install)', 'Bash(npx prisma generate)',
+      'Bash(node scripts/automation/rename-migrations.mjs:*)', 'Bash(npm run build:*)', 'Bash(npm run build:packages)', 'Bash(npm run typecheck:*)',
+      'Bash(npm run test:*)', 'Bash(npm run i18n:check:*)',
+    ]);
+    for (const t of DEFAULT_AUTOMATION_TOOLS) {
+      expect(t).not.toMatch(/push/);
+      expect(t).not.toBe('Bash(npm run:*)');
+      expect(t).not.toMatch(/gh pr merge|--force/);
+    }
+  });
+
+  it('with the run worktree, the line also allows its git -C and --no-pager forms and denies their options (TER-991)', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, worktree: '/w/TER-1' });
+    for (const r of ['Bash(git -C /w/TER-1 status:*)', 'Bash(git -C /w/TER-1/ status:*)', 'Bash(git -C . status:*)', 'Bash(git --no-pager status:*)', 'Bash(git --no-pager -C /w/TER-1 show:*)'])
+      expect(line).toContain(`'${r}'`);
+    for (const r of AUTOMATION_FORM_DENIED_TOOLS) expect(line).toContain(`'${r}'`);
+    expect(line.indexOf("'Bash(git -C /w/TER-1 status:*)'")).toBeLessThan(line.indexOf('--disallowedTools'));
+    expect(line.indexOf("'Bash(git -C *--ext*)'")).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    const plain = launchLine('claude', '/c', 'do it', null, null, PERMISSION);
+    expect(plain).not.toContain('-C ');
+    expect(plain).not.toContain('--no-pager');
+  });
+
+  it('an automatic run starts in Claude Code\'s auto mode (TER-993); a bypass mode is refused', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, mode: 'auto' });
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode auto --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    for (const mode of ['bypassPermissions', 'dontAsk', 'default', 'plan']) {
+      expect(() => launchLine('claude', '/c', 'x', null, null, { ...PERMISSION, mode: mode as 'auto' }), mode).toThrow(ControlError);
+    }
+  });
+
+  it('an automatic run (a worktree) carries the hard-lock guard as --settings, after the deny list (TER-993)', () => {
+    const auto = { ...PERMISSION, mode: 'auto' as const, worktree: '/w/TER-1' };
+    const line = launchLine('claude', '/c', 'do it', { tabId: 'abc', url: MCP_URL }, null, auto, 'abc');
+    expect(line).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    expect(line.indexOf('--settings')).toBeGreaterThan(line.indexOf('--disallowedTools'));
+    expect(line.endsWith("-- 'do it'")).toBe(true);
+    // without the MCP the guard still rides, from the explicit guard tab id
+    expect(launchLine('claude', '/c', 'x', null, null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    // a tab with no worktree (manual / start_agent) gets no guard
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION, 'abc')).not.toContain('--settings');
+  });
+
+  it('never names a guard.json nobody wrote: the MCP tab id is not a stand-in for the guard (TER-1005)', () => {
+    const auto = { ...PERMISSION, mode: 'auto' as const, worktree: '/w/TER-1' };
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, auto, null)).not.toContain('--settings');
+    expect(launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, auto)).not.toContain('--settings');
+    expect(resumeLine('/c', SID_GUARD, 'x', 'abc', null, auto)).not.toContain('--settings');
+    expect(resumeLine('/c', SID_GUARD, 'x', 'abc', null, auto, 'abc')).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+    expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: 'abc' })).not.toContain('--settings');
+    expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: null, guardTabId: 'abc' })).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+  });
+
+  it('a run on an agent without the guard (before 0.19.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
+    const { c } = ctx();
+    const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission: { ...PERMISSION, worktree: WORKTREE } }).catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: 'GUARD_UNSUPPORTED' });
+    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.19\.0/);
+    expect(openTab).not.toHaveBeenCalled();
+    expect(installTabMcp).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('on agent 0.19.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
+    const m1 = machines[0]!;
+    const before = m1.agent_version;
+    m1.agent_version = '0.19.0';
+    try {
+      cfg.mcpUrl = MCP_URL;
+      tabMcpSupported.mockReturnValue(true);
+      openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
+      const order: string[] = [];
+      installTabMcp.mockImplementation(async (_m: unknown, _tab: string, file: string) => void order.push(`write:${file}`));
+      sendTextToSession.mockImplementation(async () => void order.push('typed'));
+      const { c } = ctx();
+      const permission = { ...PERMISSION, mode: 'auto' as const, worktree: WORKTREE };
+      await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission });
+      expect(order).toContain('write:guard.json');
+      expect(order.indexOf('write:guard.json')).toBeLessThan(order.indexOf('typed'));
+      expect(installTabMcp).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'abc', 'guard.json', expect.stringContaining('termhub-guard'));
+      expect(sendTextToSession.mock.calls[0][2]).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
+
+      // a failed write is a failed start: nothing typed, the tab named
+      vi.clearAllMocks();
+      installTabMcp.mockImplementation(async (_m: unknown, _tab: string, file: string) => {
+        if (file === 'guard.json') throw new Error('a máquina recusou a gravação');
+      });
+      const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission }).catch((e: unknown) => e);
+      expect(tabIdOfError(err)).toBe('abc');
+      expect(sendTextToSession).not.toHaveBeenCalled();
+    } finally {
+      m1.agent_version = before;
+      installTabMcp.mockReset();
+      sendTextToSession.mockReset();
+    }
+  });
+
+  it('without the MCP: acceptEdits, one quoted allow list and `--` before the prompt', () => {
+    expect(launchLine('claude', '/c', 'do it', null, null, PERMISSION)).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    expect(launchLine('claude', null, 'do it', null, 'opus', PERMISSION)).toBe(`${CLEAR_CLAUDE}claude --model 'opus' --permission-mode acceptEdits --allowedTools ${TOOLS} ${DENY} -- 'do it'`);
+    // an empty project list still carries the read rules and the deny list, and ends the options before the prompt
+    expect(launchLine('claude', '/c', 'x', null, null, { mode: 'acceptEdits', allowedTools: [], branch: null })).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --allowedTools ${READ} ${DENY} -- 'x'`);
+  });
+
+  it('with the MCP: the tab tools and the automation tools share a single --allowedTools', () => {
+    const line = launchLine('claude', '/c', 'do it', { tabId: 'abc', url: MCP_URL }, null, PERMISSION);
+    expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode acceptEdits --mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools ${TAB_TOOLS} ${TOOLS} ${DENY} -- 'do it'`);
+    expect(line.split('--allowedTools')).toHaveLength(2);
+    expect(line.split('--disallowedTools')).toHaveLength(2);
+  });
+
+  it('never a bypass flag, with every default tool quoted', () => {
+    for (const mcp of [null, { tabId: 'abc', url: MCP_URL }]) {
+      const line = launchLine('claude', null, 'x', mcp, null, { mode: 'acceptEdits', allowedTools: DEFAULT_AUTOMATION_TOOLS, branch: 'TER-1-card' });
+      expect(line).not.toMatch(/dangerously|bypassPermissions|skip-permissions/);
+      for (const t of DEFAULT_AUTOMATION_TOOLS) expect(line).toContain(` '${t}'`);
+      expect(line.endsWith(` -- 'x'`)).toBe(true);
+    }
+  });
+
+  it('the deny list (TER-968, R5) covers merging, gh api, secrets, publishing, stores, containers, the database, the keychain, rm -rf and secret files', () => {
+    for (const rule of [
+      'Bash(gh pr merge:*)', 'Bash(gh api:*)', 'Bash(gh secret:*)', 'Bash(npm publish:*)', 'Bash(npm run release*)', 'Bash(eas:*)', 'Bash(fastlane:*)',
+      'Bash(docker:*)', 'Bash(psql:*)', 'Bash(security:*)', 'Bash(rm -rf:*)', 'Bash(git push --force*)', 'Bash(git push * +*)',
+      'Read(//**/.env*)', 'Edit(//**/.env*)', 'Read(~/.ssh/**)', 'Edit(~/.ssh/**)', 'Read(~/.config/gh/**)', 'Edit(~/.config/gh/**)',
+      'Read(~/.claude*/.credentials.json)', 'Edit(~/.claude*/.credentials.json)', 'Read(~/.aws/**)', 'Edit(~/.aws/**)',
+    ])
+      expect(AUTOMATION_DENIED_TOOLS).toContain(rule);
+    // an allow rule cannot carve an exception out of a deny rule in Claude Code: no generic push deny, or the run's own push would be blocked too
+    expect(AUTOMATION_DENIED_TOOLS).not.toContain('Bash(git push:*)');
+    // no deny silently cancels a rule the tab is meant to have
+    for (const t of AUTOMATION_DENIED_TOOLS) for (const own of [...runBranchRules('TER-1-card'), ...DEFAULT_AUTOMATION_TOOLS, ...AUTOMATION_READ_TOOLS]) expect(denyGlob(t).test(own), `${t} vs ${own}`).toBe(false);
+  });
+
+  it('path rules use the documented anchors: `//` (filesystem root) for .env, `~/` for the home dir; none is cwd-relative', () => {
+    const paths = AUTOMATION_DENIED_TOOLS.filter((t) => /^(Read|Edit)\(/.test(t)).map((t) => t.replace(/^(Read|Edit)\((.*)\)$/, '$2'));
+    expect(paths.length).toBe(17);
+    for (const p of paths) expect(p.startsWith('//') || p.startsWith('~/'), p).toBe(true);
+    expect(launchLine('claude', null, 'x', null, null, PERMISSION)).toContain(`'Read(//**/.env*)' 'Edit(//**/.env*)' 'Read(~/.ssh/**)'`);
+  });
+
+  it('a project allow rule too broad for an automatic tab never reaches the line; the run\'s own pushes still do (TER-968, review 1)', () => {
+    const broad = ['Bash', 'Bash(*)', 'Bash(git:*)', 'Bash(git *)', 'Bash(git push:*)', 'Bash(git push origin HEAD)', 'Bash(npm run:*)', 'Bash(gh:*)', 'Bash(docker:*)', 'Bash(sh -c:*)', '*'];
+    const line = launchLine('claude', null, 'x', null, null, { mode: 'acceptEdits', allowedTools: [...broad, 'Bash(npm test:*)'], branch: 'TER-1-card' });
+    const allow = line.slice(line.indexOf('--allowedTools'), line.indexOf('--disallowedTools'));
+    for (const b of broad) expect(allow, b).not.toContain(` '${b}'`);
+    expect(allow).toContain(`'Bash(npm test:*)' ${runBranchRules('TER-1-card').map((t) => `'${t}'`).join(' ')}`);
+  });
+
+  it('the deny list closes git options that run a program or reach outside the worktree, and gh workflow/release/repo (TER-968 review 2)', () => {
+    const denied = (c: string) => AUTOMATION_DENIED_TOOLS.some((t) => denyGlob(t).test(`Bash(${c})`));
+    for (const c of [
+      "git fetch --upload-pack='git push origin HEAD:main #' .",
+      'git fetch origin --upload-pack=x',
+      'git fetch --upload-p=x .',
+      'git fetch --upl=x .',
+      'git push --rece=x origin b',
+      'git push --e=x origin b',
+      'git diff --ext',
+      'git log -p --ext-d',
+      'git merge --strat=evil origin/main',
+      'git -c core.sshCommand=x fetch',
+      'git -c core.hooksPath=/tmp/h commit -m x',
+      'git -c alias.p=push p',
+      'git -C /w -c x=y status',
+      'git --config-env=core.sshCommand=E fetch',
+      'git push --receive-pack=x origin b',
+      'git --exec-path=/tmp status',
+      'git diff --ext-diff',
+      'git log -p --ext-diff',
+      'git diff --output=/tmp/x',
+      'git log --output=/home/u/.bashrc',
+      'git diff --no-index /home/u/.ssh/id_rsa /dev/null',
+      'git merge -s ours origin/main',
+      'git merge origin/main -s evil',
+      'git merge --strategy=evil origin/main',
+      'gh workflow run deploy',
+      'gh release create v1',
+      'gh repo delete o/r',
+    ])
+      expect(denied(c), c).toBe(true);
+    for (const c of ['git fetch', 'git fetch origin', 'git merge origin/main', 'git diff HEAD~1', 'git log --oneline -5', 'git commit -m x', 'gh pr create --fill', 'gh pr view 3'])
+      expect(denied(c), c).toBe(false);
+  });
+
+  it('the run\'s own branch push rules are exact and built only from a valid branch name', () => {
+    expect(branchPushRules('TER-1-card')).toEqual([
+      'Bash(git push origin TER-1-card)',
+      'Bash(git push -u origin TER-1-card)',
+      'Bash(git push origin HEAD:refs/heads/TER-1-card)',
+      'Bash(git push -u origin HEAD:refs/heads/TER-1-card)',
+    ]);
+    expect(branchFetchRules('TER-1-card')).toEqual(['Bash(git fetch origin TER-1-card)']);
+    expect(runBranchRules('TER-1-card')).toEqual([...branchPushRules('TER-1-card'), ...branchFetchRules('TER-1-card')]);
+    for (const bad of [null, '', '-x', 'a b', 'a*', 'HEAD:main', '+main', 'a..b', "a'b"]) {
+      expect(branchPushRules(bad), String(bad)).toEqual([]);
+      expect(runBranchRules(bad), String(bad)).toEqual([]);
+    }
+  });
+
+  it('an automatic line carries the run\'s own push rules in the single --allowedTools, then the deny list, then `--`', () => {
+    const line = launchLine('claude', null, 'x', { tabId: 'abc', url: MCP_URL }, null, { ...PERMISSION, branch: 'TER-7-epic' });
+    const own = runBranchRules('TER-7-epic').map((t) => `'${t}'`).join(' ');
+    expect(line).toContain(`${TAB_TOOLS} ${TOOLS} ${own} ${DENY} -- 'x'`);
+    expect(line.indexOf('--allowedTools')).toBeLessThan(line.indexOf('--disallowedTools'));
+    expect(line.indexOf('--disallowedTools')).toBeLessThan(line.lastIndexOf(' -- '));
+    expect(resumeLine(null, '123e4567-e89b-12d3-a456-426614174000', 'x', null, null, { ...PERMISSION, branch: 'TER-7-epic' })).toContain(`${TOOLS} ${own} ${DENY} --resume`);
+  });
+
+  it('a manual tab gets no deny list and no push rule: its lines are unchanged', () => {
+    for (const line of [
+      launchLine('claude', '/c', 'x'),
+      launchLine('claude', '/c', 'x', { tabId: 'abc', url: MCP_URL }),
+      resumeLine(null, '123e4567-e89b-12d3-a456-426614174000', 'x', 'abc'),
+      continueLine('claude', null),
+    ]) {
+      expect(line).not.toContain('--disallowedTools');
+      expect(line).not.toContain('git push');
+    }
+  });
+
+  it('Codex ignores the permission: the line is the plain one', () => {
+    expect(launchLine('chatgpt', '/c', 'x', null, null, PERMISSION)).toBe(launchLine('chatgpt', '/c', 'x'));
+    expect(launchLine('chatgpt', '/c', 'x', { tabId: 'abc', url: MCP_URL }, null, PERMISSION)).toBe(launchLine('chatgpt', '/c', 'x', { tabId: 'abc', url: MCP_URL }));
+  });
+
+  it('refuses a tool that would read as an option or break the line, and any other mode', () => {
+    for (const bad of ['', ' ', '--dangerously-skip-permissions', 'Bash(x)\nrm', 'a\x1bb']) {
+      expect(() => launchLine('claude', null, 'x', null, null, { mode: 'acceptEdits', allowedTools: [bad], branch: null }), JSON.stringify(bad)).toThrow(new ControlError('INVALID_ALLOWED_TOOL', 'Ferramenta permitida inválida'));
+    }
+    expect(() => launchLine('claude', null, 'x', null, null, { mode: 'bypassPermissions' as never, allowedTools: [], branch: null })).toThrow(new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido'));
+  });
+
+  it('without internal options the start is byte-identical to before: same openTab call, same line', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(openTab.mock.calls[0]).toStrictEqual([c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' }]);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`CLAUDE_CONFIG_DIR='/Users/p/.claude-work' claude '${started('write a spec').replace(/'/g, "'\\''")}'`);
+    vi.clearAllMocks();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, {});
+    expect(openTab.mock.calls[0]).toHaveLength(2);
+    expect(sendTextToSession.mock.calls[0][2]).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec')));
+  });
+
+  it('opens the tab in the worktree and types the setup command, then the line with the flags', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'npm ci && npm run build:packages' });
+    expect(openTab).toHaveBeenCalledWith(c, { project_id: 'p1', machine_id: 'm1', name: 'claude · pedrogoiania' }, { cwd: WORKTREE });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`eval 'npm ci && npm run build:packages' ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), null, null, PERMISSION)}`);
+  });
+
+  it('with the MCP installed, the setup command and the merged allow list', async () => {
+    cfg.mcpUrl = MCP_URL;
+    openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'pnpm i' });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(`eval 'pnpm i' ; ${launchLine('claude', '/Users/p/.claude-work', started('do the card'), { tabId: 'abc', url: MCP_URL }, null, PERMISSION)}`);
+  });
+
+  it('onTabOpened is told the tab before anything is typed into it; its failure is a failed start with the tab id', async () => {
+    const { c } = ctx();
+    const order: string[] = [];
+    sendTextToSession.mockImplementationOnce(async () => void order.push('typed'));
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { onTabOpened: async (id) => void order.push(`opened:${id}`) });
+    expect(order).toEqual([`opened:${(await openTab.mock.results[0]!.value).tab_id}`, 'typed']);
+    vi.clearAllMocks();
+    const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { onTabOpened: async () => { throw new Error('db down'); } }).catch((e: unknown) => e);
+    expect(tabIdOfError(err)).toBeTruthy();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('a blank setup command adds nothing; promptIsFinal does not append the lessons reminder again', async () => {
+    const { c } = ctx();
+    const prompt = withLessonsReminder('do the card');
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt }, { setupCommand: '  ', promptIsFinal: true });
+    expect(sendTextToSession.mock.calls[0][2]).toBe(launchLine('claude', '/Users/p/.claude-work', withOriginReminder(prompt)));
+  });
+
+  it('isolates the setup command: a comment, a trailing ; & \\ or an unbalanced quote never break the CLI line', () => {
+    expect(withSetup('npm ci # x', 'claude x')).toBe("eval 'npm ci # x' ; claude x");
+    expect(withSetup('npm ci;', 'claude x')).toBe("eval 'npm ci;' ; claude x");
+    expect(withSetup('npm ci &', 'claude x')).toBe("eval 'npm ci &' ; claude x");
+    expect(withSetup("FOO='a b' npm ci", 'claude x')).toBe("eval 'FOO='\\''a b'\\'' npm ci' ; claude x");
+    // run for real in bash (as a tab's shell would): the line after the setup always runs, and the setup itself runs as written
+    const run = (setup: string) => execFileSync('bash', ['--norc', '--noprofile', '-c', withSetup(setup, 'echo LAUNCHED')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    for (const setup of ['true # x', 'true;', 'true &', 'true \\', 'echo "unbalanced', "echo 'unbalanced", 'false']) {
+      expect(run(setup), setup).toMatch(/LAUNCHED\n$/);
+    }
+    expect(run("V='a b'; echo \"[$V]\"")).toBe('[a b]\nLAUNCHED\n');
+  });
+
+  it('refuses a cwd that is not absolute or climbs out, and a multi-line setup, before any tab exists', async () => {
+    const { c } = ctx();
+    for (const cwd of ['relative/dir', '~/wt', '', '/home/u/../etc', '/a/..', '/a\nb']) {
+      await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd }), JSON.stringify(cwd)).rejects.toMatchObject({ code: 'INVALID_CWD' });
+    }
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { setupCommand: 'npm ci\nrm -rf /' })).rejects.toMatchObject({ code: 'INVALID_SETUP_COMMAND' });
+    expect(openTab).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
   });
 });

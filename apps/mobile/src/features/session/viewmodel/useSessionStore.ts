@@ -6,12 +6,13 @@ import { api, mockControls, setTokenRenewer, setTokenStaleCheck } from '@/servic
 import { deviceKey } from '@/services/key';
 import { expoPushToken } from '@/services/push';
 import { vault } from '@/services/vault';
+import { t } from '@/i18n';
 import type { LocalAuth } from '../model/session.types';
 import { createSessionStore } from './createSessionStore';
 
 const localAuth: LocalAuth = {
   available: async () => (await LocalAuthentication.hasHardwareAsync()) && (await LocalAuthentication.isEnrolledAsync()),
-  authenticate: async () => (await LocalAuthentication.authenticateAsync({ promptMessage: 'Ativar a biometria' })).success,
+  authenticate: async () => (await LocalAuthentication.authenticateAsync({ promptMessage: t('Ativar a biometria') })).success,
 };
 
 export const useSessionStore = createSessionStore({ api, key: deviceKey, vault, mockControls, localAuth, pushToken: expoPushToken });

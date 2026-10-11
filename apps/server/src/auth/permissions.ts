@@ -19,11 +19,16 @@ export const RESOURCES = [
   { key: 'roles', label: 'Roles e permissões' },
   { key: 'chat', label: 'Chat' },
   { key: 'devices', label: 'Aparelhos' },
+  // Registering versions of the Terms and the Privacy Policy (TER-742). No role grants it: admins only by default.
+  { key: 'legal', label: 'Documentos legais' },
+  { key: 'security_events', label: 'Auditoria de segurança' },
+  { key: 'feature_flags', label: 'Recursos em teste' },
 ] as const;
 export type Resource = (typeof RESOURCES)[number]['key'];
-// 'write' is used only by the `terminals` resource, for the MCP write tools (open_tab, send_input, send_key,
-// run_command, close_tab): those aren't CRUD on a record, so they get their own action rather than overloading
-// 'update'.
+// 'write' is used only by the `terminals` resource: acting inside a terminal or simulator — typing over
+// /ws/tabs, tapping over /ws/sim, POST /tabs/:id/input and /paste-file (TER-576), the mobile write routes and
+// the MCP write tools (open_tab, send_input, send_key, run_command, close_tab). That isn't CRUD on a record, so
+// it gets its own action rather than overloading 'update'; terminals:read alone only watches.
 export const ACTIONS = ['create', 'read', 'update', 'delete', 'write'] as const;
 export type Action = (typeof ACTIONS)[number];
 export const RESOURCE_KEYS: readonly string[] = RESOURCES.map((r) => r.key);

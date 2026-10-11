@@ -10,8 +10,10 @@ import { createMockTransport, type MockControls } from './mock';
 import { FetchTransport } from './transport';
 import type { Transport } from './transport';
 import type { MobileApi } from './types';
+import { accountPendingDeletion } from './account-pending';
 import { socketWake } from './wake';
 import { deviceKey } from '../key';
+import { currentLocale } from '@/i18n';
 
 const platform: AppPlatform = Device.osName === 'iOS' ? 'ios' : 'android';
 const app = appHeader(platform, Application.nativeApplicationVersion, Application.nativeBuildVersion);
@@ -57,4 +59,6 @@ export const api: MobileApi = createHttpMobileApi({
   // `_layout.tsx` emits it on AppState `active`, the session store on entering `unlocked`.
   foreground: { subscribe: socketWake.subscribe },
   tokenStale: () => staleCheck(),
+  onAccountPendingDeletion: () => accountPendingDeletion.emit(),
+  language: currentLocale,
 });

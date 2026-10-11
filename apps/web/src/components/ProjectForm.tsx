@@ -10,6 +10,7 @@ import { machineLabel } from '../lib/machine-labels';
 import type { ProjectInput } from '../lib/types';
 import { api, ApiError } from '../lib/api';
 import { isValidProjectKey, suggestProjectKey } from '../lib/project-key';
+import { tk, useTranslation } from '../i18n';
 
 interface Props {
   open: boolean;
@@ -22,14 +23,15 @@ type KeyState = { kind: 'idle' } | { kind: 'checking' } | { kind: 'ok' } | { kin
 
 const keyHint: Record<KeyState['kind'], { text: string; cls: string }> = {
   idle: { text: '', cls: '' },
-  checking: { text: 'verificando…', cls: 'text-fg-dim' },
-  ok: { text: 'disponível', cls: 'text-ok' },
-  taken: { text: 'já em uso', cls: 'text-danger' },
-  invalid: { text: 'formato inválido', cls: 'text-danger' },
+  checking: { text: tk('verificando…'), cls: 'text-fg-dim' },
+  ok: { text: tk('disponível'), cls: 'text-ok' },
+  taken: { text: tk('já em uso'), cls: 'text-danger' },
+  invalid: { text: tk('formato inválido'), cls: 'text-danger' },
 };
 
 /** New-project walkthrough: 1) project (name/key/description) 2) machine 3) directory. */
 export function ProjectForm({ open, onClose, machineId }: Props) {
+  const { t } = useTranslation();
   const { createProject, machines, statuses } = useData();
   const { can } = useAuth();
   const navigate = useNavigate();
@@ -79,7 +81,7 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
     if (!isValidProjectKey(key)) return setKeyState({ kind: 'invalid' });
     setKeyState({ kind: 'checking' });
     let cancelled = false;
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       api.projects
         .keyAvailable(key)
         .then((r) => !cancelled && setKeyState(r.available ? { kind: 'ok' } : { kind: r.reason === 'invalid' ? 'invalid' : 'taken' }))
@@ -87,7 +89,7 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
     }, 250);
     return () => {
       cancelled = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [key]);
 
@@ -101,7 +103,7 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
       onClose();
       navigate(`/projects/${project.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erro ao criar projeto');
+      setError(err instanceof ApiError ? err.message : t('Erro ao criar projeto'));
       setBusy(false);
     }
   };
@@ -118,8 +120,8 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
   };
 
   return (
-    <Modal title="Novo projeto" open={open} onClose={onClose} width={browsing ? 'max-w-2xl' : 'max-w-md'}>
-      <p className="mb-3 text-xs text-fg-dim">Passo {step} de 3</p>
+    <Modal title={t('Novo projeto')} open={open} onClose={onClose} width={browsing ? 'max-w-2xl' : 'max-w-md'}>
+      <p className="mb-3 text-xs text-fg-dim">{t('Passo {{step}} de 3', { step })}</p>
 
       {step === 1 && (
         <form
@@ -130,11 +132,11 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
           }}
         >
           <div>
-            <label className="label" htmlFor="project-name">Nome</label>
-            <input id="project-name" className="input" value={name} onChange={(e) => onName(e.target.value)} required autoFocus placeholder="ex.: meu-app" />
+            <label className="label" htmlFor="project-name">{t('Nome')}</label>
+            <input id="project-name" className="input" value={name} onChange={(e) => onName(e.target.value)} required autoFocus placeholder={t('ex.: meu-app')} />
           </div>
           <div>
-            <label className="label" htmlFor="project-key">Chave</label>
+            <label className="label" htmlFor="project-key">{t('Chave')}</label>
             <div className="flex items-center gap-2">
               <input
                 id="project-key"
@@ -145,22 +147,25 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
                   setKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10));
                 }}
                 required
+                // i18n-ignore: a sample key
                 placeholder="APP"
               />
-              <span className={`text-xs ${keyHint[keyState.kind].cls}`}>{keyHint[keyState.kind].text}</span>
+              <span className={`text-xs ${keyHint[keyState.kind].cls}`}>{keyHint[keyState.kind].text && t(keyHint[keyState.kind].text)}</span>
             </div>
-            <p className="mt-1 text-xs text-fg-dim">2 a 10 letras ou dígitos, começando com letra. Aparece nas URLs e nos números dos cards (ex.: {key || 'APP'}-12). Não muda depois.</p>
+            <p className="mt-1 text-xs text-fg-dim">
+              {t('2 a 10 letras ou dígitos, começando com letra. Aparece nas URLs e nos números dos cards (ex.: {{example}}). Não muda depois.', { example: `${key || 'APP'}-12` })}
+            </p>
           </div>
           <div>
-            <label className="label" htmlFor="project-description">Descrição (opcional)</label>
+            <label className="label" htmlFor="project-description">{t('Descrição (opcional)')}</label>
             <textarea id="project-description" className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-ghost" onClick={onClose}>
-              Cancelar
+              {t('Cancelar')}
             </button>
             <button type="submit" className="btn-primary" disabled={!step1Ok}>
-              Continuar
+              {t('Continuar')}
             </button>
           </div>
         </form>
@@ -169,8 +174,8 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
       {step === 2 && (
         <div className="space-y-3">
           <div>
-            <span className="label">Máquina</span>
-            {machines.length === 0 && <p className="text-xs text-fg-dim">Nenhuma máquina cadastrada ainda.</p>}
+            <span className="label">{t('Máquina')}</span>
+            {machines.length === 0 && <p className="text-xs text-fg-dim">{t('Nenhuma máquina cadastrada ainda.')}</p>}
             <ul className="mt-1 space-y-1">
               {machines.map((m) => {
                 const status = statuses[m.id] ?? 'checking';
@@ -192,20 +197,20 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
               className="btn-ghost border border-line text-xs"
               onClick={() => setMachineForm({ open: true, priorIds: new Set(machines.map((m) => m.id)) })}
             >
-              Cadastrar nova máquina
+              {t('Cadastrar nova máquina')}
             </button>
           )}
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex items-center justify-between gap-2 pt-2">
             <button type="button" className="btn-ghost text-xs" onClick={skip} disabled={busy}>
-              Pular por enquanto
+              {t('Pular por enquanto')}
             </button>
             <div className="flex gap-2">
               <button type="button" className="btn-ghost" onClick={() => setStep(1)}>
-                Voltar
+                {t('Voltar')}
               </button>
               <button type="button" className="btn-primary" disabled={!machine} onClick={() => setStep(3)}>
-                Continuar
+                {t('Continuar')}
               </button>
             </div>
           </div>
@@ -215,15 +220,15 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
       {step === 3 && (
         <form onSubmit={createWithMachine} className="space-y-3">
           <div>
-            <label className="label" htmlFor="project-cwd">Diretório (caminho absoluto na máquina)</label>
+            <label className="label" htmlFor="project-cwd">{t('Diretório (caminho absoluto na máquina)')}</label>
             <div className="flex gap-2">
-              <input id="project-cwd" className="input font-mono" value={cwd} onChange={(e) => setCwd(e.target.value)} required placeholder="/home/pedro/projetos/meu-app" />
-              <button type="button" className="btn-ghost shrink-0 border border-line" onClick={() => setBrowsing((b) => !b)} title="Listar discos e pastas da máquina">
-                {browsing ? 'Ocultar' : 'Procurar…'}
+              <input id="project-cwd" className="input font-mono" value={cwd} onChange={(e) => setCwd(e.target.value)} required placeholder={t('/home/pedro/projetos/meu-app')} />
+              <button type="button" className="btn-ghost shrink-0 border border-line" onClick={() => setBrowsing((b) => !b)} title={t('Listar discos e pastas da máquina')}>
+                {browsing ? t('Ocultar') : t('Procurar…')}
               </button>
             </div>
             <label className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
-              <input type="checkbox" checked={createDir} onChange={(e) => setCreateDir(e.target.checked)} /> criar a pasta na máquina se não existir
+              <input type="checkbox" checked={createDir} onChange={(e) => setCreateDir(e.target.checked)} /> {t('criar a pasta na máquina se não existir')}
             </label>
             {browsing && (
               <div className="mt-2">
@@ -242,10 +247,10 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-ghost" onClick={() => setStep(2)}>
-              Voltar
+              {t('Voltar')}
             </button>
             <button type="submit" className="btn-primary" disabled={busy || !cwd.trim()}>
-              Criar projeto
+              {t('Criar projeto')}
             </button>
           </div>
         </form>

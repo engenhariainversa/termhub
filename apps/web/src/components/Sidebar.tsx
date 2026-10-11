@@ -1,7 +1,10 @@
 import { ChevronsLeft } from 'lucide-react';
 import { useMemo, useRef, useState, type DragEvent, type HTMLAttributes } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import { Trans, useTranslation } from '../i18n';
+import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { announceTerminalEnded } from '../lib/editor-tabs';
 import { useData } from '../lib/data';
 import { useMonitor } from '../lib/monitor';
 import { needsYouByProject } from '../lib/needs-you';
@@ -12,6 +15,7 @@ import { decodeGroupDrag, decodeProjectDrag, encodeProjectDrag, GROUP_MIME, PROJ
 import { loadCollapsedGroups, loadCollapsedProjects, saveCollapsedGroups, saveCollapsedProjects } from '../lib/sidebar-prefs';
 import type { Project, ProjectGroup, Tab } from '../lib/types';
 import { GroupHeader } from './GroupHeader';
+import { AiLoginWarnings } from './AiLoginWarnings';
 import { MainNav } from './MainNav';
 import { ProfileButton } from './ProfileButton';
 import { ProjectForm } from './ProjectForm';
@@ -33,6 +37,15 @@ function agentsByProject(tabs: Tab[]): Map<string, Tab[]> {
   }
   for (const list of byProject.values()) list.sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
   return byProject;
+}
+
+/**
+ * Ending a terminal kills its tmux session, so it asks first unless nothing would be lost: the agent in it
+ * finished (or failed) its turn, `finished` included (TER-972). A simulator tab only goes away; the simulator keeps running.
+ */
+export function endNeedsConfirm(tab: Tab): boolean {
+  if (tab.kind === 'simulator') return false;
+  return tab.state !== 'idle' && tab.state !== 'finished' && tab.state !== 'blocked' && tab.state !== 'error';
 }
 
 /** what is being dragged in the sidebar: a project row, or a group header */
@@ -66,9 +79,10 @@ function sectionNames(sections: Section[]): Map<SectionId, string> {
 }
 
 export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
+  const { t } = useTranslation();
   const { can } = useAuth();
   const { projects, machinesOf, loading } = useData();
-  const { items: monitorItems, openTabs } = useMonitor();
+  const { items: monitorItems, openTabs, autoRuns } = useMonitor();
   const waiting = useMemo(() => needsYouByProject(monitorItems), [monitorItems]);
   // every open terminal tab, reported a state or not: "Em execução" means a tab is open
   const agents = useMemo(() => agentsByProject(openTabs), [openTabs]);
@@ -91,6 +105,19 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   /** the group "+ grupo" just created: its header opens in rename mode */
   const [newGroupId, setNewGroupId] = useState<string | null>(null);
   const [deletingGroup, setDeletingGroup] = useState<ProjectGroup | null>(null);
+  /** the terminal whose ✕ asks for confirmation */
+  const [ending, setEnding] = useState<Tab | null>(null);
+  const [endError, setEndError] = useState<string | null>(null);
+  const endTerminal = async (tab: Tab) => {
+    setEnding(null);
+    setEndError(null);
+    try {
+      await api.tabs.remove(tab.id);
+      announceTerminalEnded(tab.project_id, tab.id);
+    } catch (e) {
+      setEndError(e instanceof ApiError ? e.message : t('Erro ao encerrar o terminal'));
+    }
+  };
   /** the open Grupos… menu; `key` changes per opening so a menu never inherits another row's state */
   const [menuFor, setMenuFor] = useState<{ projectId: string; anchor: HTMLElement; key: number } | null>(null);
   // the drag in progress: browsers hide dataTransfer's data during dragover (only its types show), so it is kept here too
@@ -125,7 +152,10 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   const visibleProjects = projects.filter((p) => showArchived || p.status !== 'archived');
   const hasArchived = projects.some((p) => p.status === 'archived');
   const running = visibleProjects.filter((p) => agents.has(p.id));
-  const sections = buildSections(projects, groups, new Set(agents.keys()), showArchived);
+  // the fixed sections are named by termhub, so they follow the language; a custom group keeps the name it was given
+  const sections = buildSections(projects, groups, new Set(agents.keys()), showArchived).map((s) =>
+    s.kind === 'custom' ? s : { ...s, label: s.kind === 'running' ? t('Em execução') : s.kind === 'others' ? t('Outros') : t('Favoritos') },
+  );
   const names = sectionNames(sections);
   const nameOf = (section: Section) => names.get(section.id) ?? section.label;
   const anyExpanded = running.some((p) => !collapsed.has(p.id));
@@ -229,7 +259,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   };
 
   const addGroup = async () => {
-    const group = await createGroup('Novo grupo');
+    const group = await createGroup(t('Novo grupo'));
     if (group) setNewGroupId(group.id);
   };
 
@@ -257,6 +287,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         project={p}
         section={nameOf(section)}
         agents={agents.get(p.id) ?? []}
+        autoRuns={autoRuns}
         machines={machinesOf(p)}
         waiting={waiting.get(p.id) ?? 0}
         expanded={!collapsed.has(p.id)}
@@ -267,6 +298,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         // the same button closes it; any other ⋯ (even the same project in another section) moves it there
         onOpenGroups={(anchor) => setMenuFor((cur) => (cur?.anchor === anchor ? null : { projectId: p.id, anchor, key: (cur?.key ?? 0) + 1 }))}
         dragProps={dragProps}
+        onEndTerminal={can('terminals', 'delete') ? (tab) => (endNeedsConfirm(tab) ? setEnding(tab) : void endTerminal(tab)) : undefined}
       />
     );
   };
@@ -320,12 +352,12 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         {open && section.projects.length > 0 && <ul className={SECTION_LIST}>{section.projects.map(row(section))}</ul>}
         {open && !isOthers && section.projects.length === 0 && (
           <p className={`mx-3 my-1 rounded border border-dashed px-2 py-1.5 text-center text-[11px] ${over ? 'border-accent text-fg' : 'border-line text-fg-dim'}`}>
-            arraste projetos para cá
+            {t('arraste projetos para cá')}
           </p>
         )}
         {open && isOthers && hasArchived && (
           <button className="mt-1 px-3 text-xs text-fg-dim hover:text-fg" onClick={() => setShowArchived((v) => !v)}>
-            {showArchived ? 'Ocultar arquivados' : 'Mostrar arquivados'}
+            {showArchived ? t('Ocultar arquivados') : t('Mostrar arquivados')}
           </button>
         )}
       </section>
@@ -336,16 +368,16 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-line bg-bg-2">
       <div className="flex h-11 items-center justify-between border-b border-line px-3">
         <NavLink to="/" className="text-sm font-semibold tracking-tight">
-          <span className="text-accent">▮</span> termhub
+          <span className="text-accent">▮</span> termhub {/* i18n-ignore: the brand */}
         </NavLink>
         <span className="flex items-center gap-0.5">
           {can('projects', 'create') && (
-            <button className="btn-ghost px-2 py-1 text-xs" title="Novo projeto" onClick={() => setProjectFormOpen(true)}>
-              + novo
+            <button className="btn-ghost px-2 py-1 text-xs" title={t('Novo projeto')} onClick={() => setProjectFormOpen(true)}>
+              {t('+ novo')}
             </button>
           )}
           {onCollapse && (
-            <button className="rounded p-1 text-fg-dim hover:bg-bg-3 hover:text-fg" onClick={onCollapse} title="Recolher sidebar" aria-label="Recolher sidebar">
+            <button className="rounded p-1 text-fg-dim hover:bg-bg-3 hover:text-fg" onClick={onCollapse} title={t('Recolher sidebar')} aria-label={t('Recolher sidebar')}>
               <ChevronsLeft size={16} aria-hidden="true" />
             </button>
           )}
@@ -353,26 +385,31 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto py-2">
-        {loading && <p className="px-3 py-2 text-xs text-fg-dim">Carregando…</p>}
+        {loading && <p className="px-3 py-2 text-xs text-fg-dim">{t('Carregando…')}</p>}
 
         <div className="flex items-center pr-2">
-          <p className={`${SECTION_LABEL} flex-1`}>Projetos</p>
+          <p className={`${SECTION_LABEL} flex-1`}>{t('Projetos')}</p>
           {running.length > 0 && (
             <button
               type="button"
               className="rounded px-1 text-[10px] text-fg-dim hover:bg-bg-3 hover:text-fg"
-              title={anyExpanded ? 'Recolher todos' : 'Expandir todos'}
-              aria-label={anyExpanded ? 'Recolher todos' : 'Expandir todos'}
+              title={anyExpanded ? t('Recolher todos') : t('Expandir todos')}
+              aria-label={anyExpanded ? t('Recolher todos') : t('Expandir todos')}
               aria-expanded={anyExpanded}
               onClick={toggleAll}
             >
               {anyExpanded ? '⊟' : '⊞'}
             </button>
           )}
-          <button type="button" className="rounded px-1 text-[10px] text-fg-dim hover:bg-bg-3 hover:text-fg" title="Novo grupo" onClick={() => void addGroup()}>
-            + grupo
+          <button type="button" className="rounded px-1 text-[10px] text-fg-dim hover:bg-bg-3 hover:text-fg" title={t('Novo grupo')} onClick={() => void addGroup()}>
+            {t('+ grupo')}
           </button>
         </div>
+        {endError && (
+          <p role="alert" className="px-3 text-[11px] text-danger">
+            {endError}
+          </p>
+        )}
         {groupsError && (
           <p role="alert" className="px-3 text-[11px] text-danger">
             {groupsError}
@@ -380,23 +417,49 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         )}
         {!loading && visibleProjects.length === 0 && can('projects', 'create') && (
           <button className="px-3 py-1 text-xs text-fg-dim hover:text-fg" onClick={() => setProjectFormOpen(true)}>
-            + novo projeto
+            {t('+ novo projeto')}
           </button>
         )}
 
         {sections.map(renderSection)}
       </nav>
 
+      <AiLoginWarnings className="border-t border-line px-2 py-2" />
       <MainNav variant="list" />
       <ProfileButton variant="row" />
 
       {projectFormOpen && <ProjectForm open onClose={() => setProjectFormOpen(false)} />}
       {menuFor && <ProjectGroupsMenu key={menuFor.key} projectId={menuFor.projectId} anchor={menuFor.anchor} onClose={() => setMenuFor(null)} />}
       <ConfirmDialog
+        open={!!ending}
+        title={t('Encerrar terminal')}
+        message={
+          ending?.state === 'working' ? (
+            <Trans
+              i18nKey="Encerrar <0>{{name}}</0>, que está trabalhando agora? A sessão tmux <1>{{session}}</1> será encerrada na máquina e o que estiver rodando nela será interrompido."
+              values={{ name: ending?.name ?? '', session: ending?.tmux_session ?? '' }}
+              components={[<strong key="name" />, <code key="session" className="font-mono text-xs" />]}
+            />
+          ) : (
+            <Trans
+              i18nKey="Encerrar <0>{{name}}</0>? A sessão tmux <1>{{session}}</1> será encerrada na máquina e o que estiver rodando nela será interrompido."
+              values={{ name: ending?.name ?? '', session: ending?.tmux_session ?? '' }}
+              components={[<strong key="name" />, <code key="session" className="font-mono text-xs" />]}
+            />
+          )
+        }
+        confirmLabel={t('Encerrar terminal')}
+        danger
+        onCancel={() => setEnding(null)}
+        onConfirm={() => {
+          if (ending) void endTerminal(ending);
+        }}
+      />
+      <ConfirmDialog
         open={!!deletingGroup}
-        title="Excluir grupo"
-        message={`Excluir o grupo "${deletingGroup?.name ?? ''}"? Os projetos não são apagados.`}
-        confirmLabel="Excluir"
+        title={t('Excluir grupo')}
+        message={t('Excluir o grupo "{{name}}"? Os projetos não são apagados.', { name: deletingGroup?.name ?? '' })}
+        confirmLabel={t('Excluir')}
         danger
         onCancel={() => setDeletingGroup(null)}
         onConfirm={async () => {

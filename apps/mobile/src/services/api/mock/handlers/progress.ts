@@ -9,6 +9,16 @@ export function mockProgress(now: number): TProgressResponse {
   const minutesAgo = (m: number) => new Date(now - m * 60_000).toISOString();
   return {
     generated_at: new Date(now).toISOString(),
+    feed: [
+      {
+        id: 'ev-2', kind: 'pr_opened', created_at: minutesAgo(30), project_id: 'p-termhub', task_id: 'c-183', run_id: 'run-0183abcdef', tab_id: 't-api', ref: 'TER-183', epic: 'Visão gerencial',
+        machine: 'jarvis', account: null, branch: 'auto/ter-183', workflow: null, version: null, pr: 12, url: 'https://github.com/acme/app/pull/12', until: null, reason_text: null, paused: null, tool: null,
+      },
+      {
+        id: 'ev-1', kind: 'run_started', created_at: minutesAgo(90), project_id: 'p-termhub', task_id: 'c-183', run_id: 'run-0183abcdef', tab_id: 't-api', ref: 'TER-183', epic: 'Visão gerencial',
+        machine: 'jarvis', account: 'pessoal', branch: 'auto/ter-183', workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null,
+      },
+    ],
     epics: [
       {
         id: 'e-182', ref: 'TER-182', title: 'Visão gerencial', project: { id: 'p-termhub', key: 'TER', name: 'termhub' },
@@ -20,7 +30,9 @@ export function mockProgress(now: number): TProgressResponse {
             id: 'c-183', ref: 'TER-183', title: 'Painel de progresso', type: 'story', status: 'doing', column_name: 'Fazendo',
             units: { done: 3, total: 5 }, percent: 60, started_at: minutesAgo(90), done_at: null, active_seconds: 1800,
             estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
-            agents: [{ tab_id: 't-api', tab_name: 'api', machine_name: 'jarvis', subtask_ref: null, state: 'waiting_input', state_at: minutesAgo(12), background: false, needs_you: true, activity: null, activity_verb: null, rate_limited: false }],
+            agents: [{ tab_id: 't-api', tab_name: 'api', machine_name: 'jarvis', subtask_ref: null, state: 'waiting_input', state_at: minutesAgo(12), background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, needs_you: true, activity: null, activity_verb: null, rate_limited: false, automatic: false }],
+            auto: false,
+            usage: { tokens: 1_200_000, cost_usd: 2.4 },
             pull_requests: [
               {
                 number: 12, url: 'https://github.com/acme/app/pull/12', title: 'Painel', state: 'open', draft: false,
@@ -32,6 +44,7 @@ export function mockProgress(now: number): TProgressResponse {
         ],
         ci: { open: 1, failed: 1, running: 0, deployed: 0 },
         ci_error: null,
+        usage: { tokens: 1_200_000, cost_usd: 2.4 },
       },
     ],
   };
@@ -40,6 +53,8 @@ export function mockProgress(now: number): TProgressResponse {
 export function registerProgressRoutes(router: MockRouter, state: MockState): void {
   router.route('GET', '/api/m/v1/progress', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
-    return { status: 200, body: mockProgress(ctx.now()) };
+    const progress = mockProgress(ctx.now());
+    for (const epic of progress.epics) for (const card of epic.cards) card.auto = state.cardAuto.get(card.id) ?? card.auto;
+    return { status: 200, body: progress };
   });
 }

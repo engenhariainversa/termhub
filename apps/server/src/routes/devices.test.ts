@@ -96,6 +96,7 @@ function buildApp(opts: { viewAs?: string } = {}) {
     findById: vi.fn(async (id: string) => (id === 'd1' ? device({ id: 'd1', user_id: 'u1' }) : undefined)),
     rename: vi.fn(async (id: string, userId: string, name: string) => (id === 'd1' && userId === 'u1' ? device({ id, name }) : undefined)),
     countActive: vi.fn(async () => 2),
+    findActiveById: vi.fn(async (id: string) => (id === 'd1' ? device({ id: 'd1', user_id: 'u1', push_token: 'ExponentPushToken[a]' }) : id === 'dx' ? device({ id: 'dx', user_id: 'u2' }) : undefined)),
   };
   const deviceEvents = {
     listForUser: vi.fn(async (userId: string) => [
@@ -107,16 +108,18 @@ function buildApp(opts: { viewAs?: string } = {}) {
     deny: vi.fn(async (id: string) => deviceRequest({ id, status: 'denied' })),
   };
   const revoke = vi.fn(async (id: string) => device({ id, status: 'revoked', revoked_at: '2026-09-19T01:00:00.000Z', revoked_reason: 'user' }));
+  const push = { testPush: vi.fn(async () => ({ scheduled_for: '2026-10-05T00:00:00.000Z', ticket: { status: 'ok' as const } })) };
 
   app.register(
     (a) =>
       deviceRoutes(a, { deviceRequests, devices, deviceEvents } as unknown as Repositories, {
         enrolment: enrolment as never,
         revoke,
+        push,
       }),
     { prefix: '/devices' },
   );
-  return { app, routes, deviceRequests, devices, deviceEvents, enrolment, revoke };
+  return { app, routes, deviceRequests, devices, deviceEvents, enrolment, revoke, push };
 }
 
 describe('device routes', () => {
@@ -244,6 +247,9 @@ describe('device routes', () => {
     ['pin_failed', {}, 'PIN errado'],
     ['device_revoked', {}, 'Aparelho revogado'],
     ['push_token_set', {}, 'Notificações ativadas neste aparelho'],
+    ['push_failed', { code: 'DeviceNotRegistered' }, 'Notificação recusada: o aparelho não aceita mais avisos (app removido ou notificações desligadas)'],
+    ['push_failed', { code: 'InvalidCredentials' }, 'Notificação não entregue: credencial da Apple ou do Google inválida no servidor'],
+    ['push_failed', { code: 'MessageTooBig' }, 'Notificação não entregue (MessageTooBig)'],
     ['pin_locked', {}, 'PIN errado 3 vezes, aparelho bloqueado por 15 min'],
     ['device_revoked', { reason: 'pin_bruteforce' }, 'Aparelho revogado por tentativas de PIN'],
     ['device_revoked', { reason: 'user' }, 'Aparelho revogado por você'],
@@ -285,5 +291,49 @@ describe('device routes', () => {
     expect(devices.listByUser).toHaveBeenCalledWith('u1');
     await app.inject({ method: 'DELETE', url: '/devices/d1' });
     expect(devices.findById).toHaveBeenCalledWith('d1');
+  });
+});
+
+describe('POST /devices/:id/test-push (TER-913)', () => {
+  it('sends to the user\'s own active device with the kind and delay, answers 202, action update', async () => {
+    const { app, push, routes } = buildApp();
+    const r = await app.inject({ method: 'POST', url: '/devices/d1/test-push', payload: { kind: 'reply', delay_seconds: 10 } });
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ scheduled_for: '2026-10-05T00:00:00.000Z', ticket: { status: 'ok' } });
+    expect(push.testPush).toHaveBeenCalledWith({ id: 'u1' }, expect.objectContaining({ id: 'd1' }), 'reply', 10);
+    expect(routes.find((x) => x.method === 'POST' && x.url === '/devices/:id/test-push')?.config?.action).toBe('update');
+  });
+
+  it('defaults to a confirmation sent at once', async () => {
+    const { app, push } = buildApp();
+    await app.inject({ method: 'POST', url: '/devices/d1/test-push' });
+    expect(push.testPush).toHaveBeenCalledWith(expect.anything(), expect.anything(), 'confirmation', 0);
+  });
+
+  it('404 for another user\'s device and for one that is not active (revoked or unknown)', async () => {
+    const { app, push } = buildApp();
+    for (const id of ['dx', 'd-revoked']) {
+      const r = await app.inject({ method: 'POST', url: `/devices/${id}/test-push`, payload: {} });
+      expect(r.statusCode).toBe(404);
+    }
+    expect(push.testPush).not.toHaveBeenCalled();
+  });
+
+  it('rejects a delay over 120 s and an unknown kind', async () => {
+    const { app, push } = buildApp();
+    expect((await app.inject({ method: 'POST', url: '/devices/d1/test-push', payload: { delay_seconds: 121 } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/devices/d1/test-push', payload: { kind: 'boom' } })).statusCode).toBe(400);
+    expect(push.testPush).not.toHaveBeenCalled();
+  });
+});
+
+describe('describeDeviceEvent push_test', () => {
+  it.each([
+    [{ outcome: 'delivered_to_provider' }, 'Notificação de teste: entregue à Apple/Google'],
+    [{ outcome: 'receipt_pending' }, 'Notificação de teste enviada; a Apple/Google ainda não confirmou'],
+    [{ outcome: 'send_failed' }, 'Notificação de teste falhou: o servidor não conseguiu enviar'],
+    [{ outcome: 'InvalidCredentials' }, 'Notificação de teste falhou: InvalidCredentials'],
+  ])('%j', (meta, text) => {
+    expect(describeDeviceEvent(deviceEvent({ id: 'e', kind: 'push_test', meta }))).toBe(text);
   });
 });

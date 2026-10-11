@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 
+jest.mock('@/features/automation/viewmodel/usePauseStore', () => ({ usePauseStore: require('../../../../test/helpers/ui-stores').stores.pause }));
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/progress/viewmodel/useProgressStore', () => ({ useProgressStore: require('../../../../test/helpers/ui-stores').stores.progress }));
 jest.mock('expo-router', () => ({
@@ -10,6 +11,8 @@ jest.mock('expo-router', () => ({
 }));
 
 import { useProgressStore } from '@/features/progress/viewmodel/useProgressStore';
+import { setLocale } from '@/i18n';
+import { mockProgress } from '@/services/api/mock/handlers/progress';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { ProgressScreen } from './progress-screen';
 
@@ -19,7 +22,7 @@ beforeAll(async () => {
   await enrolStores();
 });
 beforeEach(() => {
-  useProgressStore.setState({ epics: [], loading: false, refreshing: false, error: null });
+  useProgressStore.setState({ epics: [], feed: [], loading: false, refreshing: false, error: null });
 });
 afterEach(() => {
   useProgressStore.getState().stopPolling();
@@ -27,6 +30,55 @@ afterEach(() => {
 });
 
 describe('Progresso', () => {
+  it('shows the Automático feed, newest first, and the badge on the automatic tab', async () => {
+    await render(<ProgressScreen />);
+    const feed = await screen.findByTestId('progress-feed', {}, LOAD);
+    expect(within(feed).getByText('TER-183: PR aberto')).toBeTruthy();
+    expect(within(feed).getByText('TER-183 iniciado em jarvis (pessoal)')).toBeTruthy();
+    expect(within(feed).getByText('PR #12')).toBeTruthy();
+    expect(within(feed).getAllByText('#abcdef').length).toBe(2);
+    const texts = within(feed).getAllByText(/TER-183/).map((n) => n.props.children);
+    expect(texts[0]).toBe('TER-183: PR aberto');
+  });
+
+  it('badges the tab an automatic run started', async () => {
+    const progress = mockProgress(Date.now());
+    progress.epics[0]!.cards[0]!.agents![0]!.automatic = true;
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByLabelText('automático')).toBeTruthy();
+  });
+
+  it('shows the estimated cost per epic and card, "—" when nothing was priced', async () => {
+    const progress = mockProgress(Date.now());
+    progress.epics[0]!.usage = { tokens: 2_500_000, cost_usd: 3.25 };
+    progress.epics[0]!.cards[0]!.usage = { tokens: 0, cost_usd: null };
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    expect(await screen.findByText('custo US$ 3,25 · 2,5 M tokens', {}, LOAD)).toBeTruthy();
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByText('custo —')).toBeTruthy();
+  });
+
+  it('has no feed section when there is nothing to show', async () => {
+    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], feed: [], generated_at: new Date().toISOString() });
+    await render(<ProgressScreen />);
+    await waitFor(() => expect(screen.getByText('Nenhum épico em andamento')).toBeTruthy(), LOAD);
+    expect(screen.queryByTestId('progress-feed')).toBeNull();
+  });
+
+  it('in English: the agents waiting and the estimate', async () => {
+    setLocale('en');
+    try {
+      await render(<ProgressScreen />);
+      expect(await screen.findByText('Visão gerencial', {}, LOAD)).toBeTruthy();
+      expect(screen.getByText('1 agent waiting for you')).toBeTruthy();
+    } finally {
+      await act(async () => setLocale(null));
+    }
+  });
+
   it('loads on focus and shows the epic, its percent and who waits for the user', async () => {
     const load = jest.spyOn(stores.api, 'progress');
     await render(<ProgressScreen />);
@@ -43,6 +95,15 @@ describe('Progresso', () => {
     expect(screen.getByText('TER-183 Painel de progresso')).toBeTruthy();
     expect(screen.getByText(/api · esperando você/)).toBeTruthy();
     expect(screen.getAllByText('~20–45 min de trabalho').length).toBeGreaterThan(0);
+  });
+
+  it('a long-press on a card tags it for automatic work and shows the badge', async () => {
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.queryByLabelText('automático')).toBeNull();
+    await act(async () => fireEvent(screen.getByLabelText('TER-183 Painel de progresso'), 'longPress'));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Marcar como automático' })));
+    await waitFor(() => expect(screen.getByLabelText('automático')).toBeTruthy());
   });
 
   it('tells assistive tech whether an epic is expanded', async () => {
@@ -76,7 +137,7 @@ describe('Progresso', () => {
   });
 
   it('shows the empty state', async () => {
-    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], generated_at: '' });
+    jest.spyOn(stores.api, 'progress').mockResolvedValue({ epics: [], feed: [], generated_at: '' });
     await render(<ProgressScreen />);
     expect(await screen.findByText('Nenhum épico em andamento', {}, LOAD)).toBeTruthy();
   });

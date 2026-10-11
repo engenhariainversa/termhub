@@ -194,6 +194,12 @@ describe('an expired or stale card (TER-477)', () => {
     expect(onRepropose).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', summary: base.summary }));
   });
 
+  it('a send_input card whose tab was closed offers no grant at all, only "Propor de novo" (TER-986)', () => {
+    render(<ChatActionCard action={card({ status: 'failed', error_code: 'TAB_GONE', project_id: 'p1', summary: 'digitar `oi` numa aba que não existe mais do projeto App' })} deciding={false} onDecide={vi.fn()} onRepropose={vi.fn()} />);
+    expect(screen.getByText('Expirou: a aba foi fechada')).toBeInTheDocument();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Propor de novo']);
+  });
+
   it('any other failure keeps "Falhou" and offers nothing', () => {
     render(<ChatActionCard action={card({ status: 'failed', error_code: 'MACHINE_OFFLINE' })} deciding={false} onDecide={vi.fn()} onRepropose={vi.fn()} />);
     expect(screen.getByText('Falhou')).toBeInTheDocument();
@@ -230,5 +236,40 @@ describe('"Decisão automática" (TER-641)', () => {
   ])('no badge on a card %s', (_l, action) => {
     render(<ChatActionCard action={action} deciding={false} onDecide={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Decisão automática' })).toBeNull();
+  });
+});
+
+describe('a call that ran under a grant reads as one line (TER-984)', () => {
+  const ran = card({ summary: 'digitar `Mensagem do Pedro\nsegunda linha comprida` na aba App', status: 'executed', grant_id: 'g1' });
+
+  it('shows the first line of what it did and how it ended, and hides the rest until expanded', () => {
+    const { container } = render(<ChatActionCard action={ran} deciding={false} onDecide={vi.fn()} />);
+    expect(container.querySelector('[data-compact]')).not.toBeNull();
+    expect(screen.getByText('digitar `Mensagem do Pedro')).toBeInTheDocument();
+    expect(screen.getByText('Executado · aba confiada')).toBeInTheDocument();
+    expect(screen.queryByText(/segunda linha comprida/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
+    expect(container.querySelector('[data-compact]')).toBeNull();
+    expect(screen.getByText(/segunda linha comprida/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recolher' }));
+    expect(container.querySelector('[data-compact]')).not.toBeNull();
+  });
+
+  it('marks a failed call with ✗', () => {
+    render(<ChatActionCard action={{ ...ran, status: 'failed', error_code: 'MACHINE_OFFLINE' }} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByText('✗')).toBeInTheDocument();
+    expect(screen.getByText('Falhou · aba confiada')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['a pending card', card({ status: 'pending' })],
+    ['a card decided by a click', card({ status: 'executed', grant_id: null })],
+    ['a stale granted card', card({ status: 'failed', grant_id: 'g1', error_code: 'TAB_GONE' })],
+  ])('keeps %s in its full form', (_label, action) => {
+    const { container } = render(<ChatActionCard action={action} deciding={false} onDecide={vi.fn()} />);
+    expect(container.querySelector('[data-compact]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Ver detalhes' })).toBeNull();
   });
 });

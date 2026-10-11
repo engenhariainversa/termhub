@@ -32,6 +32,7 @@ export type AiAccountMinAggregateOutputType = {
   label: string | null
   machineId: string | null
   configDir: string | null
+  exclusiveProjectId: string | null
   createdAt: Date | null
 }
 
@@ -41,6 +42,7 @@ export type AiAccountMaxAggregateOutputType = {
   label: string | null
   machineId: string | null
   configDir: string | null
+  exclusiveProjectId: string | null
   createdAt: Date | null
 }
 
@@ -50,6 +52,7 @@ export type AiAccountCountAggregateOutputType = {
   label: number
   machineId: number
   configDir: number
+  exclusiveProjectId: number
   createdAt: number
   _all: number
 }
@@ -61,6 +64,7 @@ export type AiAccountMinAggregateInputType = {
   label?: true
   machineId?: true
   configDir?: true
+  exclusiveProjectId?: true
   createdAt?: true
 }
 
@@ -70,6 +74,7 @@ export type AiAccountMaxAggregateInputType = {
   label?: true
   machineId?: true
   configDir?: true
+  exclusiveProjectId?: true
   createdAt?: true
 }
 
@@ -79,6 +84,7 @@ export type AiAccountCountAggregateInputType = {
   label?: true
   machineId?: true
   configDir?: true
+  exclusiveProjectId?: true
   createdAt?: true
   _all?: true
 }
@@ -161,6 +167,7 @@ export type AiAccountGroupByOutputType = {
   label: string
   machineId: string
   configDir: string | null
+  exclusiveProjectId: string | null
   createdAt: Date
   _count: AiAccountCountAggregateOutputType | null
   _min: AiAccountMinAggregateOutputType | null
@@ -191,10 +198,13 @@ export type AiAccountWhereInput = {
   label?: Prisma.StringFilter<"AiAccount"> | string
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
   machine?: Prisma.XOR<Prisma.MachineScalarRelationFilter, Prisma.MachineWhereInput>
+  exclusiveProject?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   chatConversations?: Prisma.ChatConversationListRelationFilter
   tabs?: Prisma.TabListRelationFilter
+  exhaustion?: Prisma.XOR<Prisma.AiAccountExhaustionNullableScalarRelationFilter, Prisma.AiAccountExhaustionWhereInput> | null
 }
 
 export type AiAccountOrderByWithRelationInput = {
@@ -203,10 +213,13 @@ export type AiAccountOrderByWithRelationInput = {
   label?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrderInput | Prisma.SortOrder
+  exclusiveProjectId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   machine?: Prisma.MachineOrderByWithRelationInput
+  exclusiveProject?: Prisma.ProjectOrderByWithRelationInput
   chatConversations?: Prisma.ChatConversationOrderByRelationAggregateInput
   tabs?: Prisma.TabOrderByRelationAggregateInput
+  exhaustion?: Prisma.AiAccountExhaustionOrderByWithRelationInput
 }
 
 export type AiAccountWhereUniqueInput = Prisma.AtLeast<{
@@ -218,10 +231,13 @@ export type AiAccountWhereUniqueInput = Prisma.AtLeast<{
   label?: Prisma.StringFilter<"AiAccount"> | string
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
   machine?: Prisma.XOR<Prisma.MachineScalarRelationFilter, Prisma.MachineWhereInput>
+  exclusiveProject?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   chatConversations?: Prisma.ChatConversationListRelationFilter
   tabs?: Prisma.TabListRelationFilter
+  exhaustion?: Prisma.XOR<Prisma.AiAccountExhaustionNullableScalarRelationFilter, Prisma.AiAccountExhaustionWhereInput> | null
 }, "id">
 
 export type AiAccountOrderByWithAggregationInput = {
@@ -230,6 +246,7 @@ export type AiAccountOrderByWithAggregationInput = {
   label?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrderInput | Prisma.SortOrder
+  exclusiveProjectId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.AiAccountCountOrderByAggregateInput
   _max?: Prisma.AiAccountMaxOrderByAggregateInput
@@ -245,6 +262,7 @@ export type AiAccountScalarWhereWithAggregatesInput = {
   label?: Prisma.StringWithAggregatesFilter<"AiAccount"> | string
   machineId?: Prisma.StringWithAggregatesFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableWithAggregatesFilter<"AiAccount"> | string | null
+  exclusiveProjectId?: Prisma.StringNullableWithAggregatesFilter<"AiAccount"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"AiAccount"> | Date | string
 }
 
@@ -255,8 +273,10 @@ export type AiAccountCreateInput = {
   configDir?: string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
+  exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountUncheckedCreateInput = {
@@ -265,9 +285,11 @@ export type AiAccountUncheckedCreateInput = {
   label: string
   machineId: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountUpdateInput = {
@@ -277,8 +299,10 @@ export type AiAccountUpdateInput = {
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
+  exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountUncheckedUpdateInput = {
@@ -287,9 +311,11 @@ export type AiAccountUncheckedUpdateInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountCreateManyInput = {
@@ -298,6 +324,7 @@ export type AiAccountCreateManyInput = {
   label: string
   machineId: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
 }
 
@@ -315,6 +342,7 @@ export type AiAccountUncheckedUpdateManyInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -333,12 +361,18 @@ export type AiAccountNullableScalarRelationFilter = {
   isNot?: Prisma.AiAccountWhereInput | null
 }
 
+export type AiAccountScalarRelationFilter = {
+  is?: Prisma.AiAccountWhereInput
+  isNot?: Prisma.AiAccountWhereInput
+}
+
 export type AiAccountCountOrderByAggregateInput = {
   id?: Prisma.SortOrder
   provider?: Prisma.SortOrder
   label?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
+  exclusiveProjectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -348,6 +382,7 @@ export type AiAccountMaxOrderByAggregateInput = {
   label?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
+  exclusiveProjectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -357,6 +392,7 @@ export type AiAccountMinOrderByAggregateInput = {
   label?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
+  exclusiveProjectId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -402,6 +438,48 @@ export type AiAccountUncheckedUpdateManyWithoutMachineNestedInput = {
   deleteMany?: Prisma.AiAccountScalarWhereInput | Prisma.AiAccountScalarWhereInput[]
 }
 
+export type AiAccountCreateNestedManyWithoutExclusiveProjectInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput> | Prisma.AiAccountCreateWithoutExclusiveProjectInput[] | Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput[]
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput | Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput[]
+  createMany?: Prisma.AiAccountCreateManyExclusiveProjectInputEnvelope
+  connect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+}
+
+export type AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput> | Prisma.AiAccountCreateWithoutExclusiveProjectInput[] | Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput[]
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput | Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput[]
+  createMany?: Prisma.AiAccountCreateManyExclusiveProjectInputEnvelope
+  connect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+}
+
+export type AiAccountUpdateManyWithoutExclusiveProjectNestedInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput> | Prisma.AiAccountCreateWithoutExclusiveProjectInput[] | Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput[]
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput | Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput[]
+  upsert?: Prisma.AiAccountUpsertWithWhereUniqueWithoutExclusiveProjectInput | Prisma.AiAccountUpsertWithWhereUniqueWithoutExclusiveProjectInput[]
+  createMany?: Prisma.AiAccountCreateManyExclusiveProjectInputEnvelope
+  set?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  disconnect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  delete?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  connect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  update?: Prisma.AiAccountUpdateWithWhereUniqueWithoutExclusiveProjectInput | Prisma.AiAccountUpdateWithWhereUniqueWithoutExclusiveProjectInput[]
+  updateMany?: Prisma.AiAccountUpdateManyWithWhereWithoutExclusiveProjectInput | Prisma.AiAccountUpdateManyWithWhereWithoutExclusiveProjectInput[]
+  deleteMany?: Prisma.AiAccountScalarWhereInput | Prisma.AiAccountScalarWhereInput[]
+}
+
+export type AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput> | Prisma.AiAccountCreateWithoutExclusiveProjectInput[] | Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput[]
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput | Prisma.AiAccountCreateOrConnectWithoutExclusiveProjectInput[]
+  upsert?: Prisma.AiAccountUpsertWithWhereUniqueWithoutExclusiveProjectInput | Prisma.AiAccountUpsertWithWhereUniqueWithoutExclusiveProjectInput[]
+  createMany?: Prisma.AiAccountCreateManyExclusiveProjectInputEnvelope
+  set?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  disconnect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  delete?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  connect?: Prisma.AiAccountWhereUniqueInput | Prisma.AiAccountWhereUniqueInput[]
+  update?: Prisma.AiAccountUpdateWithWhereUniqueWithoutExclusiveProjectInput | Prisma.AiAccountUpdateWithWhereUniqueWithoutExclusiveProjectInput[]
+  updateMany?: Prisma.AiAccountUpdateManyWithWhereWithoutExclusiveProjectInput | Prisma.AiAccountUpdateManyWithWhereWithoutExclusiveProjectInput[]
+  deleteMany?: Prisma.AiAccountScalarWhereInput | Prisma.AiAccountScalarWhereInput[]
+}
+
 export type AiAccountCreateNestedOneWithoutTabsInput = {
   create?: Prisma.XOR<Prisma.AiAccountCreateWithoutTabsInput, Prisma.AiAccountUncheckedCreateWithoutTabsInput>
   connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutTabsInput
@@ -416,6 +494,20 @@ export type AiAccountUpdateOneWithoutTabsNestedInput = {
   delete?: Prisma.AiAccountWhereInput | boolean
   connect?: Prisma.AiAccountWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.AiAccountUpdateToOneWithWhereWithoutTabsInput, Prisma.AiAccountUpdateWithoutTabsInput>, Prisma.AiAccountUncheckedUpdateWithoutTabsInput>
+}
+
+export type AiAccountCreateNestedOneWithoutExhaustionInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExhaustionInput, Prisma.AiAccountUncheckedCreateWithoutExhaustionInput>
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExhaustionInput
+  connect?: Prisma.AiAccountWhereUniqueInput
+}
+
+export type AiAccountUpdateOneRequiredWithoutExhaustionNestedInput = {
+  create?: Prisma.XOR<Prisma.AiAccountCreateWithoutExhaustionInput, Prisma.AiAccountUncheckedCreateWithoutExhaustionInput>
+  connectOrCreate?: Prisma.AiAccountCreateOrConnectWithoutExhaustionInput
+  upsert?: Prisma.AiAccountUpsertWithoutExhaustionInput
+  connect?: Prisma.AiAccountWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.AiAccountUpdateToOneWithWhereWithoutExhaustionInput, Prisma.AiAccountUpdateWithoutExhaustionInput>, Prisma.AiAccountUncheckedUpdateWithoutExhaustionInput>
 }
 
 export type EnumAiProviderFieldUpdateOperationsInput = {
@@ -444,8 +536,10 @@ export type AiAccountCreateWithoutMachineInput = {
   label: string
   configDir?: string | null
   createdAt?: Date | string
+  exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountUncheckedCreateWithoutMachineInput = {
@@ -453,9 +547,11 @@ export type AiAccountUncheckedCreateWithoutMachineInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountCreateOrConnectWithoutMachineInput = {
@@ -493,7 +589,58 @@ export type AiAccountScalarWhereInput = {
   label?: Prisma.StringFilter<"AiAccount"> | string
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
+}
+
+export type AiAccountCreateWithoutExclusiveProjectInput = {
+  id: string
+  provider: $Enums.AiProvider
+  label: string
+  configDir?: string | null
+  createdAt?: Date | string
+  machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
+  tabs?: Prisma.TabCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionCreateNestedOneWithoutAccountInput
+}
+
+export type AiAccountUncheckedCreateWithoutExclusiveProjectInput = {
+  id: string
+  provider: $Enums.AiProvider
+  label: string
+  machineId: string
+  configDir?: string | null
+  createdAt?: Date | string
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
+}
+
+export type AiAccountCreateOrConnectWithoutExclusiveProjectInput = {
+  where: Prisma.AiAccountWhereUniqueInput
+  create: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput>
+}
+
+export type AiAccountCreateManyExclusiveProjectInputEnvelope = {
+  data: Prisma.AiAccountCreateManyExclusiveProjectInput | Prisma.AiAccountCreateManyExclusiveProjectInput[]
+  skipDuplicates?: boolean
+}
+
+export type AiAccountUpsertWithWhereUniqueWithoutExclusiveProjectInput = {
+  where: Prisma.AiAccountWhereUniqueInput
+  update: Prisma.XOR<Prisma.AiAccountUpdateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedUpdateWithoutExclusiveProjectInput>
+  create: Prisma.XOR<Prisma.AiAccountCreateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedCreateWithoutExclusiveProjectInput>
+}
+
+export type AiAccountUpdateWithWhereUniqueWithoutExclusiveProjectInput = {
+  where: Prisma.AiAccountWhereUniqueInput
+  data: Prisma.XOR<Prisma.AiAccountUpdateWithoutExclusiveProjectInput, Prisma.AiAccountUncheckedUpdateWithoutExclusiveProjectInput>
+}
+
+export type AiAccountUpdateManyWithWhereWithoutExclusiveProjectInput = {
+  where: Prisma.AiAccountScalarWhereInput
+  data: Prisma.XOR<Prisma.AiAccountUpdateManyMutationInput, Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectInput>
 }
 
 export type AiAccountCreateWithoutTabsInput = {
@@ -503,7 +650,9 @@ export type AiAccountCreateWithoutTabsInput = {
   configDir?: string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
+  exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountUncheckedCreateWithoutTabsInput = {
@@ -512,8 +661,10 @@ export type AiAccountUncheckedCreateWithoutTabsInput = {
   label: string
   machineId: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountCreateOrConnectWithoutTabsInput = {
@@ -539,7 +690,9 @@ export type AiAccountUpdateWithoutTabsInput = {
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
+  exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountUncheckedUpdateWithoutTabsInput = {
@@ -548,8 +701,74 @@ export type AiAccountUncheckedUpdateWithoutTabsInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
+}
+
+export type AiAccountCreateWithoutExhaustionInput = {
+  id: string
+  provider: $Enums.AiProvider
+  label: string
+  configDir?: string | null
+  createdAt?: Date | string
+  machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
+  exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
+  tabs?: Prisma.TabCreateNestedManyWithoutAiAccountInput
+}
+
+export type AiAccountUncheckedCreateWithoutExhaustionInput = {
+  id: string
+  provider: $Enums.AiProvider
+  label: string
+  machineId: string
+  configDir?: string | null
+  exclusiveProjectId?: string | null
+  createdAt?: Date | string
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
+}
+
+export type AiAccountCreateOrConnectWithoutExhaustionInput = {
+  where: Prisma.AiAccountWhereUniqueInput
+  create: Prisma.XOR<Prisma.AiAccountCreateWithoutExhaustionInput, Prisma.AiAccountUncheckedCreateWithoutExhaustionInput>
+}
+
+export type AiAccountUpsertWithoutExhaustionInput = {
+  update: Prisma.XOR<Prisma.AiAccountUpdateWithoutExhaustionInput, Prisma.AiAccountUncheckedUpdateWithoutExhaustionInput>
+  create: Prisma.XOR<Prisma.AiAccountCreateWithoutExhaustionInput, Prisma.AiAccountUncheckedCreateWithoutExhaustionInput>
+  where?: Prisma.AiAccountWhereInput
+}
+
+export type AiAccountUpdateToOneWithWhereWithoutExhaustionInput = {
+  where?: Prisma.AiAccountWhereInput
+  data: Prisma.XOR<Prisma.AiAccountUpdateWithoutExhaustionInput, Prisma.AiAccountUncheckedUpdateWithoutExhaustionInput>
+}
+
+export type AiAccountUpdateWithoutExhaustionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
+  label?: Prisma.StringFieldUpdateOperationsInput | string
+  configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
+  exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutAiAccountNestedInput
+}
+
+export type AiAccountUncheckedUpdateWithoutExhaustionInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
+  label?: Prisma.StringFieldUpdateOperationsInput | string
+  machineId?: Prisma.StringFieldUpdateOperationsInput | string
+  configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
 }
 
 export type AiAccountCreateWithoutChatConversationsInput = {
@@ -559,7 +778,9 @@ export type AiAccountCreateWithoutChatConversationsInput = {
   configDir?: string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
+  exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
   tabs?: Prisma.TabCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountUncheckedCreateWithoutChatConversationsInput = {
@@ -568,8 +789,10 @@ export type AiAccountUncheckedCreateWithoutChatConversationsInput = {
   label: string
   machineId: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
 }
 
 export type AiAccountCreateOrConnectWithoutChatConversationsInput = {
@@ -595,7 +818,9 @@ export type AiAccountUpdateWithoutChatConversationsInput = {
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
+  exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
   tabs?: Prisma.TabUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountUncheckedUpdateWithoutChatConversationsInput = {
@@ -604,8 +829,10 @@ export type AiAccountUncheckedUpdateWithoutChatConversationsInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountCreateManyMachineInput = {
@@ -613,6 +840,7 @@ export type AiAccountCreateManyMachineInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  exclusiveProjectId?: string | null
   createdAt?: Date | string
 }
 
@@ -622,8 +850,10 @@ export type AiAccountUpdateWithoutMachineInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountUncheckedUpdateWithoutMachineInput = {
@@ -631,15 +861,60 @@ export type AiAccountUncheckedUpdateWithoutMachineInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
 }
 
 export type AiAccountUncheckedUpdateManyWithoutMachineInput = {
   id?: Prisma.StringFieldUpdateOperationsInput | string
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
+  configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type AiAccountCreateManyExclusiveProjectInput = {
+  id: string
+  provider: $Enums.AiProvider
+  label: string
+  machineId: string
+  configDir?: string | null
+  createdAt?: Date | string
+}
+
+export type AiAccountUpdateWithoutExclusiveProjectInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
+  label?: Prisma.StringFieldUpdateOperationsInput | string
+  configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUpdateOneWithoutAccountNestedInput
+}
+
+export type AiAccountUncheckedUpdateWithoutExclusiveProjectInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
+  label?: Prisma.StringFieldUpdateOperationsInput | string
+  machineId?: Prisma.StringFieldUpdateOperationsInput | string
+  configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
+  exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
+}
+
+export type AiAccountUncheckedUpdateManyWithoutExclusiveProjectInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
+  label?: Prisma.StringFieldUpdateOperationsInput | string
+  machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -690,10 +965,13 @@ export type AiAccountSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   label?: boolean
   machineId?: boolean
   configDir?: boolean
+  exclusiveProjectId?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
   chatConversations?: boolean | Prisma.AiAccount$chatConversationsArgs<ExtArgs>
   tabs?: boolean | Prisma.AiAccount$tabsArgs<ExtArgs>
+  exhaustion?: boolean | Prisma.AiAccount$exhaustionArgs<ExtArgs>
   _count?: boolean | Prisma.AiAccountCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["aiAccount"]>
 
@@ -703,8 +981,10 @@ export type AiAccountSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   label?: boolean
   machineId?: boolean
   configDir?: boolean
+  exclusiveProjectId?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
 }, ExtArgs["result"]["aiAccount"]>
 
 export type AiAccountSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -713,8 +993,10 @@ export type AiAccountSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   label?: boolean
   machineId?: boolean
   configDir?: boolean
+  exclusiveProjectId?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
 }, ExtArgs["result"]["aiAccount"]>
 
 export type AiAccountSelectScalar = {
@@ -723,32 +1005,42 @@ export type AiAccountSelectScalar = {
   label?: boolean
   machineId?: boolean
   configDir?: boolean
+  exclusiveProjectId?: boolean
   createdAt?: boolean
 }
 
-export type AiAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "provider" | "label" | "machineId" | "configDir" | "createdAt", ExtArgs["result"]["aiAccount"]>
+export type AiAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "provider" | "label" | "machineId" | "configDir" | "exclusiveProjectId" | "createdAt", ExtArgs["result"]["aiAccount"]>
 export type AiAccountInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
   chatConversations?: boolean | Prisma.AiAccount$chatConversationsArgs<ExtArgs>
   tabs?: boolean | Prisma.AiAccount$tabsArgs<ExtArgs>
+  exhaustion?: boolean | Prisma.AiAccount$exhaustionArgs<ExtArgs>
   _count?: boolean | Prisma.AiAccountCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type AiAccountIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
 }
 export type AiAccountIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
+  exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
 }
 
 export type $AiAccountPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "AiAccount"
   objects: {
     machine: Prisma.$MachinePayload<ExtArgs>
+    exclusiveProject: Prisma.$ProjectPayload<ExtArgs> | null
     /**
      * Conversations running on this account; deleting the account nulls the column.
      */
     chatConversations: Prisma.$ChatConversationPayload<ExtArgs>[]
     tabs: Prisma.$TabPayload<ExtArgs>[]
+    /**
+     * Set while the account is at its usage limit (automatic work skips it).
+     */
+    exhaustion: Prisma.$AiAccountExhaustionPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -759,6 +1051,11 @@ export type $AiAccountPayload<ExtArgs extends runtime.Types.Extensions.InternalA
      * CLI config dir override (e.g. ~/.claude-work for a second Claude login). null = default.
      */
     configDir: string | null
+    /**
+     * TER-990: the only project this account may run in (a client's or a company's account). null = any
+     * project of the owner. Deleting the project clears it.
+     */
+    exclusiveProjectId: string | null
     createdAt: Date
   }, ExtArgs["result"]["aiAccount"]>
   composites: {}
@@ -1155,8 +1452,10 @@ readonly fields: AiAccountFieldRefs;
 export interface Prisma__AiAccountClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
   machine<T extends Prisma.MachineDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.MachineDefaultArgs<ExtArgs>>): Prisma.Prisma__MachineClient<runtime.Types.Result.GetResult<Prisma.$MachinePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+  exclusiveProject<T extends Prisma.AiAccount$exclusiveProjectArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>>): Prisma.Prisma__ProjectClient<runtime.Types.Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   chatConversations<T extends Prisma.AiAccount$chatConversationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AiAccount$chatConversationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatConversationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabs<T extends Prisma.AiAccount$tabsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AiAccount$tabsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  exhaustion<T extends Prisma.AiAccount$exhaustionArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AiAccount$exhaustionArgs<ExtArgs>>): Prisma.Prisma__AiAccountExhaustionClient<runtime.Types.Result.GetResult<Prisma.$AiAccountExhaustionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1191,6 +1490,7 @@ export interface AiAccountFieldRefs {
   readonly label: Prisma.FieldRef<"AiAccount", 'String'>
   readonly machineId: Prisma.FieldRef<"AiAccount", 'String'>
   readonly configDir: Prisma.FieldRef<"AiAccount", 'String'>
+  readonly exclusiveProjectId: Prisma.FieldRef<"AiAccount", 'String'>
   readonly createdAt: Prisma.FieldRef<"AiAccount", 'DateTime'>
 }
     
@@ -1593,6 +1893,25 @@ export type AiAccountDeleteManyArgs<ExtArgs extends runtime.Types.Extensions.Int
 }
 
 /**
+ * AiAccount.exclusiveProject
+ */
+export type AiAccount$exclusiveProjectArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Project
+   */
+  select?: Prisma.ProjectSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Project
+   */
+  omit?: Prisma.ProjectOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ProjectInclude<ExtArgs> | null
+  where?: Prisma.ProjectWhereInput
+}
+
+/**
  * AiAccount.chatConversations
  */
 export type AiAccount$chatConversationsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1638,6 +1957,25 @@ export type AiAccount$tabsArgs<ExtArgs extends runtime.Types.Extensions.Internal
   take?: number
   skip?: number
   distinct?: Prisma.TabScalarFieldEnum | Prisma.TabScalarFieldEnum[]
+}
+
+/**
+ * AiAccount.exhaustion
+ */
+export type AiAccount$exhaustionArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AiAccountExhaustion
+   */
+  select?: Prisma.AiAccountExhaustionSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AiAccountExhaustion
+   */
+  omit?: Prisma.AiAccountExhaustionOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AiAccountExhaustionInclude<ExtArgs> | null
+  where?: Prisma.AiAccountExhaustionWhereInput
 }
 
 /**

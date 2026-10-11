@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ChatAction, ChatActionStatus } from '../db/repositories/chat-actions.js';
 import { STANDING_GRANT_KINDS, type StandingGrantKind } from '../db/repositories/chat-standing-grants.js';
+import { hasAutomationPatch } from '../automation/setup-patch.js';
 
 export { STANDING_GRANT_KINDS, type StandingGrantKind };
 
@@ -13,7 +14,7 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // spec TER-205 D11. Never add a tool here that acts on a machine directly.
 // recap_pending_cards only moves the person's own cards to the end of their chat (TER-477): nothing is
 // decided, sent or changed on a machine, and a confirmation card for it would be one more card to answer.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards']);
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run']);
 
 // Tools classified by reversibility
 const readTools = new Set([
@@ -27,6 +28,11 @@ const readTools = new Set([
   'read_last_answer',
   'wait_for_state',
   'list_tasks',
+  'list_automation_queue',
+  'get_automation_policy',
+  // a tab tool (agentic board F-8): reads the calling tab's own run card; the concierge never lists it
+  'get_card',
+  'list_automation_events',
   'list_tickets',
   'get_ticket',
   'read_attachment',
@@ -35,6 +41,10 @@ const readTools = new Set([
   'get_project_setup',
   // TER-627: lists the tabs' question cards and their answers; nothing is sent or changed.
   'list_tab_questions',
+  // TER-1023: the hooks' state on a machine; nothing on the machine is written.
+  'get_machine_hooks',
+  // TER-1038: the chat's own context fill; nothing is changed.
+  'get_chat_context',
 ]);
 
 const writeTools = new Set([
@@ -51,6 +61,15 @@ const writeTools = new Set([
   'set_project_machine_cwd',
   'sync_tickets',
   'import_tickets',
+  // Lifting the brake lets automatic work start again: the person says so on a card.
+  'resume_automation',
+  // Hands one parked automatic run back: the follower may type into its tab again.
+  'resume_automation_run',
+  // TER-1023: rewrites the hooks' entries in the machine's config files (the person's own are kept, an
+  // uninstall gives them back). Always a card: no grant or default covers it.
+  'install_machine_hooks',
+  // TER-1056: installs a newer agent and restarts it (tmux sessions survive). Always a card: no grant or default covers it.
+  'update_machine_agent',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
@@ -60,10 +79,43 @@ const writeTools = new Set([
 // the tab the same owner-scoped way and only for a stopped tab. Never let close_tab through without one.
 // create_integration and set_project_repo change credentials and where the CI panel reads from
 // (spec 2026-09-28 MCP integrations D6): always a card, never covered by a grant.
-const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo']);
+// automation_merge is the card the merge executor asks for a PR above the project's level (agentic board
+// D7): never a concierge tool, never covered by a grant; approving it merges that PR once.
+// set_ai_account_exclusive decides where a client's account may run (TER-990): always the person's card.
+// start_ai_login and submit_ai_login_code change what a machine's AI CLI is logged in as (TER-1047): always a card.
+const irreversibleTools = new Set([
+  'close_tab',
+  'delete_task',
+  'push_ticket_status',
+  'create_integration',
+  'set_project_repo',
+  'automation_merge',
+  'set_ai_account_exclusive',
+  'start_ai_login',
+  'submit_ai_login_code',
+]);
 
 // Keys that interrupt the running process and cannot be undone
 const interruptingKeys = new Set(['C-c', 'Escape']);
+
+/**
+ * Arguments that are secrets (TER-1047: the code pasted to finish an AI CLI login). The row keeps them
+ * only while it is open, because the model is told to repeat an approved call with the stored arguments;
+ * once the row is closed they are replaced by `REDACTED_ARG` (`scrubSecretArgs` in chat/service.ts).
+ */
+export const SECRET_ARGS: Readonly<Record<string, readonly string[]>> = { submit_ai_login_code: ['code'] };
+export const REDACTED_ARG = '[redacted]';
+
+/** The arguments with their secrets redacted; the same object when there is nothing to redact. */
+export function redactSecretArgs(tool: string, args: unknown): unknown {
+  const keys = SECRET_ARGS[tool];
+  if (!keys || !args || typeof args !== 'object') return args;
+  const record = args as Record<string, unknown>;
+  if (!keys.some((k) => record[k] != null && record[k] !== REDACTED_ARG)) return args;
+  const out: Record<string, unknown> = { ...record };
+  for (const k of keys) if (out[k] != null) out[k] = REDACTED_ARG;
+  return out;
+}
 
 /**
  * Classifies a proposed tool action by its reversibility.
@@ -91,6 +143,24 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   if (tool === 'send_key') {
     const key = (args as { key?: string } | undefined)?.key;
     return typeof key === 'string' && interruptingKeys.has(key) ? 'irreversible' : 'write';
+  }
+
+  // pause_automation is the brake: on its own it only stops new work, so it never waits for a card. With
+  // interrupt it also sends Escape to the tabs running automatic work, which is the person's call.
+  if (tool === 'pause_automation') {
+    return (args as { interrupt?: unknown } | undefined)?.interrupt === true ? 'write' : 'self_mediated';
+  }
+
+  // TER-975: the automation Setup. Without a field to change it only reads. With one, the static class is
+  // the worst case (a write no grant or default covers, so it asks); the gate runtime reads the current
+  // Setup and lets a brake (off, a lower level, a lower max_parallel) through as self-mediated.
+  if (tool === 'set_automation_policy') {
+    return hasAutomationPatch((args ?? {}) as Record<string, unknown>) ? 'write' : 'read';
+  }
+
+  // The machine's "Aceita trabalho automático": refusing is a brake, accepting asks the person.
+  if (tool === 'set_machine_automation') {
+    return (args as { accept?: unknown } | undefined)?.accept === false ? 'self_mediated' : 'write';
   }
 
   // unlink_project_machine only closes tabs (irreversible) when confirm: true; otherwise it either

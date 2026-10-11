@@ -113,7 +113,12 @@ beforeEach(() => {
   // A synchronous fake: reads the body from stdin (--data-binary @-) and appends it as one line, in a
   // single write. Body and newline used to be two appends: a test saw the body, finished, and the
   // newline's append recreated the log inside the directory afterEach was removing (ENOTEMPTY on CI).
-  writeFileSync(join(bin, 'curl'), `#!/bin/sh\nbody=$(cat); printf '%s\\t%s\\n' "$TH_SEQ" "$body" >> "${log}"\n`);
+  // It answers only when a test sets TH_REPLY: the reply body, then curl's -w status line (TH_CODE,
+  // 200 by default) — what the foreground UserPromptSubmit post reads (TER-851).
+  writeFileSync(
+    join(bin, 'curl'),
+    `#!/bin/sh\nbody=$(cat); printf '%s\\t%s\\n' "$TH_SEQ" "$body" >> "${log}"\n[ -z "$TH_REPLY" ] || printf '%s\\n%s' "$TH_REPLY" "\${TH_CODE:-200}"\n`,
+  );
   for (const f of ['termhub-hook', 'tmux', 'curl']) chmodSync(join(bin, f), 0o755);
 });
 /**
@@ -819,5 +824,45 @@ describe('hook script — Codex', () => {
     runAs('codex', stop);
     const [body] = await bodies(1);
     expect(eventOf(body)).toEqual(stop);
+  });
+});
+
+describe('hook script — origin note on UserPromptSubmit (TER-851)', () => {
+  const note = JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: 'termhub origin note: x' } });
+  const prompt = { session_id: 's1', hook_event_name: 'UserPromptSubmit', prompt: 'pode mesclar' };
+
+  function runReplying(tool: string, event: unknown, env: Record<string, string>): string {
+    const r = spawnSync('sh', [join(bin, 'termhub-hook'), tool], {
+      input: JSON.stringify(event),
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, TMUX_PANE: '%1', TMPDIR: tmp, TH_SEQ: nextSeq(), ...env },
+      timeout: 5000,
+    });
+    expect(r.status).toBe(0);
+    return r.stdout.toString();
+  }
+
+  it('prints the server’s note for a Claude prompt, after posting the prompt', () => {
+    expect(runReplying('claude', prompt, { TH_REPLY: note })).toBe(`${note}\n`);
+    // posted in the foreground: logged by the time the script exits
+    expect(logged().map(eventOf)).toEqual([prompt]);
+  });
+
+  it('prints nothing for a reply that is not a 200', () => {
+    expect(runReplying('claude', prompt, { TH_REPLY: note, TH_CODE: '202' })).toBe('');
+  });
+
+  it('prints nothing for a 200 without the note’s prefix (an older server’s answer)', () => {
+    expect(runReplying('claude', prompt, { TH_REPLY: '{"ok":true,"tab_id":"t1","state":"working"}' })).toBe('');
+  });
+
+  it('prints nothing when the server does not answer', () => {
+    expect(runReplying('claude', prompt, {})).toBe('');
+  });
+
+  it('prints nothing for any other event, nor for another tool’s prompt', async () => {
+    expect(runReplying('claude', { hook_event_name: 'Stop', last_assistant_message: 'x' }, { TH_REPLY: note })).toBe('');
+    expect(runReplying('codex', prompt, { TH_REPLY: note })).toBe('');
+    expect(runReplying('claude', { session_id: 's1', agent_id: 'a1', hook_event_name: 'UserPromptSubmit', prompt: 'x' }, { TH_REPLY: note })).toBe('');
+    await bodies(3);
   });
 });

@@ -17,7 +17,7 @@ function legalMarkdown(): Plugin {
 }
 
 // Static marketing site served at termhub.dev (see landing/Dockerfile).
-// Multi-page: every adjacent page (/brand/, /security/, /termos/, /privacidade/) is its own
+// Multi-page: every adjacent page (/brand/, /security/, /excluir-conta/, /termos/, /privacidade/) is its own
 // `<dir>/index.html` entry, so nginx serves it as a plain directory index.
 export default defineConfig({
   plugins: [react(), legalMarkdown()],
@@ -31,6 +31,7 @@ export default defineConfig({
         security: 'security/index.html',
         termos: 'termos/index.html',
         privacidade: 'privacidade/index.html',
+        deleteAccount: 'excluir-conta/index.html',
       },
     },
   },

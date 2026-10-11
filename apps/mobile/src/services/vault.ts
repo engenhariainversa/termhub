@@ -1,4 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
+import { t } from '@/i18n';
 
 /** The closed set of secrets the app ever puts in SecureStore (design spec §5.1). `key.diagnostic`
  * backs the software device key the Ajustes diagnostic uses (never the enrolled `key.private`). */
@@ -9,7 +10,7 @@ const KEYS: VaultKey[] = ['key.private', 'pin.wrapped', 'pin.salt', 'pin.biometr
 const opts = (biometric: boolean): SecureStore.SecureStoreOptions => ({
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   requireAuthentication: biometric,
-  authenticationPrompt: 'Desbloquear o termhub',
+  authenticationPrompt: t('Desbloquear o termhub'),
 });
 
 export const vault = {

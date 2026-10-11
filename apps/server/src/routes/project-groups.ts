@@ -20,7 +20,7 @@ async function rule<T>(work: () => Promise<T>): Promise<T> {
   } catch (e) {
     if (e instanceof ProjectGroupRuleError) {
       const status = e.code === 'SYSTEM_GROUP' ? 409 : e.code === 'NOT_FOUND' ? 404 : 400;
-      throw new HttpError(status, e.message, e.code);
+      throw new HttpError(status, e.localized, e.code);
     }
     throw e;
   }

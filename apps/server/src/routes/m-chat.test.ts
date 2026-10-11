@@ -41,15 +41,17 @@ function deferred<T>() {
 }
 
 function build(opts: {
+  /** users with the subscriptions flag on for themselves (TER-1040) */
+  testers?: string[];
   start?: ReturnType<typeof vi.fn>;
   reset?: ReturnType<typeof vi.fn>;
-  resumeAfterDecision?: ReturnType<typeof vi.fn>;
+  startAfterDecision?: ReturnType<typeof vi.fn>;
   decide?: ReturnType<typeof vi.fn>;
   findByIdForUser?: ReturnType<typeof vi.fn>;
   checkPin?: ReturnType<typeof vi.fn>;
   consumeDecisionChallenge?: ReturnType<typeof vi.fn>;
   hostMachines?: { id: string; name: string; type: string }[];
-  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string }[];
+  aiAccounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string; exclusive_project?: { id: string; name: string } | null }[];
   setHost?: ReturnType<typeof vi.fn>;
   extraProjects?: { id: string; name: string; key: string; status: string }[];
   projectStatuses?: { project_id: string; busy: boolean; pending_confirmations: number }[];
@@ -83,14 +85,17 @@ function build(opts: {
   const extraProjects = opts.extraProjects ?? [];
   const decide = opts.decide ?? vi.fn(async (_id: string, _userId: string, status: string) => ({ ...pendingAction, status }));
   const findByIdForUser = opts.findByIdForUser ?? vi.fn(async () => ({ ...pendingAction, status: 'pending' }));
-  const resumeAfterDecision = opts.resumeAfterDecision ?? vi.fn(async () => ({ id: 'm3', role: 'assistant', text: 'Feito.' }));
+  const startAfterDecision =
+    opts.startAfterDecision ??
+    vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'm3', done: Promise.resolve({ id: 'm3', role: 'assistant', text: 'Feito.' }) }));
   const start =
     opts.start ??
     vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done: new Promise(() => undefined) }));
   const service = {
     conversationFor: opts.conversationFor ?? vi.fn(async () => ({ id: 'c1', user_id: 'u1', review_mode: false, machine_id: 'm1', ai_account_id: null, cli_session_id: null })),
     start,
-    resumeAfterDecision,
+    startAfterDecision,
+    afterDecisions: vi.fn(),
     reset: opts.reset ?? vi.fn(async () => ({ id: 'c_new', project_id: 'p1' })),
     hostFor: vi.fn(async () => ({ kind: 'ready', machine: { id: 'm1', name: 'jarvis' }, configDir: null })),
     projectStatuses: vi.fn(async () => opts.projectStatuses ?? [{ project_id: 'p1', busy: true, pending_confirmations: 2 }]),
@@ -101,6 +106,7 @@ function build(opts: {
   const session = {
     checkPin: opts.checkPin ?? vi.fn(async () => ({ ok: true })),
     consumeDecisionChallenge: opts.consumeDecisionChallenge ?? vi.fn(async () => true),
+    challenge: vi.fn(async (_deviceId: string, _purpose: string, actionId: string) => ({ challenge: `ch-${actionId}`, expires_at: '2026-10-01T12:01:00.000Z' })),
   };
   const agents = {
     capabilities: vi.fn((id: string) => (id === 'm1' ? ['chat'] : null)),
@@ -120,10 +126,17 @@ function build(opts: {
       clearProjectSessions: vi.fn(async () => undefined),
       listActiveProjectConversations: vi.fn(async () => [{ id: 'c_p1', project_id: 'p1', last_message_at: '2026-09-23T10:00:00.000Z' }]),
     },
-    chatActions: { decide, findByIdForUser, listByConversation: vi.fn(async () => []) },
+    chatActions: {
+      decide,
+      findByIdForUser,
+      listByConversation: vi.fn(async () => []),
+      failPendingTabGone: vi.fn(async (id: string) => ({ action: { ...pendingAction, id, status: 'failed', error_code: 'TAB_GONE' }, user_id: 'u1' })),
+    },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
-    tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? []).filter((t) => ids.includes(t.id))) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
+    // The decision route reads the card's tab (TER-986): by default the fixture card's tab ('t1') is open.
+    tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }]).filter((t) => ids.includes(t.id))) },
     chatGrants: {
       grant: vi.fn(async (input: { conversation_id: string; tab_id: string; tool: string; source_action_id: string; granted_by: string }) => ({ id: 'g1', ...input, created_at: '2026-09-25T10:00:00.000Z', expires_at: '2026-09-26T10:00:00.000Z', revoked_at: null, revoked_by: null })),
       listActive: vi.fn(async () => opts.grants ?? []),
@@ -184,6 +197,8 @@ function build(opts: {
               { id: 'acc1', label: 'Trabalho', machine_id: 'm1', provider: 'claude', config_dir: '/home/u/.claude-work' },
               { id: 'acc2', label: 'GPT', machine_id: 'm1', provider: 'chatgpt', config_dir: null },
               { id: 'acc3', label: 'Pessoal', machine_id: 'm2', provider: 'claude', config_dir: null },
+              // TER-990: exclusive to a project, never offered as the chat host
+              { id: 'acc4', label: 'DR Horton', machine_id: 'm1', provider: 'claude', config_dir: '/home/u/.claude-drh', exclusive_project: { id: 'p9', name: 'DR Horton' } },
             ]
           : []
       ),
@@ -198,6 +213,7 @@ function build(opts: {
       setFavorite: opts.setFavorite ?? vi.fn(async () => undefined),
     },
     roles: { findById: vi.fn(async () => undefined), permissionsOf: vi.fn(async () => []) },
+    featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async (_flag: string, userId: string) => (opts.testers?.includes(userId) ? true : null)) },
   };
   const app = Fastify();
   applyErrorHandler(app);
@@ -210,7 +226,7 @@ function build(opts: {
   const indexActions = vi.fn(async () => {});
   app.register((a) => mobileChatRoutes(a, repos as never, { chat: service as never, agents, session: session as never, indexActions }), { prefix: '/chat' });
   app.register((a) => mobileMeRoutes(a, repos as never), { prefix: '' });
-  return { app, service, session, agents, repos, decide, findByIdForUser, resumeAfterDecision, start, setHost, indexActions };
+  return { app, service, session, agents, repos, decide, findByIdForUser, startAfterDecision, start, setHost, indexActions };
 }
 
 const approve = { decision: 'approve', challenge: 'chal-1', pin_proof: 'proof-1' };
@@ -413,6 +429,14 @@ describe('POST /chat/host', () => {
     expect(res.json()).toMatchObject({ host: { kind: 'ready' } });
   });
 
+  it('refuses an account exclusive to a project (TER-990)', async () => {
+    const { app, setHost } = build({ aiAccounts: [{ id: 'acc4', label: 'drhorton', provider: 'claude', machine_id: 'm1', config_dir: null, exclusive_project: { id: 'p9', name: 'DR Horton' } }] });
+    const res = await app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm1', ai_account_id: 'acc4' } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('ACCOUNT_EXCLUSIVE');
+    expect(setHost).not.toHaveBeenCalled();
+  });
+
   it('never accepts a machine this user does not own, nor an account that is not on it', async () => {
     const { app, setHost } = build({ aiAccounts: [{ id: 'acc9', provider: 'claude', machine_id: 'm9', config_dir: null }] });
     expect((await app.inject({ method: 'POST', url: '/chat/host', payload: { machine_id: 'm-someone-else' } })).statusCode).toBe(404);
@@ -513,11 +537,18 @@ describe('POST /chat/messages', () => {
     expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7' });
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
   });
+
+  it('passes reply_to_card to start (TER-849)', async () => {
+    const { app, start } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'escolhe azul', reply_to_card: { kind: 'tab_question', id: 'q7' } } });
+    expect(res.statusCode).toBe(202);
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'escolhe azul', { projectId: null, replyToCard: { kind: 'tab_question', id: 'q7' } });
+  });
 });
 
 describe('POST /chat/actions/:id/decision', () => {
   it('deny: decides, publishes the event and resumes, with no PIN involvement', async () => {
-    const { app, decide, resumeAfterDecision, session, indexActions } = build();
+    const { app, decide, startAfterDecision, session, indexActions, service } = build();
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
     let res;
@@ -529,9 +560,10 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(res.statusCode).toBe(200);
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'denied');
     expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'denied' });
-    expect(resumeAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'denied' });
+    expect(startAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'denied' });
+    expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'act1', status: 'denied' })]);
     expect(res.json()).toEqual({ action: expect.objectContaining({ id: 'act1', status: 'denied' }), queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     // Memory (spec 2026-09-26 concierge memory §4): the decided row is indexed, fire-and-forget.
@@ -546,14 +578,14 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: a write card without a proof is approved with no challenge and no PIN work', async () => {
-    const { app, session, decide, resumeAfterDecision } = build();
+    const { app, session, decide, startAfterDecision } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ queued: true });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
-    await vi.waitFor(() => expect(resumeAfterDecision).toHaveBeenCalled());
+    await vi.waitFor(() => expect(startAfterDecision).toHaveBeenCalled());
   });
 
   it('approve: an irreversible card without a proof is 401 PIN_REQUIRED and stays pending, nothing consumed', async () => {
@@ -637,13 +669,13 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: a wrong PIN is 401 with the failures, and the action stays pending', async () => {
-    const { app, session, decide, resumeAfterDecision } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 2 })) });
+    const { app, session, decide, startAfterDecision } = build({ checkPin: vi.fn(async () => ({ ok: false, code: 'PIN_INVALID', failures: 2 })) });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(401);
     expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 2 });
     expect(session.checkPin).toHaveBeenCalledWith(device, decisionProofMessage('chal-1', 'act1', 'approve'), 'proof-1', expect.objectContaining({ ip: expect.any(String) }));
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('approve: a locked device is 423 with retry-after in whole seconds', async () => {
@@ -664,7 +696,7 @@ describe('POST /chat/actions/:id/decision', () => {
   });
 
   it('approve: with a good proof decides, publishes the event and resumes', async () => {
-    const { app, decide, resumeAfterDecision, session } = build();
+    const { app, decide, startAfterDecision, session } = build();
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
     let res;
@@ -682,9 +714,9 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(consumed).toBeLessThan(checked);
     expect(checked).toBeLessThan(decided);
     expect(events).toContainEqual({ type: 'decision', user_id: 'u1', conversation_id: 'c1', action_id: 'act1', status: 'approved' });
-    expect(resumeAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'approved' });
+    expect(startAfterDecision.mock.calls[0][1]).toMatchObject({ id: 'act1', status: 'approved' });
     expect(res.json()).toEqual({ action: expect.objectContaining({ id: 'act1', status: 'approved' }), queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('approve: a race lost to the web after the proof ends in the same 409', async () => {
@@ -692,20 +724,20 @@ describe('POST /chat/actions/:id/decision', () => {
       .fn()
       .mockResolvedValueOnce({ ...pendingAction, status: 'pending' })
       .mockResolvedValueOnce({ ...pendingAction, status: 'approved' });
-    const { app, resumeAfterDecision } = build({ decide: vi.fn(async () => undefined), findByIdForUser });
+    const { app, startAfterDecision } = build({ decide: vi.fn(async () => undefined), findByIdForUser });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(409);
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
-  it('answers at once, without waiting for the resumed run', async () => {
+  it('answers at once, without waiting for the resumed run to start', async () => {
     let finish!: () => void;
-    const resumeAfterDecision = vi.fn(() => new Promise((resolve) => { finish = () => resolve({ id: 'm3' }); }));
-    const { app } = build({ resumeAfterDecision });
+    const startAfterDecision = vi.fn(() => new Promise((resolve) => { finish = () => resolve(undefined); }));
+    const { app } = build({ startAfterDecision });
     const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: approve });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     finish();
   });
 
@@ -717,19 +749,36 @@ describe('POST /chat/actions/:id/decision', () => {
     const onUnhandled = (reason: unknown) => unhandled.push(reason);
     process.on('unhandledRejection', onUnhandled);
     try {
-      const resumeAfterDecision = vi.fn(async () => { throw failure; });
-      const { app } = build({ resumeAfterDecision });
+      const startAfterDecision = vi.fn(async () => { throw failure; });
+      const { app } = build({ startAfterDecision });
       for (const payload of [approve, { decision: 'deny' }]) {
         const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload });
         expect(res.statusCode).toBe(200);
         expect(res.json()).toMatchObject({ queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
       }
       await new Promise((r) => setTimeout(r, 20));
-      expect(resumeAfterDecision).toHaveBeenCalledTimes(2);
+      expect(startAfterDecision).toHaveBeenCalledTimes(2);
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', onUnhandled);
     }
+  });
+
+  it('TER-473: a run that fails after it started is not logged again by the route', async () => {
+    const warn = vi.fn();
+    // `startAfterDecision` already caught and logged `done`; the route must not await it.
+    const done = Promise.reject(new Error('boom'));
+    done.catch(() => undefined);
+    const startAfterDecision = vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'm3', done }));
+    const { app } = build({ startAfterDecision });
+    app.addHook('onRequest', async (request) => {
+      request.log.warn = warn as never;
+    });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'deny' } });
+    expect(res.statusCode).toBe(200);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalledWith(expect.anything(), 'mobile decision resume failed');
   });
 
   it('approve_tab: with a valid challenge and proof, decides, grants the tab and publishes both events', async () => {
@@ -753,8 +802,8 @@ describe('POST /chat/actions/:id/decision', () => {
 
   it('approve_tab whose grant fails still approves and resumes, with no grant in the answer or on the bus', async () => {
     const eligible = { ...pendingAction, status: 'pending', args: { tab_id: 't1', text: 'oi' } };
-    const resumeAfterDecision = vi.fn(async () => undefined);
-    const { app, decide, repos } = build({ resumeAfterDecision, findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
+    const startAfterDecision = vi.fn(async () => undefined);
+    const { app, decide, repos } = build({ startAfterDecision, findByIdForUser: vi.fn(async () => eligible), tabs: [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }] });
     vi.mocked(repos.chatGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
@@ -770,7 +819,7 @@ describe('POST /chat/actions/:id/decision', () => {
     expect(res.json().action).toMatchObject({ id: 'act1', status: 'approved' });
     expect(res.json()).toMatchObject({ queued: true });
     expect(res.json()).not.toHaveProperty('grant');
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(events.map((e) => e.type)).toContain('decision');
     expect(events.map((e) => e.type)).not.toContain('grant');
   });
@@ -861,8 +910,8 @@ describe('POST /chat/actions/:id/decision: approve_project', () => {
   });
 
   it('whose grant fails still approves and resumes, with no project_grant in the answer or on the bus', async () => {
-    const resumeAfterDecision = vi.fn(async () => undefined);
-    const { app, decide, repos } = build({ resumeAfterDecision, findByIdForUser: vi.fn(async () => boardCard), boardTasks: [{ id: 'k1', project_id: 'p1' }] });
+    const startAfterDecision = vi.fn(async () => undefined);
+    const { app, decide, repos } = build({ startAfterDecision, findByIdForUser: vi.fn(async () => boardCard), boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     vi.mocked(repos.chatProjectGrants.grant).mockRejectedValueOnce(new Error('connection terminated'));
     const events: ChatEvent[] = [];
     const unsubscribe = chatBus.subscribe((e) => events.push(e));
@@ -877,7 +926,7 @@ describe('POST /chat/actions/:id/decision: approve_project', () => {
     expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
     expect(res.json()).toMatchObject({ queued: true });
     expect(res.json()).not.toHaveProperty('project_grant');
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     expect(events.map((e) => e.type)).not.toContain('project_grant');
   });
 
@@ -979,9 +1028,7 @@ describe('POST /chat/actions/:id/decision: terminal grants (TER-325)', () => {
 
   it.each([
     ['approve_tab_terminal', 'run_command', { ...keyCard, tool: 'run_command', args: { tab_id: 't1', command: 'ls' } }],
-    ['approve_tab_terminal', 'a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
     ['approve_project_all', 'delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-    ['approve_project_all', 'a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
   ])('%s on %s is 400 GRANT_NOT_ALLOWED before the challenge is consumed or the PIN checked', async (decision, _label, row) => {
     const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs, boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     const res = await post(app, decision);
@@ -1050,9 +1097,32 @@ describe('POST /chat/actions/:id/decision: approve_project_always (TER-386)', ()
     expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
   });
 
+  // TER-986: a closed tab (or a foreign one, which reads the same) retires the card before any PIN work.
+  it.each(['approve', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always'])(
+    '%s on a card whose tab is gone is 409 TAB_GONE before the challenge is consumed or the PIN checked, and retires it',
+    async (decision) => {
+      const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => ({ ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } })), tabs });
+      const events: ChatEvent[] = [];
+      const unsubscribe = chatBus.subscribe((e) => events.push(e));
+      let res;
+      try {
+        res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision, challenge: 'ch', pin_proof: 'proof-1' } });
+      } finally {
+        unsubscribe();
+      }
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('TAB_GONE');
+      expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
+      expect(session.checkPin).not.toHaveBeenCalled();
+      expect(decide).not.toHaveBeenCalled();
+      expect(repos.chatActions.failPendingTabGone).toHaveBeenCalledWith('act1');
+      expect(repos.chatStandingGrants.grant).not.toHaveBeenCalled();
+      expect(events).toContainEqual(expect.objectContaining({ type: 'action_status', action_id: 'act1', status: 'failed', error_code: 'TAB_GONE' }));
+    },
+  );
+
   it.each([
     ['delete_task', { ...boardCard, tool: 'delete_task', args: { task_id: 'k1' } }],
-    ['a foreign tab', { ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }],
   ])('on %s is 400 GRANT_NOT_ALLOWED before the challenge is consumed or the PIN checked', async (_label, row) => {
     const { app, session, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs, boardTasks: [{ id: 'k1', project_id: 'p1' }] });
     const res = await post(app);
@@ -1082,6 +1152,28 @@ describe('POST /chat/actions/:id/decision: approve_project_always (TER-386)', ()
   });
 });
 
+describe('POST /chat/actions/challenges (TER-530)', () => {
+  const post = (app: ReturnType<typeof build>['app'], payload: unknown) => app.inject({ method: 'POST', url: '/chat/actions/challenges', payload });
+
+  it('issues one decision challenge per action of a 13-card batch in a single call, each bound to its own action', async () => {
+    const { app, session } = build();
+    const ids = Array.from({ length: 13 }, (_, i) => `a${i + 1}`);
+    const res = await post(app, { action_ids: ids });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().challenges).toEqual(ids.map((id) => ({ action_id: id, challenge: `ch-${id}`, expires_at: '2026-10-01T12:01:00.000Z' })));
+    expect(session.challenge).toHaveBeenCalledTimes(13);
+    for (const id of ids) expect(session.challenge).toHaveBeenCalledWith(device.id, 'decision', id);
+  });
+
+  it('refuses an empty list, repeated ids and more than the batch cap (20) before issuing anything', async () => {
+    const { app, session } = build();
+    for (const action_ids of [[], ['a1', 'a1'], Array.from({ length: 21 }, (_, i) => `a${i}`)]) {
+      expect((await post(app, { action_ids })).statusCode).toBe(400);
+    }
+    expect(session.challenge).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /chat/actions/decisions (batch)', () => {
   const rowsOf = (rows: Record<string, { status: string; conversation_id?: string; class?: string }>) =>
     vi.fn(async (id: string) => (rows[id] ? { ...pendingAction, id, conversation_id: 'c1', ...rows[id] } : undefined));
@@ -1090,7 +1182,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
 
   it('proves the approval, decides both, resumes once and answers queued', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision, indexActions } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, session, startAfterDecision, indexActions, service } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' }, { id: 'a2', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'denied' }], skipped: [], queued: true, note: 'A decisão foi registrada; a resposta chega pelo chat.' });
@@ -1101,17 +1193,19 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(decide).toHaveBeenCalledWith('a1', 'u1', 'approved');
     expect(decide).toHaveBeenCalledWith('a2', 'u1', 'denied');
     expect(session.checkPin.mock.invocationCallOrder[0]).toBeLessThan(decide.mock.invocationCallOrder[0]);
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
     // Memory (spec 2026-09-26 concierge memory §4): the whole decided batch is indexed, fire-and-forget.
     expect(indexActions).toHaveBeenCalledWith('u1', [
       expect.objectContaining({ id: 'a1', status: 'approved' }),
       expect.objectContaining({ id: 'a2', status: 'denied' }),
     ]);
+    // The decision hook (agentic board F-19) sees every decided row of the batch.
+    expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
   });
 
   it('a wrong PIN on the second approval is 401 and decides nothing', async () => {
     const checkPin = vi.fn().mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, code: 'PIN_INVALID', failures: 1 });
-    const { app, decide, resumeAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, decide, startAfterDecision } = build({ checkPin, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [
       { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
       { id: 'a2', decision: 'approve', challenge: 'ch2', pin_proof: 'pp2' },
@@ -1120,7 +1214,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(res.json()).toMatchObject({ code: 'PIN_INVALID', failures: 1 });
     expect(checkPin).toHaveBeenCalledTimes(2);
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('a refused challenge is 400 CHALLENGE_INVALID and decides nothing', async () => {
@@ -1194,7 +1288,7 @@ describe('POST /chat/actions/decisions (batch)', () => {
   });
 
   it('nothing left to decide is 409, with no challenge spent and nothing decided', async () => {
-    const { app, session, decide, resumeAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
+    const { app, session, decide, startAfterDecision } = build({ findByIdForUser: rowsOf({ a1: { status: 'approved' } }) });
     const res = await post(app, [
       { id: 'a1', decision: 'approve', challenge: 'ch1', pin_proof: 'pp1' },
       { id: 'a2', decision: 'deny' },
@@ -1202,41 +1296,41 @@ describe('POST /chat/actions/decisions (batch)', () => {
     expect(res.statusCode).toBe(409);
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('a deny-only batch never touches the challenge or the PIN', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'deny' }, { id: 'a2', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).toHaveBeenCalledTimes(2);
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('TER-92: write approvals without a proof are decided with no challenge and no PIN work', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending' }, a3: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ actions: [{ id: 'a1', status: 'approved' }, { id: 'a2', status: 'approved' }, { id: 'a3', status: 'denied' }], skipped: [] });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).toHaveBeenCalledTimes(1);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
   });
 
   it('TER-92: an irreversible approval without a proof is 401 PIN_REQUIRED and decides nothing, not even the write one', async () => {
     const decide = decideById();
-    const { app, session, resumeAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
+    const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf({ a1: { status: 'pending' }, a2: { status: 'pending', class: 'irreversible' }, a3: { status: 'pending' } }) });
     const res = await post(app, [{ id: 'a1', decision: 'approve' }, { id: 'a2', decision: 'approve' }, { id: 'a3', decision: 'deny' }]);
     expect(res.statusCode).toBe(401);
     expect(res.json()).toEqual({ error: 'Confirme com o PIN para autorizar esta ação.', code: 'PIN_REQUIRED' });
     expect(session.consumeDecisionChallenge).not.toHaveBeenCalled();
     expect(session.checkPin).not.toHaveBeenCalled();
     expect(decide).not.toHaveBeenCalled();
-    expect(resumeAfterDecision).not.toHaveBeenCalled();
+    expect(startAfterDecision).not.toHaveBeenCalled();
   });
 
   it('TER-92: a read approval without a proof is PIN_REQUIRED too (only write goes without the PIN)', async () => {
@@ -1423,12 +1517,18 @@ describe('GET /me', () => {
     expect(res.json()).toEqual({
       user: { id: 'u1', email: 'ana@example.com', name: 'Ana', nickname: 'ana' },
       permissions: [],
+      features: { subscriptions: false },
       device: { id: 'd1', name: 'iPhone de Ana', platform: 'ios', model: 'iPhone 15', created_at: '2026-09-19T00:00:00.000Z', last_seen_at: '2026-09-20T00:00:00.000Z' },
       unread_notifications: 3,
     });
     expect(res.body).not.toContain('public_key');
     expect(res.body).not.toContain('pin_secret_enc');
     expect(res.body).not.toContain('secret-hash');
+  });
+
+  it('carries the subscriptions flag on for a tester (TER-1040)', async () => {
+    const { app } = build({ testers: ['u1'] });
+    expect((await app.inject({ method: 'GET', url: '/me' })).json().features).toEqual({ subscriptions: true });
   });
 });
 

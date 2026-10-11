@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { ProjectRuleError } from '../db/repositories/projects.js';
 import type { Machine, Project, ProjectMachine, Tab } from '../db/repositories/types.js';
-import { badRequest, HttpError } from '../lib/errors.js';
+import { badRequest, HttpError, sendError } from '../lib/errors.js';
 import { PROJECT_KEY_RE } from '../lib/project-key.js';
 import { nextTerminalName } from '../lib/tab-names.js';
 import { scoped } from '../auth/scope.js';
@@ -63,7 +63,7 @@ async function rule<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (e) {
-    if (e instanceof ProjectRuleError) throw new HttpError(e.code === 'KEY_TAKEN' || e.code === 'MACHINE_ALREADY_LINKED' ? 409 : 400, e.message, e.code);
+    if (e instanceof ProjectRuleError) throw new HttpError(e.code === 'KEY_TAKEN' || e.code === 'MACHINE_ALREADY_LINKED' ? 409 : 400, e.localized, e.code);
     throw e;
   }
 }
@@ -121,9 +121,9 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
     if (patch.is_public === true && !current.is_public) {
       // Publishing belongs to the project's owner: an admin acting as someone else, or on an
       // orphan project, cannot put another person's work on the street.
-      if (!current.owner_id) return reply.code(409).send({ error: 'Esse projeto não tem dono', code: 'PROJECT_UNOWNED' });
-      if (current.owner_id !== request.user!.id) return reply.code(403).send({ error: 'Só quem é dono do projeto pode publicar', code: 'NOT_OWNER' });
-      if (!request.user!.nickname) return reply.code(409).send({ error: 'Escolha seu apelido antes de publicar', code: 'NICKNAME_REQUIRED' });
+      if (!current.owner_id) return sendError(request, reply, 409, 'Esse projeto não tem dono', 'PROJECT_UNOWNED');
+      if (current.owner_id !== request.user!.id) return sendError(request, reply, 403, 'Só quem é dono do projeto pode publicar', 'NOT_OWNER');
+      if (!request.user!.nickname) return sendError(request, reply, 409, 'Escolha seu apelido antes de publicar', 'NICKNAME_REQUIRED');
     }
     const project = await repos.projects.update(id, patch);
     // The public bus fans this out to any `/ws/public/:nickname` socket watching this project's

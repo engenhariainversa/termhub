@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Machine, MonitorItem, Tab } from './types';
-import { emptyMonitorHint, entersNeedsYou, needsYouByProject, needsYouText, optimisticSeenAt, shouldMarkSeen, tabDotClass, tabNeedsYou } from './needs-you';
+import { emptyMonitorHint, entersNeedsYou, needsYouByProject, needsYouText, optimisticSeenAt, shouldMarkSeen, tabDotClass, tabDotIcon, tabNeedsYou } from './needs-you';
 import { isTabOnScreen, setTabsOnScreen } from './visible-tabs';
 
 const T1 = '2026-01-01T00:00:00.000Z';
@@ -112,19 +112,39 @@ describe('tabDotClass', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_permission', state_at: T1 }))).toContain('bg-attention');
   });
 
-  it('is neutral, never orange, while the agent waits on its own background work (TER-644)', () => {
+  it('pulses like a working tab, never orange, while the agent waits on its own background work (TER-644, TER-1044)', () => {
     expect(tabNeedsYou(tab({ state: 'waiting_background', state_at: T1 }))).toBe(false);
-    expect(tabDotClass(true, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-muted');
+    expect(tabDotClass(true, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-accent tab-dot-working');
     expect(tabDotClass(false, tab({ state: 'waiting_background', state_at: T1 }))).toBe('bg-fg-dim');
+  });
+
+  it('is neutral with a check, never orange nor pulsing, once the agent finished with a report (TER-972, TER-1046)', () => {
+    expect(tabNeedsYou(tab({ state: 'finished', state_at: T1 }))).toBe(false);
+    expect(tabDotClass(true, tab({ state: 'finished', state_at: T1 }))).toBe('bg-fg-dim');
+    expect(tabDotClass(false, tab({ state: 'finished', state_at: T1 }))).toBe('bg-fg-dim');
+    expect(tabDotIcon(tab({ state: 'finished' }))).toBe('check');
+  });
+
+  it('a blocked run is grey with a lock and never needs you; a login is red and needs you; the trust dialog is orange (TER-1046)', () => {
+    expect(tabNeedsYou(tab({ state: 'blocked', state_at: T1 }))).toBe(false);
+    expect(tabDotClass(true, tab({ state: 'blocked', state_at: T1 }))).toBe('bg-fg-dim');
+    expect(tabDotIcon(tab({ state: 'blocked' }))).toBe('lock');
+    expect(tabNeedsYou(tab({ state: 'auth_required', state_at: T1 }))).toBe(true);
+    expect(tabDotClass(true, tab({ state: 'auth_required', state_at: T1 }))).toBe('bg-danger tab-dot-blink');
+    expect(tabDotClass(true, tab({ state: 'auth_required', state_at: T1, state_seen_at: T1 }))).toBe('bg-danger');
+    expect(tabNeedsYou(tab({ state: 'trust_prompt', state_at: T1 }))).toBe(true);
+    expect(tabDotClass(true, tab({ state: 'trust_prompt', state_at: T1 }))).toBe('bg-attention tab-dot-blink');
+    expect(tabDotIcon(tab({ state: 'waiting_input' }))).toBeNull();
   });
 
   it('is not orange once the tab has been seen', () => {
     expect(tabDotClass(true, tab({ state: 'waiting_input', state_at: T1, state_seen_at: T1 }))).toBe('bg-ok');
   });
 
-  it('is red on error, green when alive, grey otherwise', () => {
+  it('is red on error, pulsing blue while working, green when alive, grey otherwise', () => {
     expect(tabDotClass(true, tab({ state: 'error' }))).toBe('bg-danger');
-    expect(tabDotClass(true, tab({ state: 'working' }))).toBe('bg-ok');
+    expect(tabDotClass(true, tab({ state: 'working' }))).toBe('bg-accent tab-dot-working');
+    expect(tabDotClass(false, tab({ state: 'working' }))).toBe('bg-fg-dim');
     expect(tabDotClass(true, null)).toBe('bg-ok');
     expect(tabDotClass(false, null)).toBe('bg-fg-dim');
     expect(tabDotClass(false, undefined)).toBe('bg-fg-dim');
@@ -215,7 +235,7 @@ describe('emptyMonitorHint', () => {
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
-    claude_auto_swap: false,
+    claude_auto_swap: false, ai_usage_query: true,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,

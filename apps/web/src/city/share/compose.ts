@@ -7,6 +7,7 @@
  */
 import type { CityModel } from '../../office/model';
 import type { PublicCity } from '../../lib/types';
+import { i18n } from '../../i18n';
 
 export type ShareFormat = 'story' | 'post';
 /** What a still or a video can be: a composed story or post, or `screen` — the camera's view, 16:9, nothing added. */
@@ -99,8 +100,8 @@ function linkLine(text: string, at: Omit<TextBlock, 'text'>, min: number): TextB
 }
 
 export function liveLine(working: number, waiting: number): string {
-  const first = working === 0 ? 'Nenhum agente trabalhando agora' : `${working} ${working === 1 ? 'agente trabalhando' : 'agentes trabalhando'} agora`;
-  return waiting > 0 ? `${first} · ${waiting} esperando você` : first;
+  const first = working === 0 ? i18n.t('Nenhum agente trabalhando agora') : i18n.t('{{count}} agentes trabalhando agora', { count: working });
+  return waiting > 0 ? i18n.t('{{line}} · {{n}} esperando você', { line: first, n: waiting }) : first;
 }
 
 export function displayLink(url: string): string {
@@ -120,9 +121,9 @@ export function shareInfoFor(city: PublicCity, model: CityModel, longUrl: string
 
 export function layoutFor(format: ShareFormat, info: ShareInfo): ShareLayout {
   const { width, height } = FORMAT_SIZE[format];
-  const title = `Cidade de ${info.ownerName}`;
+  const title = i18n.t('Cidade de {{name}}', { name: info.ownerName });
   const live = liveLine(info.working, info.waiting);
-  const invite = 'Participe do beta grátis';
+  const invite = i18n.t('Participe do beta grátis');
 
   if (format === 'story') {
     // header 300 · scene 70% (1344) · footer 276

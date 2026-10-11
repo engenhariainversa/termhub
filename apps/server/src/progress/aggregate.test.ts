@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { agentOnCard, progressResponse, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, selectEpics, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { agentOnCard, progressResponse, type EpicProgress, type PullRequestBadge } from '@termhub/mobile-api';
+import { aggregateCard, aggregateEpic, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
-const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null });
+const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
 const card = (over: Partial<ProgressCardRow> & { id: string }): ProgressCardRow => ({
   ref: `TER-${over.id}`, title: over.id, type: 'story', status: 'doing', position: 0, column_name: 'Fazendo',
-  started_at: null, done_at: null, active_seconds: 0, tab: null, subtasks: [], pull_requests: [], ...over,
+  started_at: null, done_at: null, active_seconds: 0, tab: null, subtasks: [], pull_requests: [], auto: false, ...over,
 });
 const sub = (id: string, status: 'todo' | 'done', extra: { done_at?: Date; tab?: ProgressTabRow } = {}) => ({ id, ref: `TER-${id}`, status, done_at: extra.done_at ?? null, tab: extra.tab ?? null });
 const epic = (cards: ProgressCardRow[], id = 'e1'): ProgressEpicRow => ({ id, ref: `TER-${id}`, title: `Épico ${id}`, project: { id: 'p1', key: 'TER', name: 'termhub' }, cards });
@@ -120,5 +120,89 @@ describe('an agent waiting on its own background work (TER-644)', () => {
     expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
     const { background: _b, ...older } = e.cards[0]!.agents![0]!;
     expect(agentOnCard.parse(older).background).toBe(false);
+  });
+});
+
+describe('an agent that ended its turn with a report (TER-972)', () => {
+  it('is sent as idle with finished: true, so an app that predates the state shows it stopped, and counts as idle', () => {
+    const e = aggregateEpic(epic([card({ id: '2', tab: tab('t1', 'finished') }), card({ id: '3', tab: tab('t2', 'idle') })]), true);
+    expect(e.cards[0]!.agents![0]).toMatchObject({ state: 'idle', finished: true, background: false, needs_you: false });
+    expect(e.cards[1]!.agents![0]).toMatchObject({ state: 'idle', finished: false });
+    expect(e.agents).toEqual({ working: 0, needs_you: 0, idle: 2 });
+    // the shared contract accepts it, and an older payload without the flag reads as false
+    expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
+    const { finished: _f, ...older } = e.cards[0]!.agents![0]!;
+    expect(agentOnCard.parse(older).finished).toBe(false);
+  });
+});
+
+describe('automatic tabs and the feed', () => {
+  it('flags the agent of a tab an automatic run started', () => {
+    const c = aggregateCard(card({ id: '2', tab: { ...tab('t1', 'working'), automatic: true }, subtasks: [sub('3', 'todo', { tab: tab('t2', 'working') })] }), true);
+    expect(c.agents?.map((a) => [a.tab_id, a.automatic])).toEqual([['t1', true], ['t2', false]]);
+    expect(agentOnCard.parse(c.agents![0]).automatic).toBe(true);
+  });
+
+  const row = (id: string, kind: FeedRow['event']['kind'], payload: FeedRow['event']['payload'] = {}, over: Partial<FeedRow> = {}): FeedRow => ({
+    event: { id, project_id: 'p1', task_id: 't1', run_id: 'r1', kind, payload, created_at: at(Number(id)).toISOString() },
+    ref: 'TER-9', epic: 'Épico', machine: 'jarvis', account: 'pessoal', tab_id: 'tab1', branch: 'auto/ter-9',
+    ...over,
+  });
+
+  it('keeps the order it is given (newest first) and carries the facts of each line', () => {
+    const feed = feedOf([row('3', 'merged', { pr: 7, url: 'https://x/pr/7' }), row('2', 'run_started', { branch: 'auto/other' }), row('1', 'release_ok', { workflow: 'npm', version: '1.2.3' })], 'pt-BR');
+    expect(feed.map((e) => e.id)).toEqual(['3', '2', '1']);
+    expect(feed[0]).toMatchObject({ kind: 'merged', ref: 'TER-9', pr: 7, url: 'https://x/pr/7', reason_text: null });
+    expect(feed[1]).toMatchObject({ machine: 'jarvis', account: 'pessoal', branch: 'auto/other', tab_id: 'tab1' });
+    expect(feed[2]).toMatchObject({ workflow: 'npm', version: '1.2.3' });
+  });
+
+  it('writes the escalation reason in the reader language, with a fallback for an unknown one', () => {
+    const [pt, en, unknown] = [feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'pt-BR')[0], feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'en')[0], feedOf([row('1', 'escalated', { reason: 'novo' })], 'pt-BR')[0]];
+    expect(pt.reason_text).toContain('confiança');
+    expect(en.reason_text).not.toBe(pt.reason_text);
+    expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
+  });
+
+  it('names the PR head a conflict escalation is about, and why it was sent (TER-1016)', () => {
+    const sha = 'a058efd2f842aecb5ba60bcf8f56ff51eb80ae6f';
+    const text = (payload: Record<string, unknown>, locale: 'pt-BR' | 'en' = 'pt-BR') => feedOf([row('1', 'escalated', { reason: 'conflict_cap', pr: 397, ...payload })], locale)[0].reason_text;
+    expect(text({ sha, attempts: 3 })).toBe('O PR continua com conflito em a058efd depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+    expect(text({ sha, cause: 'fixer_no_push' })).toContain('A correção do conflito em a058efd terminou sem push');
+    expect(text({ sha, cause: 'run_done_no_push' })).toContain('A execução terminou, mas o PR continua com conflito em a058efd');
+    expect(text({ sha, cause: 'run_done_no_push' }, 'en')).toContain('still in conflict at a058efd');
+    // an older event without a head keeps the reason's own text
+    expect(text({})).toBe('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+  });
+
+  it('gives a failed start its reason in the reader language, and no reason to any other block (TER-987)', () => {
+    const start = { code: 'LAUNCH_FAILED', stage: 'start', message: 'A máquina não respondeu', message_en: 'The machine did not answer' };
+    expect(feedOf([row('1', 'run_blocked', start)], 'pt-BR')[0].reason_text).toBe('A máquina não respondeu');
+    expect(feedOf([row('1', 'run_blocked', start)], 'en')[0].reason_text).toBe('The machine did not answer');
+    expect(feedOf([row('1', 'run_blocked', { code: 'LAUNCH_FAILED', stage: 'start', message: 'só pt' })], 'en')[0].reason_text).toBe('só pt');
+    expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
+  it('says a run_done took over a blocked run, in the reader language; any other run_done has no reason (TER-1049)', () => {
+    const adopted = { via: 'pull_request_after_blocked', pr_url: 'https://x/pr/9' };
+    expect(feedOf([row('1', 'run_done', adopted)], 'pt-BR')[0].reason_text).toBe('PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedOf([row('1', 'run_done', adopted)], 'en')[0].reason_text).toBe('PR opened after the block; automatic work follows it until the merge');
+    expect(feedOf([row('1', 'run_done', { via: 'pull_request' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
+  it('names the branch a merge landed on', () => {
+    expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');
+  });
+});
+
+describe('withUsage', () => {
+  const epic = (cards: string[]) => ({ id: 'e1', cards: cards.map((id) => ({ id, usage: null })), usage: null }) as unknown as EpicProgress;
+
+  it('puts each card its totals and the epic its own plus its cards\'; nothing priced stays null', () => {
+    const out = withUsage(epic(['c1', 'c2', 'c3']), new Map([['c1', { tokens: 10, cost_usd: null }], ['c2', { tokens: 5, cost_usd: 0.25 }], ['e1', { tokens: 1, cost_usd: 0.5 }]]));
+    expect(out.cards.map((c) => c.usage)).toEqual([{ tokens: 10, cost_usd: null }, { tokens: 5, cost_usd: 0.25 }, null]);
+    expect(out.usage).toEqual({ tokens: 16, cost_usd: 0.75 });
+    expect(withUsage(epic(['c1']), new Map([['c1', { tokens: 0, cost_usd: null }]])).usage).toEqual({ tokens: 0, cost_usd: null });
+    expect(withUsage(epic(['c9']), new Map([['c1', { tokens: 1, cost_usd: 1 }]])).usage).toBeNull();
   });
 });

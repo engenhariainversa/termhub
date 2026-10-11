@@ -7,20 +7,22 @@ import { syncProjectCi } from './sync.js';
 
 const pull = (over: Partial<GithubPull> = {}): GithubPull => ({
   number: 7, html_url: 'https://github.com/acme/app/pull/7', title: 'Painel TER-2', body: 'Also TER-3 and TER-1 and TER-99', state: 'open', draft: false,
-  merged_at: null, merge_commit_sha: null, head: { ref: 'TER-2-panel', sha: 'abc' }, ...over,
+  merged_at: null, merge_commit_sha: null, head: { ref: 'TER-2-panel', sha: 'abc' }, base: { ref: 'epic/TER-1-x' }, ...over,
 });
-const cards: Record<number, { id: string; type: string; parent_id: string | null }> = {
+const cards: Record<number, { id: string; type: string; parent_id: string | null; auto?: boolean; ref?: string; title?: string }> = {
   1: { id: 'epic', type: 'epic', parent_id: null },
   2: { id: 'card2', type: 'story', parent_id: null },
   3: { id: 'sub3', type: 'subtask', parent_id: 'card2' },
+  4: { id: 'epic4', type: 'epic', parent_id: null, auto: true, ref: 'TER-4', title: 'Big epic' },
+  5: { id: 'epic5', type: 'epic', parent_id: null, auto: false, ref: 'TER-5', title: 'Manual epic' },
 };
 
-function setup(over: { integrationOwner?: string | null; projectOwner?: string | null; provider?: string; repo?: object | null } = {}) {
+function setup(over: { integrationOwner?: string | null; projectOwner?: string | null; provider?: string; repo?: object | null; automation?: object } = {}) {
   const replaceLinks = vi.fn(async () => {});
   const updateCi = vi.fn(async () => {});
   const listWatched = vi.fn(async () => [] as unknown[]);
   const repos = {
-    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { repo: over.repo === undefined ? { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy.yml' } : over.repo, automation: { enabled: false, release_workflows: [], ...over.automation } } })) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', key: 'TER', owner_id: over.projectOwner === undefined ? 'u1' : over.projectOwner })) },
     integrations: {
       findById: vi.fn(async () => ({ id: 'i1', provider: over.provider ?? 'github', owner_id: over.integrationOwner === undefined ? 'u1' : over.integrationOwner })),
@@ -45,6 +47,45 @@ describe('syncProjectCi', () => {
     expect(await syncProjectCi(deps, 'p1')).toEqual({ pulls: 1, checked: 0 });
     expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc' }), ['card2']);
     expect(etags.get('p1')).toBe('e2');
+  });
+
+  it('stores the PR base branch', async () => {
+    const { deps, replaceLinks } = setup();
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ base_ref: 'epic/TER-1-x' }), ['card2']);
+  });
+
+  // Agentic board §10.2: the epic PR (head = an automatic epic's own branch) is linked to that epic alone.
+  it('with automation on, links a PR from an automatic epic\'s own branch to that epic only', async () => {
+    const { deps, replaceLinks, github } = setup({ automation: { enabled: true, epic_branch_pattern: 'epic/{ref}-{slug}' } });
+    const epicPull = pull({ title: 'TER-4: integrate epic/TER-4-big-epic', body: 'Part of TER-4\n- TER-2 Painel (#6)', head: { ref: 'epic/TER-4-big-epic', sha: 'e' }, base: { ref: 'main' } });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [epicPull] });
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: 'epic/TER-4-big-epic', base_ref: 'main' }), ['epic4']);
+  });
+
+  it('with automation off, links exactly as before: an epic PR naming only the epic is on no card, and card refs in a PR still link the cards', async () => {
+    const { deps, replaceLinks, github } = setup();
+    const epicPull = pull({ number: 9, title: 'TER-4: integrate epic/TER-4-big-epic', body: 'Part of TER-4.\n\nCard PRs merged into the epic branch: #6, #7.', head: { ref: 'epic/TER-4-big-epic', sha: 'e' }, base: { ref: 'main' } });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [epicPull, pull()] });
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 9 }), []);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2']);
+  });
+
+  it('never links an epic otherwise: automation off, a manual epic, or a head that is not the epic\'s own branch', async () => {
+    const on = { enabled: true, epic_branch_pattern: 'epic/{ref}-{slug}' };
+    const cases = [
+      { automation: { enabled: false, epic_branch_pattern: 'epic/{ref}-{slug}' }, head: 'epic/TER-4-big-epic' },
+      { automation: on, head: 'epic/TER-5-manual-epic' },
+      { automation: on, head: 'TER-4-big-epic-fix' },
+    ];
+    for (const c of cases) {
+      const { deps, replaceLinks, github } = setup({ automation: c.automation });
+      vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'x', body: 'TER-2', head: { ref: c.head, sha: 'e' } })] });
+      await syncProjectCi(deps, 'p1');
+      expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: c.head }), ['card2']);
+    }
   });
 
   it('calls replaceLinks with no cards when the PR names none, so old links go', async () => {
@@ -75,6 +116,61 @@ describe('syncProjectCi', () => {
     expect(github.listRuns).toHaveBeenCalledWith('tok', 'acme/app', 'm5');
   });
 
+  // Agentic board D22: a merged PR is also watched for the release workflows, only with automation on.
+  it('with automation on, follows the release workflows of a merged release-level PR and keeps watching a finished deploy', async () => {
+    const { deps, updateCi, listWatched, github } = setup({ automation: { enabled: true, release_workflows: ['publish-agent.yml'] } });
+    (deps.repos as unknown as { tasks: Record<string, unknown> }).tasks.findById = vi.fn(async () => ({ id: 't1', auto: false }));
+    listWatched.mockResolvedValue([{ repo: 'acme/app', number: 5, state: 'merged', head_sha: 'old', merge_commit_sha: 'm5', base_ref: 'main', task_id: 't1', deploy_state: 'passed', release_runs: [], changed_level: 'release' }]);
+    vi.mocked(github.listRuns).mockResolvedValue([{ id: 9, name: 'Publish', path: '.github/workflows/publish-agent.yml', status: 'in_progress', conclusion: null, html_url: 'r9', created_at: '2026-09-27T12:00:00Z' }]);
+    Object.assign(github, { fileAt: vi.fn(async () => null) });
+    await syncProjectCi(deps, 'p1');
+    expect(listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true, releases: true }, expect.any(Date));
+    expect(updateCi).toHaveBeenCalledWith('p1', 'acme/app', 5, {
+      deploy_state: 'none',
+      deploy_url: null,
+      release_runs: [{ workflow: 'publish-agent.yml', state: 'running', url: 'r9', version: null }],
+    });
+  });
+
+  it('TER-1004: a merged PR\'s deploy is reported on the card whose automatic run worked on its branch, not on a card it only cites', async () => {
+    const { deps, listWatched, github } = setup({ automation: { enabled: true } });
+    const events: Array<{ kind: string; task_id: string | null }> = [];
+    const branches: Record<string, string[]> = { cited: ['TER-9-other'], owner: ['TER-8-own'] };
+    Object.assign(deps.repos, {
+      tasks: { findById: vi.fn(async (id: string) => ({ id, ref: id, auto: true })) },
+      automationRuns: { branchesOfTask: vi.fn(async (id: string) => branches[id] ?? []) },
+      automationEvents: { insert: vi.fn(async (e: { kind: string; task_id: string | null }) => (events.push(e), { id: 'e', created_at: '', ...e })) },
+      chat: { findLatestActiveForProject: vi.fn(async () => undefined), getOrCreateForProject: vi.fn(async () => undefined) },
+      users: { findById: vi.fn(async () => ({ id: 'u1', locale: null })) },
+    });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: true });
+    const merged = { repo: 'acme/app', number: 5, state: 'merged', head_ref: 'TER-8-own', head_sha: 'old', merge_commit_sha: 'm5', base_ref: 'main', deploy_state: 'none', release_runs: [], changed_level: 'deploy' };
+    listWatched.mockResolvedValue([{ ...merged, task_id: 'cited' }, { ...merged, task_id: 'owner' }]);
+    vi.mocked(github.listRuns).mockResolvedValue([{ id: 3, name: 'Deploy', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'success', html_url: 'r3', created_at: '2026-09-27T12:00:00Z' }]);
+    await syncProjectCi(deps, 'p1');
+    expect(events).toEqual([expect.objectContaining({ kind: 'deploy_ok', task_id: 'owner' })]);
+  });
+
+  it('TER-1049: with automation on, looks for blocked runs to adopt right after linking the PRs; off, never', async () => {
+    const on = setup({ automation: { enabled: true } });
+    const blockedSince = vi.fn(async () => []);
+    Object.assign(on.deps.repos, { automationRuns: { blockedSince } });
+    await syncProjectCi(on.deps, 'p1');
+    expect(blockedSince).toHaveBeenCalledWith('p1', new Date(Date.parse('2026-09-27T12:00:00Z') - 7 * 24 * 3600_000));
+    expect(on.replaceLinks.mock.invocationCallOrder[0]).toBeLessThan(blockedSince.mock.invocationCallOrder[0]!);
+    const off = setup();
+    const notCalled = vi.fn(async () => []);
+    Object.assign(off.deps.repos, { automationRuns: { blockedSince: notCalled } });
+    await syncProjectCi(off.deps, 'p1');
+    expect(notCalled).not.toHaveBeenCalled();
+  });
+
+  it('with automation off, never reads release workflows', async () => {
+    const { deps, listWatched } = setup({ automation: { release_workflows: ['publish-agent.yml'] } });
+    await syncProjectCi(deps, 'p1');
+    expect(listWatched).toHaveBeenCalledWith('p1', expect.objectContaining({ releases: false }), expect.any(Date));
+  });
+
   it('skips a project without repo, and one whose integration is not the owner’s GitHub', async () => {
     expect(await syncProjectCi(setup({ repo: null }).deps, 'p1')).toEqual({ skipped: 'no_repo' });
     expect(await syncProjectCi(setup({ integrationOwner: 'u2' }).deps, 'p1')).toEqual({ skipped: 'not_allowed' });
@@ -84,10 +180,10 @@ describe('syncProjectCi', () => {
   it('watches only the current repo, and merged PRs only when a deploy workflow is set', async () => {
     const withDeploy = setup();
     await syncProjectCi(withDeploy.deps, 'p1');
-    expect(withDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true }, new Date('2026-09-27T12:00:00Z'));
+    expect(withDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/app', includeMerged: true, releases: false }, new Date('2026-09-27T12:00:00Z'));
     const noDeploy = setup({ repo: { integration_id: 'i1', full_name: 'acme/new', deploy_workflow: null } });
     await syncProjectCi(noDeploy.deps, 'p1');
-    expect(noDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/new', includeMerged: false }, new Date('2026-09-27T12:00:00Z'));
+    expect(noDeploy.listWatched).toHaveBeenCalledWith('p1', { repo: 'acme/new', includeMerged: false, releases: false }, new Date('2026-09-27T12:00:00Z'));
   });
 
   it('never matches two missing owners', async () => {
@@ -109,5 +205,31 @@ describe('syncProjectCi', () => {
     expect(replaceLinks).not.toHaveBeenCalled();
     await syncProjectCi(deps, 'p1');
     expect(ciErrorOf('p1')).toBeNull();
+  });
+
+  // Agentic board §10.1 and Review Focus 5: the merge executor runs after the sync's writes, and only where
+  // the project turned automation on.
+  it('a project with automation off never calls the merge executor', async () => {
+    const { deps } = setup();
+    const merge = vi.fn(async () => {});
+    await syncProjectCi({ ...deps, merge }, 'p1');
+    expect(merge).not.toHaveBeenCalled();
+  });
+
+  it('a project with automation on runs the merge executor after the CI writes', async () => {
+    const { deps, updateCi, listWatched } = setup({ automation: { enabled: true } });
+    listWatched.mockResolvedValue([{ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc', merge_commit_sha: null }]);
+    const merge = vi.fn(async () => {});
+    await syncProjectCi({ ...deps, merge }, 'p1');
+    expect(merge).toHaveBeenCalledWith('p1');
+    expect(updateCi.mock.invocationCallOrder[0]).toBeLessThan(merge.mock.invocationCallOrder[0]!);
+  });
+
+  it('a failed sync does not run the merge executor', async () => {
+    const { deps, github } = setup({ automation: { enabled: true } });
+    vi.mocked(github.listPulls).mockRejectedValueOnce(new GithubCiError('auth', 401));
+    const merge = vi.fn(async () => {});
+    await expect(syncProjectCi({ ...deps, merge }, 'p1')).rejects.toBeInstanceOf(GithubCiError);
+    expect(merge).not.toHaveBeenCalled();
   });
 });

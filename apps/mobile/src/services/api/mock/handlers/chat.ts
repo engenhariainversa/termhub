@@ -7,6 +7,7 @@ import { randomId } from '../../../crypto/random';
 import {
   chatGrantListQuery,
   chatMemoryPatchBody,
+  decisionChallengesBody,
   isBoardGrantable,
   isTabGrantable,
   isTerminalGrantable,
@@ -16,6 +17,8 @@ import {
   mobileMessageBody,
   replyExcerpt,
   resetBody,
+  tabQuestionReplyText,
+  type ReplyCardRef,
   projectFavoriteBody,
   setHostBody,
   standingKindOf,
@@ -143,12 +146,27 @@ function bindAttachments(state: MockState, conversationId: string, ids: string[]
   return rows as MockAttachment[];
 }
 
+const replyUnavailable = () => new WireError(409, 'REPLY_UNAVAILABLE', 'A mensagem citada não está mais disponível. Cancele a citação e envie de novo.');
+
+/** The server's rule for `reply_to_card` (TER-849): a gate card or a tab's question of this conversation. */
+function replyCardTargetOf(state: MockState, conversationId: string, card: ReplyCardRef): NonNullable<MockMessage['reply_to']> {
+  if (card.kind === 'action') {
+    const action = state.actions.get(card.id);
+    if (!action || action.conversation_id !== conversationId) throw replyUnavailable();
+    return { id: null, role: 'assistant', excerpt: replyExcerpt(action.summary), card };
+  }
+  const question = state.tabQuestions.find((q) => q.id === card.id && q.conversation_id === conversationId);
+  if (!question) throw replyUnavailable();
+  return { id: null, role: 'assistant', excerpt: replyExcerpt(tabQuestionReplyText(question)), card };
+}
+
 /** The server's rule for `reply_to_id` (TER-447): a message of this conversation with words or files. */
-function replyTargetOf(state: MockState, conversationId: string, id: string | undefined): NonNullable<MockMessage['reply_to']> | null {
+function replyTargetOf(state: MockState, conversationId: string, id: string | undefined, card?: ReplyCardRef): NonNullable<MockMessage['reply_to']> | null {
+  if (card) return replyCardTargetOf(state, conversationId, card);
   if (id === undefined) return null;
   const row = state.messages.get(conversationId)?.find((m) => m.id === id);
   const names = (row?.attachments ?? []).map((a) => a.name);
-  if (!row || (!row.text && names.length === 0)) throw new WireError(409, 'REPLY_UNAVAILABLE', 'A mensagem citada não está mais disponível. Cancele a citação e envie de novo.');
+  if (!row || (!row.text && names.length === 0)) throw replyUnavailable();
   return { id: row.id, role: row.role, excerpt: replyExcerpt(row.text, names) };
 }
 
@@ -319,8 +337,16 @@ function createTabQuestion(state: MockState, now: number, conversationId: string
 
 /** What `GET …/screen` shows: the card as the tab would draw it. */
 function tabQuestionScreenText(q: MockTabQuestion): string {
-  return q.kind === 'choice' ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.` : 'Bash command\n  npm test\n Do you want to proceed?\n ❯ 1. Yes\n   2. No';
+  return q.kind === 'choice'
+    ? `${q.payload.questions[0]!.question}\n❯ 1. Postgres\n  2. SQLite\n  3. Type something.`
+    : `Bash command\n  npm test\n Do you want to proceed?\n${MOCK_PERMISSION_OPTIONS.map((o) => `${o.number === 1 ? ' ❯' : '  '} ${o.number}. ${o.label}`).join('\n')}`;
 }
+/** The options the server reads off that screen (TER-995). */
+const MOCK_PERMISSION_OPTIONS = [
+  { number: 1, label: 'Yes', summary: 'Yes', allow: true, highlight: false },
+  { number: 2, label: "Yes, and don't ask again for npm test commands", summary: "Yes, and don't ask again for npm test commands", allow: true, highlight: true },
+  { number: 3, label: 'No', summary: 'No', allow: false, highlight: false },
+];
 
 // --- tab suggestions (spec 2026-09-25 tab suggestions §6) -------------------------------------------
 
@@ -682,7 +708,7 @@ function matchesLessonQuery(l: MockLesson, q: string): boolean {
 function chatMemoryView(state: MockState): TChatMemory {
   // `available` has no fixture for "false" (no server config to mirror in the mock) — every mock
   // run behaves as if embeddings were configured, like a dev server normally would be.
-  return { enabled: state.chatMemoryEnabled, autodecide: state.chatAutodecideEnabled, codex_replies: state.chatCodexRepliesEnabled, available: true, count: state.decisions.length, notes: state.notes.length };
+  return { enabled: state.chatMemoryEnabled, autodecide: state.chatAutodecideEnabled, codex_replies: state.chatCodexRepliesEnabled, context_limit: state.chatContextLimit, available: true, count: state.decisions.length, notes: state.notes.length };
 }
 
 // --- routes ---------------------------------------------------------------------------------
@@ -692,7 +718,7 @@ function chatMemoryView(state: MockState): TChatMemory {
  * without this attempt counting again. The challenge must be a `decision` one bound to this action,
  * and is spent either way; the proof signs the decision word, so one made for `approve` is refused
  * for `approve_tab`. A bad proof counts a PIN failure and throws `PIN_INVALID`. */
-function checkDecisionProof(
+export function checkDecisionProof(
   state: MockState,
   device: MockDevice,
   actionId: string,
@@ -769,6 +795,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
         tab_questions: state.tabQuestions.filter((q) => q.conversation_id === conversation.id).map(tabQuestionView),
         tab_suggestions: state.tabSuggestions.filter((s) => s.conversation_id === conversation.id).map(tabSuggestionView),
         tab_limits: state.tabLimits.filter((l) => l.conversation_id === conversation.id).map(tabLimitView),
+        context_limit: state.chatContextLimit,
         subagents: state.subagents.filter((s) => s.conversation_id === conversation.id).map(subagentView),
         host: hostFor(conversation),
       },
@@ -816,7 +843,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const project = projectId ? state.projects.get(projectId) : undefined;
     const userMessageId = randomId(10);
     const assistantMessageId = randomId(10);
-    const replyTo = replyTargetOf(state, conversation.id, body.reply_to_id);
+    const replyTo = replyTargetOf(state, conversation.id, body.reply_to_id, body.reply_to_card);
     const attachments = bindAttachments(state, conversation.id, body.attachment_ids ?? [], userMessageId);
 
     scheduleStream({
@@ -871,6 +898,22 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
   router.route('GET', '/api/m/v1/chat/attachments/:id/status', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     return { status: 200, body: { attachment: attachmentView(findAttachment(state, ctx.params.id!)) } };
+  });
+
+  /** "Tentar de novo" on an unavailable transcription (TER-1035): back to pending, then ready like an upload. */
+  router.route('POST', '/api/m/v1/chat/attachments/:id/retry', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const a = findAttachment(state, ctx.params.id!);
+    if (a.status !== 'failed' || a.error_code !== 'TRANSCRIPTION_UNAVAILABLE') throw new WireError(409, 'CONFLICT', 'Este anexo não pode ser processado de novo');
+    Object.assign(a, { status: 'pending', error_code: null, meta: null });
+    broadcast(state, attachmentEvent(a));
+    setTimeout(() => {
+      if (state.attachments.get(a.id) !== a) return;
+      a.status = 'ready';
+      a.meta = metaFor(a.kind);
+      broadcast(state, attachmentEvent(a));
+    }, ATTACHMENT_EXTRACT_MS);
+    return { status: 200, body: { attachment: attachmentView(a) } };
   });
 
   // The download itself is not mocked: the phone shows images through `<Image>` against the real host and
@@ -1008,6 +1051,21 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { project_grant: projectGrant } };
   });
 
+  /** The decision challenges of a grouped confirmation in one authenticated call, like the server
+   * (TER-530): one per action, each bound to its own action, consumed by `checkDecisionProof`. */
+  router.route('POST', '/api/m/v1/chat/actions/challenges', (ctx) => {
+    const { device } = verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const { action_ids } = decisionChallengesBody.parse(ctx.body);
+    const now = ctx.now();
+    const expires_at = new Date(now + 60_000).toISOString();
+    const challenges = action_ids.map((actionId) => {
+      const challenge = randomId(24);
+      state.challenges.set(challenge, { deviceId: device.id, purpose: 'decision', actionId, expiresAt: now + 60_000, used: false });
+      return { action_id: actionId, challenge, expires_at };
+    });
+    return { status: 200, body: { challenges } };
+  });
+
   /** A grouped confirmation, like the server: ids of two conversations are a 400; every approval
    * still pending is proven before anything is decided (a wrong PIN leaves the whole batch pending);
    * then each row is decided with its own `decision` event. Nothing decided at all is a 409. */
@@ -1140,7 +1198,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     const question = state.tabQuestions.find((q) => q.id === ctx.params.id);
     if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
     if (question.status !== 'open') throw new WireError(409, 'TAB_PROMPT_CHANGED', 'A aba já não mostra esta pergunta: nada foi enviado.');
-    return { status: 200, body: { text: tabQuestionScreenText(question) } };
+    return { status: 200, body: { text: tabQuestionScreenText(question), options: question.kind === 'permission' ? MOCK_PERMISSION_OPTIONS : [] } };
   });
 
   /** Sends a tab's suggestion (no PIN): 404 unknown, 409 once it is not open. */
@@ -1259,6 +1317,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     if (body.enabled !== undefined) state.chatMemoryEnabled = body.enabled;
     if (body.autodecide !== undefined) state.chatAutodecideEnabled = body.autodecide;
     if (body.codex_replies !== undefined) state.chatCodexRepliesEnabled = body.codex_replies;
+    if (body.context_limit !== undefined) state.chatContextLimit = body.context_limit;
     return { status: 200, body: chatMemoryView(state) };
   });
 

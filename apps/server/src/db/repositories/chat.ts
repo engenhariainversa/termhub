@@ -1,4 +1,4 @@
-import type { ChatAttachment, ChatNotice } from '@termhub/mobile-api';
+import type { ChatAttachment, ChatNotice, ReplyCardRef } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma, type ChatConversation as PrismaConversation, type ChatMessage as PrismaMessage } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
@@ -26,6 +26,9 @@ export interface ChatConversation {
   context_tokens: number | null;
   /** The model's context window as that turn reported it; null when the CLI did not say. */
   context_window: number | null;
+  /** When that session was last compacted ("Compactar" or the CLI's auto-compact, TER-1038); null
+   *  when it never was, and again once the session is dropped. */
+  context_compacted_at: string | null;
   last_message_at: string | null;
   created_at: string;
 }
@@ -34,10 +37,11 @@ export interface ChatConversation {
 export interface ChatContextUsage {
   tokens: number;
   window: number | null;
+  compacted_at: string | null;
 }
 
 /** What dropping a CLI session drops with it: the fill belonged to that session. */
-const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: null } as const;
+const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: null, contextCompactedAt: null } as const;
 
 /**
  * What the chat says about an answer besides its text (TER-588), in the one shape the app's contract
@@ -49,11 +53,12 @@ const NO_SESSION = { cliSessionId: null, contextTokens: null, contextWindow: nul
 export type { ChatNotice };
 
 /** What a message answers (TER-447): the snapshot taken when it was sent. `id` is null once the
- *  quoted row was deleted. */
+ *  quoted row was deleted, and on a reply to a card (TER-849), which names the card in `card`. */
 export interface ChatReplyRef {
   id: string | null;
   role: ChatRole;
   excerpt: string;
+  card?: ReplyCardRef;
 }
 
 export interface ChatMessage {
@@ -85,9 +90,13 @@ const mapConversation = (c: PrismaConversation): ChatConversation => ({
   review_mode: c.reviewMode,
   context_tokens: c.contextTokens,
   context_window: c.contextWindow,
+  context_compacted_at: c.contextCompactedAt?.toISOString() ?? null,
   last_message_at: c.lastMessageAt?.toISOString() ?? null,
   created_at: c.createdAt.toISOString(),
 });
+
+const replyCardOf = (m: PrismaMessage): { card?: ReplyCardRef } =>
+  m.replyToCardId !== null && (m.replyToCardKind === 'action' || m.replyToCardKind === 'tab_question') ? { card: { kind: m.replyToCardKind, id: m.replyToCardId } } : {};
 
 const mapMessage = (m: PrismaMessage): ChatMessage => ({
   id: m.id,
@@ -98,7 +107,7 @@ const mapMessage = (m: PrismaMessage): ChatMessage => ({
   error_code: m.errorCode,
   ...(m.notice ? { notice: m.notice as ChatNotice } : {}),
   created_at: m.createdAt.toISOString(),
-  ...(m.replyToRole === null ? {} : { reply_to: { id: m.replyToId, role: m.replyToRole as ChatRole, excerpt: m.replyToExcerpt ?? '' } }),
+  ...(m.replyToRole === null ? {} : { reply_to: { id: m.replyToId, role: m.replyToRole as ChatRole, excerpt: m.replyToExcerpt ?? '', ...replyCardOf(m) } }),
 });
 
 export class ChatRepository {
@@ -146,6 +155,15 @@ export class ChatRepository {
     return row ? mapConversation(row) : undefined;
   }
 
+  /** The user's most recently active conversation in any scope (a test push's tap lands there, TER-913). */
+  async findLatestActiveForUser(userId: string): Promise<ChatConversation | undefined> {
+    const row = await this.db.chatConversation.findFirst({
+      where: { userId, tabId: null, archivedAt: null },
+      orderBy: [{ lastMessageAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? mapConversation(row) : undefined;
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({ where: { id, userId } });
     return row ? mapConversation(row) : undefined;
@@ -154,6 +172,26 @@ export class ChatRepository {
   /** "Nova conversa": the row and its transcript stay, but it stops being the scope's active one. */
   async archive(id: string): Promise<void> {
     await this.db.chatConversation.updateMany({ where: { id, archivedAt: null }, data: { archivedAt: new Date() } });
+  }
+
+  /**
+   * "Apagar conversa" (TER-743): the row goes, and its transcript, actions, attachments, subagents and
+   * grants cascade with it. The memory rows indexed from its messages and decided actions point at them
+   * without a foreign key, so they go here, in the same transaction. Attachment files left on the volume
+   * lose their row and the hourly sweep removes them. Decisions on tab question cards stay (their
+   * conversation is nulled): they are the person's answers, forgotten from "Memória do chat".
+   */
+  async deleteConversation(id: string, userId: string): Promise<boolean> {
+    return this.db.$transaction(async (tx) => {
+      const [messages, actions] = await Promise.all([
+        tx.chatMessage.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+        tx.chatAction.findMany({ where: { conversationId: id, conversation: { userId } }, select: { id: true } }),
+      ]);
+      if (messages.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'message', sourceId: { in: messages.map((m) => m.id) } } });
+      if (actions.length) await tx.memoryItem.deleteMany({ where: { ownerId: userId, kind: 'action', sourceId: { in: actions.map((a) => a.id) } } });
+      const { count } = await tx.chatConversation.deleteMany({ where: { id, userId } });
+      return count > 0;
+    });
   }
 
   /** A host change moves every project conversation too: their CLI sessions live in the old host's
@@ -181,6 +219,14 @@ export class ChatRepository {
     return rows.map(mapMessage);
   }
 
+  /** The person's own messages (`role: 'user'`) among `ids`, in any of `userId`'s conversations. An id of
+   *  someone else's, an assistant's or a missing message is dropped (TER-851: `send_input`'s `on_behalf_of`). */
+  async findUserMessagesForUser(ids: string[], userId: string): Promise<ChatMessage[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.chatMessage.findMany({ where: { id: { in: ids }, role: 'user', conversation: { userId } } });
+    return rows.map(mapMessage);
+  }
+
   /** A null session also clears the context fill: it described the session that is gone. */
   async setCliSession(id: string, sessionId: string | null): Promise<void> {
     await this.db.chatConversation.update({ where: { id }, data: sessionId === null ? NO_SESSION : { cliSessionId: sessionId } });
@@ -188,13 +234,14 @@ export class ChatRepository {
 
   /** Stores how full the session's context is (TER-315). A turn that did not report the window keeps
    *  the one stored before. Answers the stored pair. */
-  async setContext(id: string, usage: { tokens: number; window?: number | null }): Promise<ChatContextUsage> {
+  /** `compacted`: this fill is what a compaction left, so it also stamps `context_compacted_at`. */
+  async setContext(id: string, usage: { tokens: number; window?: number | null; compacted?: boolean }): Promise<ChatContextUsage> {
     const row = await this.db.chatConversation.update({
       where: { id },
-      data: { contextTokens: usage.tokens, ...(usage.window != null ? { contextWindow: usage.window } : {}) },
-      select: { contextTokens: true, contextWindow: true },
+      data: { contextTokens: usage.tokens, ...(usage.window != null ? { contextWindow: usage.window } : {}), ...(usage.compacted ? { contextCompactedAt: new Date() } : {}) },
+      select: { contextTokens: true, contextWindow: true, contextCompactedAt: true },
     });
-    return { tokens: row.contextTokens ?? usage.tokens, window: row.contextWindow };
+    return { tokens: row.contextTokens ?? usage.tokens, window: row.contextWindow, compacted_at: row.contextCompactedAt?.toISOString() ?? null };
   }
 
   /**
@@ -269,7 +316,19 @@ export class ChatRepository {
     await this.db.chatConversation.update({ where: { id }, data: { aiAccountId } });
   }
 
-  async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string; role: ChatRole; excerpt: string } }): Promise<ChatMessage> {
+  /** The person typed in this conversation now (TER-530): see `lastTypedAt`. */
+  async markTyped(id: string, at = new Date()): Promise<void> {
+    await this.db.chatConversation.update({ where: { id }, data: { lastTypedAt: at } });
+  }
+
+  /** When the person last typed here, or null. Re-injected decisions and wakes are stored as user
+   * messages too, so this — set only by `ChatService.start` — is what tells a person's own words apart. */
+  async lastTypedAt(id: string): Promise<string | null> {
+    const row = await this.db.chatConversation.findUnique({ where: { id }, select: { lastTypedAt: true } });
+    return row?.lastTypedAt?.toISOString() ?? null;
+  }
+
+  async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string | null; role: ChatRole; excerpt: string; card?: ReplyCardRef } }): Promise<ChatMessage> {
     const [message] = await this.db.$transaction([
       this.db.chatMessage.create({
         data: {
@@ -280,6 +339,7 @@ export class ChatRepository {
           usage: (input.usage ?? null) as never,
           errorCode: input.error_code ?? null,
           ...(input.reply_to ? { replyToId: input.reply_to.id, replyToRole: input.reply_to.role, replyToExcerpt: input.reply_to.excerpt } : {}),
+          ...(input.reply_to?.card ? { replyToCardKind: input.reply_to.card.kind, replyToCardId: input.reply_to.card.id } : {}),
         },
       }),
       this.db.chatConversation.update({ where: { id: input.conversation_id }, data: { lastMessageAt: new Date() } }),

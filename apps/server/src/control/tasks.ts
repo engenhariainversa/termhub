@@ -1,8 +1,11 @@
 import { config } from '../config.js';
+import { dispatchTriggers } from '../automation/events.js';
 import { TaskRuleError } from '../db/repositories/tasks.js';
 import type { ColumnCategory, Task, TaskColumn, TaskStatus, TaskType, TaskWithSubtasks } from '../db/repositories/types.js';
 import { readTicketLink } from '../integrations/ticket-link.js';
 import { ControlError, type ControlContext } from './context.js';
+import { recordTagChange, viaOf } from '../automation/setup-tools.js';
+import { msg } from '../i18n/index.js';
 
 /** Field limits, the same the REST routes enforce (`routes/tasks.ts`). */
 export const TASK_TITLE_MAX = 300;
@@ -35,6 +38,8 @@ export interface TaskOut {
   epic_id: string | null;
   column_id: string | null;
   tab_id: string | null;
+  /** tagged "automático" (eligible for automatic work) */
+  auto: boolean;
   /** the external ticket this card came from (Linear/Jira/GitHub), or null */
   ticket: { key: string; url: string; state: string; provider: string } | null;
   created_at: string;
@@ -70,7 +75,7 @@ export function boardUrl(projectId: string): string {
 
 export const taskOut = (t: Task): TaskOut => ({
   id: t.id, project_id: t.project_id, type: t.type, ref: t.ref, url: cardUrl(t.ref), title: t.title, description: t.description, status: t.status,
-  position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id,
+  position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id, auto: t.auto,
   ticket: (() => { const l = readTicketLink(t.external_ref); return l ? { key: l.key, url: l.url, state: l.state, provider: l.provider } : null; })(),
   created_at: t.created_at, updated_at: t.updated_at,
 });
@@ -82,7 +87,7 @@ export async function rules<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (e) {
-    if (e instanceof TaskRuleError) throw new ControlError(e.code, e.message);
+    if (e instanceof TaskRuleError) throw new ControlError(e.code, e.localized);
     throw e;
   }
 }
@@ -108,12 +113,16 @@ export async function listTasks(
 
 export async function createTask(
   ctx: ControlContext,
-  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; subtasks?: SubtaskIn[] },
+  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: SubtaskIn[] },
 ): Promise<{ task: TaskTreeOut; board_url: string }> {
   await ctx.scoped.project(input.project_id);
   const task = await rules(() =>
-    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }, input.subtasks ?? []),
+    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto }, input.subtasks ?? []),
   );
+  if (task.auto) {
+    await recordTagChange(ctx.repos, task, true, 1, viaOf(ctx));
+    dispatchTriggers.poke('tag_set');
+  }
   return { task: outTree(task), board_url: boardUrl(input.project_id) };
 }
 
@@ -125,15 +134,26 @@ export async function addSubtasks(ctx: ControlContext, input: { task_id: string;
 
 export async function updateTask(
   ctx: ControlContext,
-  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string },
+  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
-  if ([input.title, input.description, input.status, input.type, input.epic_id].every((v) => v === undefined)) {
-    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type ou epic_id');
+  const fields = [input.title, input.description, input.status, input.type, input.epic_id];
+  if (fields.every((v) => v === undefined) && input.auto === undefined) {
+    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto');
   }
-  const updated = await rules(() =>
-    ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }),
-  );
+  let updated: Task | undefined = task;
+  if (fields.some((v) => v !== undefined)) {
+    updated = await rules(() =>
+      ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }),
+    );
+  }
+  if (updated && input.auto !== undefined) {
+    // After the fields, so an epic change and the tag in one call end up consistent.
+    const { changed } = await rules(() => ctx.repos.tasks.setAuto(task.id, input.auto!));
+    await recordTagChange(ctx.repos, task, input.auto, changed, viaOf(ctx));
+    if (input.auto) dispatchTriggers.poke('tag_set');
+    updated = await ctx.repos.tasks.findById(task.id);
+  }
   if (!updated) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');
   return { task: taskOut(updated), board_url: boardUrl(task.project_id) };
 }
@@ -151,16 +171,22 @@ export async function moveTask(
   return { task: taskOut(moved), board_url: boardUrl(task.project_id) };
 }
 
-const subtaskCount = (n: number) => (n === 1 ? '1 subtarefa' : `${n} subtarefas`);
-
 /** Destructive and cascading, so it needs `confirm: true`; the refusal spells out what would go. */
 export async function deleteTask(ctx: ControlContext, input: { task_id: string; confirm?: boolean }): Promise<{ deleted: true; task_id: string; deleted_subtasks: number; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
   const children = await ctx.repos.tasks.childIds(task.id);
   if (!input.confirm) {
-    const kind = task.parent_id ? 'a subtarefa' : 'a tarefa';
-    const what = children.length ? `${kind} "${task.title}" e ${subtaskCount(children.length)}` : `${kind} "${task.title}"`;
-    throw new ControlError('CONFIRM_REQUIRED', `Isso exclui ${what}; repita com confirm: true para confirmar`);
+    const vars = { title: task.title, count: children.length };
+    throw new ControlError(
+      'CONFIRM_REQUIRED',
+      task.parent_id
+        ? children.length
+          ? msg('Isso exclui a subtarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar', vars)
+          : msg('Isso exclui a subtarefa "{{title}}"; repita com confirm: true para confirmar', vars)
+        : children.length
+          ? msg('Isso exclui a tarefa "{{title}}" e {{count}} subtarefas; repita com confirm: true para confirmar', vars)
+          : msg('Isso exclui a tarefa "{{title}}"; repita com confirm: true para confirmar', vars),
+    );
   }
   // Tickets point at tasks by id with no FK: unlink the whole subtree so they show as "não importado" again.
   for (const id of [task.id, ...children]) await ctx.repos.tickets.unlinkTask(id);

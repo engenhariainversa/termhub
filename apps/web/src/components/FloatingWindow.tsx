@@ -1,5 +1,6 @@
 import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import type { Rect } from '../lib/layout';
+import { useTranslation } from '../i18n';
 
 export const FLOATING_TITLE_HEIGHT = 24;
 const RESIZE_HANDLE_SIZE = 16;
@@ -24,6 +25,7 @@ interface Props {
  * wrapper). Keeping the handle outside the frame, at the same stacking level, lets its `z-30` win.
  */
 export function FloatingWindow({ rect, title, onMove, onResize, onDock, onFocus, children }: Props) {
+  const { t } = useTranslation();
   const drag = useRef<{ dx: number; dy: number } | null>(null);
   const resize = useRef<{ x0: number; y0: number; w0: number; h0: number } | null>(null);
 
@@ -80,15 +82,15 @@ export function FloatingWindow({ rect, title, onMove, onResize, onDock, onFocus,
             📱
           </span>
           <span className="truncate text-fg">{title}</span>
-          <button className="ml-auto rounded px-1 hover:bg-bg-4 hover:text-fg" onPointerDown={(e) => e.stopPropagation()} onClick={onDock} title="Encaixar no painel focado">
-            Encaixar
+          <button className="ml-auto rounded px-1 hover:bg-bg-4 hover:text-fg" onPointerDown={(e) => e.stopPropagation()} onClick={onDock} title={t('Encaixar no painel focado')}>
+            {t('Encaixar')}
           </button>
           <button
             className="rounded px-1 hover:bg-bg-4 hover:text-fg"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={onDock}
-            title="Encaixar (fechar a janela)"
-            aria-label="Encaixar"
+            title={t('Encaixar (fechar a janela)')}
+            aria-label={t('Encaixar')}
           >
             ✕
           </button>
@@ -109,7 +111,7 @@ export function FloatingWindow({ rect, title, onMove, onResize, onDock, onFocus,
         onPointerUp={endResize}
         onPointerCancel={endResize}
         role="separator"
-        aria-label="Redimensionar"
+        aria-label={t('Redimensionar')}
       />
     </>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type HTMLAttributes } from 'react';
+import { useTranslation } from '../i18n';
 import type { Section } from '../lib/project-groups-model';
 
 export const GROUP_NAME_MAX = 40;
@@ -23,6 +24,7 @@ interface Props {
 
 /** A collapsible sidebar section header: chevron, name, count and, for custom groups, rename/delete. */
 export function GroupHeader({ section, name, collapsed, onToggle, editable, onRename, onDelete, onEditEnd, startEditing, headerDragProps }: Props) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(section.label);
   // Enter and blur both save: whichever comes first ends the edit, the other is ignored
@@ -47,7 +49,7 @@ export function GroupHeader({ section, name, collapsed, onToggle, editable, onRe
     onEditEnd?.();
   };
 
-  const label = `${collapsed ? 'Expandir' : 'Recolher'} ${name ?? section.label}`;
+  const label = collapsed ? t('Expandir {{name}}', { name: name ?? section.label }) : t('Recolher {{name}}', { name: name ?? section.label });
   return (
     <div
       {...headerDragProps}
@@ -68,7 +70,7 @@ export function GroupHeader({ section, name, collapsed, onToggle, editable, onRe
       {editing ? (
         <input
           className="input min-w-0 flex-1 px-1 py-0 text-xs"
-          aria-label="Nome do grupo"
+          aria-label={t('Nome do grupo')}
           value={draft}
           maxLength={GROUP_NAME_MAX}
           autoFocus
@@ -94,10 +96,10 @@ export function GroupHeader({ section, name, collapsed, onToggle, editable, onRe
       )}
       {editable && !editing && (
         <span className="hidden shrink-0 items-center gap-0.5 group-focus-within/g:flex group-hover/g:flex">
-          <button type="button" className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg" title="Renomear grupo" onClick={begin}>
+          <button type="button" className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-fg" title={t('Renomear grupo')} onClick={begin}>
             ✎
           </button>
-          <button type="button" className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-danger" title="Excluir grupo" onClick={onDelete}>
+          <button type="button" className="rounded px-1 text-xs text-fg-dim hover:bg-bg-4 hover:text-danger" title={t('Excluir grupo')} onClick={onDelete}>
             ✕
           </button>
         </span>

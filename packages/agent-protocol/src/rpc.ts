@@ -11,12 +11,53 @@ export const pasteName = z.string().min(1).max(255).regex(/^[A-Za-z0-9._-]+$/);
  *  `docs/lessons/README.md` (the format's own doc, not a lesson). */
 export const DOC_PATH_RE = /^docs\/(?:superpowers\/(?:specs|plans)\/[A-Za-z0-9._-]{1,200}\.md|lessons\/(?!README\.md$)[A-Za-z0-9._-]{1,200}\.md)$/;
 export const docPath = z.string().regex(DOC_PATH_RE);
+/** An npm `dist.integrity` in SHA-512 form: `sha512-` plus the base64 of the 64-byte digest. */
+export const SHA512_INTEGRITY_RE = /^sha512-[A-Za-z0-9+/]{86}==$/;
 export const aiProvider = z.enum(['claude', 'chatgpt', 'gemini', 'antigravity']);
+
+/** One usage window of an AI account (`ai.usage`); mirrors @termhub/machine-ops AiUsageWindow. */
+export const aiUsageWindow = z.object({
+  key: z.string().max(200),
+  label: z.string().max(200),
+  utilization: z.number().min(0).max(100),
+  resets_at: z.string().max(64).nullable(),
+  model: z.string().max(64).optional(),
+});
+/** `ai.usage` answer; mirrors @termhub/machine-ops AiUsageResult. Never carries the credential. */
+export const aiUsageResult = z.object({
+  ok: z.boolean(),
+  plan: z.string().max(100).nullable(),
+  windows: z.array(aiUsageWindow).max(50),
+  error: z.string().max(500).nullable(),
+  hint: z.string().max(500).nullable(),
+  rate_limited: z.boolean().optional(),
+  retry_after_ms: z.number().min(0).nullable().optional(),
+});
+
+/** `ai.login.status` answer (TER-1047). */
+export const aiLoginStatusResult = z.object({ supported: z.boolean(), logged_in: z.boolean() });
+export type AiLoginStatusResult = z.infer<typeof aiLoginStatusResult>;
+/**
+ * `ai.login.start` answer: the page to open and, for a device flow, the code to type there.
+ * `logged_in: true` (since agent 0.27.0, TER-1054): the CLI finished the login on its own (the machine's
+ * browser) and its status confirms it; `url` is null and there is nothing left to do. Older agents leave
+ * it out, which reads as false.
+ */
+export const aiLoginStartResult = z.object({
+  url: z.string().min(1).max(4000).nullable(),
+  user_code: z.string().max(64).nullable(),
+  needs_code: z.boolean(),
+  logged_in: z.boolean().default(false),
+});
+export type AiLoginStartResult = z.infer<typeof aiLoginStartResult>;
+/** `ai.login.submit` answer. `message`: why it did not finish, never containing the submitted code. */
+export const aiLoginSubmitResult = z.object({ logged_in: z.boolean(), message: z.string().max(500).nullable() });
+export type AiLoginSubmitResult = z.infer<typeof aiLoginSubmitResult>;
 
 /** A tab id, as minted by the server (see @termhub/machine-ops TAB_ID_RE, which this must match). */
 export const TAB_ID_RE = /^[a-z0-9]{1,64}$/;
 export const tabId = z.string().regex(TAB_ID_RE);
-export const tabMcpFile = z.enum(['mcp.json', 'token']);
+export const tabMcpFile = z.enum(['mcp.json', 'token', 'guard.json']);
 
 /** Simulator UDID as `xcrun simctl` prints it. The same regex lives in `@termhub/machine-ops`
  *  (`simulator.ts`), which cannot depend on this package; the server's tests assert they match. */
@@ -30,24 +71,64 @@ export function isWdaPort(port: number): boolean {
 }
 export const wdaPort = z.number().int().refine(isWdaPort, 'port outside the WDA ranges');
 
-/** The only keys a terminal tool may press (spec §4.2): no arbitrary key names reach tmux. */
-export const TMUX_KEYS = ['Enter', 'Escape', 'C-c', 'Up', 'Down', 'Tab', 'y', 'n', '1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
+/** The only keys a terminal tool may press (spec §4.2): no arbitrary key names reach tmux. `BTab` is
+ *  Shift+Tab, Claude Code's mode switch, since agent 0.15.0: the server sends it only to an agent
+ *  that advertises `CAPABILITY_TRANSCRIPT`, because an older agent's schema refuses it. */
+export const TMUX_KEYS = ['Enter', 'Escape', 'C-c', 'Up', 'Down', 'Tab', 'y', 'n', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab'] as const;
 export const tmuxKey = z.enum(TMUX_KEYS);
 export type TmuxKey = (typeof TMUX_KEYS)[number];
 
 export const TEXT_MAX_CHARS = 4000;
 
+/** A shrunk transcript line larger than this travels as a stub (`termhub_dropped`). */
+export const TRANSCRIPT_LINE_MAX_BYTES = 65_536;
+
+/**
+ * The largest file `file.read` returns (spec 2026-10-04 file preview). The body travels base64 in one
+ * control frame (`MAX_FRAME`, 1 MiB): 512 KiB is ~683 KiB encoded, with room for the envelope. A bigger
+ * file answers `too_large` with its size and no body.
+ */
+export const FILE_READ_MAX_BYTES = 512 * 1024;
+/** The only extensions `file.read` opens, compared lowercase on the resolved file. */
+export const FILE_READ_EXTENSIONS = ['.md', '.markdown', '.txt'] as const;
+/** Why `file.read` answered without a body. `outside`: not under an allowed folder (or a link leaves
+ *  it); `hidden`: a dot-folder or dot-file below the folder; `type`: not one of FILE_READ_EXTENSIONS;
+ *  `not_file`: a directory, socket, …; `binary`: not UTF-8 text; `eperm`: the agent's user cannot read it. */
+/** The extensions `file.list` lists (spec 2026-10-04 recent Markdown files, D2): Markdown only, no `.txt`. */
+export const FILE_LIST_EXTENSIONS = ['.md', '.markdown'] as const;
+/** The most entries one `file.list` answers, newest first (D4). */
+export const FILE_LIST_MAX_ENTRIES = 500;
+/** A folder relative to the project folder, for `file.list`: no leading `/` or `~`, no empty, `.`, `..` or
+ *  dot-prefixed segment, a plain charset and at most 16 segments. */
+export const REL_DIR_RE = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}(?:\/[A-Za-z0-9_-][A-Za-z0-9._-]{0,127}){0,15}$/;
+export const relDir = z.string().min(1).max(512).regex(REL_DIR_RE);
+export const FILE_READ_REFUSALS = ['missing', 'outside', 'hidden', 'type', 'not_file', 'too_large', 'binary', 'eperm'] as const;
+export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
+
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
-   *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED). */
-  code: z.enum(['eperm', 'notfound', 'no_tmux', 'timeout', 'invalid', 'internal', 'failed', 'refused']),
+   *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED).
+   *  `worktree_conflict` / `path_outside_root`: `git.worktree.*` only (since agent 0.18.0), so an older
+   *  server, which never calls those methods, never receives them. */
+  code: z.enum(['eperm', 'notfound', 'no_tmux', 'timeout', 'invalid', 'internal', 'failed', 'refused', 'worktree_conflict', 'path_outside_root']),
   message: z.string().max(2000),
   path: z.string().max(4096).optional(),
 });
 export type RpcError = z.infer<typeof rpcErrorSchema>;
 
+/** Our hook entries in one config file (`HookEntriesState` in @termhub/machine-ops). */
+const hookEntriesState = z.enum(['missing', 'outdated', 'current', 'unreadable']);
+
 const DEFAULT_TIMEOUT = 8_000;
 const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: R, timeoutMs = DEFAULT_TIMEOUT) => ({ params, result, timeoutMs });
+
+/**
+ * A branch name for `git.worktree.*`: a plain charset, never a leading `-` (git would read it as an
+ * option), no `..` (git refuses it as a ref anyway). `:` is outside the charset, so it can never
+ * turn into a second refspec half.
+ */
+export const GIT_BRANCH_RE = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/;
+export const gitBranch = z.string().regex(GIT_BRANCH_RE);
 
 export const RPC = {
   'tmux.list': def(z.object({}), z.object({ sessions: z.array(sessionName) })),
@@ -94,7 +175,39 @@ export const RPC = {
     }),
     z.object({ stdout: z.string() }),
   ),
-  'ai.credential': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), z.object({ stdout: z.string() }), 10_000),
+  /**
+   * Usage of the AI account whose CLI login lives in `config_dir` (spec 2026-10-07 ai-usage-on-machine,
+   * D2; since agent 0.20.0, replacing `ai.credential`). The credential is read and used on the machine,
+   * which asks the provider itself: only the numbers travel. Code Assist makes up to four sequential
+   * 12 s calls, hence the timeout.
+   */
+  'ai.usage': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiUsageResult, 60_000),
+  /**
+   * Whether the CLI login of the account whose config dir is `config_dir` (null: the machine's default
+   * login) is valid (TER-1047, since agent 0.26.0): `claude auth status` / `codex login status`.
+   * `supported: false` for a provider without a CLI login the agent can drive (Gemini, Antigravity).
+   */
+  'ai.login.status': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable() }), aiLoginStatusResult, 20_000),
+  /**
+   * Starts the CLI's login in the hidden tmux session `session` (any session of that name is killed
+   * first) and answers what the person needs to finish it in a browser: the login `url`, and for
+   * Codex's device flow the one-time `user_code`. `needs_code`: the CLI waits for a code pasted back
+   * (Claude); false when it polls on its own (Codex). Since agent 0.26.0.
+   */
+  'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
+  /**
+   * Types `code` into the login session (null: nothing to type — Codex, or a Claude login the person
+   * finished in the machine's own browser) and waits up to 45 s for the login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
+   * The session is killed once the login is done or failed; a Codex session that only timed out is kept
+   * so a later submit can wait again. Since agent 0.26.0.
+   */
+  'ai.login.submit': def(
+    z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName, code: z.string().min(1).max(2000).nullable() }),
+    aiLoginSubmitResult,
+    60_000,
+  ),
+  /** Kills the hidden login session (since agent 0.26.0). */
+  'ai.login.cancel': def(z.object({ session: sessionName }), z.object({ cancelled: z.boolean() })),
   /**
    * A secret the machine already holds, read for the server to store encrypted (spec 2026-09-28 MCP
    * integrations D1/D2). One source only: `gh_auth_token` (`gh auth token`); new sources are added one
@@ -110,6 +223,113 @@ export const RPC = {
     }),
     z.object({ status: z.enum(['linked', 'same_account', 'no_transcript', 'no_config_dir', 'conflict']) }),
     10_000,
+  ),
+  /**
+   * Lines of a Claude Code transcript by byte range (spec 2026-10-01 tab chat §4). The agent knows
+   * nothing about a line's shape: it keeps the lines whose `type` is in `types`, truncates every
+   * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
+   * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
+   * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
+   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   */
+  /**
+   * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
+   * or `~/…`; `roots` are the project folders on this machine. The agent adds its own allowed folders
+   * (home, the temp dirs and `file_read_roots` from its config) and checks, on the resolved file: under
+   * a folder (the link target too), no dot segment below it, an allowed extension, a regular file of at
+   * most FILE_READ_MAX_BYTES, valid UTF-8. Any refusal is a `status`, never a thrown error, so the
+   * screen can say why (since agent 0.16.0).
+   */
+  'file.read': def(
+    z.object({ path: machinePath, roots: z.array(machinePath).max(16) }),
+    z.discriminatedUnion('status', [
+      z.object({
+        status: z.literal('ok'),
+        path: z.string().max(4096),
+        size: z.number().int().min(0).max(FILE_READ_MAX_BYTES),
+        mtime_ms: z.number().min(0),
+        content_b64: z.string().max(Math.ceil(FILE_READ_MAX_BYTES / 3) * 4),
+      }),
+      z.object({ status: z.enum(FILE_READ_REFUSALS), size: z.number().int().min(0).optional() }),
+    ]),
+    10_000,
+  ),
+  /**
+   * The Markdown files of a project on this machine (spec 2026-10-04 recent Markdown files, TER-953): the
+   * non-recursive contents of each of `dirs` (relative to `cwd`; none when `cwd` is null) plus each cited
+   * file of `paths` (absolute or `~/…`). Every entry passes `file.read`'s checks (allowed folders with
+   * `roots` as the project folders, no dot segment, the link target too, FILE_LIST_EXTENSIONS, a regular
+   * file by `stat`); a refused or missing one is left out silently. A file over FILE_READ_MAX_BYTES is
+   * listed with `too_large`. `path` is the resolved file, `asked` the path as sent (cited) or the joined
+   * folder path (listed). Names, sizes and dates only, never a body; newest first, at most
+   * FILE_LIST_MAX_ENTRIES (since agent 0.17.0).
+   */
+  'file.list': def(
+    z.object({
+      cwd: machinePath.nullable(),
+      dirs: z.array(relDir).max(8),
+      paths: z.array(machinePath).max(100),
+      roots: z.array(machinePath).max(16),
+    }),
+    z.object({
+      entries: z
+        .array(
+          z.object({
+            path: z.string().max(4096),
+            asked: z.string().max(4096),
+            size: z.number().int().min(0),
+            mtime_ms: z.number().min(0),
+            too_large: z.boolean(),
+          }),
+        )
+        .max(FILE_LIST_MAX_ENTRIES),
+    }),
+    15_000,
+  ),
+  'transcript.read': def(
+    z.object({
+      transcript_path: machinePath,
+      session_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+      direction: z.enum(['forward', 'backward']),
+      offset: z.number().int().min(0).nullable(),
+      max_bytes: z.number().int().min(1024).max(512 * 1024),
+      types: z.array(z.string().min(1).max(32)).min(1).max(16),
+      max_string: z.number().int().min(256).max(16_384),
+    }),
+    z.object({
+      status: z.enum(['ok', 'missing']),
+      lines: z.array(z.string()),
+      start: z.number().int().min(0),
+      end: z.number().int().min(0),
+      size: z.number().int().min(0),
+    }),
+    10_000,
+  ),
+  /**
+   * A git worktree for automatic work (spec 2026-10-04 agentic board, §7; since agent 0.18.0, capability
+   * `worktree`). `repo_dir` is the project's folder on the machine, `root` the expanded `worktrees_dir`,
+   * and `path` must stay under `root` (no `..`, no link out: `path_outside_root`). When `path` is already
+   * a worktree on `branch` it answers `created: false`; on another branch (or a folder in the way,
+   * or `branch` checked out elsewhere) `worktree_conflict`. Otherwise it fetches `origin`, and starts
+   * the branch from `origin/<branch>` when that exists (a branch already pushed is never reset), else
+   * from `origin/<base>`; an existing local branch that differs from the remote is checked out as is.
+   * git runs with an argv, never a shell. 180 s: a fetch and a checkout of a large repo can both be
+   * slow; the agent splits one deadline 10 s under it across the steps, so it answers before this.
+   */
+  'git.worktree.ensure': def(
+    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath, branch: gitBranch, base: gitBranch }),
+    z.object({ path: z.string().max(4096), head: z.string().regex(/^[0-9a-f]{40,64}$/), created: z.boolean() }),
+    180_000,
+  ),
+  /**
+   * Removes a worktree made by `git.worktree.ensure` (the branch stays). A worktree with uncommitted
+   * or untracked changes is kept: `{ removed: false, dirty: true }`. A `path` that no longer exists
+   * answers `{ removed: false, dirty: false }`. Same path guard as `ensure` (since agent 0.18.0).
+   */
+  'git.worktree.remove': def(
+    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath }),
+    z.object({ removed: z.boolean(), dirty: z.boolean() }),
+    30_000,
   ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */
@@ -131,12 +351,36 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
-  /** Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1). */
+  /**
+   * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
+   * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.
+   */
+  'hooks.status': def(
+    z.object({ claude_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({
+      script: z.object({ installed: z.boolean(), version: z.string().max(64).nullable(), expected_version: z.string().max(64), outdated: z.boolean() }),
+      claude: z.object({ present: z.boolean(), state: hookEntriesState, dirs: z.array(z.object({ dir: z.string().max(4096), state: hookEntriesState })).max(64) }),
+      codex: z.object({ present: z.boolean(), state: hookEntriesState, notify: z.boolean(), trusted: z.enum(['all', 'some', 'none']).nullable() }),
+      cursor: z.object({ present: z.boolean(), state: hookEntriesState }),
+    }),
+    15_000,
+  ),
+  /**
+   * Installs `version` of @termhub/agent with npm; when the agent runs as a service it then exits so the service relaunches the new code (since agent 0.2.1).
+   * `integrity`: the `sha512-…` the server verified against the release's provenance (spec 2026-10-07 agent release trust). Since agent 0.22.0
+   * the agent downloads the tarball, checks it against this and installs that file; older agents strip the field and install by version.
+   */
   'agent.update': def(
-    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/) }),
+    z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/), integrity: z.string().regex(SHA512_INTEGRITY_RE).optional() }),
     z.object({ installed_version: z.string(), restart: z.enum(['service', 'manual']) }),
     180_000,
   ),
+  /**
+   * "Uninstall from the machine" before the machine is deleted (since agent 0.22.0): removes the service definition, deletes the agent's
+   * config (its token), replies, then stops. `service`: whether a launchd/systemd service was there to remove. Hooks and tmux sessions
+   * are removed by the server through `hooks.uninstall` / `tmux.kill` first.
+   */
+  'agent.uninstall': def(z.object({}), z.object({ service: z.enum(['removed', 'none']) }), 30_000),
   /** iOS simulator over the agent (spec 2026-09-24): raw `xcrun simctl list devices -j`; the server parses it. */
   'sim.list': def(z.object({}), z.object({ stdout: z.string() }), 15_000),
   /** `xcrun simctl boot`; combined output, "already booted" included — the server decides what is a failure. */
@@ -167,6 +411,17 @@ export const RPC = {
   'tab.mcp.write': def(z.object({ tab_id: tabId, file: tabMcpFile, body: z.string().min(1).max(8192) }), z.object({ ok: z.literal(true) }), 10_000),
   /** Deletes a tab's whole MCP config dir on close (spec D12); best effort (since agent 0.10.0). */
   'tab.mcp.remove': def(z.object({ tab_id: tabId }), z.object({ ok: z.literal(true) }), 10_000),
+  /**
+   * From the machine, an empty POST without a token to each of `urls` (the monitor hooks and MCP
+   * addresses, TER-586), redirects not followed. `status` is the HTTP answer (401 means the address
+   * reaches termhub) or null with `error` when nothing answered: DNS, TLS, a refused or timed-out
+   * connection — what a firewall that only lets `/agent/ws` through looks like (since agent 0.23.0).
+   */
+  'net.check': def(
+    z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
+    z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
+    15_000,
+  ),
 } as const;
 
 export type RpcMethod = keyof typeof RPC;

@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
+import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionChallengesBody, decisionChallengesResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -16,6 +16,7 @@ import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { permissionsOf } from '../auth/permissions.js';
+import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
@@ -39,9 +40,12 @@ import {
   revokeGrant,
 } from '../chat/grants.js';
 import type { StandingGrantKind } from '../chat/gate.js';
+import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { HttpError, conflict, notFound, unauthorized } from '../lib/errors.js';
 import { DeviceLockedError, PinInvalidError, deviceRevoked, type SessionService } from '../mobile/session.js';
+import { requestLocale, t } from '../i18n/index.js';
+import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
 
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
@@ -69,7 +73,7 @@ export interface MobileChatDeps {
 }
 
 /** The device the mobile auth hook authenticated for this request (every route here is `mobileAuth: 'device'`). */
-function deviceOf(request: FastifyRequest): Device {
+export function deviceOf(request: FastifyRequest): Device {
   const mobile = request.mobile;
   if (!mobile || !('device' in mobile)) throw unauthorized();
   return mobile.device;
@@ -78,7 +82,7 @@ function deviceOf(request: FastifyRequest): Device {
 /** Consumes the decision challenge bound to one action and checks the PIN proof over it. Answers the
  * way `POST /session/token` does on failure (sent here, so the caller just stops) and returns false;
  * true when the proof is good. */
-async function proofOk(deps: MobileChatDeps, request: FastifyRequest, reply: FastifyReply, device: Device, actionId: string, decision: PinDecision, proof: { challenge: string; pin_proof: string }): Promise<boolean> {
+export async function proofOk(deps: Pick<MobileChatDeps, 'session'>, request: FastifyRequest, reply: FastifyReply, device: Device, actionId: string, decision: PinDecision, proof: { challenge: string; pin_proof: string }): Promise<boolean> {
   if (!(await deps.session.consumeDecisionChallenge(device, proof.challenge, actionId))) throw new HttpError(400, 'Desafio inválido ou expirado', 'CHALLENGE_INVALID');
   const pin = await deps.session.checkPin(device, decisionProofMessage(proof.challenge, actionId, decision), proof.pin_proof, { ip: request.ip });
   if (pin.ok) return true;
@@ -88,7 +92,7 @@ async function proofOk(deps: MobileChatDeps, request: FastifyRequest, reply: Fas
   }
   if (pin.code === 'PIN_INVALID') {
     const err = new PinInvalidError(pin.failures);
-    await reply.code(401).send({ error: err.message, code: err.code, failures: err.failures });
+    await reply.code(401).send({ error: t(requestLocale(request), err.localized), code: err.code, failures: err.failures });
     return false;
   }
   throw deviceRevoked();
@@ -113,7 +117,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const projectId = project ?? null;
     const user = request.scope.user;
     const conversation = await deps.chat.conversationFor(user, projectId);
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       deps.chat.hostFor(user, projectId),
@@ -128,6 +132,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       deps.chat.openAnswerIds(conversation.id),
       // Usage-limit cards (TER-589): their own list, like suggestions, for the apps that parse tab_questions strictly.
       repos.tabLimitNotices.listByConversation(conversation.id),
+      // What the context meter measures against (TER-1038): null = the model's window.
+      repos.users.chatContextLimit(user.id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, user.id));
@@ -145,6 +151,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       subagents,
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
+      context_limit,
     };
   });
 
@@ -196,7 +203,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     try {
       await repos.projectGroups.setFavorite(user.id, project.id, favorite);
     } catch (e) {
-      if (e instanceof ProjectGroupRuleError) throw new HttpError(400, e.message, e.code);
+      if (e instanceof ProjectGroupRuleError) throw new HttpError(400, e.localized, e.code);
       throw e;
     }
     return reply.code(204).send();
@@ -215,7 +222,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
           online: deps.agents.capabilities(m.id) !== null,
           agent_version: deps.agents.info(m.id)?.agent_version ?? null,
           accounts: accounts
-            .filter((a) => a.machine_id === m.id && a.provider === 'claude')
+            // TER-990: an exclusive account cannot host the account-wide chat, so the phone does not offer it
+            .filter((a) => a.machine_id === m.id && a.provider === 'claude' && usableIn(a, null))
             .map((a) => ({ id: a.id, label: a.label, config_dir: a.config_dir })),
         })),
     });
@@ -234,6 +242,11 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       const account = await repos.aiAccounts.findById(accountId);
       if (!account || account.machine_id !== machine.id) throw notFound('Conta de IA não encontrada nessa máquina');
       if (account.provider !== 'claude') throw new HttpError(400, 'O chat roda no Claude: escolha uma conta do Claude nessa máquina', 'CHAT_ACCOUNT_NOT_CLAUDE');
+      // TER-990: the chat's host runs the account-wide chat, outside any project — never on an exclusive account
+      if (!usableIn(account, null)) {
+        await auditBlocked(repos, request.log, account, { project_id: null, path: 'chat_host', machine_id: machine.id });
+        throw new HttpError(400, exclusiveError(account).localized, 'ACCOUNT_EXCLUSIVE');
+      }
     }
 
     const current = await deps.chat.conversationFor(user);
@@ -248,8 +261,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
    * the same tick `start` resolved: nothing else awaits it, and an unhandled rejection kills the process.
    */
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
-    const { text, project_id, attachment_ids, reply_to_id } = mobileMessageBody.parse(request.body);
-    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}) });
+    const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = mobileMessageBody.parse(request.body);
+    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) });
     started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'mobile run failed after start'));
     return reply.code(202).send(sendAccepted.parse({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id }));
   });
@@ -279,6 +292,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     let standing: { kind: StandingGrantKind; projectId: string } | undefined;
     if (body.decision !== 'deny') {
       const device = deviceOf(request);
+      // A card whose tab was closed is retired, not approved (TER-986) — before the PIN is asked for.
+      await assertActionTabAlive(repos, user.id, id);
       // An ineligible grant is refused before the challenge is spent or the PIN checked. The project a
       // grant trusts is resolved here, with the user's own id, exactly as the gate will resolve it.
       let existing: ChatAction | undefined;
@@ -312,6 +327,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     }
 
     chatBus.publish({ type: 'decision', user_id: user.id, conversation_id: action.conversation_id, action_id: action.id, status });
+    // The server's own cards (a merge above the level) act on approval here (agentic board F-19).
+    deps.chat.afterDecisions([action]);
     void indexActions(user.id, [action]);
     const actionId = action.id;
     // Same rule as the web route: the approval is already decided and published, so a grant that fails
@@ -346,10 +363,28 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         request.log.warn({ code: failureLabel(err), actionId }, 'chat standing grant failed after approval');
       }
     }
+    // Only the start is awaited here: `startAfterDecision` already logs a run that fails after it
+    // started, so this catch sees a failure to start and nothing else (one line per failure).
     void Promise.resolve()
-      .then(() => deps.chat.resumeAfterDecision(user, action))
+      .then(() => deps.chat.startAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
     return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant };
+  });
+
+  /**
+   * The decision challenges of a grouped confirmation, one per action, in one call (TER-530). The app
+   * used to ask `session/challenge` once per action, and that route — the anonymous entry point, kept
+   * on the proxy's tightest budget — answered 429 from the sixth approval on, so a batch of irreversible
+   * cards could not be approved at all. Here the device is already authenticated (token + DPoP), so the
+   * calls share the ordinary mobile budget, and each challenge is still bound to its own action and
+   * consumed by `proofOk` exactly as before.
+   */
+  app.post('/actions/challenges', { config: { action: 'create' } }, async (request) => {
+    const { action_ids } = decisionChallengesBody.parse(request.body);
+    const device = deviceOf(request);
+    const challenges: { action_id: string; challenge: string; expires_at: string }[] = [];
+    for (const id of action_ids) challenges.push({ action_id: id, ...(await deps.session.challenge(device.id, 'decision', id)) });
+    return decisionChallengesResponse.parse({ challenges });
   });
 
   /**
@@ -383,12 +418,13 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     if (toDecide.length === 0) throw conflict('Estas ações já foram decididas');
     const result = await decideMany(repos, user.id, toDecide);
     const decided = result.decided;
+    deps.chat.afterDecisions(decided);
     void indexActions(user.id, decided);
     const skippedIds = new Set(firstSkipped.map((s) => s.id));
     const skipped = [...firstSkipped, ...result.skipped.filter((s) => !skippedIds.has(s.id))];
     const first = decided[0]!;
     void Promise.resolve()
-      .then(() => deps.chat.resumeAfterDecision(user, first))
+      .then(() => deps.chat.startAfterDecision(user, first))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId: first.id }, 'mobile batch resume failed'));
     return { actions: decided, skipped, queued: true, note: DECISION_NOTE };
   });
@@ -470,10 +506,15 @@ export async function mobileMeRoutes(app: FastifyInstance, repos: Repositories) 
   app.get('/me', { config: { action: 'read' } }, async (request) => {
     const device = deviceOf(request);
     const user = request.scope.user;
-    const [permissions, unread] = await Promise.all([permissionsOf(repos, user), repos.userNotifications.countUnread(user.id)]);
+    const [permissions, unread, features] = await Promise.all([
+      permissionsOf(repos, user),
+      repos.userNotifications.countUnread(user.id),
+      featuresFor({ repos, userId: user.id }),
+    ]);
     return {
       user: { id: user.id, email: user.email, name: user.name, nickname: user.nickname },
       permissions,
+      features,
       device: toDeviceSelf(device),
       unread_notifications: unread,
     };

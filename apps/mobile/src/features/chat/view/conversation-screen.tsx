@@ -1,41 +1,63 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Keyboard, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
+import { ActivityIndicator, FlatList, Keyboard, Pressable, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/contract';
-import { AppText, Banner, Button, EmptyState, MAX_READABLE_WIDTH, readableColumn, Screen, Sheet } from '@/ui';
-import { activeGrantIndex, isGrantActive } from '../model/grant-time';
-import { isReplyable, replyRefOf, type ReplyRef } from '../model/reply';
+import { AppText, Banner, Button, EmptyState, Icon, type IconName, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
+import { inboxKey } from '../model/chat-inbox';
+import { activeGrantIndex } from '../model/grant-time';
+import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
+import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
-import { chatTimeline, groupPendingActions, type ChatEntry } from '../model/timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions, type ChatEntry } from '../model/timeline';
 import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
+import { ActionTrailCard } from './action-trail-card';
 import { Composer } from './composer';
+import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { PendingBar } from './pending-bar';
 import { SwipeToReply } from './swipe-to-reply';
-import { SubagentsSheet } from './subagents-sheet';
 import { TabLimitCard } from './tab-limit-card';
 import { TabQuestionCard } from './tab-question-card';
 import { TabSuggestionCard } from './tab-suggestion-card';
 
+/** How far from its end (the inverted list's offset 0) the reader counts as scrolled up (TER-984), like
+ * the web's `isNearBottom`; within it, the thread follows what arrives (TER-1001). */
+const NEAR_END = 80;
+/**
+ * The inverted list's offset 0 is the thread's end, and new rows come in at index 0, before every row
+ * on screen: for a reader scrolled up past `NEAR_END`, the scroll view keeps the first visible row where
+ * it is when rows come in or grow before it (TER-1001), so they stay on the line they were reading.
+ *
+ * Only then (TER-1057). At the end the inverted list already shows what arrives, with no help: offset 0
+ * stays the end. The scroll view's own anchoring there takes the newest row on screen, shifts the offset
+ * by however far that row moved and animates back to the end — and the newest rows are exactly the ones
+ * a turn reorders and regroups (a decided card moving above its answer, two settled cards folding into
+ * one accordion, TER-1024). A row that moved, or one unmounted and its view recycled elsewhere, sent the
+ * thread a whole answer's height up.
+ */
+const KEEP_READING_POSITION = { minIndexForVisible: 0 };
 /** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
 const GRANT_TICK_MS = 30_000;
-/** How often the subagents sheet's elapsed labels refresh while it is open (spec 2026-09-26 panel §4). */
-const SUBAGENTS_TICK_MS = 30_000;
+/** The header's way to the conversation's settings (TER-1039). */
+const SETTINGS_ICON: IconName = { ios: 'gearshape', android: 'settings' };
 
 const entryKey = (entry: ChatEntry) =>
   entry.kind === 'message'
-    ? `m:${entry.message.id}`
+    ? // A sent row keeps its local key once it becomes the server's: no remount, no flash (TER-1001).
+      `m:${entry.message.row_key ?? entry.message.id}`
     : entry.kind === 'action'
       ? `a:${entry.action.id}`
-      : entry.kind === 'action_group'
-        ? `g:${entry.actions[0]!.id}`
+      : // A card, a group of pending cards and a turn's accordion share their first card's key: a settled
+        // card folding into an accordion (TER-1024), or a group shrinking to one card, keeps its row
+        // mounted instead of swapping it for another (TER-1057). A card is in one entry only.
+        entry.kind === 'action_group' || entry.kind === 'action_trail'
+        ? `a:${entry.actions[0]!.id}`
         : entry.kind === 'tab_suggestion'
           ? `s:${entry.suggestion.id}`
           : entry.kind === 'tab_limit'
@@ -45,7 +67,7 @@ const entryKey = (entry: ChatEntry) =>
 /** Whether `entry` is the card of the action or question `id` — a group holds several actions. */
 const holds = (entry: ChatEntry, id: string): boolean =>
   (entry.kind === 'action' && entry.action.id === id) ||
-  (entry.kind === 'action_group' && entry.actions.some((a) => a.id === id)) ||
+  ((entry.kind === 'action_group' || entry.kind === 'action_trail') && entry.actions.some((a) => a.id === id)) ||
   (entry.kind === 'tab_question' && entry.question.id === id);
 
 /** How long the thread waits, after an approximate scroll, to retry a jump to a row not measured yet. */
@@ -76,16 +98,25 @@ const MessageRow = memo(function MessageRow({
   const retrySend = useChatStore((s) => s.retrySend);
   const onRetry = useCallback((id: string) => void retrySend(id), [retrySend]);
   const reply = useCallback(() => onReply(message), [onReply, message]);
-  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} />;
-  // Only a row the server has, with something in it, can be answered (TER-447).
-  return isReplyable(message) ? <SwipeToReply onReply={reply}>{bubble}</SwipeToReply> : bubble;
+  // Markdown paths in an answer open as previews, looked for on the conversation's project machines.
+  const activeProject = useChatStore((s) => s.activeProject);
+  const fileContext = useMemo(() => ({ projectId: activeProject ?? null }), [activeProject]);
+  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
+  // Only a row the server has, with something in it, can be answered (TER-447). The wrapper stays either
+  // way: a sent row becoming the server's, or an answer getting its text, is not remounted (TER-1001).
+  return (
+    <SwipeToReply onReply={reply} enabled={isReplyable(message)}>
+      {bubble}
+    </SwipeToReply>
+  );
 });
 
 /** The conversation (spec §11.2): thread, action cards, the host line when the host needs attention,
- * the trusted tabs and composer. `routeId` is a conversation id (a deep link), a project id or
+ * the pending bar and composer; the header's cog opens its settings (TER-1039). `routeId` is a conversation id (a deep link), a project id or
  * `general` — the store resolves which. `embedded` is the iPad split's right pane (spec 2026-09-28
  * §2.3): no "Voltar", the list next to it is the way out. */
 export function ConversationView({ routeId, embedded = false }: { routeId: string; embedded?: boolean }) {
+  const { t } = useTranslation();
   const router = useRouter();
   const openByRoute = useChatStore((s) => s.openByRoute);
   const activeProject = useChatStore((s) => s.activeProject);
@@ -115,33 +146,12 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const busyLimitIds = useChatStore((s) => s.busyLimitIds);
   const limitErrors = useChatStore((s) => s.limitErrors);
   const answerTabLimit = useChatStore((s) => s.answerTabLimit);
-  const reset = useChatStore((s) => s.reset);
-  const cancelSubagent = useChatStore((s) => s.cancelSubagent);
-  const [confirmingReset, setConfirmingReset] = useState(false);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
   const [separate, setSeparate] = useState(false);
-  const insets = useSafeAreaInsets();
-  /** Where the keyboard-avoiding view's parent starts on screen; `null` until measured. */
-  const bodyRef = useRef<View>(null);
-  const [bodyTop, setBodyTop] = useState<number | null>(null);
-  const measureBody = useCallback(() => bodyRef.current?.measureInWindow((_x, y) => setBodyTop(y)), []);
 
-  // The subagents panel (spec 2026-09-26 panel §4): always closable — the header button stays up
-  // while it is open (even once every subagent has ended), the sheet has its own close control
-  // (`Sheet`'s backdrop), and "Nova conversa" closes it too, below.
-  const [subagentsOpen, setSubagentsOpen] = useState(false);
-  const subagents = useMemo(() => slot?.subagents ?? [], [slot?.subagents]);
-  const cancelFailed = useMemo(() => slot?.cancelFailed ?? [], [slot?.cancelFailed]);
-  const activeSubagents = useMemo(() => subagents.filter(isActive), [subagents]);
-  const [subagentsNow, setSubagentsNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!subagentsOpen) return;
-    // Fresh on open too: otherwise the sheet shows the time of its last open (or of the mount).
-    setSubagentsNow(Date.now());
-    const timer = setInterval(() => setSubagentsNow(Date.now()), SUBAGENTS_TICK_MS);
-    return () => clearInterval(timer);
-  }, [subagentsOpen]);
-  const onCancelSubagent = useCallback((id: string) => void cancelSubagent(id), [cancelSubagent]);
+  // The subagents panel lives in the conversation's settings (TER-1039); a dot on the cog keeps a
+  // running subagent noticeable from here.
+  const subagentsRunning = useMemo(() => (slot?.subagents ?? []).some(isActive), [slot?.subagents]);
 
   useEffect(() => {
     if (routeId) void openByRoute(routeId);
@@ -158,29 +168,16 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     return () => clearTimeout(timer);
   }, [highlightId]);
   const onReply = useCallback((message: ChatMessage) => setReplyTo(replyRefOf(message)), []);
+  // A confirmation or a tab's question is answered the same way (TER-849).
+  const onReplyCard = useCallback((card: ReplyableCard) => setReplyTo(replyRefOfCard(card)), []);
   const cancelReply = useCallback(() => setReplyTo(null), []);
-  // The preview goes with the text, at once, and comes back with it if the send fails.
-  const onSend = useCallback(
-    async (text: string, attachments: TChatAttachment[]) => {
-      const quoted = replyTo;
-      if (quoted) setReplyTo(null);
-      const ok = await (quoted ? send(text, attachments, quoted) : send(text, attachments));
-      if (!ok && quoted) setReplyTo((current) => current ?? quoted);
-      return ok;
-    },
-    [replyTo, send],
-  );
 
   const messages = slot?.messages;
   const actions = slot?.actions;
   const grants = useMemo(() => slot?.grants ?? [], [slot?.grants]);
   const projectGrants = useMemo(() => slot?.projectGrants ?? [], [slot?.projectGrants]);
-  // Standing grants ("Liberar sem prazo") never expire: all of them count, and no tick re-checks them.
+  // Standing grants ("Liberar sem prazo") never expire: no tick re-checks them.
   const standingGrants = useMemo(() => slot?.standingGrants ?? [], [slot?.standingGrants]);
-  const activeGrantCount = useMemo(
-    () => grants.filter((g) => isGrantActive(g)).length + projectGrants.filter((g) => isGrantActive(g)).length + standingGrants.length,
-    [grants, projectGrants, standingGrants],
-  );
   const tabQuestions = slot?.tabQuestions;
   const tabSuggestions = slot?.tabSuggestions;
   const tabLimits = slot?.tabLimits;
@@ -214,7 +211,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
   const onAnswerLimit = useCallback((id: string, accountId: string | null) => void answerTabLimit(id, accountId), [answerTabLimit]);
   // "Propor de novo" (TER-477): a plain chat message; the concierge proposes a fresh card through the gate.
-  const onRepropose = useCallback((action: ChatAction) => void send(`Proponha de novo: ${action.summary}`), [send]);
+  const onRepropose = useCallback((action: ChatAction) => void send(t('Proponha de novo: {{summary}}', { summary: action.summary })), [send, t]);
   const onApproveWrites = useCallback((ids: string[]) => void decideMany(ids.map((id) => ({ id, decision: 'approve' as const }))), [decideMany]);
   const timeline = useMemo(
     () => chatTimeline(messages ?? [], actions ?? [], tabQuestions ?? [], tabSuggestions ?? [], tabLimits ?? []),
@@ -225,8 +222,9 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     .map((a) => a.id)
     .join(',');
   useEffect(() => setSeparate(false), [pendingKey]);
-  // Newest first, for the inverted list that keeps the thread pinned to its end.
-  const entries = useMemo(() => (separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
+  // Newest first, for the inverted list that keeps the thread pinned to its end. A turn's settled cards
+  // fold into one accordion above its answer (TER-1024); pending ones never do.
+  const entries = useMemo(() => groupSettledActions(separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
   // The pending bar's jump (TER-477): scrolls the thread to the row that holds the card. A row far
   // up the list may not be measured yet: `onScrollToIndexFailed` scrolls to its estimated offset,
   // which renders it, then tries once more.
@@ -248,12 +246,56 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, viewPosition: 0.5, animated: true }), JUMP_RETRY_MS);
   }, []);
 
+  // TER-984: the "novas mensagens" pill, as on the web. The inverted list shows its end at offset 0, so
+  // a reader there sees what arrives; one scrolled up (past `NEAR_END`) stays where they are reading
+  // (`KEEP_READING_POSITION`, TER-1001) and is told how many rows arrived at the end — the rows newer
+  // than the end they last saw, or one when the newest row was replaced — and the pill takes them back.
+  const farFromEnd = useRef(false);
+  /** `farFromEnd` as state, flipped only when the reader crosses `NEAR_END`: it switches the scroll
+   * view's anchoring on while they read further up (`KEEP_READING_POSITION`, TER-1057). */
+  const [reading, setReading] = useState(false);
+  const [unread, setUnread] = useState(0);
+  const lastEnd = useRef(entries[0] ? entryKey(entries[0]) : '');
+  useEffect(() => {
+    const before = lastEnd.current;
+    lastEnd.current = entries[0] ? entryKey(entries[0]) : '';
+    if (!farFromEnd.current || lastEnd.current === before) return;
+    const newer = entries.findIndex((e) => entryKey(e) === before);
+    setUnread((n) => n + (newer > 0 ? newer : 1));
+  }, [entries]);
+  const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
+    farFromEnd.current = e.nativeEvent.contentOffset.y > NEAR_END;
+    setReading(farFromEnd.current);
+    if (!farFromEnd.current) setUnread(0);
+  }, []);
+  const toEnd = useCallback(() => {
+    farFromEnd.current = false;
+    setReading(false);
+    setUnread(0);
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  // The preview goes with the text, at once, and comes back with it if the send fails. What the person
+  // writes reads at the end, as in any messaging app, wherever they had scrolled to (TER-1001).
+  const onSend = useCallback(
+    async (text: string, attachments: TChatAttachment[]) => {
+      const quoted = replyTo;
+      if (quoted) setReplyTo(null);
+      toEnd();
+      const ok = await (quoted ? send(text, attachments, quoted) : send(text, attachments));
+      if (!ok && quoted) setReplyTo((current) => current ?? quoted);
+      return ok;
+    },
+    [replyTo, send, toEnd],
+  );
+
   // A quote's tap (TER-447): the original, if the thread has it, scrolls to the middle the same way
   // and is outlined for a moment. Read through a ref so the rows' callback stays stable across deltas.
   const entriesRef = useRef(entries);
   entriesRef.current = entries;
   const onOpenReply = useCallback((id: string): boolean => {
-    const index = entriesRef.current.findIndex((e) => e.kind === 'message' && e.message.id === id);
+    // A card's quote (TER-849) finds its card, alone or in a group, like the pending bar's jump.
+    const index = entriesRef.current.findIndex((e) => (e.kind === 'message' && e.message.id === id) || holds(e, id));
     if (index < 0) return false;
     retriedJump.current = false;
     listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
@@ -265,6 +307,25 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   // so neither this callback nor `extra` change while an answer streams. The memoised rows re-render
   // only where their own props changed.
   const onShowSeparately = useCallback(() => setSeparate(true), []);
+  /** One gate card, alone in the thread or inside a turn's accordion (TER-1024). */
+  const renderAction = useCallback(
+    (action: ChatAction) => (
+      <SwipeToReply onReply={() => onReplyCard({ kind: 'action', action })}>
+        <ActionCard
+          action={action}
+          busy={decidingId !== null}
+          onDecide={onDecide}
+          grant={grantIndex.get(action.id)}
+          projectGrant={projectGrantIndex.get(action.id)}
+          standingGrant={standingGrantIndex.get(action.id)}
+          revoking={revokingId !== null}
+          onRevoke={onRevoke}
+          onRepropose={onRepropose}
+        />
+      </SwipeToReply>
+    ),
+    [onReplyCard, decidingId, onDecide, grantIndex, projectGrantIndex, standingGrantIndex, revokingId, onRevoke, onRepropose],
+  );
   const renderItem = useCallback(
     ({ item }: { item: ChatEntry }) =>
       item.kind === 'tab_suggestion' ? (
@@ -278,31 +339,25 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       ) : item.kind === 'tab_limit' ? (
         <TabLimitCard limit={item.limit} busy={busyLimitIds.includes(item.limit.id)} error={limitErrors[item.limit.id] ?? null} onAnswer={onAnswerLimit} />
       ) : item.kind === 'tab_question' ? (
-        <TabQuestionCard
-          question={item.question}
-          busy={answeringQuestionIds.includes(item.question.id)}
-          error={questionErrors[item.question.id] ?? null}
-          onAnswer={onAnswer}
-          loadScreen={loadTabQuestionScreen}
-          onForget={onForget}
-          onCancelAutoAnswer={onCancelAutoAnswer}
-        />
+        <SwipeToReply onReply={() => onReplyCard({ kind: 'tab_question', question: item.question })}>
+          <TabQuestionCard
+            question={item.question}
+            busy={answeringQuestionIds.includes(item.question.id)}
+            error={questionErrors[item.question.id] ?? null}
+            onAnswer={onAnswer}
+            loadScreen={loadTabQuestionScreen}
+            onForget={onForget}
+            onCancelAutoAnswer={onCancelAutoAnswer}
+          />
+        </SwipeToReply>
       ) : item.kind === 'message' ? (
         <MessageRow message={item.message} onReply={onReply} onOpenReply={onOpenReply} highlighted={highlightId === item.message.id} />
       ) : item.kind === 'action_group' ? (
         <ActionGroupCard actions={item.actions} busy={decidingId !== null} onDecide={onDecideMany} onShowSeparately={onShowSeparately} />
+      ) : item.kind === 'action_trail' ? (
+        <ActionTrailCard actions={item.actions} renderAction={renderAction} />
       ) : (
-        <ActionCard
-          action={item.action}
-          busy={decidingId !== null}
-          onDecide={onDecide}
-          grant={grantIndex.get(item.action.id)}
-          projectGrant={projectGrantIndex.get(item.action.id)}
-          standingGrant={standingGrantIndex.get(item.action.id)}
-          revoking={revokingId !== null}
-          onRevoke={onRevoke}
-          onRepropose={onRepropose}
-        />
+        renderAction(item.action)
       ),
     [
       answeringQuestionIds,
@@ -319,6 +374,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       loadTabQuestionScreen,
       onOpenReply,
       onReply,
+      onReplyCard,
       onAnswer,
       onAnswerLimit,
       onCancelAutoAnswer,
@@ -330,6 +386,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
       onRevoke,
       onRepropose,
       onSendSuggestion,
+      renderAction,
       revokingId,
     ],
   );
@@ -338,46 +395,47 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     [decidingId, grantIndex, projectGrantIndex, standingGrantIndex, revokingId, answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, busyLimitIds, limitErrors, highlightId],
   );
 
-  const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? 'Conversa') : 'Chat geral';
+  const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
-
-  const confirmReset = () => {
-    setConfirmingReset(false);
-    setSubagentsOpen(false);
-    void reset();
-  };
+  const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
 
   return (
     <Screen padded={false} width="full">
-      {/* `padding` on iOS, `height` on Android (spec §4.2 "Keyboard"): stock behaviour on both, no
-          extra native module. The avoiding view compares its frame, relative to its parent, with the
-          keyboard's top on screen: the offset is where that parent really starts on screen, measured,
-          so the composer lands right on the keyboard. It used to be assumed to be the top safe-area
-          inset; wherever the screen really starts elsewhere, the pill floated off the keyboard by the
-          difference. */}
-      <View ref={bodyRef} testID="conversation-body" className="flex-1" onLayout={measureBody}>
-      <KeyboardAvoidingView testID="conversation-keyboard" className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={bodyTop ?? insets.top}>
+      {/* The body leaves the keyboard's overlap with it at its bottom (TER-1022): one source for the
+          keyboard's height, taken from each event's end frame and the body's place measured right then,
+          so the composer sits right on the keyboard — QuickType bar included — and back on the safe
+          area however the keyboard went (drag, tap outside, send). The stock KeyboardAvoidingView
+          followed show/hide only and could keep a stale height. */}
+      <KeyboardInsetView testID="conversation-body">
         {/* The header block — title, host line, error — and the footer block below — grants, composer —
             are siblings of the list, never rows inside it: a line appearing there changes the list's
             frame, not its content, and the inverted list keeps its end pinned through that. */}
         <View>
           <View className={`flex-row items-center gap-2 border-b border-app-border py-2 ${embedded ? 'px-4' : 'px-2'}`}>
-            {embedded ? null : <Button label="Voltar" variant="ghost" onPress={goBack} />}
+            {embedded ? null : <Button label={t('Voltar')} variant="ghost" onPress={goBack} />}
             <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
               {title}
             </AppText>
-            {/* The subagents panel (spec 2026-09-26 panel §4): the button appears once something is
-                running or being cancelled, and — while the sheet is open — stays even after every one
-                of them ended, so the sheet it opened always has a way to close it again. */}
-            {activeSubagents.length > 0 || subagentsOpen ? <Button label={`Subagentes (${activeSubagents.length})`} variant="ghost" onPress={() => setSubagentsOpen((o) => !o)} /> : null}
-            {activeGrantCount > 0 ? <Button label={activeGrantsLabel(activeGrantCount)} variant="ghost" onPress={() => router.push('/chat-grants')} /> : null}
-            <Button label="Nova conversa" variant="ghost" onPress={() => setConfirmingReset(true)} />
+            {/* TER-1038: "ctx 150k/200k", against the person's own limit when they set one. */}
+            <ContextMeter meter={meter} />
+            {/* Everything else about the conversation — where it runs, subagents, trusted tabs, memory,
+                "Nova conversa" — is one tap away, in its settings (TER-1039). */}
+            <Pressable
+              testID="conversation-settings"
+              accessibilityRole="button"
+              accessibilityLabel={t('Configurações da conversa')}
+              hitSlop={8}
+              onPress={() => router.push('/chat-settings')}
+              className="h-10 w-10 items-center justify-center rounded-full"
+            >
+              <Icon name={SETTINGS_ICON} size={22} tone="muted" />
+              {subagentsRunning ? <View testID="conversation-settings-dot" className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-app-accent" /> : null}
+            </Pressable>
           </View>
-          {/* The account-wide chat shows it only when something stands in the way (offline, no machine, none
-              chosen, an old agent): where a ready chat runs, and switching it, live in Ajustes. A project
-              chat always shows it: it is the way to the project's accounts and model (spec 2026-09-30
-              project AI accounts §8). */}
-          {slot?.host && (slot.host.kind !== 'ready' || activeProject) ? <HostLine host={slot.host} canChange={activeProject === null} projectId={activeProject ?? null} /> : null}
+          {/* Inline only when something stands in the way (offline, no machine, none chosen, an old
+              agent): a ready host — account-wide or a project's, with its accounts, model and files
+              (spec 2026-09-30 project AI accounts §8) — is shown in the conversation's settings. */}
+          {slot?.host && slot.host.kind !== 'ready' ? <HostLine host={slot.host} canChange={activeProject === null} projectId={activeProject ?? null} /> : null}
           {shownError ? (
             <View className="px-4 pt-3">
               <Banner tone="danger" text={shownError} />
@@ -392,10 +450,11 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
           ) : (
             // A tap on the empty thread dismisses the keyboard, as dragging the list does below.
             <Pressable accessible={false} className="flex-1" onPress={Keyboard.dismiss}>
-              <EmptyState title="Nenhuma mensagem ainda" hint="Escreva abaixo para começar a conversa." />
+              <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para começar a conversa.')} />
             </Pressable>
           )
         ) : (
+          <View className="flex-1">
           <FlatList
             ref={listRef}
             testID="conversation-thread"
@@ -409,25 +468,27 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             extraData={extra}
             renderItem={renderItem}
             onScrollToIndexFailed={onScrollToIndexFailed}
+            maintainVisibleContentPosition={reading ? KEEP_READING_POSITION : undefined}
+            onScroll={onScroll}
+            scrollEventThrottle={64}
           />
+          {unread > 0 ? (
+            <View pointerEvents="box-none" className="absolute bottom-2 left-0 right-0 items-center">
+              <Pressable testID="conversation-unread" accessibilityRole="button" onPress={toEnd} className="rounded-full border border-app-border bg-app-surface2 px-3 py-1">
+                <AppText variant="muted">{t('↓ {{count}} novas mensagens', { count: unread })}</AppText>
+              </Pressable>
+            </View>
+          ) : null}
+          </View>
         )}
         {/* The footer block, a sibling of the list like the header: its height changes the list's
             frame, not its content (spec 2026-09-26 §4.2 "Keyboard"). */}
         <View testID="conversation-composer-column" style={READABLE_COLUMN}>
           {/* What waits on the person, however far up the thread (TER-477); hidden while nothing does. */}
           <PendingBar entries={timeline} deciding={decidingId !== null} onJump={onJump} onApprove={onApproveWrites} />
-          <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} />
+          <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} inbox={activeProject === undefined ? undefined : inboxKey(activeProject)} />
         </View>
-      </KeyboardAvoidingView>
-      </View>
-      <Sheet open={confirmingReset} onClose={() => setConfirmingReset(false)} title="Começar uma nova conversa?">
-        <View className="gap-3">
-          <AppText variant="muted">A conversa atual fica arquivada e o chat começa do zero.</AppText>
-          <Button label="Começar nova conversa" variant="danger" onPress={confirmReset} />
-          <Button label="Cancelar" variant="ghost" onPress={() => setConfirmingReset(false)} />
-        </View>
-      </Sheet>
-      <SubagentsSheet open={subagentsOpen} onClose={() => setSubagentsOpen(false)} subagents={subagents} cancelFailed={cancelFailed} onCancel={onCancelSubagent} now={subagentsNow} />
+      </KeyboardInsetView>
     </Screen>
   );
 }

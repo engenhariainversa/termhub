@@ -1,6 +1,8 @@
 // A copy of the contract's table (`packages/mobile-api/src/attachments.ts`, spec §5.2 and §5.6): the web
 // depends on no workspace package, so it keeps its own. The server is the judge; a drift here only
 // moves a refusal from the box to the server's 4xx.
+import { i18n, tk } from '../i18n';
+import { formatNumber } from './format';
 import type { ChatAttachment, ChatMessage } from './types';
 
 export type AttachmentKind = ChatAttachment['kind'];
@@ -51,7 +53,7 @@ export function kindFromNameAndMime(name: string, mime: string): AttachmentKind 
   return null;
 }
 
-/** `512 B`, `1,2 KB`, `10 MB` — a decimal comma, as the product speaks. */
+/** `512 B`, `1,2 KB` / `1.2 KB`, `10 MB` — the decimal separator of the language on screen. */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   const units = ['KB', 'MB', 'GB'];
@@ -61,31 +63,49 @@ export function formatBytes(bytes: number): string {
     value /= 1024;
     i += 1;
   }
-  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : value.toFixed(1).replace('.', ',');
+  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   return `${text} ${units[i]}`;
 }
 
 /** The refusal the box shows before anything is uploaded, or the kind it will upload as. */
 export function checkFile(name: string, mime: string, bytes: number): { kind: AttachmentKind } | { refused: string } {
   const ext = extensionOf(name);
-  if (ext === '.doc' || ext === '.xls') return { refused: 'Envie como .docx/.xlsx' };
+  if (ext === '.doc' || ext === '.xls') return { refused: i18n.t('Envie como .docx/.xlsx') };
   const kind = kindFromNameAndMime(name, mime);
-  if (!kind) return { refused: 'Tipo de arquivo não suportado' };
-  if (bytes > ATTACHMENT_LIMITS[kind]) return { refused: `Arquivo acima de ${formatBytes(ATTACHMENT_LIMITS[kind])}` };
+  if (!kind) return { refused: i18n.t('Tipo de arquivo não suportado') };
+  if (bytes > ATTACHMENT_LIMITS[kind]) return { refused: i18n.t('Arquivo acima de {{size}}', { size: formatBytes(ATTACHMENT_LIMITS[kind]) }) };
   return { kind };
 }
 
 const FAILURE_REASON: Record<string, string> = {
-  ATTACHMENT_INVALID: 'arquivo inválido',
-  TRANSCRIPTION_UNAVAILABLE: 'transcrição indisponível',
-  TRANSCRIPTION_FAILED: 'transcrição falhou',
+  ATTACHMENT_INVALID: tk('arquivo inválido'),
+  TRANSCRIPTION_UNAVAILABLE: tk('transcrição indisponível'),
+  TRANSCRIPTION_FAILED: tk('transcrição falhou'),
 };
+
+/** TRANSCRIPTION_UNAVAILABLE by the server's `meta.reason` (TER-1035): what went wrong with whisper. */
+const TRANSCRIPTION_REASON: Record<string, string> = {
+  not_configured: tk('transcrição desligada neste servidor'),
+  refused: tk('o serviço de transcrição recusou o acesso'),
+  unreachable: tk('serviço de transcrição fora do ar'),
+  error: tk('o serviço de transcrição deu erro'),
+};
+
+function failureReason(a: ChatAttachment): string {
+  const reason = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof a.meta?.reason === 'string' ? TRANSCRIPTION_REASON[a.meta.reason] : undefined;
+  return reason ?? ((a.error_code && FAILURE_REASON[a.error_code]) || tk('erro'));
+}
 
 /** The line under a chip or a bubble's attachment while the server is still working on it, or after it gave up. */
 export function attachmentStatusText(a: ChatAttachment): string | null {
-  if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? 'transcrevendo…' : 'processando…';
-  if (a.status === 'failed') return `falhou: ${(a.error_code && FAILURE_REASON[a.error_code]) || 'erro'}`;
+  if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? i18n.t('transcrevendo…') : i18n.t('processando…');
+  if (a.status === 'failed') return i18n.t('falhou: {{reason}}', { reason: i18n.t(failureReason(a)) });
   return null;
+}
+
+/** A transcription whisper could not do can be asked again (`POST …/retry`); a file it could not decode cannot. */
+export function canRetryAttachment(a: Pick<ChatAttachment, 'kind' | 'status' | 'error_code'>): boolean {
+  return a.status === 'failed' && a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && (a.kind === 'audio' || a.kind === 'video');
 }
 
 const isDimension = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v > 0;

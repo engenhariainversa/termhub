@@ -1,4 +1,4 @@
-import { useLang, type Dict } from '../i18n';
+import { HTML_LANG, useLang, type Dict, type Lang } from '../i18n';
 import { Site, SiteFooter, SiteHeader } from '../Site';
 import { LEGAL_DOCS, type LegalSlug } from './documents';
 import type { RenderedLegal } from './render';
@@ -11,8 +11,8 @@ import type { RenderedLegal } from './render';
 
 const OTHER: Record<LegalSlug, LegalSlug> = { termos: 'privacidade', privacidade: 'termos' };
 
-function formatDate(iso: string, lang: 'pt' | 'en') {
-  return new Date(`${iso}T12:00:00Z`).toLocaleDateString(lang === 'pt' ? 'pt-BR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+function formatDate(iso: string, lang: Lang) {
+  return new Date(`${iso}T12:00:00Z`).toLocaleDateString(HTML_LANG[lang], { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 function Page({ slug, doc }: { slug: LegalSlug; doc: RenderedLegal }) {

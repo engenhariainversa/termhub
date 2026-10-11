@@ -48,7 +48,9 @@ function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?
     recordEvent: vi.fn(async () => {}),
   };
   const tabs = { findById: vi.fn(async (id: string) => opts.tabs?.find((t) => t.id === id)) };
-  const repos = { apiTokens, tabs, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) } } as unknown as Repositories;
+  // every listed tab has an active automatic run: the run-only tab tools (report_card, get_card) are listed
+  const automationRuns = { activeByTab: vi.fn(async (id: string) => { const t = opts.tabs?.find((x) => x.id === id); return t ? { id: 'run1', project_id: t.project_id } : null; }) };
+  const repos = { apiTokens, tabs, automationRuns, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) } } as unknown as Repositories;
   const grants = opts.grants ?? ['machines:read', 'projects:read', 'terminals:read'];
   vi.mocked(canAccess).mockImplementation(async (_r, _u, resource, action) => grants.includes(`${resource}:${action}`));
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test', limiter: opts.limiter, attachments: opts.attachments }));
@@ -90,8 +92,16 @@ describe('tools/list input schemas (TER-626)', () => {
     const { app } = build({ token: token({ scopes: [...API_TOKEN_SCOPES] }), grants });
     const r = await rpc(app, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
     const text = r.body.includes('data:') ? r.body.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : r.body;
-    const tools = JSON.parse(text).result.tools as { name: string; inputSchema: Record<string, unknown> }[];
-    expect(tools.map((t) => t.name).sort()).toEqual(TOOLS.map((t) => t.name).sort());
+    const listed = JSON.parse(text).result.tools as { name: string; inputSchema: Record<string, unknown> }[];
+    // the run-only tab tools are listed to a tab token whose tab has an active run, never to this one
+    const runOnly = ['report_card', 'get_card'];
+    expect(listed.map((t) => t.name).sort()).toEqual(TOOLS.map((t) => t.name).filter((n) => !runOnly.includes(n)).sort());
+    const tabApp = build({ token: token({ scopes: ['read', 'memory'], tab_id: 'tab1', gated: false }), grants, tabs: [{ id: 'tab1', project_id: 'p1' }] }).app;
+    const tabRes = await rpc(tabApp, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
+    const tabText = tabRes.body.includes('data:') ? tabRes.body.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : tabRes.body;
+    const tabTools = (JSON.parse(tabText).result.tools as typeof listed).filter((t) => runOnly.includes(t.name));
+    expect(tabTools.map((t) => t.name).sort()).toEqual([...runOnly].sort());
+    const tools = [...listed, ...tabTools];
 
     // Formats (`uri`…) are valid 2020-12 keywords; checking values against them is not what is at stake here.
     const ajv = new Ajv2020({ strict: true, strictRequired: false, allowUnionTypes: true, validateFormats: false });

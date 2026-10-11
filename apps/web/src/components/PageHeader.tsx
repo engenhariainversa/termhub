@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from '../i18n';
 
 export interface PageHeaderTab {
   to: string;
@@ -36,6 +37,7 @@ const SHORT_TITLE = 12;
  * `shrink-0`). The actions never shrink.
  */
 export function PageHeader({ title, subtitle, subtitleTitle, tabs, extra, actions }: PageHeaderProps) {
+  const { t } = useTranslation();
   const hasTabs = !!tabs && tabs.length > 0;
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-bg-2 px-4">
@@ -50,16 +52,16 @@ export function PageHeader({ title, subtitle, subtitleTitle, tabs, extra, action
       {(hasTabs || extra) && (
         <div className="header-scroll-fade flex min-w-[10rem] flex-1 shrink basis-auto items-center gap-3 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {hasTabs && (
-            <nav aria-label={`Seções de ${title}`} className="flex shrink-0 items-center gap-1">
-              {tabs!.map((t) => (
+            <nav aria-label={t('Seções de {{title}}', { title })} className="flex shrink-0 items-center gap-1">
+              {tabs!.map((tab) => (
                 <NavLink
-                  key={t.to}
-                  to={t.to}
-                  end={t.end}
+                  key={tab.to}
+                  to={tab.to}
+                  end={tab.end}
                   className={({ isActive }) => `whitespace-nowrap rounded px-3 py-1 text-sm ${isActive ? 'bg-accent/15 text-fg' : 'text-fg-muted hover:bg-bg-3 hover:text-fg'}`}
                 >
-                  {t.label}
-                  {!!t.badge && <span className="ml-1 text-[10px] text-fg-dim">{t.badge}</span>}
+                  {tab.label}
+                  {!!tab.badge && <span className="ml-1 text-[10px] text-fg-dim">{tab.badge}</span>}
                 </NavLink>
               ))}
             </nav>

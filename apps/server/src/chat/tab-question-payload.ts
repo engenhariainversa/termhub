@@ -25,7 +25,7 @@ const rawInput = z.object({ questions: z.array(rawQuestion).min(1).max(4) });
 export interface TabQuestionOption {
   label: string;
   description: string;
-  /** Claude Code marks the recommended option in its label: "Blue (Recommended)". */
+  /** Claude Code marks the recommended option in its label: "Blue (Recommended)" (or "(Recomendado)"). */
   recommended: boolean;
 }
 export interface TabQuestionItem {
@@ -100,9 +100,9 @@ export type TabQuestionInput =
   | { kind: 'choice'; payload: ChoicePayload; tool_use_id: string | null }
   | { kind: 'permission'; payload: PermissionPayload; tool_use_id: null };
 
-const RECOMMENDED = /\s*\(Recommended\)\s*$/i;
+const RECOMMENDED = /\s*\((?:Recommended|Recomendado)\)\s*$/i;
 
-/** "Blue (Recommended)" → `{ label: "Blue", recommended: true }`. A label that is only the marker stays as it is. */
+/** "Blue (Recommended)" or "Azul (Recomendado)" → `{ label: "Blue", recommended: true }`. A label that is only the marker stays as it is. */
 export function normaliseLabel(label: string): { label: string; recommended: boolean } {
   const trimmed = label.trim();
   const stripped = trimmed.replace(RECOMMENDED, '').trim();
@@ -211,10 +211,16 @@ export const choiceAnswerBody = z.object({
 });
 export type ChoiceAnswer = z.infer<typeof choiceAnswerBody>;
 
+/** An option of the dialog on screen, by its number and its text as the card read it (TER-995). The
+ * server reads the screen again and refuses the answer when that number no longer shows that text. */
+export const permissionOptionChoice = z.object({ number: z.number().int().min(1).max(9), label: z.string().trim().min(1).max(ANSWER_TEXT_MAX) });
+
 export const permissionAnswerBody = z
-  .object({ allow: z.boolean(), text: typedText.optional() })
-  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] });
-export type PermissionAnswer = z.infer<typeof permissionAnswerBody>;
+  .object({ allow: z.boolean(), text: typedText.optional(), option: permissionOptionChoice.optional() })
+  .refine((a) => !(a.allow && a.text !== undefined), { message: 'texto só acompanha uma negação', path: ['text'] })
+  .refine((a) => !(a.option && a.text !== undefined), { message: 'texto não acompanha uma opção', path: ['text'] });
+/** As stored, an option answer also carries the button's text (`summary`) the closed card shows. */
+export type PermissionAnswer = Omit<z.infer<typeof permissionAnswerBody>, 'option'> & { option?: { number: number; label: string; summary?: string } };
 
 export type ChoiceAnswerProblem = 'ANSWER_COUNT' | 'ANSWER_OPTION' | 'ANSWER_SHAPE';
 

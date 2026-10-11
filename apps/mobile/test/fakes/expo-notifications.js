@@ -10,4 +10,7 @@ module.exports = {
   getExpoPushTokenAsync: jest.fn(async () => ({ type: 'expo', data: 'ExponentPushToken[jest]' })),
   useLastNotificationResponse: () => null,
   clearLastNotificationResponse: jest.fn(),
+  setBadgeCountAsync: jest.fn(async () => true),
+  getPresentedNotificationsAsync: jest.fn(async () => []),
+  dismissNotificationAsync: jest.fn(async () => undefined),
 };

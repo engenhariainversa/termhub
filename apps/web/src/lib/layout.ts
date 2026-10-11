@@ -1,14 +1,16 @@
 // Pane layout for the terminals area: fixed presets, tab-per-cell assignment,
 // one optional floating window. Pure module; persistence helpers at the bottom.
 
+import { tk } from '../i18n';
+
 export type Preset = 'single' | 'columns' | 'rows' | 'stack-left' | 'grid';
 
 export const PRESETS: readonly { key: Preset; label: string; cells: number }[] = [
-  { key: 'single', label: 'Um painel', cells: 1 },
-  { key: 'columns', label: 'Duas colunas', cells: 2 },
-  { key: 'rows', label: 'Duas linhas', cells: 2 },
-  { key: 'stack-left', label: 'Dois empilhados + um ao lado', cells: 3 },
-  { key: 'grid', label: 'Quatro (2x2)', cells: 4 },
+  { key: 'single', label: tk('Um painel'), cells: 1 },
+  { key: 'columns', label: tk('Duas colunas'), cells: 2 },
+  { key: 'rows', label: tk('Duas linhas'), cells: 2 },
+  { key: 'stack-left', label: tk('Dois empilhados + um ao lado'), cells: 3 },
+  { key: 'grid', label: tk('Quatro (2x2)'), cells: 4 },
 ];
 
 export function cellCount(preset: Preset): number {

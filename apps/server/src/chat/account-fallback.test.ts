@@ -55,6 +55,22 @@ describe('fallbackCandidates in a project chat (TER-589)', () => {
   });
 });
 
+describe('fallbackCandidates with an account exclusive to a project (TER-990)', () => {
+  beforeEach(() => {
+    // c, the emptiest account, is exclusive to DR Horton (p9)
+    owned = owned.map((a) => (a.id === 'c' ? { ...a, exclusive_project: { id: 'p9', name: 'DR Horton' } } : a));
+  });
+
+  it('never falls back onto it in another project chat, nor in the account-wide chat', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), 'p1')).map((a) => a.id)).toEqual(['b']);
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), null)).map((a) => a.id)).toEqual(['b']);
+  });
+
+  it('falls back onto it in its own project chat', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), 'p9')).map((a) => a.id)).toEqual(['c', 'b']);
+  });
+});
+
 describe('fallbackCandidates', () => {
   it('ranks the other Claude accounts of the host machine by room left, owner-scoped', async () => {
     const got = await fallbackCandidates(repos, machine, 'a', new Set(), null);
@@ -70,6 +86,28 @@ describe('fallbackCandidates', () => {
     peaks.c = 10;
     // the default login (null) runs the chat: every account of the machine is a candidate
     expect((await fallbackCandidates(repos, machine, null, new Set(['b']), null)).map((a) => a.id)).toEqual(['c']);
+  });
+});
+
+describe('fallbackCandidates and the run model (TER-837)', () => {
+  beforeEach(() => {
+    // b has room on the account, but its Fable allowance is used up
+    getAccountUsage.mockImplementation(async (a: AiAccount) =>
+      a.id === 'b'
+        ? { ...usage('b', 69), windows: [{ key: 'seven_day', label: '', utilization: 69, resets_at: null }, { key: 'limit:weekly_scoped:Fable', label: '', utilization: 100, resets_at: null, model: 'fable' }] }
+        : usage(a.id, 100),
+    );
+  });
+
+  it('takes an account whose only full window caps another model', async () => {
+    expect((await fallbackCandidates(repos, machine, 'a', new Set(), null, 'claude-opus-5-5')).map((a) => a.id)).toEqual(['b']);
+    const pick = await pickFallback(repos, { machine, currentAccountId: 'a', tried: new Set(), projectId: null, sessionDir: DIR, sessionId: SID, model: 'opus' });
+    expect(pick?.account.id).toBe('b');
+  });
+
+  it('does not take it for that model, or when the model is unknown', async () => {
+    expect(await fallbackCandidates(repos, machine, 'a', new Set(), null, 'fable')).toEqual([]);
+    expect(await fallbackCandidates(repos, machine, 'a', new Set(), null)).toEqual([]);
   });
 });
 

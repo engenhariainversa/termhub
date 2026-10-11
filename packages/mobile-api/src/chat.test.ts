@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   actionAutoDecision,
   autoDecisionSourceLine,
+  REPLY_CARD_LABEL,
   REPLY_EXCERPT_MAX,
   replyExcerpt,
   chatMemoryPatchBody,
@@ -22,6 +23,7 @@ import {
   STANDING_KIND_LABEL,
   standingKindOf,
   tabQuestionAutoAnswerCancelResponse,
+  tabQuestionReplyText,
 } from './chat.js';
 import { tabQuestionSchema } from './events.js';
 
@@ -146,6 +148,14 @@ describe('mobileMessageBody', () => {
   it('accepts an optional reply_to_id (TER-447)', () => {
     expect(mobileMessageBody.parse({ text: 'oi', reply_to_id: 'm1' })).toEqual({ text: 'oi', reply_to_id: 'm1' });
     expect(mobileMessageBody.safeParse({ text: 'oi', reply_to_id: '' }).success).toBe(false);
+  });
+
+  it('accepts a card to answer instead (TER-849), never together with a message', () => {
+    expect(mobileMessageBody.parse({ text: 'oi', reply_to_card: { kind: 'action', id: 'a1' } })).toEqual({ text: 'oi', reply_to_card: { kind: 'action', id: 'a1' } });
+    expect(mobileMessageBody.safeParse({ text: 'oi', reply_to_card: { kind: 'tab_question', id: 'q1' } }).success).toBe(true);
+    expect(mobileMessageBody.safeParse({ text: 'oi', reply_to_card: { kind: 'tab_suggestion', id: 'q1' } }).success).toBe(false);
+    expect(mobileMessageBody.safeParse({ text: 'oi', reply_to_card: { kind: 'action', id: '' } }).success).toBe(false);
+    expect(mobileMessageBody.safeParse({ text: 'oi', reply_to_id: 'm1', reply_to_card: { kind: 'action', id: 'a1' } }).success).toBe(false);
   });
 
   it('accepts text alone, attachments alone, and refuses neither', () => {
@@ -425,5 +435,21 @@ describe('actionAutoDecision / autoDecisionSourceLine (TER-641)', () => {
     expect(autoDecisionSourceLine(auto.sources[0]!)).toBe('«Rodo os testes?» → Sim');
     expect(autoDecisionSourceLine({ ref: 'decision:d1', question: 'Rodo?', answer: '' })).toBe('«Rodo?»');
     expect(autoDecisionSourceLine({ ref: 'task:tk1', question: null, answer: null })).toBe('task:tk1');
+  });
+});
+
+describe('card replies (TER-849)', () => {
+  it('labels each card kind', () => {
+    expect(REPLY_CARD_LABEL).toEqual({ action: 'Confirmação', tab_question: 'Pergunta da aba' });
+  });
+
+  it('quotes every question of a choice card', () => {
+    const q = (question: string) => ({ question, header: '', multi_select: false, options: [] });
+    expect(tabQuestionReplyText({ kind: 'choice', payload: { questions: [q('Qual banco?'), q(' '), q('Migrar agora? ')] } })).toBe('Qual banco? · Migrar agora?');
+  });
+
+  it("quotes a permission card's question, or names the tool it asks for", () => {
+    expect(tabQuestionReplyText({ kind: 'permission', payload: { tool_name: 'Bash', question: 'Rodar npm test?' } })).toBe('Rodar npm test?');
+    expect(tabQuestionReplyText({ kind: 'permission', payload: { tool_name: 'Bash' } })).toBe('Permissão para usar Bash');
   });
 });

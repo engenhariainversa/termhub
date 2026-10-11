@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import { t, useTranslation } from '@/i18n';
 import { AppText, Button, Icon } from '@/ui';
 import { permissionTitle, tabLabel } from '../model/tab-question-text';
 import type { ChatEntry } from '../model/timeline';
@@ -22,7 +23,7 @@ function pendingItems(entries: ChatEntry[]): PendingItem[] {
     if (e.kind === 'action') return e.action.status === 'pending' ? [{ id: e.action.id, line: e.action.summary, write: e.action.class === 'write' }] : [];
     if (e.kind !== 'tab_question' || e.question.status !== 'open') return [];
     const q = e.question;
-    const line = q.kind === 'permission' ? permissionTitle(q) : `${tabLabel(q)} pergunta: ${q.payload.questions[0]?.question ?? ''}`;
+    const line = q.kind === 'permission' ? permissionTitle(q) : t('{{tab}} pergunta: {{question}}', { tab: tabLabel(q), question: q.payload.questions[0]?.question ?? '' });
     return [{ id: q.id, line, write: false }];
   });
 }
@@ -46,11 +47,13 @@ type Props = {
  * while nothing waits.
  */
 export const PendingBar = memo(function PendingBar({ entries, deciding, onJump, onApprove }: Props) {
+  const { t, i18n } = useTranslation();
   const [open, setOpen] = useState(false);
-  const items = useMemo(() => pendingItems(entries), [entries]);
+  // The lines are composed in the current language: rebuilt when it changes.
+  const items = useMemo(() => pendingItems(entries), [entries, i18n.language]);
   if (items.length === 0) return null;
   const writes = items.filter((i) => i.write).slice(0, BATCH_MAX);
-  const count = items.length === 1 ? '1 pendente' : `${items.length} pendentes`;
+  const count = t('{{count}} pendentes', { count: items.length });
   return (
     <View testID="pending-bar" className="gap-1 border-t border-app-border px-4 py-2">
       <Pressable accessibilityRole="button" accessibilityLabel={count} accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} className="flex-row items-center gap-2 py-1">
@@ -74,7 +77,7 @@ export const PendingBar = memo(function PendingBar({ entries, deciding, onJump, 
               </AppText>
             </Pressable>
           ))}
-          {writes.length >= 2 ? <Button label={`Aprovar as reversíveis (${writes.length})`} variant="secondary" onPress={() => onApprove(writes.map((w) => w.id))} disabled={deciding} /> : null}
+          {writes.length >= 2 ? <Button label={t('Aprovar as reversíveis ({{n}})', { n: writes.length })} variant="secondary" onPress={() => onApprove(writes.map((w) => w.id))} disabled={deciding} /> : null}
         </View>
       ) : null}
     </View>

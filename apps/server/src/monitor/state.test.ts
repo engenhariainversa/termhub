@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { LAST_ANSWER_MAX, NEEDS_YOU, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
+import { AT_PROMPT, LAST_ANSWER_MAX, NEEDS_YOU, STATE_TEXT_MAX, claudeSessionOf, interpretHookEvent, isRateLimit, needsYou, runningBackgroundTasks } from './state.js';
 import { activityOf } from './activity.js';
 
 describe('interpretHookEvent — claude', () => {
@@ -471,9 +471,14 @@ describe('claude StopFailure', () => {
   it('a usage limit without a message still says so', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'rate_limit' })).toMatchObject({ text: 'Limite de uso da conta atingido' });
   });
-  it('any other API error is an error state', () => {
+  it('a login that expired needs the person to log in again (TER-1046)', () => {
     const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'authentication_failed' });
-    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(i).toMatchObject({ kind: 'auth_required', text: 'Login da conta expirou: rode /login nesta aba (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(isRateLimit(i)).toBe(false);
+  });
+  it('any other API error is an error state', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'server_error' });
+    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (server_error)', meta: { event: 'StopFailure', error: 'server_error' } });
     expect(isRateLimit(i)).toBe(false);
   });
   it('an unknown error value is not echoed', () => {
@@ -570,8 +575,9 @@ describe('claude Stop background tasks (spec 2026-09-26 TER-203 §4.1)', () => {
   ])('%s', (_label, background, count) => {
     const i = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Vigiando o CI.', ...(background === undefined ? {} : { background_tasks: background }) });
     expect(i?.text).toBe('Vigiando o CI.');
-    // background work still running is not a wait for the person (TER-644)
-    expect(i?.kind).toBe(count > 0 ? 'waiting_background' : 'waiting_input');
+    // background work still running is not a wait for the person (TER-644); with nothing left running the
+    // turn is over, and this message is a report that asks nothing (TER-972)
+    expect(i?.kind).toBe(count > 0 ? 'waiting_background' : 'finished');
     expect(i?.backgroundTasks).toBe(count > 0 ? count : undefined);
     expect(i?.meta).toEqual(count > 0 ? { event: 'Stop', background_tasks: count } : { event: 'Stop' });
     expect(JSON.stringify(i)).not.toContain('s3cr3t');
@@ -607,8 +613,8 @@ describe('the whole answer (spec 2026-09-30 last answer)', () => {
   });
 
   it('keeps the answer of a Claude Stop with background tasks still running', () => {
-    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Pronto.', background_tasks: [{ status: 'running' }] })!;
-    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Pronto.' });
+    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Aguardando o build.', background_tasks: [{ status: 'running' }] })!;
+    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Aguardando o build.' });
   });
 
   it.each([
@@ -661,5 +667,89 @@ describe('waiting_background is not "needs you" (TER-644)', () => {
     expect(NEEDS_YOU).not.toContain('waiting_background');
     expect(needsYou({ state: 'waiting_background', state_at: at, state_seen_at: null })).toBe(false);
     expect(needsYou({ state: 'waiting_input', state_at: at, state_seen_at: null })).toBe(true);
+  });
+});
+
+describe('a claude Stop that ends with a report is finished, not a wait (TER-972)', () => {
+  const stop = (last: string | undefined, background?: unknown[]) =>
+    interpretHookEvent('claude', { hook_event_name: 'Stop', ...(last === undefined ? {} : { last_assistant_message: last }), ...(background ? { background_tasks: background } : {}) });
+
+  it('a plain report is finished, with its text, its answer and the same meta', () => {
+    const i = stop('Merge e deploy feitos; o card está em Feito.');
+    expect(i).toMatchObject({ kind: 'finished', text: 'Merge e deploy feitos; o card está em Feito.', answer: 'Merge e deploy feitos; o card está em Feito.', meta: { event: 'Stop' } });
+    expect(i?.backgroundTasks).toBeUndefined();
+  });
+
+  it('a message that ends in a question still waits for the person; an offer is part of the report (TER-1046)', () => {
+    expect(stop('Deploy feito. Quer que eu feche a aba?')?.kind).toBe('waiting_input');
+    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('finished');
+  });
+
+  it("Claude Code's login error is auth_required, keeping its text (TER-1046)", () => {
+    expect(stop('Login expired · Please run /login')).toMatchObject({ kind: 'auth_required', text: 'Login expired · Please run /login' });
+  });
+
+  it('a Stop with no last message still waits for the person', () => {
+    expect(stop(undefined)?.kind).toBe('waiting_input');
+    expect(stop('   ')?.kind).toBe('waiting_input');
+  });
+
+  it('background work still running holds the tab only when the message says it waits on it (TER-1053)', () => {
+    const running = [{ id: 'b1', type: 'monitor', status: 'running' }];
+    for (const waits of ['Aguardando o CI do #940.', 'Disparei 3 agentes em background; consolido quando terminarem.', 'Vou acompanhar o deploy e te aviso.', "Started the build; I'll report once it finishes.", '   ']) {
+      expect(stop(waits, running)).toMatchObject({ kind: 'waiting_background', backgroundTasks: 1 });
+    }
+    // a report or a request ends the work, whatever the background still does (a Monitor never ends)
+    const done = stop('Merge e deploy feitos.', running);
+    expect(done).toMatchObject({ kind: 'finished', meta: { event: 'Stop', background_tasks: 1 } });
+    expect(done?.backgroundTasks).toBeUndefined();
+    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_input');
+  });
+
+  it('the case that hung (TER-1053): a final report with a Monitor left running is the end of the turn and reaches the person', () => {
+    const last = [
+      'O PR está aberto, e parei aqui como pedido.',
+      '',
+      '- **PR:** https://github.com/acme/monorepo/pull/940',
+      '  - Um único commit, `f2a0a3a8d`, assinado e sem Co-Authored-By.',
+      '',
+      '**Ficou de fora:**',
+      '- **Link "relates" entre os tickets.** A descrição já cita o #928. Posso criar o link se ele quiser.',
+      '- **Citar o #940 na descrição do #849.** Não editei, e espero a próxima etapa.',
+      '',
+      'O CI do #940, do #849 e do #851 ainda não foi verificado.',
+    ].join('\n');
+    const i = stop(last, [{ id: 'm1', type: 'monitor', status: 'running' }]);
+    // an offer ("Posso…") is a report (TER-1046): finished, which reaches the person — never "still working"
+    expect(i?.kind).toBe('finished');
+    expect(i?.backgroundTasks).toBeUndefined();
+    // the same report with a direct question waits for the person
+    expect(stop(last.replace(' Posso criar o link se ele quiser.', ' Quer que eu crie o link?'), [{ id: 'm1', type: 'monitor', status: 'running' }])?.kind).toBe('waiting_input');
+  });
+
+  it('a subagent Stop is classified the same way and keeps no answer', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Pronto.', agent_id: 'a1' });
+    expect(i).toMatchObject({ kind: 'finished', meta: { event: 'Stop', subagent: true, agent_id: 'a1' } });
+    expect(i?.answer).toBeUndefined();
+  });
+
+  it('Codex and Cursor turns are not classified: they still end as waits', () => {
+    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Deploy feito.' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Deploy feito.' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('cursor', { hook_event_name: 'afterAgentResponse', text: 'Deploy feito.' })?.kind).toBe('waiting_input');
+  });
+
+  it('a finished tab never needs the person, seen or not, and is back at its prompt', () => {
+    const at = '2026-10-05T15:00:00.000Z';
+    expect(NEEDS_YOU).not.toContain('finished');
+    expect(needsYou({ state: 'finished', state_at: at, state_seen_at: null })).toBe(false);
+    expect(AT_PROMPT).toEqual(['waiting_input', 'finished', 'blocked']);
+  });
+
+  it('a login that expired and the trust dialog need the person; a blocked run does not (TER-1046)', () => {
+    const at = '2026-10-08T15:00:00.000Z';
+    expect(needsYou({ state: 'auth_required', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'trust_prompt', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'blocked', state_at: at, state_seen_at: null })).toBe(false);
   });
 });

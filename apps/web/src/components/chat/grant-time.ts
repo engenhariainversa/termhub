@@ -1,9 +1,11 @@
-const hhmm = (d: Date) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+import { i18n } from '../../i18n';
+import { formatTime } from '../../lib/format';
 
 /** "até 14:32", or "até amanhã, 09:05" — a grant lasts at most 24 h, so those are the only two days. */
 export function untilLabel(expiresAt: string, now = new Date()): string {
   const end = new Date(expiresAt);
-  return end.toDateString() === now.toDateString() ? `até ${hhmm(end)}` : `até amanhã, ${hhmm(end)}`;
+  const time = formatTime(end);
+  return end.toDateString() === now.toDateString() ? i18n.t('até {{time}}', { time }) : i18n.t('até amanhã, {{time}}', { time });
 }
 
 /** The server is the judge (it re-checks on every call); this only hides a strip that has run out. */

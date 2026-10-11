@@ -8,7 +8,9 @@ import { actionForMethod, canAccess } from '../auth/permissions.js';
 import { hashToken } from '../auth/tokens.js';
 import { HttpError, badRequest, forbidden, unauthorized } from '../lib/errors.js';
 import { MOBILE_TOKEN_RE } from './codes.js';
+import { isPendingDeletion, pendingDeletion } from '../account/deletion.js';
 import { verifyProof, type JtiCache } from './dpop.js';
+import { msg } from '../i18n/index.js';
 
 // The mobile prefix's own authentication: a device access token plus a DPoP proof, and nothing
 // else. It never reads a cookie or the Cloudflare Access header, and a personal API token is
@@ -47,7 +49,7 @@ const replayed = () => new HttpError(401, 'Prova repetida', 'PROOF_REPLAYED');
 
 export function buildMobileAuthHook(deps: MobileAuthDeps) {
   return async function mobileAuthHook(request: FastifyRequest) {
-    const cfg = (request.routeOptions?.config ?? {}) as { mobileAuth?: MobileAuthMode; resource?: string; action?: string };
+    const cfg = (request.routeOptions?.config ?? {}) as { mobileAuth?: MobileAuthMode; resource?: string; action?: string; allowPendingDeletion?: boolean };
 
     // The version gate comes first, on every route: an app too old to speak this API is told to
     // update before anything else can fail. No header is tolerated (a command-line client).
@@ -117,10 +119,12 @@ export function buildMobileAuthHook(deps: MobileAuthDeps) {
     request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id };
     request.mobile = { device, user };
     void deps.repos.devices.touchSeen(device.id, request.ip, new Date()).catch(() => {});
+    // A deactivated account (deletion pending, TER-720) reaches only the routes that show and cancel it.
+    if (isPendingDeletion(user) && !cfg.allowPendingDeletion) throw pendingDeletion();
 
     if (cfg.resource) {
       const action = cfg.action ?? actionForMethod(request.method);
-      if (!(await canAccess(deps.repos, user, cfg.resource, action))) throw forbidden(`Sem permissão: ${cfg.resource}:${action}`);
+      if (!(await canAccess(deps.repos, user, cfg.resource, action))) throw forbidden(msg('Sem permissão: {{permission}}', { permission: `${cfg.resource}:${action}` }));
     }
   };
 }

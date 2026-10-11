@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { LegalLinks } from '@/features/legal/view/legal-links';
+import { useTranslation } from '@/i18n';
 import { AppText, Banner, Button, Field, Screen } from '@/ui';
 import { useSessionStore } from '../viewmodel/useSessionStore';
 
@@ -9,6 +10,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Início (P§4.1, design spec §11.2): "Continuar com e-mail" starts the enrolment of this device. */
 export function StartScreen() {
+  const { t } = useTranslation();
   const requestDevice = useSessionStore((s) => s.requestDevice);
   const busy = useSessionStore((s) => s.busy);
   const notice = useSessionStore((s) => s.notice);
@@ -22,7 +24,7 @@ export function StartScreen() {
   const submit = () => {
     const trimmed = email.trim();
     if (!EMAIL_RE.test(trimmed)) {
-      setError('Digite um e-mail válido');
+      setError(t('Digite um e-mail válido'));
       return;
     }
     setError(null);
@@ -32,12 +34,13 @@ export function StartScreen() {
   return (
     <Screen>
       <View className="flex-1 justify-center gap-4">
+        {/* i18n-ignore */}
         <AppText variant="title">termhub</AppText>
-        <AppText variant="muted">Entre com o e-mail da sua conta para pedir acesso a este aparelho.</AppText>
+        <AppText variant="muted">{t('Entre com o e-mail da sua conta para pedir acesso a este aparelho.')}</AppText>
         {notice ? <Banner tone="info" text={notice} /> : null}
         {storeError ? <Banner tone="danger" text={storeError} /> : null}
         <Field
-          label="E-mail"
+          label={t('E-mail')}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
@@ -45,8 +48,8 @@ export function StartScreen() {
           error={error ?? undefined}
           testID="start-email"
         />
-        <Button label="Continuar com e-mail" onPress={submit} loading={busy} />
-        <AppText variant="muted">Usamos o seu e-mail para encontrar a sua conta e pedir a aprovação deste aparelho.</AppText>
+        <Button label={t('Continuar com e-mail')} onPress={submit} loading={busy} />
+        <AppText variant="muted">{t('Usamos o seu e-mail para encontrar a sua conta e pedir a aprovação deste aparelho.')}</AppText>
         <LegalLinks />
       </View>
     </Screen>

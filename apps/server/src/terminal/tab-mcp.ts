@@ -26,6 +26,18 @@ export function tabMcpSupported(machine: Machine): boolean {
   return !!version && versionAtLeast(version, TAB_MCP_MIN_AGENT_VERSION);
 }
 
+/** First agent release that ships the hard-lock guard script (TER-993); the server only points
+ *  `--settings` at it on a machine new enough to have it, so an older agent gets no dangling hook. */
+export const GUARD_MIN_AGENT_VERSION = '0.19.0';
+
+/** Whether the machine has the guard script `~/.termhub/bin/termhub-guard` (agent 0.19.0+). ssh/local
+ *  machines never run automatic work, so they are not a case here; an agent's live version wins. */
+export function guardSupported(machine: Machine): boolean {
+  if (machine.type !== 'agent') return false;
+  const version = agents.info(machine.id)?.agent_version ?? machine.agent_version;
+  return !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION);
+}
+
 async function runScript(machine: Machine, script: string, input: Buffer): Promise<void> {
   // Over ssh the remote command goes to the user's login shell, which may not be POSIX (fish): `sh -c` there too.
   const r = await runOnMachineWithInput(machine, { file: 'sh', args: ['-c', script] }, `sh -c ${shellQuote(script)}`, input, SCRIPT_TIMEOUT_MS);

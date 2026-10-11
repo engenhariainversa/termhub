@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { useTranslation } from '@/i18n';
 import { AppText, Button, Countdown, PinInput, Screen } from '@/ui';
 import { attemptsSuffix } from '../model/messages';
 import { useSessionStore } from '../viewmodel/useSessionStore';
@@ -9,6 +10,7 @@ const PIN_LENGTH = 6;
 /** Desbloquear (P§5.3–5.6, design spec §5.4): the PIN on the system number pad, and the biometric
  * shortcut when enabled. "Sair e remover este aparelho" lives in Ajustes, not here. */
 export function UnlockScreen() {
+  const { t } = useTranslation();
   const unlock = useSessionStore((s) => s.unlock);
   const unlockWithBiometrics = useSessionStore((s) => s.unlockWithBiometrics);
   const lockExpired = useSessionStore((s) => s.lockExpired);
@@ -31,11 +33,11 @@ export function UnlockScreen() {
   return (
     <Screen>
       <View className="flex-1 justify-center gap-6">
-        <AppText variant="title">Desbloquear</AppText>
-        <AppText variant="muted">Digite seu PIN</AppText>
+        <AppText variant="title">{t('Desbloquear')}</AppText>
+        <AppText variant="muted">{t('Digite seu PIN')}</AppText>
         {lockedUntil ? (
           <View className="gap-2">
-            <AppText className="text-app-danger">Aparelho bloqueado</AppText>
+            <AppText className="text-app-danger">{t('Aparelho bloqueado')}</AppText>
             <Countdown until={lockedUntil} onExpire={lockExpired} />
           </View>
         ) : error ? (
@@ -47,7 +49,7 @@ export function UnlockScreen() {
         {busy ? (
           <View className="items-center gap-3 py-4">
             <ActivityIndicator />
-            <AppText variant="muted">Conferindo o PIN…</AppText>
+            <AppText variant="muted">{t('Conferindo o PIN…')}</AppText>
           </View>
         ) : (
           <PinInput
@@ -56,11 +58,11 @@ export function UnlockScreen() {
             length={PIN_LENGTH}
             disabled={Boolean(lockedUntil)}
             error={Boolean(error) && !lockedUntil}
-            accessibilityLabel="PIN"
+            accessibilityLabel={t('PIN')}
           />
         )}
         {biometricsEnabled ? (
-          <Button label="Usar biometria" variant="ghost" onPress={() => void unlockWithBiometrics()} disabled={Boolean(lockedUntil) || busy} />
+          <Button label={t('Usar biometria')} variant="ghost" onPress={() => void unlockWithBiometrics()} disabled={Boolean(lockedUntil) || busy} />
         ) : null}
       </View>
     </Screen>

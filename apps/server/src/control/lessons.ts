@@ -7,6 +7,7 @@ import type { MemoryDeps } from '../memory/index-items.js';
 import { indexProjectNote } from '../memory/note.js';
 import { newId } from '../lib/ids.js';
 import { ControlError, type ControlContext } from './context.js';
+import { msg, tk } from '../i18n/index.js';
 
 /** `record_lesson`'s own cap (spec 2026-09-27 failure lessons D10): the same idea as TER-95's
  *  `NOTES_PER_HOUR` — a runaway loop, or an injection that got the concierge to call the tool
@@ -19,9 +20,9 @@ const LESSONS_WINDOW_MS = 60 * 60 * 1000;
  *  read, without pulling the whole project history for what is normally a single new row. */
 const LESSON_LOOKUP_LIMIT = 20;
 
-const LESSON_SECRET_MSG = 'A lição parece conter um segredo (token ou chave); tire-o e tente de novo';
-const LESSONS_RATE_LIMITED_MSG = 'Limite de 20 lições por hora atingido; tente mais tarde';
-const NOTE_FULL_MSG = 'A anotação do projeto chegou ao limite de 200 000 caracteres';
+const LESSON_SECRET_MSG = tk('A lição parece conter um segredo (token ou chave); tire-o e tente de novo');
+const LESSONS_RATE_LIMITED_MSG = tk('Limite de 20 lições por hora atingido; tente mais tarde');
+const NOTE_FULL_MSG = tk('A anotação do projeto chegou ao limite de 200 000 caracteres');
 
 export interface RecordLessonInput {
   project_id: string;
@@ -66,7 +67,7 @@ export async function recordLesson(ctx: ControlContext, a: RecordLessonInput, de
   let tabId: string | null = null;
   if (a.tab_id) {
     const { tab } = await ctx.scoped.tab(a.tab_id);
-    if (tab.project_id !== project.id) throw new ControlError('TAB_OTHER_PROJECT', `A aba "${tab.name}" é de outro projeto`);
+    if (tab.project_id !== project.id) throw new ControlError('TAB_OTHER_PROJECT', msg('A aba "{{tab}}" é de outro projeto', { tab: tab.name }));
     tabId = tab.id;
   }
 

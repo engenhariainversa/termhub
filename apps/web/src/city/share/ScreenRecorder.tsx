@@ -3,6 +3,7 @@ import type { CityModel } from '../../office/model';
 import { screenCrop, type ShareInfo } from './compose';
 import { canShareFile, downloadFile, shareOrDownload } from './deliver';
 import { fileNameFor, type FrameSource } from './images';
+import { useTranslation } from '../../i18n';
 import { baseType, canRecordVideo, extensionFor, instagramReady, recordVideo, RecordingCancelled, SCREEN_VIDEO_MAX_MS, type Recording } from './record';
 
 type State =
@@ -77,12 +78,13 @@ export function RecordingFrame({ host }: { host: HTMLElement }) {
     observer.observe(host);
     return () => observer.disconnect();
   }, [host]);
+  const { t } = useTranslation();
   const r = screenCrop(size.width, size.height);
   return (
     <div aria-hidden="true" className="pointer-events-none absolute z-10 rounded-sm border-2 border-danger shadow-[0_0_0_1px_rgba(248,81,73,0.35)]" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
       <span className="absolute left-2 top-2 flex items-center gap-1.5 rounded bg-danger/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" />
-        rec
+        {t('rec')}
       </span>
     </div>
   );
@@ -90,27 +92,28 @@ export function RecordingFrame({ host }: { host: HTMLElement }) {
 
 /** What a finished screen recording offers: watch it, share or download it, or let it go. */
 export function RecordingResult({ file, preview, warn, onClose }: { file: File; preview: string; warn: boolean; onClose(): void }) {
+  const { t } = useTranslation();
   return (
-    <div role="dialog" aria-label="Gravação da tela" className="space-y-2 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl sm:rounded-lg">
+    <div role="dialog" aria-label={t('Gravação da tela')} className="space-y-2 rounded-b-xl border border-line bg-bg-2 p-4 shadow-xl sm:rounded-lg">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-fg">Gravação</h2>
-        <button type="button" aria-label="Fechar" className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
+        <h2 className="text-sm font-semibold text-fg">{t('Gravação')}</h2>
+        <button type="button" aria-label={t('Fechar')} className="rounded px-2 text-fg-muted hover:text-fg" onClick={onClose}>
           ×
         </button>
       </div>
       <video src={preview} controls playsInline className="w-full rounded bg-black" />
-      {warn && <p className="text-xs text-warn">O Instagram pode não aceitar WebM. No celular, use o Safari ou o Chrome.</p>}
+      {warn && <p className="text-xs text-warn">{t('O Instagram pode não aceitar WebM. No celular, use o Safari ou o Chrome.')}</p>}
       <div className="flex flex-wrap gap-2">
         {canShareFile(file) && (
           <button type="button" className="rounded-md bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:bg-accent-hover" onClick={() => void shareOrDownload(file)}>
-            Compartilhar
+            {t('Compartilhar')}
           </button>
         )}
         <button type="button" className="rounded-md border border-line px-3 py-1.5 text-sm text-fg hover:bg-bg-3" onClick={() => downloadFile(file, file.name)}>
-          Baixar
+          {t('Baixar')}
         </button>
         <button type="button" className="rounded-md border border-line px-3 py-1.5 text-sm text-fg hover:bg-bg-3" onClick={onClose}>
-          Descartar
+          {t('Descartar')}
         </button>
       </div>
     </div>
