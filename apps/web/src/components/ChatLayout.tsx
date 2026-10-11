@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useTranslation } from '../i18n';
 import { trackAppHeight } from '../lib/viewport';
+import { LegalNoticeBanner } from './LegalNoticeBanner';
 import { ChatHeaderSlot } from './chat/chat-header-slot';
 
 /**
@@ -45,6 +46,8 @@ export function ChatLayout() {
             every other control of the conversation live in the settings dialog it opens. */}
         <div ref={setSlot} className="ml-auto flex items-center" />
       </header>
+      {/* the notice of a coming Terms/Privacy change reaches the chat too (TER-742); the sidebar layout shows it above its pages */}
+      <LegalNoticeBanner />
       {/* `main`, like every sidebar route's own region (`Layout.tsx`): /chat is a full page too, and
        * a screen reader needs the landmark to skip the header. */}
       {/* A flex column, not a plain block: the page inside stretches to this region instead of

@@ -99,6 +99,11 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.featureFlagOverride.create({ data: { flag: 'subscriptions', userId, enabled: true } });
     // An export request (TER-741): the row cascades with the user; its file is swept by the export job.
     await db.dataExport.create({ data: { id: newId(), userId } });
+    // An acceptance of the Terms (TER-742) cascades with the user; the version row is no one's and stays.
+    const legalVersion = await db.legalDocumentVersion.create({
+      data: { id: newId(), document: 'terms', version: `t-${userId}`, effectiveAt: new Date(), url: 'https://termhub.dev/termos' },
+    });
+    await db.legalAcceptance.create({ data: { id: newId(), userId, versionId: legalVersion.id, channel: 'web' } });
     await db.session.create({ data: { id: newId(), userId, tokenHash: `s-${userId}`, expiresAt: new Date(Date.now() + DAY) } });
     await db.loginCode.create({ data: { id: newId(), email, codeHash: 'c', expiresAt: new Date(Date.now() + DAY) } });
     await db.loginAttempt.create({ data: { key: `email:${email}`, failures: 1 } });

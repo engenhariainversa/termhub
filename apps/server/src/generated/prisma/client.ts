@@ -403,6 +403,17 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
 /**
+ * Model LegalDocumentVersion
+ * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+ * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+ */
+export type LegalDocumentVersion = Prisma.LegalDocumentVersionModel
+/**
+ * Model LegalAcceptance
+ * One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+ */
+export type LegalAcceptance = Prisma.LegalAcceptanceModel
+/**
  * Model DataExport
  * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
  * holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a

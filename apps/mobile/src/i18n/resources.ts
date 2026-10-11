@@ -6,6 +6,7 @@ import en_app from '@/locales/en/app.json';
 import en_aiLogin from '@/locales/en/ai-login.json';
 import en_ui from '@/locales/en/ui.json';
 import en_account from '@/locales/en/account.json';
+import en_legal from '@/locales/en/legal.json';
 import en_chat from '@/locales/en/chat.json';
 import en_chatView from '@/locales/en/chat-view.json';
 import en_chatGrants from '@/locales/en/chat-grants.json';
@@ -24,6 +25,7 @@ import en_tabChat from '@/locales/en/tab-chat.json';
 import en_services from '@/locales/en/services.json';
 import es_app from '@/locales/es/app.json';
 import es_aiLogin from '@/locales/es/ai-login.json';
+import es_legal from '@/locales/es/legal.json';
 import es_ui from '@/locales/es/ui.json';
 import es_account from '@/locales/es/account.json';
 import es_chat from '@/locales/es/chat.json';
@@ -46,6 +48,7 @@ import pt_app from '@/locales/pt-BR/app.json';
 import pt_aiLogin from '@/locales/pt-BR/ai-login.json';
 import pt_ui from '@/locales/pt-BR/ui.json';
 import pt_account from '@/locales/pt-BR/account.json';
+import pt_legal from '@/locales/pt-BR/legal.json';
 import pt_chat from '@/locales/pt-BR/chat.json';
 import pt_chatView from '@/locales/pt-BR/chat-view.json';
 import pt_chatGrants from '@/locales/pt-BR/chat-grants.json';
@@ -70,6 +73,7 @@ export const EN_AREAS: Record<string, Catalog> = {
   'app': en_app,
   'ui': en_ui,
   'account': en_account,
+  'legal': en_legal,
   'ai-login': en_aiLogin,
   'chat': en_chat,
   'chat-view': en_chatView,
@@ -95,6 +99,7 @@ export const ES_AREAS: Record<string, Catalog> = {
   'ui': es_ui,
   'account': es_account,
   'ai-login': es_aiLogin,
+  'legal': es_legal,
   'chat': es_chat,
   'chat-view': es_chatView,
   'chat-grants': es_chatGrants,
@@ -118,6 +123,7 @@ export const PT_AREAS: Record<string, Catalog> = {
   'app': pt_app,
   'ui': pt_ui,
   'account': pt_account,
+  'legal': pt_legal,
   'ai-login': pt_aiLogin,
   'chat': pt_chat,
   'chat-view': pt_chatView,

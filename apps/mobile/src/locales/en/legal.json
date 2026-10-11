@@ -1,0 +1,13 @@
+{
+  "Termos de Uso e Política de Privacidade": "Terms of Use and Privacy Policy",
+  "Para continuar usando o termhub, leia e aceite a versão em vigor dos documentos abaixo.": "To keep using termhub, read and accept the current version of the documents below.",
+  "Termos de Uso": "Terms of Use",
+  "Política de Privacidade": "Privacy Policy",
+  "versão {{version}}, em vigor desde {{date}}": "version {{version}}, in effect since {{date}}",
+  "versão {{version}}": "version {{version}}",
+  "Ler o documento": "Read the document",
+  "Ler {{name}}": "Read the {{name}}",
+  "Li e aceito os Termos de Uso e a Política de Privacidade": "I have read and accept the Terms of Use and the Privacy Policy",
+  "Continuar": "Continue",
+  "Não foi possível falar com o servidor. Tente de novo.": "Could not reach the server. Try again."
+}
