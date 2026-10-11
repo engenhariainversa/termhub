@@ -7,6 +7,7 @@ import { useAccountStore } from '@/features/account/viewmodel/useAccountStore';
 import { PauseCard } from '@/features/automation/view/pause-card';
 import { hostLine } from '@/features/chat/model/copy';
 import { HostSheet } from '@/features/chat/view/host-sheet';
+import { LegalLinks } from '@/features/legal/view/legal-links';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { PERMISSIONS_MSG } from '@/features/permissions/model/messages';
 import { usePermissionsStore } from '@/features/permissions/viewmodel/usePermissionsStore';
@@ -47,7 +48,8 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-/** Ajustes (spec §11.2, design spec §7): this device, biometrics, notifications and privacy, the general chat's machine and
+/** Ajustes (spec §11.2, design spec §7): this device, biometrics, notifications and privacy (with the
+ * links to the terms and the privacy policy), the general chat's machine and
  * "Permissões do chat" (its trusted tabs and projects), the theme, the key diagnostic, the version,
  * leaving and "Excluir minha conta" (TER-720). */
 export function SettingsScreen() {
@@ -186,6 +188,7 @@ export function SettingsScreen() {
             <Switch accessibilityLabel={PERMISSIONS_MSG.adsSwitch} value={adConsent === 'granted'} onValueChange={(value) => void setAdsFromSettings(value)} />
           </View>
           <AppText variant="muted">{PERMISSIONS_MSG.adsHint}</AppText>
+          <LegalLinks />
         </Section>
 
         <Section title={t('Chat')}>
