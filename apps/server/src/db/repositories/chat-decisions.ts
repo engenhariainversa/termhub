@@ -77,6 +77,24 @@ export interface DecisionNeighbour extends ChatDecision {
   similarity: number;
 }
 
+/** One decision and one of its earlier neighbours, with their cosine similarity (TER-1009). */
+export interface DecisionPair {
+  id: string;
+  neighbour_id: string;
+  similarity: number;
+}
+
+/** `replayDataset`'s answer: `decisions` are the ones measured (oldest first), `older` the earlier
+ *  neighbours that fell outside the `limit` window, and `unembedded` how many of the user's rows have no
+ *  vector under the current text version yet (left out of the report until the sweeper embeds them). */
+export interface ReplayDataset {
+  decisions: ChatDecision[];
+  older: ChatDecision[];
+  replay: DecisionPair[];
+  scope: DecisionPair[];
+  unembedded: number;
+}
+
 /** A `tab_questions` row the sweeper still owes a decision (spec §5): only ever a `choice`, `answered`. */
 export interface AnsweredChoiceRow {
   id: string;
@@ -394,6 +412,80 @@ export class ChatDecisionsRepository {
     const last = page[page.length - 1];
     const next_cursor = hasMore && last ? encodeCursor(last.created_at, last.id) : null;
     return { items: page.map(mapRaw), next_cursor };
+  }
+
+  /**
+   * The memory report's dataset (TER-1009): this user's decisions embedded under the current text
+   * version (`tag`, e.g. `'#q1'`), oldest first, at most the newest `limit` of them; and, for each, its
+   * neighbours among the same user's *earlier* decisions (`created_at` strictly before, never the same
+   * card, same `embed_model`):
+   * - `replay`: the `k` nearest of the same `multi_select` shape that `nearest` would have kept (the
+   *   person's own, in scope, current at that moment) — exactly what it would have answered when that
+   *   question was opened, had the memory then held only what came before it;
+   * - `scope`: the single nearest in the same project (or both account-wide), any shape — the closest
+   *   earlier question the person answered in the same scope, for the "pergunta repetida" count.
+   * Never another user's row on either side. An exact scan per decision: on demand only, never on a hot
+   * path. `unembedded` counts the user's rows left out for lack of a current vector.
+   */
+  async replayDataset(userId: string, tag: string, k: number, limit: number): Promise<ReplayDataset> {
+    const current = Prisma.sql`d.user_id = ${userId} AND d.embedding IS NOT NULL AND d.embed_model IS NOT NULL AND right(d.embed_model, length(${tag})) = ${tag}`;
+    const rows = await this.db.$queryRaw<RawRow[]>`
+      SELECT * FROM (
+        SELECT ${DECISION_SELECT}
+        FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
+        WHERE ${current}
+        ORDER BY d.created_at DESC, d.id DESC LIMIT ${limit}
+      ) t ORDER BY t.created_at ASC, t.id ASC`;
+    const [counts] = await this.db.$queryRaw<{ unembedded: bigint | number }[]>`
+      SELECT count(*) FILTER (WHERE NOT (${current})) AS unembedded FROM "chat_decisions" d WHERE d.user_id = ${userId}`;
+    const unembedded = Number(counts?.unembedded ?? 0);
+    if (rows.length === 0) return { decisions: [], older: [], replay: [], scope: [], unembedded };
+    const ids = Prisma.join(rows.map((r) => r.id));
+    // `e` is any earlier decision of the same user that `d` may be compared with: never `d`'s own card
+    // (two questions of one card are inserted together), same model and text version.
+    const earlier = Prisma.sql`e.user_id = d.user_id AND e.embedding IS NOT NULL AND e.embed_model = d.embed_model AND e.created_at < d.created_at
+      AND (d.tab_question_id IS NULL OR e.tab_question_id IS NULL OR e.tab_question_id <> d.tab_question_id)`;
+    // What `nearest` keeps as a precedent, as of `d`: the person's own answer (TER-1006), in scope for
+    // `d`'s project and conversation (TER-1014) and not yet errada, substituída or expired when `d` was
+    // asked (TER-1013) — a mark put on it later did not stop it from being suggested then.
+    const precedent = Prisma.sql`e.trust = 'person'
+      AND (e.scope = 'user' OR (e.scope = 'project' AND e.project_id = d.project_id) OR (e.scope = 'conversation' AND e.conversation_id = d.conversation_id))
+      AND (e.wrong_at IS NULL OR e.wrong_at > d.created_at) AND (e.superseded_at IS NULL OR e.superseded_at > d.created_at)
+      AND (e.expires_at IS NULL OR e.expires_at > d.created_at)`;
+    const [replay, scope] = await Promise.all([
+      this.db.$queryRaw<{ id: string; neighbour_id: string; similarity: number | string }[]>`
+        SELECT d.id, n.id AS neighbour_id, n.similarity
+        FROM "chat_decisions" d CROSS JOIN LATERAL (
+          SELECT e.id, 1 - (e.embedding <=> d.embedding) AS similarity FROM "chat_decisions" e
+          WHERE ${earlier} AND e.multi_select = d.multi_select AND ${precedent}
+          ORDER BY e.embedding <=> d.embedding LIMIT ${k}
+        ) n
+        WHERE d.id IN (${ids})`,
+      this.db.$queryRaw<{ id: string; neighbour_id: string; similarity: number | string }[]>`
+        SELECT d.id, n.id AS neighbour_id, n.similarity
+        FROM "chat_decisions" d CROSS JOIN LATERAL (
+          SELECT e.id, 1 - (e.embedding <=> d.embedding) AS similarity FROM "chat_decisions" e
+          WHERE ${earlier} AND e.project_id IS NOT DISTINCT FROM d.project_id
+          ORDER BY e.embedding <=> d.embedding LIMIT 1
+        ) n
+        WHERE d.id IN (${ids})`,
+    ]);
+    // A neighbour older than the `limit` window is not in `rows`: load it so every pair resolves.
+    const known = new Set(rows.map((r) => r.id));
+    const missing = [...new Set([...replay, ...scope].map((p) => p.neighbour_id).filter((id) => !known.has(id)))];
+    const older = missing.length
+      ? await this.db.$queryRaw<RawRow[]>`
+          SELECT ${DECISION_SELECT} FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
+          WHERE d.user_id = ${userId} AND d.id IN (${Prisma.join(missing)})`
+      : [];
+    const pair = (p: { id: string; neighbour_id: string; similarity: number | string }) => ({ id: p.id, neighbour_id: p.neighbour_id, similarity: Number(p.similarity) });
+    return {
+      decisions: rows.map(mapRaw),
+      older: older.map(mapRaw),
+      replay: replay.map(pair),
+      scope: scope.map(pair),
+      unembedded,
+    };
   }
 
   async deleteForUser(id: string, userId: string): Promise<boolean> {
