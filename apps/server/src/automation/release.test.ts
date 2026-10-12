@@ -218,6 +218,22 @@ describe('followMerged: release workflows', () => {
     expect(root.events[0].payload).toMatchObject({ version: '0.19.0' });
   });
 
+  it("reads an app's store version from the Expo app.json the PR changed under release_paths (TER-1055)", async () => {
+    const pkgs = {
+      'package.json': JSON.stringify({ version: '1.0.0', private: true }),
+      'apps/agent/package.json': JSON.stringify({ name: '@termhub/mobile', version: '0.6.0', private: true }),
+      'apps/agent/app.json': JSON.stringify({ expo: { name: 'termhub', version: '0.6.1' } }),
+    };
+    const app = world({ byCommit: { m1: [publish()] }, files: ['apps/agent/package.json', 'apps/agent/app.json'], pkgs });
+    await followMerged(app.deps, app.ctx, pr({ deploy_state: 'passed' }));
+    expect(app.events[0].payload).toMatchObject({ version: '0.6.1' });
+    expect(app.messages).toEqual(['Publicado publish-agent.yml 0.6.1']);
+
+    const outside = world({ byCommit: { m1: [publish()] }, files: ['apps/web/app.json'], pkgs: { ...pkgs, 'apps/web/app.json': pkgs['apps/agent/app.json'] } });
+    await followMerged(outside.deps, outside.ctx, pr({ deploy_state: 'passed' }));
+    expect(outside.events[0].payload).not.toHaveProperty('version');
+  });
+
   it('a cancelled release is not a failure', async () => {
     const w = world({ byCommit: { m1: [publish({ conclusion: 'cancelled' })] }, headSha: null });
     await followMerged(w.deps, w.ctx, pr({ deploy_state: 'passed' }));
@@ -247,5 +263,98 @@ describe('the chat hears of deliveries (spec D25)', () => {
     await followMerged(failed.deps, failed.ctx, pr());
     expect(failed.messages).toHaveLength(1);
     expect(failed.messages[0]).not.toContain('Deploy concluído');
+  });
+});
+
+describe('followMerged: a deploy that failed on GitHub\'s side (TER-1025)', () => {
+  const NOW = new Date('2026-10-07T16:00:00Z');
+  const failedAt = (minutesAgo: number) => new Date(NOW.getTime() - minutesAgo * 60_000).toISOString();
+  type Job = { name: string; status: string; conclusion: string | null; steps: Array<{ name: string; conclusion: string | null }> };
+  const realJob: Job = { name: 'deploy', status: 'completed', conclusion: 'failure', steps: [{ name: 'Build', conclusion: 'success' }, { name: 'Deploy', conclusion: 'failure' }] };
+
+  function infra(o: { jobs?: Job[]; minutesAgo?: number; retried?: number; incident?: boolean; rerun?: () => Promise<void>; retries?: number; claimed?: boolean } = {}) {
+    const w = world({ byCommit: { m1: [run({ id: 41, conclusion: 'failure', updated_at: failedAt(o.minutesAgo ?? 6) })] } });
+    const events = w.deps.repos.automationEvents as unknown as Record<string, unknown>;
+    events.countForTask = vi.fn(async () => o.retried ?? 0);
+    events.insertOnce = vi.fn(async (e: AutomationEventInput) => (o.claimed ? null : (w.events.push(e), { id: 'claim', ...e, created_at: '' })));
+    events.remove = vi.fn(async () => {});
+    const runJobs = vi.fn(async () => o.jobs ?? []);
+    const rerunRun = vi.fn(o.rerun ?? (async () => {}));
+    Object.assign(w.github, { runJobs, rerunRun });
+    (w.setup.automation as unknown as Record<string, unknown>).deploy_retries = o.retries ?? 3;
+    const deps = { ...w.deps, now: () => NOW, githubHealth: async () => ({ degraded: o.incident ? ['Actions'] : [] }) };
+    return { ...w, deps, runJobs, rerunRun };
+  }
+
+  it('a run with no job is run again, same run, and nothing is paused', async () => {
+    const w = infra({ jobs: [] });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.rerunRun).toHaveBeenCalledWith('tok', 'acme/app', 41);
+    expect(pauseAutomation).not.toHaveBeenCalled();
+    expect(kinds(w.events)).toEqual(['deploy_retried']);
+    expect(w.events[0].payload).toMatchObject({ pr: 7, sha: 'm1', attempt: 1, run_id: 41, cause: 'no_jobs' });
+    expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, expect.objectContaining({ deploy_state: 'running' }));
+    expect(w.messages[0]).toContain('1 de 3');
+  });
+
+  it('jobs with no failed step, or a failed step during an Actions incident, are GitHub\'s too', async () => {
+    const noStep = infra({ jobs: [{ name: 'check', status: 'completed', conclusion: 'cancelled', steps: [{ name: 'Set up job', conclusion: 'cancelled' }] }] });
+    await followMerged(noStep.deps, noStep.ctx, pr());
+    expect(noStep.events[0].payload).toMatchObject({ cause: 'no_failed_step' });
+
+    const incident = infra({ jobs: [realJob], incident: true });
+    await followMerged(incident.deps, incident.ctx, pr());
+    expect(incident.events[0].payload).toMatchObject({ cause: 'github_incident' });
+    expect(pauseAutomation).not.toHaveBeenCalled();
+  });
+
+  it('a failed step with GitHub healthy pauses at once, as before', async () => {
+    const w = infra({ jobs: [realJob] });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.rerunRun).not.toHaveBeenCalled();
+    expect(pauseAutomation).toHaveBeenCalledTimes(1);
+    expect(kinds(w.events)).toEqual(['deploy_failed', 'escalated']);
+  });
+
+  it('waits for the try\'s delay (5, 15, 30 min) without storing the failure, so the next sync looks again', async () => {
+    const w = infra({ jobs: [], minutesAgo: 10, retried: 1 });
+    await followMerged(w.deps, w.ctx, pr({ deploy_state: 'running' }));
+    expect(w.rerunRun).not.toHaveBeenCalled();
+    expect(pauseAutomation).not.toHaveBeenCalled();
+    expect(w.events).toEqual([]);
+    const patch = (w.updateCi.mock.calls[0] as unknown[])[3] as Record<string, unknown>;
+    expect(patch).not.toHaveProperty('deploy_state');
+  });
+
+  it('after the last try it pauses and says how many were made', async () => {
+    const w = infra({ jobs: [], minutesAgo: 60, retried: 3 });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.rerunRun).not.toHaveBeenCalled();
+    expect(pauseAutomation).toHaveBeenCalledTimes(1);
+    expect(w.events[0]).toMatchObject({ kind: 'deploy_failed', payload: expect.objectContaining({ attempts: 3 }) });
+  });
+
+  it('the other colour holding the try waits; a re-run GitHub refuses for good pauses', async () => {
+    const taken = infra({ jobs: [], claimed: true });
+    await followMerged(taken.deps, taken.ctx, pr());
+    expect(taken.rerunRun).not.toHaveBeenCalled();
+    expect(pauseAutomation).not.toHaveBeenCalled();
+
+    const { GithubCiError } = await import('../integrations/github-ci.js');
+    const refused = infra({ jobs: [], rerun: async () => Promise.reject(new GithubCiError('forbidden', 403)) });
+    await followMerged(refused.deps, refused.ctx, pr());
+    expect(pauseAutomation).toHaveBeenCalledTimes(1);
+
+    pauseAutomation.mockClear();
+    const flaky = infra({ jobs: [], rerun: async () => Promise.reject(new GithubCiError('http', 502)) });
+    await followMerged(flaky.deps, flaky.ctx, pr());
+    expect(pauseAutomation).not.toHaveBeenCalled();
+  });
+
+  it('deploy_retries 0 keeps the old behaviour: pause at once', async () => {
+    const w = infra({ jobs: [], retries: 0 });
+    await followMerged(w.deps, w.ctx, pr());
+    expect(w.rerunRun).not.toHaveBeenCalled();
+    expect(pauseAutomation).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,6 @@
 import { i18n, tk, useTranslation } from '../../i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Paperclip } from 'lucide-react';
+import { AudioLines, Paperclip, Trash2 } from 'lucide-react';
 import { api, ApiError } from '../../lib/api';
 import { useChatInbox } from '../../lib/chat-inbox';
 import { ACCEPT_ATTRIBUTE, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, type AttachmentKind } from '../../lib/attachments';
@@ -9,6 +9,8 @@ import { downscaleImage } from '../../lib/image-downscale';
 import type { ReplyTarget } from '../../lib/chat-reply';
 import type { ChatAttachment, ReplyCardKind } from '../../lib/types';
 import { useDictation, type Dictation } from '../../lib/use-dictation';
+import type { Clip } from '../../lib/voice-recorder';
+import { useVoiceNote } from '../../lib/use-voice-note';
 import { AttachmentChip } from './AttachmentChip';
 
 export interface ChatComposerProps {
@@ -61,9 +63,8 @@ const FALLBACK_LINE_PX = 24;
  * separator the person typed is kept exactly: a newline they wrote stays a newline. A clip that trims
  * away to nothing (silence, a stray tap) leaves the box untouched.
  *
- * In this product a transcription can only ever arrive into an empty or whitespace-only box: with text
- * in it the single button is the send arrow, so there is no microphone left to press. The joining
- * branch is the guard for a future where the mic survives typed text, not a path anyone walks today.
+ * Dictation has its own button beside the paperclip (TER-1036), there with or without text, so a
+ * clip often lands after something typed: that is what the joining branch is for.
  */
 function appendDictated(current: string, text: string): string {
   const clip = text.trim();
@@ -79,14 +80,30 @@ function formatClock(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** What the single circular button does right now. Exactly one of these, in every state. */
-type PrimaryRole = 'dictate' | 'send' | 'stop';
+/**
+ * What the single circular button does right now. Exactly one of these, in every state: `record` is
+ * the voice note held on it (TER-1036), `sendVoice` sends a locked one, `stop` ends a dictation.
+ */
+type PrimaryRole = 'record' | 'send' | 'stop' | 'sendVoice';
 
 const PRIMARY_LABEL: Record<PrimaryRole, string> = {
-  dictate: tk('Ditar'),
+  record: tk('Gravar áudio'),
   send: tk('Enviar'),
   stop: tk('Parar'),
+  sendVoice: tk('Enviar áudio'),
 };
+
+/** A hold dragged this far to the left drops the recording; this far up, locks it (WhatsApp's). */
+const CANCEL_DRAG_PX = 100;
+const LOCK_DRAG_PX = 70;
+
+/** `audio-2026-10-07-14-03-55.webm`: the voice note's file name, by the container the browser recorded. */
+function voiceNoteFile(clip: Clip): File {
+  const type = clip.audio.type.split(';')[0].trim() || 'audio/webm';
+  const ext = type === 'audio/mp4' ? 'm4a' : type === 'audio/ogg' ? 'ogg' : 'webm';
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+  return new File([clip.audio], `audio-${stamp}.${ext}`, { type });
+}
 
 /** One file in the box, from the moment it was picked until the message that carries it is sent. */
 interface DraftAttachment {
@@ -185,9 +202,9 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
   }, [statuses]);
 
   const add = useCallback(
-    (files: Iterable<File>) => {
+    (files: Iterable<File>): string[] => {
       const list = [...files];
-      if (list.length === 0) return;
+      if (list.length === 0) return [];
       const room = MAX_ATTACHMENTS_PER_MESSAGE - latest.current.length;
       setNotice(list.length > room ? i18n.t('No máximo {{max}} anexos por mensagem', { max: MAX_ATTACHMENTS_PER_MESSAGE }) : null);
       const next: DraftAttachment[] = list.slice(0, Math.max(0, room)).map((file) => {
@@ -210,9 +227,10 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
           controller: null,
         };
       });
-      if (next.length === 0) return;
+      if (next.length === 0) return [];
       setDrafts((prev) => [...prev, ...next]);
       for (const draft of next) if (!draft.refused) void upload(draft);
+      return next.map((d) => d.key);
     },
     [upload],
   );
@@ -239,11 +257,12 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
    * `onSend`): `commit` lets them go once the message is in, `restore` puts them back in front of
    * whatever was added meanwhile when it was not — capped at the limit, the surplus (the newest of
    * what was added meanwhile) dropped the way ✕ drops a chip: aborted or deleted, never left on the
-   * server as an orphan the sweep has to find.
+   * server as an orphan the sweep has to find. With `keys`, only those chips go (a voice note leaves
+   * on its own, whatever else was added meanwhile).
    */
-  const take = useCallback(() => {
-    const taken = latest.current;
-    setDrafts([]);
+  const take = useCallback((keys?: string[]) => {
+    const taken = keys ? latest.current.filter((d) => keys.includes(d.key)) : latest.current;
+    setDrafts((prev) => (keys ? prev.filter((d) => !keys.includes(d.key)) : []));
     setNotice(null);
     return {
       commit() {
@@ -286,6 +305,11 @@ function useAttachmentDrafts(projectId: string | null | undefined, statuses: Rea
  * Enter sends on a fine pointer (a mouse) and writes a newline on a coarse one (a touch keyboard,
  * where Enter is how every other line got started); Shift+Enter is always a newline, on either. Either
  * way it can only send what the button itself would send.
+ *
+ * An empty box makes the button a microphone for voice notes, WhatsApp's way (TER-1036): hold to
+ * record, let go to send, drag left to drop it, drag up to lock it (then Descartar / Enviar áudio); a
+ * click only says "Segure para gravar". The microphone is only asked for once a hold starts recording.
+ * The note goes as an audio attachment, which the server transcribes like any other.
  */
 export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedReason, status, notice, projectId, attachmentStatuses }: ChatComposerProps) {
   const { t } = useTranslation();
@@ -309,6 +333,46 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
     // transcription is read it and fix it.
     ref.current?.focus();
   });
+
+  // The voice note (TER-1036): the clip goes into the box as a chip, uploads like any file, and leaves on
+  // its own the moment it has landed. A failed upload keeps the chip, with its retry and the send
+  // arrow, so a recording is never lost to a network blip.
+  const voiceKey = useRef<string | null>(null);
+  const voiceNote = useVoiceNote((clip) => {
+    voiceKey.current = attachments.add([voiceNoteFile(clip)])[0] ?? null;
+  });
+  const replyRef = useRef(replyTo);
+  replyRef.current = replyTo;
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
+  useEffect(() => {
+    const key = voiceKey.current;
+    if (!key) return;
+    const draft = attachments.drafts.find((d) => d.key === key);
+    if (!draft || draft.phase === 'failed') {
+      voiceKey.current = null;
+      return;
+    }
+    if (draft.phase !== 'uploaded' || !draft.attachment) return;
+    voiceKey.current = null;
+    const id = draft.attachment.id;
+    const taken = attachments.take([key]);
+    const reply = replyRef.current;
+    void (async () => {
+      let ok = false;
+      try {
+        ok = await (reply ? onSendRef.current('', [id], reply.id) : onSendRef.current('', [id]));
+      } catch {
+        ok = false;
+      }
+      if (ok) taken.commit();
+      else taken.restore();
+    })();
+  }, [attachments]);
+  /** Where the hold started, while the pointer is down on the microphone. */
+  const held = useRef<{ x: number; y: number } | null>(null);
+  /** The click that ends a hold which locked the recording is not a click on "Enviar áudio". */
+  const swallowClick = useRef(false);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -344,11 +408,27 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   // cannot send it is an invitation to lose it. A recording already under way still stops, so nothing
   // is left listening.
   // A chip in the box (even one still uploading) is content too: the button is the send arrow.
+  // A voice note under way keeps the microphone where the finger is (its pointer is captured there)
+  // until it ends; a locked one turns it into its send button.
   const blocked = Boolean(blockedReason);
-  const role: PrimaryRole = dictation.state === 'recording' ? 'stop' : hasText || hasChips || blocked || dictation.state === 'off' ? 'send' : 'dictate';
+  const voiceActive = voiceNote.phase !== 'idle';
+  const role: PrimaryRole =
+    dictation.state === 'recording'
+      ? 'stop'
+      : voiceNote.phase === 'locked'
+        ? 'sendVoice'
+        : voiceActive
+          ? 'record'
+          : hasText || hasChips || blocked || dictation.state === 'off'
+            ? 'send'
+            : 'record';
   const notReadyToDictate = busy || dictation.state === 'checking' || dictation.state === 'starting';
   // Review Focus #2: nothing leaves while a chip is still on the wire.
-  const disabled = role === 'stop' ? false : role === 'send' ? blocked || !(hasText || uploadedIds.length > 0) || uploading || busy : blocked || notReadyToDictate;
+  const disabled =
+    role === 'stop' || role === 'sendVoice' ? false : role === 'send' ? blocked || !(hasText || uploadedIds.length > 0) || uploading || busy : !voiceActive && (blocked || notReadyToDictate);
+  /** Dictation lives on its own button now (left of the row): the box's text, transcribed. */
+  const dictateOff = blocked || notReadyToDictate || dictation.state === 'recording' || voiceActive;
+  const sendingVoice = voiceKey.current !== null && attachments.drafts.some((d) => d.key === voiceKey.current && d.phase === 'uploading');
   /** The one condition sending obeys, so the keyboard can never send what the button would refuse. */
   const canSend = role === 'send' && !disabled;
 
@@ -392,15 +472,17 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   // nothing here says to wait for it (spec 2026-09-26).
   const line = blockedReason
     ? { text: blockedReason, danger: false }
-    : uploading
-      ? { text: t('enviando anexo…'), danger: false }
-      : busy
-        ? { text: t('transcrevendo…'), danger: false }
-        : status
-          ? { text: status, danger: true }
-          : notice
-            ? { text: notice, danger: false }
-            : { text: attachments.notice ?? '', danger: false };
+    : voiceNote.hint
+      ? { text: voiceNote.hint, danger: false }
+      : uploading
+        ? { text: sendingVoice ? t('enviando áudio…') : t('enviando anexo…'), danger: false }
+        : busy
+          ? { text: t('transcrevendo…'), danger: false }
+          : status
+            ? { text: status, danger: true }
+            : notice
+              ? { text: notice, danger: false }
+              : { text: attachments.notice ?? '', danger: false };
 
   return (
     // `env(safe-area-inset-bottom)` resolves to 0px in every browser today, because the app-wide
@@ -513,9 +595,24 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
             >
               <Paperclip size={18} aria-hidden="true" />
             </button>
+            {dictation.state !== 'off' && (
+              <button
+                type="button"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fg-dim transition-colors hover:bg-bg-3 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={t('Ditar')}
+                title={t('Ditar')}
+                disabled={dictateOff}
+                onClick={dictation.start}
+              >
+                <AudioLines size={18} aria-hidden="true" />
+              </button>
+            )}
           </div>
           <div className="flex min-w-0 items-center gap-2">
             {dictation.state === 'recording' && <RecordingStatus dictation={dictation} />}
+            {(voiceNote.phase === 'recording' || voiceNote.phase === 'locked') && (
+              <VoiceNoteStatus seconds={voiceNote.seconds} locked={voiceNote.phase === 'locked'} onDiscard={voiceNote.cancel} />
+            )}
             {/* Mounted at all times: a live region a browser inserts together with its text is not
                 reliably announced — the region has to be in the accessibility tree before the text
                 changes. Fixed height (`h-4`), so a line appearing here shifts nothing; `empty:-mr-2`
@@ -525,15 +622,75 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
             <span role="status" title={line.text || undefined} className={`h-4 min-w-0 truncate text-xs leading-4 empty:-mr-2 ${line.danger ? 'text-danger' : 'text-fg-muted'}`}>
               {line.text}
             </span>
+            {/* One element in every role, so a hold that locks keeps the very button its pointer is
+                captured on. The microphone records while held (pointer events, so a mouse and a finger
+                alike; `touch-none` so a phone browser does not take the drag for a scroll), and the
+                keyboard holds it with Space or Enter; Escape drops a recording. */}
             <button
               type="button"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className={`flex h-10 w-10 shrink-0 touch-none select-none items-center justify-center rounded-full text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                role === 'record' && voiceActive ? 'scale-110 bg-danger' : 'bg-accent hover:bg-accent-hover'
+              }`}
               aria-label={t(PRIMARY_LABEL[role])}
-              title={t(PRIMARY_LABEL[role])}
+              title={role === 'record' ? t('Segure para gravar') : t(PRIMARY_LABEL[role])}
               disabled={disabled}
-              onClick={role === 'stop' ? dictation.stop : role === 'send' ? () => void send() : dictation.start}
+              onContextMenu={(e) => {
+                if (role === 'record') e.preventDefault();
+              }}
+              onPointerDown={(e) => {
+                swallowClick.current = false;
+                if (role !== 'record' || disabled || e.button !== 0) return;
+                held.current = { x: e.clientX, y: e.clientY };
+                e.currentTarget.setPointerCapture?.(e.pointerId);
+                voiceNote.press();
+              }}
+              onPointerMove={(e) => {
+                const from = held.current;
+                if (!from || voiceNote.phase !== 'recording') return;
+                if (e.clientX - from.x <= -CANCEL_DRAG_PX) {
+                  held.current = null;
+                  voiceNote.cancel();
+                } else if (e.clientY - from.y <= -LOCK_DRAG_PX) {
+                  voiceNote.lock();
+                }
+              }}
+              onPointerUp={() => {
+                if (!held.current) return;
+                held.current = null;
+                swallowClick.current = voiceNote.phase === 'locked';
+                voiceNote.release();
+              }}
+              onPointerCancel={() => {
+                if (!held.current) return;
+                held.current = null;
+                voiceNote.cancel();
+              }}
+              onKeyDown={(e) => {
+                if (role === 'record' && (e.key === ' ' || e.key === 'Enter')) {
+                  e.preventDefault();
+                  if (!e.repeat && !disabled) voiceNote.begin();
+                } else if (e.key === 'Escape' && voiceActive) {
+                  e.preventDefault();
+                  voiceNote.cancel();
+                }
+              }}
+              onKeyUp={(e) => {
+                if (role === 'record' && (e.key === ' ' || e.key === 'Enter')) {
+                  e.preventDefault();
+                  voiceNote.release();
+                }
+              }}
+              onClick={() => {
+                if (swallowClick.current) {
+                  swallowClick.current = false;
+                  return;
+                }
+                if (role === 'stop') dictation.stop();
+                else if (role === 'send') void send();
+                else if (role === 'sendVoice') voiceNote.send();
+              }}
             >
-              {role === 'stop' ? <StopIcon /> : role === 'send' ? <ArrowUpIcon /> : <MicIcon />}
+              {role === 'stop' ? <StopIcon /> : role === 'send' || role === 'sendVoice' ? <ArrowUpIcon /> : <MicIcon />}
             </button>
           </div>
         </div>
@@ -543,10 +700,10 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
           clip too short to hold speech, or one with no words in it, is nobody's fault. `empty:mt-0`
           keeps an empty one from holding a line of space open. */}
       <p role="status" className="mt-1 px-1 text-xs text-danger empty:mt-0">
-        {dictation.error ?? ''}
+        {dictation.error ?? voiceNote.error ?? ''}
       </p>
       <p role="status" className="mt-1 px-1 text-xs text-fg-muted empty:mt-0">
-        {dictation.notice ?? ''}
+        {dictation.notice ?? voiceNote.notice ?? ''}
       </p>
     </div>
   );
@@ -566,6 +723,34 @@ function RecordingStatus({ dictation }: { dictation: Dictation }) {
       <button type="button" className="rounded-md px-2 py-1 text-xs text-fg-muted transition-colors hover:bg-bg-3 hover:text-fg" onClick={dictation.cancel}>
         {t('cancelar')}
       </button>
+    </>
+  );
+}
+
+/** Heights of the recording's wave bars, in px: a fixed, uneven profile that pulses, not a meter. */
+const WAVE = [6, 12, 8, 16, 10, 14, 7, 12];
+
+/**
+ * Next to the status while a voice note records: it is listening, for this long; held, how to drop
+ * it ("‹ deslize para cancelar"); locked, the button that drops it (the primary one sends).
+ */
+function VoiceNoteStatus({ seconds, locked, onDiscard }: { seconds: number; locked: boolean; onDiscard: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {locked && (
+        <button type="button" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-fg-dim transition-colors hover:bg-bg-3 hover:text-danger" aria-label={t('Descartar áudio')} title={t('Descartar áudio')} onClick={onDiscard}>
+          <Trash2 size={18} aria-hidden="true" />
+        </button>
+      )}
+      <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-danger" aria-hidden="true" />
+      <span className="font-mono text-xs text-fg">{formatClock(seconds)}</span>
+      <span data-testid="voice-note-wave" className="flex h-4 items-center gap-0.5" aria-hidden="true">
+        {WAVE.map((h, i) => (
+          <span key={i} className="w-0.5 animate-pulse rounded-full bg-fg-muted" style={{ height: h, animationDelay: `${i * 120}ms` }} />
+        ))}
+      </span>
+      {!locked && <span className="truncate text-xs text-fg-muted">{t('‹ deslize para cancelar')}</span>}
     </>
   );
 }

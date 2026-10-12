@@ -21,7 +21,8 @@ export function feedLine(e: TAutomationFeedEvent): string | null {
     case 'run_resumed':
       return t('{{ref}}: retomado', { ref });
     case 'run_done':
-      return t('{{ref}}: agente terminou', { ref });
+      // a blocked run a PR from its branch took over says so (TER-1049)
+      return e.reason_text ? t('{{ref}}: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: agente terminou', { ref });
     case 'run_cancelled':
       // TER-974: why, when the server knows (the card untagged, the tab closed)
       return e.reason_text ? t('{{ref}}: cancelado — {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: cancelado', { ref });

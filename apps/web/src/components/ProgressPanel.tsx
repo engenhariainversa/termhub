@@ -7,7 +7,7 @@ import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
 import { feedLine } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
-import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, stateLabel, withLiveTab } from '../lib/progress';
+import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
 import { i18n, useTranslation } from '../i18n';
 import type { AgentOnCard, AutomationFeedEvent, AutomationUsage, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
@@ -56,7 +56,7 @@ function AgentChip({ agent, projectId }: { agent: AgentOnCard; projectId: string
       <span className={`h-2 w-2 rounded-full ${agent.background ? STATE_DOT.background : agent.finished ? STATE_DOT.finished : agent.state ? STATE_DOT[agent.state] : 'bg-zinc-300'}`} aria-hidden />
       <span>{agent.tab_name}</span>
       <span>
-        {stateLabel(agent.state, agent.background, agent.finished)}
+        {stateLabel(fullStateOf(agent))}
         {agent.state === 'working' && !agent.background && agent.activity_verb ? ` (${agent.activity_verb})` : ''}
         {since}
       </span>

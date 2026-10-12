@@ -1,0 +1,65 @@
+name: Mobile TestFlight (hulk)
+
+# Builds the iOS app on the Mac hulk and uploads it to TestFlight (apps/mobile/scripts/testflight.sh,
+# which runs scripts/ios-release.sh --upload). Never submits for App Store review: that stays manual.
+#
+# A push to main that changes what goes into the native binary (the same files as the project's
+# store paths) runs it; the script ships `expo.version` once and skips a version it already uploaded,
+# so a native change without a version bump builds nothing. Running it by hand ships the current
+# version, again with `force`. Setup of the runner: docs/automation/runbook.md, "TestFlight on hulk".
+#
+# A run with nothing to upload cancels itself: termhub follows this workflow as a release workflow
+# and reads a cancelled run as "nothing delivered", so only a real upload becomes `release_ok`.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/app.json'
+      - 'apps/mobile/app.config.js'
+      - 'apps/mobile/package.json'
+      - 'apps/mobile/plugins/**'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Reenviar a versão atual mesmo que já tenha ido para o TestFlight (build novo)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: mobile-testflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write # to cancel its own run when there is nothing to upload
+
+jobs:
+  testflight:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, macOS, macos-hulk]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - id: ship
+        name: Build e envio para o TestFlight
+        env:
+          FORCE: ${{ inputs.force && '--force' || '' }}
+        run: bash apps/mobile/scripts/testflight.sh $FORCE
+
+      - name: Nada enviado; cancelar a execução
+        if: steps.ship.outputs.uploaded == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"
+          sleep 60
+
+      - name: Limpar
+        if: always()
+        run: rm -rf apps/mobile/build apps/mobile/ios

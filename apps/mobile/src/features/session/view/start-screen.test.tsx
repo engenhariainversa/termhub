@@ -42,6 +42,14 @@ describe('Início', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
+  // Apple 5.1.1(i): the privacy policy is linked inside the app, and the screen says what the e-mail is for.
+  it('says what the e-mail is for and links the terms and the privacy policy', async () => {
+    await render(<StartScreen />);
+    expect(screen.getByText(/Usamos o seu e-mail para/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Termos de uso' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Política de privacidade' })).toBeTruthy();
+  });
+
   it("shows the store's error when requestDevice fails", async () => {
     jest.spyOn(mockKey, 'create').mockRejectedValueOnce(new Error('keystore'));
     await render(<StartScreen />);

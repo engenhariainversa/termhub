@@ -26,6 +26,9 @@ describe('feedLine', () => {
     // TER-974: a cancelled run, with its reason when the server sends one
     expect(feedLine(ev({ kind: 'run_cancelled', reason_text: 'a aba foi fechada' }))).toBe('TER-9: cancelado — a aba foi fechada');
     expect(feedLine(ev({ kind: 'run_cancelled' }))).toBe('TER-9: cancelado');
+    // TER-1049: a blocked run a PR took over says so
+    expect(feedLine(ev({ kind: 'run_done', reason_text: 'PR aberto depois do bloqueio; o automático acompanha até o merge' }))).toBe('TER-9: PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedLine(ev({ kind: 'run_done' }))).toBe('TER-9: agente terminou');
     // TER-975: changes to what automatic work may do
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');
     expect(feedLine(ev({ kind: 'tagged' }))).toBe('TER-9: marcado como automático');

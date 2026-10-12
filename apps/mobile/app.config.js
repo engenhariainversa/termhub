@@ -6,6 +6,8 @@
 // runtimeVersion follows `expo.version`: a 0.3.2 binary only ever takes updates published from a
 // 0.3.2 checkout, so a JS bundle can never land on a binary with different native code. Bumping
 // `expo.version` for a new store build starts a fresh line of updates for that version.
+// OTA_RUNTIME_VERSION overrides it only while scripts/ota-publish.sh publishes the same bundle to an
+// older, compatible build (ota-runtimes.js); store builds never set it.
 const OTA_URL = 'https://ota.engenhariainversa.com.br';
 const OTA_APP_ID = 'ed0e9dc1-67db-40c2-8bf4-685e6b0cc2d2';
 const OTA_CHANNEL = 'production';
@@ -14,7 +16,7 @@ module.exports = ({ config }) => ({
   ...config,
   // No web build: without this, `expo export` (which `eoas publish` runs) also bundles for web.
   platforms: ['ios', 'android'],
-  runtimeVersion: { policy: 'appVersion' },
+  runtimeVersion: process.env.OTA_RUNTIME_VERSION || { policy: 'appVersion' },
   updates: {
     enabled: true,
     url: `${OTA_URL}/manifest`,

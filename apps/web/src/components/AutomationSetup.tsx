@@ -85,6 +85,16 @@ export function AutomationSetup({ value, onChange }: Props) {
           <p className="mt-1 text-xs text-fg-dim">{t('Envio às lojas nunca é automático.')}</p>
         </Field>
 
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="accent-accent mt-0.5" checked={value.stop_on_decisions ?? false} onChange={(e) => set('stop_on_decisions', e.target.checked)} />
+          <span>
+            {t('Parar em decisões de produto')}
+            <span className="block text-xs text-fg-dim">
+              {t('Desligado, o agente segue a própria recomendação (ou uma decisão sua anterior) e registra a escolha no PR; credenciais, deploy, lojas, dados de produção e mudança de escopo sempre param.')}
+            </span>
+          </span>
+        </label>
+
         <Field label={t('Caminhos de release')} hint={t('globs, um por linha; mudanças neles exigem o nível Publicação')}>
           <ListInput value={value.release_paths} onChange={(v) => set('release_paths', v)} /* i18n-ignore */ placeholder="apps/mobile/app.json" />
         </Field>
@@ -119,6 +129,12 @@ export function AutomationSetup({ value, onChange }: Props) {
           </Field>
           <Field label={t('Tentativas de correção do CI')}>
             <NumberInput value={value.fix_attempts} min={0} max={10} onChange={(v) => set('fix_attempts', v ?? 0)} />
+          </Field>
+          <Field label={t('Novas tentativas do deploy')} hint={t('quando o deploy falha por problema do GitHub; 0 = pausa na hora')}>
+            <NumberInput value={value.deploy_retries} min={0} max={10} onChange={(v) => set('deploy_retries', v ?? 0)} />
+          </Field>
+          <Field label={t('Retomadas após erro do GitHub')} hint={t('push ou PR com erro do GitHub; depois disso, chama você')}>
+            <NumberInput value={value.github_retries} min={0} max={10} onChange={(v) => set('github_retries', v ?? 0)} />
           </Field>
           <Field label={t('Hora do resumo diário')} hint={t('0 a 23; vazio = sem resumo')}>
             <NumberInput value={value.summary_hour} min={0} max={23} placeholder={t('Sem resumo')} onChange={(v) => set('summary_hour', v)} />

@@ -34,14 +34,28 @@ const ATTACHMENT_FAILURE_REASON: Record<string, string> = {
   TRANSCRIPTION_FAILED: tk('transcrição falhou'),
 };
 
+/** TRANSCRIPTION_UNAVAILABLE by the server's `meta.reason` (TER-1035): what went wrong with whisper. */
+const TRANSCRIPTION_REASON: Record<string, string> = {
+  not_configured: tk('transcrição desligada neste servidor'),
+  refused: tk('o serviço de transcrição recusou o acesso'),
+  unreachable: tk('serviço de transcrição fora do ar'),
+  error: tk('o serviço de transcrição deu erro'),
+};
+
 /** The line under a chip or a bubble's attachment while the server works on it, or after it gave up. */
-export function attachmentStatusText(a: Pick<TChatAttachment, 'kind' | 'status' | 'error_code'>): string | null {
+export function attachmentStatusText(a: Pick<TChatAttachment, 'kind' | 'status' | 'error_code'> & { meta?: TChatAttachment['meta'] }): string | null {
   if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? t('transcrevendo…') : t('processando…');
   if (a.status === 'failed') {
-    const reason = a.error_code ? ATTACHMENT_FAILURE_REASON[a.error_code] : undefined;
+    const why = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof a.meta?.reason === 'string' ? TRANSCRIPTION_REASON[a.meta.reason] : undefined;
+    const reason = why ?? (a.error_code ? ATTACHMENT_FAILURE_REASON[a.error_code] : undefined);
     return t('falhou: {{reason}}', { reason: t(reason ?? tk('erro')) });
   }
   return null;
+}
+
+/** A transcription whisper could not do can be asked again; a file it could not decode cannot (the web's `canRetryAttachment`). */
+export function canRetryAttachment(a: Pick<TChatAttachment, 'kind' | 'status' | 'error_code'>): boolean {
+  return a.status === 'failed' && a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && (a.kind === 'audio' || a.kind === 'video');
 }
 
 /** A file as a picker handed it over; the size is unknown for some (a fresh recording). */
@@ -200,14 +214,17 @@ export function useAttachmentDrafts(deps: AttachmentDeps) {
     }
   }, []);
 
+  /** Answers the keys of the chips it added (none past the limit), so a caller can follow its own. */
   const add = useCallback(
-    (files: PickedFile[]) => {
+    (files: PickedFile[]): string[] => {
       const before = latest.current;
       const { drafts: next, notice } = planAdd(before, files, () => `d${++seq.current}`);
       setNotice(notice);
-      if (next.length === before.length) return;
+      if (next.length === before.length) return [];
       dispatch({ type: 'add', drafts: next });
-      for (const draft of next.slice(before.length)) if (!draft.refused) void upload(draft);
+      const added = next.slice(before.length);
+      for (const draft of added) if (!draft.refused) void upload(draft);
+      return added.map((d) => d.key);
     },
     [upload],
   );

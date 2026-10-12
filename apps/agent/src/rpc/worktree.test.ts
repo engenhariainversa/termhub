@@ -2,10 +2,14 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RpcFailure } from '../exec.js';
 import { RPC } from '@termhub/agent-protocol';
 import { ENSURE_BUDGET_MS, REMOVE_BUDGET_MS, ensure, parseWorktreeList, remove, scrubCredentials } from './worktree.js';
+
+// TER-1025: `ensure` marks the worktree trusted in the machine's Claude configs; never the developer's real ones here
+const trustWorktree = vi.hoisted(() => vi.fn(async () => 0));
+vi.mock('../claude-trust.js', () => ({ trustWorktree }));
 
 // A real git: a bare repo stands in for `origin`, a clone for the project folder on the machine.
 const ID = ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'init.defaultBranch=main', '-c', 'commit.gpgsign=false'];
@@ -50,6 +54,13 @@ describe('git.worktree.ensure', () => {
     expect(res.head).toBe(git(repo, 'rev-parse', 'origin/main'));
     expect(git(res.path, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('TER-1-x');
     expect(() => git(res.path, 'rev-parse', '--abbrev-ref', 'TER-1-x@{upstream}')).toThrow();
+  });
+
+  it('marks the worktree trusted for Claude, and a failure there never fails the call (TER-1025)', async () => {
+    const res = await ensure(params());
+    expect(trustWorktree).toHaveBeenCalledWith(res.path, os.homedir());
+    trustWorktree.mockRejectedValueOnce(new Error('EACCES'));
+    await expect(ensure(params())).resolves.toMatchObject({ created: false });
   });
 
   it('answers created: false when called twice', async () => {

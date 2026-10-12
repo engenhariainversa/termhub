@@ -1,9 +1,9 @@
 import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
-import { ESCALATION_FALLBACK, ESCALATION_TEXT } from '../automation/escalation-text.js';
+import { escalationEventText } from '../automation/escalation-text.js';
 import { t, tk, type Locale } from '../i18n/index.js';
-import { NEEDS_YOU } from '../monitor/state.js';
+import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
 type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -58,12 +58,9 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644); and `finished`:
-    // stopped, flagged, never waiting for the person (TER-972)
-    state: tab.state === 'waiting_background' ? 'working' : tab.state === 'finished' ? 'idle' : tab.state,
+    // the contract's state predates the newer states: each travels as an older one, flagged (contractStateOf)
+    ...contractStateOf(tab.state),
     state_at: iso(tab.state_at),
-    background: tab.state === 'waiting_background',
-    finished: tab.state === 'finished',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,
@@ -213,6 +210,8 @@ export const FEED_KINDS = [
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
   // TER-974: a cancelled run, and the TER-993 lines both clients already write
   'run_cancelled', 'permission_auto_approved', 'guard_blocked',
+  // TER-1025
+  'deploy_retried', 'github_wait', 'trust_auto_accepted',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
@@ -221,12 +220,16 @@ const CANCEL_TEXT: Record<string, string> = {
   tab_closed: tk('a aba foi fechada'),
 };
 
-/** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987) or a cancel's (TER-974). */
+/** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
+ *  over (TER-1049) or a cancel's (TER-974). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
-  const reason = str(p.reason);
-  if (e.kind === 'escalated') return t(locale, (reason && ESCALATION_TEXT[reason]) || ESCALATION_FALLBACK);
+  if (e.kind === 'escalated') return escalationEventText(p, locale);
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
-  if (e.kind === 'run_cancelled') return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;
+  if (e.kind === 'run_done') return adoptedOf(p, locale);
+  if (e.kind === 'run_cancelled') {
+    const reason = str(p.reason);
+    return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;
+  }
   return null;
 }
 
@@ -247,7 +250,12 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 /** Why a start failed (TER-987), in the reader's language when the event has it: null for any other block. */
 function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
   if (p.stage !== 'start') return null;
-  return (locale === 'en' ? str(p.message_en) : null) ?? str(p.message);
+  return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
+}
+
+/** A blocked run a PR from its branch took over (TER-1049, follower's ADOPTED_VIA): what its `run_done` line says. */
+function adoptedOf(p: Record<string, unknown>, locale: Locale): string | null {
+  return p.via === 'pull_request_after_blocked' ? t(locale, 'PR aberto depois do bloqueio; o automático acompanha até o merge') : null;
 }
 
 /**
@@ -280,6 +288,8 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       reason_text: reasonTextOf(e, p, locale),
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
+      // the decision a decided_by_recommendation line names (TER-1043)
+      summary: str(p.summary),
     };
   });
 }

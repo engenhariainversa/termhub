@@ -7,6 +7,8 @@ import { authRoutes } from './routes.js';
 const setLocale = vi.fn();
 const setTimeZone = vi.fn();
 const findById = vi.fn();
+const LEGAL = { pending: [{ id: 'v1', document: 'terms', version: '1', effective_at: '2026-10-01T00:00:00.000Z', url: 'https://termhub.dev/termos/', requires_acceptance: true, summary: null }], upcoming: [] };
+const statusFor = vi.fn(async () => LEGAL);
 
 function buildApp(user: Record<string, unknown> | null) {
   const app = Fastify();
@@ -15,7 +17,7 @@ function buildApp(user: Record<string, unknown> | null) {
     request.user = user as never;
     if (user) request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setLocale, setTimeZone }, roles: { findById } } as unknown as Repositories;
+  const repos = { users: { setLocale, setTimeZone }, roles: { findById }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) }, legal: { statusFor } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -26,8 +28,8 @@ const patch = (app: ReturnType<typeof buildApp>, payload: unknown) => app.inject
 describe('PATCH /auth/me/locale', () => {
   beforeEach(() => setLocale.mockReset().mockResolvedValue(undefined));
 
-  it('stores en, pt-BR or null (automatic) and answers 204', async () => {
-    for (const locale of ['en', 'pt-BR', null]) {
+  it('stores en, es, pt-BR or null (automatic) and answers 204', async () => {
+    for (const locale of ['en', 'es', 'pt-BR', null]) {
       const res = await patch(buildApp(user), { locale });
       expect(res.statusCode).toBe(204);
       expect(setLocale).toHaveBeenLastCalledWith('u1', locale);
@@ -35,7 +37,7 @@ describe('PATCH /auth/me/locale', () => {
   });
 
   it('refuses any other value', async () => {
-    for (const locale of ['es', 'EN', '', 3]) {
+    for (const locale of ['fr', 'es-AR', 'EN', '', 3]) {
       const res = await patch(buildApp(user), { locale });
       expect(res.statusCode).toBe(400);
       expect(res.json().code).toBe('VALIDATION');
@@ -56,6 +58,17 @@ describe('GET /auth/me', () => {
     const res = await buildApp({ ...user, locale: 'en' }).inject({ url: '/auth/me' });
     expect(res.statusCode).toBe(200);
     expect(res.json().user.locale).toBe('en');
+  });
+
+  it('carries the legal acceptance status of the signed-in person (TER-742)', async () => {
+    const res = await buildApp(user).inject({ url: '/auth/me' });
+    expect(res.json().legal).toEqual(LEGAL);
+    expect(statusFor).toHaveBeenCalledWith('u1');
+  });
+
+  it('carries the feature flags resolved for this person, off by default (TER-1040)', async () => {
+    const res = await buildApp(user).inject({ url: '/auth/me' });
+    expect(res.json().user.features).toEqual({ subscriptions: false });
   });
 });
 
