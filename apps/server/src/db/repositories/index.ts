@@ -52,6 +52,7 @@ import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { MemoryRulesRepository } from './memory-rules.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
@@ -92,6 +93,7 @@ export interface Repositories {
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
   memoryItems: MemoryItemsRepository;
+  memoryRules: MemoryRulesRepository;
   memoryStatus: MemoryStatusRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
@@ -155,6 +157,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
     memoryItems: new MemoryItemsRepository(db),
+    memoryRules: new MemoryRulesRepository(db),
     memoryStatus: new MemoryStatusRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),

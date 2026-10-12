@@ -4,7 +4,7 @@ import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatActi
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
-import type { MemoryReplacement, MemoryStatus, AiMemoryState } from './types';
+import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -271,6 +271,14 @@ export const api = {
         /** "Esquecer": a note-origin lesson is removed outright; a file-origin one is only hidden here
          *  (the file stays in the repository until a PR removes it) — `note` carries that sentence. */
         forget: (id: string) => request<{ ok: true; note?: string }>('DELETE', `/chat/lessons/${encodeURIComponent(id)}`),
+      },
+      /** "Regras vigentes" (TER-1010): `list` consolidates first. Approving a policy only asks its
+       *  `set_automation_policy` cards; rejecting keeps the proposal away for 180 days. */
+      rules: {
+        list: () => request<{ rules: MemoryRule[]; proposals: MemoryRule[] }>('GET', '/chat/rules'),
+        approve: (id: string, text?: string) => request<{ rule: MemoryRule }>('POST', `/chat/rules/${encodeURIComponent(id)}/approve`, text ? { text } : {}),
+        reject: (id: string) => request<{ rule: MemoryRule }>('POST', `/chat/rules/${encodeURIComponent(id)}/reject`, {}),
+        remove: (id: string) => request<void>('DELETE', `/chat/rules/${encodeURIComponent(id)}`),
       },
     },
   ),

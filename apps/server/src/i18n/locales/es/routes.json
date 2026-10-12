@@ -88,5 +88,7 @@
   "Um item não pode substituir a si mesmo": "Un elemento no puede reemplazarse a sí mismo",
   "O item escolhido já substitui outro; desfaça aquela substituição antes": "El elemento elegido ya reemplaza a otro; deshaz ese reemplazo antes",
   "Este item já substitui o escolhido; desfaça aquela substituição antes": "Este elemento ya reemplaza al elegido; deshaz ese reemplazo antes",
-  "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "La dirección de ai-memory debe ser local (127.0.0.1, localhost) o de red privada"
+  "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "La dirección de ai-memory debe ser local (127.0.0.1, localhost) o de red privada",
+  "Esta proposta já foi decidida": "Esta propuesta ya fue decidida",
+  "Nenhum projeto desta proposta continua seu": "Ningún proyecto de esta propuesta sigue siendo tuyo"
 }

@@ -18,6 +18,8 @@ import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
 import { nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { requestLocale, t, tk } from '../i18n/index.js';
+import type { MemoryRule, RuleSourceRow } from '../db/repositories/memory-rules.js';
+import { approveRule, refreshRules, rejectRule, removeRule, statementOf, type RulesDeps } from '../memory/rules-service.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
@@ -25,6 +27,8 @@ const lessonsQuery = z.object({ q: z.string().trim().max(200).optional(), projec
 /** `GET /memory/report` (TER-1009): `threshold` defaults to the server's suggestion threshold. */
 const reportQuery = z.object({ threshold: z.coerce.number().min(0).max(1).optional(), period: z.enum(['week', 'month']).default('month') });
 const idParam = z.object({ id: z.string().min(1).max(64) });
+/** "Aprovar" a proposal (TER-1010): the person may reword a rule before approving it. */
+const approveBody = z.object({ text: z.string().trim().min(1).max(1000).optional() }).default({});
 /** A decision's or a note's ref: what "Substituída por…" picks and `supersedes` stores. */
 const STATUS_REF = /^(decision|note):[a-z0-9]{1,64}$/;
 /** `PUT /decisions/:id/status` and `PUT /notes/:id/status` (TER-1013): `current` undoes any mark;
@@ -141,6 +145,35 @@ function toLessonView(item: MemoryItem) {
   };
 }
 
+/**
+ * One "Regras vigentes" row (TER-1010): an approved rule or a proposal waiting for the person, with the
+ * notes and decisions it came from (the ones still in memory). A `policy` row names its projects; the
+ * screen words the change from `autonomy`/`max_parallel` itself.
+ */
+function toRuleView(r: MemoryRule, sources: Map<string, RuleSourceRow>) {
+  const projectName = (id: string) => [...sources.values()].find((s) => s.project_id === id)?.project_name ?? null;
+  return {
+    id: r.id,
+    kind: r.kind,
+    status: r.status,
+    project: r.project_id ? { id: r.project_id, name: r.project_name ?? '' } : null,
+    text: r.text,
+    policy: r.policy
+      ? {
+          autonomy: r.policy.autonomy ?? null,
+          max_parallel: r.policy.max_parallel ?? null,
+          projects: r.policy.project_ids.map((id) => ({ id, name: projectName(id) ?? '', applied: (r.policy?.applied ?? []).includes(id) })),
+        }
+      : null,
+    sources: r.source_refs.flatMap((ref) => {
+      const s = sources.get(ref);
+      return s ? [{ ref, title: s.title, statement: excerpt(statementOf(s), 300), project_name: s.project_name }] : [];
+    }),
+    created_at: r.created_at,
+    decided_at: r.decided_at,
+  };
+}
+
 /** "Memória do chat" (spec 2026-09-26 §4.6, concierge memory D8/D12/§8): the user's own decisions, the
  * suggestion and "Responder sozinho" switches, the concierge's own notes, and (spec 2026-09-27 failure
  * lessons §6/§8) the "Lições" list — verify/unverify/forget, always the signed-in user's own `lesson`
@@ -152,6 +185,45 @@ function toLessonView(item: MemoryItem) {
  * since their HTTP methods (`POST`/`DELETE`) would otherwise default to `create`/`delete` (see the
  * task-6 report for the check). */
 export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories) {
+  const rulesDeps = (): RulesDeps => ({ embedder: defaultEmbedder(), log: app.log, threshold: config.rulesSimilarityThreshold });
+
+  /** "Regras vigentes" (TER-1010): consolidates first, then answers the approved rules and the proposals
+   *  waiting for the person (a rejected one stays out of sight, and out of the proposals, for 180 days). */
+  app.get('/rules', async (request) => {
+    const { rules, sources } = await refreshRules(repos, request.scope.user.id, rulesDeps());
+    const view = (r: MemoryRule) => toRuleView(r, sources);
+    return {
+      rules: rules.filter((r) => r.status === 'approved').map(view),
+      proposals: rules.filter((r) => r.status === 'proposed' || r.status === 'awaiting_confirmation').map(view),
+    };
+  });
+
+  /** "Aprovar": a rule now; a policy only asks its `set_automation_policy` cards (spec: never applied
+   *  without them). `chat:update`, like verifying a lesson. */
+  app.post('/rules/:id/approve', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const body = approveBody.parse(request.body ?? {});
+    const rule = await approveRule(repos, request.scope.user.id, id, body, rulesDeps());
+    // The rule's note and its superseded sources change the current rules (TER-1019).
+    if (rule.status === 'approved') nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Recusar": the same proposal stays away for 180 days. */
+  app.post('/rules/:id/reject', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const rule = await rejectRule(repos, request.scope.user.id, id);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Remover regra": an approved rule only; its sources are current again. */
+  app.delete('/rules/:id', async (request, reply) => {
+    const { id } = idParam.parse(request.params);
+    await removeRule(repos, request.scope.user.id, id);
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return reply.code(204).send();
+  });
+
   app.get('/decisions', async (request) => {
     const { q, cursor } = listQuery.parse(request.query);
     const userId = request.scope.user.id;

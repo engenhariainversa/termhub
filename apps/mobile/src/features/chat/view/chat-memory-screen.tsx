@@ -6,6 +6,7 @@ import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
 import { ContextLimitCard } from './context-limit-card';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
+import { MemoryRulesSection } from './memory-rules-section';
 import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
 import { MemoryStatusControls, MemoryStatusLine } from './memory-status-controls';
@@ -265,6 +266,7 @@ export function ChatMemoryScreen() {
         ListFooterComponent={
           <View className="gap-3">
             {cursor ? <Button label={loadingMore ? t('Carregando…') : t('Carregar mais')} variant="ghost" disabled={loadingMore} onPress={() => void loadMore()} /> : null}
+            <MemoryRulesSection />
             <View className="gap-3 pt-6">
               <AppText variant="title" className="text-base">
                 {t('Anotações do concierge')}

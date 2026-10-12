@@ -5,6 +5,7 @@ import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
 import { ContextLimitField } from '../components/chat/ContextLimitField';
 import { formatDate } from '../lib/format';
+import { MemoryRulesSection } from '../components/MemoryRulesSection';
 import { MemoryStatusBadge, MemoryStatusControls } from '../components/MemoryStatusControls';
 
 const fmtDate = (iso: string) => formatDate(iso);
@@ -419,6 +420,8 @@ export function ChatMemoryPage() {
 
       {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
       {memory && <ContextLimitField memory={memory} onSaved={setMemory} />}
+
+      <MemoryRulesSection />
 
       <div className="mt-4">
         <label className="label" htmlFor="chat-memory-search">
