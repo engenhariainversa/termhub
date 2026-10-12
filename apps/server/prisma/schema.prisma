@@ -76,6 +76,14 @@ model User {
   /// "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): off, the
   /// concierge can only suggest, never schedule an automatic answer.
   chatAutodecide          Boolean                  @default(false) @map("chat_autodecide")
+  /// TER-642: the similarity thresholds this person pinned by hand for automatic answers (send at once
+  /// from `high`, suggest and send after the countdown from `low`). Null = calibrated, else the defaults.
+  chatAutoHigh            Float?                   @map("chat_auto_high")
+  chatAutoLow             Float?                   @map("chat_auto_low")
+  /// The last calibration from this person's own answers: `{ high, low, samples, computed_at }`.
+  chatAutoCalibration     Json?                    @map("chat_auto_calibration")
+  chatAutoSamples         ChatAutoSample[]
+  chatFocus               ChatFocus[]
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies        Boolean                  @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
@@ -100,6 +108,7 @@ model User {
   automationSummaries     AutomationSummary[]
   featureFlagOverrides    FeatureFlagOverride[]
   dataExports             DataExport[]
+  legalAcceptances        LegalAcceptance[]
 
   @@index([roleId])
   @@index([deletionScheduledAt])
@@ -140,6 +149,11 @@ model Session {
   tokenHash String   @unique @map("token_hash")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
+  /// Last authenticated request (written at most once a minute); the idle timeout counts from here.
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  /// Where the session was opened, shown in Settings → Segurança.
+  ip         String?
+  userAgent  String?  @map("user_agent")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -213,8 +227,8 @@ model Machine {
   agentPairedAt         DateTime?          @map("agent_paired_at")
   agentVersion          String?            @map("agent_version")
   agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
-  /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
-  agentAutoUpdate       Boolean            @default(false) @map("agent_auto_update")
+  /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
+  agentAutoUpdate       Boolean            @default(true) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
   claudeAutoSwap        Boolean            @default(true) @map("claude_auto_swap")
   /// TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
@@ -349,6 +363,7 @@ model Tab {
   tasks               Task[]
   events              TabEvent[]
   lastAnswer          TabLastAnswer?
+  usage               TabUsage?
 
   @@index([projectId])
   @@index([machineId])
@@ -367,6 +382,12 @@ enum TabState {
   waiting_background
   /// The agent ended its turn with a report that asks nothing: done, not waiting for the person (TER-972).
   finished
+  /// The automatic run of the tab reported itself blocked: automation or the chat acts, not the person (TER-1046).
+  blocked
+  /// Claude Code cannot use its account ("Login expired · Please run /login"): the person has to log in again (TER-1046).
+  auth_required
+  /// Claude Code asks whether the folder is trusted, before any hook fires (TER-1046).
+  trust_prompt
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).
@@ -655,13 +676,14 @@ model AutomationRun {
 }
 
 /// Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
-/// read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
-/// tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+/// read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+/// `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
 model TabUsage {
   tabId            String   @id @map("tab_id")
   sessionId        String   @map("session_id")
   transcriptOffset BigInt   @map("transcript_offset")
   updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  tab              Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
 
   @@map("tab_usage")
 }
@@ -1263,11 +1285,46 @@ model TabQuestion {
   wokenAt        DateTime?        @map("woken_at")
   /// When the card was last brought back to the end of the chat (TER-477); the thread orders by it, else `createdAt`.
   surfacedAt     DateTime?        @map("surfaced_at")
+  /// TER-642: the best precedent memory found per question when the card opened, whatever its score:
+  /// `{ items: [{ question_index, ref, similarity, selected, text? }] }`. Calibration's raw material.
+  precedent      Json?
 
   @@index([tabId, status])
   @@index([conversationId, createdAt])
   @@index([tabId, createdAt])
   @@map("tab_questions")
+}
+
+/// TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+/// thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+/// `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+/// `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+model ChatAutoSample {
+  id            String   @id
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tabQuestionId String   @map("tab_question_id")
+  questionIndex Int      @map("question_index")
+  score         Float
+  matched       Boolean
+  source        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([tabQuestionId, questionIndex])
+  @@index([userId, createdAt])
+  @@map("chat_auto_samples")
+}
+
+/// TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+/// A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+model ChatFocus {
+  userId   String   @map("user_id")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId String   @map("client_id")
+  seenAt   DateTime @default(now()) @map("seen_at")
+
+  @@id([userId, clientId])
+  @@map("chat_focus")
 }
 
 /// A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
@@ -1569,6 +1626,47 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+/// the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+model LegalDocumentVersion {
+  id                 String            @id
+  /// 'terms' | 'privacy'
+  document           String
+  /// as printed in the document ("1", "1.1")
+  version            String
+  effectiveAt        DateTime          @map("effective_at") @db.Timestamptz
+  /// the public page of that version
+  url                String
+  requiresAcceptance Boolean           @default(true) @map("requires_acceptance")
+  /// what changed (pt-BR), shown in the notice
+  summary            String?
+  /// when the 30-day notice e-mail went out; set once (the claim, so only one colour sends it)
+  noticeSentAt       DateTime?         @map("notice_sent_at") @db.Timestamptz
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  acceptances        LegalAcceptance[]
+
+  @@unique([document, version])
+  @@map("legal_document_versions")
+}
+
+/// One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+model LegalAcceptance {
+  id         String               @id
+  userId     String               @map("user_id")
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versionId  String               @map("version_id")
+  version    LegalDocumentVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  acceptedAt DateTime             @default(now()) @map("accepted_at") @db.Timestamptz
+  ip         String?
+  userAgent  String?              @map("user_agent")
+  /// 'web' | 'mobile' | 'checkout'
+  channel    String
+
+  @@index([userId, versionId])
+  @@index([versionId])
+  @@map("legal_acceptances")
 }
 
 /// "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account

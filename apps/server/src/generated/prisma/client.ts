@@ -157,8 +157,8 @@ export type AutomationRun = Prisma.AutomationRunModel
 /**
  * Model TabUsage
  * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
- * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
- * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ * read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+ * `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
  */
 export type TabUsage = Prisma.TabUsageModel
 /**
@@ -319,6 +319,20 @@ export type TabLimitNotice = Prisma.TabLimitNoticeModel
  */
 export type TabQuestion = Prisma.TabQuestionModel
 /**
+ * Model ChatAutoSample
+ * TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+ * thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+ * `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+ * `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+ */
+export type ChatAutoSample = Prisma.ChatAutoSampleModel
+/**
+ * Model ChatFocus
+ * TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+ * A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+ */
+export type ChatFocus = Prisma.ChatFocusModel
+/**
  * Model ChatDecision
  * A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
  * similar questions later (spec 2026-09-26). `embedding` is pgvector, read and written in raw SQL.
@@ -402,6 +416,17 @@ export type UserNotification = Prisma.UserNotificationModel
  * timer's claim, inserted with ON CONFLICT DO NOTHING so two colours send it once. `day` is the user's local date.
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
+/**
+ * Model LegalDocumentVersion
+ * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+ * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+ */
+export type LegalDocumentVersion = Prisma.LegalDocumentVersionModel
+/**
+ * Model LegalAcceptance
+ * One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+ */
+export type LegalAcceptance = Prisma.LegalAcceptanceModel
 /**
  * Model DataExport
  * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account

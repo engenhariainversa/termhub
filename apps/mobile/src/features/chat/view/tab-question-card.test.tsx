@@ -61,13 +61,13 @@ describe('TabQuestionCard: suggested answer (chat decision memory spec 2026-09-2
     expect(onAnswer).not.toHaveBeenCalled();
   });
 
-  it('"Esquecer esta decisão" on a suggestion with an empty decision_id only clears the pre-selection', async () => {
-    const onForget = jest.fn(async () => undefined);
-    const noDecision: TabQuestionSuggestion = { items: [{ ...SUGGESTION.items[0]!, decision_id: '', similarity: 0 }] };
-    await render(<TabQuestionCard question={{ ...BASE_QUESTION, suggestion: noDecision }} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onForget={onForget} />);
-    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Esquecer esta decisão' })));
-    expect(onForget).not.toHaveBeenCalled();
-    expect(screen.getByRole('radio', { name: 'Não' }).props.accessibilityState.checked).toBe(false);
+  it('a suggestion backed by a note (TER-642: empty decision_id, no `by`) says so and has no decision to forget', async () => {
+    const fromNote: TabQuestionSuggestion = { items: [{ ...SUGGESTION.items[0]!, decision_id: '', similarity: 0.9, sources: ['note:n1'] }] };
+    await render(<TabQuestionCard question={{ ...BASE_QUESTION, suggestion: fromNote }} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onForget={jest.fn()} />);
+    expect(screen.getByRole('radio', { name: 'Não' }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByText('Sugestão da memória: uma anotação diz «Não» para «Usar worktree?» em termhub, 20/09/2026')).toBeTruthy();
+    expect(screen.queryByText(/você respondeu/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Esquecer esta decisão' })).toBeNull();
   });
 
   it('no suggestion line renders for a question with no suggestion, or once it is answered', async () => {
@@ -249,6 +249,79 @@ describe('automatic answer countdown (concierge memory spec 2026-09-26 §6/§8)'
     await act(async () => jest.advanceTimersByTime(1000));
     expect(screen.getByText('Enviando…')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeTruthy();
+  });
+
+  describe('similarity bands and focus (TER-642)', () => {
+    it('a paused countdown shows the time left from remaining_ms, standing still, with both buttons and never "Enviando…"', async () => {
+      const onCancelAutoAnswer = jest.fn();
+      const onAnswer = jest.fn();
+      // `due_at` is in the past on purpose: paused, it means nothing.
+      const paused = auto({ band: 'mid', paused: true, focus: false, remaining_ms: 37_400, due_at: new Date(now.getTime() - 5000).toISOString() });
+      await render(<TabQuestionCard question={card({ auto_answer: paused })} busy={false} onAnswer={onAnswer} loadScreen={async () => null} onCancelAutoAnswer={onCancelAutoAnswer} />);
+      expect(screen.getByText(/Resposta automática pausada, faltam 0:38 — «Sim»\. Motivo: Mesma pergunta respondida antes/)).toBeTruthy();
+      expect(screen.getByText('A contagem só corre com o termhub em foco.')).toBeTruthy();
+      expect(screen.queryByText('Enviando…')).toBeNull();
+      await act(async () => jest.advanceTimersByTime(10_000));
+      expect(screen.getByText(/faltam 0:38/)).toBeTruthy();
+      await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Cancelar' })));
+      expect(onCancelAutoAnswer).toHaveBeenCalledWith('q1');
+      await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Responder agora' })));
+      expect(onAnswer).toHaveBeenCalledWith('q1', { answers: [{ selected: [0] }] });
+    });
+
+    it('a paused countdown with nothing left still does not say "Enviando…"', async () => {
+      await render(<TabQuestionCard question={card({ auto_answer: auto({ paused: true, remaining_ms: 0 }) })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      expect(screen.getByText(/pausada, faltam 0:00/)).toBeTruthy();
+      expect(screen.queryByText('Enviando…')).toBeNull();
+    });
+
+    it('resumes from the fresh due_at the server republishes, and ticks again', async () => {
+      const view = await render(<TabQuestionCard question={card({ auto_answer: auto({ paused: true, remaining_ms: 30_000 }) })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      expect(screen.getByText(/pausada, faltam 0:30/)).toBeTruthy();
+      await view.rerender(<TabQuestionCard question={card({ auto_answer: auto({ paused: false, focus: true, due_at: new Date(now.getTime() + 30_000).toISOString() }) })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      expect(screen.getByText(/Resposta automática em 0:30/)).toBeTruthy();
+      expect(screen.queryByText('A contagem só corre com o termhub em foco.')).toBeNull();
+      await act(async () => jest.advanceTimersByTime(2000));
+      expect(screen.getByText(/Resposta automática em 0:28/)).toBeTruthy();
+    });
+
+    it('band "high" has no timer: "Respondendo sozinho", only "Cancelar"', async () => {
+      const onCancelAutoAnswer = jest.fn();
+      const high = auto({ band: 'high', score: 0.97, thresholds: { high: 0.95, low: 0.85 }, due_at: new Date(now.getTime() + 3000).toISOString() });
+      await render(<TabQuestionCard question={card({ auto_answer: high })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onCancelAutoAnswer={onCancelAutoAnswer} />);
+      expect(screen.getByText(/^Respondendo sozinho — «Sim»\. Motivo: Mesma pergunta respondida antes/)).toBeTruthy();
+      expect(screen.queryByText(/Resposta automática em/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Responder agora' })).toBeNull();
+      await act(async () => jest.advanceTimersByTime(5000));
+      expect(screen.queryByText('Enviando…')).toBeNull();
+      await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Cancelar' })));
+      expect(onCancelAutoAnswer).toHaveBeenCalledWith('q1');
+    });
+
+    it('band "high" keeps the chosen option\'s description', async () => {
+      const steps = { question: 'Como seguir?', header: 'Passo', multi_select: false, options: [{ label: 'Opção 1', description: 'faz merge e push para main', recommended: false }] };
+      await render(<TabQuestionCard question={card({ payload: { questions: [steps] }, auto_answer: auto({ band: 'high' }) })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      expect(screen.getByText(/Respondendo sozinho — «Opção 1» \(faz merge e push para main\)\. Motivo: Mesma pergunta respondida antes/)).toBeTruthy();
+    });
+
+    it('names a note as the source of a countdown it backed', async () => {
+      const noteSource = { ...memorySource, decision_id: '', sources: ['note:n1'] };
+      await render(<TabQuestionCard question={card({ auto_answer: auto({ sources: [{ kind: 'note', id: 'n1' }] }), suggestion: { items: [noteSource] } })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      expect(screen.getByText(/Fonte: uma anotação diz «Sim» para «Usar worktree\?» em termhub, 20\/09\/2026/)).toBeTruthy();
+    });
+
+    it('the badge shows the similarity next to the thresholds, two decimals', async () => {
+      const decision = { reason: 'Mesma pergunta respondida antes', sources: [], score: 0.9712, thresholds: { high: 0.95, low: 0.8 } };
+      await render(<TabQuestionCard question={card({ auto_answer: auto(), auto_decision: decision })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Decisão automática' })));
+      expect(screen.getByText('Semelhança 0,97 · limiares 0,95 / 0,80')).toBeTruthy();
+    });
+
+    it('the badge has no similarity line without a score (an older server, an action card)', async () => {
+      await render(<TabQuestionCard question={card({ auto_answer: auto(), auto_decision: { reason: 'Mesma pergunta respondida antes', sources: [] } })} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+      await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Decisão automática' })));
+      expect(screen.queryByText(/Semelhança/)).toBeNull();
+    });
   });
 
   it('the countdown line names the chosen option\'s description after its label, cut at 80 characters', async () => {

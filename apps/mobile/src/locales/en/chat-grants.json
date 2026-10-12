@@ -33,5 +33,18 @@
   "Histórico": "History",
   "Nada no histórico ainda.": "Nothing in the history yet.",
   "{{state}} em {{date}}": "{{state}} on {{date}}",
-  "Carregar mais": "Load more"
+  "Carregar mais": "Load more",
+  "Resposta automática": "Automatic answer",
+  "Quando uma aba pergunta algo parecido com o que a memória já guarda, a semelhança (de 0 a 1) decide o que o chat faz. Só age com «Responder sozinho» ligado, na Memória do chat.": "When a tab asks something close to what the memory already holds, the similarity (from 0 to 1) decides what the chat does. It only acts with “Answer on its own” turned on, in Chat memory.",
+  "A partir de {{high}}: envia a resposta sozinho.": "From {{high}}: sends the answer on its own.",
+  "De {{low}} até {{high}}: sugere a resposta e envia em {{seconds}} s, contando só com o termhub em foco.": "From {{low}} to {{high}}: suggests the answer and sends it in {{seconds}} s, counting only while termhub is in focus.",
+  "Abaixo de {{low}}: não sugere nada.": "Below {{low}}: suggests nothing.",
+  "Limiares fixados por você: o ajuste automático está desligado.": "Thresholds pinned by you: automatic adjustment is off.",
+  "Limiares ajustados pelo seu histórico ({{samples}} respostas).": "Thresholds adjusted from your history ({{samples}} answers).",
+  "Limiares padrão — o ajuste automático começa com {{min}} respostas suas ({{samples}} até agora).": "Default thresholds — the automatic adjustment starts at {{min}} answers of yours ({{samples}} so far).",
+  "Limiar de envio": "Sending threshold",
+  "Limiar de sugestão": "Suggestion threshold",
+  "Use números de {{min}} a {{max}}, com o limiar de sugestão igual ou abaixo do de envio.": "Use numbers from {{min}} to {{max}}, with the suggestion threshold at or below the sending one.",
+  "Fixar limiares": "Pin thresholds",
+  "Voltar ao ajuste automático": "Back to automatic adjustment"
 }

@@ -7,6 +7,8 @@ import { AppState, Linking } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 // Loaded at boot so it hears the first `sessionStarted` and reads the feature flags (TER-1040).
 import '@/features/feature-flags/viewmodel/useFeatureFlagsStore';
+// Loaded at boot too: tells the server while the app is in the foreground (TER-642).
+import '@/features/chat/view/focus-reporter';
 import { PushPrimerSheet } from '@/features/permissions/view/push-primer-sheet';
 import { setSystemSettingsOpener } from '@/features/permissions/viewmodel/usePermissionsStore';
 import { useNotificationsStore } from '@/features/notifications/viewmodel/useNotificationsStore';

@@ -12,6 +12,8 @@ export const SECURITY_EVENT_ACTIONS = [
   'auth.logout',
   'auth.view_as',
   'auth.view_as_end',
+  'auth.session_revoke',
+  'auth.password_change',
   'user.invite',
   'user.role_change',
   'user.delete',

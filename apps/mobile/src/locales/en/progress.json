@@ -1,5 +1,8 @@
 {
   "concluído": "done",
+  "bloqueado": "blocked",
+  "login expirado": "login expired",
+  "confiar na pasta?": "trust the folder?",
   "ainda não começou": "not started yet",
   "estimativa após 2 subtarefas": "estimate after 2 subtasks",
   "~{{range}} de trabalho": "~{{range}} of work",
@@ -81,5 +84,7 @@
   "{{ref}}: {{tool}} liberado sozinho": "{{ref}}: {{tool}} allowed automatically",
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permission allowed automatically",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
-  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard"
+  "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard",
+  "{{ref}}: cancelado — {{reason}}": "{{ref}}: cancelled — {{reason}}",
+  "{{ref}}: cancelado": "{{ref}}: cancelled"
 }

@@ -29,17 +29,28 @@ export function needsYouByProject(items: MonitorItem[]): Map<string, number> {
 }
 
 /**
- * Colour and motion of the tab's status dot (TER-1044): orange and blinking slowly while the tab needs
- * you (waiting and not seen yet), blue and pulsing while it works — its own background work included
- * (TER-644), never the "needs you" orange — and still otherwise. The motion classes live in index.css,
- * which turns them off for whoever asked the system for no motion.
+ * Colour and motion of the tab's status dot (TER-1044, TER-1046): orange and blinking slowly while the tab
+ * needs you (waiting and not seen yet), red for an expired login (blinking until seen) and an error, blue
+ * and pulsing while it works — its own background work included (TER-644), never the "needs you" orange —,
+ * neutral grey for a tab that finished or whose run is blocked (`tabDotIcon` draws them), and still green
+ * otherwise. The motion classes live in index.css, which turns them off for whoever asked the system for no
+ * motion.
  */
 export function tabDotClass(alive: boolean, tab: NeedsYouTab | null | undefined): string {
+  if (tab?.state === 'auth_required') return tabNeedsYou(tab) ? 'bg-danger tab-dot-blink' : 'bg-danger';
   if (tab && tabNeedsYou(tab)) return 'bg-attention tab-dot-blink';
   if (tab?.state === 'error') return 'bg-danger';
   if (tab?.state === 'working' || tab?.state === 'waiting_background') return alive ? 'bg-accent tab-dot-working' : 'bg-fg-dim';
-  // done, with a report and no question (TER-972): green, never moving
+  // done, with a report and no question (TER-972), or blocked on something automation follows (TER-1046)
+  if (tab?.state === 'finished' || tab?.state === 'blocked') return 'bg-fg-dim';
   return alive ? 'bg-ok' : 'bg-fg-dim';
+}
+
+/** The glyph drawn instead of the dot (TER-1046): a check for a tab that finished, a lock for a blocked run. */
+export function tabDotIcon(tab: Pick<Tab, 'state'> | null | undefined): 'check' | 'lock' | null {
+  if (tab?.state === 'finished') return 'check';
+  if (tab?.state === 'blocked') return 'lock';
+  return null;
 }
 
 /** Whether the dot shows the tab at work: the automatic ring turns only then. */
@@ -49,6 +60,8 @@ export const tabDotWorking = (alive: boolean, tab: NeedsYouTab | null | undefine
 /** What the alert says: the tool's own message, or a line for the state. */
 export function needsYouText(tab: Tab): string {
   if (tab.state_text) return tab.state_text;
+  if (tab.state === 'auth_required') return i18n.t('o login expirou: rode /login na aba');
+  if (tab.state === 'trust_prompt') return i18n.t('pergunta se a pasta é confiável');
   return tab.state === 'waiting_permission' ? i18n.t('está pedindo permissão') : i18n.t('terminou e está esperando você');
 }
 

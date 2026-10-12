@@ -12,6 +12,7 @@ import {
   type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
+  legalStatusResponse,
   aiLoginCancelResponse,
   aiLoginResumeResponse,
   aiLoginStartResponse,
@@ -62,6 +63,7 @@ import {
   transcriptionResponse,
   type AccountDeletionBody,
   type TChallengeBody,
+  type TChatMemoryPatchBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
   type TMobileBatchDecisionBody,
@@ -299,6 +301,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
     cancelAccountDeletion: (a: Auth) => call('DELETE', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
 
+    legalStatus: (a: Auth) => call('GET', '/api/m/v1/legal', legalStatusResponse, { token: a.accessToken }),
+    acceptLegal: (a: Auth, versionIds: string[]) =>
+      call('POST', '/api/m/v1/legal/accept', legalStatusResponse, { token: a.accessToken, body: { version_ids: versionIds } }),
+
     chatProjects: (a: Auth) => call('GET', '/api/m/v1/chat/projects', chatProjectsResponse, { token: a.accessToken }),
     setProjectFavorite: (a: Auth, projectId: string, favorite: boolean) =>
       empty('PUT', `/api/m/v1/chat/projects/${encodeURIComponent(projectId)}/favorite`, { token: a.accessToken, body: { favorite } }),
@@ -333,8 +339,11 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken, body: { ai } }),
     getAutomationSetup: (a: Auth, projectId: string) =>
       call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken }).then((r) => r.automation),
-    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }) =>
-      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken, body: { automation, ...proof } }).then((r) => r.automation),
+    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string) =>
+      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, {
+        token: a.accessToken,
+        body: { automation, ...proof, ...(timeZone ? { time_zone: timeZone } : {}) },
+      }).then((r) => r.automation),
     getPauseState: (a: Auth) => call('GET', '/api/m/v1/automation/state', pauseState, { token: a.accessToken }),
     pauseAutomation: (a: Auth, scope: string, interrupt = false) =>
       call('POST', '/api/m/v1/automation/pause', pauseResponse, { token: a.accessToken, body: { scope, interrupt } }).then((r) => r.paused_at),
@@ -381,8 +390,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     },
     forgetChatDecision: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}`, { token: a.accessToken }),
     chatMemory: (a: Auth) => call('GET', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken }),
-    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
+    setChatMemory: (a: Auth, body: boolean | TChatMemoryPatchBody) =>
       call('PATCH', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken, body: typeof body === 'boolean' ? { enabled: body } : body }),
+    reportChatFocus: (a: Auth, clientId: string, focused: boolean) => empty('POST', '/api/m/v1/chat/focus', { token: a.accessToken, body: { client_id: clientId, focused } }),
     chatNotes: (a: Auth, cursor) => {
       const params = new URLSearchParams();
       if (cursor) params.set('cursor', cursor);

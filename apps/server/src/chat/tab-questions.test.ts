@@ -11,7 +11,13 @@ import type { TabQuestionSuggestion } from './decision-text.js';
 import type { Embedder } from './embeddings.js';
 import { closingScope, expireOrphanTabQuestions, noteHookEvent, openTabQuestion, publishTabQuestions, startTabQuestionExpiry } from './tab-questions.js';
 
-vi.mock('./decision-memory.js', () => ({ suggestFor: vi.fn(async () => null) }));
+// `openTabQuestion` asks `recallFor`; the tests keep steering it through `suggestFor`, with no precedent
+// to store unless one sets `recalled.precedent`.
+const recalled = vi.hoisted(() => ({ precedent: null as { items: unknown[] } | null }));
+vi.mock('./decision-memory.js', () => {
+  const suggestFor = vi.fn(async (..._args: unknown[]) => null);
+  return { suggestFor, recallFor: vi.fn(async (...args: unknown[]) => ({ suggestion: await suggestFor(...args), precedent: recalled.precedent })), recordAutoSamples: vi.fn(async () => {}) };
+});
 
 const tab = { id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api' } as Tab;
 const payload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
@@ -40,6 +46,8 @@ function fakeRepos(
     stillOpen?: TabQuestion | undefined;
     /** The person's "Responder sozinho" switch (off by default). */
     autodecide?: boolean;
+    /** Thresholds the person pinned by hand (TER-642); the defaults otherwise. */
+    pinned?: { high: number; low: number };
   } = {},
 ) {
   const conversation = opts.conversation === undefined ? { id: 'c1', user_id: 'u1' } : (opts.conversation ?? undefined);
@@ -58,8 +66,10 @@ function fakeRepos(
       }),
       findOpenForTab: vi.fn(async () => ('stillOpen' in opts ? opts.stillOpen : opened)),
       setAutoAnswer: vi.fn(async (_id: string, auto: AutoAnswer) => ({ ...(opened ?? row()), suggestion: null as TabQuestionSuggestion | null, auto_answer: auto })),
+      setPrecedent: vi.fn(async () => {}),
     },
-    users: { chatAutodecide: vi.fn(async () => opts.autodecide ?? false) },
+    users: { chatAutodecide: vi.fn(async () => opts.autodecide ?? false), chatAutoThresholds: vi.fn(async () => ({ high: opts.pinned?.high ?? null, low: opts.pinned?.low ?? null, calibration: null })) },
+    chatAuto: { focusedUsers: vi.fn(async () => new Set<string>()) },
     // The repeat path re-reads the decisions a suggestion cites: `d1` answered "Azul" to this same card.
     chatDecisions: {
       findManyForUser: vi.fn(async (ids: string[], userId: string) =>
@@ -174,6 +184,23 @@ describe('openTabQuestion', () => {
     const published = events.filter((e) => e.type === 'tab_question');
     expect(published).toHaveLength(1);
     expect(published[0] && 'question' in published[0] ? published[0].question.auto_answer : undefined).toMatchObject({ status: 'scheduled', answer: { answers: [{ selected: [0] }] } });
+  });
+
+  it("asks memory with the person's own thresholds, and keeps what it found for calibration even with nothing to suggest (TER-642)", async () => {
+    const { recallFor } = await import('./decision-memory.js');
+    recalled.precedent = { items: [{ question_index: 0, ref: 'decision:d1', similarity: 0.6, selected: [1] }] };
+    try {
+      vi.mocked(suggestFor).mockResolvedValueOnce(null);
+      const repos = fakeRepos({ opened: row({ id: 'q1' }), pinned: { high: 0.97, low: 0.9 } });
+      const q = await openTabQuestion(asRepos(repos), tab, { kind: 'choice', payload, tool_use_id: 'toolu_1' }, { embedder: someEmbedder });
+      expect(vi.mocked(recallFor)).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ id: 'q1' }), expect.objectContaining({ threshold: 0.9, high: 0.97 }));
+      expect(repos.tabQuestions.setPrecedent).toHaveBeenCalledWith('q1', recalled.precedent);
+      // below the low threshold: the card goes out with nothing pre-selected, and the precedent never reaches a screen
+      expect(q?.suggestion).toBeNull();
+      expect(JSON.stringify(events)).not.toContain('precedent');
+    } finally {
+      recalled.precedent = null;
+    }
   });
 
   it('the repeat path with the switch off publishes the plain suggested card, no countdown', async () => {

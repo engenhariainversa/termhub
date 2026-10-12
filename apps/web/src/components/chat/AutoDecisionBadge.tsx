@@ -1,6 +1,7 @@
 import { useTranslation } from '../../i18n';
 import { useId, useState } from 'react';
 import type { AutoDecision, ChatAction } from '../../lib/types';
+import { formatSimilarity } from '../../lib/format';
 import { autoAnswerReason } from './tab-question-text';
 
 /** Mirrors `actionAutoDecision` (packages/mobile-api): the precedent a send cited, only when the call
@@ -44,6 +45,10 @@ export function AutoDecisionBadge({ decision }: { decision: AutoDecision }) {
       {open && (
         <div id={detailId} className="mt-1 space-y-0.5 text-fg-dim">
           {reason && <p className="whitespace-pre-wrap">{t('Motivo: {{reason}}', { reason })}</p>}
+          {/* TER-642: what the answer scored against the person's thresholds at that moment. */}
+          {decision.score !== undefined && decision.thresholds && (
+            <p>{t('Semelhança {{score}} · limiares {{high}} / {{low}}', { score: formatSimilarity(decision.score), high: formatSimilarity(decision.thresholds.high), low: formatSimilarity(decision.thresholds.low) })}</p>
+          )}
           {decision.sources.length > 0 && (
             <>
               <p>{t('Com base em:')}</p>

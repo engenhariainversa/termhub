@@ -340,10 +340,16 @@ export function deletionCancelledMail(to: string, opts: { appUrl: string }, loca
   });
 }
 
-/** Sent after the deletion job ran: nothing is left to sign in to. */
-export function accountDeletedMail(to: string, locale: Locale = DEFAULT_LOCALE): Mail {
+/**
+ * Sent after the deletion job ran: nothing is left to sign in to. `backupRetentionDays` (the
+ * instance's database backup retention, TER-745) adds when the copies still in backups go.
+ */
+export function accountDeletedMail(to: string, opts: { backupRetentionDays?: number | null } = {}, locale: Locale = DEFAULT_LOCALE): Mail {
   return noticeMail(locale, to, t(locale, 'Sua conta do termhub foi excluída'), [
     t(locale, 'Concluímos a exclusão da sua conta e de todos os dados ligados a ela.'),
+    ...(opts.backupRetentionDays
+      ? [t(locale, 'As cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até {{days}} dias.', { days: opts.backupRetentionDays })]
+      : []),
     t(locale, 'Guardamos só o que a lei exige, como os registros de acesso (6 meses). Este é o último e-mail que você recebe do termhub.'),
   ]);
 }
@@ -365,6 +371,45 @@ export function deletionLinkMail(to: string, opts: { link: string; ttlMinutes: n
     ],
     { label: t(locale, 'Confirmar exclusão'), url: opts.link },
   );
+}
+
+// ---------- terms and privacy policy changes (TER-742) ----------
+
+/** A version whose notice is going out: which document, from when, what changes and where to read it. */
+export interface LegalChangeNotice {
+  document: 'terms' | 'privacy';
+  effective_at: string;
+  url: string;
+  summary: string | null;
+}
+
+/**
+ * The 30-day notice of a relevant change to the Terms of Use and/or the Privacy Policy. One e-mail per
+ * person covers every version claimed in the same run. The summary is written in pt-BR and goes as is.
+ */
+export function legalChangeNoticeMail(to: string, versions: readonly LegalChangeNotice[], locale: Locale = DEFAULT_LOCALE): Mail {
+  const terms = versions.some((v) => v.document === 'terms');
+  const privacy = versions.some((v) => v.document === 'privacy');
+  const subject =
+    terms && privacy
+      ? t(locale, 'Mudanças nos Termos de Uso e na Política de Privacidade')
+      : terms
+        ? t(locale, 'Mudanças nos Termos de Uso')
+        : t(locale, 'Mudanças na Política de Privacidade');
+  const paragraphs: string[] = [];
+  for (const v of versions) {
+    const date = deletionDateLabel(new Date(v.effective_at), locale);
+    paragraphs.push(
+      v.document === 'terms'
+        ? t(locale, 'Os Termos de Uso do termhub mudam em {{date}}.', { date })
+        : t(locale, 'A Política de Privacidade do termhub muda em {{date}}.', { date }),
+    );
+    if (v.summary) paragraphs.push(t(locale, 'O que muda: {{summary}}', { summary: v.summary }));
+    if (versions.length > 1) paragraphs.push(t(locale, 'Leia a nova versão: {{url}}', { url: v.url }));
+  }
+  paragraphs.push(t(locale, 'A partir dessa data, vamos pedir que você leia e aceite a nova versão no seu próximo acesso. Se preferir, já pode aceitar antes pelo termhub.'));
+  const only = versions.length === 1 ? versions[0] : undefined;
+  return noticeMail(locale, to, subject, paragraphs, only ? { label: t(locale, 'Ler a nova versão'), url: only.url } : undefined);
 }
 
 /** "Exportar meus dados" (TER-741): the archive is ready; the button opens Perfil, where it downloads while signed in. */

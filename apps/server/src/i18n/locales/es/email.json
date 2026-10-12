@@ -34,6 +34,7 @@
   "Sua conta do termhub voltou ao normal. Nada foi apagado.": "Tu cuenta de termhub volvió a la normalidad. No se borró nada.",
   "Sua conta do termhub foi excluída": "Tu cuenta de termhub se eliminó",
   "Concluímos a exclusão da sua conta e de todos os dados ligados a ela.": "Terminamos de eliminar tu cuenta y todos los datos vinculados a ella.",
+  "As cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até {{days}} dias.": "Las copias de seguridad de la base de datos que aún tienen estos datos se borran en un plazo de {{days}} días.",
   "Guardamos só o que a lei exige, como os registros de acesso (6 meses). Este é o último e-mail que você recebe do termhub.": "Solo guardamos lo que exige la ley, como los registros de acceso (6 meses). Este es el último correo que recibes de termhub.",
   "Confirme a exclusão da sua conta do termhub": "Confirma la eliminación de tu cuenta de termhub",
   "Alguém pediu, na página de exclusão do termhub, para excluir a conta deste e-mail.": "Alguien pidió, en la página de eliminación de termhub, eliminar la cuenta de este correo.",
@@ -44,5 +45,14 @@
   "O arquivo que você pediu, com os dados da sua conta, está pronto.": "El archivo que pediste, con los datos de tu cuenta, está listo.",
   "Baixe pelo Perfil, com a sua conta aberta, até {{date}}. Depois disso o arquivo é apagado e você pode pedir outro.": "Descárgalo desde Perfil, con tu cuenta abierta, hasta el {{date}}. Después el archivo se borra y puedes pedir otro.",
   "Se não foi você que pediu, troque sua senha e confira os aparelhos e tokens da conta.": "Si no fuiste tú quien lo pidió, cambia tu contraseña y revisa los dispositivos y tokens de la cuenta.",
-  "Baixar meus dados": "Descargar mis datos"
+  "Baixar meus dados": "Descargar mis datos",
+  "Mudanças nos Termos de Uso e na Política de Privacidade": "Cambios en los Términos de Uso y en la Política de Privacidad",
+  "Mudanças nos Termos de Uso": "Cambios en los Términos de Uso",
+  "Mudanças na Política de Privacidade": "Cambios en la Política de Privacidad",
+  "Os Termos de Uso do termhub mudam em {{date}}.": "Los Términos de Uso de termhub cambian el {{date}}.",
+  "A Política de Privacidade do termhub muda em {{date}}.": "La Política de Privacidad de termhub cambia el {{date}}.",
+  "O que muda: {{summary}}": "Qué cambia: {{summary}}",
+  "Leia a nova versão: {{url}}": "Lee la nueva versión: {{url}}",
+  "A partir dessa data, vamos pedir que você leia e aceite a nova versão no seu próximo acesso. Se preferir, já pode aceitar antes pelo termhub.": "A partir de esa fecha, te pediremos que leas y aceptes la nueva versión en tu próximo acceso. Si lo prefieres, ya puedes aceptarla antes en termhub.",
+  "Ler a nova versão": "Leer la nueva versión"
 }

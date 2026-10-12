@@ -10,6 +10,6 @@ export async function doctorCommand(paths: string[], json: boolean): Promise<voi
     console.log(formatDoctor(report));
   }
 
-  const allOk = report.config.ok && report.server.ok && report.tmux.ok && report.nodePty.ok && report.paths.every((p) => p.ok);
+  const allOk = report.config.ok && report.server.ok && report.tmux.ok && report.nodePty.ok && report.network.ok && report.paths.every((p) => p.ok);
   process.exitCode = allOk ? 0 : 1;
 }

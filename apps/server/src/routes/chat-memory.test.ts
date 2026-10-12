@@ -44,12 +44,27 @@ function fakeRepos() {
       setChatCodexReplies: vi.fn(async () => undefined),
       chatContextLimit: vi.fn(async (): Promise<number | null> => null),
       setChatContextLimit: vi.fn(async () => undefined),
+      chatAutoThresholds: vi.fn(async (): Promise<{ high: number | null; low: number | null; calibration: { high: number; low: number; samples: number; computed_at: string } | null }> => ({ high: null, low: null, calibration: null })),
+      setChatAutoThresholds: vi.fn(async () => undefined),
     },
     tabQuestions: {
       cancelScheduledForUser: vi.fn(async (_userId: string) => [] as { id: string }[]),
+      listFocusCountdowns: vi.fn(async (_userId?: string) => [] as { id: string }[]),
+    },
+    chatAuto: {
+      touchFocus: vi.fn(async () => undefined),
+      clearFocus: vi.fn(async () => undefined),
+      focusedUsers: vi.fn(async () => new Set<string>()),
     },
   };
 }
+
+/** What `GET /memory` says about automatic answers for someone with no history and nothing pinned (TER-642). */
+const AUTO_DEFAULTS = {
+  auto_thresholds: { high: 0.95, low: 0.85, source: 'default', defaults: { high: 0.95, low: 0.85 }, samples: 0, min_samples: 30, calibrated_at: null },
+  auto_delay_seconds: 60,
+  focus_beat_seconds: 15,
+};
 
 /** A `lesson` memory item (chunk 0), as `findLessonForOwner`/`listLessons` return it. */
 function lessonItem(overrides: Partial<Record<string, unknown>> = {}) {
@@ -173,7 +188,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2 });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2, ...AUTO_DEFAULTS });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -185,7 +200,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0 });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0, ...AUTO_DEFAULTS });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {
@@ -225,6 +240,55 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       expect(r.statusCode).toBe(400);
     }
     expect(repos.users.setChatContextLimit).toHaveBeenCalledTimes(2);
+  });
+
+  describe('automatic-answer thresholds (TER-642)', () => {
+    it('GET /memory says where the thresholds in force come from: pinned by hand, calibrated, or the defaults', async () => {
+      const repos = fakeRepos();
+      const calibration = { high: 0.93, low: 0.8, samples: 42, computed_at: '2026-10-10T00:00:00.000Z' };
+      repos.users.chatAutoThresholds.mockResolvedValueOnce({ high: null, low: null, calibration });
+      const calibrated = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
+      expect(calibrated.json().auto_thresholds).toEqual({ high: 0.93, low: 0.8, source: 'calibrated', defaults: { high: 0.95, low: 0.85 }, samples: 42, min_samples: 30, calibrated_at: '2026-10-10T00:00:00.000Z' });
+      repos.users.chatAutoThresholds.mockResolvedValueOnce({ high: 0.99, low: 0.9, calibration });
+      const pinned = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
+      expect(pinned.json().auto_thresholds).toMatchObject({ high: 0.99, low: 0.9, source: 'manual', samples: 42 });
+      // too little history: the calibration is not in force yet
+      repos.users.chatAutoThresholds.mockResolvedValueOnce({ high: null, low: null, calibration: { ...calibration, samples: 12 } });
+      const young = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
+      expect(young.json().auto_thresholds).toMatchObject({ high: 0.95, low: 0.85, source: 'default', samples: 12 });
+    });
+
+    it('PATCH /memory pins the thresholds, hands them back with null, and refuses a pair out of order or out of range', async () => {
+      const repos = fakeRepos();
+      const res = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { auto_thresholds: { high: 0.97, low: 0.9 } } });
+      expect(res.statusCode).toBe(200);
+      expect(repos.users.setChatAutoThresholds).toHaveBeenCalledWith('u1', { high: 0.97, low: 0.9 });
+      expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
+      const back = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { auto_thresholds: null } });
+      expect(back.statusCode).toBe(200);
+      expect(repos.users.setChatAutoThresholds).toHaveBeenLastCalledWith('u1', null);
+      for (const bad of [{ high: 0.8, low: 0.9 }, { high: 1.2, low: 0.9 }, { high: 0.9, low: 0.2 }, { high: 0.9 }]) {
+        const r = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { auto_thresholds: bad } });
+        expect(r.statusCode).toBe(400);
+      }
+      expect(repos.users.setChatAutoThresholds).toHaveBeenCalledTimes(2);
+    });
+
+    it("POST /focus stores this screen's heartbeat (or takes it out) for the requester only, and syncs their countdowns", async () => {
+      const repos = fakeRepos();
+      const on = await build(kind, repos).inject({ method: 'POST', url: '/chat/focus', payload: { client_id: 'screen-abcdef', focused: true } });
+      expect(on.statusCode).toBe(204);
+      expect(repos.chatAuto.touchFocus).toHaveBeenCalledWith('u1', 'screen-abcdef');
+      expect(repos.tabQuestions.listFocusCountdowns).toHaveBeenCalledWith('u1');
+      const off = await build(kind, repos).inject({ method: 'POST', url: '/chat/focus', payload: { client_id: 'screen-abcdef', focused: false } });
+      expect(off.statusCode).toBe(204);
+      expect(repos.chatAuto.clearFocus).toHaveBeenCalledWith('u1', 'screen-abcdef');
+      for (const bad of [{ client_id: 'x', focused: true }, { client_id: 'has spaces in it', focused: true }, { client_id: 'screen-abcdef' }]) {
+        const r = await build(kind, repos).inject({ method: 'POST', url: '/chat/focus', payload: bad });
+        expect(r.statusCode).toBe(400);
+      }
+      expect(repos.chatAuto.touchFocus).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('PATCH /memory with autodecide: false cancels the user\'s running countdowns and republishes those cards', async () => {

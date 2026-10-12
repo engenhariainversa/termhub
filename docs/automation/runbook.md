@@ -116,7 +116,7 @@ Project Setup, "Trabalho automático" section. Fields not listed keep their defa
 | Até onde os agentes vão sozinhos (`autonomy`) | `release` (Publicação). Consider `deploy` for the first week; the spike leaves that to the maintainer |
 | Caminhos de release (`release_paths`) | `apps/agent/package.json`, `apps/mobile/**`, `packages/mobile-api/**` |
 | Caminhos das lojas (`store_paths`) | `apps/mobile/app.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/plugins/**` |
-| Workflows de release (`release_workflows`) | `Publish @termhub/agent`, `Publish mobile OTA` |
+| Workflows de release (`release_workflows`) | `Publish @termhub/agent`, `Publish mobile OTA`, `Mobile TestFlight (hulk)` (add it once the hulk runner exists: section 4b) |
 | Checks obrigatórios (`required_checks`) | `CI e Deploy` |
 | Pasta dos worktrees (`worktrees_dir`) | default `~/.termhub/worktrees`, or a folder outside every checkout; the trust prompt above applies to it |
 | Hora do resumo diário (`summary_hour`) | an hour of the day, 0 to 23 (e.g. 18); empty = no summary |
@@ -165,6 +165,45 @@ Every change, from the chat, an MCP client, the web or the app, is an automation
 (`chat`, `mcp`, `web`, `app`): `automation_on`, `automation_off`, `setup_changed` (with the changed
 `fields`), `tagged` / `untagged` (with how many `cards`), `machine_opt_in` / `machine_opt_out` (on every
 project linked to the machine). They show in the feed and in `list_automation_events`.
+
+## 4b. TestFlight on hulk (TER-1055)
+
+A native change to the app (a store path) still waits for a person to merge it. After that merge, the iOS build
+goes to TestFlight by itself: the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`)
+runs on a self-hosted runner on hulk, the Mac with Xcode and the Apple credentials, and calls
+`apps/mobile/scripts/testflight.sh` (the local flow of `apps/mobile/README.md`, "Releasing to TestFlight", no
+EAS). It never submits for App Store review and builds no Android.
+
+- **Trigger:** a push to `main` that changes `apps/mobile/app.json`, `app.config.js`, `package.json` or
+  `plugins/**`, or Actions → Run workflow (with `force` to re-upload the same version under a new build number).
+- **Once per version:** hulk records each accepted upload in `~/.termhub/testflight/ios-<version>`. A version
+  already there is skipped and the run cancels itself; termhub reads a cancelled run as nothing delivered, so no
+  `release_ok` and no push. A native change without an `expo.version` bump therefore ships nothing: bump the
+  version.
+- **Build number:** the UTC date and time (`YYYYMMDDHHMM`), written into the generated `Info.plist` only.
+- **Credentials stay on hulk:** the Apple ID signed in to Xcode, or an App Store Connect API key named by
+  `ASC_KEY_ID` / `ASC_ISSUER_ID` (and `ASC_KEY_PATH`) in `~/.termhub/testflight/env` on hulk. No Apple, Expo or
+  EAS secret goes to GitHub.
+- **In termhub:** with the workflow in `release_workflows`, an automatic card whose PR changed the app gets
+  `release_ok` with the app's `expo.version` (read from the `app.json` the PR changed), a chat line, and a push:
+  "termhub: versão 0.6.0 publicada" / "Mobile TestFlight (hulk) publicou a versão 0.6.0." A failed build is
+  `release_failed` and escalates (section 10). The build number is in the run's summary, not in the push.
+
+One-time setup on hulk (the maintainer, not an agent: it registers a runner on the repository):
+
+1. Repository → Settings → Actions → Runners → New self-hosted runner → macOS. Install it in a folder of its own
+   (e.g. `/Volumes/Extra/actions-runner`), outside the termhub checkout, and register it with the extra label
+   `macos-hulk`. Never give it the `termhub` label: that one sends CI and deploy jobs to jarvis.
+2. Install it as a service of the user that is signed in to Xcode (`./svc.sh install && ./svc.sh start`; on
+   macOS that is a LaunchAgent, so the user's keychain is available). The user must stay logged in.
+3. The runner needs `node` 22, `npm`, CocoaPods and Xcode in its `PATH`: put them in the runner's `.path` (or
+   `.env`) and restart it.
+4. Optional: `~/.termhub/testflight/env` with `export ASC_KEY_ID=… ASC_ISSUER_ID=…` to sign and upload with the
+   API key instead of the Xcode account. The `.p8` stays in `~/.appstoreconnect/private_keys/`.
+5. A self-hosted runner runs whatever a workflow sends it. Keep "Require approval for all outside
+   collaborators" (Settings → Actions → General) on, so a fork's pull request never reaches hulk.
+6. First upload: Actions → "Mobile TestFlight (hulk)" → Run workflow on `main`. Then add the workflow to
+   `release_workflows` (section 4).
 
 ## 5. First card, end to end
 
@@ -334,6 +373,41 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
   types `continue` into each. Automatic runs escalated because of the login are not resumed by this; unblock
   them as in section 9.
 
+## 9b. Keeping the machines' agents up to date (TER-1056)
+
+A machine on an old agent misses whatever needs a newer one (the screen login needs 0.26.0, the hooks read
+0.21.0, the worktree RPC 0.18.0). The server keeps them current:
+
+- **Auto-update is on by default.** New machines start with "Atualizar automaticamente quando ociosa" on, and
+  the migration `20261016090000_agent_auto_update_default_on` turned it on once for every agent machine.
+  The server, not the agent, watches npm: it reads the latest `@termhub/agent` hourly (and right after boot),
+  verifies its provenance (TER-584, `docs/security-and-network.md`), and every 10 minutes, plus 30 s after an
+  agent connects, updates each machine that wants it. Only while the machine is idle: no channel open (a
+  terminal attached or a chat answering there) and no tab with a tool working or waiting. The agent
+  restarts as a service; the tmux sessions survive and open terminals reconnect.
+- **Minimum version.** `MIN_AGENT_VERSION` in `apps/server/src/agent/min-version.ts` (0.27.0 today). An agent
+  below it is updated on its next idle turn even with the switch off, and Máquinas shows it in red
+  ("vX.Y.Z !", "desatualizado" on the Agente tab, a notice in the agent card) until it reconnects on a newer
+  version. To force a critical fix out: in the PR that bumps `apps/agent/package.json`, raise
+  `MIN_AGENT_VERSION` to that version. CI publishes the agent and deploys the server from the same merge; the
+  server installs only a verified release, so the red notice stays until npm has finished processing it.
+- **From the chat.** `list_machines` answers `agent_version`, `update_available` and `below_min_version` per
+  agent machine (plus `latest_agent_version` and `min_agent_version`). `update_machine_agent` with
+  `machine_id`, or `all: true`, runs the Atualizar button behind a confirmation card, waits up to 2 minutes
+  for the agent to come back, and answers each machine's status and the versions before and after. The
+  machine the chat itself runs on answers `scheduled`: updating it on the spot would cut the conversation,
+  so the scheduler updates it once the answer is over and it is idle, switch or not. Automatic tabs never
+  call it.
+- **After an update** (button, chat or auto-update): once the agent is back on the new version, the monitor
+  hooks are installed again if termhub had installed them there and the forwarding script or our entries
+  changed (`hooks: reinstalled`); hooks termhub never installed are left alone. A machine still dialing
+  with the legacy permanent token answers `repair_suggested: true`: offer "Parear de novo" on its agent tab
+  (TER-1017) to trade it for a device key.
+- Stuck: an agent older than 0.2.1 cannot update itself (`too_old`); `restart_needed` means the agent does
+  not run as a service, so someone restarts it on the machine; `not_back` means it did not reconnect within
+  2 minutes (check `termhub-agent doctor` there). The fallback is always `npm i -g @termhub/agent@latest` on
+  the machine.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
@@ -353,6 +427,10 @@ See `docs/lessons/2026-10-07-deploy-job-missing-github-incident.md`.
 - Mobile OTA (xprem): with the xprem MCP, `get_updates` and `get_update_health` to see the reach,
   `republish_update` to put an earlier update back on branch `production`, or `rollback_branch` to fall back
   to the bundle in the binary. Devices that ran the bad bundle take the fix on their next update check.
+- Mobile TestFlight (hulk): a build reaches testers only once it is in their group (by hand, or by a group set
+  to distribute builds automatically). Expire a bad one in
+  App Store Connect → TestFlight if it is bad, fix on `main`, bump `expo.version` and merge again. A run that
+  failed before the upload can simply be run again (Actions → Run workflow): the version was not recorded.
 - Automation never undoes a release by itself.
 
 ## 11. Removing a stuck worktree
@@ -400,3 +478,8 @@ None by default: automation is off until a project turns it on, the default leve
 TER-1043 (section 7a) raises autonomy for everyone who has automation on: their runs now decide product
 and technical questions alone and record them, instead of waiting. The project setting "Parar em decisões
 de produto" (off by default) brings the old behaviour back per project.
+
+TER-1056 (section 9b) changes every machine, automation or not: agents now update themselves while idle by
+default (the switch was off by default before, and the migration turned it on once for every agent
+machine). Anyone who does not want it turns the switch off per machine; an agent below the minimum version
+is updated anyway.

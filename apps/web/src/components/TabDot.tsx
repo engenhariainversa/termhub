@@ -1,5 +1,6 @@
+import { Check, Lock } from 'lucide-react';
 import { useTranslation } from '../i18n';
-import { tabDotClass, tabDotWorking, tabNeedsYou } from '../lib/needs-you';
+import { tabDotClass, tabDotIcon, tabDotWorking, tabNeedsYou } from '../lib/needs-you';
 import type { Tab } from '../lib/types';
 
 interface Props {
@@ -30,6 +31,9 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
   const label = title ? withAutoRef(title, autoRef, t) : autoRef ? t('automático, {{ref}}', { ref: autoRef }) : undefined;
   // the box is the ring's size, ring or not (TER-1045): the ring and the pulse (6px dot at 1.4×) stay inside
   // it, so nothing around it clips them and a ringed row's text lines up with the others
+  // a finished tab and a blocked run show a glyph instead of the dot (TER-1046), in the dot's own grey
+  const icon = tabDotIcon(tab);
+  const Icon = icon === 'check' ? Check : icon === 'lock' ? Lock : null;
   return (
     <span
       className="relative inline-flex h-3 w-3 shrink-0 items-center justify-center"
@@ -44,7 +48,11 @@ export function TabDot({ alive, tab, autoRef, title }: Props) {
           className={`absolute inset-0 rounded-full border border-accent border-r-transparent ${tabDotWorking(alive, tab) ? 'tab-dot-ring' : ''}`}
         />
       )}
-      <span data-dot aria-hidden className={`h-1.5 w-1.5 rounded-full ${tabDotClass(alive, tab)}`} />
+      {Icon ? (
+        <Icon data-dot data-icon={icon} aria-hidden strokeWidth={3} className="absolute left-1/2 top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 text-fg-dim" />
+      ) : (
+        <span data-dot aria-hidden className={`h-1.5 w-1.5 rounded-full ${tabDotClass(alive, tab)}`} />
+      )}
     </span>
   );
 }

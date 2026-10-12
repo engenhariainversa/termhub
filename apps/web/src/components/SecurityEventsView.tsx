@@ -11,6 +11,8 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'auth.logout': tk('Saiu'),
   'auth.view_as': tk('Começou a ver como outra pessoa'),
   'auth.view_as_end': tk('Parou de ver como outra pessoa'),
+  'auth.session_revoke': tk('Encerrou sessões'),
+  'auth.password_change': tk('Trocou a senha'),
   'user.invite': tk('Convidou usuário'),
   'user.role_change': tk('Mudou a role de usuário'),
   'user.delete': tk('Excluiu usuário'),

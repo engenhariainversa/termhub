@@ -5,7 +5,12 @@ import { setupSchema } from '../setup/schema.js';
 import { dispatcherInstanceId, startDispatcher, TICK_MS, TRIGGER_DEBOUNCE_MS, type DispatcherDeps } from './dispatcher.js';
 import { automationBus, dispatchTriggers } from './events.js';
 
-/** Repositories that record every call and answer only what `impl` defines (anything else throws). */
+/** What every owner answers unless a test says otherwise: no version of the Terms pending (TER-742). */
+const DEFAULTS: Record<string, Record<string, (...args: never[]) => unknown>> = {
+  legal: { statusFor: async () => ({ pending: [], upcoming: [] }) },
+};
+
+/** Repositories that record every call and answer only what `impl` (or DEFAULTS) defines (anything else throws). */
 function recordingRepos(impl: Record<string, Record<string, (...args: never[]) => unknown>> = {}) {
   const calls: string[] = [];
   const repos = new Proxy(
@@ -18,7 +23,7 @@ function recordingRepos(impl: Record<string, Record<string, (...args: never[]) =
             get: (_u, method: string) =>
               (...args: never[]) => {
                 calls.push(`${repo}.${method}`);
-                const f = impl[repo]?.[method];
+                const f = impl[repo]?.[method] ?? DEFAULTS[repo]?.[method];
                 if (!f) throw new Error(`unexpected call ${repo}.${method}`);
                 return f(...args);
               },
@@ -47,7 +52,7 @@ function deps(repos: Repositories, over: Partial<DispatcherDeps> = {}): Dispatch
 
 /** No project has automation on: the sweep finds nothing and the list is empty. */
 const idle = () => ({
-  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [] },
+  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [], cardsWithCancelledWorktree: async () => [] },
   projectSetup: { listWithAutomation: async () => [] },
 });
 
@@ -261,7 +266,7 @@ describe('startDispatcher (fakes)', () => {
     const at = new Date('2026-10-05T12:00:00Z');
     const budgetRepos = (limit: number | null, spent: number) => {
       const setup = setupSchema.parse({ automation: { enabled: true, daily_budget_usd: limit } });
-      return recordingRepos({
+      const impl = {
         ...idle(),
         projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: setup }] },
         automationRuns: { ...idle().automationRuns, countActive: async () => 0, claim: async () => null },
@@ -272,7 +277,8 @@ describe('startDispatcher (fakes)', () => {
         tasks: { listByProject: async () => [] },
         tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => spent },
         automationEvents: { insertOnce: async () => null },
-      });
+      };
+      return { ...recordingRepos(impl), impl };
     };
 
     it('a project at its budget gets no new start (the queue is not even read), and its fixer and integrator wait', async () => {
@@ -296,6 +302,29 @@ describe('startDispatcher (fakes)', () => {
       expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
       expect(more.calls).not.toContain('automationRuns.claim');
       await d.stop();
+    });
+
+    it('an owner who has not accepted the Terms in force gets no new start, and their fixer waits (TER-742)', async () => {
+      const pending = { statusFor: async () => ({ pending: [{ id: 'v1', document: 'terms' }], upcoming: [] }) };
+      // with a budget set, reaching the budget check would read the day's cost: stopping first means it never does
+      const { repos, calls } = recordingRepos({ ...budgetRepos(10, 0).impl, legal: pending });
+      const d = startDispatcher(deps(repos, { now: () => at, log: { info: () => {}, warn: () => {} } }), { schedule: false });
+      await d.tick('t');
+      await d.stop();
+      expect(calls).toContain('legal.statusFor');
+      expect(calls).not.toContain('tabUsage.costOfDay');
+      expect(calls).not.toContain('automationRuns.claim');
+      const fixer = { projectId: 'p1', taskId: 'c1', role: 'fixer' as const, triggerSha: 'h1', branch: 'b', base: 'main', prompt: 'p' };
+      const more = recordingRepos({
+        projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+        automationPauses: { state: async () => ({ user: null, project: null }) },
+        users: { findById: async () => ({ id: 'u1' }) },
+        projectSetup: { get: async () => ({ data: setupSchema.parse({ automation: { enabled: true } }) }) },
+        tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
+        legal: pending,
+      });
+      expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
+      expect(more.calls).not.toContain('automationRuns.claim');
     });
 
     it('under the budget, or with none, the queue is read as usual', async () => {

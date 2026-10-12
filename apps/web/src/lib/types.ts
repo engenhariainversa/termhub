@@ -64,6 +64,26 @@ export interface FeatureFlagInfo {
   overrides: FeatureFlagOverride[];
 }
 
+/** A registered version of the Terms of Use or of the Privacy Policy (TER-742). */
+export interface LegalVersion {
+  id: string;
+  document: 'terms' | 'privacy';
+  /** as printed in the document ("1", "1.1") */
+  version: string;
+  effective_at: string;
+  /** public page of that version */
+  url: string;
+  requires_acceptance: boolean;
+  /** what changed (pt-BR), when the maintainer wrote it */
+  summary: string | null;
+}
+
+/** GET /api/legal/status (also `legal` in /auth/me): versions in force not accepted yet, and the ones coming. */
+export interface LegalStatus {
+  pending: LegalVersion[];
+  upcoming: LegalVersion[];
+}
+
 /** GET/POST/DELETE /api/account/deletion. */
 export interface AccountDeletionStatus {
   pending: boolean;
@@ -152,6 +172,8 @@ export interface Machine {
   agent_credential?: 'key' | 'bearer' | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
+  /** TER-1056, server-computed: the agent is older than the server's minimum (it updates itself once idle, switch or not) */
+  below_min_version?: boolean;
   /** the user's own computer: shown only in the browser that added it (see lib/local-machines) */
   is_local: boolean;
   /** null = orphan (visible only to admins viewing "all") */
@@ -341,6 +363,10 @@ export interface AgentOnCard {
   background: boolean;
   /** the agent ended its turn with a report and asks nothing (TER-972); only with `state: 'idle'` */
   finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
   needs_you: boolean;
   activity: string | null;
   activity_verb: string | null;
@@ -708,8 +734,21 @@ export interface Tab {
 /**
  * `waiting_background`: the agent ended its turn while its own subagents, shells or monitors still run (TER-644).
  * `finished`: the agent ended its turn with a plain report and asks nothing (TER-972).
+ * `blocked`: the tab's automatic run reported itself blocked; automation or the chat acts (TER-1046).
+ * `auth_required`: Claude Code's login expired, the person has to run /login (TER-1046).
+ * `trust_prompt`: Claude Code asks whether the folder is trusted, before it starts (TER-1046).
  */
-export type TabState = 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | 'waiting_background' | 'finished';
+export type TabState =
+  | 'working'
+  | 'waiting_input'
+  | 'waiting_permission'
+  | 'idle'
+  | 'error'
+  | 'waiting_background'
+  | 'finished'
+  | 'blocked'
+  | 'auth_required'
+  | 'trust_prompt';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -722,10 +761,16 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   error: tk('erro'),
   waiting_background: tk('aguardando segundo plano'),
   finished: tk('concluído'),
+  blocked: tk('bloqueado'),
+  auth_required: tk('login expirado'),
+  trust_prompt: tk('confiar na pasta?'),
 };
 
-/** States in which the tool is waiting for the person. */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+/** States in which the tool is waiting for the person: the yellow ones and the expired login (TER-1046). */
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+
+/** States a quick reply answers: typing text into a login or trust dialog would do nothing good. */
+export const ANSWERABLE: readonly TabState[] = ['waiting_input', 'waiting_permission'];
 
 export interface TabEvent {
   id: string;
@@ -918,6 +963,9 @@ export interface AuthConfig {
   email_code: boolean;
   /** where this instance's public cities live, e.g. https://termhub.dev/city — share links are built from it */
   public_city_url: string;
+  /** this instance's terms of use and privacy policy (TERMS_URL / PRIVACY_URL); null = no link */
+  terms_url?: string | null;
+  privacy_url?: string | null;
 }
 
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
@@ -1229,8 +1277,13 @@ export interface ChatAction {
 export interface AutoDecision {
   reason: string | null;
   sources: { ref: string; question: string | null; answer: string | null }[];
-  /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
-  by?: TabQuestionAutoAnswer['by'];
+  /** `'automation'` on a question card answered by automatic board work, `'automation_permission'` on a
+   *  permission it allowed by the project's rules (TER-974): the reason is shown translated. */
+  by?: TabQuestionAutoAnswer['by'] | 'automation_permission';
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent from an older server and on an action card. */
+  score?: number;
+  thresholds?: AutoThresholdPair;
 }
 
 /** Mirrors the server's `SubagentStatus` (apps/server/src/chat/stream.ts). */
@@ -1384,7 +1437,8 @@ export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
  * indexes (the mapping is done server-side); `text` is set instead for a free-text past answer. */
 export interface TabQuestionSuggestionItem {
   question_index: number;
-  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2). */
+  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2), and
+   *  on one backed by a concierge note instead of a past decision (TER-642: `sources` is `['note:<id>']`). */
   decision_id: string;
   similarity: number;
   selected: number[];
@@ -1401,6 +1455,23 @@ export interface TabQuestionSuggestion {
   items: TabQuestionSuggestionItem[];
 }
 
+/** The similarity thresholds of an automatic answer (TER-642), cosine 0.5–1: from `high` it is sent at
+ * once, from `low` suggested and sent when its countdown runs out, below `low` nothing. */
+export interface AutoThresholdPair {
+  high: number;
+  low: number;
+}
+/** Mirrors the server's `AutoThresholdsView`: the thresholds in force for this person, where they come
+ * from (`manual`: pinned by hand; `calibrated`: from their own answers; `default`: too little history),
+ * the defaults, how many of their answers calibration has seen and how many it needs. */
+export interface AutoThresholds extends AutoThresholdPair {
+  source: 'manual' | 'calibrated' | 'default';
+  defaults: AutoThresholdPair;
+  samples: number;
+  min_samples: number;
+  calibrated_at: string | null;
+}
+
 /** A countdown that sends `answer` by itself at `due_at` unless the person cancels it (spec 2026-09-26
  * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call,
  * `'automation'` the option the agent recommended in a tab with an automatic run (agentic board D18). */
@@ -1414,6 +1485,16 @@ export interface TabQuestionAutoAnswer {
   error_code?: string;
   decided_by?: string;
   claimed_at?: string;
+  // TER-642, all absent from an older server. `score`/`thresholds`/`band` say what led to an answer
+  // backed by memory (`band` 'high': sent at once, no real countdown; 'mid': after the countdown).
+  // `focus`: the countdown only runs while termhub is in focus; `paused` with `remaining_ms` left while
+  // it is not — `due_at` then means nothing until the server republishes the card with a fresh one.
+  score?: number;
+  thresholds?: AutoThresholdPair;
+  band?: 'high' | 'mid';
+  focus?: boolean;
+  paused?: boolean;
+  remaining_ms?: number;
 }
 
 interface TabQuestionBase {
@@ -1482,6 +1563,11 @@ export interface ChatMemory {
   available: boolean;
   count: number;
   notes: number;
+  /** TER-642; all three absent from an older server. `auto_delay_seconds` is the countdown of a
+   *  suggested answer, `focus_beat_seconds` how often a screen in focus says so (`POST /chat/focus`). */
+  auto_thresholds?: AutoThresholds;
+  auto_delay_seconds?: number;
+  focus_beat_seconds?: number;
 }
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
@@ -1699,6 +1785,18 @@ export interface DevicesSummary {
 export type ApiTokenScope = 'read' | 'tasks' | 'terminals' | 'memory';
 
 /** Personal API token as the server lists it (never the secret). */
+/** One web session of the signed-in person (GET /auth/sessions). */
+export interface WebSession {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  ip: string | null;
+  user_agent: string | null;
+  /** the session of this very browser */
+  current: boolean;
+}
+
 export interface ApiToken {
   id: string;
   user_id: string;
@@ -1847,6 +1945,10 @@ export interface TabChatSummary {
   state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
   background: boolean;
   finished: boolean;
+  /** TER-1046, absent from an older server: a blocked run (`idle`), an expired login (`error`), the trust dialog (`waiting_input`) */
+  blocked?: boolean;
+  auth_required?: boolean;
+  trust_prompt?: boolean;
   state_at: string | null;
   needs_you: boolean;
   activity: string | null;

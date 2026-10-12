@@ -10,7 +10,7 @@ import type { Project, Task } from '../db/repositories/types.js';
 import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { cleanupRuns } from './cleanup.js';
+import { cleanupRuns, markCancelledWorktreesDue } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
@@ -29,6 +29,8 @@ import { eligibilityQueue } from './queue.js';
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
 export const TRIGGER_DEBOUNCE_MS = 1_000;
+/** How often a project's cancelled runs are looked at for a worktree to clean (TER-974). */
+export const CANCELLED_SCAN_MS = 10 * 60_000;
 /** Spec §8 step 7: heartbeats every 30 s; a run silent for 2 min is taken over by another instance. */
 export const HEARTBEAT_MS = 30_000;
 export const STALE_MS = 2 * 60_000;
@@ -349,12 +351,20 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     await markRunning(ctx, project, run, task, place, tabId, branch, true);
   }
 
+  /** A version of the Terms in force that the owner has not accepted (TER-742); none registered = false. */
+  async function legalPending(ownerId: string): Promise<boolean> {
+    return (await repos.legal.statusFor(ownerId)).pending.length > 0;
+  }
+
   async function dispatchProject(projectId: string, enabledSetup: ProjectSetupData): Promise<void> {
     const project = await repos.projects.findById(projectId);
     if (!project?.owner_id) return;
     if (await isPaused(repos, project.owner_id, projectId)) return;
     const owner = await repos.users.findById(project.owner_id);
     if (!owner) return;
+    // TER-742: while the owner has not accepted the Terms in force, their tokens and the MCP refuse every
+    // call, so an agent started now could not report back: no new start until they accept.
+    if (await legalPending(owner.id)) return;
     // TER-892: a day's budget reached stops the new starts (the runs going on finish their turn)
     if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
@@ -417,6 +427,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return 'halted';
     const [owner, setup, task] = await Promise.all([repos.users.findById(project.owner_id), repos.projectSetup.get(project.id), repos.tasks.findById(i.taskId)]);
     if (!owner || !setup.data.automation.enabled || !task || task.project_id !== project.id) return 'halted';
+    // TER-742: the trigger waits for the owner to accept the Terms, like a reached budget
+    if (await legalPending(owner.id)) return 'waiting';
     // R8: no new fixer or integrator run once the day's budget is reached; the trigger stays free for tomorrow
     if (await budgetReached(repos, project.id, setup.data.automation, deps.now(), log)) return 'waiting';
     const max = setup.data.automation.max_parallel;
@@ -520,12 +532,26 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
+  /** When each project's cancelled runs were last looked at for a worktree to clean (TER-974). */
+  const cancelledScanAt = new Map<string, number>();
+
   /**
    * Cleanups left due after a merge (machine offline, tab busy): tried again on each tick. A pause does not
    * stop them (removing a merged card's worktree is not work); automation off does (only projects with it on
    * are read), and so does a draining instance.
    */
   async function retryCleanups(projectId: string, setup: ProjectSetupData): Promise<void> {
+    // TER-974: a cancelled run's worktree nothing will use again joins them (looked for every few minutes)
+    const now = deps.now();
+    if (now.getTime() - (cancelledScanAt.get(projectId) ?? 0) >= CANCELLED_SCAN_MS) {
+      cancelledScanAt.set(projectId, now.getTime());
+      try {
+        const marked = await markCancelledWorktreesDue(repos, projectId, now);
+        if (marked.length > 0) log.info({ projectId, runs: marked.length }, 'automation: worktrees of cancelled runs due for cleanup');
+      } catch (e) {
+        log.warn({ projectId, code: errorCode(e) }, 'automation: cancelled runs not looked at for cleanup');
+      }
+    }
     const due = await repos.automationRuns.dueCleanups(projectId);
     if (due.length === 0) return;
     const project = await repos.projects.findById(projectId);

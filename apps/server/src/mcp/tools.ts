@@ -30,6 +30,7 @@ import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
+import { updateMachineAgent } from '../control/agent-update.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
@@ -97,7 +98,7 @@ export function parseArgs(tool: ToolDef, args: unknown): { ok: true; value: Reco
 export const TOOLS: ToolDef[] = [
   {
     name: 'list_machines',
-    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …).',
+    description: 'List your machines: id, name, subtitle (your own note about the machine, e.g. "MacBook do escritório"; null if none), type (agent/local/ssh), OS, whether it is online now, and installed tools (claude, codex, tmux, …). Agent machines also carry agent_version (the connected agent, or the last one seen), update_available (a newer verified release can be installed now: update_machine_agent) and below_min_version (older than the minimum the server requires: it updates itself once idle, but tell the person); the answer has latest_agent_version and min_agent_version.',
     scope: 'read', resource: 'machines', action: 'read', input: {},
     run: (ctx) => listMachines(ctx),
   },
@@ -118,7 +119,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_tabs',
-    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person), its pending question, and the task linked to it.',
+    description: 'List the tabs of a project (or of every project of a machine): whether the tmux session is alive, what the tool in it is doing (working, waiting_input, waiting_permission, idle, error, or waiting_background: it ended its turn while its own subagents, background shells or monitors still run — still at work, not waiting for the person; or finished: it ended its turn with a report and asks nothing — done, not waiting for the person; or blocked: its automatic run reported itself blocked — automation or the chat acts, not the person; or auth_required: the Claude Code login expired and the person must run /login in that tab — urgent; or trust_prompt: Claude Code asks whether the folder is trusted, before it starts), its pending question, and the task linked to it. A tab needs the person in waiting_input, waiting_permission, auth_required and trust_prompt.',
     scope: 'read', resource: 'terminals', action: 'read',
     input: { project_id: id.optional(), machine_id: id.optional() },
     run: (ctx, a) => listTabs(ctx, a as { project_id?: string; machine_id?: string }),
@@ -359,6 +360,15 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, a) => installMachineHooks(ctx, a as { machine_id: string; tools?: HookTool[] }),
   },
   {
+    name: 'update_machine_agent',
+    description:
+      "Update the termhub agent of one machine (machine_id) or of every agent machine of the person (all: true), as the Atualizar button of the machine screen does: installs the newest release the server verified, the agent restarts as a service (tmux sessions survive, open terminals reconnect), and the call waits for it to come back. Pass exactly one of machine_id and all. It restarts the agent, so it always asks the person first. Answers per machine status (updated, current, scheduled, offline, too_old, restart_needed, not_back, failed), the version before and after, below_min_version, hooks (reinstalled when termhub's hooks there changed, current, not_installed, failed) and repair_suggested (the machine still uses the legacy token: offer a new pairing on Máquinas). The machine this chat runs on answers scheduled: it updates once your answer is over and it is idle. Use list_machines (agent_version, update_available, below_min_version) to see who is behind.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id.optional(), all: z.literal(true).optional() },
+    run: (ctx, a) => updateMachineAgent(ctx, a as { machine_id?: string; all?: boolean }),
+  },
+  {
     name: 'report_card',
     description:
       "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
@@ -538,7 +548,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'answer_tab_question',
     description:
-      'Answer a tab\'s open multiple-choice question (from list_tab_questions) on the person\'s behalf, based on memory. Give one answer per question (option labels, or text), a short reason in the person\'s language and the search_memory refs you relied on. mode "auto" (default) schedules the answer with a visible countdown (60 s) the person can cancel; the server only accepts it when a cited ref is a decision (trust "person") about the same question whose past answer is exactly this one, the person turned "Responder sozinho" on, and the question is not about deploys, pushes, merges, deletions or other irreversible acts — otherwise it becomes a suggestion (pre-selected on the card, the person still clicks), and the result says why. Use mode "suggest" when your basis is a spec, a card or a note. Never answer permission prompts: they are not listed here.',
+      'Answer a tab\'s open multiple-choice question (from list_tab_questions) on the person\'s behalf, based on memory. Give one answer per question (option labels, or text), a short reason in the person\'s language and the search_memory refs you relied on. mode "auto" (default) lets the server decide by how similar the cited precedent\'s question is to this one, against the person\'s own thresholds: very similar, it is sent at once; similar, it is scheduled with a visible countdown (60 s, running only while the person has termhub in focus) they can cancel. The server only accepts it when a cited ref is a decision (trust "person") whose past answer is exactly this one, or a note whose decision is exactly the option you chose, the person turned "Responder sozinho" on, and the question is not about deploys, pushes, merges, deletions or other irreversible acts — otherwise it becomes a suggestion (pre-selected on the card, the person still clicks), and the result says why. Use mode "suggest" when your basis is a spec or a card. Never answer permission prompts: they are not listed here.',
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       question_id: id,

@@ -8,7 +8,7 @@ import { automationSetupActionId, type TAutomationSetup } from '@/services/api/c
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
 import type { SessionState } from '@/features/session/model/session.types';
-import { AUTOMATION_MSG, autonomyConfirmText, isChanged, needsConfirm } from '../model/automation';
+import { AUTOMATION_MSG, autonomyConfirmText, deviceTimeZone, isChanged, needsConfirm, summaryHourOf } from '../model/automation';
 
 export interface AutomationDeps {
   api: Pick<MobileApi, 'getAutomationSetup' | 'saveAutomationSetup'>;
@@ -87,16 +87,20 @@ export function useAutomation(projectId: string, deps: AutomationDeps): Automati
         setDraft(res);
         setNotice(t(AUTOMATION_MSG.saved));
       };
+      // the daily summary runs on the person's own clock (spec D26): the zone travels with the hour (TER-974)
+      const zone = summaryHourOf(block) !== null ? deviceTimeZone() : null;
+      const send = (proof?: { challenge: string; pin_proof: string }) =>
+        zone ? api.saveAutomationSetup(session().auth(), projectId, block, proof, zone) : proof ? api.saveAutomationSetup(session().auth(), projectId, block, proof) : api.saveAutomationSetup(session().auth(), projectId, block);
       try {
         try {
-          done(await api.saveAutomationSetup(session().auth(), projectId, block));
+          done(await send());
         } catch (e) {
           if (!(e instanceof ApiError) || e.code !== 'PIN_REQUIRED') throw e;
           // The server is the judge of what needs the PIN: ask for it and save with the proof.
           await session().requestPinProof(
             automationSetupActionId(projectId),
             async (proof) => {
-              const res = await api.saveAutomationSetup(session().auth(), projectId, block, proof);
+              const res = await send(proof);
               if (alive.current) done(res);
             },
             'automation_setup',

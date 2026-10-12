@@ -17,6 +17,7 @@ import {
   type ServerMessage,
 } from '@termhub/agent-protocol';
 import { signChallenge, type DeviceKey } from './device-key.js';
+import { proxyConnection, proxyFor } from './proxy.js';
 
 export interface ClientOptions {
   url: string;
@@ -52,6 +53,8 @@ export interface ClientOptions {
    * would leave `connectOnce()` pending and `runForever()` stuck on it. Tests shorten it.
    */
   handshakeTimeoutMs?: number;
+  /** Where the proxy variables (`HTTPS_PROXY`, `NO_PROXY`, …) are read; defaults to `process.env`. Tests pass their own. */
+  env?: Record<string, string | undefined>;
 }
 
 export interface AgentSocket {
@@ -133,12 +136,21 @@ export function connectOnce(
     }
 
     const wsUrl = deriveWsUrl(opts.url);
+    let proxy: URL | undefined;
+    try {
+      proxy = proxyFor(new URL(wsUrl), opts.env);
+    } catch (err) {
+      reject(err);
+      return;
+    }
     // `handshakeTimeout` makes `ws` abort with the error "Opening handshake has timed out", which the
     // 'error' handler below turns into a rejection, so runForever() backs off and tries again.
     const authorization = opts.device ? `${DEVICE_AUTH_SCHEME} ${opts.device.machineId}` : `Bearer ${opts.token ?? ''}`;
     const ws = new WebSocket(wsUrl, {
       headers: { Authorization: authorization },
       handshakeTimeout: opts.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS,
+      // An explicit proxy (HTTPS_PROXY): the request goes out over a CONNECT tunnel instead of a direct socket.
+      ...(proxy ? { createConnection: proxyConnection(proxy, wsUrl.startsWith('wss:')) as never } : {}),
     });
     let opened = false;
     /** The hello went out and the promise resolved; a device dial only gets there after the challenge. */
