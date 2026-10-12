@@ -4,6 +4,8 @@ import type {
   Machine as PrismaMachine,
   Project as PrismaProject,
   ProjectMachine as PrismaProjectMachine,
+  ProjectRepository as PrismaProjectRepository,
+  ProjectRepositoryCheckout as PrismaProjectRepositoryCheckout,
   Tab as PrismaTab,
   TabEvent as PrismaTabEvent,
   Task as PrismaTask,
@@ -416,6 +418,28 @@ export const mapProjectMachine = (l: PrismaProjectMachine): ProjectMachine => ({
   cwd: l.cwd,
   position: l.position,
   created_at: l.createdAt.toISOString(),
+});
+
+const REPO_STATUSES: readonly RepoStatus[] = ['ok', 'unsupported', 'no_access'];
+
+export const mapProjectRepository = (r: PrismaProjectRepository & { checkouts: PrismaProjectRepositoryCheckout[] }): ProjectRepository => ({
+  id: r.id,
+  project_id: r.projectId,
+  full_name: r.fullName,
+  key: r.key,
+  description: r.description,
+  // a value this release does not know is not a repository it may act on
+  status: REPO_STATUSES.includes(r.status as RepoStatus) ? (r.status as RepoStatus) : 'unsupported',
+  discovered_at: r.discoveredAt.toISOString(),
+  updated_at: r.updatedAt.toISOString(),
+  checkouts: r.checkouts.map((c) => ({
+    machine_id: c.machineId,
+    dir: c.dir,
+    default_branch: c.defaultBranch,
+    has_commits: c.hasCommits,
+    seen_at: c.seenAt.toISOString(),
+    missing_at: c.missingAt?.toISOString() ?? null,
+  })),
 });
 
 export const mapTab = (t: PrismaTab): Tab => ({

@@ -70,6 +70,18 @@ export type Project = Prisma.ProjectModel
  */
 export type ProjectMachine = Prisma.ProjectMachineModel
 /**
+ * Model ProjectRepository
+ * A git repository found in a project's folder (spec 2026-10-07 multi-repo R1, R4). Written only by
+ * discovery; what the person changes about it lives in the setup (`repos`), keyed by `full_name`.
+ */
+export type ProjectRepository = Prisma.ProjectRepositoryModel
+/**
+ * Model ProjectRepositoryCheckout
+ * Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). A folder that is gone
+ * is marked with `missing_at`, never deleted.
+ */
+export type ProjectRepositoryCheckout = Prisma.ProjectRepositoryCheckoutModel
+/**
  * Model Tab
  * 
  */
