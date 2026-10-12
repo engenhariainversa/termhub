@@ -5,6 +5,7 @@ import path from 'node:path';
 import { configPath, readConfig } from './config.js';
 import { checkServerConnection, type ServerConnectionCheck } from './run.js';
 import { sh } from './exec.js';
+import { proxyFor, redactProxy } from './proxy.js';
 import { checkUrl, type UrlCheck } from './rpc/net.js';
 
 export interface DoctorReport {
@@ -16,6 +17,52 @@ export interface DoctorReport {
   nodePty: { ok: boolean; error?: string };
   spawnHelper: { ok: boolean; path: string | null; repaired: boolean; error?: string };
   paths: { path: string; ok: boolean; error?: string }[];
+  network: NetworkReport;
+}
+
+/**
+ * How the agent reaches the server: through which proxy (password hidden), if any, and which
+ * extra CA bundle Node trusts (`NODE_EXTRA_CA_CERTS`). `ok` is false for a proxy variable the agent
+ * cannot use or a CA file it cannot read.
+ */
+export interface NetworkReport {
+  ok: boolean;
+  proxy?: string;
+  /** The server matched `NO_PROXY` although a proxy is set. */
+  bypassed?: boolean;
+  proxyError?: string;
+  extraCa?: { path: string; ok: boolean; error?: string };
+}
+
+/** The network part of `doctor`, for the server at `url` (when configured) and the variables in `env`. */
+export function networkReport(
+  url: string | undefined,
+  env: Record<string, string | undefined> = process.env,
+  fsImpl: Pick<typeof fs, 'readFileSync'> = fs,
+): NetworkReport {
+  const report: NetworkReport = { ok: true };
+  if (url) {
+    try {
+      const target = new URL(url);
+      const proxy = proxyFor(target, env);
+      if (proxy) report.proxy = redactProxy(proxy);
+      else if (proxyFor(target, { ...env, no_proxy: '', NO_PROXY: '' })) report.bypassed = true;
+    } catch (err) {
+      report.ok = false;
+      report.proxyError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  const caPath = env.NODE_EXTRA_CA_CERTS?.trim();
+  if (caPath) {
+    try {
+      const pem = fsImpl.readFileSync(caPath, 'utf8');
+      report.extraCa = pem.includes('-----BEGIN CERTIFICATE-----') ? { path: caPath, ok: true } : { path: caPath, ok: false, error: 'nenhum certificado PEM no arquivo' };
+    } catch (err) {
+      report.extraCa = { path: caPath, ok: false, error: pathErrorCode(err) };
+    }
+    if (!report.extraCa.ok) report.ok = false;
+  }
+  return report;
 }
 
 export interface EndpointReport {
@@ -31,6 +78,7 @@ export interface DoctorDeps {
   /** Only the slice `runDoctor` uses, so tests can inject a fake without touching the real filesystem. */
   fs?: Pick<typeof fs, 'readdirSync'>;
   connect?: typeof checkServerConnection;
+  env?: Record<string, string | undefined>;
   check?: (url: string) => Promise<UrlCheck>;
 }
 
@@ -106,7 +154,7 @@ export async function runDoctor(paths: string[], deps: DoctorDeps = {}): Promise
   // The hooks post with curl and the tabs' MCP is a plain HTTP client, both to addresses that may sit on
   // another host than /agent/ws (termhub.dev vs app.termhub.dev): a firewall that only lets the latter
   // through leaves the agent connected and the monitor silent (TER-586).
-  const check = deps.check ?? ((url: string) => checkUrl(url));
+  const check = deps.check ?? ((url: string) => checkUrl(url, undefined, undefined, deps.env));
   const targets: [EndpointReport['name'], string][] = [];
   if (probe.endpoints) {
     targets.push(['hooks', probe.endpoints.hooks_url]);
@@ -129,7 +177,8 @@ export async function runDoctor(paths: string[], deps: DoctorDeps = {}): Promise
 
   const helper = ensureSpawnHelperExecutable();
   const spawnHelper = { ok: helper.executable, path: helper.path, repaired: helper.repaired, ...(helper.error ? { error: helper.error } : {}) };
-  return { config: configReport, server, endpoints, tmux, nodePty, spawnHelper, paths: pathsReport };
+  const network = networkReport(config?.url, deps.env);
+  return { config: configReport, server, endpoints, tmux, nodePty, spawnHelper, paths: pathsReport, network };
 }
 
 export interface FormatDoctorDeps {
@@ -149,6 +198,14 @@ export function formatDoctor(report: DoctorReport, deps: FormatDoctorDeps = {}):
 
   lines.push(`${mark(report.config.ok)} Configuração (${report.config.path})`);
   lines.push(`${mark(report.server.ok)} Servidor${report.server.ok ? '' : report.server.error ? `: ${report.server.error}` : ''}`);
+  const net = report.network;
+  if (net.proxyError) lines.push(`✗ Proxy: ${net.proxyError}`);
+  else if (net.proxy) lines.push(`✓ Proxy: ${net.proxy}`);
+  else if (net.bypassed) lines.push('✓ Proxy: nenhum para o servidor (NO_PROXY)');
+  else lines.push('✓ Proxy: nenhum (conexão direta)');
+  if (net.extraCa) {
+    lines.push(`${mark(net.extraCa.ok)} CA extra (NODE_EXTRA_CA_CERTS): ${net.extraCa.path}${net.extraCa.ok ? '' : net.extraCa.error ? `: ${net.extraCa.error}` : ''}`);
+  }
   for (const e of report.endpoints) {
     const label = e.name === 'hooks' ? 'Hooks do monitor' : 'MCP das abas';
     const detail = e.ok ? '' : e.status !== null ? `: respondeu HTTP ${e.status} (esperado 401)` : `: ${e.error ?? 'sem resposta'}`;
