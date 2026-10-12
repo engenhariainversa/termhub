@@ -67,5 +67,6 @@
   "Sugestão não encontrada": "Sugerencia no encontrada",
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Enviar a la pestaña requiere el permiso terminals:write en tu rol",
   "Não foi possível enviar para a aba": "No se pudo enviar a la pestaña",
-  "Trabalho automático pausado ou desligado": "El trabajo automático está pausado o desactivado"
+  "Trabalho automático pausado ou desligado": "El trabajo automático está pausado o desactivado",
+  "Respostas automáticas demais nesta execução": "Demasiadas respuestas automáticas en esta ejecución"
 }

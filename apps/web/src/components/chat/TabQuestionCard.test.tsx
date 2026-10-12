@@ -439,6 +439,11 @@ describe('"Decisão automática" (TER-641)', () => {
     expect(screen.getByText('Motivo: Já decidido')).toBeInTheDocument();
     expect(screen.getByText(/«Qual cor\?» → Blue/)).toBeInTheDocument();
   });
+  it('marks a permission the automatic run allowed by its rules (TER-974)', () => {
+    render(<TabQuestionCard question={permission({ status: 'answered', answer: { allow: true }, auto_decision: { reason: null, sources: [], by: 'automation_permission' } })} answering={false} onAnswer={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decisão automática' }));
+    expect(screen.getByText('Motivo: Liberada pelas regras do trabalho automático')).toBeInTheDocument();
+  });
   it('no badge without auto_decision', () => {
     render(<TabQuestionCard question={choice({ status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] }, answered_via: 'card' })} answering={false} onAnswer={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Decisão automática' })).toBeNull();

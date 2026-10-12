@@ -19,9 +19,13 @@ export interface AutoDecisionView {
   sources: AutoDecisionSource[];
   /** Who decided, on a question card's countdown (`AutoAnswer.by`): `'automation'` is the option the agent
    *  recommended in a tab with an automatic run — screens show its reason in the reader's language
-   *  ("Opção recomendada pelo agente") and no sources. Absent on an action card. */
-  by?: AutoAnswerBy;
+   *  ("Opção recomendada pelo agente") and no sources. `'automation_permission'` (TER-974): a permission the
+   *  automatic run allowed by the project's rules, shown the same way. Absent on an action card. */
+  by?: AutoAnswerBy | typeof PERMISSION_BY_AUTOMATION;
 }
+
+/** `AutoDecisionView.by` of a permission the automatic run allowed by the project's rules (TER-974). */
+export const PERMISSION_BY_AUTOMATION = 'automation_permission';
 
 /** What a caller knows before resolving: the reason and the cited refs (`kind:id`), or null for no badge. */
 export interface AutoDecisionInput {

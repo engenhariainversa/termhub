@@ -42,10 +42,14 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('tab usage (Postgres)', ()
     await db.user.create({ data: { id: userId, email: `${userId}@test.local`, name: 'u', timeZone: 'America/Sao_Paulo' } });
     await db.project.create({ data: { id: projectId, ownerId: userId, key: keyOf(projectId), name: 'p' } });
     await db.task.create({ data: { id: taskId, projectId, title: 't' } });
+    // a cursor needs its tab (TER-974): every tab id the tests write
+    const machineId = newId();
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
+    await db.tab.createMany({ data: ['', '-a', '-b', '-c', '-x', '-y'].map((s) => ({ id: `t-${projectId}${s}`, projectId, machineId, name: 'tab' })) });
     return async () => {
-      await db.tabUsage.deleteMany({ where: { tabId: { startsWith: 't-' + projectId } } });
       await db.project.deleteMany({ where: { id: projectId } });
-      await db.user.delete({ where: { id: userId } });
+      await db.machine.deleteMany({ where: { id: machineId } });
+      await db.user.deleteMany({ where: { id: userId } });
     };
   });
 
@@ -117,5 +121,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('tab usage (Postgres)', ()
     expect(await usage.costOfDay(projectId, '2026-10-04')).toBe(1.25);
     expect(await usage.costOfDay(projectId, '2026-10-05')).toBe(4);
     expect(await usage.costOfDay(projectId, '2026-10-06')).toBe(0);
+  });
+
+  it('drops the cursor with its tab, and with its project (an account deletion purges them), keeping the day rows (TER-974)', async () => {
+    expect(await usage.record(write({}))).toBe(true);
+    expect(await usage.record(write({ tab_id: `t-${projectId}-a` }))).toBe(true);
+    await db.tab.delete({ where: { id: 't-' + projectId } });
+    expect(await usage.cursor('t-' + projectId)).toBeNull();
+    expect(await db.tabUsageDay.count({ where: { projectId } })).toBe(2);
+    // a pass over a tab closed meanwhile writes nothing
+    expect(await usage.record(write({}))).toBe(false);
+    await db.project.delete({ where: { id: projectId } });
+    expect(await db.tabUsage.count({ where: { tabId: { startsWith: 't-' + projectId } } })).toBe(0);
   });
 });

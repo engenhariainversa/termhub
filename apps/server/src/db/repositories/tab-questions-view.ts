@@ -1,6 +1,6 @@
 import type { TabQuestionSuggestion } from '../../chat/decision-text.js';
 import type { SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
-import { describeAutoDecisions, type AutoDecisionInput, type AutoDecisionView } from './auto-decision-view.js';
+import { describeAutoDecisions, PERMISSION_BY_AUTOMATION, type AutoDecisionInput, type AutoDecisionView } from './auto-decision-view.js';
 import type { Repositories } from './index.js';
 import { PERMISSION_QUEUED, type AnsweredVia, type AutoAnswer, type TabQuestion, type TabQuestionStatus, type TabRowAnswer, type TabRowPayload } from './tab-questions.js';
 
@@ -33,7 +33,8 @@ export interface TabQuestionView {
   surfaced_at: string | null;
   /** TER-641: "Decisão automática" — set while the countdown runs or sends (`scheduled`/`sent`, which
    * stays on a card the countdown answered), with its reason and cited decisions resolved owner-scoped.
-   * Null on a card answered by a click, a cancelled or failed countdown, or none at all. */
+   * Null on a card answered by a click, a cancelled or failed countdown, or none at all. Also set on a
+   * permission the automatic run allowed by the project's rules (TER-974, `by: 'automation_permission'`). */
   auto_decision: AutoDecisionView | null;
 }
 
@@ -80,8 +81,16 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null, autoDe
     auto_answer: r.auto_answer && (r.status === 'open' || r.auto_answer.status === 'sent' || r.auto_answer.status === 'failed') ? r.auto_answer : null,
     answered_via: r.answered_via === 'automation' ? null : (r.answered_via ?? null),
     surfaced_at: r.surfaced_at ?? null,
-    auto_decision: autoDecision,
+    auto_decision: autoDecision ?? permissionByAutomation(r),
   };
+}
+
+/** TER-974: a permission the automatic run allowed by the project's rules (`answered_via: 'automation'`)
+ *  carries the "Decisão automática" badge too. It cites nothing and has no reason of its own: the screens
+ *  say why from `by`. It travels in `auto_decision`, which installed apps already parse with `by` as a plain
+ *  string, so `answered_via` keeps the enum they know. */
+function permissionByAutomation(r: TabQuestion): AutoDecisionView | null {
+  return r.kind === 'permission' && r.status === 'answered' && r.answered_via === 'automation' ? { reason: null, sources: [], by: PERMISSION_BY_AUTOMATION } : null;
 }
 
 /**

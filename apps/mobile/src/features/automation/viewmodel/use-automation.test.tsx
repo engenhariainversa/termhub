@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import type { TAutomationSetup } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
-import { AUTOMATION_MSG, autonomyConfirmText } from '../model/automation';
+import { AUTOMATION_MSG, autonomyConfirmText, withSummaryHour } from '../model/automation';
 import { useAutomation, type AutomationDeps } from './use-automation';
 
 const OFF: TAutomationSetup = { enabled: false, types: ['story', 'task', 'bug'], autonomy: 'pr', worktrees_dir: '~/wt' };
@@ -114,5 +114,24 @@ describe('useAutomation', () => {
       await t.hook.result.current.save();
     });
     expect(t.hook.result.current.saveError).toBe('use {ref}');
+  });
+
+  it('sends the phone\'s time zone with a summary hour, and none without one (TER-974)', async () => {
+    const t = await loaded();
+    await act(async () => {
+      t.hook.result.current.edit((d) => withSummaryHour(d, 8));
+    });
+    await act(async () => {
+      await t.hook.result.current.save();
+    });
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    expect(t.api.saveAutomationSetup).toHaveBeenLastCalledWith(expect.anything(), 'p1', expect.objectContaining({ summary_hour: 8 }), undefined, zone);
+    await act(async () => {
+      t.hook.result.current.edit((d) => withSummaryHour(d, null));
+    });
+    await act(async () => {
+      await t.hook.result.current.save();
+    });
+    expect(t.api.saveAutomationSetup).toHaveBeenLastCalledWith(expect.anything(), 'p1', expect.objectContaining({ summary_hour: null }));
   });
 });

@@ -1240,6 +1240,8 @@ describe('runs that must end (final review I1, I2)', () => {
       await followRun(w.deps, w.run.id);
       expect(w.run.status).toBe('done');
       expect(w.type).not.toHaveBeenCalled();
+      // already merged: no "PR aberto" line (TER-974)
+      expect(w.kinds()).toEqual(['run_done']);
     }
   });
 
