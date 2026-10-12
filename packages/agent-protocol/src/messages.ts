@@ -86,6 +86,12 @@ export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
 export const CAPABILITY_AI_LOGIN = 'ai_login';
 export const AI_LOGIN_MIN_AGENT_VERSION = '0.26.0';
 
+/** The agent answers `git.repos.scan` (spec 2026-10-07 multi-repo R2, R18): the git checkouts of a project
+ *  folder, for repository discovery. The server requires it before the call; a machine without it keeps
+ *  working for single-repo projects. Ships in agent 0.29.0. */
+export const CAPABILITY_REPO_SCAN = 'repo_scan';
+export const REPO_SCAN_MIN_AGENT_VERSION = '0.29.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

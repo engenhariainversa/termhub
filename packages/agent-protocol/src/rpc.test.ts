@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
+import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, REPO_DESCRIPTION_MAX_CHARS, REPO_SCAN_MAX_REPOS, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.repos.scan', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -58,6 +58,18 @@ describe('rpc catalog', () => {
     const remove = RPC['git.worktree.remove'];
     expect(remove.params.safeParse({ repo_dir: ok.repo_dir, root: ok.root, path: ok.path }).success).toBe(true);
     expect(remove.result.safeParse({ removed: false, dirty: true }).success).toBe(true);
+  });
+  it('validates git.repos.scan: the folder, the depth and the answer', () => {
+    const scan = RPC['git.repos.scan'];
+    expect(scan.timeoutMs).toBe(60_000);
+    for (const depth of [1, 2, 3]) expect(scan.params.safeParse({ dir: '~/code/app', depth }).success).toBe(true);
+    for (const depth of [0, 4, 1.5]) expect(scan.params.safeParse({ dir: '~/code/app', depth }).success, String(depth)).toBe(false);
+    expect(scan.params.safeParse({ dir: 'code/app', depth: 1 }).success).toBe(false);
+    expect(scan.params.safeParse({ dir: '/code/app' }).success).toBe(false);
+    const repo = { dir: '.', origin: 'git@github.com:acme/app.git', default_branch: 'main', has_commits: true, description: 'The app' };
+    expect(scan.result.safeParse({ repos: [repo, { dir: 'api', origin: null, default_branch: null, has_commits: false, description: null }], truncated: false }).success).toBe(true);
+    expect(scan.result.safeParse({ repos: [{ ...repo, description: 'x'.repeat(REPO_DESCRIPTION_MAX_CHARS + 1) }], truncated: false }).success).toBe(false);
+    expect(scan.result.safeParse({ repos: Array.from({ length: REPO_SCAN_MAX_REPOS + 1 }, () => repo), truncated: true }).success).toBe(false);
   });
   it('validates agent.update versions', () => {
     expect(RPC['agent.update'].params.safeParse({ version: '0.2.1' }).success).toBe(true);
