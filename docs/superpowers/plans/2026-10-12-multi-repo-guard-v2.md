@@ -79,7 +79,7 @@ Card: TER-1073.
 - Produces: `GUARD_SCRIPT_VERSION: number` (2). `GUARD_SCRIPT` and `buildGuardSettings(branch, worktree)` keep
   their signatures; for a multi-repo run the caller passes the workspace root as `worktree`.
 
-- [ ] **Step 1: Write the failing tests** — add to `guard-script.test.ts`, after the `git push` block
+- [x] **Step 1: Write the failing tests** — add to `guard-script.test.ts`, after the `git push` block
   (and import `GUARD_SCRIPT_VERSION`):
 
 ```ts
@@ -130,12 +130,12 @@ describe('guard v2 — push from a repo folder of the workspace (spec 2026-10-07
 });
 ```
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `npm test -w @termhub/machine-ops -- guard-script`
 Expected: FAIL — `GUARD_SCRIPT_VERSION` is undefined and the `-C <WORKTREE>/<key>` pushes are denied.
 
-- [ ] **Step 3: Implement** — in `guard-script.ts`:
+- [x] **Step 3: Implement** — in `guard-script.ts`:
 
 Add, next to `GUARD_SCRIPT_REL`:
 
@@ -185,12 +185,12 @@ In the script, the second line becomes `# termhub-guard v${GUARD_SCRIPT_VERSION}
 (inside the TS template literal every `${…}` of the shell is written `\${…}`, like the rest of the file.)
 Update the doc comment of `GUARD_SCRIPT` (`$2` is the worktree, or the workspace root of a multi-repo run).
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `npm test -w @termhub/machine-ops -- guard-script`
 Expected: PASS, the old cases included.
 
-- [ ] **Step 5: Commit** — `Guard v2: allow the run branch push from a workspace repo folder`.
+- [x] **Step 5: Commit** — `Guard v2: allow the run branch push from a workspace repo folder`.
 
 ### Task 2: Allow-list forms for repo keys (server)
 
@@ -206,7 +206,7 @@ Expected: PASS, the old cases included.
   - `gitRuleForms(rule: string, worktree: string | null, keys?: readonly string[]): string[]`
   - `automationAllowList(allowed, branch, forms?: { worktree: string | null; keys?: readonly string[] } | null)`
 
-- [ ] **Step 1: Write the failing tests** — a new `describe` in `automation-tools.test.ts` (import
+- [x] **Step 1: Write the failing tests** — a new `describe` in `automation-tools.test.ts` (import
   `runRepoPaths`):
 
 ```ts
@@ -283,12 +283,12 @@ describe('repo keys: the -C forms of a multi-repo run (spec 2026-10-07 multi-rep
 });
 ```
 
-- [ ] **Step 2: Run and see them fail**
+- [x] **Step 2: Run and see them fail**
 
 Run: `npm test -w @termhub/server -- src/control/automation-tools`
 Expected: FAIL — `runRepoPaths` is not exported; the key arguments are ignored.
 
-- [ ] **Step 3: Implement** — in `automation-tools.ts`:
+- [x] **Step 3: Implement** — in `automation-tools.ts`:
 
 ```ts
 /** The repo folders of a multi-repo run (spec 2026-10-07 multi-repo R11): the workspace root, and one key per repo. */
@@ -339,12 +339,12 @@ export function gitRuleForms(rule: string, worktree: string | null, keys: readon
 `automationAllowList` passes `forms.keys` to both. Update the three doc comments (the "a subfolder included"
 sentence now says: except the run's own repo folders, by exact path).
 
-- [ ] **Step 4: Run and see them pass**
+- [x] **Step 4: Run and see them pass**
 
 Run: `npm test -w @termhub/server -- src/control/automation-tools src/control/agents src/automation/answers`
 Expected: PASS.
 
-- [ ] **Step 5: Commit** — `Automation: -C allow-list forms for the repo folders of a run`.
+- [x] **Step 5: Commit** — `Automation: -C allow-list forms for the repo folders of a run`.
 
 ### Task 3: Agent version gate and release
 
@@ -356,7 +356,7 @@ Expected: PASS.
 **Interfaces:**
 - Produces: `MULTI_REPO_GUARD_MIN_AGENT_VERSION = '0.29.0'`, `multiRepoGuardSupported(machine: Machine): boolean`.
 
-- [ ] **Step 1: Write the failing test** — in `tab-mcp.test.ts`, import both names and add:
+- [x] **Step 1: Write the failing test** — in `tab-mcp.test.ts`, import both names and add:
 
 ```ts
 describe('multiRepoGuardSupported (spec 2026-10-07 multi-repo R18)', () => {
@@ -373,9 +373,9 @@ describe('multiRepoGuardSupported (spec 2026-10-07 multi-repo R18)', () => {
 });
 ```
 
-- [ ] **Step 2: Run and see it fail** — `npm test -w @termhub/server -- src/terminal/tab-mcp` → FAIL (undefined).
+- [x] **Step 2: Run and see it fail** — `npm test -w @termhub/server -- src/terminal/tab-mcp` → FAIL (undefined).
 
-- [ ] **Step 3: Implement** — in `tab-mcp.ts`, after `guardSupported`:
+- [x] **Step 3: Implement** — in `tab-mcp.ts`, after `guardSupported`:
 
 ```ts
 /** First agent release whose guard is version 2 (spec 2026-10-07 multi-repo R13, R18): its push rule takes
@@ -395,7 +395,7 @@ Bump `0.28.1` → `0.29.0` in `apps/agent/package.json`, `apps/agent/src/version
 `apps/agent` entry of `package-lock.json`. Add to the runbook's hard-lock paragraph: guard v2 (agent
 0.29.0+) also takes the run's branch push as `git -C <workspace>/<key> push …`, for multi-repo runs.
 
-- [ ] **Step 4: Verify everything**
+- [x] **Step 4: Verify everything**
 
 Run: `npm run build:packages && npm run prisma:generate`, then
 `npm test -w @termhub/machine-ops`, `npm test -w @termhub/agent`,
@@ -404,7 +404,7 @@ Run: `npm run build:packages && npm run prisma:generate`, then
 Expected: all pass (the agent's `version.test.ts` checks the two version fields agree, and `hooks.test.ts`
 that the agent writes this `GUARD_SCRIPT`).
 
-- [ ] **Step 5: Commit** — `Agent 0.29.0: ship guard v2 (MULTI_REPO_GUARD_MIN_AGENT_VERSION)`.
+- [x] **Step 5: Commit** — `Agent 0.29.0: ship guard v2 (MULTI_REPO_GUARD_MIN_AGENT_VERSION)`.
 
 ## Impact on other users
 
