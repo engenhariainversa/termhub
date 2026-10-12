@@ -25,6 +25,15 @@ it('is highlighted above 80%, and so is the button', () => {
   expect(screen.getByRole('button', { name: 'Compactar' }).className).toContain('text-warn');
 });
 
+it("measures against the person's own limit, warns on it, and names the last compaction (TER-1038)", () => {
+  meter({ tokens: 170_000, window: 1_000_000, limit: 200_000, compactedAt: '2026-10-07T12:00:00.000Z' });
+  const m = screen.getByRole('meter');
+  expect(m).toHaveAttribute('aria-valuemax', '200000');
+  expect(m).toHaveTextContent('170 mil / 200 mil · 85%');
+  expect(m.className).toContain('text-warn');
+  expect(m).toHaveAttribute('title', expect.stringContaining('Última compactação'));
+});
+
 it('is red from 95%', () => {
   meter({ tokens: 196_000, window: 200_000 });
   expect(screen.getByRole('meter').className).toContain('text-danger');

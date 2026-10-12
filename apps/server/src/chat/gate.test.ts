@@ -11,6 +11,7 @@ import {
   gateDecision,
   grantable,
   idempotencyKeyFor,
+  redactSecretArgs,
   standingKindOf,
   STANDING_BUDGET_WINDOW_MS,
   STANDING_GRANT_BUDGETS,
@@ -30,6 +31,9 @@ it('classifies every tool the MCP exposes, and defaults an unknown one to irreve
   expect(actionClass('link_tab_task', { tab_id: 't1', task_id: 'k1' })).toBe('write');
   expect(actionClass('close_tab', { tab_id: 't1' })).toBe('irreversible');
   expect(actionClass('delete_task', { task_id: 'k1' })).toBe('irreversible');
+  // TER-1047: redoing an AI CLI login always asks
+  expect(actionClass('start_ai_login', { account_id: 'a1' })).toBe('irreversible');
+  expect(actionClass('submit_ai_login_code', { login_id: 'l1' })).toBe('irreversible');
   // a tool added later must not silently become auto-allowed
   expect(actionClass('drop_everything', {})).toBe('irreversible');
 });
@@ -207,6 +211,8 @@ describe('standingKindOf', () => {
     ['create_integration', {}, null],
     ['set_project_repo', {}, null],
     ['set_ai_account_exclusive', { account_id: 'a1', project_id: 'p1', confirm: true }, null],
+    ['start_ai_login', { account_id: 'a1' }, null],
+    ['submit_ai_login_code', { login_id: 'l1' }, null],
     ['link_project_machine', { project_id: 'p1', machine_id: 'm1' }, null],
   ])('%s %j → %s', (tool, args, expected) => expect(standingKindOf(tool, args)).toBe(expected));
 });
@@ -252,7 +258,7 @@ describe('defaultKindOf (TER-627)', () => {
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
     // report_card is a tab tool (agentic board F-8): only a tab with an active run lists it, never the concierge;
     // unclassified, it would ask like any unknown tool
-    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive']);
+    const alwaysAsks = new Set(['run_command', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'start_ai_login', 'submit_ai_login_code']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },
@@ -275,5 +281,20 @@ describe('defaultKindOf (TER-627)', () => {
     expect(isDefaultGrantId('default:board:u1')).toBe(true);
     expect(isDefaultGrantId('sg1')).toBe(false);
     expect(isDefaultGrantId(null)).toBe(false);
+  });
+});
+
+describe('redactSecretArgs (TER-1047)', () => {
+  it('redacts the login code and keeps everything else', () => {
+    expect(redactSecretArgs('submit_ai_login_code', { login_id: 'l1', code: 'abc' })).toEqual({ login_id: 'l1', code: '[redacted]' });
+  });
+
+  it('returns the same object when there is nothing to redact', () => {
+    const none = { login_id: 'l1' };
+    const done = { login_id: 'l1', code: '[redacted]' };
+    const other = { tab_id: 't1', text: 'abc' };
+    expect(redactSecretArgs('submit_ai_login_code', none)).toBe(none);
+    expect(redactSecretArgs('submit_ai_login_code', done)).toBe(done);
+    expect(redactSecretArgs('send_input', other)).toBe(other);
   });
 });

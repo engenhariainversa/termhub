@@ -9,9 +9,9 @@ vi.mock('../exec.js', async () => {
   return { ...actual, agentEnv: () => ({ PATH: '/usr/local/bin:/usr/bin:/bin' }) };
 });
 
-const { renderPlist, install: launchdInstall, uninstall: launchdUninstall, status: launchdStatus, stopRestartLoop, LABEL } = await import('./launchd.js');
-const { renderUnit, refreshUnit, install: systemdInstall, uninstall: systemdUninstall, status: systemdStatus, UNIT_NAME } = await import('./systemd.js');
-const { serviceFileOptions } = await import('./index.js');
+const { renderPlist, install: launchdInstall, uninstall: launchdUninstall, status: launchdStatus, stopRestartLoop, removeDefinition: launchdRemoveDefinition, stop: launchdStop, LABEL } = await import('./launchd.js');
+const { renderUnit, refreshUnit, install: systemdInstall, uninstall: systemdUninstall, status: systemdStatus, removeDefinition: systemdRemoveDefinition, stop: systemdStop, UNIT_NAME } = await import('./systemd.js');
+const { serviceFileOptions, removeDefinition, stop } = await import('./index.js');
 
 function ok(stdout = ''): RunResult {
   return { code: 0, stdout, stderr: '', timedOut: false };
@@ -316,6 +316,83 @@ describe('systemd refreshUnit', () => {
     const run = vi.fn(async () => ok());
     await expect(refreshUnit(opts, { run: run as never, home })).resolves.toBe(false);
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+// agent.uninstall runs inside the service it removes: the definition must go without stopping the
+// job (which would kill the process before it replies); stopping is a separate, later call.
+describe('removeDefinition/stop (agent.uninstall)', () => {
+  const uid = process.getuid ? process.getuid() : 0;
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'termhub-agent-remove-def-'));
+  });
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('launchd: unlinks the plist without running launchctl', async () => {
+    const plist = path.join(home, 'Library', 'LaunchAgents', `${LABEL}.plist`);
+    fs.mkdirSync(path.dirname(plist), { recursive: true });
+    fs.writeFileSync(plist, '<plist/>', 'utf8');
+    const run = vi.fn(async () => ok());
+    await expect(launchdRemoveDefinition({ run: run as never, home })).resolves.toBe(true);
+    expect(fs.existsSync(plist)).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('launchd: reports false when there is no plist', async () => {
+    await expect(launchdRemoveDefinition({ run: vi.fn() as never, home })).resolves.toBe(false);
+  });
+
+  it('launchd: stop() boots the job out by label', async () => {
+    const run = vi.fn(async () => ok());
+    await launchdStop({ run: run as never });
+    expect(run).toHaveBeenCalledWith('launchctl', ['bootout', `gui/${uid}/${LABEL}`]);
+  });
+
+  it('systemd: disables without --now, unlinks the unit, then daemon-reloads', async () => {
+    const unit = path.join(home, '.config', 'systemd', 'user', `${UNIT_NAME}.service`);
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, '[Unit]\n', 'utf8');
+    const calls: string[][] = [];
+    const run = vi.fn(async (file: string, args: string[]) => {
+      calls.push([file, ...args, fs.existsSync(unit) ? 'unit-present' : 'unit-gone']);
+      return ok();
+    });
+    await expect(systemdRemoveDefinition({ run: run as never, home })).resolves.toBe(true);
+    expect(calls).toEqual([
+      ['systemctl', '--user', 'disable', UNIT_NAME, 'unit-present'],
+      ['systemctl', '--user', 'daemon-reload', 'unit-gone'],
+    ]);
+    expect(fs.existsSync(unit)).toBe(false);
+  });
+
+  it('systemd: throws and keeps the unit when disable fails', async () => {
+    const unit = path.join(home, '.config', 'systemd', 'user', `${UNIT_NAME}.service`);
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, '[Unit]\n', 'utf8');
+    const run = vi.fn(async () => fail('denied'));
+    await expect(systemdRemoveDefinition({ run: run as never, home })).rejects.toThrow(/disable failed/);
+    expect(fs.existsSync(unit)).toBe(true);
+  });
+
+  it('systemd: reports false and runs nothing when there is no unit', async () => {
+    const run = vi.fn(async () => ok());
+    await expect(systemdRemoveDefinition({ run: run as never, home })).resolves.toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('systemd: stop() stops the unit', async () => {
+    const run = vi.fn(async () => ok());
+    await systemdStop({ run: run as never });
+    expect(run).toHaveBeenCalledWith('systemctl', ['--user', 'stop', UNIT_NAME]);
+  });
+
+  it('index: platforms without a service layer have nothing to remove or stop', async () => {
+    await expect(removeDefinition('win32')).resolves.toBe(false);
+    await expect(stop('win32')).resolves.toBeUndefined();
   });
 });
 

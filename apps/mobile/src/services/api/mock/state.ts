@@ -275,6 +275,8 @@ export interface MockState {
   chatAutodecideEnabled: boolean;
   /** "Responder perguntas do Codex pelo chat"; defaults to `false`, like the server's column default. */
   chatCodexRepliesEnabled: boolean;
+  /** The chat's context meter limit (TER-1038); null = the model's window. */
+  chatContextLimit: number | null;
   /** "Anotações do concierge" (spec D12): the mock's one user's `record_decision` notes, any order
    * (`GET notes` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   notes: MockNote[];
@@ -286,6 +288,12 @@ export interface MockState {
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
+  /** Feature flags `GET me` sends for the mock user (TER-1040): all off, like a fresh server. */
+  features: { subscriptions: boolean };
+  /** "Refazer login" (TER-1047): each AI account's login state (`ok` until a test sets otherwise), and
+   * the flows started, by login id. */
+  aiLoginStates: Map<string, string>;
+  aiLoginFlows: Map<string, { accountId: string; needsCode: boolean }>;
 }
 
 export function createMockState(): MockState {
@@ -324,10 +332,14 @@ export function createMockState(): MockState {
     chatMemoryEnabled: true,
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
+    chatContextLimit: null,
     notes: [],
     lessons: [],
     accountDeletion: null,
     pushTabFinished: false,
+    features: { subscriptions: false },
+    aiLoginStates: new Map(),
+    aiLoginFlows: new Map(),
   };
 }
 

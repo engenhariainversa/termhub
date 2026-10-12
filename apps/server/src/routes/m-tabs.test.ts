@@ -83,6 +83,7 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
     projects: { findById: vi.fn(async (id: string) => [project, foreignProject].find((p) => p.id === id)), list: vi.fn(async () => [project]) },
     machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? machine : undefined)), list: vi.fn(async () => [machine]) },
     projectMachines: { find: vi.fn(async (p: string, m: string) => ({ id: 'pm', project_id: p, machine_id: m, cwd: '/w' })) },
+    automationRuns: { activeTabRefs: vi.fn(async (_owner: string | null) => [{ tab_id: 't1', ref: 'TH-12' }]) },
     tabQuestions: { listOpenForTab: vi.fn(async (_tab: string, _user: string) => opts.questions ?? []) },
     chatDecisions: {},
   };
@@ -125,6 +126,9 @@ describe('GET /tabs', () => {
     const body = tabsResponse.parse(res.json());
     // t2's project is not in the scope's list: it is left out
     expect(body.tabs.map((t) => [t.id, t.availability, t.project.key, t.machine.name])).toEqual([['t1', 'ready', 'TH', 'box']]);
+    // the card of the automatic run working in the tab (TER-1044)
+    expect(body.tabs[0].auto_ref).toBe('TH-12');
+    expect(repos.automationRuns.activeTabRefs).toHaveBeenCalledWith('u1');
     expect(repos.tabs.listOpenTerminals).toHaveBeenCalledWith('u1');
     expect(repos.projects.list).toHaveBeenCalledWith({ owner: 'u1' });
     expect(repos.machines.list).toHaveBeenCalledWith('u1');

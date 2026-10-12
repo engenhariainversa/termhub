@@ -1,0 +1,10 @@
+{
+  "Use POST": "Usa POST",
+  "Limite de {{limit}} chamadas por minuto deste token; tente de novo em {{seconds}} s": "Se alcanzó el límite de {{limit}} llamadas por minuto de este token; vuelve a intentarlo en {{seconds}} s",
+  "Erro interno ao executar a ferramenta": "Error interno al ejecutar la herramienta",
+  "O token desta aba só age em nome da própria aba": "El token de esta pestaña solo actúa en nombre de su propia pestaña",
+  "O token desta aba só usa as ferramentas permitidas ({{tools}}, e report_card e get_card numa aba com trabalho automático); {{tool}} não está disponível aqui": "El token de esta pestaña solo usa las herramientas permitidas ({{tools}}, además de report_card y get_card en una pestaña con trabajo automático); {{tool}} no está disponible aquí",
+  "{{tool}} só está disponível numa aba com trabalho automático em andamento": "{{tool}} solo está disponible en una pestaña con trabajo automático en curso",
+  "Ferramenta desconhecida: {{tool}}": "Herramienta desconocida: {{tool}}",
+  "Este token não pode usar a ferramenta {{tool}}: ela precisa do escopo `{{scope}}` e da permissão {{grant}} na sua role": "Este token no puede usar la herramienta {{tool}}: necesita el alcance `{{scope}}` y el permiso {{grant}} en tu rol"
+}

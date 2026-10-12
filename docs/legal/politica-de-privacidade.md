@@ -101,11 +101,13 @@ Tickets apagados na origem também são apagados no termhub, na sincronização 
 ### 3.6 Contas de IA
 
 - **O que guardamos.** O nome que você dá à conta e a pasta de configuração dela na sua máquina. **Não guardamos tokens nem senhas das suas contas de IA.**
-- **Como consultamos o uso.** Para mostrar o consumo e os limites, o agente lê a credencial de login da ferramenta na sua máquina e a envia ao nosso servidor. O servidor a usa uma única vez para consultar o fornecedor e a descarta, mantendo em memória só os números de uso.
+- **Como consultamos o uso.** Para mostrar o consumo e os limites, o agente lê a credencial de login da ferramenta na sua máquina e consulta o fornecedor dali mesmo. **A credencial nunca sai da sua máquina**: nosso servidor recebe só os números de uso, que mantém em memória.
+  - Nas máquinas ligadas por SSH, o servidor executa na sua máquina um comando que lê a credencial e consulta o fornecedor ali; o servidor recebe só a resposta do fornecedor, sem a credencial.
   - Os fornecedores consultados são a Anthropic, a OpenAI/ChatGPT e o Google.
+  - **Você pode desligar a consulta em cada máquina** (Máquinas › a máquina › "Consultar o uso das contas de IA"). Desligada, o termhub não lê a credencial e as contas dessa máquina ficam sem as barras de uso.
   - [Ver a nota.]
 
-> Nota: recomendação técnica: mover essa consulta para o agente, para que a credencial nunca saia da máquina. Ver o item A-1.
+> Nota: o parecer sobre o item A-1 ainda está pendente.
 
 - **Troca de conta.** Quando a troca automática de conta está ligada, o agente pode fazer a sessão continuar em outra conta Claude sua, na mesma máquina.
 
@@ -132,12 +134,12 @@ Tickets apagados na origem também são apagados no termhub, na sincronização 
 
 ### 3.9 Registros técnicos (logs) e segurança
 
-- **O que registramos.** Nossos servidores registram, para cada requisição, a data e a hora, o endereço IP, o método e o endereço acessado.
+- **O que registramos.** Nossos servidores registram, para cada acesso, a data e a hora, o endereço IP, o usuário (quando conectado), o método e a rota acessada, sem os parâmetros do endereço.
 - **O que não registramos.** Os logs não guardam o conteúdo dos terminais, as senhas nem os cabeçalhos de autenticação.
 - **Por quanto tempo.** Guardamos os registros de acesso por **6 meses**, como exige o Marco Civil da Internet (art. 15).
 - **Base legal:** cumprimento de obrigação legal (II) e legítimo interesse (IX).
 
-> Nota: hoje não há política de retenção de logs configurada. Ver o item P-6.
+> Nota: a retenção de 6 meses e a rotação estão implementadas desde o TER-744 (item P-6).
 
 ### 3.10 Pagamentos (quando os planos forem lançados)
 
@@ -185,7 +187,7 @@ Compartilhamos dados só com quem nos ajuda a prestar o Serviço (operadores) ou
 | **Google (Firebase / Google Analytics)** | dados de navegação e de uso do app, identificadores do aparelho e, com o seu consentimento, o identificador de publicidade | métricas de uso e medição de anúncios | EUA |
 | **Expo**, e por meio dela **Apple** (APNs) e **Google** (FCM) | token do aparelho e texto das notificações | entregar notificações | EUA |
 | **Provedor de e-mail** [NOME] | seu e-mail e o conteúdo das mensagens: código de login, convites, avisos de aparelho | enviar e-mails do Serviço | [PAÍS] |
-| **Anthropic, OpenAI e Google** | credencial da sua conta de IA, na consulta de uso (seção 3.6) | mostrar consumo e limites | EUA |
+| **Anthropic, OpenAI e Google** | a credencial da sua conta de IA, enviada pela sua própria máquina direto ao fornecedor na consulta de uso; o termhub recebe só os números (seção 3.6) | mostrar consumo e limites | EUA |
 | **GitHub, Linear, Atlassian (Jira)** | o token que você informou e as consultas e atualizações que você pediu | integrações que você ligou | EUA / outros |
 | **Type to Access (77a.it)** | o endereço da sua cidade pública e o seu apelido | criar o link curto da cidade pública, quando você a publica | [PAÍS] |
 | **Intermediador de pagamentos** [NOME], quando os planos forem lançados | dados de cobrança | processar pagamentos | [PAÍS] |
@@ -209,7 +211,7 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 
 | Dado | Prazo |
 |---|---|
-| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los. Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[N] dias** dos backups |
+| Conta, projetos, cards, notas, chat, memória, últimas respostas dos agentes, anexos enviados | enquanto a conta existir, ou até você apagá-los (uma conversa do chat pode ser apagada inteira em "Apagar conversa", com o que a memória guardou dela). Depois da exclusão da conta: até **[30] dias** para apagar dos sistemas ativos e até **[N] dias** dos backups |
 | Sessões web | até 30 dias, ou até você sair |
 | Códigos de login por e-mail | 10 minutos |
 | Pedidos de acesso de aparelhos | 1 dia |
@@ -219,9 +221,10 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 | Anexos não enviados | 24 horas |
 | Áudio de ditado | não é guardado. O texto fica até 10 minutos em memória |
 | Arquivos colados no terminal (na sua máquina) | 7 dias |
-| Histórico de estados das abas | [definir. Hoje não é apagado] |
+| Histórico de estados das abas | 90 dias |
 | Registros de acesso (logs) | 6 meses (Marco Civil, art. 15) |
-| Lista de espera | até o convite ou [12 meses], o que vier primeiro, ou até você pedir a exclusão |
+| Registro de acesso de administradores a uma conta ("ver como") | 1 ano após o fim do acesso |
+| Lista de espera | 12 meses depois da inscrição ou, se você foi convidado, 12 meses depois do último convite; ou até você pedir a exclusão |
 | Dados de cobrança e fiscais | pelo prazo da legislação fiscal (em geral, 5 anos) |
 
 > Nota: vários desses prazos ainda não estão implementados. Ver a seção "Lacunas no produto".
@@ -242,13 +245,11 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 
 O Google Analytics só é carregado depois que você clica em "Aceitar" no aviso de cookies. Você pode mudar a escolha a qualquer momento em "Preferências de cookies" (no perfil do app ou no rodapé do site). Ao recusar, apagamos os cookies do Google Analytics.
 
-O site carrega fontes do Google Fonts, o que envia o seu IP ao Google.
-
-> Nota: TER-583 propõe hospedar as fontes no próprio site.
+As fontes do site são servidas pelo próprio termhub.dev: nenhum pedido vai ao Google Fonts.
 
 ### 9.2 Aplicativo móvel
 
-- **Métricas de uso (Google Analytics for Firebase).** Registramos as telas abertas, só o tipo de tela e nunca o conteúdo, e eventos automáticos de sessão. O Firebase associa esses dados a um identificador de instalação e ao IP, que dá a localização aproximada. [Definir: consentimento ou legítimo interesse; ver item L-5.]
+- **Métricas de uso (Google Analytics for Firebase).** Só com a sua permissão, no mesmo pedido da medição de anúncios: registramos as telas abertas, só o tipo de tela e nunca o conteúdo, e eventos automáticos de sessão. O Firebase associa esses dados a um identificador de instalação e ao IP, que dá a localização aproximada. Você pode mudar a escolha em Ajustes → Privacidade → "Métricas de uso e anúncios".
 - **Medição de anúncios.** Só com a sua permissão:
   - no iOS, pelo pedido de "Permitir rastreamento" (ATT);
   - no Android, pelo nosso próprio pedido.
@@ -263,7 +264,7 @@ O site carrega fontes do Google Fonts, o que envia o seu IP ao Google.
 - Os tokens das integrações e o segredo do PIN são cifrados com AES-256-GCM.
 - O aplicativo móvel usa chaves guardadas no hardware do aparelho e PIN.
 - O agente usa uma conexão só de saída, e o servidor só pode pedir a ele um conjunto fechado de operações.
-- O acesso de administradores do termhub aos dados de uma conta (função "ver como") é restrito a suporte, segurança e cumprimento de obrigação legal. [É registrado; ver item P-9.]
+- O acesso de administradores do termhub aos dados de uma conta (função "ver como") é restrito a suporte, segurança e cumprimento de obrigação legal. Cada acesso fica registrado (quem, qual conta, início, fim e IP) por 1 ano.
 - **Incidentes.** Se houver um incidente de segurança que possa trazer risco ou dano relevante a você, avisaremos você e a ANPD, nos termos da lei (art. 48 e Resolução CD/ANPD nº 15/2024).
 - **Limite do que protegemos.** Nenhum sistema é totalmente seguro. Mantenha suas máquinas, contas e credenciais protegidas.
 

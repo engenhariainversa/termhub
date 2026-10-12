@@ -6,6 +6,12 @@ import type { Repositories } from '../db/repositories/index.js';
 import { MAX_SUBTASKS_PER_CALL, TaskRuleError, type TaskRuleCode } from '../db/repositories/tasks.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
+import { canAccess } from '../auth/permissions.js';
+import { feedOf } from '../progress/aggregate.js';
+import { requestLocale } from '../i18n/index.js';
+
+/** A card's page lists this many automatic events at most (the events are kept 30 days). */
+const ACTIVITY_LIMIT = 100;
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const refParam = z.object({ ref: z.string().min(1).max(32) });
@@ -126,6 +132,16 @@ export async function taskRoutes(app: FastifyInstance, repos: Repositories) {
     const rows = await repos.taskPullRequests.listByTasks([task.parent_id ?? task.id]);
     const pull_requests = rows.map(({ number, url, title, state, draft, ci_state, ci_summary, deploy_state, deploy_url, release_runs }) => ({ number, url, title, state, draft, ci_state, ci_summary, deploy_state, deploy_url, release_runs }));
     return { pull_requests };
+  });
+
+  /** A card's page: what the automatic work did on it and on its subtasks, newest first, as the Progresso feed says it. */
+  app.get('/:id/activity', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const { task } = await scoped(repos, request).task(id);
+    const includeAgents = await canAccess(repos, request.user, 'terminals', 'read');
+    const taskIds = [task.id, ...(await repos.tasks.childIds(task.id))];
+    const rows = await repos.progress.feed({ owner: request.scope.ownerId, projectId: task.project_id, limit: ACTIVITY_LIMIT, taskIds });
+    return { events: feedOf(rows, requestLocale(request), includeAgents) };
   });
 
   app.delete('/:id', async (request) => {

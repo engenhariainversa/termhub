@@ -123,7 +123,8 @@ export type ChatEvent =
   | { type: 'subagent_cancel_failed'; user_id: string; conversation_id: string; subagent_id: string }
   /** How full the conversation's CLI session is after a turn or a compaction (TER-315): numbers only.
    *  `window` is the model's context window, null when the CLI never reported it. */
-  | { type: 'context'; user_id: string; conversation_id: string; tokens: number; window: number | null }
+  /** `compacted_at` (TER-1038): when the session was last compacted, null when never. */
+  | { type: 'context'; user_id: string; conversation_id: string; tokens: number; window: number | null; compacted_at: string | null }
   /** "Compactar" (TER-315): started, done (with the sizes before and after, when the CLI said) or
    *  failed (with the code a failed answer would carry). */
   | { type: 'compact'; user_id: string; conversation_id: string; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null };

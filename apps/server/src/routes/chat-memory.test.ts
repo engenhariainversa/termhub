@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lessonForgetSchema, lessonItemSchema, lessonListSchema } from '@termhub/mobile-api';
+import { decisionStatusResponse, lessonForgetSchema, lessonItemSchema, lessonListSchema, memoryReplacementsResponse, noteStatusResponse } from '@termhub/mobile-api';
 import { config } from '../config.js';
 import { applyErrorHandler } from '../lib/errors.js';
 
@@ -18,6 +18,11 @@ function fakeRepos() {
       deleteForUser: vi.fn(async () => true),
       countForUser: vi.fn(async () => 0),
       replayDataset: vi.fn(async () => ({ decisions: [] as unknown[], older: [] as unknown[], replay: [] as unknown[], scope: [] as unknown[], unembedded: 0 })),
+      findManyForUser: vi.fn(async () => [] as unknown[]),
+    },
+    memoryStatus: {
+      setStatus: vi.fn(async () => 'ok' as string),
+      supersedersOf: vi.fn(async () => new Map<string, { ref: string; title: string }>()),
     },
     memoryItems: {
       listNotes: vi.fn(async () => ({ items: [], next_cursor: null })),
@@ -29,6 +34,7 @@ function fakeRepos() {
       clearVerified: vi.fn(async () => true),
       hideSource: vi.fn(async () => true),
       deleteBySource: vi.fn(async () => 0),
+      findManyForOwner: vi.fn(async () => [] as unknown[]),
     },
     notes: {
       removeBlock: vi.fn(async () => ({ id: 'n1', project_id: 'p1', content: '', updated_at: '2026-09-27T00:00:00.000Z' }) as unknown),
@@ -43,6 +49,8 @@ function fakeRepos() {
       setChatAutodecide: vi.fn(async () => undefined),
       chatCodexReplies: vi.fn(async () => false),
       setChatCodexReplies: vi.fn(async () => undefined),
+      chatContextLimit: vi.fn(async (): Promise<number | null> => null),
+      setChatContextLimit: vi.fn(async () => undefined),
     },
     tabQuestions: {
       cancelScheduledForUser: vi.fn(async (_userId: string) => [] as { id: string }[]),
@@ -151,6 +159,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           embed_model: 'm',
           suggested_count: 2,
           accepted_count: 1,
+          status: 'current',
+          expires_at: null,
+          supersedes: null,
           created_at: '2026-09-26T00:00:00.000Z',
         },
       ],
@@ -175,6 +186,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       suggested_count: 2,
       accepted_count: 1,
       created_at: '2026-09-26T00:00:00.000Z',
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     });
     expect(decision).not.toHaveProperty('embedding');
     expect(decision).not.toHaveProperty('user_id');
@@ -212,7 +226,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, available: false, count: 7, notes: 2 });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2 });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -224,7 +238,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, available: false, count: 3, notes: 0 });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0 });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {
@@ -246,6 +260,24 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(repos.users.setChatSuggestions).not.toHaveBeenCalled();
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
     expect(res.json()).toMatchObject({ codex_replies: true });
+  });
+
+  it('PATCH /memory sets the context meter limit, clears it with null, and refuses one out of bounds (TER-1038)', async () => {
+    const repos = fakeRepos();
+    repos.users.chatContextLimit.mockResolvedValueOnce(200_000);
+    const res = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: 200_000 } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledWith('u1', 200_000);
+    expect(repos.users.setChatCodexReplies).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ context_limit: 200_000 });
+    const cleared = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: null } });
+    expect(cleared.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenLastCalledWith('u1', null);
+    for (const bad of [500, 20_000_000, 150_000.5]) {
+      const r = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: bad } });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledTimes(2);
   });
 
   it('PATCH /memory with autodecide: false cancels the user\'s running countdowns and republishes those cards', async () => {
@@ -325,6 +357,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           content_hash: 'h',
           source_hash: null,
           embed_model: null,
+          status: 'superseded',
+          expires_at: null,
+          supersedes: null,
           source_at: '2026-09-26T00:00:00.000Z',
           created_at: '2026-09-26T00:00:00.000Z',
           updated_at: '2026-09-26T00:00:00.000Z',
@@ -332,9 +367,11 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       ],
       next_cursor: 'CURSOR',
     });
+    repos.memoryStatus.supersedersOf.mockResolvedValueOnce(new Map([['note:n1', { ref: 'decision:d9', title: 'Qual gerenciador?' }]]));
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/notes?cursor=xyz' });
     expect(res.statusCode).toBe(200);
     expect(repos.memoryItems.listNotes).toHaveBeenCalledWith('u1', { cursor: 'xyz', limit: 50 });
+    expect(repos.memoryStatus.supersedersOf).toHaveBeenCalledWith('u1', ['note:n1']);
     expect(res.json()).toEqual({
       notes: [
         {
@@ -345,6 +382,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           decision: 'npm',
           reason: 'é o padrão do Node',
           created_at: '2026-09-26T00:00:00.000Z',
+          status: 'superseded',
+          expires_at: null,
+          superseded_by: { ref: 'decision:d9', title: 'Qual gerenciador?' },
         },
       ],
       next_cursor: 'CURSOR',
@@ -369,6 +409,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           content_hash: 'h',
           source_hash: null,
           embed_model: null,
+          status: 'current',
+          expires_at: null,
+          supersedes: null,
           source_at: '2026-09-26T00:00:00.000Z',
           created_at: '2026-09-26T00:00:00.000Z',
           updated_at: '2026-09-26T00:00:00.000Z',
@@ -386,7 +429,79 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       decision: '',
       reason: '',
       created_at: '2026-09-26T00:00:00.000Z',
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     });
+  });
+
+  const decisionRow = (over: Record<string, unknown> = {}) => ({
+    id: 'd1', user_id: 'u1', project_id: 'p1', project_name: 'Proj', conversation_id: null, tab_question_id: null, question_index: 0,
+    header: 'H', question: 'Q?', options: [{ label: 'a', description: '' }], multi_select: false, answer: { labels: ['a'] },
+    embed_model: null, suggested_count: 0, accepted_count: 0, auto_count: 0, status: 'current', expires_at: null, supersedes: null,
+    created_at: '2026-09-26T00:00:00.000Z', ...over,
+  });
+
+  it('PUT /decisions/:id/status marks the requester\'s decision and answers it as the list shows it (TER-1013)', async () => {
+    const repos = fakeRepos();
+    repos.chatDecisions.findManyForUser.mockResolvedValueOnce([decisionRow({ status: 'wrong' })]);
+    const res = await build(kind, repos).inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'wrong' } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryStatus.setStatus).toHaveBeenCalledWith('u1', { kind: 'decision', id: 'd1' }, 'wrong', undefined);
+    expect(repos.chatDecisions.findManyForUser).toHaveBeenCalledWith(['d1'], 'u1');
+    expect(decisionStatusResponse.parse(res.json()).decision).toMatchObject({ id: 'd1', status: 'wrong', superseded_by: null });
+  });
+
+  it('PUT /notes/:id/status superseded passes the replacement and shows it', async () => {
+    const repos = fakeRepos();
+    repos.memoryStatus.supersedersOf.mockResolvedValueOnce(new Map([['note:n1', { ref: 'decision:d2', title: 'Nova?' }]]));
+    repos.memoryItems.findManyForOwner.mockResolvedValueOnce([
+      { id: 'n1', owner_id: 'u1', project_id: null, project_name: null, kind: 'note', source_id: 'n1', chunk_index: 0, title: 'T', text: 'Decisão: x', trust: 'derived', status: 'superseded', expires_at: null, supersedes: null, created_at: '2026-09-26T00:00:00.000Z' },
+    ]);
+    const res = await build(kind, repos).inject({ method: 'PUT', url: '/chat/notes/n1/status', payload: { status: 'superseded', superseded_by: 'decision:d2' } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryStatus.setStatus).toHaveBeenCalledWith('u1', { kind: 'note', id: 'n1' }, 'superseded', { kind: 'decision', id: 'd2' });
+    expect(noteStatusResponse.parse(res.json()).note).toMatchObject({ id: 'n1', status: 'superseded', superseded_by: { ref: 'decision:d2', title: 'Nova?' } });
+  });
+
+  it('PUT .../status refuses superseded without a replacement, a bad ref, and an unknown status', async () => {
+    const repos = fakeRepos();
+    const app = build(kind, repos);
+    for (const payload of [{ status: 'superseded' }, { status: 'superseded', superseded_by: 'task:x' }, { status: 'gone' }]) {
+      expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload })).statusCode).toBe(400);
+    }
+    expect(repos.memoryStatus.setStatus).not.toHaveBeenCalled();
+  });
+
+  it('PUT .../status answers 404 for someone else\'s item and maps the replacement refusals', async () => {
+    const repos = fakeRepos();
+    const app = build(kind, repos);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('not_found');
+    expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'outdated' } })).statusCode).toBe(404);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('self');
+    expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'superseded', superseded_by: 'decision:d1' } })).statusCode).toBe(400);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('replacement_taken');
+    const taken = await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'superseded', superseded_by: 'note:n2' } });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json().code).toBe('REPLACEMENT_TAKEN');
+  });
+
+  it('GET /memory/replacements offers current items only, never the one being marked', async () => {
+    const repos = fakeRepos();
+    repos.chatDecisions.listForUser.mockResolvedValueOnce({
+      items: [decisionRow({ id: 'd1' }), decisionRow({ id: 'd2', status: 'wrong' }), decisionRow({ id: 'd3', created_at: '2026-09-28T00:00:00.000Z' })],
+      next_cursor: null,
+    });
+    repos.memoryItems.listNotes.mockResolvedValueOnce({
+      items: [{ id: 'n1', project_id: null, project_name: null, kind: 'note', title: 'Nota', text: 'Decisão: y', status: 'current', created_at: '2026-09-27T00:00:00.000Z' }],
+      next_cursor: null,
+    });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/replacements?q=abc&exclude=decision:d1' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatDecisions.listForUser).toHaveBeenCalledWith('u1', expect.objectContaining({ q: 'abc' }));
+    const body = memoryReplacementsResponse.parse(res.json());
+    expect(body.items.map((i) => i.ref)).toEqual(['decision:d3', 'note:n1']);
+    expect(body.items[1]).toMatchObject({ kind: 'note', title: 'Nota', detail: 'y' });
   });
 
   it('DELETE /notes/:id calls deleteNote scoped to this user and answers 204 whether or not it existed (another user\'s note, or a non-note item, survive)', async () => {

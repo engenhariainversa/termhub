@@ -188,7 +188,7 @@ export function AgentEnrollment({ machine, token, onConnected }: Props) {
     {
       title: t('Conectar'),
       command: enrollCommand(origin, token),
-      note: t('Esse token só aparece agora. Se perder, gere outro em Rotacionar token.'),
+      note: t('Esse token só aparece agora, é de uso único e vale 15 minutos. Se expirar, gere outro em Parear de novo.'),
     },
     {
       title: t('Instalar como serviço'),

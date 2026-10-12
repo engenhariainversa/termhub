@@ -1,6 +1,7 @@
 import { chatBus } from '../chat/bus.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { localeOf, t, type Locale } from '../i18n/index.js';
+import { zoneOrUtc } from '../lib/local-time.js';
 import { automationSummaryText, type PushText } from '../mobile/push-text.js';
 import { REASON_TEXT } from './eligibility.js';
 import { escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
@@ -34,7 +35,7 @@ export interface SummaryContent {
 
 const dateOf = (day: string, locale: Locale) => {
   const [y, m, d] = day.split('-');
-  return locale === 'en' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`;
+  return locale === 'en' ? `${m}/${d}/${y}` : `${d}/${m}/${y}`; // pt-BR and es read day first
 };
 
 /** `dd/mm HH:mm` (`mm/dd` in English) of `at` in `zone`. */
@@ -61,18 +62,6 @@ export interface SummaryDeps {
   /** One push to the user's phones; absent when the mobile API is off. */
   push?: (userId: string, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, collapseId: string) => Promise<void>;
   log?: Log;
-}
-
-function zoneOrUtc(zone: string | null): string {
-  if (zone) {
-    try {
-      new Intl.DateTimeFormat('en-CA', { timeZone: zone });
-      return zone;
-    } catch {
-      // unknown zone: UTC
-    }
-  }
-  return 'UTC';
 }
 
 function localHour(zone: string, at: Date): number {

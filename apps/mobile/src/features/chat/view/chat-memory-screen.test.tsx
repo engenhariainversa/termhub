@@ -28,6 +28,9 @@ function dec(over: Partial<TChatDecision> & { id: string; question: string }): T
     suggested_count: 1,
     accepted_count: 1,
     created_at: new Date().toISOString(),
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -39,6 +42,9 @@ function note(over: Partial<TConciergeNote> & { id: string; question: string }):
     decision: 'Sim',
     reason: 'Você sempre isola em worktree',
     created_at: new Date().toISOString(),
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -89,6 +95,7 @@ afterEach(() => {
     loadingMoreNotes: false,
     forgettingNoteId: null,
     notesError: null,
+    statusBusyRef: null,
     lessons: null,
     lessonsCursor: null,
     lessonsQ: '',
@@ -374,5 +381,44 @@ describe('Memória do chat in English (i18n)', () => {
       expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
       expect.objectContaining({ text: 'Forget', style: 'destructive' }),
     ]);
+  });
+});
+
+describe('Desatualizada / Errada / Substituída por (TER-1013)', () => {
+  it('a decision shows "Vigente"; "Errada" marks it and "Desfazer" undoes it', async () => {
+    const d = dec({ id: 'd1', question: 'Usar a main direto?' });
+    jest.spyOn(stores.api, 'chatDecisions').mockResolvedValue({ decisions: [d], next_cursor: null });
+    const spy = jest.spyOn(stores.api, 'setChatDecisionStatus').mockResolvedValueOnce({ ...d, status: 'wrong' });
+    await render(<ChatMemoryScreen />);
+    await screen.findByText('Usar a main direto?', undefined, LOAD);
+    expect(screen.getByText('Vigente')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Errada' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(expect.anything(), 'd1', 'wrong', undefined));
+    expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Desatualizada' })).toBeNull();
+
+    spy.mockResolvedValueOnce(d);
+    await fireEvent.press(screen.getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith(expect.anything(), 'd1', 'current', undefined));
+    expect(await screen.findByText('Vigente')).toBeTruthy();
+  });
+
+  it('"Substituída por…" on a note picks the replacing item and shows it', async () => {
+    jest.spyOn(stores.api, 'chatDecisions').mockResolvedValue({ decisions: [], next_cursor: null });
+    const n = note({ id: 'n1', question: 'Qual gerenciador de pacotes?' });
+    jest.spyOn(stores.api, 'chatNotes').mockResolvedValue({ notes: [n], next_cursor: null });
+    const replacements = jest.spyOn(stores.api, 'chatMemoryReplacements').mockResolvedValue({
+      items: [{ ref: 'decision:d9', kind: 'decision', title: 'Usar pnpm?', detail: 'Sim', project_name: null, created_at: new Date().toISOString() }],
+    });
+    const spy = jest.spyOn(stores.api, 'setChatNoteStatus').mockResolvedValueOnce({ ...n, status: 'superseded', superseded_by: { ref: 'decision:d9', title: 'Usar pnpm?' } });
+    await render(<ChatMemoryScreen />);
+    await screen.findByText('Qual gerenciador de pacotes?', undefined, LOAD);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Substituída por…' }));
+    await waitFor(() => expect(replacements).toHaveBeenCalledWith(expect.anything(), '', 'note:n1'), LOAD);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Usar pnpm?' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(expect.anything(), 'n1', 'superseded', 'decision:d9'));
+    expect(await screen.findByText('Substituída por «Usar pnpm?»')).toBeTruthy();
   });
 });

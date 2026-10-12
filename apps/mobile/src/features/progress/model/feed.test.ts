@@ -1,10 +1,10 @@
 import { setLocale } from '@/i18n';
 import type { TAutomationFeedEvent } from '@/services/api/contract';
-import { feedLine } from './feed';
+import { feedLine, feedWhy } from './feed';
 
 const ev = (over: Partial<TAutomationFeedEvent>): TAutomationFeedEvent => ({
   id: 'x', kind: 'run_started', created_at: '2026-10-05T10:00:00.000Z', project_id: 'p', task_id: 't', run_id: 'r', tab_id: 'tab', ref: 'TER-9', epic: 'Épico',
-  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null, ...over,
+  machine: 'jarvis', account: 'pessoal', branch: null, workflow: null, version: null, pr: null, url: null, until: null, reason_text: null, paused: null, tool: null, why_text: null, rule_ref: null, score: null, ...over,
 });
 
 describe('feedLine', () => {
@@ -40,6 +40,33 @@ describe('feedLine', () => {
     setLocale('en');
     try {
       expect(feedLine(ev({ kind: 'merged', branch: 'main' }))).toBe('TER-9: merged into main');
+    } finally {
+      setLocale(null);
+    }
+  });
+});
+
+describe('feedWhy (TER-1011)', () => {
+  it('is null without a reason', () => {
+    expect(feedWhy(ev({ kind: 'question_answered' }))).toBeNull();
+  });
+  it('names a precedent with its similarity', () => {
+    expect(feedWhy(ev({ kind: 'question_answered', why_text: 'respondida com uma decisão sua de antes', rule_ref: 'decision:abc', score: 0.874 }))).toBe(
+      'Motivo: respondida com uma decisão sua de antes · Precedente: decision:abc · Similaridade: 87%',
+    );
+    expect(feedWhy(ev({ rule_ref: 'note:n1' }))).toBe('Precedente: note:n1');
+  });
+  it('names an allow rule', () => {
+    expect(feedWhy(ev({ kind: 'permission_auto_approved', rule_ref: 'Bash(npm test:*)' }))).toBe('Regra: Bash(npm test:*)');
+  });
+  it('gives the reason alone', () => {
+    expect(feedWhy(ev({ kind: 'escalated', why_text: 'nenhuma regra vigente cobre' }))).toBe('Motivo: nenhuma regra vigente cobre');
+  });
+  it('in English', () => {
+    setLocale('en');
+    try {
+      expect(feedWhy(ev({ why_text: 'x', rule_ref: 'decision:abc', score: 0.5 }))).toBe('Why: x · Precedent: decision:abc · Similarity: 50%');
+      expect(feedWhy(ev({ rule_ref: 'mcp__termhub__create_task' }))).toBe('Rule: mcp__termhub__create_task');
     } finally {
       setLocale(null);
     }

@@ -16,11 +16,11 @@ export const PERMISSIONS_MSG = {
     return t('Agora não');
   },
   get adTitle() {
-    return t('Ajude a medir nossos anúncios');
+    return t('Ajude a melhorar o termhub');
   },
   get adBody() {
     return t(
-      'Com sua permissão, usamos o identificador de publicidade do aparelho só para saber quais anúncios trouxeram novas pessoas ao termhub. Você pode mudar isso em Ajustes.',
+      'Com sua permissão, registramos quais telas do app você abre, nunca o conteúdo, e usamos o identificador de publicidade do aparelho só para saber quais anúncios trouxeram novas pessoas ao termhub. Você pode mudar isso em Ajustes.',
     );
   },
   get adAccept() {
@@ -56,9 +56,11 @@ export const PERMISSIONS_MSG = {
     return t('Um aviso quando uma aba de projeto termina o trabalho e espera você. Tocar nele abre a aba. Vale para todos os seus aparelhos.');
   },
   get adsSwitch() {
-    return t('Medição de anúncios');
+    return t('Métricas de uso e anúncios');
   },
   get adsHint() {
-    return t('Usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.');
+    return t(
+      'Registra quais telas você abre, nunca o conteúdo, e usa o identificador de publicidade do aparelho só para medir quais anúncios trouxeram novas pessoas ao termhub.',
+    );
   },
 };

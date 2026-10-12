@@ -28,7 +28,7 @@ export const VOICE_MIME = 'audio/m4a';
 /** The server's `MOBILE_MAX_SECONDS`: clips are cut here no matter what. */
 export const MAX_RECORDING_S = 300;
 /** Below this there is nothing to transcribe: a tap, not speech. */
-const MIN_CLIP_S = 0.5;
+export const MIN_CLIP_S = 0.5;
 const POLL_MS = 1000;
 /** Give up polling after this (a 5-minute clip on the CPU model takes ~100 s). */
 const POLL_TIMEOUT_MS = 12 * 60 * 1000;

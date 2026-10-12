@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type DragEvent, type FormEvent } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
-import { backlogSections, cardPath, openCount, taskTypeLabel, WORK_TYPES, type BacklogSection } from '../lib/board';
+import { backlogSections, boardCardPath, openCount, taskTypeLabel, WORK_TYPES, type BacklogSection } from '../lib/board';
 import { useData } from '../lib/data';
 import type { Task, TaskType } from '../lib/types';
 import { useTranslation } from '../i18n';
@@ -16,7 +16,6 @@ export function BacklogView({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const { setOpenTasks } = useData();
   const navigate = useNavigate();
-  const location = useLocation();
   const [tasks, setTasks] = useState<Task[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -50,7 +49,8 @@ export function BacklogView({ projectId }: { projectId: string }) {
     await load();
   };
 
-  const open = (task: Task) => navigate(cardPath(task.ref), { state: { from: location.pathname } });
+  // the editor lives on the Board; closing it goes back here (the board's `boardCard` history entry)
+  const open = (task: Task) => navigate(boardCardPath(projectId, task.ref), { state: { boardCard: true } });
 
   /** Drop on row `index` of a section; the index counts the dragged row when it sits above. */
   const dropOn = (e: DragEvent, section: BacklogSection, index: number) => {

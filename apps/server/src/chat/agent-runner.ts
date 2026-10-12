@@ -32,9 +32,8 @@ export interface ClaudeChannelHost {
 type RunFailureReason = ChannelClosedReason | 'host_gone' | 'agent_too_old' | 'host_busy';
 
 /**
- * The line a failed run ends with, in the exact shape the container's own stream uses
- * (`apps/concierge/src/index.ts`): both runners speak one format, so `parseFrame` and the service
- * above it stay untouched. The reason is a label, never text from the machine — stderr can carry the
+ * The line a failed run ends with, in the shape the retired container runner used (a
+ * `termhub_error` frame), so `parseFrame` and the service above it read one format. The reason is a label, never text from the machine — stderr can carry the
  * prompt back and never leaves the host it ran on (spec §7.1).
  */
 const failureLine = (reason: RunFailureReason, code: number | null): string => JSON.stringify({ type: 'termhub_error', code, reason });
@@ -78,8 +77,8 @@ interface InputLink {
 /**
  * Runs the conversation on a machine of the user's own, through the agent already installed there:
  * opens a `claude` channel, writes the prompt, and yields the CLI's `stream-json` back a line at a
- * time — the same contract `httpRunner` has with the container, so nothing above `RunnerClient`
- * (the busy lock, the gate, the cards, the fresh-session retry, the bus) can tell the two apart.
+ * time through `RunnerClient`, so nothing above it (the busy lock, the gate, the cards, the
+ * fresh-session retry, the bus) depends on where the CLI runs.
  *
  * Which machine to use is decided elsewhere: this takes an id and drives it.
  */
@@ -208,8 +207,7 @@ async function* runOnAgent(
       return;
     }
 
-    // What `httpRunner` expresses with AbortSignal.timeout: here it ends the iteration and the
-    // `finally` closes the channel, which kills the CLI on the machine too. A plain failed run —
+    // The deadline ends the iteration and the `finally` closes the channel, which kills the CLI on the machine too. A plain failed run —
     // there is no frame to read a reason from when the run simply never finished.
     const deadline = setTimeout(() => {
       stream.expired = true;
@@ -233,7 +231,7 @@ async function* runOnAgent(
         if (stream.end || stream.expired || link.closing) break;
         await new Promise<void>((resolve) => (stream.wake = resolve));
       }
-      // A last line the agent framed without its newline; the container's reader keeps it too.
+      // A last line the agent framed without its newline is kept too.
       if (stream.tail.trim()) yield stream.tail;
       // A run the caller closed did not fail: it ends with nothing said about it.
       const last = stream.end ? endOfRun(stream.end) : link.closing ? null : failureLine('run_failed', null);

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { compactDoneText, compactFailedText, contextLevel, contextShare, contextTitle, formatShare, formatTokens, isCompactCommand, isCompactShortcut } from './chat-context';
+import { compactDoneText, compactFailedText, contextLevel, contextMax, contextShare, contextTitle, formatShare, formatTokens, isCompactCommand, isCompactShortcut, parseContextLimit } from './chat-context';
 
 it('the share is capped at the window, and unknown without one', () => {
   expect(contextShare(50_000, 200_000)).toBe(0.25);
@@ -35,6 +35,22 @@ it('the tooltip has the exact numbers, and suggests compacting once high', () =>
   expect(contextTitle(25_258, 1_000_000)).toBe('Contexto da conversa: 25.258 de 1.000.000 tokens (3%)');
   expect(contextTitle(170_000, 200_000)).toBe('Contexto da conversa: 170.000 de 200.000 tokens (85%). Compacte a conversa para liberar espaço.');
   expect(contextTitle(1_200, null)).toBe('Contexto da conversa: 1.200 tokens');
+});
+
+it("measures against the person's own limit first, and says the window and the last compaction (TER-1038)", () => {
+  expect(contextMax(1_000_000, 200_000)).toBe(200_000);
+  expect(contextMax(1_000_000, null)).toBe(1_000_000);
+  expect(contextMax(null, undefined)).toBeNull();
+  expect(contextTitle(150_000, 1_000_000, 200_000)).toBe('Contexto da conversa: 150.000 de 200.000 tokens (75%), o seu limite; janela do modelo: 1.000.000');
+  expect(contextTitle(170_000, null, 200_000)).toBe('Contexto da conversa: 170.000 de 200.000 tokens (85%), o seu limite. Compacte a conversa para liberar espaço.');
+  expect(contextTitle(25_258, 1_000_000, null, '2026-10-07T12:00:00.000Z')).toMatch(/^Contexto da conversa: 25\.258 de 1\.000\.000 tokens \(3%\)\. Última compactação: \S+/);
+});
+
+it('reads the limit field in thousands, empty as the window, and refuses the rest', () => {
+  expect(parseContextLimit(' 200 ')).toBe(200_000);
+  expect(parseContextLimit('')).toBeNull();
+  expect(parseContextLimit('10000')).toBe(10_000_000);
+  for (const bad of ['9', '10001', '1.5', '200k', '-5', 'abc']) expect(parseContextLimit(bad)).toBeUndefined();
 });
 
 it('says what a compaction did, or why it did not', () => {

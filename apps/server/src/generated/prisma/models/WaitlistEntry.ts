@@ -599,7 +599,7 @@ export type $WaitlistEntryPayload<ExtArgs extends runtime.Types.Extensions.Inter
     linkedin: string | null
     github: string | null
     /**
-     * "pt" | "en": language the form was filled in
+     * "pt" | "en" | "es": language the form was filled in
      */
     locale: string
     source: string

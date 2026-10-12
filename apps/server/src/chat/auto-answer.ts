@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
 import { controlContextFor, type ControlContext } from '../control/context.js';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
+import { holdsAt } from '../db/repositories/decision-scope.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutoAnswer, AutoAnswerBy, TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
@@ -47,6 +48,8 @@ export interface ScheduleInput {
   by: AutoAnswerBy;
   reason: string;
   sources: { kind: MemoryRefKind; id: string }[];
+  /** The precedent's similarity the concierge's check measured (TER-1011): the feed's score. */
+  score?: number | null;
 }
 
 /**
@@ -59,6 +62,9 @@ export interface ScheduleInput {
  * this time is not a precedent.
  */
 export function decisionBacks(d: ChatDecision, item: ChoicePayload['questions'][number], a: ChoiceAnswer['answers'][number]): boolean {
+  // TER-1013: a decision the person marked desatualizada, errada or substituída is never a precedent,
+  // even when cited by ref from an earlier search (and re-checked at send time).
+  if (d.status !== 'current') return false;
   const mapped = mapAnswer(d.answer, item);
   if (mapped === null || !sameAnswer(mapped, { selected: a.selected, text: a.text })) return false;
   return a.selected.every((s) => {
@@ -133,6 +139,7 @@ async function storeAutoAnswer(repos: Repositories, input: ScheduleInput, now: D
     by: input.by,
     reason: input.reason,
     sources: input.sources,
+    ...(typeof input.score === 'number' ? { score: input.score } : {}),
     due_at: new Date(now.getTime() + config.autoAnswerDelayMs).toISOString(),
     status: 'scheduled',
   };
@@ -162,8 +169,13 @@ export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion,
   if (!(await autoAnswerAllowed(repos, row))) return null;
   const ids = [...new Set(items.map((it) => it!.decision_id))];
   // The suggestion only says a decision was similar: re-read the ones it cites (the person's own,
-  // still there) and check each still backs its answer, option descriptions included.
-  const decisions = await repos.chatDecisions.findManyForUser(ids, row.user_id);
+  // still there, never one the countdown made, TER-1006) and check each still backs its answer, option
+  // descriptions included. A decision a newer one replaced (TER-1015) is history, never a precedent:
+  // drop it before the check.
+  const decisions = (await repos.chatDecisions.findManyForUser(ids, row.user_id)).filter((d) => !d.superseded_at && d.trust === 'person');
+  // TER-1014: a decision that expired or does not hold on this card's project/conversation is no precedent.
+  const place = { projectId: row.project_id, conversationId: row.conversation_id };
+  if (decisions.some((d) => !holdsAt(d, place, now))) return null;
   if (!precedentBacks(decisions, payload, answer)) return null;
   return storeAutoAnswer(repos, { row, answer, by: 'memory', reason: REPEAT_REASON, sources: ids.map((id) => ({ kind: 'decision' as const, id })) }, now);
 }
@@ -208,7 +220,14 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
         if (!(await automaticRunOfTab(repos, claimed.tab_id))) throw new HttpError(409, 'Trabalho automático pausado ou desligado', 'AUTOMATION_OFF');
       } else if (!(await autoAnswerAllowed(repos, claimed))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
       const cited = [...new Set(auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id))];
-      if (cited.length && (await repos.chatDecisions.findManyForUser(cited, user.id)).length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      const precedents = cited.length ? await repos.chatDecisions.findManyForUser(cited, user.id) : [];
+      // A decision the countdown made (`derived`, TER-1006) is no precedent: as good as forgotten.
+      if (precedents.filter((d) => d.trust === 'person').length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      if (precedents.some((d) => d.superseded_at)) throw new HttpError(409, 'A decisão usada foi substituída', 'PRECEDENT_SUPERSEDED');
+      // TER-1014: a precedent that expired during the countdown (or never held here) sends nothing.
+      if (precedents.some((d) => !holdsAt(d, { projectId: claimed.project_id, conversationId: claimed.conversation_id }, now))) {
+        throw new HttpError(409, 'A decisão usada expirou ou não vale aqui', 'PRECEDENT_EXPIRED');
+      }
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });
     } catch (err) {
       const code = codeOf(err, 'AUTO_ANSWER_FAILED');

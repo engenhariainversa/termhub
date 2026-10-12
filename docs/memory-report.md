@@ -29,6 +29,10 @@ are left out and counted in `dataset.unembedded`.
 
 For each decision, the memory is rebuilt as it stood right before it: its `k` = 5 nearest *earlier*
 decisions of the same `multi_select` shape and the same embedding model, never one of the same card.
+Like `nearest`, it only keeps what could back a suggestion: the person's own answers (never a `derived`
+one the countdown sent), in scope for that question's project and conversation, and not yet marked
+errada, substituída or expired at that moment — a mark put on a decision later does not remove it from
+the replay of the questions asked before the mark.
 That is what `nearest` would have answered when the card opened. The cards' own rule then picks the
 precedent (`pickPrecedent`, shared with `suggestFor`): only neighbours at or above `threshold`, newest
 first, the first whose answer still maps onto this question's options. Outcomes:

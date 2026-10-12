@@ -5,7 +5,7 @@ import { AutomationBadge } from './AutomationBadge';
 import { UsageCost } from './UsageCost';
 import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
-import { feedLine } from '../lib/automation-feed';
+import { feedLine, feedWhy } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
@@ -203,6 +203,7 @@ export function AutomationFeed({ feed }: { feed: AutomationFeedEvent[] }) {
             )}
             {e.run_id && <span className="text-xs text-zinc-500" title={t('execução {{id}}', { id: e.run_id })}>{`#${e.run_id.slice(-6)}`}</span>}
             <span className="ml-auto text-xs text-zinc-500">{relativeTime(e.created_at)}</span>
+            {feedWhy(e) && <span className="basis-full text-xs text-zinc-500">{feedWhy(e)}</span>}
           </li>
         ))}
       </ul>

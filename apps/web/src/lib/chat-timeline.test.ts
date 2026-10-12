@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './types';
-import { chatTimeline, groupPendingActions } from './chat-timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions } from './chat-timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const T1 = '2026-01-01T00:01:00.000Z';
@@ -180,11 +180,17 @@ describe('chatTimeline — actions that ran without asking (TER-984)', () => {
     expect(ids(chatTimeline(messages, actions))).toEqual(['m1', 'u2', 'a1']);
   });
 
-  it('does not move a card that asked for confirmation, pending or decided', () => {
+  it('moves a decided card above its turn\'s answer, and keeps a pending one below it (TER-1024)', () => {
     const messages = [message({ id: 'm1', created_at: T0 })];
     const actions = [action({ id: 'p1', status: 'pending', created_at: T1 }), action({ id: 'd1', status: 'executed', created_at: T2 })];
 
-    expect(ids(chatTimeline(messages, actions))).toEqual(['m1', 'p1', 'd1']);
+    expect(ids(chatTimeline(messages, actions))).toEqual(['d1', 'm1', 'p1']);
+  });
+
+  it('every settled status moves, refused, expired and failed included (TER-1024)', () => {
+    const messages = [message({ id: 'm1', created_at: T0 })];
+    const actions = (['denied', 'expired', 'failed', 'approved'] as const).map((status, i) => action({ id: status, status, created_at: `2026-01-01T00:0${i + 1}:00.000Z` }));
+    expect(ids(chatTimeline(messages, actions))).toEqual(['denied', 'expired', 'failed', 'approved', 'm1']);
   });
 
   it('keeps the entry\'s own at: only the order changes', () => {
@@ -268,11 +274,53 @@ describe('groupPendingActions', () => {
 
     const result = groupPendingActions(entries);
 
-    expect(result.map((e) => e.kind)).toEqual(['message', 'action_group', 'action', 'message']);
-    const group = result[1];
+    // The decided card sits above m1, the answer of its turn (TER-1024); the pending ones group below it.
+    expect(result.map((e) => e.kind)).toEqual(['action', 'message', 'action_group', 'message']);
+    const group = result[2];
     expect(group.kind === 'action_group' && group.actions.map((a) => a.id)).toEqual(['a1', 'a3']);
     expect(group.at).toBe(T1);
-    const decided = result[2];
+    const decided = result[0];
     expect(decided.kind === 'action' && decided.action.id).toBe('a2');
+  });
+});
+
+describe('groupSettledActions (TER-1024)', () => {
+  const at = (n: number) => `2026-01-01T00:0${n}:00.000Z`;
+  const user = (id: string, n: number) => message({ id, role: 'user', created_at: at(n) });
+  const answer = (id: string, n: number) => message({ id, created_at: at(n) });
+
+  it('folds a turn\'s settled cards into one trail just above its answer', () => {
+    const entries = chatTimeline(
+      [user('u1', 0), answer('m1', 1)],
+      [action({ id: 'a1', status: 'executed', grant_id: 'g', created_at: at(2) }), action({ id: 'a2', status: 'executed', created_at: at(3) }), action({ id: 'a3', status: 'denied', created_at: at(4) })],
+    );
+    const result = groupSettledActions(entries);
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action_trail', 'message']);
+    const trail = result[1];
+    expect(trail.kind === 'action_trail' && trail.actions.map((a) => a.id)).toEqual(['a1', 'a2', 'a3']);
+    expect(trail.at).toBe(at(2));
+  });
+
+  it('never folds a pending card, and a lone settled card stays a card', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [action({ id: 'd1', status: 'executed', created_at: at(2) }), action({ id: 'p1', created_at: at(3) }), action({ id: 'p2', created_at: at(4) })]);
+    const result = groupSettledActions(groupPendingActions(entries));
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action', 'message', 'action_group']);
+  });
+
+  it('keeps two turns\' trails apart', () => {
+    const entries = chatTimeline(
+      [user('u1', 0), answer('m1', 1), user('u2', 4), answer('m2', 5)],
+      [action({ id: 'a1', status: 'executed', created_at: at(2) }), action({ id: 'a2', status: 'executed', created_at: at(3) }), action({ id: 'b1', status: 'executed', created_at: at(6) }), action({ id: 'b2', status: 'failed', created_at: at(7) })],
+    );
+    const result = groupSettledActions(entries);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action_trail' ? e.actions.map((a) => a.id).join('+') : e.kind))).toEqual(['u1', 'a1+a2', 'm1', 'u2', 'b1+b2', 'm2']);
+  });
+
+  it('reads the same from the persisted rows alone: a reload keeps the order', () => {
+    const messages = [user('u1', 0), answer('m1', 1)];
+    const actions = [action({ id: 'a1', status: 'executed', created_at: at(2) }), action({ id: 'a2', status: 'executed', created_at: at(3) })];
+    const first = groupSettledActions(chatTimeline(messages, actions));
+    const reloaded = groupSettledActions(chatTimeline([...messages].reverse(), [...actions].reverse()));
+    expect(reloaded).toEqual(first);
   });
 });

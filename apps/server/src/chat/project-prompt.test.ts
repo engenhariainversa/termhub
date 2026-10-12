@@ -293,3 +293,11 @@ describe('default allowances line (TER-627)', () => {
     expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
   });
 });
+
+it("TER-1011: the project's current rules are told after the allowances, and the prompt stays within its cap", () => {
+  const rules = 'Regras vigentes do projeto (…):\n- [note:n2] «Modo de permissão»: «modo auto»';
+  const text = projectSystemPrompt({ name: 'X', key: 'X' }, [{ machine: 'm', cwd: '/w'.repeat(3000) }], [], [], [], rules);
+  expect(text).toContain(rules);
+  expect(text.length).toBeLessThanOrEqual(4000);
+  expect(projectSystemPrompt({ name: 'X', key: 'X' }, [])).not.toContain('Regras vigentes');
+});

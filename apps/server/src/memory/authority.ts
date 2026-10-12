@@ -63,11 +63,13 @@ export function rankByAuthority<T extends AuthorityHit>(hits: T[], queryProjectI
 }
 
 /**
- * Whether a decision or item is no longer in force: superseded (`superseded_at` set, TER-1015) or past
- * its `expires_at` (TER-1014). Read structurally, so a row without those columns counts as current.
+ * Whether a decision or item is no longer in force: marked on the Memória screen (`status` other than
+ * `current`: desatualizada, errada or substituída, TER-1013), superseded (`superseded_at` set, TER-1015)
+ * or past its `expires_at` (TER-1014). Read structurally, so a row without those columns counts as current.
  */
 export function isInactive(row: object, now: Date = new Date()): boolean {
-  const r = row as { superseded_at?: string | Date | null; expires_at?: string | Date | null };
+  const r = row as { status?: string; superseded_at?: string | Date | null; expires_at?: string | Date | null };
+  if (r.status !== undefined && r.status !== 'current') return true;
   if (r.superseded_at) return true;
   return r.expires_at != null && new Date(r.expires_at).getTime() <= now.getTime();
 }

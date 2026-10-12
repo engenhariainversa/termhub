@@ -13,6 +13,7 @@ import { registerFileRoutes } from './handlers/files';
 import { registerMeRoutes } from './handlers/me';
 import { registerNotificationRoutes } from './handlers/notifications';
 import { registerAutomationRoutes } from './handlers/automation';
+import { registerAiLoginRoutes } from './handlers/ai-login';
 import { registerProgressRoutes } from './handlers/progress';
 import { registerSessionRoutes } from './handlers/session';
 import { registerTabRoutes, seedTabs } from './handlers/tabs';
@@ -52,6 +53,7 @@ export function createMockTransport(opts: CreateMockTransportOptions = {}): Tran
   registerNotificationRoutes(router, state);
   registerProgressRoutes(router, state);
   registerAutomationRoutes(router, state);
+  registerAiLoginRoutes(router, state);
   registerTranscriptionRoutes(router, state);
   registerTabRoutes(router, state);
   registerFileRoutes(router, state);

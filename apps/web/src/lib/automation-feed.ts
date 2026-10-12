@@ -44,6 +44,12 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       const what = e.epic ? t('Deploy falhou ({{epic}})', { epic: e.epic }) : t('Deploy falhou');
       return e.paused === false ? what : t('{{what}} — automático pausado no projeto', { what });
     }
+    case 'deploy_retried':
+      return t('Deploy falhou por problema do GitHub; rodando de novo');
+    case 'github_wait':
+      return t('{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar', { ref });
+    case 'trust_auto_accepted':
+      return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':
@@ -91,4 +97,20 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Why an automatic answer, approval or escalation happened (TER-1011), as a secondary line under the sentence,
+ * or null when the event carries no reason. Same wording as the app's `features/progress/model/feed.ts`.
+ */
+export function feedWhy(e: Pick<AutomationFeedEvent, 'why_text' | 'rule_ref' | 'score'>): string | null {
+  const t = i18n.t.bind(i18n);
+  const parts: string[] = [];
+  if (e.why_text) parts.push(t('Motivo: {{why}}', { why: e.why_text }));
+  if (e.rule_ref) {
+    const ref = e.rule_ref;
+    parts.push(ref.startsWith('decision:') || ref.startsWith('note:') ? t('Precedente: {{ref}}', { ref }) : t('Regra: {{ref}}', { ref }));
+  }
+  if (typeof e.score === 'number') parts.push(t('Similaridade: {{score}}%', { score: Math.round(e.score * 100) }));
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
