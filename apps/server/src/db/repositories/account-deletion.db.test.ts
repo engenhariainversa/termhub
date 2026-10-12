@@ -72,6 +72,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.memoryItem.create({
       data: { id: newId(), ownerId: userId, projectId, kind: 'note', sourceId: newId(), title: 't', text: 'x', trust: 'person', contentHash: newId(), sourceAt: new Date() },
     });
+    // A current rule (TER-1010): cascades with the user.
+    await db.memoryRule.create({ data: { id: newId(), ownerId: userId, projectId, kind: 'rule', status: 'approved', text: 'r', sourceRefs: [], fingerprint: newId() } });
     const groupId = newId();
     await db.projectGroup.create({ data: { id: groupId, userId, name: 'g' } });
     await db.projectGroupItem.create({ data: { groupId, projectId } });
