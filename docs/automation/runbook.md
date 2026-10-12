@@ -365,6 +365,11 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
   entrei pelo navegador da máquina" once the link showed), confirmed by `claude auth status`. Closing the
   modal also re-checks the account, so the warning goes either way. The CLI's output only shows as a
   detail ("Saída da CLI") under an error.
+- An error with "Login successful." in "Saída da CLI" means the machine's agent is older than 0.27.0
+  (Máquinas shows the version). The server now asks that machine's `claude auth status` when a start
+  fails and reads a logged-in answer as "Login refeito"; updating the agent is still the fix. Since agent
+  0.28.1, exit 0 with "Login successful." also counts when the status command cannot answer at all (a
+  timeout, or a Claude Code without `auth status`); a status that says logged out still wins.
 - A flow lives **15 minutes**, in the memory of the server colour that started it: then (or after a deploy)
   it is gone and the person starts again. The server kills its session when it expires; if one is left
   behind (the server died mid-flow), remove it on the machine: `tmux ls | grep termhub-login-`, then
