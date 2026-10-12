@@ -1,5 +1,6 @@
 import os from 'node:os';
 import { checkPathAccess, fullDiskAccessNote } from '../doctor.js';
+import { proxyEnvFrom, redactProxy } from '../proxy.js';
 import * as service from '../service/index.js';
 
 export async function serviceCommand(sub: string | undefined): Promise<void> {
@@ -13,6 +14,12 @@ export async function serviceCommand(sub: string | undefined): Promise<void> {
       }
       await service.install();
       console.log('Serviço instalado.');
+      // The service does not inherit this shell: say which proxy/CA variables went into it, so
+      // someone who exported HTTPS_PROXY after installing knows to run `service install` again.
+      const carried = proxyEnvFrom();
+      for (const [key, value] of Object.entries(carried)) {
+        console.log(`  ${key}=${key.endsWith('_PROXY') && key !== 'NO_PROXY' ? safeProxy(value) : value}`);
+      }
       return;
     }
     case 'uninstall':
@@ -27,5 +34,13 @@ export async function serviceCommand(sub: string | undefined): Promise<void> {
     default:
       console.error('Uso: termhub-agent service install|uninstall|status');
       process.exitCode = 2;
+  }
+}
+
+function safeProxy(value: string): string {
+  try {
+    return redactProxy(new URL(/:\/\//.test(value) ? value : `http://${value}`));
+  } catch {
+    return '(URL inválida)';
   }
 }
