@@ -9,7 +9,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { GUARD_SCRIPT, buildGuardSettings } from './guard-script.js';
+import { GUARD_SCRIPT, GUARD_SCRIPT_VERSION, buildGuardSettings } from './guard-script.js';
 
 const BRANCH = 'TER-1-card';
 const WORKTREE = '/home/u/.termhub/worktrees/p1/TER-1';
@@ -61,6 +61,52 @@ describe('guard — git push (the auto-mode gap)', () => {
   });
   it('denies the run\'s push when the run has no branch', () => {
     expect(bash(`git push -u origin ${BRANCH}`, null).deny).toBe(true);
+  });
+});
+
+describe('guard v2 — push from a repo folder of the workspace (spec 2026-10-07 multi-repo R13)', () => {
+  it('is marked as version 2', () => {
+    expect(GUARD_SCRIPT_VERSION).toBe(2);
+    expect(GUARD_SCRIPT).toContain('# termhub-guard v2\n');
+  });
+  it('allows the run\'s own branch from <WORKTREE>/<key>, in the four plain forms', () => {
+    for (const key of ['frontend', 'hub-community-frontend', 'api.v2', 'bff_1', 'main']) {
+      const c = `git -C ${WORKTREE}/${key} push`;
+      expect(bash(`${c} -u origin ${BRANCH}`).deny, key).toBe(false);
+      expect(bash(`${c} origin ${BRANCH}`).deny, key).toBe(false);
+      expect(bash(`${c} -u origin HEAD:refs/heads/${BRANCH}`).deny, key).toBe(false);
+      expect(bash(`${c} origin HEAD:refs/heads/${BRANCH}`).deny, key).toBe(false);
+    }
+    expect(bash(`git  -C  ${WORKTREE}/frontend   push origin ${BRANCH}`).deny).toBe(false); // blanks squashed
+  });
+  it('denies a key with `..`, with `/`, hidden, or that starts an option', () => {
+    for (const key of ['..', '../other', 'a/..', 'a..b', 'a/b', 'frontend/', '.git', '-x', 'a*', '$HOME', '']) {
+      const c = `git -C ${WORKTREE}/${key} push -u origin ${BRANCH}`;
+      expect(bash(c).deny, c).toBe(true);
+    }
+  });
+  it('denies another branch or shape from a repo folder', () => {
+    const c = `git -C ${WORKTREE}/frontend`;
+    for (const rest of ['push origin main', 'push origin HEAD:main', `push origin ${BRANCH}:main`, `push --force origin ${BRANCH}`, `push -f origin ${BRANCH}`, 'push', `push upstream ${BRANCH}`,
+      `push -u origin ${BRANCH} && git push origin main`, `--no-pager push -u origin ${BRANCH}`, `-C /home/u/other push -u origin ${BRANCH}`, `-c core.sshCommand=x push -u origin ${BRANCH}`]) {
+      expect(bash(`${c} ${rest}`).deny, rest).toBe(true);
+    }
+  });
+  it('denies -C outside the workspace, on a sibling of it, relative, and on the workspace root itself', () => {
+    for (const p of ['/home/u/other/frontend', `${WORKTREE}2/frontend`, `${WORKTREE}-x/frontend`, '/etc', 'frontend', './frontend', '.', WORKTREE, `${WORKTREE}/`]) {
+      const c = `git -C ${p} push -u origin ${BRANCH}`;
+      expect(bash(c).deny, c).toBe(true);
+    }
+  });
+  it('denies the -C form when the run has no branch or no usable worktree', () => {
+    expect(bash(`git -C ${WORKTREE}/frontend push -u origin ${BRANCH}`, null).deny).toBe(true);
+    expect(bash(`git -C /etc push -u origin ${BRANCH}`, BRANCH, '').deny).toBe(true);
+    expect(bash(`git -C /etc push -u origin ${BRANCH}`, BRANCH, '/').deny).toBe(true);
+    expect(bash(`git -C //etc push -u origin ${BRANCH}`, BRANCH, '/').deny).toBe(true);
+    expect(bash(`git -C ${WORKTREE}//frontend push -u origin ${BRANCH}`, BRANCH, `${WORKTREE}/`).deny).toBe(true);
+  });
+  it('leaves the other git commands in a repo folder to the allow list', () => {
+    for (const c of [`git -C ${WORKTREE}/frontend status`, `git -C ${WORKTREE}/frontend log --oneline -5`, 'git -C frontend diff --stat']) expect(bash(c).deny, c).toBe(false);
   });
 });
 
