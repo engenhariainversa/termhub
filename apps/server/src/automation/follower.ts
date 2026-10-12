@@ -28,6 +28,7 @@ import { MAX_RESTARTS } from './restart.js';
 import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
+import { inRunRepo, runRepoOf } from './run-pr.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
@@ -418,11 +419,17 @@ async function finishBlocked(repos: Repositories, run: AutomationRun, code: stri
 /** The PR fallback of D17: a PR the CI sync linked to the card, from the run's branch — open, or merged
  *  since the run began (a person, or the executor, merged it while the run was still on: final review I2).
  *  Not for an integrator or a fixer: their PR existed before the run started (the server opened the epic PR;
- *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run. */
+ *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run.
+ *  The PR is matched by repository and branch (spec 2026-10-07 multi-repo R14): another repository can have
+ *  a branch of the same name, and a PR from it linked to the card is not the run's. */
 async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number; merged: boolean } | null> {
   if (!run.task_id || !run.branch || run.role === 'integrator' || run.role === 'fixer') return null;
   const ofRun = (p: { state: string; merged_at: Date | null }) => p.state === 'open' || (p.state === 'merged' && p.merged_at !== null && p.merged_at.getTime() >= run.created_at.getTime());
-  const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.head_ref === run.branch && ofRun(p));
+  const fromBranch = (await repos.taskPullRequests.listByTasks([run.task_id])).filter((p) => p.head_ref === run.branch && ofRun(p));
+  // Setup is read only once a PR from the branch exists: a look with none costs what it did
+  if (fromBranch.length === 0) return null;
+  const repo = runRepoOf((await repos.projectSetup.get(run.project_id)).data);
+  const pr = fromBranch.find((p) => inRunRepo(repo, p.repo));
   return pr ? { url: pr.url, number: pr.number, merged: pr.state === 'merged' } : null;
 }
 

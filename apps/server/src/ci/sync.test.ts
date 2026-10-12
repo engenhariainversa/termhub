@@ -151,6 +151,22 @@ describe('syncProjectCi', () => {
     expect(events).toEqual([expect.objectContaining({ kind: 'deploy_ok', task_id: 'owner' })]);
   });
 
+  it('a merged PR of another repository whose head is named like a card\'s run branch is reported on no card (spec 2026-10-07 multi-repo R14)', async () => {
+    const { deps, listWatched, github } = setup({ automation: { enabled: true } });
+    const events: Array<{ kind: string; task_id: string | null }> = [];
+    Object.assign(deps.repos, {
+      tasks: { findById: vi.fn(async (id: string) => ({ id, ref: id, auto: true })) },
+      automationRuns: { branchesOfTask: vi.fn(async (id: string) => (id === 'owner' ? ['TER-8-own'] : [])) },
+      automationEvents: { insert: vi.fn(async (e: { kind: string; task_id: string | null }) => (events.push(e), { id: 'e', created_at: '', ...e })) },
+    });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: true });
+    const merged = { repo: 'acme/site', number: 5, state: 'merged', head_ref: 'TER-8-own', head_sha: 'old', merge_commit_sha: 'm5', base_ref: 'main', deploy_state: 'none', release_runs: [], changed_level: 'deploy' };
+    listWatched.mockResolvedValue([{ ...merged, task_id: 'cited' }, { ...merged, task_id: 'owner' }]);
+    vi.mocked(github.listRuns).mockResolvedValue([{ id: 3, name: 'Deploy', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'success', html_url: 'r3', created_at: '2026-09-27T12:00:00Z' }]);
+    await syncProjectCi(deps, 'p1');
+    expect(events).toEqual([]);
+  });
+
   it('TER-1049: with automation on, looks for blocked runs to adopt right after linking the PRs; off, never', async () => {
     const on = setup({ automation: { enabled: true } });
     const blockedSince = vi.fn(async () => []);

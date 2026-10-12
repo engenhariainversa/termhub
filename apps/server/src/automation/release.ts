@@ -12,6 +12,7 @@ import { postAutomationLine } from './chat-line.js';
 import { escalateDelivery } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { globMatches } from './policy.js';
+import { inRunRepo, isRunHead, runRepoOf } from './run-pr.js';
 
 /*
  * After a merge (agentic board D22, §10.5): follow the project's deploy workflow and, for a PR that changed
@@ -112,15 +113,19 @@ async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number
 /**
  * Whether the card's automatic runs worked on this branch: the card the PR is about. Any other card the PR
  * cites is only a reference (TER-1004: #394, a person's PR, cited TER-988 and its deploy landed there).
+ * The branch counts only in the repository the runs work on (spec 2026-10-07 multi-repo R14): another
+ * repository can have a branch of the same name.
  */
-export async function runBranchOf(repos: Repositories, taskId: string, headRef: string): Promise<boolean> {
-  return (await repos.automationRuns.branchesOfTask(taskId)).includes(headRef);
+export async function runBranchOf(repos: Repositories, setup: ProjectSetupData, taskId: string, pr: { repo: string; head_ref: string }): Promise<boolean> {
+  const repo = runRepoOf(setup);
+  if (!inRunRepo(repo, pr.repo)) return false;
+  return isRunHead(repo, await repos.automationRuns.branchesOfTask(taskId), pr);
 }
 
 /** Of a merged PR's rows (one per card it cites), the one of the automatic card that worked on its head; else the first. */
-export async function deliveryRow(repos: Repositories, rows: TaskPullRequest[]): Promise<TaskPullRequest> {
+export async function deliveryRow(repos: Repositories, setup: ProjectSetupData, rows: TaskPullRequest[]): Promise<TaskPullRequest> {
   for (const row of rows) {
-    if ((await repos.tasks.findById(row.task_id))?.auto && (await runBranchOf(repos, row.task_id, row.head_ref))) return row;
+    if ((await repos.tasks.findById(row.task_id))?.auto && (await runBranchOf(repos, setup, row.task_id, row))) return row;
   }
   return rows[0]!;
 }
@@ -155,7 +160,7 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
     patch.release_runs = releases.map(({ workflow, state, url, version }) => ({ workflow, state, url, version }));
   }
   // only what the automation delivers: the PR of an automatic card's run, in a project with automation on
-  const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto && (await runBranchOf(repos, w.task_id, w.head_ref));
+  const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto && (await runBranchOf(repos, c.setup, w.task_id, w));
   const about = { project_id: c.projectId, task_id: w.task_id };
   const ids = { pr: w.number, sha: w.merge_commit_sha };
   const deployDone = reporting && !!deploy && finished(deploy.state) && deploy.state !== w.deploy_state;
