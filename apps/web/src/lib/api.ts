@@ -5,6 +5,7 @@ import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 import type { LegalStatus } from './types';
+import type { WebSession } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -124,6 +125,13 @@ export const api = {
     sendCode: (email: string) => request<{ ok: true; ttl_minutes: number }>('POST', '/auth/code/send', { email }),
     verifyCode: (email: string, code: string) => request<{ user: User }>('POST', '/auth/code/verify', { email, code }),
     logout: () => request<{ ok: true }>('POST', '/auth/logout'),
+    /** The signed-in person's live web sessions, most recently used first (Settings → Segurança). */
+    sessions: () => request<{ sessions: WebSession[] }>('GET', '/auth/sessions'),
+    /** `current: true` = it was this browser's session, now signed out. */
+    revokeSession: (id: string) => request<{ ok: true; current: boolean }>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+    revokeOtherSessions: () => request<{ revoked: number }>('POST', '/auth/sessions/revoke-others'),
+    /** 403 WRONG_PASSWORD, 403 REAUTH_REQUIRED (first password, sign-in too old), 400 WEAK_PASSWORD, 429 LOCKED. */
+    changePassword: (current_password: string | null, new_password: string) => request<{ ok: true; revoked: number }>('POST', '/auth/me/password', { current_password, new_password }),
     /** Claims the address of the user's public city. 400 NICKNAME_INVALID for a bad shape or a
      *  reserved word, 409 NICKNAME_TAKEN when somebody else already holds it, 409 NICKNAME_LOCKED
      *  when the account already has one (a claimed address is never changed). */

@@ -355,6 +355,7 @@ See [.env.example](.env.example). Main ones:
 | --- | --- |
 | `AUTH_MODE` | `app`, `cloudflare`, `disabled` (dev) or the combination `app,cloudflare` |
 | `PUBLIC_URL` | public URL (secure cookies and OAuth redirect); when it is `https://`, every response also carries `Strict-Transport-Security` |
+| `SESSION_TTL_DAYS` / `SESSION_IDLE_MINUTES` | web session lifetime (default 30 days) and idle timeout: a session unused for that many minutes ends (default `0` = off) |
 | `TRUST_PROXY` | which peers may set `X-Forwarded-For`/`-Proto`/`-Host`: a comma list of IPs, CIDRs and the presets `loopback`, `linklocal`, `uniquelocal`, or `true`/`false`. Default `loopback,uniquelocal` (a proxy on the same host or on a Docker network). The client address it yields feeds the login lockout and the waitlist limit, so if your proxy reaches the app from a public address, list that address instead of setting `true` |
 | `DATABASE_URL` | Postgres (`postgresql://user:pass@host:5432/db`); add `?sslmode=require` for a database outside a private network. In compose it is built from `POSTGRES_PASSWORD`, whose dev fallback `termhub` is refused in production |
 | `SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`/`EMAIL_FROM` | login code and invite delivery; without `SMTP_HOST` no e-mail is sent and the server logs an error (never the e-mail itself) |

@@ -34,6 +34,7 @@ describe('SettingsSidebar', () => {
     expect(linksOf('Conta')).toEqual([
       ['Perfil', '/settings/profile'],
       ['Minha cidade', '/settings/city'],
+      ['Segurança', '/settings/account-security'],
       ['Integrações', '/settings/integrations'],
       ['Tokens de API', '/settings/api-tokens'],
       ['Aparelhos', '/settings/devices'],
@@ -59,6 +60,7 @@ describe('SettingsSidebar', () => {
     expect(linksOf('Conta')).toEqual([
       ['Perfil', '/settings/profile'],
       ['Minha cidade', '/settings/city'],
+      ['Segurança', '/settings/account-security'],
     ]);
     expect(screen.queryByRole('group', { name: 'Administração' })).toBeNull();
     expect(screen.queryByText('Administração')).toBeNull();
