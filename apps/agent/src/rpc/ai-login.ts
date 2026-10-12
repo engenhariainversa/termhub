@@ -14,7 +14,8 @@ import { ENTER_PAUSE_MS, processFailure } from './tmux.js';
  * `claude auth login` opens the machine's browser (`BROWSER=true` did not stop it on macOS), and a person sitting there
  * signs in and the CLI takes the callback itself, prints "Login successful." and exits 0 (TER-1054).
  * `start` and `submit` read that as a login, confirmed by the status command: `start` answers
- * `logged_in: true` with no URL, `submit` answers logged in.
+ * `logged_in: true` with no URL, `submit` answers logged in. When the status cannot answer at all, exit 0
+ * together with the success line is enough (since agent 0.28.1).
  *
  * Nothing here is ever logged: the URL carries an OAuth state, the code is a credential, and the pane
  * text may hold either. The only text that goes back to the server is `failureMessage`, which drops
@@ -112,6 +113,11 @@ export function parseClaudeStatus(stdout: string): boolean {
   return /"loggedIn"\s*:\s*true/.test(stdout);
 }
 
+/** Whether `claude auth status` said anything about the login: a CLI without the command prints an error instead. */
+export function claudeStatusAnswered(stdout: string): boolean {
+  return /"loggedIn"\s*:/.test(stdout);
+}
+
 /** `codex login status` exits 0 and says "Logged in using …" when logged in. Case matters: "Not logged in". */
 export function parseCodexStatus(code: number | null, output: string): boolean {
   return code === 0 && /\bLogged in\b/.test(output);
@@ -200,29 +206,40 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- handlers ----------
 
-async function checkStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean> {
+/** The status command's answer; null when it said nothing about the login (a Claude Code without `auth status`). */
+async function askStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean | null> {
   const r = await run(cli.bin, cli.status, { env: cliEnv(cli, dir, deps), timeoutMs: STATUS_TIMEOUT_MS });
   if (r.error === 'enoent') throw new RpcFailure('notfound', `${cli.bin} not found on this machine`);
   if (r.timedOut) throw new RpcFailure('timeout', `${cli.bin} did not answer in time`);
-  return cli.envVar === 'CLAUDE_CONFIG_DIR' ? parseClaudeStatus(r.stdout) : parseCodexStatus(r.code, `${r.stdout}\n${r.stderr}`);
+  if (cli.envVar !== 'CLAUDE_CONFIG_DIR') return parseCodexStatus(r.code, `${r.stdout}\n${r.stderr}`);
+  return claudeStatusAnswered(r.stdout) ? parseClaudeStatus(r.stdout) : null;
+}
+
+async function checkStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean> {
+  return (await askStatus(cli, dir, deps)) === true;
 }
 
 /**
  * Whether the account is logged in after its CLI exited. A CLI that reported success gets a few more
- * looks at the status (the credentials may land a moment after); a status that cannot answer reads as
- * not logged in. `notfound` still throws.
+ * looks at the status (the credentials may land a moment after). The status decides whenever it answers.
+ * When it never does (it times out, or this Claude Code has no status command), a CLI that both exited 0
+ * and printed its success line is taken at its word; anything less reads as not logged in. `notfound`
+ * still throws.
  */
-async function confirmAfterExit(cli: CliSpec, dir: string | null, deps: AiLoginDeps, reportedSuccess: boolean): Promise<boolean> {
-  const polls = reportedSuccess ? CONFIRM_POLLS : 1;
+async function confirmAfterExit(cli: CliSpec, dir: string | null, deps: AiLoginDeps, exitCode: number | null, text: string): Promise<boolean> {
+  const polls = cliReportedSuccess(exitCode, text) ? CONFIRM_POLLS : 1;
+  let denied = false;
   for (let i = 0; i < polls; i++) {
     if (i > 0) await sleep(CONFIRM_POLL_MS);
     try {
-      if (await checkStatus(cli, dir, deps)) return true;
+      const answer = await askStatus(cli, dir, deps);
+      if (answer) return true;
+      if (answer === false) denied = true;
     } catch (err) {
       if (!(err instanceof RpcFailure && err.code === 'timeout')) throw err;
     }
   }
-  return false;
+  return !denied && exitCode === 0 && CLI_SUCCESS_RE.test(text);
 }
 
 export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
@@ -267,7 +284,7 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
         // The CLI already exited: either it finished the login on its own (the machine's browser), or it
         // failed. A URL on the pane is no use any more, so the status decides, not the screen.
         await killSession(params.session);
-        if (await confirmAfterExit(cli, params.config_dir, deps, cliReportedSuccess(exitCode, text))) return { url: null, user_code: null, needs_code: false, logged_in: true };
+        if (await confirmAfterExit(cli, params.config_dir, deps, exitCode, text)) return { url: null, user_code: null, needs_code: false, logged_in: true };
         throw new RpcFailure('failed', failureMessage(text) ?? SESSION_GONE_MESSAGE);
       }
       if (cli.needsCode) {
@@ -318,7 +335,7 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
         await killSession(params.session);
         // A CLI that said "Login successful" (or exited 0) gets a few more looks at the status before
         // its own word is taken as a failure.
-        if (state === 'dead' && cliReportedSuccess(exitCode, text ?? '') && (await confirmAfterExit(cli, params.config_dir, deps, true))) {
+        if (state === 'dead' && cliReportedSuccess(exitCode, text ?? '') && (await confirmAfterExit(cli, params.config_dir, deps, exitCode, text ?? ''))) {
           return { logged_in: true, message: null };
         }
         return { logged_in: false, message: (text && failureMessage(text, params.code)) || SESSION_GONE_MESSAGE };

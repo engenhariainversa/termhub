@@ -109,6 +109,24 @@ echo "Login successful."
 exit 0
 `;
 
+/** A Claude Code without a status command: the login works, the status cannot say so. */
+const NO_STATUS_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+echo "Opening browser to sign in…"
+printf 'Paste code here if prompted > '
+sleep 0.3
+echo "Login successful."
+exit 0
+`;
+
+/** Exits 0 without its success line, and has no status command either. */
+const SILENT_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+echo "Opening browser to sign in…"
+sleep 0.3
+exit 0
+`;
+
 describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
   let root: string;
   let bin: string;
@@ -251,7 +269,29 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
     expect(hasSession(session)).toBe(false);
   });
 
-  it('claude: "Login successful" that the status never confirms is still a failure', async () => {
+  it('claude: "Login successful" with exit 0 is a login when the status cannot answer (TER-1054)', async () => {
+    const noStatus = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-no-status', NO_STATUS_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-no-status';
+    expect(await noStatus.start({ provider: 'claude', config_dir: accountDir('claude-no-status'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+    expect(hasSession(session)).toBe(false);
+  }, 15_000);
+
+  it('claude: exit 0 without the success line is not a login when the status cannot answer', async () => {
+    const silent = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-silent', SILENT_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    await expect(silent.start({ provider: 'claude', config_dir: accountDir('claude-silent'), session: 'termhub-login-silent' })).rejects.toMatchObject({ code: 'failed' });
+  }, 15_000);
+
+  it('claude: "Login successful" that the status denies is still a failure', async () => {
     const lying = createAiLogin({
       env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
       bins: { claude: script('claude-lying', LYING_CLAUDE), chatgpt: join(bin, 'codex') },
