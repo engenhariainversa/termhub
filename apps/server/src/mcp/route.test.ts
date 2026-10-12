@@ -35,7 +35,7 @@ import { z } from 'zod';
 const SECRET = 'thb_pat_' + 'A'.repeat(43);
 const token = (over: Partial<ApiToken> = {}): ApiToken => ({ id: 'tok1', user_id: 'u1', name: 'jarvis', scopes: ['read'], expires_at: null, last_used_at: null, revoked_at: null, created_at: '', ...over });
 
-function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?: TokenRateLimiter; attachments?: AttachmentStore; tabs?: { id: string; project_id: string }[] } = {}) {
+function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?: TokenRateLimiter; attachments?: AttachmentStore; tabs?: { id: string; project_id: string }[]; legalPending?: { document: 'terms' | 'privacy' }[] } = {}) {
   const app = Fastify();
   applyErrorHandler(app);
   const active = 'token' in opts ? opts.token : token();
@@ -45,11 +45,12 @@ function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?
     recordEvent: vi.fn(async () => {}),
   };
   const tabs = { findById: vi.fn(async (id: string) => opts.tabs?.find((t) => t.id === id)) };
-  const repos = { apiTokens, tabs, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) } } as unknown as Repositories;
+  const legal = { statusFor: vi.fn(async () => ({ pending: opts.legalPending ?? [], upcoming: [] })) };
+  const repos = { apiTokens, tabs, legal, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) } } as unknown as Repositories;
   const grants = opts.grants ?? ['machines:read', 'projects:read', 'terminals:read'];
   vi.mocked(canAccess).mockImplementation(async (_r, _u, resource, action) => grants.includes(`${resource}:${action}`));
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test', limiter: opts.limiter, attachments: opts.attachments }));
-  return { app, apiTokens };
+  return { app, apiTokens, legal };
 }
 
 const rpc = (app: ReturnType<typeof Fastify>, body: unknown, auth: string | null = `Bearer ${SECRET}`) =>
@@ -105,7 +106,7 @@ describe('POST /mcp tools', () => {
 
     const list = await rpc(app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     const names = list.json().result.tools.map((t: { name: string }) => t.name).sort();
-    expect(names).toEqual(['find', 'get_project_setup', 'list_automation_events', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
+    expect(names).toEqual(['find', 'get_machine_hooks', 'get_project_setup', 'list_automation_events', 'list_machines', 'list_project_groups', 'list_projects', 'list_tab_questions', 'list_tabs', 'read_last_answer', 'read_screen', 'recap_pending_cards', 'wait_for_state']);
     await flush();
     expect(apiTokens.touchLastUsed).toHaveBeenCalledWith('tok1');
   });
@@ -214,6 +215,60 @@ describe('POST /mcp tools', () => {
     const r = await rpc(app, call('list_machines'));
     expect(r.json().result.isError).toBe(true);
     expect(r.json().result.content[0].text).toMatch(/Limite de 1 chamadas por minuto/);
+  });
+});
+
+describe('POST /mcp and the Terms (TER-742)', () => {
+  it('runs tools as before when nothing is pending (no version registered, or all accepted)', async () => {
+    const { app, legal } = build();
+    const res = (await rpc(app, call('list_machines'))).json().result;
+    expect(res.isError).toBeFalsy();
+    expect(legal.statusFor).toHaveBeenCalledWith('u1');
+  });
+
+  it('refuses every tool call while a version in force is pending, says what and where, and runs nothing', async () => {
+    const { app, apiTokens } = build({ legalPending: [{ document: 'terms' }] });
+    const res = (await rpc(app, call('list_machines'))).json().result;
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/^Falta aceitar os Termos de Uso em vigor\./);
+    expect(res.content[0].text).toContain('entre no termhub (http');
+    expect(listMachines).not.toHaveBeenCalled();
+    await flush();
+    expect(apiTokens.recordEvent.mock.calls[0][0]).toMatchObject({ tool: 'list_machines', ok: false, error_code: 'LEGAL_ACCEPTANCE_REQUIRED' });
+  });
+
+  it('names both documents when both are pending, and answers in the caller\'s language', async () => {
+    const { app } = build({ legalPending: [{ document: 'terms' }, { document: 'privacy' }] });
+    const pt = (await rpc(app, call('list_machines'))).json().result;
+    expect(pt.content[0].text).toMatch(/^Falta aceitar os Termos de Uso e a Política de Privacidade em vigor\./);
+    const en = await app.inject({
+      method: 'POST',
+      url: '/mcp',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', authorization: `Bearer ${SECRET}`, 'accept-language': 'en' },
+      payload: call('list_machines'),
+    });
+    expect(en.json().result.content[0].text).toMatch(/^You still need to accept the Terms of Use and the Privacy Policy in force\./);
+  });
+
+  it('refuses a tool outside the allowed set the same way, before naming the scope', async () => {
+    const { app } = build({ legalPending: [{ document: 'privacy' }] });
+    const res = (await rpc(app, call('send_input', { tab_id: 't1', text: 'x' }))).json().result;
+    expect(res.content[0].text).toMatch(/^Falta aceitar a Política de Privacidade em vigor\./);
+  });
+
+  it('still answers initialize and tools/list, so the client connects and the message can reach the person', async () => {
+    const { app } = build({ legalPending: [{ document: 'terms' }] });
+    const init = await rpc(app, { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '1' } } });
+    expect(init.statusCode).toBe(200);
+    const list = (await rpc(app, { jsonrpc: '2.0', id: 1, method: 'tools/list' })).json().result;
+    expect(list.tools.map((t: { name: string }) => t.name)).toContain('list_machines');
+  });
+
+  it('applies to an agent tab\'s token too', async () => {
+    const { app } = build({ token: token({ tab_id: 'tab1', scopes: ['read'] }), tabs: [{ id: 'tab1', project_id: 'p1' }], legalPending: [{ document: 'terms' }] });
+    const res = (await rpc(app, call('list_machines'))).json().result;
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toMatch(/^Falta aceitar os Termos de Uso/);
   });
 });
 
@@ -564,8 +619,8 @@ describe('read_attachment', () => {
 
   it('is offered to a read token whose user can read the chat, and hidden otherwise', async () => {
     const offered = await rpc(build({ grants: chatGrants }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
-    // search_memory shares the same chat:read grant as read_attachment.
-    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory']);
+    // search_memory and get_chat_context (TER-1038) share the same chat:read grant as read_attachment.
+    expect(offered.json().result.tools.map((t: { name: string }) => t.name)).toEqual(['read_attachment', 'search_memory', 'get_chat_context']);
     const hidden = await rpc(build({ grants: ['machines:read'] }).app, { jsonrpc: '2.0', id: 2, method: 'tools/list' });
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('read_attachment');
     expect(hidden.json().result.tools.map((t: { name: string }) => t.name)).not.toContain('search_memory');

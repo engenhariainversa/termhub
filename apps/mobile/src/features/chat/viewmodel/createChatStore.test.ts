@@ -909,7 +909,13 @@ it('events of another conversation never touch the open one', async () => {
   expect(chat.getState().live).toBe(liveBefore);
   expect(chat.getState().live).toEqual({ ...emptyFold(), closed: liveBefore.closed });
   expect(slot(chat, 'p-termhub')).toBe(before);
-  expect(read).not.toHaveBeenCalled();
+  // TER-469: a conversation no slot knows may be the open slot's replacement (a reset elsewhere), so
+  // its first event costs one read of the open slot, and only one.
+  expect(read).toHaveBeenCalledTimes(1);
+  await flush();
+  expect(slot(chat, 'p-termhub').conversation?.id).toBe('c-termhub');
+  handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-opapingou', message_id: 'm1', delta: 'y' });
+  expect(read).toHaveBeenCalledTimes(1);
 });
 
 it('reset empties the thread on a new conversation', async () => {
@@ -1611,13 +1617,16 @@ describe('run state (spec 2026-09-29 §5)', () => {
 
     handlers().onEvent({ type: 'run_finished', user_id: 'u1', conversation_id: 'c-opapingou', message_id: null, ok: false, error_code: 'SETUP_FAILED' });
     await flush();
-    expect(read).not.toHaveBeenCalled();
+    await flush();
+    // Only the one read an unknown conversation costs (TER-469), and no line.
+    expect(read).toHaveBeenCalledTimes(1);
     expect(chat.getState().error).toBeNull();
 
     handlers().onEvent({ type: 'run_finished', user_id: 'u1', conversation_id: 'c-termhub', message_id: null, ok: false, error_code: 'SETUP_FAILED' });
     await flush();
     await flush();
-    expect(read).toHaveBeenCalledWith(expect.anything(), 'p-termhub');
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenLastCalledWith(expect.anything(), 'p-termhub');
     expect(chat.getState().error).toBe('O concierge não conseguiu começar a resposta. Tente de novo.');
   });
 
@@ -1675,6 +1684,59 @@ describe('run state (spec 2026-09-29 §5)', () => {
     expect(slot(chat, 'p-termhub').messages.find((m) => m.id === 'a1')?.text).toBe('pronto');
     expect(chat.getState().live.started.has('a1')).toBe(false);
     expect(chat.getState().live.deltas.size).toBe(0);
+  });
+
+  describe('a conversation replaced on another device (TER-469)', () => {
+    const fresh = (id: string, text = ''): TChatMessage => ({ ...answer(id, text), conversation_id: 'c-new' });
+
+    it('the first event of the new conversation re-reads the slot, and the held events are replayed', async () => {
+      const { chat, api, handlers } = await setup();
+      await openAndConnect(chat, 'p-termhub');
+      const reads = serve(api, (res) => ({ ...res, conversation: { ...res.conversation, id: 'c-new' }, messages: [fresh('n1')], open_answer_ids: ['n1'] }));
+
+      handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-new', message_id: 'n1', delta: 'pro' });
+      handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-new', message_id: 'n1', delta: 'nto' });
+      await flush();
+      await flush();
+      expect(reads.mock.calls.filter(([, p]) => p === 'p-termhub')).toHaveLength(1);
+      expect(slot(chat, 'p-termhub').conversation?.id).toBe('c-new');
+      expect(slot(chat, 'p-termhub').messages.map((m) => m.id)).toEqual(['n1']);
+      expect(chat.getState().live.deltas.get('n1')).toBe('pronto');
+
+      // From now on the slot's own: applied live, no other read.
+      handlers().onEvent({ type: 'message', user_id: 'u1', conversation_id: 'c-new', message: fresh('n1', 'pronto!') });
+      await flush();
+      expect(slot(chat, 'p-termhub').messages[0]?.text).toBe('pronto!');
+      expect(reads.mock.calls.filter(([, p]) => p === 'p-termhub')).toHaveLength(1);
+    });
+
+    it("another conversation's events cost one read, then are dropped without another", async () => {
+      const { chat, api, handlers } = await setup();
+      await openAndConnect(chat, 'p-termhub');
+      const reads = serve(api, (res) => res);
+      const before = slot(chat, 'p-termhub').messages;
+
+      handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-elsewhere', message_id: 'x1', delta: 'a' });
+      await flush();
+      await flush();
+      handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-elsewhere', message_id: 'x1', delta: 'b' });
+      await flush();
+      expect(reads).toHaveBeenCalledTimes(1);
+      expect(slot(chat, 'p-termhub').conversation?.id).toBe('c-termhub');
+      expect(slot(chat, 'p-termhub').messages.map((m) => m.id)).toEqual(before.map((m) => m.id));
+      expect(chat.getState().live.deltas.has('x1')).toBe(false);
+    });
+
+    it("a conversation another slot holds is that slot's: no read", async () => {
+      const { chat, api, handlers } = await setup();
+      await openAndConnect(chat, 'p-opapingou');
+      await chat.getState().open('p-termhub');
+      await flush();
+      const reads = serve(api, (res) => res);
+      handlers().onEvent({ type: 'delta', user_id: 'u1', conversation_id: 'c-opapingou', message_id: 'o1', delta: 'x' });
+      await flush();
+      expect(reads).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -1742,4 +1804,14 @@ it('announces a message the server accepted, never a failed one (permission prom
   await expect(chat.getState().send('de novo')).resolves.toBe(true);
   expect(sent).toHaveBeenCalledTimes(1);
   off();
+});
+
+it("a context event moves the header's meter, keeping the last compaction when an older server leaves it out (TER-1038)", async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  expect(slot(chat, 'p-termhub').contextLimit).toBeNull();
+  handlers().onEvent({ type: 'context', user_id: 'u1', conversation_id: 'c-termhub', tokens: 1_951, window: 200_000, compacted_at: '2026-10-07T12:00:00.000Z' });
+  expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 1_951, context_window: 200_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
+  handlers().onEvent({ type: 'context', user_id: 'u1', conversation_id: 'c-termhub', tokens: 25_000, window: 200_000 });
+  expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 25_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
 });

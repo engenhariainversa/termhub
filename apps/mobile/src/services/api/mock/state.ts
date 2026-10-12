@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -275,6 +275,8 @@ export interface MockState {
   chatAutodecideEnabled: boolean;
   /** "Responder perguntas do Codex pelo chat"; defaults to `false`, like the server's column default. */
   chatCodexRepliesEnabled: boolean;
+  /** The chat's context meter limit (TER-1038); null = the model's window. */
+  chatContextLimit: number | null;
   /** "Anotações do concierge" (spec D12): the mock's one user's `record_decision` notes, any order
    * (`GET notes` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   notes: MockNote[];
@@ -284,8 +286,19 @@ export interface MockState {
   /** The mock user's pending account deletion (TER-720), milliseconds; `null` when none. While set,
    * every authenticated route but the account-deletion ones answers `403 ACCOUNT_PENDING_DELETION`. */
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
+  /** The Terms / Privacy Policy versions in force the mock user has not accepted yet (TER-742).
+   * Empty by default; a test seeds it with `controls.seedLegalPending`. */
+  legalPending: TLegalVersion[];
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
+  /** Feature flags `GET me` sends for the mock user (TER-1040): all off, like a fresh server. */
+  features: { subscriptions: boolean };
+  /** "Refazer login" (TER-1047): each AI account's login state (`ok` until a test sets otherwise), and
+   * the flows started, by login id. */
+  aiLoginStates: Map<string, string>;
+  aiLoginFlows: Map<string, { accountId: string; needsCode: boolean }>;
+  /** Accounts whose next login the machine's own browser finishes before any link shows (TER-1054). */
+  aiLoginFinishOnMachine: Set<string>;
 }
 
 export function createMockState(): MockState {
@@ -324,10 +337,16 @@ export function createMockState(): MockState {
     chatMemoryEnabled: true,
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
+    chatContextLimit: null,
     notes: [],
     lessons: [],
     accountDeletion: null,
+    legalPending: [],
     pushTabFinished: false,
+    features: { subscriptions: false },
+    aiLoginStates: new Map(),
+    aiLoginFlows: new Map(),
+    aiLoginFinishOnMachine: new Set(),
   };
 }
 

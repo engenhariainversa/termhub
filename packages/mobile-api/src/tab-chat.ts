@@ -39,18 +39,23 @@ export const tabSummary = z.object({
   project: z.object({ id: z.string(), key: z.string(), name: z.string() }),
   machine: z.object({ id: z.string(), name: z.string() }),
   /**
-   * `waiting_background` travels as `working` with `background: true`, and `finished` as `idle` with
-   * `finished: true`, as in `agentOnCard` (progress.ts).
+   * `waiting_background` travels as `working` with `background: true`, `finished` as `idle` with
+   * `finished: true`, and the TER-1046 states with their own flags, as in `agentOnCard` (progress.ts).
    */
   state: progressTabState.nullable(),
   background: z.boolean().default(false),
   finished: z.boolean().default(false),
+  blocked: z.boolean().default(false),
+  auth_required: z.boolean().default(false),
+  trust_prompt: z.boolean().default(false),
   state_at: z.string().nullable(),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),
   /** One of `tabChatAvailability`, read as a plain string (see there). */
   availability: z.string(),
+  /** the card ref ("TER-123") of the automatic run working in this tab; null = none (TER-1044, absent from an older server) */
+  auto_ref: z.string().nullable().default(null),
 });
 export type TTabSummary = z.infer<typeof tabSummary>;
 

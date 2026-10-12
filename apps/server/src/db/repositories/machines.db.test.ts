@@ -82,4 +82,77 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MachinesRepository.findBy
       await db.user.deleteMany({ where: { id: ownerId } });
     }
   });
+
+  it('ai_usage_query is on by default (TER-735), turned off on update, and kept on a later update that does not mention it', async () => {
+    const ownerId = newId();
+    await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'owner' } });
+    try {
+      const created = await repo.create({ name: 'mac', type: 'agent', owner_id: ownerId });
+      expect(created.ai_usage_query).toBe(true);
+      const off = await repo.update(created.id, { ai_usage_query: false });
+      expect(off?.ai_usage_query).toBe(false);
+      expect((await repo.findById(created.id))?.ai_usage_query).toBe(false);
+      const renamed = await repo.update(created.id, { name: 'x' });
+      expect(renamed?.ai_usage_query).toBe(false);
+      const on = await repo.update(created.id, { ai_usage_query: true });
+      expect(on?.ai_usage_query).toBe(true);
+    } finally {
+      await db.machine.deleteMany({ where: { ownerId } });
+      await db.user.deleteMany({ where: { id: ownerId } });
+    }
+  });
+});
+
+describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MachinesRepository agent pairing (Postgres, TER-1017)', () => {
+  let db: PrismaClient;
+  let repo: MachinesRepository;
+
+  beforeAll(() => {
+    db = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL! }) });
+    repo = new MachinesRepository(db);
+  });
+
+  afterAll(async () => {
+    await db?.$disconnect();
+  });
+
+  it('a pairing token opens the machine once, before it expires, and revokes the legacy bearer', async () => {
+    const id = newId();
+    const pairing = `pair-${id}`;
+    await db.machine.create({ data: { id, name: 'mac', type: 'agent', agentTokenHash: `legacy-${id}` } });
+    try {
+      expect((await repo.findById(id))?.agent_credential).toBe('bearer');
+      await repo.startAgentPairing(id, pairing, new Date(Date.now() + 60_000));
+      // "pair again" revokes the bearer at once
+      expect(await repo.findByAgentTokenHash(`legacy-${id}`)).toBeUndefined();
+      expect((await repo.findById(id))?.agent_credential).toBeNull();
+      expect((await repo.findByPairingHash(pairing))?.id).toBe(id);
+
+      expect(await repo.completeAgentPairing(id, pairing, 'KEY')).toBe(true);
+      // burnt: the same token neither finds nor pairs the machine again
+      expect(await repo.completeAgentPairing(id, pairing, 'OTHER')).toBe(false);
+      expect(await repo.findByPairingHash(pairing)).toBeUndefined();
+      expect(await repo.findDeviceKey(id)).toMatchObject({ publicKey: 'KEY', machine: { id, agent_credential: 'key' } });
+
+      // pairing again revokes the key
+      await repo.startAgentPairing(id, `${pairing}-2`, new Date(Date.now() + 60_000));
+      expect(await repo.findDeviceKey(id)).toBeUndefined();
+    } finally {
+      await db.machine.deleteMany({ where: { id } });
+    }
+  });
+
+  it('an expired pairing token neither finds nor pairs the machine', async () => {
+    const id = newId();
+    const pairing = `pair-${id}`;
+    await db.machine.create({ data: { id, name: 'mac', type: 'agent' } });
+    try {
+      await repo.startAgentPairing(id, pairing, new Date(Date.now() - 1_000));
+      expect(await repo.findByPairingHash(pairing)).toBeUndefined();
+      expect(await repo.completeAgentPairing(id, pairing, 'KEY')).toBe(false);
+      expect(await repo.findDeviceKey(id)).toBeUndefined();
+    } finally {
+      await db.machine.deleteMany({ where: { id } });
+    }
+  });
 });

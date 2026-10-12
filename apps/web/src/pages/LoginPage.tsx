@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { tk, Trans, useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
 import { ApiError } from '../lib/api';
+import { LegalLinks } from '../components/LegalLinks';
 import { deletionDate, takeDeletionNotice } from '../lib/account-deletion';
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -188,6 +189,7 @@ export function LoginPage() {
             </button>
           </form>
         )}
+        <LegalLinks className="mt-6 justify-center border-t border-line pt-4" />
       </div>
     </div>
   );

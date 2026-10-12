@@ -93,6 +93,7 @@ function build(cwd: string) {
         if (tab) Object.assign(tab, fields);
       }),
     },
+    legal: { statusFor: vi.fn(async () => ({ pending: [], upcoming: [] })) },
   } as unknown as Repositories;
 
   const app = Fastify();

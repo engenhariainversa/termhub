@@ -84,6 +84,8 @@ export interface ChatMemoryState {
   setAutodecide(next: boolean): Promise<void>;
   /** "Responder perguntas do Codex pelo chat": the same optimistic flip and rollback as `setAutodecide`, its own in-flight guard. */
   setCodexReplies(next: boolean): Promise<void>;
+  /** The chat's context meter limit in tokens (TER-1038); null = the model's window. True once saved. */
+  setContextLimit(limit: number | null): Promise<boolean>;
   /** "Esquecer": the same hard delete as a card's "Esquecer esta decisão". */
   forget(id: string): Promise<void>;
   /** "Anotações do concierge": the first page — call once when the screen mounts, alongside `load()`. */
@@ -310,6 +312,19 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a configuração') });
         } finally {
           settingCodexReplies = false;
+        }
+      },
+
+      async setContextLimit(limit) {
+        if (!get().memory) return false;
+        set({ error: null });
+        try {
+          const updated = await api.setChatMemory(session().auth(), { context_limit: limit });
+          set({ memory: updated });
+          return true;
+        } catch (e) {
+          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível salvar o limite de contexto') });
+          return false;
         }
       },
 

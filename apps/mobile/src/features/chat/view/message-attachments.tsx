@@ -1,9 +1,12 @@
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { memo, useEffect, useReducer, useState } from 'react';
-import { Image, Modal, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, Pressable, Text, View } from 'react-native';
 import type { TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { Icon } from '@/ui';
-import { attachmentStatusText, formatBytes, thumbSize } from '../viewmodel/attachments';
+import { ApiError } from '@/services/api/errors';
+import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../viewmodel/attachments';
+import { cachedAudio } from '../viewmodel/audio-cache';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ATTACHMENT_ICON, KIND_ICON } from './attachment-chip';
 
@@ -63,14 +66,133 @@ function AuthImage({ attachment, className, resizeMode, size }: { attachment: TC
   return <Image source={source} accessibilityLabel={attachment.name} resizeMode={resizeMode} className={className} style={style} onError={() => dispatch('error')} />;
 }
 
+/** Whole seconds as `m:ss`. */
+const clock = (total: number) => {
+  const s = Math.max(0, Math.floor(total));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+};
+
+/** The clip's length as the server measured it (`meta.duration_s`), or `null` before it knows. */
+function metaDuration(meta: Record<string, unknown> | null): number | null {
+  const d = meta?.duration_s;
+  return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : null;
+}
+
+const PLAY_ICON = { ios: 'play.fill', android: 'play_arrow' } as const;
+const PAUSE_ICON = { ios: 'pause.fill', android: 'pause' } as const;
+
+/**
+ * A voice note, or any sent audio (TER-1036): play/pause, where it is and how long it lasts, and the
+ * transcription the server made of it, folded away until asked for. The bubble's attachment is the one
+ * the message was sent with ("transcrevendo…"); what the socket heard since (`attachmentStatuses`) is
+ * newer, so the transcription shows up the moment it is ready. The clip is only downloaded on the first
+ * play, into the cache (`cachedAudio`): a thread full of notes fetches nothing on open. A transcription
+ * whisper could not do offers "Tentar de novo" (TER-1035), which the parent runs.
+ */
+function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attachment: TChatAttachment; retrying: boolean; retryError: string | null; onRetry: (id: string) => void }) {
+  const { t } = useTranslation();
+  const heard = useChatStore((s) => s.attachmentStatuses[attachment.id]);
+  const sign = useChatStore((s) => s.attachmentSource);
+  const a = heard ?? attachment;
+  const player = useAudioPlayer(null);
+  const playback = useAudioPlayerStatus(player);
+  const [loaded, setLoaded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const duration = metaDuration(a.meta) ?? (playback.duration > 0 ? playback.duration : null);
+  const status = attachmentStatusText(a);
+  const transcript = typeof a.transcript === 'string' && a.transcript.trim() ? a.transcript.trim() : null;
+
+  const toggle = async () => {
+    if (playback.playing) {
+      player.pause();
+      return;
+    }
+    if (!loaded) {
+      setLoading(true);
+      setFailed(false);
+      try {
+        player.replace({ uri: await cachedAudio(a, sign) });
+        setLoaded(true);
+      } catch {
+        setFailed(true);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+    // Heard with the phone on silent, as a voice note is; and from the start again once it ended.
+    await setAudioModeAsync({ playsInSilentMode: true }).catch(() => undefined);
+    if (playback.didJustFinish || (playback.duration > 0 && playback.currentTime >= playback.duration)) await player.seekTo(0).catch(() => undefined);
+    player.play();
+  };
+
+  return (
+    <View className="min-w-52 gap-1 rounded-lg bg-black/10 px-2 py-1.5">
+      <View className="flex-row items-center gap-2">
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={playback.playing ? t('Pausar áudio') : t('Reproduzir áudio')}
+          onPress={() => void toggle()}
+          disabled={loading}
+          hitSlop={6}
+          className="h-8 w-8 items-center justify-center rounded-full bg-white"
+        >
+          {loading ? <ActivityIndicator size="small" /> : <Icon name={playback.playing ? PAUSE_ICON : PLAY_ICON} size={14} tone="accent" />}
+        </Pressable>
+        <Text className="text-xs text-white/80">
+          {playback.playing || playback.currentTime > 0 ? `${clock(playback.currentTime)} / ` : ''}
+          {duration !== null ? clock(duration) : '–:––'}
+        </Text>
+      </View>
+      {failed ? <Text className="text-xs text-white/80">{t('Não foi possível carregar o áudio')}</Text> : null}
+      {transcript ? (
+        <>
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} hitSlop={4}>
+            <Text className="text-xs text-white/70 underline">{open ? t('Ocultar transcrição') : t('Ver transcrição')}</Text>
+          </Pressable>
+          {open ? <Text className="text-sm text-white">{transcript}</Text> : null}
+        </>
+      ) : status ? (
+        <Text className={`text-xs ${a.status === 'failed' ? 'text-app-danger' : 'text-white/70'}`}>{status}</Text>
+      ) : null}
+      {canRetryAttachment(a) ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying} onPress={() => onRetry(a.id)} className="self-start rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
+          <Text className={`text-xs text-white ${retrying ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
+        </Pressable>
+      ) : null}
+      {retryError ? <Text className="text-xs text-app-danger">{retryError}</Text> : null}
+    </View>
+  );
+}
+
 /**
  * What the person sent with a message (spec 2026-09-26 §5.6): an image as a thumbnail that opens full
- * screen; every other kind as its name, size and status — opening a file on the phone is out of scope.
+ * screen; a sound as a player with its transcription (TER-1036); every other kind as its name, size and status — opening a file on the phone is out of scope.
  * The size, the `·` and the status are separate `Text`s, so each reads as exactly its own text.
  */
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: TChatAttachment[] }) {
   const { t } = useTranslation();
   const [viewing, setViewing] = useState<TChatAttachment | null>(null);
+  const retryAttachment = useChatStore((s) => s.retryAttachment);
+  /** The ids whose retry is on its way, and the one the server refused, with why (TER-1035). */
+  const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set());
+  const [retryError, setRetryError] = useState<{ id: string; message: string } | null>(null);
+  const retry = (id: string) => {
+    setRetrying((s) => new Set(s).add(id));
+    setRetryError(null);
+    // The bubble moves to "transcrevendo…" with the `attachment_status` the server publishes.
+    retryAttachment(id)
+      .catch((e: unknown) => setRetryError({ id, message: e instanceof ApiError ? e.message : t('Não foi possível tentar de novo') }))
+      .finally(() =>
+        setRetrying((s) => {
+          const next = new Set(s);
+          next.delete(id);
+          return next;
+        }),
+      );
+  };
   return (
     <View className="mt-2 gap-2">
       {attachments.map((a) => {
@@ -80,6 +202,9 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
               <AuthImage attachment={a} className="h-40 w-40 rounded-lg" resizeMode="cover" size={thumbSize(a.meta, THUMB_BOX, THUMB_MIN)} />
             </Pressable>
           );
+        }
+        if (a.kind === 'audio') {
+          return <AudioAttachment key={a.id} attachment={a} retrying={retrying.has(a.id)} retryError={retryError?.id === a.id ? retryError.message : null} onRetry={retry} />;
         }
         const status = attachmentStatusText(a);
         const tone = a.status === 'failed' ? 'text-app-danger' : 'text-white/70';
@@ -99,7 +224,13 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
                   </>
                 ) : null}
               </View>
+              {retryError?.id === a.id ? <Text className="text-xs text-app-danger">{retryError.message}</Text> : null}
             </View>
+            {canRetryAttachment(a) ? (
+              <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying.has(a.id)} onPress={() => retry(a.id)} className="rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
+                <Text className={`text-xs text-white ${retrying.has(a.id) ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         );
       })}

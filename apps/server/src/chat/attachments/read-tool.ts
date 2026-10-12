@@ -25,8 +25,19 @@ const defuseMarkers = (page: string): string => page.replace(MARKER_OPENING, '�
 const isHighSurrogate = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
 const FAILURE_REASON: Record<string, string> = {
   ATTACHMENT_INVALID: 'o arquivo não pôde ser lido',
-  TRANSCRIPTION_UNAVAILABLE: 'a transcrição de áudio não está configurada neste servidor, então não há transcrição',
+  TRANSCRIPTION_UNAVAILABLE: 'o serviço de transcrição não respondeu, então não há transcrição',
   TRANSCRIPTION_FAILED: 'a transcrição do áudio falhou',
+};
+/** TRANSCRIPTION_UNAVAILABLE by `meta.reason` (TER-1035): the model can tell the person what to do. */
+const TRANSCRIPTION_REASON: Record<string, string> = {
+  not_configured: 'a transcrição de áudio não está configurada neste servidor, então não há transcrição',
+  refused: 'o serviço de transcrição recusou o acesso do servidor (segredo compartilhado), então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo depois que o servidor for corrigido',
+  unreachable: 'o serviço de transcrição está fora do ar, então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo',
+  error: 'o serviço de transcrição respondeu com erro, então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo',
+};
+const failureReason = (row: AttachmentRow): string => {
+  const reason = row.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof row.meta?.reason === 'string' ? TRANSCRIPTION_REASON[row.meta.reason] : undefined;
+  return reason ?? FAILURE_REASON[row.error_code ?? ''] ?? 'erro desconhecido';
 };
 
 const text = (t: string): ToolContentResult => ({ content: [{ type: 'text', text: t }] });
@@ -55,7 +66,7 @@ export async function readAttachment(ctx: ControlContext, args: { id: string; of
 
   if (row.kind === 'image') return image(ctx, row, name);
   if (row.status === 'pending') return text(`${name} ainda está sendo processado; tente de novo em alguns segundos.`);
-  if (row.status === 'failed') return text(`${name} não pôde ser processado: ${FAILURE_REASON[row.error_code ?? ''] ?? 'erro desconhecido'}.`);
+  if (row.status === 'failed') return text(`${name} não pôde ser processado: ${failureReason(row)}.`);
 
   const body = row.extracted_text ?? '';
   const start = Math.min(Math.max(0, args.offset ?? 0), body.length);

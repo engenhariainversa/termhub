@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../i18n';
@@ -52,5 +52,15 @@ describe('MachinesPage in English', () => {
     expect(screen.getByRole('button', { name: 'no monitor' })).toBeInTheDocument();
     expect(screen.getByText('2 local machines from other computers')).toBeInTheDocument();
     expect(screen.getByTitle('online — click to check')).toBeInTheDocument();
+  });
+
+  it('tells how to remove an agent by hand when it cannot uninstall itself', () => {
+    render(
+      <MemoryRouter>
+        <MachinesPage />
+      </MemoryRouter>,
+    );
+    fireEvent.click(within(screen.getByText('mac').closest('li')!).getByRole('button', { name: '✕' }));
+    expect(screen.getByText('The agent stays installed on the machine. To remove it, run there:')).toBeInTheDocument();
   });
 });

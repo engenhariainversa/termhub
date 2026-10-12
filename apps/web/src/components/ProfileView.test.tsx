@@ -13,6 +13,7 @@ const { authState, analytics, openCookieBanner } = vi.hoisted(() => ({
       logout: vi.fn(async () => {}),
       viewAs: null,
       setViewAs: vi.fn(async () => {}),
+      config: null as { terms_url?: string | null; privacy_url?: string | null } | null,
     },
   },
   analytics: { enabled: false },
@@ -20,7 +21,10 @@ const { authState, analytics, openCookieBanner } = vi.hoisted(() => ({
 }));
 
 vi.mock('../lib/auth', () => ({ useAuth: () => authState.current }));
-vi.mock('../lib/api', () => ({ api: { users: { list: () => new Promise(() => {}) } } }));
+vi.mock('../lib/api', () => ({
+  api: { users: { list: () => new Promise(() => {}) }, account: { dataExport: () => new Promise(() => {}), dataExportUrl: (id: string) => id } },
+  ApiError: class ApiError extends Error {},
+}));
 vi.mock('../lib/analytics', () => ({
   get ANALYTICS_ENABLED() {
     return analytics.enabled;
@@ -57,7 +61,7 @@ function mount() {
 }
 
 beforeEach(() => {
-  authState.current = { ...authState.current, user: user(false) };
+  authState.current = { ...authState.current, user: user(false), config: null };
   analytics.enabled = false;
 });
 afterEach(() => {
@@ -105,5 +109,15 @@ describe('ProfileView', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Preferências de cookies' }));
     expect(openCookieBanner).toHaveBeenCalledTimes(1);
+  });
+
+  it('links to the terms and the privacy policy when the server has them', () => {
+    mount();
+    expect(screen.queryByRole('link', { name: 'Termos de uso' })).toBeNull();
+    cleanup();
+    authState.current = { ...authState.current, config: { terms_url: 'https://termhub.dev/termos/', privacy_url: 'https://termhub.dev/privacidade/' } };
+    mount();
+    expect(screen.getByRole('link', { name: 'Termos de uso' })).toHaveAttribute('href', 'https://termhub.dev/termos/');
+    expect(screen.getByRole('link', { name: 'Política de privacidade' })).toHaveAttribute('href', 'https://termhub.dev/privacidade/');
   });
 });

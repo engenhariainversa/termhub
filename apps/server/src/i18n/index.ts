@@ -3,13 +3,13 @@ import { CATALOGS } from './catalog.js';
 
 /**
  * Server-side translation (spec 2026-10-04 i18n). The pt-BR text is the key: `t('en', 'Projeto não
- * encontrado')` looks the English entry up in `locales/en/*.json` and falls back to the key itself, so
+ * encontrado')` looks the English entry up in `locales/en/*.json` (Spanish: `locales/es/*.json`) and falls back to the key itself, so
  * a missing entry shows Portuguese instead of a key. `{{name}}` placeholders are interpolated; with a
  * numeric `count`, i18next-style plural suffixes (`_one`, `_other`) are looked up first, and plural
  * keys have entries in both catalogs (pt-BR included). `npm run i18n:check` keeps the catalogs honest.
  */
-export type Locale = 'pt-BR' | 'en';
-export const LOCALES: readonly Locale[] = ['pt-BR', 'en'];
+export type Locale = 'pt-BR' | 'en' | 'es';
+export const LOCALES: readonly Locale[] = ['pt-BR', 'en', 'es'];
 export const DEFAULT_LOCALE: Locale = 'pt-BR';
 
 /** Interpolation values; a LocalizedText value is translated into the same language (a label inside a message). */
@@ -69,7 +69,7 @@ export function t(locale: Locale, text: string | LocalizedText, vars?: Vars): st
 
 /** A stored or sent value narrowed to a Locale; anything else (null included) is null = automatic. */
 export function parseLocale(value: unknown): Locale | null {
-  return value === 'pt-BR' || value === 'en' ? value : null;
+  return value === 'pt-BR' || value === 'en' || value === 'es' ? value : null;
 }
 
 /** The locale for someone with this stored choice (null/unknown → pt-BR). */
@@ -79,8 +79,7 @@ export function localeOf(value: unknown): Locale {
 
 /**
  * Picks a locale from an `Accept-Language` header: languages in q order (ties keep header order),
- * the first `pt*` → pt-BR, the first `en*` → en; nothing usable → null. Spanish and other languages
- * are skipped on purpose (a Spanish reader is closer to pt-BR until TER-406).
+ * the first `pt*` → pt-BR, `en*` → en, `es*` → es; nothing usable → null.
  */
 export function negotiateLocale(header: string | string[] | undefined): Locale | null {
   const raw = Array.isArray(header) ? header.join(',') : header;
@@ -98,6 +97,7 @@ export function negotiateLocale(header: string | string[] | undefined): Locale |
   for (const { tag } of ranked) {
     if (tag === 'pt' || tag.startsWith('pt-')) return 'pt-BR';
     if (tag === 'en' || tag.startsWith('en-')) return 'en';
+    if (tag === 'es' || tag.startsWith('es-')) return 'es';
   }
   return null;
 }

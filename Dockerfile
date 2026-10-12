@@ -11,7 +11,6 @@ COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
 COPY apps/landing/package.json apps/landing/
 COPY apps/agent/package.json apps/agent/
-COPY apps/concierge/package.json apps/concierge/
 COPY apps/mobile/package.json apps/mobile/
 COPY packages/agent-protocol/package.json packages/agent-protocol/
 COPY packages/machine-ops/package.json packages/machine-ops/
@@ -21,7 +20,7 @@ COPY scripts/postinstall.mjs scripts/
 # lockfile but never runs here, and its dependency tree would inflate node_modules for nothing.
 # Add a new workspace to this list only if the server or web build imports it.
 RUN npm ci --include-workspace-root \
-    -w @termhub/server -w @termhub/web -w @termhub/landing -w @termhub/agent -w @termhub/concierge \
+    -w @termhub/server -w @termhub/web -w @termhub/landing -w @termhub/agent \
     -w @termhub/agent-protocol -w @termhub/machine-ops -w @termhub/claude-cli -w @termhub/mobile-api
 
 # Build
@@ -54,13 +53,16 @@ RUN npm run build:city -w @termhub/web
 # Só dependências de produção na imagem final. The same workspace list as the deps stage: a bare
 # `npm prune` re-reads the whole lockfile and would bring @termhub/mobile's tree back in.
 RUN npm prune --omit=dev --include-workspace-root \
-    -w @termhub/server -w @termhub/web -w @termhub/landing -w @termhub/agent -w @termhub/concierge \
+    -w @termhub/server -w @termhub/web -w @termhub/landing -w @termhub/agent \
     -w @termhub/agent-protocol -w @termhub/machine-ops -w @termhub/claude-cli -w @termhub/mobile-api
 
 # Runtime
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
+# Outbound proxy: fetch, http and https honour HTTPS_PROXY/HTTP_PROXY/NO_PROXY (Node >= 22.21). Inert
+# while none of them is set; with one set, NO_PROXY must list the compose services (see README).
+ENV NODE_USE_ENV_PROXY=1
 # rsvg-convert + font-inter: the public city's link preview card (apps/server/src/public/card.ts)
 # rasterises with the same librsvg tool apps/landing/og/build.sh uses, as a runtime subprocess.
 # Package names are Alpine's (apk), not Debian's librsvg2-bin — this image is node:22-alpine.

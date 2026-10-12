@@ -2,12 +2,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { ANALYTICS_ENABLED, disableAnalytics, initAnalytics, setLang as setAnalyticsLang, track } from './analytics';
 import { CookieBanner } from './CookieBanner';
 import { readConsent, subscribeConsent } from './consent';
-import { DICT, HTML_LANG, LANG_KEY, LANG_NAMES, LangContext, detectLang, useLang, type Dict, type Lang } from './i18n';
+import { DICT, HTML_LANG, LANG_KEY, LANG_NAMES, LANGS, LangContext, OG_LOCALE, detectLang, isLang, useLang, type Dict, type Lang } from './i18n';
 
 /**
  * What every page of termhub.dev shares: the language switch, analytics and
  * the cookie banner (`Site`), plus the header and footer chrome. The home
- * page and the adjacent ones (/brand/, /security/, /excluir-conta/, later terms and privacy) are separate
+ * page and the adjacent ones (/brand/, /security/, /excluir-conta/, /termos/, /privacidade/) are separate
  * Vite entries, so each mounts its own tree inside a `Site`.
  */
 
@@ -32,7 +32,7 @@ function LangSwitch() {
   const { lang, t, setLang } = useLang();
   return (
     <span className="flex rounded-field border border-border-2 p-0.5 text-caption" role="group" aria-label={t.lang_switch.label}>
-      {(['pt', 'en'] as Lang[]).map((l) => (
+      {LANGS.map((l) => (
         <button
           key={l}
           type="button"
@@ -81,6 +81,8 @@ export function SiteFooter() {
         <a href={`${REPO_URL}/blob/main/README.md`} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.docs}</a>
         <a href="/security/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.security}</a>
         <a href="/brand/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.brand}</a>
+        <a href="/termos/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.terms}</a>
+        <a href="/privacidade/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.privacy}</a>
         <a href="/excluir-conta/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.deleteAccount}</a>
         <a href={COFFEE_URL} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.coffee}</a>
         {ANALYTICS_ENABLED && (
@@ -121,13 +123,13 @@ export function Site({ meta, children }: { meta: (t: Dict) => { title: string; d
     document.title = m.title;
     document.querySelector('meta[name="description"]')?.setAttribute('content', m.description);
     document.querySelector('meta[property="og:title"]')?.setAttribute('content', m.title);
-    document.querySelector('meta[property="og:locale"]')?.setAttribute('content', lang === 'pt' ? 'pt_BR' : 'en_US');
+    document.querySelector('meta[property="og:locale"]')?.setAttribute('content', OG_LOCALE[lang]);
   }, [lang, meta]);
   // A page opened with an explicit ?lang= (the hreflang alternates) is its own canonical URL; the
   // bare URL stays canonical for itself, since it is the x-default that follows the browser language.
   useEffect(() => {
     const q = new URLSearchParams(window.location.search).get('lang');
-    if (q !== 'pt' && q !== 'en') return;
+    if (!isLang(q)) return;
     const canonical = document.querySelector('link[rel="canonical"]');
     const href = canonical?.getAttribute('href');
     if (canonical && href) canonical.setAttribute('href', `${href.split('?')[0]}?lang=${q}`);

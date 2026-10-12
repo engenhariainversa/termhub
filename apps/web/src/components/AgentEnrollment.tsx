@@ -2,28 +2,75 @@ import { useEffect, useRef, useState } from 'react';
 import { CopyButton } from './MachineForm';
 import { api } from '../lib/api';
 import { track } from '../lib/analytics';
-import { Trans, useTranslation } from '../i18n';
+import { Trans, tk, useTranslation } from '../i18n';
 import type { Machine } from '../lib/types';
 
 const POLL_MS = 3000;
 
 export type ClientOs = 'linux' | 'macos';
 
+/** Lowest Node major the agent runs on: `engines.node` of apps/agent/package.json (a test keeps them equal). */
+export const MIN_NODE_MAJOR = 20;
+/** How long the Linux command waits for another apt/dpkg run to release its lock, in seconds. */
+export const APT_LOCK_WAIT_S = 120;
+
+/** What the install commands print on the machine: pt-BR keys, translated when the command is built. */
+const MSG = {
+  node: tk('O termhub-agent precisa do Node 20 ou mais novo, com o npm. Instale (https://nodejs.org ou nvm) e rode o comando de novo.'),
+  aptWait: tk('O apt está em uso por outro processo; esperando liberar (até 2 minutos)...'),
+  aptHeld: tk('O apt continua em uso por outro processo (PID, nome e há quanto tempo roda):'),
+  aptHeldFix: tk(
+    'Se for uma atualização em andamento, espere terminar e rode o comando de novo. Se estiver parado há muito tempo, finalize esse processo (kill PID), rode dpkg --configure -a (com sudo, se não for root) e depois este comando de novo.',
+  ),
+  noManager: tk('Instale tmux, make, g++ e python3 com o gerenciador de pacotes do sistema e rode o comando de novo.'),
+  clt: tk('Conclua a instalação das Command Line Tools e rode o comando de novo.'),
+};
+
+type Translate = (key: string) => string;
+const asIs: Translate = (key) => key;
+/** Single-quotes a message for the shell, whatever the translation holds. */
+const sq = (text: string) => `'${text.replace(/'/g, `'\\''`)}'`;
+
 /**
  * Installs the agent on a Linux machine. The agent attaches every terminal to tmux, and npm builds
  * node-pty from source there (its release ships no Linux prebuild), so tmux, a C++ toolchain and
  * python3 come first, through the one package manager the machine has. `if/elif` picks exactly one
- * manager, and `fi && npm` only installs the agent when that manager succeeded — a failed apt never
+ * branch, and `fi && npm` only installs the agent when that branch succeeded — a failed apt never
  * falls through to another manager nor reaches npm. `sudo` only when not running as root.
+ *
+ * - Node is checked first, so a machine without it (or with an old one) hears it before anything
+ *   is installed instead of at the npm step.
+ * - A machine that already has tmux, make, g++ and python3 skips the package manager altogether.
+ * - apt may be busy (unattended-upgrades on a VPS's first boot, or a stuck run): `th_apt` lets apt
+ *   wait for the dpkg lock itself (`DPkg::Lock::Timeout`) and retries while another apt/dpkg
+ *   process is alive, because `apt-get update` fails at once on the lists lock. When the lock is
+ *   still held after `APT_LOCK_WAIT_S`, it names the holders and says what to do — never to delete
+ *   the lock file. A failure with no other apt process around is a real one and is not retried.
+ *   `unattended-upgrade-shutdown` is left out of the holders: Ubuntu keeps that daemon running all
+ *   the time under the same process name (`unattended-upgr`) as a real unattended upgrade.
  */
-export const LINUX_INSTALL_COMMAND = [
-  'SUDO=$([ "$(id -u)" -eq 0 ] || echo sudo)',
-  'if command -v apt-get >/dev/null; then $SUDO apt-get update && $SUDO apt-get install -y build-essential python3 tmux',
-  'elif command -v dnf >/dev/null; then $SUDO dnf group install -y "Development Tools" && $SUDO dnf install -y python3 tmux',
-  'elif command -v pacman >/dev/null; then $SUDO pacman -S --noconfirm --needed base-devel python tmux',
-  "else echo 'Instale tmux, make, g++ e python3 com o gerenciador de pacotes do sistema e rode o comando de novo.'; false",
-  'fi && npm i -g @termhub/agent && termhub-agent --version',
-].join('\n');
+export function linuxInstallCommand(t: Translate = asIs): string {
+  return [
+    'SUDO=$([ "$(id -u)" -eq 0 ] || echo sudo)',
+    'th_apt() {',
+    '  th_start=$(date +%s) th_waiting=',
+    `  until $SUDO env DEBIAN_FRONTEND=noninteractive apt-get -o DPkg::Lock::Timeout=${APT_LOCK_WAIT_S} "$@"; do`,
+    '    th_held=$(ps -eo pid=,etime=,comm=,args= 2>/dev/null | while read -r p e c a; do case "$c $a" in *unattended-upgrade-shutdown*) ;; apt\\ *|apt-get\\ *|apt.systemd*|aptitude*|dpkg\\ *|unattended-upgr*) echo "  PID $p ($c) $e";; esac; done)',
+    '    [ -n "$th_held" ] || return 1',
+    `    if [ $(($(date +%s) - th_start)) -ge ${APT_LOCK_WAIT_S} ]; then echo ${sq(t(MSG.aptHeld))}; echo "$th_held"; echo ${sq(t(MSG.aptHeldFix))}; return 1; fi`,
+    `    [ -n "$th_waiting" ] || echo ${sq(t(MSG.aptWait))}`,
+    '    th_waiting=1; sleep 5',
+    '  done',
+    '}',
+    `if ! command -v npm >/dev/null || ! node -e 'process.exit(parseInt(process.versions.node) >= ${MIN_NODE_MAJOR} ? 0 : 1)' 2>/dev/null; then echo ${sq(t(MSG.node))}; false`,
+    'elif command -v tmux >/dev/null && command -v make >/dev/null && command -v g++ >/dev/null && command -v python3 >/dev/null; then :',
+    'elif command -v apt-get >/dev/null; then th_apt update && th_apt install -y build-essential python3 tmux',
+    'elif command -v dnf >/dev/null; then $SUDO dnf group install -y "Development Tools" && $SUDO dnf install -y python3 tmux',
+    'elif command -v pacman >/dev/null; then $SUDO pacman -S --noconfirm --needed base-devel python tmux',
+    `else echo ${sq(t(MSG.noManager))}; false`,
+    'fi && npm i -g @termhub/agent && termhub-agent --version',
+  ].join('\n');
+}
 
 /**
  * Installs the agent on macOS. node-pty ships macOS prebuilds, but npm falls back to compiling it
@@ -31,13 +78,22 @@ export const LINUX_INSTALL_COMMAND = [
  * opens the system installer and returns right away, hence the stop-and-rerun instead of going on.
  * Each step is grouped and joined with `&&`, so a failure stops the chain before npm.
  */
-export const MACOS_INSTALL_COMMAND = [
-  "{ xcode-select -p >/dev/null 2>&1 || { xcode-select --install; echo 'Conclua a instalação das Command Line Tools e rode o comando de novo.'; false; }; } &&",
-  '{ command -v tmux >/dev/null || brew install tmux; } &&',
-  'npm i -g @termhub/agent && termhub-agent --version',
-].join('\n');
+export function macosInstallCommand(t: Translate = asIs): string {
+  return [
+    `{ xcode-select -p >/dev/null 2>&1 || { xcode-select --install; echo ${sq(t(MSG.clt))}; false; }; } &&`,
+    '{ command -v tmux >/dev/null || brew install tmux; } &&',
+    'npm i -g @termhub/agent && termhub-agent --version',
+  ].join('\n');
+}
 
-export const INSTALL_COMMANDS: Record<ClientOs, string> = { linux: LINUX_INSTALL_COMMAND, macos: MACOS_INSTALL_COMMAND };
+/** The commands with their messages in pt-BR, the source language. */
+export const LINUX_INSTALL_COMMAND = linuxInstallCommand();
+export const MACOS_INSTALL_COMMAND = macosInstallCommand();
+
+/** The install command of each OS, with its messages in the language of `t`. */
+export function installCommand(os: ClientOs, t: Translate = asIs): string {
+  return os === 'linux' ? linuxInstallCommand(t) : macosInstallCommand(t);
+}
 
 /** Picks the tab shown first from the browser's OS: macOS on a Mac, Linux everywhere else. */
 export function detectClientOs(nav: Pick<Navigator, 'platform' | 'userAgent'> & { userAgentData?: { platform?: string } } = navigator): ClientOs {
@@ -148,10 +204,10 @@ export function AgentEnrollment({ machine, token, onConnected }: Props) {
   const steps: Step[] = [
     {
       title: tab === 'linux' ? t('Instalar tmux, ferramentas de compilação e o agente') : t('Instalar o tmux e o agente'),
-      command: INSTALL_COMMANDS[tab],
+      command: installCommand(tab, (key) => t(key)),
       hint:
         tab === 'linux'
-          ? t('Precisa de Node 20+. Usa apt, dnf ou pacman (com sudo quando não for root): o npm compila o node-pty, por isso o make, o g++ e o python3.')
+          ? t('Precisa de Node 20+ (o comando confere antes). Se faltar tmux, make, g++ ou python3, instala com apt, dnf ou pacman (com sudo quando não for root): o npm compila o node-pty.')
           : t('Precisa de Node 20+ e do Homebrew. Se faltarem as Command Line Tools, o comando abre o instalador e para: conclua e rode de novo.'),
       troubleshoot: (
         <>
@@ -188,7 +244,7 @@ export function AgentEnrollment({ machine, token, onConnected }: Props) {
     {
       title: t('Conectar'),
       command: enrollCommand(origin, token),
-      note: t('Esse token só aparece agora. Se perder, gere outro em Rotacionar token.'),
+      note: t('Esse token só aparece agora, é de uso único e vale 15 minutos. Se expirar, gere outro em Parear de novo.'),
     },
     {
       title: t('Instalar como serviço'),

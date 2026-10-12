@@ -1,0 +1,40 @@
+name: Backup do banco
+
+# Daily encrypted backup of the production database on jarvis, with rotation, and a weekly restore
+# test into a throwaway container (TER-745). Decisions and procedures: deploy/README.md, "Database
+# backups". A failed run fails the workflow, so it shows up like a failed deploy.
+on:
+  schedule:
+    # 06:30 UTC = 03:30 in Brasília, away from the working hours when merges deploy.
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+    inputs:
+      restore_test:
+        description: 'Também rodar o teste de restauração'
+        type: boolean
+        default: false
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: [self-hosted, termhub]
+    timeout-minutes: 30
+    env:
+      # .env de produção vive só no servidor; o script lê dele só BACKUP_RETENTION_DAYS.
+      ENV_FILE: /mnt/hd2tb/projetos/termhub/.env
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backup cifrado e rotação
+        run: bash deploy/db-backup.sh
+      # Sundays (UTC), or when asked: restore the newest backup into th-restore-test and check it.
+      - name: Teste de restauração
+        if: ${{ inputs.restore_test || github.event_name == 'schedule' }}
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$(date -u +%u)" != 7 ]; then
+            echo "Teste de restauração: só aos domingos."
+            exit 0
+          fi
+          bash deploy/db-restore-test.sh

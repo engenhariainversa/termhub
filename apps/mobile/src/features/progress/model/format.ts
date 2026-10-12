@@ -62,9 +62,18 @@ const STATE_LABEL: Record<NonNullable<TAgentOnCard['state']>, string> = {
  * `background`: the agent waits on its own subagents, shells or monitors, sent as `working` (TER-644).
  * `finished`: the agent ended its turn with a report and asks nothing, sent as `idle` (TER-972).
  */
-export function stateLabel(state: TAgentOnCard['state'], background = false, finished = false): string {
+export function stateLabel(
+  state: TAgentOnCard['state'],
+  background = false,
+  finished = false,
+  flags: Partial<Pick<TAgentOnCard, 'blocked' | 'auth_required' | 'trust_prompt'>> = {},
+): string {
   if (background && state === 'working') return t('aguardando segundo plano');
   if (finished && state === 'idle') return t('concluído');
+  // TER-1046: sent as idle, error and waiting_input, each flagged
+  if (flags.blocked && state === 'idle') return t('bloqueado');
+  if (flags.auth_required && state === 'error') return t('login expirado');
+  if (flags.trust_prompt && state === 'waiting_input') return t('confiar na pasta?');
   return state ? t(STATE_LABEL[state]) : t('sem sinal');
 }
 

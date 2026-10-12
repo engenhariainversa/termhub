@@ -6,7 +6,7 @@ import { useData } from '../lib/data';
 import { epicsInProgress, type EpicSummary } from '../lib/epic-summary';
 import { useMonitor } from '../lib/monitor';
 import { useNarrowWindow } from '../lib/narrow-window';
-import { stateLabel } from '../lib/progress';
+import { fullStateOf, stateLabel } from '../lib/progress';
 import { useProjectChat } from '../lib/project-chat';
 import type { AgentOnCard, EpicProgress, Machine, Project, Tab } from '../lib/types';
 import { buildCityModel, type CityModel } from '../office/model';
@@ -79,16 +79,16 @@ export function OfficeEmptyState({ project, tabs, machines, reachable, visible, 
   const { t } = useTranslation();
   const { statuses } = useData();
   const { can } = useAuth();
-  const { items, tabState } = useMonitor();
+  const { items, tabState, autoRuns } = useMonitor();
   const narrow = useNarrowWindow();
   const tap = useTapToOpen(onOpen);
   const [scene, setScene] = useState<OfficeScene | null>(null);
 
   // `tabState` reads a ref and never changes identity; `items` is what changes on a live push
   const model = useMemo<CityModel>(
-    () => buildCityModel(projectCity(project, tabs, machines, statuses, reachable), tabState),
+    () => buildCityModel(projectCity(project, tabs, machines, statuses, reachable), tabState, (id) => autoRuns?.get(id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `items` stands for the monitor's live state (see above)
-    [project, tabs, machines, statuses, reachable, tabState, items],
+    [project, tabs, machines, statuses, reachable, tabState, items, autoRuns],
   );
   const live = (tab: Tab) => ({ ...tab, ...pickState(tabState(tab.id)) });
 
@@ -169,7 +169,11 @@ const DOT: Record<string, string> = {
   error: 'bg-red-500',
   waiting_background: 'bg-sky-400',
   // done with a report, asking nothing (TER-972): green, never the "esperando você" amber
-  finished: 'bg-emerald-500',
+  finished: 'bg-zinc-400',
+  // TER-1046: blocked on something automation follows (grey), the login (red), the trust dialog (amber)
+  blocked: 'bg-zinc-400',
+  auth_required: 'bg-red-500',
+  trust_prompt: 'bg-amber-500',
 };
 
 function StateDot({ tab }: { tab: Pick<Tab, 'alive' | 'state'> }) {
@@ -332,7 +336,7 @@ function EpicRow({ epic, onOpenAgent, onHighlight }: { epic: EpicSummary; onOpen
 /** An agent on the epic: hovering lights up its figure in the office, a click opens its terminal. */
 function AgentChip({ agent, onOpen, onHighlight }: { agent: AgentOnCard; onOpen: () => void; onHighlight: (tabId: string | null) => void }) {
   const { t } = useTranslation();
-  const label = stateLabel(agent.state, agent.background, agent.finished);
+  const label = stateLabel(fullStateOf(agent));
   const tone = agent.needs_you ? DOT.waiting_input : agent.background ? DOT.waiting_background : agent.finished ? DOT.finished : DOT.working;
   return (
     <button
