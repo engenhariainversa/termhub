@@ -25,6 +25,7 @@ vi.mock('../auth/permissions.js', async (importOriginal) => ({ ...(await importO
 const { applyErrorHandler } = await import('../lib/errors.js');
 const { aiLoginRoutes } = await import('./ai-login.js');
 const { aiLogin, LOGIN_FLOW_TTL_MS } = await import('../ai/login.js');
+const { AgentRpcError } = await import('../agent/connection.js');
 
 const machines = [
   { id: 'm1', name: 'jarvis', type: 'agent', owner_id: 'u1' },
@@ -90,6 +91,32 @@ describe('POST /ai-accounts/:id/login', () => {
     expect(aiLoginStartResponse.parse(res.json())).toMatchObject({ url: null, logged_in: true, stuck_tabs: [{ id: 't1', name: 'aba t1', project_id: 'p1' }] });
     expect(aiLogin.loginStatusOf('a1').state).toBe('ok');
     expect(aiLogin.openFlows).toBe(0);
+  });
+
+  it('a start the machine failed is still a login when its status says logged in (an agent older than 0.27.0, TER-1054)', async () => {
+    aiLogin.markLoginRequired('a1');
+    screens.set('th-t1', 'Please run /login');
+    rpc.mockImplementation(async (_machine: string, method: string) => {
+      if (method === 'ai.login.start') throw new AgentRpcError({ code: 'failed', message: 'Opening browser to sign in…\nPaste code here if prompted > Login successful.' });
+      if (method === 'ai.login.status') return { supported: true, logged_in: true };
+      return {};
+    });
+    const res = await build().inject({ method: 'POST', url: '/ai-accounts/a1/login' });
+    expect(res.statusCode).toBe(200);
+    expect(aiLoginStartResponse.parse(res.json())).toMatchObject({ url: null, logged_in: true, stuck_tabs: [{ id: 't1', name: 'aba t1', project_id: 'p1' }] });
+    expect(aiLogin.loginStatusOf('a1').state).toBe('ok');
+    expect(aiLogin.openFlows).toBe(0);
+  });
+
+  it('a start the machine failed stays a failure, with the CLI output, when the status says logged out', async () => {
+    rpc.mockImplementation(async (_machine: string, method: string) => {
+      if (method === 'ai.login.start') throw new AgentRpcError({ code: 'failed', message: 'error: network unreachable' });
+      return { supported: true, logged_in: false };
+    });
+    const res = await build().inject({ method: 'POST', url: '/ai-accounts/a1/login' });
+    expect(res.statusCode).toBe(502);
+    expect(res.json()).toMatchObject({ code: 'MACHINE_FAILED', error: 'error: network unreachable' });
+    expect(aiLogin.loginStatusOf('a1').state).toBe('login_required');
   });
 
   it('refuses an admin viewing as the owner: only the machine owner redoes the login', async () => {
