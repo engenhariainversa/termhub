@@ -66,7 +66,7 @@ npm run typecheck -w @termhub/server && npm run i18n:check -w @termhub/server
 | --- | --- | --- | --- |
 | 1 | Which repo is `setup.repo` in the effective list when rows exist but none matches it? | It stays in the list as a hand-added repo (key `null`, `discovered: false`). | R1's union: it is a repo the person added by hand. Dropping it would stop a working project the moment a scan finds another checkout. |
 | 2 | Tie on `merge_order` when choosing the mirror | The repo already in `setup.repo` wins, then key order, then `owner/repo`. | Every repo starts at `merge_order` 0. Without this the first scan could move the mirror, and the previous colour would start syncing another repo. |
-| 3 | Mirror moves to another repo | Before `setup.repo` is rewritten, the old and the new repo each get an explicit entry in `repos[]` with their effective values, when they have none. | The repo in `setup.repo` with no override reads the project-wide policy (§3.1). Without the entries, the old repo would lose its level and the new one would jump from `pr` to the project's. |
+| 3 | Mirror moves to another repo | Before `setup.repo` is rewritten, the old and the new repo each get an entry in `repos[]` stating their effective values (an existing entry has its `null` fields filled). | The repo in `setup.repo` with no override reads the project-wide policy (§3.1). Without the entries, the old repo would lose its level and the new one would jump from `pr` to the project's. |
 | 4 | No enabled repo left | `setup.repo` is left as it is. | The mirror only writes a repo, never clears one: clearing would drop base branch, pattern and deploy workflow. Honouring `enabled: false` for the last repo belongs to the cards that move the run path (tasks 10–11). |
 | 5 | `null` in an override of the legacy repo | `integration_id`, `base_branch`, `branch_pattern` and `deploy_workflow` fall back to `setup.repo`'s value. | §3.1 step 2. An override added only to set `merge_order` must not silently stop deploy tracking. To clear the workflow, clear it in the `repo` block. |
 | 6 | Override autonomy above the project's | Refused on save (400), clamped on read. | The plan asks for the validation; the clamp covers a project level lowered later through `set_automation_policy`. |
@@ -192,9 +192,9 @@ Rules of `withRepoMirror`: unchanged when there are no rows and no overrides. Ca
 entries with status `ok` and a name in `owner/repo` form, ordered by `merge_order`, then "is the current
 `setup.repo`", then key, then name. No candidate: unchanged. Same repo as `setup.repo`: `repo` is rewritten
 with the entry's `integration_id`, `full_name`, `base_branch`, `branch_pattern`, `draft_pr`,
-`deploy_workflow`. Another repo: first append to `repos[]` an explicit override for the old repo and for the
-new one, each from its effective entry, when it has none (decision 3); if that would pass `REPOS_MAX`, leave
-the setup unchanged.
+`deploy_workflow`. Another repo: first write into `repos[]` an override for the old repo and for the new
+one, each stating its effective entry (decision 3); if that would pass `REPOS_MAX`, leave the setup
+unchanged.
 
 - [ ] **Step 1: failing tests** in `repos.test.ts`:
   - empty table, no `repo`: `[]`;

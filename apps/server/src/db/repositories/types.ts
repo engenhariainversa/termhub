@@ -161,6 +161,36 @@ export interface ProjectMachine {
   created_at: string;
 }
 
+/** `unsupported`: a checkout with no GitHub origin; `no_access`: the integration does not see the repo. */
+export type RepoStatus = 'ok' | 'unsupported' | 'no_access';
+
+/** Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). */
+export interface ProjectRepositoryCheckout {
+  machine_id: string;
+  /** relative to the project's folder on that machine; `.` for the folder itself */
+  dir: string;
+  default_branch: string | null;
+  has_commits: boolean;
+  seen_at: string;
+  /** set when a scan no longer found the folder; the row is never deleted */
+  missing_at: string | null;
+}
+
+/** A git repository discovery found in a project's folder (spec 2026-10-07 multi-repo R1, R4). */
+export interface ProjectRepository {
+  id: string;
+  project_id: string;
+  /** owner/repo */
+  full_name: string;
+  /** short name for paths and chips, unique in the project and never changed */
+  key: string;
+  description: string | null;
+  status: RepoStatus;
+  discovered_at: string;
+  updated_at: string;
+  checkouts: ProjectRepositoryCheckout[];
+}
+
 export interface Tab {
   id: string;
   project_id: string;
