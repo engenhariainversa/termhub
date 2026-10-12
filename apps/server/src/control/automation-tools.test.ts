@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_AUTOMATION_TOOLS } from './agents.js';
-import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, branchPushRules, gitRuleForms, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
+import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, branchPushRules, gitRuleForms, runBranchRules, runRepoPaths, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
 describe('unsafeAllowedTool: allow rules too broad for an automatic tab (TER-968, review 1)', () => {
   it.each([
@@ -179,5 +179,78 @@ describe('gitRuleForms: the same git rule as `git -C <worktree>` and `--no-pager
 
   it('no form deny turns into a command family that would drop a project rule', () => {
     for (const r of ['Bash(git status:*)', 'Bash(git merge:*)', 'Bash(git log:*)', 'Bash(git grep:*)']) expect(unsafeAllowedTool(r), r).toBe(false);
+  });
+});
+
+describe('repo keys: the -C forms of a multi-repo run (spec 2026-10-07 multi-repo R13)', () => {
+  const WS = '/Users/u/.termhub/worktrees/P1/TER-903';
+  const B = 'TER-903-card';
+
+  it('without keys, every output is the one of a single-repo run', () => {
+    expect(runBranchRules(B, null)).toEqual(runBranchRules(B));
+    expect(runBranchRules(B, { workspace: WS, keys: [] })).toEqual(runBranchRules(B));
+    expect(gitRuleForms('Bash(git log:*)', WS, [])).toEqual(gitRuleForms('Bash(git log:*)', WS));
+    expect(automationAllowList(DEFAULT_AUTOMATION_TOOLS, B, { worktree: WS, keys: [] })).toEqual(automationAllowList(DEFAULT_AUTOMATION_TOOLS, B, { worktree: WS }));
+    expect(runRepoPaths(null)).toEqual([]);
+  });
+
+  it('runBranchRules adds the run branch pushes and fetch from each repo folder, by exact path', () => {
+    expect(runBranchRules(B, { workspace: `${WS}/`, keys: ['frontend', 'bff'] })).toEqual([
+      ...runBranchRules(B),
+      `Bash(git -C ${WS}/frontend push origin ${B})`,
+      `Bash(git -C ${WS}/frontend push -u origin ${B})`,
+      `Bash(git -C ${WS}/frontend push origin HEAD:refs/heads/${B})`,
+      `Bash(git -C ${WS}/frontend push -u origin HEAD:refs/heads/${B})`,
+      `Bash(git -C ${WS}/frontend fetch origin ${B})`,
+      `Bash(git -C ${WS}/bff push origin ${B})`,
+      `Bash(git -C ${WS}/bff push -u origin ${B})`,
+      `Bash(git -C ${WS}/bff push origin HEAD:refs/heads/${B})`,
+      `Bash(git -C ${WS}/bff push -u origin HEAD:refs/heads/${B})`,
+      `Bash(git -C ${WS}/bff fetch origin ${B})`,
+    ]);
+    expect(runBranchRules(null, { workspace: WS, keys: ['frontend'] })).toEqual([]);
+  });
+
+  it('gitRuleForms adds, after today\'s forms, each repo folder by its path and by its key', () => {
+    expect(gitRuleForms('Bash(git log:*)', WS, ['frontend'])).toEqual([
+      ...gitRuleForms('Bash(git log:*)', WS),
+      `Bash(git -C ${WS}/frontend log:*)`,
+      `Bash(git -C ${WS}/frontend --no-pager log:*)`,
+      `Bash(git --no-pager -C ${WS}/frontend log:*)`,
+      'Bash(git -C frontend log:*)',
+      'Bash(git -C frontend --no-pager log:*)',
+      'Bash(git --no-pager -C frontend log:*)',
+    ]);
+  });
+
+  it.each(['', '..', '../x', 'a/b', 'a/..', 'a..b', '.git', '-x', 'a b', 'a*', "a'b", 'a(b)', 'a;b', '$HOME'])('gives no rule for the key %j', (key) => {
+    expect(runRepoPaths({ workspace: WS, keys: [key] })).toEqual([]);
+    expect(runBranchRules(B, { workspace: WS, keys: [key] })).toEqual(runBranchRules(B));
+    expect(gitRuleForms('Bash(git log:*)', WS, [key])).toEqual(gitRuleForms('Bash(git log:*)', WS));
+  });
+
+  it.each([null, '', 'relative/ws', '/', '/a b/ws', '/a/*/ws', '/a/../ws'])('gives no key rule for the workspace %j', (ws) => {
+    expect(runRepoPaths({ workspace: ws, keys: ['frontend'] })).toEqual([]);
+    expect(runBranchRules(B, { workspace: ws, keys: ['frontend'] })).toEqual(runBranchRules(B));
+    expect(gitRuleForms('Bash(git log:*)', ws, ['frontend'])).toEqual(['Bash(git --no-pager log:*)']);
+  });
+
+  it('keeps a valid key next to a bad one, and each key once', () => {
+    expect(runRepoPaths({ workspace: WS, keys: ['frontend', '../x', 'frontend', 'api.v2'] })).toEqual([`${WS}/frontend`, `${WS}/api.v2`]);
+  });
+
+  it('the allow list of a multi-repo run: exact rules, never a -C with a wildcard, none of them a project rule', () => {
+    const list = automationAllowList(DEFAULT_AUTOMATION_TOOLS, B, { worktree: WS, keys: ['frontend', 'bff'] });
+    expect(list).toContain(`Bash(git -C ${WS}/frontend push -u origin ${B})`);
+    expect(list).toContain(`Bash(git -C ${WS}/bff fetch origin ${B})`);
+    expect(list).toContain(`Bash(git -C ${WS}/bff show:*)`);
+    expect(list).toContain('Bash(git -C frontend log:*)');
+    expect(list.some((r) => /git (--no-pager )?-C [^ ]*\*/.test(r))).toBe(false);
+    expect(list.some((r) => r.includes(`-C ${WS}/frontend/`))).toBe(false);
+    expect(new Set(list).size).toBe(list.length);
+    for (const r of runBranchRules(B, { workspace: WS, keys: ['frontend'] }).filter((x) => x.includes(' -C '))) expect(unsafeAllowedTool(r), r).toBe(true);
+    // every rule of the single-repo list is still there, in the same order
+    const single = automationAllowList(DEFAULT_AUTOMATION_TOOLS, B, { worktree: WS });
+    expect(list.filter((r) => single.includes(r))).toEqual(single);
   });
 });

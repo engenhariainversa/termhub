@@ -14,7 +14,7 @@ vi.mock('../agent/errors.js', async (orig) => ({ ...(await orig<typeof import('.
 vi.mock('../agent/registry.js', () => ({ agents: { info } }));
 vi.mock('./machine-exec.js', async (orig) => ({ ...(await orig<typeof import('./machine-exec.js')>()), runOnMachineWithInput }));
 
-const { guardSupported, installTabMcp, removeTabMcp, tabMcpSupported, GUARD_MIN_AGENT_VERSION, TAB_MCP_MIN_AGENT_VERSION } = await import('./tab-mcp.js');
+const { guardSupported, installTabMcp, multiRepoGuardSupported, removeTabMcp, tabMcpSupported, GUARD_MIN_AGENT_VERSION, MULTI_REPO_GUARD_MIN_AGENT_VERSION, TAB_MCP_MIN_AGENT_VERSION } = await import('./tab-mcp.js');
 
 const machine = (type: Machine['type'], agent_version: string | null = null): Machine =>
   ({ id: 'm1', name: 'jarvis', type, os: 'linux', capabilities: ['tmux'], owner_id: 'u1', agent_version }) as Machine;
@@ -131,5 +131,19 @@ describe('guardSupported (TER-993)', () => {
     expect(guardSupported(machine('agent', '0.18.0'))).toBe(true);
     info.mockReturnValue({ agent_version: '0.18.9' });
     expect(guardSupported(machine('agent', '0.19.0'))).toBe(false);
+  });
+});
+
+describe('multiRepoGuardSupported (spec 2026-10-07 multi-repo R18)', () => {
+  it('for an agent from 0.29.0 on, the connected version first; the plain guard gate is unchanged', () => {
+    expect(MULTI_REPO_GUARD_MIN_AGENT_VERSION).toBe('0.29.0');
+    expect(multiRepoGuardSupported(machine('ssh'))).toBe(false);
+    expect(multiRepoGuardSupported(machine('local'))).toBe(false);
+    expect(multiRepoGuardSupported(machine('agent', '0.28.1'))).toBe(false);
+    expect(multiRepoGuardSupported(machine('agent', '0.29.0'))).toBe(true);
+    expect(multiRepoGuardSupported(machine('agent', null))).toBe(false);
+    expect(guardSupported(machine('agent', '0.28.1'))).toBe(true);
+    info.mockReturnValue({ agent_version: '0.28.1' });
+    expect(multiRepoGuardSupported(machine('agent', '0.29.0'))).toBe(false);
   });
 });

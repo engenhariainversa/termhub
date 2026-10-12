@@ -20,6 +20,14 @@ import { shellQuote } from './shell.js';
 export const GUARD_SCRIPT_REL = '.termhub/bin/termhub-guard';
 
 /**
+ * The guard's version, also written in the script's header (`# termhub-guard v2`). 2 (spec 2026-10-07
+ * multi-repo R13): the push rule also takes `git -C <WORKTREE>/<key> push …`, for a multi-repo run, whose
+ * `WORKTREE` is the workspace root. The server asks for it by agent version
+ * (`MULTI_REPO_GUARD_MIN_AGENT_VERSION`).
+ */
+export const GUARD_SCRIPT_VERSION = 2;
+
+/**
  * Claude Code's PreToolUse hook decision to block a tool call: `permissionDecision: "deny"` with a
  * reason the model sees. Printed on stdout; the script prints nothing to allow (Claude Code reads an
  * empty decision as "no opinion", and the allow list / mode decide).
@@ -28,7 +36,8 @@ const DENY_PREFIX = '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permis
 
 /**
  * The guard script. Reads the PreToolUse JSON on stdin; `$1` is the run's branch, `$2` the worktree
- * (both server-built and shell-quoted on the launch line). It extracts the tool name, and for `Bash`
+ * (both server-built and shell-quoted on the launch line; for a multi-repo run `$2` is the workspace
+ * root, which holds one worktree per repo). It extracts the tool name, and for `Bash`
  * the command, for a file tool the path, with the same first-key parsing the monitor hook uses, then
  * denies by rule. Every rule errs toward denying: an unknown or unparsable dangerous shape is blocked,
  * never waved through. On allow it prints nothing and exits 0.
@@ -36,6 +45,7 @@ const DENY_PREFIX = '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permis
  * POSIX sh only (macOS /bin/sh is bash; Linux dash): no arrays, no `[[`, no non-POSIX `grep -P`.
  */
 export const GUARD_SCRIPT = `#!/bin/sh
+# termhub-guard v${GUARD_SCRIPT_VERSION}
 # termhub hard-lock hook — installed by termhub. Denies the actions an automatic run must never take,
 # whatever its permission mode. Safe to delete together with the --settings file that points at it.
 BRANCH="\${1:-}"
@@ -96,7 +106,27 @@ case "$NAME" in
       *'git push'* | *'git '*' push'*)
         ALLOWED=0
         if [ -n "$BRANCH" ]; then
-          case "$SQ" in
+          PUSH="$SQ"
+          # v2, multi-repo runs (WORKTREE is the workspace root, one repo per <key>/ folder; spec
+          # 2026-10-07 multi-repo R13): the same push as "git -C <WORKTREE>/<key> push ...", read as the
+          # plain one. <key> is a repo key: it starts with a letter or digit and holds only letters,
+          # digits, . _ -, so no /, no .. and no option. The root itself, a path outside it and a
+          # relative path are not this form, so they are denied below like any other push.
+          case "$WORKTREE" in
+            /*[!/])
+              case "$SQ" in
+                "git -C $WORKTREE/"*)
+                  R=\${SQ#"git -C $WORKTREE/"}
+                  KEY=\${R%% *}
+                  case "$KEY" in
+                    '' | [!A-Za-z0-9]* | *[!A-Za-z0-9._-]* | *..*) ;;
+                    *) PUSH="git \${R#"$KEY "}" ;;
+                  esac
+                  ;;
+              esac
+              ;;
+          esac
+          case "$PUSH" in
             "git push -u origin $BRANCH" | "git push origin $BRANCH" | \\
             "git push -u origin HEAD:refs/heads/$BRANCH" | "git push origin HEAD:refs/heads/$BRANCH")
               ALLOWED=1 ;;
