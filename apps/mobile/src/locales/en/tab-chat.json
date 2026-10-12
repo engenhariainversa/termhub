@@ -1,4 +1,5 @@
 {
+  "{{state}} (automático, {{ref}})": "{{state}} (automatic, {{ref}})",
   "Aba não encontrada.": "Tab not found.",
   "Aceitar edições": "Accept edits",
   "Alternar modo": "Switch mode",
@@ -9,6 +10,9 @@
   "Cancelar": "Cancel",
   "Compactar (/compact)": "Compact (/compact)",
   "Concluído": "Done",
+  "Login expirado: rode /login": "Login expired: run /login",
+  "Pergunta se a pasta é confiável": "Asks whether the folder is trusted",
+  "Bloqueado": "Blocked",
   "Conversa compactada": "Conversation compacted",
   "Em segundo plano": "In the background",
   "Erro": "Error",

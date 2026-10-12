@@ -1,11 +1,12 @@
 import { useTranslation } from '../../i18n';
-import { memo, useEffect } from 'react';
+import { memo, useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { useData } from '../../lib/data';
 import { useNarrowWindow } from '../../lib/narrow-window';
 import { useProjectChat } from '../../lib/project-chat';
 import { trackAppHeight } from '../../lib/viewport';
 import { ChatPanel } from './ChatPanel';
 import { ChatResizer } from './ChatResizer';
+import { ChatHeaderSlot } from './chat-header-slot';
 
 // `ChatDock` re-renders on every status, pref or `alive` change (each is a new `useProjectChat()`
 // value), which would otherwise re-render every one of the up-to-3 mounted panels too, tearing down
@@ -14,6 +15,28 @@ import { ChatResizer } from './ChatResizer';
 // unrelated re-renders. Module-level (not created per render of `ChatDock`), so the memoized identity
 // is stable across the dock's own re-renders.
 const DockPanel = memo(ChatPanel);
+
+type SlotMap = ReadonlyMap<string, HTMLElement>;
+
+/**
+ * The element in a panel's header its cog is portalled into (TER-1039), registered by project id so
+ * each panel gets its own header's slot. The ref is stable per id, so the map only changes when an
+ * element mounts or unmounts, and the memoized panels re-render for that and nothing else.
+ */
+function DockSlot({ id, onSlot }: { id: string; onSlot: Dispatch<SetStateAction<SlotMap>> }) {
+  const ref = useCallback(
+    (el: HTMLDivElement | null) =>
+      onSlot((prev) => {
+        if (el ? prev.get(id) === el : !prev.has(id)) return prev;
+        const next = new Map(prev);
+        if (el) next.set(id, el);
+        else next.delete(id);
+        return next;
+      }),
+    [id, onSlot],
+  );
+  return <div ref={ref} className="flex items-center" />;
+}
 
 /**
  * The project chat, docked in the project window (spec 2026-09-26 project chat dock §4.5). Rendered in
@@ -58,6 +81,8 @@ export function ChatDock() {
     return () => document.body.classList.remove('chat-locked');
   }, [fullScreen]);
 
+  const [slots, setSlots] = useState<SlotMap>(() => new Map());
+
   const ids = [...new Set(shownProjectId ? [...alive, shownProjectId] : alive)].sort();
   if (ids.length === 0) return null;
 
@@ -87,6 +112,8 @@ export function ChatDock() {
             {docked && <ChatResizer width={p.width} onCommit={(w) => setWidth(id, w)} />}
             <header className="flex h-11 shrink-0 items-center gap-2 border-b border-line bg-bg-2 px-3">
               <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{title}</h2>
+              {/* The panel's cog (TER-1039) lands here, before the dock's own window controls. */}
+              <DockSlot id={id} onSlot={setSlots} />
               {!narrow && (
                 <button
                   type="button"
@@ -103,7 +130,9 @@ export function ChatDock() {
               </button>
             </header>
             <div className="flex min-h-0 flex-1 flex-col">
-              <DockPanel projectId={id} />
+              <ChatHeaderSlot.Provider value={slots.get(id) ?? null}>
+                <DockPanel projectId={id} />
+              </ChatHeaderSlot.Provider>
             </div>
           </aside>
         );

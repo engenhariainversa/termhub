@@ -24,6 +24,14 @@ it('toPublicAttachment drops the owner, the hash and the text', () => {
   expect(JSON.stringify(pub)).not.toMatch(/SEGREDO|abc|u1|c1/);
 });
 
+it('toPublicAttachment shows an audio clip its transcript once it is ready, and only then (TER-1036)', () => {
+  const audio = { kind: 'audio' as const, name: 'audio.m4a', mime: 'audio/mp4', extracted_text: 'roda os testes' };
+  expect(toPublicAttachment(row({ ...audio, status: 'ready' })).transcript).toBe('roda os testes');
+  expect(toPublicAttachment(row({ ...audio, status: 'pending' })).transcript).toBeNull();
+  expect(toPublicAttachment(row({ ...audio, status: 'failed', error_code: 'TRANSCRIPTION_FAILED' })).transcript).toBeNull();
+  expect(toPublicAttachment(row({ status: 'ready', extracted_text: 'SEGREDO' }))).not.toHaveProperty('transcript');
+});
+
 it('toPublicAttachment strips the queue\'s attempt counter from meta', () => {
   expect(toPublicAttachment(row({ status: 'failed', error_code: 'ATTACHMENT_INVALID', meta: { attempts: 2 } })).meta).toEqual({});
   expect(toPublicAttachment(row({ meta: { width: 3, attempts: 1 } })).meta).toEqual({ width: 3 });

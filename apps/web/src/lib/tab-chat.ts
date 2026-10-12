@@ -151,7 +151,11 @@ export function canType(availability: string): boolean {
 }
 
 /** The tab's state in one short line: "Esperando você", "Trabalhando · Bash", "Em segundo plano", "Erro", "Concluído", "Parado". */
-export function stateLine(tab: Pick<TabChatSummary, 'state' | 'background' | 'finished' | 'needs_you' | 'activity'>): string {
+export function stateLine(tab: Pick<TabChatSummary, 'state' | 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'needs_you' | 'activity'>): string {
+  // TER-1046: the login and the trust dialog say what to do; a blocked run is automation's to follow
+  if (tab.auth_required) return i18n.t('Login expirado: rode /login');
+  if (tab.trust_prompt) return i18n.t('Pergunta se a pasta é confiável');
+  if (tab.state === 'idle' && tab.blocked) return i18n.t('Bloqueado');
   if (tab.needs_you || tab.state === 'waiting_input' || tab.state === 'waiting_permission') return i18n.t('Esperando você');
   if (tab.state === 'working') {
     if (tab.background) return i18n.t('Em segundo plano');

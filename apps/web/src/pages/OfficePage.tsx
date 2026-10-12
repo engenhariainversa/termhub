@@ -39,7 +39,7 @@ export function OfficePage() {
   const { can, user, publicCityUrl } = useAuth();
   // the city's short link, when the instance makes one: only the city depth uses it (a building has none)
   const cityLink = useCityLink(!!user?.nickname);
-  const { items, tabState, connected } = useMonitor();
+  const { items, tabState, connected, autoRuns } = useMonitor();
   const { focus, setFocus } = useFocusMode();
   const allowed = can('projects', 'read') && can('terminals', 'read');
   const { city: office, failed: readFailed, stale, reload } = useOfficeCity(allowed);
@@ -52,7 +52,8 @@ export function OfficePage() {
 
   // tabState reads a ref (lib/monitor.tsx), so it never changes identity; `items` is what actually
   // changes on a live push — keep it as a dep, or the model stops updating on monitor pushes.
-  const city = useMemo(() => (office ? buildCityModel(office, tabState) : EMPTY_CITY), [office, tabState, items]);
+  // `autoRuns`: an automatic run's tab gets a robot at its desk (TER-1048)
+  const city = useMemo(() => (office ? buildCityModel(office, tabState, (id) => autoRuns?.get(id)) : EMPTY_CITY), [office, tabState, items, autoRuns]);
   // the same soundscape as the public city: on by default, started by the first gesture on the page
   const sound = useCitySound(city);
   const [soundOpen, setSoundOpen] = useState(false);

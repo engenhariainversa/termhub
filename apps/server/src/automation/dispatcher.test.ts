@@ -5,7 +5,12 @@ import { setupSchema } from '../setup/schema.js';
 import { dispatcherInstanceId, startDispatcher, TICK_MS, TRIGGER_DEBOUNCE_MS, type DispatcherDeps } from './dispatcher.js';
 import { automationBus, dispatchTriggers } from './events.js';
 
-/** Repositories that record every call and answer only what `impl` defines (anything else throws). */
+/** What every owner answers unless a test says otherwise: no version of the Terms pending (TER-742). */
+const DEFAULTS: Record<string, Record<string, (...args: never[]) => unknown>> = {
+  legal: { statusFor: async () => ({ pending: [], upcoming: [] }) },
+};
+
+/** Repositories that record every call and answer only what `impl` (or DEFAULTS) defines (anything else throws). */
 function recordingRepos(impl: Record<string, Record<string, (...args: never[]) => unknown>> = {}) {
   const calls: string[] = [];
   const repos = new Proxy(
@@ -18,7 +23,7 @@ function recordingRepos(impl: Record<string, Record<string, (...args: never[]) =
             get: (_u, method: string) =>
               (...args: never[]) => {
                 calls.push(`${repo}.${method}`);
-                const f = impl[repo]?.[method];
+                const f = impl[repo]?.[method] ?? DEFAULTS[repo]?.[method];
                 if (!f) throw new Error(`unexpected call ${repo}.${method}`);
                 return f(...args);
               },
@@ -47,7 +52,7 @@ function deps(repos: Repositories, over: Partial<DispatcherDeps> = {}): Dispatch
 
 /** No project has automation on: the sweep finds nothing and the list is empty. */
 const idle = () => ({
-  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [] },
+  automationRuns: { cancelOrphaned: async () => [], heartbeat: async () => {}, takeOver: async () => [], dueCleanups: async () => [], cardsWithCancelledWorktree: async () => [] },
   projectSetup: { listWithAutomation: async () => [] },
 });
 
@@ -261,7 +266,7 @@ describe('startDispatcher (fakes)', () => {
     const at = new Date('2026-10-05T12:00:00Z');
     const budgetRepos = (limit: number | null, spent: number) => {
       const setup = setupSchema.parse({ automation: { enabled: true, daily_budget_usd: limit } });
-      return recordingRepos({
+      const impl = {
         ...idle(),
         projectSetup: { listWithAutomation: async () => [{ project_id: 'p1', data: setup }] },
         automationRuns: { ...idle().automationRuns, countActive: async () => 0, claim: async () => null },
@@ -272,7 +277,8 @@ describe('startDispatcher (fakes)', () => {
         tasks: { listByProject: async () => [] },
         tabUsage: { ownerTimeZone: async () => null, costOfDay: async () => spent },
         automationEvents: { insertOnce: async () => null },
-      });
+      };
+      return { ...recordingRepos(impl), impl };
     };
 
     it('a project at its budget gets no new start (the queue is not even read), and its fixer and integrator wait', async () => {
@@ -296,6 +302,29 @@ describe('startDispatcher (fakes)', () => {
       expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
       expect(more.calls).not.toContain('automationRuns.claim');
       await d.stop();
+    });
+
+    it('an owner who has not accepted the Terms in force gets no new start, and their fixer waits (TER-742)', async () => {
+      const pending = { statusFor: async () => ({ pending: [{ id: 'v1', document: 'terms' }], upcoming: [] }) };
+      // with a budget set, reaching the budget check would read the day's cost: stopping first means it never does
+      const { repos, calls } = recordingRepos({ ...budgetRepos(10, 0).impl, legal: pending });
+      const d = startDispatcher(deps(repos, { now: () => at, log: { info: () => {}, warn: () => {} } }), { schedule: false });
+      await d.tick('t');
+      await d.stop();
+      expect(calls).toContain('legal.statusFor');
+      expect(calls).not.toContain('tabUsage.costOfDay');
+      expect(calls).not.toContain('automationRuns.claim');
+      const fixer = { projectId: 'p1', taskId: 'c1', role: 'fixer' as const, triggerSha: 'h1', branch: 'b', base: 'main', prompt: 'p' };
+      const more = recordingRepos({
+        projects: { findById: async () => ({ id: 'p1', owner_id: 'u1' }) },
+        automationPauses: { state: async () => ({ user: null, project: null }) },
+        users: { findById: async () => ({ id: 'u1' }) },
+        projectSetup: { get: async () => ({ data: setupSchema.parse({ automation: { enabled: true } }) }) },
+        tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
+        legal: pending,
+      });
+      expect(await startDispatcher(deps(more.repos, { now: () => at }), { schedule: false }).startTriggered(fixer)).toBe('waiting');
+      expect(more.calls).not.toContain('automationRuns.claim');
     });
 
     it('under the budget, or with none, the queue is read as usual', async () => {
@@ -327,7 +356,7 @@ describe('startDispatcher (fakes)', () => {
       users: { findById: async () => ({ id: 'u1' }) },
       projectSetup: { get: async () => ({ data: { automation: { enabled: over.enabled ?? true, max_parallel: null }, ai: { accounts: [], models: {} } } }) },
       tasks: { findById: async () => ({ id: 'c1', project_id: 'p1' }) },
-      automationRuns: { claim: async () => over.claim ?? null, release: async () => true },
+      automationRuns: { claim: async () => over.claim ?? null, release: async () => true, endedInTabs: async () => [] },
       projectMachines: { listByProject: async () => [] },
     });
 
@@ -351,9 +380,95 @@ describe('startDispatcher (fakes)', () => {
 
     it('no machine for it now: the claim is let go (the trigger stays free) and it waits', async () => {
       const release = vi.fn(async () => true);
-      const { repos } = recordingRepos({ ...base(), automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release } });
+      const { repos } = recordingRepos({ ...base(), automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release, endedInTabs: async () => [] } });
       expect(await startDispatcher(deps(repos), { schedule: false }).startTriggered(fixer)).toBe('waiting');
       expect(release).toHaveBeenCalledWith('r1', 'test');
+    });
+
+    // TER-1051: the worktree is per card, so a fixer never opens a second tab next to one the card left open
+    describe('the card left a tab open', () => {
+      const ended = new Date('2026-10-08T10:00:00Z');
+      const prev = { id: 'r0', task_id: 'c1', status: 'done', tab_id: 'tab1', account_id: 'a0', worktree_path: '/wt/TER-5', allowed_tools: ['Bash(npm test:*)'], ended_at: ended };
+      const tab = (over: object = {}) => ({ id: 'tab1', machine_id: 'm1', ai_account_id: 'a1', state: 'waiting_input', state_text: null, rate_limited_at: null, ...over });
+      const world = (o: { tab?: object | null; prompted?: boolean; question?: boolean } = {}) => {
+        const update = vi.fn(async () => true);
+        const release = vi.fn(async () => true);
+        const insert = vi.fn(async (e: object) => ({ id: 'e1', created_at: '', ...e }));
+        const promptedSince = vi.fn(async () => o.prompted ?? false);
+        const { repos, calls } = recordingRepos({
+          ...base(),
+          automationRuns: { claim: async () => ({ id: 'r1', task_id: 'c1' }), release, endedInTabs: async () => [prev], update, noteTyped: async () => {} },
+          tabs: { findById: async () => (o.tab === null ? undefined : tab(o.tab)), promptedSince },
+          tabQuestions: { hasOpenQuestion: async () => o.question ?? false },
+          automationEvents: { insert },
+        });
+        const type = vi.fn(async () => {});
+        const startAgent = vi.fn();
+        const d = startDispatcher(deps(repos, { type, startAgent: startAgent as unknown as DispatcherDeps['startAgent'] }), { schedule: false });
+        return { d, calls, update, release, insert, type, startAgent, promptedSince };
+      };
+
+      for (const state of ['waiting_input', 'finished'] as const) {
+        it(`at its prompt (${state}) and untouched since the run ended: the fixer takes it over`, async () => {
+          const w = world({ tab: { state } });
+          expect(await w.d.startTriggered(fixer)).toBe('started');
+          expect(w.promptedSince).toHaveBeenCalledWith('tab1', ended);
+          expect(w.update).toHaveBeenNthCalledWith(1, 'r1', 'test', {
+            status: 'starting',
+            tab_id: 'tab1',
+            machine_id: 'm1',
+            account_id: 'a1',
+            branch: 'TER-5-x',
+            worktree_path: '/wt/TER-5',
+            allowed_tools: ['Bash(npm test:*)'],
+          });
+          expect(w.type).toHaveBeenCalledWith(expect.anything(), 'tab1', '[termhub automático] p');
+          expect(w.update).toHaveBeenNthCalledWith(2, 'r1', 'test', expect.objectContaining({ status: 'running' }));
+          expect(w.insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'run_started', payload: expect.objectContaining({ tab_id: 'tab1', reused_tab: true }) }));
+          expect(w.startAgent).not.toHaveBeenCalled();
+          expect(w.calls).not.toContain('projectMachines.listByProject'); // no placement, no new tab
+          expect(w.release).not.toHaveBeenCalled();
+        });
+      }
+
+      const busy: Array<[string, Parameters<typeof world>[0]]> = [
+        ['working', { tab: { state: 'working' } }],
+        ['waiting for a permission', { tab: { state: 'waiting_permission' } }],
+        ['on a usage limit', { tab: { rate_limited_at: new Date() } }],
+        ['with an open question card', { question: true }],
+        ['typed into by a person since the run ended', { prompted: true }],
+      ];
+      for (const [why, over] of busy) {
+        it(`busy or in use (${why}): the claim is let go and the fix waits for the tab`, async () => {
+          const w = world(over);
+          expect(await w.d.startTriggered(fixer)).toBe('tab_busy');
+          expect(w.release).toHaveBeenCalledWith('r1', 'test');
+          expect(w.type).not.toHaveBeenCalled();
+          expect(w.update).not.toHaveBeenCalled();
+          expect(w.startAgent).not.toHaveBeenCalled();
+        });
+      }
+
+      it('a tab that cannot be typed into now lets the claim go: asked again at the next sync', async () => {
+        const w = world();
+        w.type.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'MACHINE_OFFLINE' }));
+        expect(await w.d.startTriggered(fixer)).toBe('waiting');
+        expect(w.release).toHaveBeenCalledWith('r1', 'test');
+        expect(w.insert).not.toHaveBeenCalled();
+      });
+
+      it('the tab was closed: a new tab as before', async () => {
+        const w = world({ tab: null });
+        expect(await w.d.startTriggered(fixer)).toBe('waiting'); // no machine in these fakes
+        expect(w.calls).toContain('projectMachines.listByProject');
+        expect(w.type).not.toHaveBeenCalled();
+      });
+
+      it('an integrator never looks for the card tab', async () => {
+        const w = world();
+        expect(await w.d.startTriggered({ ...fixer, role: 'integrator' })).toBe('waiting');
+        expect(w.calls).not.toContain('automationRuns.endedInTabs');
+      });
     });
   });
 });

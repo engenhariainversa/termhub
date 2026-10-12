@@ -1,0 +1,5 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`prompts > tell every role to decide by itself and record it, never ending on a question (TER-1043) 1`] = `"Decisões de produto ou técnicas: siga o precedente da pessoa (search_memory) ou a sua recomendação; registre no PR, seção "Decisões tomadas" (opções, escolha, motivo), e em report_card (decisions). Nunca termine o turno com uma pergunta. Só pare (report_card blocked) em credenciais/.env, deploy/merge/publicação manual, lojas/EAS, rm fora da worktree, docker/ssh, dados de produção, escopo maior que o card."`;
+
+exports[`prompts > tell every role to decide by itself and record it, never ending on a question (TER-1043) 2`] = `"Decisões de produto ou técnicas: siga o precedente da pessoa (search_memory) ou a sua recomendação; registre em report_card (decisions). Nunca termine o turno com uma pergunta. Só pare (report_card blocked) em credenciais/.env, deploy/merge/publicação manual, lojas/EAS, rm fora da worktree, docker/ssh, dados de produção, escopo maior que o card."`;

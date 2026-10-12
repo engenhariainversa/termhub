@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { useLang, type Dict } from '../i18n';
+import { HTML_LANG, useLang, type Dict } from '../i18n';
 import { Site, SiteFooter, SiteHeader } from '../Site';
 import { useReveal } from '../useReveal';
 
@@ -218,7 +218,7 @@ function ConfirmStep({ token, onAbandon }: { token: string; onAbandon: () => voi
   };
 
   if (state.kind === 'done') {
-    const date = new Date(state.scheduledAt).toLocaleDateString(lang === 'pt' ? 'pt-BR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+    const date = new Date(state.scheduledAt).toLocaleDateString(HTML_LANG[lang], { day: 'numeric', month: 'long', year: 'numeric' });
     return (
       <Notice title={c.done_title}>
         <p className="mt-1 text-body-sm text-frost">{c.done_text(date)}</p>

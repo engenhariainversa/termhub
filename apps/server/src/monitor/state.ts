@@ -3,7 +3,7 @@ import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops'
 import { QUESTION_MAX, parseAskUserQuestion, parseCodexUserInput, parsePermissionTool, sliceUnits, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
-import { classifyTurnEnd } from './turn-end.js';
+import { classifyBackgroundTurnEnd, classifyTurnEnd } from './turn-end.js';
 
 /** Tools whose hooks we understand (the hook script names itself). */
 export const HOOK_TOOLS = ['claude', 'codex', 'cursor'] as const;
@@ -35,9 +35,10 @@ export interface Interpreted {
    */
   keepsWaitText?: true;
   /**
-   * Only on a Claude `Stop`, only when > 0: how many of its `background_tasks` still run (a `Monitor`, a
-   * `run_in_background` shell). The tab is not blocked — the next task notification wakes it — so no suggestion
-   * card opens for this Stop (spec 2026-09-26 TER-203 §3). The count is all that leaves the payload.
+   * Only on a Claude `Stop` read as `waiting_background`: how many of its `background_tasks` still run (a
+   * `Monitor`, a `run_in_background` shell). The tab is not blocked — the next task notification wakes it — so
+   * no suggestion card opens for this Stop (spec 2026-09-26 TER-203 §3). The count is all that leaves the
+   * payload. A Stop whose message ends the work anyway (TER-1053) keeps the count in `meta` only.
    */
   backgroundTasks?: number;
   /**
@@ -111,6 +112,12 @@ const CLAUDE_API_ERRORS = new Set([
   'unknown',
 ]);
 
+/** StopFailure errors that only a new login fixes (TER-1046). */
+const AUTH_ERRORS = new Set(['authentication_failed', 'oauth_org_not_allowed']);
+export const AUTH_REQUIRED_TEXT = 'Login da conta expirou: rode /login nesta aba';
+/** Claude Code's folder trust dialog, read off the screen (TER-1046): the screen itself is never kept. */
+export const TRUST_PROMPT_TEXT = 'O Claude Code pergunta se esta pasta é confiável';
+
 export const isRateLimit = (i: Interpreted | null): boolean => !!i && i.meta.event === 'StopFailure' && i.meta.error === 'rate_limit';
 
 /** The Claude session a hook payload belongs to, when both ids are well-formed (never stored otherwise). */
@@ -181,7 +188,12 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       // `finished` when its whole last message is a report that asks nothing, else a wait (TER-972).
       const background = runningBackgroundTasks(ev.background_tasks);
       if (background === 0) return withAnswer({ kind: classifyTurnEnd(raw), text, meta: { event: name } }, raw);
-      return withAnswer({ kind: 'waiting_background', text, meta: { event: name, background_tasks: background }, backgroundTasks: background }, raw);
+      // Background work that never ends (a Monitor) would hold the tab for ever: only a message that says it
+      // waits on that work keeps it waiting on it; any other is the end of the work, background or not (TER-1053).
+      const kind = classifyBackgroundTurnEnd(raw);
+      const meta = { event: name, background_tasks: background };
+      if (kind !== 'waiting_background') return withAnswer({ kind, text, meta }, raw);
+      return withAnswer({ kind, text, meta, backgroundTasks: background }, raw);
     }
     case 'StopFailure': {
       // An API error ended the turn (spec 2026-09-26 account swap). On a usage limit Claude Code does
@@ -192,6 +204,8 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
         const line = str(ev.last_assistant_message);
         return { kind: 'waiting_input', text: cap(line ? `${RATE_LIMIT_TEXT} — ${line}` : RATE_LIMIT_TEXT), meta: { event: name, error } };
       }
+      // The account cannot be used until the person logs in again (TER-1046): not a passing error.
+      if (AUTH_ERRORS.has(error)) return { kind: 'auth_required', text: `${AUTH_REQUIRED_TEXT} (${error})`, meta: { event: name, error } };
       return { kind: 'error', text: `Erro da API do Claude (${error})`, meta: { event: name, error } };
     }
     case 'SessionEnd':
@@ -391,16 +405,56 @@ export function interpretHookEvent(tool: HookTool, raw: unknown): Interpreted | 
 }
 
 /**
- * States in which the tool is waiting for the person (the "needs you" list). `waiting_background` is not one,
- * nor is `finished`: the agent reported and asks nothing (TER-972).
+ * States in which the tool is waiting for the person (the "needs you" list): a question or a permission, a
+ * login that expired and the folder trust dialog (TER-1046). `waiting_background` is not one, nor is
+ * `finished` (the agent reported and asks nothing, TER-972) or `blocked` (automation or the chat acts).
  */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission'];
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
 
-/** States in which the agent is back at its prompt, its turn over: a wait for the person, or a report (TER-972). */
-export const AT_PROMPT: readonly TabState[] = ['waiting_input', 'finished'];
+/**
+ * States in which the agent is back at its prompt, its turn over: a wait for the person, a report (TER-972), or
+ * a run that reported itself blocked (TER-1046).
+ */
+export const AT_PROMPT: readonly TabState[] = ['waiting_input', 'finished', 'blocked'];
 
 /** States in which the agent is still at its task: working, or waiting on background work of its own (TER-644). */
 export const STILL_WORKING: readonly TabState[] = ['working', 'waiting_background'];
+
+/**
+ * A tab state as the app's contract (`@termhub/mobile-api`, whose `state` enum predates the newer states)
+ * carries it, so an app that predates each flag still shows something true: `waiting_background` travels as
+ * `working` (TER-644), `finished` and `blocked` as `idle` (TER-972, TER-1046), `auth_required` as `error` and
+ * `trust_prompt` as `waiting_input` (TER-1046), each with its flag.
+ */
+export function contractStateOf(state: TabState | null): {
+  state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
+  background: boolean;
+  finished: boolean;
+  blocked: boolean;
+  auth_required: boolean;
+  trust_prompt: boolean;
+} {
+  const flags = {
+    background: state === 'waiting_background',
+    finished: state === 'finished',
+    blocked: state === 'blocked',
+    auth_required: state === 'auth_required',
+    trust_prompt: state === 'trust_prompt',
+  };
+  switch (state) {
+    case 'waiting_background':
+      return { state: 'working', ...flags };
+    case 'finished':
+    case 'blocked':
+      return { state: 'idle', ...flags };
+    case 'auth_required':
+      return { state: 'error', ...flags };
+    case 'trust_prompt':
+      return { state: 'waiting_input', ...flags };
+    default:
+      return { state, ...flags };
+  }
+}
 
 /**
  * A tab "needs you" when it is waiting and has not been seen since that state began: a new hook

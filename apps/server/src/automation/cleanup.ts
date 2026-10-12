@@ -44,6 +44,32 @@ const codeOf = (e: unknown): string => {
   return typeof code === 'string' ? code.slice(0, 64) : 'INTERNAL';
 };
 
+/** How long a cancelled run's worktree is kept for the card's next run before its cleanup is due (TER-974). */
+export const CANCELLED_WORKTREE_GRACE_MS = 24 * 60 * 60_000;
+
+/**
+ * TER-974: a cancelled run's worktree (its card untagged, its tab closed) used to stay until the card's PR
+ * merged or someone removed it. It becomes due, with every run of its card, once nothing will use it again:
+ * the card still exists and is no longer tagged (a tagged card's next run reuses the worktree), no run of
+ * the card is active or ended within CANCELLED_WORKTREE_GRACE_MS, and no tab of its runs is still open (the
+ * person may be working there). Removal keeps the branch and a worktree with uncommitted changes
+ * (`cleanupRuns`), and no tab is closed: every one is already gone. Returns the runs marked due.
+ */
+export async function markCancelledWorktreesDue(repos: Repositories, projectId: string, now: Date): Promise<AutomationRun[]> {
+  const cutoff = now.getTime() - CANCELLED_WORKTREE_GRACE_MS;
+  const due: AutomationRun[] = [];
+  for (const taskId of await repos.automationRuns.cardsWithCancelledWorktree(projectId)) {
+    const task = await repos.tasks.findById(taskId);
+    if (!task || task.auto) continue;
+    const runs = await repos.automationRuns.listByTask(taskId);
+    if (runs.some((r) => ACTIVE.has(r.status) || (r.ended_at !== null && r.ended_at.getTime() > cutoff))) continue;
+    const tabs = await Promise.all(runs.filter((r) => r.tab_id).map((r) => repos.tabs.findById(r.tab_id!)));
+    if (tabs.some(Boolean)) continue;
+    due.push(...(await repos.automationRuns.markCleanupDue([taskId])));
+  }
+  return due;
+}
+
 /**
  * Works through the due runs of one project. Never throws for a run it cannot finish: that run stays due.
  * Pause and automation-off are the caller's to decide (a merged card's cleanup is not "work", so a pause

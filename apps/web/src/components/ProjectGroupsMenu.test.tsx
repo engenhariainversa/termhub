@@ -36,6 +36,11 @@ describe('ProjectGroupsMenu', () => {
     expect(items[1]).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('says the chat reads the groups, Favoritos left out', () => {
+    mount();
+    expect(screen.getByRole('note')).toHaveTextContent(/chat do projeto.*grupos.*Favoritos não conta/);
+  });
+
   it('checking adds at the end, unchecking removes', () => {
     mount();
     fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Favoritos/ }));

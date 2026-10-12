@@ -32,6 +32,7 @@ import { TabQuestionsRepository } from './tab-questions.js';
 import { TabLimitNoticesRepository } from './tab-limit-notices.js';
 import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-attachments.js';
 import { ChatDecisionsRepository } from './chat-decisions.js';
+import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
@@ -43,12 +44,18 @@ import { UserNotificationsRepository } from './user-notifications.js';
 import { PushTicketsRepository } from './push-tickets.js';
 import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
+import { DataExportsRepository } from './data-exports.js';
 import { AutomationSummariesRepository } from './automation-summaries.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
+import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { LegalRepository } from './legal.js';
+import { AccessLogsRepository } from './access-logs.js';
+import { SecurityEventsRepository } from './security-events.js';
+import { FeatureFlagsRepository } from './feature-flags.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -84,6 +91,7 @@ export interface Repositories {
   tabLimitNotices: TabLimitNoticesRepository;
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
+  chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
@@ -95,12 +103,18 @@ export interface Repositories {
   pushTickets: PushTicketsRepository;
   taskPullRequests: TaskPullRequestsRepository;
   accountDeletion: AccountDeletionRepository;
+  dataExports: DataExportsRepository;
   automationPauses: AutomationPausesRepository;
   automationSummaries: AutomationSummariesRepository;
   automationEvents: AutomationEventsRepository;
   automationRuns: AutomationRunsRepository;
+  viewAsAudit: ViewAsAuditRepository;
   tabUsage: TabUsageRepository;
+  accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  legal: LegalRepository;
+  securityEvents: SecurityEventsRepository;
+  featureFlags: FeatureFlagsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -140,6 +154,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabLimitNotices: new TabLimitNoticesRepository(db),
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
+    chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
@@ -151,12 +166,18 @@ export function createRepositories(db: PrismaClient): Repositories {
     pushTickets: new PushTicketsRepository(db),
     taskPullRequests: new TaskPullRequestsRepository(db),
     accountDeletion: new AccountDeletionRepository(db),
+    dataExports: new DataExportsRepository(db),
     automationPauses: new AutomationPausesRepository(db),
     automationSummaries: new AutomationSummariesRepository(db),
     automationEvents: new AutomationEventsRepository(db),
     automationRuns: new AutomationRunsRepository(db),
+    viewAsAudit: new ViewAsAuditRepository(db),
     tabUsage: new TabUsageRepository(db),
+    accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    legal: new LegalRepository(db),
+    securityEvents: new SecurityEventsRepository(db),
+    featureFlags: new FeatureFlagsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -167,6 +188,7 @@ export type { ProjectSetup } from './project-setup.js';
 export type { WaitlistEntry } from './waitlist.js';
 export type { Role, PermissionGrant } from './roles.js';
 export type { Upload } from './uploads.js';
+export type { FeatureFlagRow, FeatureFlagOverride } from './feature-flags.js';
 export { SYSTEM_ROLE_IDS } from './roles.js';
 export type { ChatConversation, ChatMessage, ChatRole } from './chat.js';
 export type { ChatAction, ChatActionClass, ChatActionStatus, InsertPendingInput, InsertApprovedInput } from './chat-actions.js';
@@ -193,4 +215,8 @@ export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
 export type { PauseState } from './automation-pauses.js';
 export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
+export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
+export type { LegalVersion, LegalStatus, LegalDocument, LegalChannel } from './legal.js';
+export { LEGAL_NOTICE_MS } from './legal.js';
+export { VIEW_AS_AUDIT_RETENTION_MS } from './view-as-audit.js';

@@ -127,6 +127,10 @@ export function ProjectGroupsMenu({ projectId, anchor, onClose }: Props) {
           {t('Novo grupo…')}
         </button>
       )}
+      {/* the concierge reads the groups (spec 2026-09-30-concierge-project-groups): say so where they are edited */}
+      <p role="note" className="mt-1 border-t border-line px-3 pt-1.5 pb-1 text-[11px] leading-snug text-fg-dim">
+        {t('O chat do projeto sabe em quais grupos ele está e quais projetos estão junto. Favoritos não conta como grupo.')}
+      </p>
     </div>
   );
 }

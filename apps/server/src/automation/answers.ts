@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { blocklistParts, scheduleAutoAnswer } from '../chat/auto-answer.js';
+import { blocklistParts, scheduleAutoAnswer, type WokenAnswerGuard } from '../chat/auto-answer.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
 import { answerTabQuestion } from '../chat/tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload, type PermissionPayload } from '../chat/tab-question-payload.js';
@@ -8,7 +8,7 @@ import { AUTOMATION_MCP_DENIED_TOOLS, AUTOMATION_MCP_TOOLS, automationAllowList,
 import { controlContextFor } from '../control/context.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { TabQuestion as TabQuestionRow } from '../db/repositories/tab-questions.js';
+import type { AutoAnswer, TabQuestion as TabQuestionRow } from '../db/repositories/tab-questions.js';
 import { tk } from '../i18n/index.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { recordEvent } from './events.js';
@@ -213,6 +213,40 @@ export async function automationAnswer(deps: AnswerDeps, q: TabQuestionRow, run:
     return 'repeat';
   }
   return (await escalate(deps, run, QUESTION_UNANSWERED)) ? 'escalated' : 'left';
+}
+
+/** The countdown's failure code when the woken chat's answer is stopped by the run's caps or cycle detector (TER-974). */
+export const WOKEN_ANSWER_STOPPED = 'AUTOMATION_ANSWER_CAP';
+
+/**
+ * TER-974: the answer the chat woken for a question of an automatic tab schedules (`by: 'concierge'`,
+ * step 3 of `automationAnswer`) used to go out uncounted, so it escaped the run's cycle detector (only
+ * the hourly and per-run caps of the run's own answers bounded the loop around it). Right before it is
+ * sent, it meets the same caps and cycle detector as a repeat or a recommendation: past one, it is not
+ * sent and the run is handed to the person with that reason. Once sent, it is recorded as the run's
+ * `question_answered` (`via: 'woken'`, with its cycle hash). A countdown of any other kind, or in a tab
+ * with no live automatic run, is left alone.
+ */
+export function wokenAnswerGuard(deps: AnswerDeps): WokenAnswerGuard {
+  const runOf = async (row: TabQuestionRow, auto: AutoAnswer): Promise<AutomationRun | null> =>
+    auto.by === 'concierge' && row.kind === 'choice' ? automaticRunOfTab(deps.repos, row.tab_id).catch(() => null) : null;
+  const cycleOf = (row: TabQuestionRow, auto: AutoAnswer) => questionCycleHash(row.payload as ChoicePayload, auto.answer);
+  return {
+    async before(row, auto) {
+      const run = await runOf(row, auto);
+      if (!run) return null;
+      const reason = (await capReached(deps, run)) ?? ((await cycleReached(deps, run, cycleOf(row, auto))) ? ANSWER_CYCLE : null);
+      if (!reason) return null;
+      (deps.log ?? noopLog).info({ runId: run.id, tabQuestionId: row.id }, 'automation: woken chat answer stopped');
+      await escalate(deps, run, reason);
+      return WOKEN_ANSWER_STOPPED;
+    },
+    async sent(row, auto) {
+      const run = await runOf(row, auto);
+      if (!run) return;
+      await recordEvent(deps.repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'question_answered', payload: { via: 'woken', tab_id: row.tab_id, question_id: row.id, cycle: cycleOf(row, auto) } });
+    },
+  };
 }
 
 /**

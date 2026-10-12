@@ -5,7 +5,8 @@ import { SCROLL_MAX_LINES } from '@termhub/machine-ops';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Project, Tab } from '../db/repositories/types.js';
 import { rejectUpgrade, type createUpgradeRouter } from '../ws/router.js';
-import { Scoped } from '../auth/scope.js';
+import { Scoped, type Scope } from '../auth/scope.js';
+import { recordSecurityEvent, upgradeIp, viewAsIdOf } from '../auth/audit.js';
 import { AgentOfflineError, agents } from '../agent/registry.js';
 import { AgentRpcError } from '../agent/connection.js';
 import { versionAtLeast } from '../agent/errors.js';
@@ -43,6 +44,11 @@ interface Deps {
   log: FastifyBaseLogger;
 }
 
+/** Whether this terminal belongs to someone else and is reached only through the admin's "view as". */
+export function opensOthersTerminal(scope: Scope, project: Pick<Project, 'owner_id'>): boolean {
+  return scope.viewAs.kind !== 'self' && project.owner_id !== scope.user.id;
+}
+
 export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter>, deps: Deps): WebSocketServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 1024 * 1024 });
   const log = deps.log.child({ mod: 'ws' });
@@ -54,6 +60,25 @@ export function registerTerminalWs(router: ReturnType<typeof createUpgradeRouter
     if (!found || found.tab.kind !== 'terminal') return rejectUpgrade(socket, 404, 'Not Found');
     const { tab, project, machine, cwd } = found;
     const locale = pickLocale(scope.user.locale, req.headers['accept-language']);
+
+    // An admin "viewing as" someone opens that person's terminal: on the security trail (TER-577).
+    if (opensOthersTerminal(scope, project)) {
+      void recordSecurityEvent(
+        deps.repos,
+        {
+          actor_id: scope.user.id,
+          actor_email: scope.user.email,
+          view_as_id: viewAsIdOf(scope),
+          action: 'terminal.view_as_open',
+          target_type: 'tab',
+          target_id: tab.id,
+          target_label: tab.name,
+          ip: upgradeIp(req),
+          meta: { machine_id: machine.id, owner_id: project.owner_id, writable: canWrite },
+        },
+        log,
+      );
+    }
 
     const cols = Number(url.searchParams.get('cols')) || 80;
     const rows = Number(url.searchParams.get('rows')) || 24;

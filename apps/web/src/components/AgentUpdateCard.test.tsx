@@ -26,7 +26,7 @@ import { AgentUpdateCard, POLL_MS } from './AgentUpdateCard';
 
 const machine: Machine = {
   id: 'm1', name: 'mini', host: null, ssh_user: null, ssh_port: 22, type: 'agent', os: 'macos', capabilities: ['tmux'], checked_at: null,
-  agent_version: '0.2.1', agent_last_seen_at: null, agent_auto_update: false, claude_auto_swap: false, is_local: false, owner_id: 'u1', owner_name: null, created_at: '',
+  agent_version: '0.2.1', agent_last_seen_at: null, agent_auto_update: false, claude_auto_swap: false, ai_usage_query: true, is_local: false, owner_id: 'u1', owner_name: null, created_at: '',
 };
 const status = (agent_version: string, latest = '0.2.5', online = true) => ({ id: 'm1', online, tmux: true, os: 'macos', capabilities: [], agent_version, latest_agent_version: latest, update_available: online && agent_version !== latest });
 
@@ -43,6 +43,20 @@ describe('AgentUpdateCard', () => {
     render(<AgentUpdateCard machine={machine} />);
     await screen.findByText('v0.2.5 · atualizado');
     expect(screen.queryByRole('button', { name: 'Atualizar' })).toBeNull();
+  });
+
+  // TER-1056: an agent below the server's minimum carries a red notice until it updates.
+  it('warns in red while the agent is below the minimum version', async () => {
+    statusMock.mockResolvedValue({ ...status('0.19.0', '0.27.0'), min_agent_version: '0.27.0', below_min_version: true });
+    render(<AgentUpdateCard machine={machine} />);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/abaixo da versão mínima do termhub \(v0\.27\.0\)/);
+  });
+
+  it('shows no minimum notice for an agent at or above it', async () => {
+    statusMock.mockResolvedValue({ ...status('0.27.0', '0.27.0'), min_agent_version: '0.27.0', below_min_version: false });
+    render(<AgentUpdateCard machine={machine} />);
+    await screen.findByText('v0.27.0 · atualizado');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('offers the update, then polls until the new version reports back', async () => {

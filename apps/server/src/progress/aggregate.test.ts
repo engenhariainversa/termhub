@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { agentOnCard, progressResponse, type EpicProgress, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { aggregateCard, aggregateEpic, FEED_KINDS, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
 const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
@@ -164,6 +164,17 @@ describe('automatic tabs and the feed', () => {
     expect(unknown.reason_text).toBe('O trabalho automático parou e espera você.');
   });
 
+  it('names the PR head a conflict escalation is about, and why it was sent (TER-1016)', () => {
+    const sha = 'a058efd2f842aecb5ba60bcf8f56ff51eb80ae6f';
+    const text = (payload: Record<string, unknown>, locale: 'pt-BR' | 'en' = 'pt-BR') => feedOf([row('1', 'escalated', { reason: 'conflict_cap', pr: 397, ...payload })], locale)[0].reason_text;
+    expect(text({ sha, attempts: 3 })).toBe('O PR continua com conflito em a058efd depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+    expect(text({ sha, cause: 'fixer_no_push' })).toContain('A correção do conflito em a058efd terminou sem push');
+    expect(text({ sha, cause: 'run_done_no_push' })).toContain('A execução terminou, mas o PR continua com conflito em a058efd');
+    expect(text({ sha, cause: 'run_done_no_push' }, 'en')).toContain('still in conflict at a058efd');
+    // an older event without a head keeps the reason's own text
+    expect(text({})).toBe('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.');
+  });
+
   it('gives a failed start its reason in the reader language, and no reason to any other block (TER-987)', () => {
     const start = { code: 'LAUNCH_FAILED', stage: 'start', message: 'A máquina não respondeu', message_en: 'The machine did not answer' };
     expect(feedOf([row('1', 'run_blocked', start)], 'pt-BR')[0].reason_text).toBe('A máquina não respondeu');
@@ -171,6 +182,19 @@ describe('automatic tabs and the feed', () => {
     expect(feedOf([row('1', 'run_blocked', { code: 'LAUNCH_FAILED', stage: 'start', message: 'só pt' })], 'en')[0].reason_text).toBe('só pt');
     expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
   });
+
+  it('says why a run was cancelled, in the reader language, and nothing for a reason it does not know (TER-974)', () => {
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'tab_closed' })], 'pt-BR')[0].reason_text).toBe('a aba foi fechada');
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'untagged' })], 'en')[0].reason_text).toBe('the card left automatic work');
+    expect(feedOf([row('1', 'run_cancelled', { reason: 'novo' })], 'pt-BR')[0].reason_text).toBeNull();
+    expect(FEED_KINDS).toEqual(expect.arrayContaining(['run_cancelled', 'permission_auto_approved', 'guard_blocked']));
+  });
+
+  it('says a run_done took over a blocked run, in the reader language; any other run_done has no reason (TER-1049)', () => {
+    const adopted = { via: 'pull_request_after_blocked', pr_url: 'https://x/pr/9' };
+    expect(feedOf([row('1', 'run_done', adopted)], 'pt-BR')[0].reason_text).toBe('PR aberto depois do bloqueio; o automático acompanha até o merge');
+    expect(feedOf([row('1', 'run_done', adopted)], 'en')[0].reason_text).toBe('PR opened after the block; automatic work follows it until the merge');
+    expect(feedOf([row('1', 'run_done', { via: 'pull_request' })], 'pt-BR')[0].reason_text).toBeNull();  });
 
   it('names the branch a merge landed on', () => {
     expect(feedOf([row('1', 'merged', { base: 'main', branch: 'zzz' })], 'pt-BR')[0].branch).toBe('main');

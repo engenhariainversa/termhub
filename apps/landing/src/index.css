@@ -1,3 +1,7 @@
+/* Fonts are served from termhub.dev itself: nothing from Google loads before the cookie
+   consent (see consent.ts). JetBrains Mono is only imported by the brand page. */
+@import '@fontsource-variable/inter/opsz.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,7 +12,7 @@ html {
 
 body {
   @apply bg-canvas text-frost antialiased;
-  font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   font-optical-sizing: auto;
   letter-spacing: -0.01em;
   font-feature-settings: 'ss01' on, 'ss03' on, 'ss04' on, 'ss19' on;
@@ -132,4 +136,74 @@ h4 {
   .animate-pulse {
     animation: none;
   }
+}
+
+/* /termos/ and /privacidade/: the Markdown rendered by src/legal/render.ts */
+.legal-doc {
+  @apply text-body text-frost;
+}
+
+.legal-doc h2 {
+  @apply mt-12 scroll-mt-20 text-heading-sm;
+}
+
+.legal-doc h3 {
+  @apply mt-8 scroll-mt-20 text-subheading;
+}
+
+.legal-doc p,
+.legal-doc ul,
+.legal-doc ol,
+.legal-doc blockquote,
+.legal-doc .legal-table {
+  @apply mt-4;
+}
+
+.legal-doc ul {
+  @apply list-disc space-y-1.5 pl-6;
+}
+
+.legal-doc ol {
+  @apply list-decimal space-y-1.5 pl-6;
+}
+
+.legal-doc li > ul,
+.legal-doc li > ol {
+  @apply mt-1.5;
+}
+
+.legal-doc strong {
+  @apply font-semibold text-white;
+}
+
+.legal-doc a {
+  @apply text-accent underline underline-offset-4;
+}
+
+.legal-doc code {
+  @apply rounded-tint bg-surface px-1 py-0.5 font-mono text-body-sm;
+}
+
+.legal-doc blockquote {
+  @apply border-l-2 border-border-2 pl-4 text-frost;
+}
+
+.legal-doc hr {
+  @apply my-8 border-border-2;
+}
+
+.legal-doc .legal-table {
+  @apply overflow-x-auto rounded-card border border-border-2;
+}
+
+.legal-doc table {
+  @apply w-full text-left text-body-sm;
+}
+
+.legal-doc th {
+  @apply bg-surface px-4 py-3 text-caption font-medium uppercase tracking-wide text-muted;
+}
+
+.legal-doc td {
+  @apply border-t border-border-2 px-4 py-3 align-top;
 }

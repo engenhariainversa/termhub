@@ -8,7 +8,7 @@ Short version for the firewall ticket:
 
 - The agent only makes **outbound** HTTPS/WebSocket connections on **TCP 443**. It opens **no listening port** on the machine and needs no SSH and no VPN.
 - Allow `app.termhub.dev` and `termhub.dev` on 443, with WebSocket upgrades. Allow `registry.npmjs.org` to install and update the agent.
-- **Explicit HTTP proxies are not supported by the agent yet.** Allow direct egress to the hosts above, or use a transparent proxy that passes WebSocket upgrades. If you inspect TLS, exempt the termhub hosts.
+- Behind an **explicit HTTP proxy**, export `HTTPS_PROXY` (and `NO_PROXY`) before `termhub-agent service install`; the agent tunnels through it with `CONNECT`. If you inspect TLS, exempt the termhub hosts or give the agent your corporate CA with `NODE_EXTRA_CA_CERTS`.
 
 ## 1. How it works
 
@@ -25,7 +25,7 @@ Short version for the firewall ticket:
   - It dials out to the server over one persistent WebSocket, `wss://<server>/agent/ws`, and keeps it open.
   - Every terminal is a tmux session on the machine. Its bytes travel over that one socket, multiplexed as channels.
   - The agent runs as the **logged-in user**: a systemd user unit on Linux, a LaunchAgent on macOS. It needs no root, and no admin rights beyond installing tmux (and the build tools on Linux).
-- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from; there is no third-party script, CDN or font host.
+- **Web app.** A single-page app served by the server. Every API call and every WebSocket goes to the **same origin** it was loaded from, and the app's own code, styles and fonts are served from that origin too (no CDN, no font host). The one exception is **Google Analytics (GA4, through the Firebase SDK)**, and only after the user accepts cookies in the cookie banner; declining, or withdrawing consent later, keeps it off. When accepted, the browser loads `gtag.js` from `www.googletagmanager.com` and talks to `firebase.googleapis.com`, `firebaseinstallations.googleapis.com` and `*.google-analytics.com` (e.g. `www.google-analytics.com`, `region1.google-analytics.com`). It reports route changes with ids stripped and a few product events, never the user id, e-mail, machine names or terminal content. A build without the `VITE_FIREBASE_*` variables (a self-hosted install, by default) ships no analytics at all. Blocking these hosts does not break the app.
 - **Mobile app.** It talks only to `termhub.dev` (`/api/m/v1/*` and `wss://termhub.dev/ws/m/chat`).
 - **Monitor hooks** (optional, installed from the app). A small shell script that Claude Code, Codex or the Cursor CLI call on their events. It forwards the event with `curl` as an HTTPS POST to `termhub.dev/api/hooks/events`, so the app can show which tab is waiting for you.
 - **Chat.** The termhub chat runs the `claude` CLI **on your own machine**, through the agent, with your own Claude login. That CLI calls back into termhub's MCP endpoint (`termhub.dev/mcp`) with a short-lived token scoped to the run.
@@ -34,7 +34,7 @@ Short version for the firewall ticket:
 
 | Connection | Direction | Keep-alive | Reconnect |
 |---|---|---|---|
-| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the token is revoked (4401) or the protocol is too old. |
+| Agent ⇄ server (`/agent/ws`) | machine → server | Both sides ping every 20 s; a missed pong drops the socket. The opening handshake times out after 15 s. | Exponential backoff from 1 s to 30 s with jitter. It stops only when the machine's access is revoked (4401) or the protocol is too old. |
 | Browser ⇄ server (`/ws/tabs`, `/ws/monitor`, `/ws/chat`, `/ws/sim`) | browser → server | Server pings every 30 s. | Terminal: exponential backoff up to 15 s, 8 attempts. Chat and monitor: every 5 s. |
 | Phone ⇄ server (`/ws/m/chat`) | phone → server | Server pings every 30 s. | Backoff from 1 s to 30 s; reconnects immediately when the app returns to the foreground. |
 | Hook events | machine → server | One POST per event, 5 s timeout, fire-and-forget. | None needed. |
@@ -50,8 +50,11 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 
 **Corporate proxies and TLS inspection**
 
-- **Explicit proxy (`HTTPS_PROXY`):** **not supported by the agent's WebSocket today.** The agent connects directly, and the service definition does not carry proxy variables. Allow direct egress to the hosts in section 3. A transparent proxy works if it passes the WebSocket `Upgrade`. (The hook script uses `curl`, which honours `https_proxy` when it is set in the CLI's environment.)
-- **TLS inspection (MITM):** the agent validates certificates with Node.js's built-in CA list, and the service does not pass an extra CA file. Inspection with a corporate root CA will make the handshake fail, so **exempt the termhub hosts from inspection**.
+- **Explicit proxy (`HTTPS_PROXY`):** the agent reads `https_proxy`/`HTTPS_PROXY` (and `http_proxy`/`HTTP_PROXY` for a plain `http://` server URL), lower case first, as curl does, and opens its WebSocket through an HTTP `CONNECT` tunnel. TLS to the termhub server still runs end to end inside the tunnel. The proxy may be `http://` or `https://`, with Basic credentials in the URL (`http://user:pass@proxy:3128`, percent-encoded). SOCKS proxies are not supported: the agent reports an error instead of connecting directly. `NO_PROXY`/`no_proxy` lists hosts that skip the proxy: `*`, a domain (which also covers its subdomains, with or without a leading `.` or `*.`), or `host:port`. CIDR ranges are not read.
+- **The service needs the variables too.** A systemd unit or LaunchAgent does not inherit your shell. `termhub-agent service install` copies `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY` and `NODE_EXTRA_CA_CERTS` from the shell it runs in into the unit or plist, and prints what it copied. When a value holds a proxy password, the file is made readable only by its owner (`0600`). The Linux unit is refreshed at every agent start, and that refresh keeps the variables that are already in it. To change them, export the new values and run `service install` again. The same variables reach `npm` during the agent's self-update.
+- **TLS inspection (MITM):** the agent validates certificates with Node.js's built-in CA list. With inspection by a corporate root CA, either **exempt the termhub hosts from inspection** or point `NODE_EXTRA_CA_CERTS` at a PEM file with that CA before `service install`. Node adds it to the built-in list; it does not replace it.
+- **Check it:** `termhub-agent doctor` shows the proxy the agent uses for the server (password hidden), says when `NO_PROXY` exempts the server, and checks that the `NODE_EXTRA_CA_CERTS` file can be read and holds a certificate. `doctor` checks the shell it runs in; the service uses what `service install` wrote.
+- The hook script uses `curl`, which honours `https_proxy` when it is set in the CLI's environment.
 - **WebSocket:** make sure the proxy or firewall allows `Connection: Upgrade` / `Upgrade: websocket` to `app.termhub.dev` and `termhub.dev`.
 
 ## 3. Domains to allow
@@ -62,7 +65,7 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 |---|---|---|---|
 | `app.termhub.dev` | 443 (HTTPS + WSS) | browsers; agent | Web app, REST API, browser WebSockets. The agent WebSocket `wss://app.termhub.dev/agent/ws` also lives here: the `connect` command the app shows uses the app's own address. |
 | `termhub.dev` | 443 (HTTPS + WSS) | machines; phones | Hook events (`/api/hooks/events`), MCP endpoint for the chat and agent tabs (`/mcp`), mobile API and WebSocket (`/api/m/v1`, `/ws/m/chat`), and the website. |
-| `registry.npmjs.org` | 443 | machines (install/update) | `npm i -g @termhub/agent`, and later updates from the app's update button or auto-update. |
+| `registry.npmjs.org` | 443 | machines (install/update) | `npm i -g @termhub/agent`, and later updates from the app's update button, the chat's `update_machine_agent` or the auto-update (on by default since TER-1056). |
 | Cloudflare Access for termhub Cloud, `*.cloudflareaccess.com` | 443 | browsers | `app.termhub.dev` is protected by Cloudflare Access, which asks the user to sign in before the app loads. |
 | `accounts.google.com` | 443 | browsers | Google sign-in, used by the Cloud's access check and by "Entrar com Google". |
 
@@ -72,16 +75,20 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 |---|---|---|
 | Your OS package mirrors or Homebrew | machines | Installing tmux (and, on Linux, the build tools for node-pty) with the install command from Add machine (`brew` on macOS; `apt-get`, `dnf` or `pacman` on Linux). |
 | The hosts your AI CLIs already use (e.g. Anthropic for Claude Code, OpenAI for Codex, Google for Gemini) | machines | The CLIs run in termhub tabs exactly as they would in any terminal. termhub adds no host of its own for them; follow each vendor's documentation. |
+| `www.googletagmanager.com`, `firebase.googleapis.com`, `firebaseinstallations.googleapis.com`, `*.google-analytics.com` | browsers | Google Analytics in the web app, loaded only after the user accepts cookies. Blocking them only turns analytics off. |
 | `github.com` | macOS machines | Only the first time you set up the iOS Simulator viewer (clones Appium's WebDriverAgent). |
 
-The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
+The **server** also makes outbound calls, but only from termhub's side: npm (latest agent version and its provenance attestation), Sigstore's TUF mirror `tuf-repo-cdn.sigstore.dev` (the trust root used to verify that attestation), Google (OAuth), the ticket integrations you configure (GitHub, Linear, Jira), the usage endpoints of the AI providers, and Expo (mobile push). Your network does not need to allow those. They are listed for self-hosters in [Evidence](#evidence).
+
+A self-hosted server behind an **explicit proxy** reaches them through it: the server image sets `NODE_USE_ENV_PROXY=1`, so `fetch`, `http` and `https` honour `HTTPS_PROXY`, `HTTP_PROXY` and `NO_PROXY` once you set them in the server's environment (Node.js 22.21 or later; outside the image, set `NODE_USE_ENV_PROXY=1` yourself). List the compose services in `NO_PROXY` (`whisper,embed,mailpit,localhost,127.0.0.1`), or the server will send its own internal calls to the proxy. SMTP does not use those variables: set `SMTP_PROXY=http://proxy:3128` and the mail connection tunnels through the proxy with `CONNECT`.
 
 ## 4. What the agent installs and can do
 
 **Installation**
 
 - **The npm package** `@termhub/agent`, installed globally. It is published from GitHub Actions with **npm provenance**, so `npm view @termhub/agent` and `npm audit signatures` can tie each release to the public workflow that built it.
-- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine's token.
+- **Updates** (the update button, the chat's `update_machine_agent` and the auto-update, on by default) install only a release the **server verified**. When npm reports a new latest version, the server reads its `dist.integrity` (it must be `sha512-…`), fetches the release's SLSA provenance attestation from the npm registry and verifies it with Sigstore: the certificate chain, the transparency log, and the signer, which must be this repository's `publish-agent.yml` workflow on `main` or an `agent-vX.Y.Z` tag. The signed statement must name `pkg:npm/%40termhub/agent@<version>` with that same SHA-512. A release that fails is logged and not offered; the previous verified release stays. The update carries the verified integrity, and agents from 0.22.0 download the tarball, check its SHA-512 against it and install that file (older agents install by version). Limits: the check covers the `@termhub/agent` tarball, not its dependencies (`ws`, `zod`, `node-pty`), which npm resolves by semver range at install time; and the server needs to reach `tuf-repo-cdn.sigstore.dev` besides `registry.npmjs.org` (the trust root is cached under the OS temp dir). The server asks npm once an hour with an anonymous `GET`, and skips the poll while no agent is connected.
+- **The config file** `~/.termhub/config.json`, created with mode `0600` in a `0700` directory. It holds the server URL and the machine id; next to it, `device-key.pem` (also `0600`) holds the machine's Ed25519 private key. An agent paired before 0.25.0 keeps its permanent token in `config.json` instead, until the machine is paired again.
 - **The service** (`termhub-agent service install`):
   - Linux: a systemd **user** unit, `systemctl --user`. Keeping it running after logout requires `loginctl enable-linger`.
   - macOS: a **LaunchAgent** in `~/Library/LaunchAgents`.
@@ -91,6 +98,7 @@ The **server** also makes outbound calls, but only from termhub's side: npm (lat
   - its settings file `~/.termhub/hook.env` (mode `0600`);
   - entries merged into `~/.claude*/settings.json`, `~/.codex/config.toml` and `~/.cursor/hooks.json`.
   - Uninstalling from the app removes them.
+- **Removing the agent.** Deleting an online machine whose agent is 0.22.0 or newer can also uninstall it (the "uninstall from the machine" option, on by default): the server removes the monitor hooks, kills the tmux sessions of the machine's tabs, then asks the agent to remove its service definition, its config file and its device key (or its old token) and stop. If removing the hooks or the agent fails, nothing is deleted and the error is shown. The npm package stays installed. For an offline machine or an older agent, run on the machine: `termhub-agent service uninstall`, `termhub-agent disconnect`, `npm rm -g @termhub/agent`.
 - **Per-tab MCP config** for agents started from termhub: `~/.termhub/tabs/<tab>/`, deleted when the tab closes.
 
 **What the server can ask the agent to do**
@@ -102,7 +110,8 @@ The server cannot send the agent an arbitrary shell command. It can only call a 
 - detect installed tools; read hardware stats;
 - paste a file into a tab;
 - install or remove the monitor hooks;
-- update the agent to a given version;
+- update the agent to a release the server verified (version and SHA-512 integrity);
+- uninstall itself (service definition and config) when the machine is deleted with that option;
 - read the local AI CLI login to show usage limits (see section 5);
 - read `gh auth token`, only when you create a GitHub integration from the chat, and only after you confirm the card;
 - scan the repository's `docs/` for the chat's memory;
@@ -140,8 +149,11 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
   - CSRF double-submit on every state-changing request;
   - an Origin check on WebSockets.
 - **Machines:**
-  - each machine gets a 256-bit token (`thb_ag_…`) that is shown once; the server stores only its SHA-256;
-  - **rotating the token or deleting the machine drops the live connection immediately** (close 4401), and the agent stops retrying.
+  - the app shows a 256-bit pairing token (`thb_ag_…`) once; it works **once**, for **15 minutes**, and the server stores only its SHA-256;
+  - `termhub-agent connect` generates an Ed25519 key pair on the machine and trades the pairing token plus the public key for the machine; the token is burnt and the private key never leaves the machine;
+  - every connection then proves possession: the server sends a fresh nonce in the handshake and the agent signs `nonce ‖ machine id ‖ timestamp`. A token leaked from a terminal, a screenshot or a shell history is useless once used; a stolen `~/.termhub` directory is still a risk;
+  - machines paired before (agent < 0.25.0) keep their permanent bearer token until someone uses "Parear de novo"; the app marks them and asks to update;
+  - **"Parear de novo" or deleting the machine drops the live connection immediately** (close 4401), revokes the key (or the old token), and the agent stops retrying.
 - **Phones:**
   - enrolment is approved by the owner on the web, and the same code is shown on both screens;
   - the phone holds a P-256 key in the platform keystore and signs every request with it (DPoP, ES256);
@@ -151,11 +163,22 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 ### Data in transit and at rest
 
 - **In transit:** all client connections use TLS (HTTPS/WSS on 443), terminated by the Cloud's edge. Inside the hosting environment, the server talks to its database and helper services over a private network.
+  - The database connection does not use TLS: in the compose setup the server and Postgres share a private network. If you self-host against a managed database across a network you do not control, add `sslmode=require` (or `verify-full` with the provider's CA) to `DATABASE_URL`.
+  - The speech-to-text (`whisper`) and embeddings (`embed`) services each require a shared secret (`WHISPER_SECRET`, `EMBED_SECRET`) and refuse every request while it is empty, so reaching the private network is not enough to use them.
+  - In production the server refuses to start with the compose fallback database password (`termhub`); set `POSTGRES_PASSWORD`.
 - **At rest:**
   - integration tokens (GitHub, Jira, Linear) are encrypted with **AES-256-GCM**;
   - every credential termhub issues (session, API, agent, hook, mobile) is stored only as a hash;
   - other data is stored in the database as is (see [Known limitations](#known-limitations)).
 - **Terminal content is never written to the server logs.** Logs carry metadata only (tab, machine, sizes), and cookies and authorization headers are redacted.
+- **Access records (Marco Civil, art. 15).** The server keeps a record of every access to the application for 6 months, as Brazilian law requires of an application provider:
+  - one row per API response and per WebSocket upgrade, in the `access_logs` table of the database, so the records survive the blue/green deploys that recreate the app containers;
+  - each row holds only the date and time, the client IP (the one Cloudflare forwards), the user when known (session, API token), the kind (`http` or `ws`), the method, the route and the status;
+  - the route is the server's route pattern (`/api/tabs/:id`), or the path for a WebSocket; never the query string, a request or response body, terminal or chat content, login codes or headers;
+  - static files, the single-page app's own pages and the healthcheck probes (`/api/ready`, `/api/health`) are not recorded;
+  - records are written in batches every few seconds, off the request's path; if the database does not take them, they wait in memory up to a ceiling, past which the oldest are dropped and the count is logged;
+  - rotation: an hourly job deletes the records older than 190 days (6 months plus a margin). Rows have no link to the account, so deleting an account does not remove its records before their 6 months are over;
+  - the records are read only by the operator, through the database, for example to answer a court order. They are not shown in the app.
 - **What the server keeps from your terminals:**
   - it does not store the terminal stream or scrollback;
   - it keeps each tab's latest status and the AI agent's last answer, which show on the home page and in the chat;
@@ -164,10 +187,13 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 ### Credentials that belong to the machine
 
-- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini):
-  - To show usage limits, the server asks the agent to read the CLI's login file on demand and uses it once to query the provider's usage endpoint.
-  - The credential is **not stored** on the server; only the usage numbers are cached, in memory.
-  - It does travel to the server over the encrypted agent connection for that query. If that is not acceptable, don't add AI accounts in termhub; everything else keeps working.
+- **AI subscription logins** (Claude, ChatGPT/Codex, Gemini, Antigravity): the credential is read **and used** on the machine that holds it, and never travels to the server.
+  - **Agent machines** (agent 0.20.0 or later): to show usage limits, the agent reads the CLI's login on demand, queries the provider's usage endpoint itself and returns only the usage numbers.
+  - **SSH machines:** the server runs a script on the machine that reads the login and calls the provider with `curl` there; the token is passed to `curl` on stdin, so it is neither printed nor on a command line. The server receives only the provider's response. The machine needs `curl`.
+  - **The local machine** (the server's own host): the server process does the same in-process, since the credential is already on that host.
+  - **Older agents** do not fall back to sending the credential: the account card says to update the agent, and shows no usage until then.
+  - Nothing is stored: only the usage numbers are cached, in memory.
+  - **The query can be turned off per machine** (Máquinas › the machine, "Consultar o uso das contas de IA", on by default). When off, termhub does not read the credential at all and that machine's accounts show no usage bars; everything else keeps working.
 - **The chat's Claude login** never leaves the machine: the CLI runs there.
 - **`gh auth token`** is read only when you confirm a "create GitHub integration" card. It is then stored encrypted, like any integration token.
 
@@ -175,7 +201,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 | To cut off… | Do this | Effect |
 |---|---|---|
-| A machine | Máquinas › the machine › rotate the token, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
+| A machine | Máquinas › the machine › Agente › Parear de novo, or delete the machine | The live connection closes at once with 4401; the agent exits and its service stops retrying. |
 | An API token | Settings › API tokens › revoke | The next call is refused. |
 | A phone | Settings › Devices › revoke | Its WebSocket closes with 4401 and its tokens are refused. |
 | A chat grant | the grant's "revoke" button (web or phone) | The next action asks again. |
@@ -191,32 +217,33 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
    - `registry.npmjs.org`
    - Cloudflare Access (`*.cloudflareaccess.com`) and `accounts.google.com`, for browsers.
 2. **No inbound rule** on the machines. No SSH, no VPN, no port forwarding.
-3. **Exempt those hosts from TLS inspection.**
-4. **No explicit proxy on the agent's path** (not supported yet): direct egress, or a transparent proxy.
+3. **Exempt those hosts from TLS inspection**, or install your corporate CA for the agent with `NODE_EXTRA_CA_CERTS`.
+4. **Proxy:** direct egress, a transparent proxy, or an explicit HTTP proxy that allows `CONNECT` to port 443, exported as `HTTPS_PROXY` before `termhub-agent service install`.
 5. **Machine prerequisites:** macOS or Linux, Node.js 20+, tmux, and a user account; on Linux, also `make`, a C++ compiler and `python3` (`build-essential python3` on apt, `"Development Tools" python3` on dnf, `base-devel python` on pacman). No root, apart from installing those packages with your package manager.
-6. Optional: the hosts of the AI CLIs your users run, and your package mirrors for tmux and the build tools.
+6. Optional: the hosts of the AI CLIs your users run (the usage bars query `api.anthropic.com`, `chatgpt.com` and `cloudcode-pa.googleapis.com` from the machine), and your package mirrors for tmux and the build tools.
 7. **Test from the machine:**
    ```bash
    npm i -g @termhub/agent                # reaches registry.npmjs.org
-   termhub-agent connect --url https://app.termhub.dev --token <token from the app>
-   termhub-agent doctor                   # "✓ Servidor" = token, TLS and WebSocket all got through
+   termhub-agent connect --url https://app.termhub.dev --token <pairing token from the app>
+   termhub-agent doctor                   # "✓ Servidor" = credential, TLS and WebSocket all got through
+                                          # "✓ Hooks do monitor (termhub.dev)", "✓ MCP das abas (termhub.dev)" = hooks/MCP host reachable
    termhub-agent status                   # "conectado ✓"
-   curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events   # 401 = hooks host reachable
    ```
-   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server validates the token and answers "probe-ok" without taking over the live session.
+   `doctor` and `status` open a real WebSocket to `/agent/ws` with `probe: true`. The server checks the credential (the signed nonce, or the old token), sends back the addresses the hooks and the tabs' MCP use (`HOOKS_URL`, `MCP_URL`) and answers "probe-ok" without taking over the live session. Pairing rides the same `/agent/ws` path, so a firewall or Access rule that lets the agent through needs nothing else. `doctor` (agent 0.23.0 or newer) then sends an empty POST without a token to each of those addresses and expects termhub's 401: any other answer (a proxy page, a Cloudflare Access redirect) or no answer is a ✗ with the URL to allow. Behind an explicit proxy that POST takes the same `CONNECT` tunnel as the WebSocket (agent 0.28.0 or newer). Otherwise the agent connects while the monitor stays silent, with no warning.
+
+   The machine's page in the app (Agente tab, "Endereços dos hooks e do MCP") runs the same check from the machine through the agent. With an older agent, test the hooks host by hand: `curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://termhub.dev/api/hooks/events` (401 = reachable).
 
 ## Known limitations
 
 These are open gaps, each tracked on the termhub board:
 
-- The agent does not support an explicit HTTP(S) proxy or an extra CA bundle yet (TER-575).
+- The agent does not support SOCKS proxies, proxy authentication other than Basic (no NTLM or Kerberos), PAC files, or CIDR ranges in `NO_PROXY`.
 - There is no SSO (SAML or generic OIDC), SCIM or multi-factor authentication for web users. The options are e-mail code, password, Google and Cloudflare Access (TER-581).
 - There is no security audit trail for logins, role changes, admin "view as" or token management, and no audit export. Chat actions and phone events are recorded and visible in the app (TER-577).
 - Sessions last 30 days with no idle timeout, and there is no "sign out everywhere" (TER-580).
 - Chat messages, proposed commands, the agent's last answers and chat attachments are stored unencrypted in the database or on disk, with no retention limit; they are deleted with the conversation, project or user (TER-582).
 - The app sends `nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy`, but no HSTS or CSP of its own (TER-579).
-- The agent token does not expire until it is rotated, and deleting a machine in the app does not uninstall the agent on the machine (TER-584).
-- `termhub-agent doctor` checks the agent connection only, not the hooks and MCP host (TER-586).
+- Machines paired before agent 0.25.0 keep a permanent token until they are paired again ("Parear de novo", TER-1017). Deleting a machine uninstalls the agent only when the machine is online on agent 0.22.0 or newer; otherwise the manual steps in section 4 apply.
 
 ## Evidence
 
@@ -224,19 +251,22 @@ Paths are relative to the repository root.
 
 | Claim | Where |
 |---|---|
-| Agent dials `wss://<url>/agent/ws` with a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff; no proxy agent | `apps/agent/src/client.ts` |
+| Agent dials `wss://<url>/agent/ws` with a signed nonce (device key) or, before 0.25.0, a bearer token; 20 s ping; 15 s handshake timeout; 1–30 s backoff | `apps/agent/src/client.ts` |
+| `HTTPS_PROXY`/`NO_PROXY` handling and the `CONNECT` tunnel | `apps/agent/src/proxy.ts` |
+| Proxy and CA variables written into the unit/plist by `service install` | `apps/agent/src/service/systemd.ts`, `apps/agent/src/service/launchd.ts` |
 | Agent has no listening socket; loopback-only TCP to WDA port ranges | `apps/agent/src/tcp.ts`, `packages/agent-protocol/src/rpc.ts` (`isWdaPort`), `packages/agent-protocol/src/messages.ts` (`tcpOpenParams`) |
 | Closed list of agent operations | `apps/agent/src/rpc/index.ts`, `packages/agent-protocol/src/rpc.ts` |
 | Config file `0600`/`0700` | `apps/agent/src/config.ts` |
 | User-level service | `apps/agent/src/service/systemd.ts`, `apps/agent/src/service/launchd.ts` |
 | `connect` command uses the app's origin | `apps/web/src/components/AgentEnrollment.tsx` |
-| Probe used by `doctor`/`status` | `apps/agent/src/run.ts` (`checkServerConnection`), `apps/agent/src/doctor.ts` |
+| Probe used by `doctor`/`status`; hooks/MCP addresses in `probe_info`, checked with a POST expecting 401 | `apps/agent/src/run.ts` (`checkServerConnection`), `apps/agent/src/doctor.ts`, `apps/agent/src/rpc/net.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts` (`/network-check`) |
 | Hook script posts with curl to `HOOKS_URL` | `packages/machine-ops/src/hooks.ts`, `apps/server/src/config.ts` |
 | Hosts routed on `termhub.dev` (hooks, MCP, mobile) | `deploy/nginx/termhub.dev.conf.tmpl` |
 | Server WebSocket endpoints, Origin check, pings, drain with 1012 | `apps/server/src/ws/router.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/terminal/ws.ts`, `apps/server/src/ws/drain.ts` |
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
+| Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |
 | Mobile base URL `termhub.dev`; DPoP ES256; hardware key; PIN proof | `apps/mobile/src/services/api/config.ts`, `apps/mobile/src/services/api/dpop.ts`, `apps/mobile/src/services/key/`, `apps/server/src/mobile/` |
-| Agent token: 256 bits, SHA-256 stored; rotate/delete closes with 4401 | `apps/server/src/agent/token.ts`, `apps/server/src/routes/machines.ts` |
+| Pairing token: 256 bits, SHA-256 stored, single use, 15 min; Ed25519 device key and nonce proof; pair again/delete closes with 4401 | `packages/agent-protocol/src/auth.ts`, `apps/server/src/agent/token.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts`, `apps/agent/src/device-key.ts`, `apps/agent/src/commands/connect.ts` |
 | Sessions, cookies, CSRF | `apps/server/src/auth/tokens.ts`, `apps/server/src/auth/routes.ts`, `apps/server/src/auth/middleware.ts` |
 | argon2id parameters | `apps/server/src/auth/password.ts` |
 | Login codes and lockout | `apps/server/src/auth/service.ts`, `apps/server/src/db/repositories/login-attempts.ts` |
@@ -245,8 +275,12 @@ Paths are relative to the repository root.
 | Chat confirmation cards and grants | `apps/server/src/chat/gate.ts`, `apps/server/src/chat/gate-runtime.ts` |
 | AES-256-GCM for integration secrets | `apps/server/src/lib/crypto.ts`, `apps/server/src/db/repositories/integrations.ts` |
 | Terminal content not logged; header redaction; security headers | `apps/server/src/terminal/ws.ts`, `apps/server/src/app.ts` |
-| AI credential read on demand, not stored | `packages/machine-ops/src/ai-credentials.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
+| Access records kept 6 months: what is recorded, batching, hourly purge | `apps/server/src/access-log/recorder.ts`, `apps/server/src/db/repositories/access-logs.ts`, `apps/server/src/ws/router.ts`, `apps/server/src/app.ts` |
+| AI credential read and used on the machine, never sent to the server; per-machine switch | `packages/machine-ops/src/ai-credentials.ts`, `packages/machine-ops/src/ai-usage*.ts`, `apps/agent/src/rpc/ai.ts`, `apps/server/src/ai/` |
 | `gh auth token` read | `apps/agent/src/rpc/secret.ts`, `apps/server/src/control/integrations.ts` |
 | Voice audio not written to disk | `apps/server/src/terminal/transcription.ts` |
+| whisper and embed refuse requests without their shared secret; default database password refused in production; outbound proxy | `docker/whisper/auth.py`, `docker/embed/api.py`, `apps/server/src/config.ts`, `Dockerfile` (`NODE_USE_ENV_PROXY`), `apps/server/src/email/mailer.ts` (`SMTP_PROXY`) |
 | npm provenance | `.github/workflows/publish-agent.yml` |
-| Server outbound calls (self-hosting): `registry.npmjs.org`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com`, `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `apps/server/src/ai/`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |
+| Server verifies each agent release's provenance (Sigstore, signer workflow, subject and SHA-512) before offering it; poll skipped with no agent connected | `apps/server/src/agent/release-verify.ts`, `apps/server/src/agent/latest-version.ts` |
+| Update sends the verified integrity; uninstall on delete (hooks, tmux sessions, `agent.uninstall`) | `packages/agent-protocol/src/rpc.ts` (`agent.update`, `agent.uninstall`), `apps/server/src/routes/machines.ts` (`DELETE /:id?uninstall=1`) |
+| Server outbound calls (self-hosting): `registry.npmjs.org`, `tuf-repo-cdn.sigstore.dev`, `oauth2.googleapis.com`, `www.googleapis.com`, `api.github.com`, `api.linear.app`, Jira base URL, `api.anthropic.com`, `chatgpt.com`, `cloudcode-pa.googleapis.com` (AI usage, only for accounts on the server's own host), `exp.host`, SMTP, Cloudflare API | `apps/server/src/agent/latest-version.ts`, `apps/server/src/agent/release-verify.ts`, `apps/server/src/auth/google.ts`, `apps/server/src/integrations/`, `packages/machine-ops/src/ai-usage*.ts`, `apps/server/src/mobile/push.ts`, `apps/server/src/email/mailer.ts`, `apps/server/src/cloudflare/access.ts` |

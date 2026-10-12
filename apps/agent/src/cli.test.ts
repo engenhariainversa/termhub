@@ -183,7 +183,7 @@ describe('cli main()', () => {
 
     await main(['disconnect']);
 
-    expect(logs.join('\n')).toContain('Configuração removida. Revogue o token no app.');
+    expect(logs.join('\n')).toContain('Configuração removida. Revogue o acesso no app');
     const { readConfig } = await import('./config.js');
     expect(readConfig()).toBeNull();
   });

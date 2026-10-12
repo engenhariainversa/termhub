@@ -180,6 +180,23 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { chatAutodecide: enabled } });
   }
 
+  /** TER-642: what this person's automatic-answer thresholds are made of — the pair pinned by hand
+   *  (both null = automatic) and the last calibration from their own answers. All null for a missing row. */
+  async chatAutoThresholds(userId: string): Promise<{ high: number | null; low: number | null; calibration: { high: number; low: number; samples: number; computed_at: string } | null }> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatAutoHigh: true, chatAutoLow: true, chatAutoCalibration: true } });
+    return { high: u?.chatAutoHigh ?? null, low: u?.chatAutoLow ?? null, calibration: (u?.chatAutoCalibration ?? null) as { high: number; low: number; samples: number; computed_at: string } | null };
+  }
+
+  /** Pins the thresholds by hand, or (null) hands them back to calibration. */
+  async setChatAutoThresholds(userId: string, pinned: { high: number; low: number } | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatAutoHigh: pinned?.high ?? null, chatAutoLow: pinned?.low ?? null } });
+  }
+
+  /** Stores a calibration; a user deleted meanwhile is nobody's to calibrate. */
+  async setChatAutoCalibration(userId: string, calibration: { high: number; low: number; samples: number; computed_at: string }): Promise<void> {
+    await this.db.user.updateMany({ where: { id: userId }, data: { chatAutoCalibration: calibration } });
+  }
+
   /** "Responder perguntas do Codex pelo chat": false when the row is missing too — opt-in, off by default. */
   async chatCodexReplies(userId: string): Promise<boolean> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatCodexReplies: true } });
@@ -188,6 +205,16 @@ export class UsersRepository {
 
   async setChatCodexReplies(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
+  }
+
+  /** The token count the chat's context meter measures against (TER-1038); null = the model's window. */
+  async chatContextLimit(userId: string): Promise<number | null> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatContextLimit: true } });
+    return u?.chatContextLimit ?? null;
+  }
+
+  async setChatContextLimit(userId: string, limit: number | null): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatContextLimit: limit } });
   }
 
   /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */

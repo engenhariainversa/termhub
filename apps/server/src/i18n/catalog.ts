@@ -14,6 +14,19 @@ import enMisc from './locales/en/misc.json' with { type: 'json' };
 import enMobile from './locales/en/mobile.json' with { type: 'json' };
 import enRoutes from './locales/en/routes.json' with { type: 'json' };
 import enTerminal from './locales/en/terminal.json' with { type: 'json' };
+import esAccount from './locales/es/account.json' with { type: 'json' };
+import esAgent from './locales/es/agent.json' with { type: 'json' };
+import esAuth from './locales/es/auth.json' with { type: 'json' };
+import esChat from './locales/es/chat.json' with { type: 'json' };
+import esControl from './locales/es/control.json' with { type: 'json' };
+import esDb from './locales/es/db.json' with { type: 'json' };
+import esEmail from './locales/es/email.json' with { type: 'json' };
+import esIntegrations from './locales/es/integrations.json' with { type: 'json' };
+import esMcp from './locales/es/mcp.json' with { type: 'json' };
+import esMisc from './locales/es/misc.json' with { type: 'json' };
+import esMobile from './locales/es/mobile.json' with { type: 'json' };
+import esRoutes from './locales/es/routes.json' with { type: 'json' };
+import esTerminal from './locales/es/terminal.json' with { type: 'json' };
 import ptBRControl from './locales/pt-BR/control.json' with { type: 'json' };
 import type { Locale } from './index.js';
 
@@ -23,4 +36,5 @@ const merge = (...parts: Catalog[]): Catalog => Object.assign({}, ...parts);
 export const CATALOGS: Record<Locale, Catalog> = {
   'pt-BR': merge(ptBRControl),
   en: merge(enAccount, enAgent, enAuth, enChat, enControl, enDb, enEmail, enIntegrations, enMcp, enMisc, enMobile, enRoutes, enTerminal),
+  es: merge(esAccount, esAgent, esAuth, esChat, esControl, esDb, esEmail, esIntegrations, esMcp, esMisc, esMobile, esRoutes, esTerminal),
 };

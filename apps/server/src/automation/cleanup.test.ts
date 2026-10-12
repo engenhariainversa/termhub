@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { setupSchema } from '../setup/schema.js';
-import { CLEANUP_MAX_ATTEMPTS, cleanupRuns } from './cleanup.js';
+import { CANCELLED_WORKTREE_GRACE_MS, CLEANUP_MAX_ATTEMPTS, cleanupRuns, markCancelledWorktreesDue } from './cleanup.js';
 
 const setup = setupSchema.parse({ automation: { enabled: true } });
 const project = { id: 'p1', owner_id: 'u1' };
@@ -96,5 +96,41 @@ describe('cleanupRuns', () => {
     await cleanupRuns(w.deps, project, setup, w.rows);
     expect(w.closeTab).not.toHaveBeenCalled();
     expect(w.removeWorkspace).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('markCancelledWorktreesDue (TER-974)', () => {
+  const now = new Date('2026-10-07T12:00:00Z');
+  const longAgo = new Date(now.getTime() - CANCELLED_WORKTREE_GRACE_MS - 1);
+  function scene(o: { auto?: boolean; task?: boolean; runs?: Array<Partial<AutomationRun>>; openTabs?: string[] } = {}) {
+    const runs = (o.runs ?? [{ status: 'cancelled', tab_id: 'tab1', ended_at: longAgo }]).map((r, i) => ({ id: `r${i}`, task_id: 't1', worktree_path: '/wt/a', cleanup_state: null, ended_at: null, ...r })) as AutomationRun[];
+    const markCleanupDue = vi.fn(async () => runs.map((r) => ({ ...r, cleanup_state: 'due' })));
+    const repos = {
+      tasks: { findById: vi.fn(async () => (o.task === false ? undefined : { id: 't1', auto: o.auto ?? false })) },
+      tabs: { findById: vi.fn(async (id: string) => ((o.openTabs ?? []).includes(id) ? { id } : undefined)) },
+      automationRuns: { cardsWithCancelledWorktree: vi.fn(async () => ['t1']), listByTask: vi.fn(async () => runs), markCleanupDue },
+    } as unknown as Repositories;
+    return { repos, markCleanupDue };
+  }
+
+  it('marks the card\'s runs due once the card left automatic work, its tabs are gone and the grace passed', async () => {
+    const s = scene();
+    expect(await markCancelledWorktreesDue(s.repos, 'p1', now)).toHaveLength(1);
+    expect(s.markCleanupDue).toHaveBeenCalledWith(['t1']);
+  });
+
+  it('keeps the worktree while anything may still use it', async () => {
+    const cases = [
+      scene({ auto: true }), // the next run of a tagged card reuses it
+      scene({ task: false }), // a deleted card is the sweep's
+      scene({ openTabs: ['tab1'] }), // the person may be working in that tab
+      scene({ runs: [{ status: 'cancelled', tab_id: null, ended_at: new Date(now.getTime() - 60_000) }] }), // within the grace
+      scene({ runs: [{ status: 'cancelled', tab_id: null, ended_at: longAgo }, { status: 'running', tab_id: null }] }), // a run is on
+      scene({ runs: [{ status: 'cancelled', tab_id: null, ended_at: longAgo }, { status: 'done', tab_id: 'tab2', ended_at: longAgo }], openTabs: ['tab2'] }),
+    ];
+    for (const s of cases) {
+      expect(await markCancelledWorktreesDue(s.repos, 'p1', now)).toEqual([]);
+      expect(s.markCleanupDue).not.toHaveBeenCalled();
+    }
   });
 });

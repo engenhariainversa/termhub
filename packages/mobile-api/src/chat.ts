@@ -237,12 +237,66 @@ export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchem
  * (spec D8), whether embeddings are configured on this server at all (`available: false` hides both
  * switches rather than offering ones that can never do anything), how many decisions are remembered,
  * and how many concierge notes (spec D12) are. */
-export const chatMemoryResponse = z.object({ enabled: z.boolean(), autodecide: z.boolean(), codex_replies: z.boolean().default(false), available: z.boolean(), count: z.number().int(), notes: z.number().int() });
+/** The chat's context meter limit (TER-1038): the meter measures against this many tokens instead of the
+ *  model's window — someone who compacts at 200k on a 1M window. Bounded so a typo is refused. */
+export const CHAT_CONTEXT_LIMIT_MIN = 10_000;
+export const CHAT_CONTEXT_LIMIT_MAX = 10_000_000;
+export const chatContextLimit = z.number().int().min(CHAT_CONTEXT_LIMIT_MIN).max(CHAT_CONTEXT_LIMIT_MAX);
+/** `context_limit`: null = the model's window (the default); absent from a server before TER-1038,
+ *  which reads the same. */
+/** The similarity thresholds of an automatic answer a person may pin by hand (TER-642), cosine 0.5–1:
+ *  from `high` an answer backed by memory is sent at once; from `low` it is suggested and sent when its
+ *  countdown runs out; below `low` nothing is suggested. `low` never above `high`. */
+export const AUTO_THRESHOLD_MIN = 0.5;
+export const AUTO_THRESHOLD_MAX = 1;
+const autoThreshold = z.number().min(AUTO_THRESHOLD_MIN).max(AUTO_THRESHOLD_MAX);
+export const autoThresholdsBody = z.object({ high: autoThreshold, low: autoThreshold }).refine((t) => t.low <= t.high, { message: 'O limiar de sugestão não pode passar do limiar de envio' });
+/** Mirrors the server's `AutoThresholdsView` (auto-thresholds.ts): the thresholds in force for this
+ *  person, where they come from (`manual`: pinned by hand; `calibrated`: from their own answers;
+ *  `default`: too little history), the defaults, how many of their answers calibration has seen and how
+ *  many it needs. `source` is a plain string: a value a newer server adds must not break an installed app. */
+export const autoThresholdsSchema = z.object({
+  high: z.number(),
+  low: z.number(),
+  source: z.string(),
+  defaults: z.object({ high: z.number(), low: z.number() }),
+  samples: z.number().int(),
+  min_samples: z.number().int(),
+  calibrated_at: z.string().nullable(),
+});
+export type TAutoThresholds = z.infer<typeof autoThresholdsSchema>;
+export const chatMemoryResponse = z.object({
+  enabled: z.boolean(),
+  autodecide: z.boolean(),
+  codex_replies: z.boolean().default(false),
+  context_limit: z.number().int().nullable().optional(),
+  available: z.boolean(),
+  count: z.number().int(),
+  notes: z.number().int(),
+  /** TER-642; all three absent from an older server. */
+  auto_thresholds: autoThresholdsSchema.optional(),
+  auto_delay_seconds: z.number().int().optional(),
+  focus_beat_seconds: z.number().int().optional(),
+});
 /** At least one of the switches, never none — an empty body is refused rather than a silent no-op.
- * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default). */
+ * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default); `context_limit` null
+ * goes back to the model's window; `auto_thresholds` null hands the thresholds back to calibration. */
 export const chatMemoryPatchBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({
+    enabled: z.boolean().optional(),
+    autodecide: z.boolean().optional(),
+    codex_replies: z.boolean().optional(),
+    context_limit: chatContextLimit.nullable().optional(),
+    auto_thresholds: autoThresholdsBody.nullable().optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, context_limit ou auto_thresholds',
+  });
+/** `POST chat/focus` (TER-642): one screen says whether termhub is in focus on it — the app, in the
+ *  foreground. `client_id` is that screen's own random id. Sent on every change and as a heartbeat. */
+export const chatFocusBody = z.object({ client_id: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
+/** How often a screen in focus beats when the server does not say (`focus_beat_seconds`). */
+export const FOCUS_BEAT_SECONDS = 15;
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
  * `question` is the note's title; `decision`/`reason` are parsed back out of the stored text's
