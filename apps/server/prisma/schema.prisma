@@ -76,6 +76,14 @@ model User {
   /// "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): off, the
   /// concierge can only suggest, never schedule an automatic answer.
   chatAutodecide          Boolean                  @default(false) @map("chat_autodecide")
+  /// TER-642: the similarity thresholds this person pinned by hand for automatic answers (send at once
+  /// from `high`, suggest and send after the countdown from `low`). Null = calibrated, else the defaults.
+  chatAutoHigh            Float?                   @map("chat_auto_high")
+  chatAutoLow             Float?                   @map("chat_auto_low")
+  /// The last calibration from this person's own answers: `{ high, low, samples, computed_at }`.
+  chatAutoCalibration     Json?                    @map("chat_auto_calibration")
+  chatAutoSamples         ChatAutoSample[]
+  chatFocus               ChatFocus[]
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies        Boolean                  @default(false) @map("chat_codex_replies")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
@@ -1277,11 +1285,46 @@ model TabQuestion {
   wokenAt        DateTime?        @map("woken_at")
   /// When the card was last brought back to the end of the chat (TER-477); the thread orders by it, else `createdAt`.
   surfacedAt     DateTime?        @map("surfaced_at")
+  /// TER-642: the best precedent memory found per question when the card opened, whatever its score:
+  /// `{ items: [{ question_index, ref, similarity, selected, text? }] }`. Calibration's raw material.
+  precedent      Json?
 
   @@index([tabId, status])
   @@index([conversationId, createdAt])
   @@index([tabId, createdAt])
   @@map("tab_questions")
+}
+
+/// TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+/// thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+/// `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+/// `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+model ChatAutoSample {
+  id            String   @id
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tabQuestionId String   @map("tab_question_id")
+  questionIndex Int      @map("question_index")
+  score         Float
+  matched       Boolean
+  source        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([tabQuestionId, questionIndex])
+  @@index([userId, createdAt])
+  @@map("chat_auto_samples")
+}
+
+/// TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+/// A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+model ChatFocus {
+  userId   String   @map("user_id")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId String   @map("client_id")
+  seenAt   DateTime @default(now()) @map("seen_at")
+
+  @@id([userId, clientId])
+  @@map("chat_focus")
 }
 
 /// A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to

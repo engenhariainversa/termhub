@@ -63,6 +63,7 @@ import {
   transcriptionResponse,
   type AccountDeletionBody,
   type TChallengeBody,
+  type TChatMemoryPatchBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
   type TMobileBatchDecisionBody,
@@ -389,8 +390,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     },
     forgetChatDecision: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}`, { token: a.accessToken }),
     chatMemory: (a: Auth) => call('GET', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken }),
-    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }) =>
+    setChatMemory: (a: Auth, body: boolean | TChatMemoryPatchBody) =>
       call('PATCH', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken, body: typeof body === 'boolean' ? { enabled: body } : body }),
+    reportChatFocus: (a: Auth, clientId: string, focused: boolean) => empty('POST', '/api/m/v1/chat/focus', { token: a.accessToken, body: { client_id: clientId, focused } }),
     chatNotes: (a: Auth, cursor) => {
       const params = new URLSearchParams();
       if (cursor) params.set('cursor', cursor);

@@ -72,6 +72,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.chatDecision.create({
       data: { id: newId(), userId, projectId, questionIndex: 0, header: 'h', question: 'q?', options: [], multiSelect: false, answer: {} },
     });
+    // TER-642: a calibration sample and a focus heartbeat, both the account's own (cascade with the user).
+    await db.chatAutoSample.create({ data: { id: newId(), userId, tabQuestionId: newId(), questionIndex: 0, score: 0.9, matched: true, source: 'answer' } });
+    await db.chatFocus.create({ data: { userId, clientId: 'screen-a' } });
     await db.memoryItem.create({
       data: { id: newId(), ownerId: userId, projectId, kind: 'note', sourceId: newId(), title: 't', text: 'x', trust: 'person', contentHash: newId(), sourceAt: new Date() },
     });

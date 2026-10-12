@@ -277,6 +277,8 @@ export interface MockState {
   chatCodexRepliesEnabled: boolean;
   /** The chat's context meter limit (TER-1038); null = the model's window. */
   chatContextLimit: number | null;
+  /** The automatic answer's thresholds pinned by hand (TER-642); null = the defaults. */
+  chatAutoThresholds: { high: number; low: number } | null;
   /** "Anotações do concierge" (spec D12): the mock's one user's `record_decision` notes, any order
    * (`GET notes` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   notes: MockNote[];
@@ -338,6 +340,7 @@ export function createMockState(): MockState {
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
     chatContextLimit: null,
+    chatAutoThresholds: null,
     notes: [],
     lessons: [],
     accountDeletion: null,

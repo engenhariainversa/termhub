@@ -94,6 +94,8 @@ export const ModelName = {
   ChatDefaultRestriction: 'ChatDefaultRestriction',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
+  ChatAutoSample: 'ChatAutoSample',
+  ChatFocus: 'ChatFocus',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
   InstanceSecret: 'InstanceSecret',
@@ -152,6 +154,9 @@ export const UserScalarFieldEnum = {
   reviewEnabledBy: 'reviewEnabledBy',
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
+  chatAutoHigh: 'chatAutoHigh',
+  chatAutoLow: 'chatAutoLow',
+  chatAutoCalibration: 'chatAutoCalibration',
   chatCodexReplies: 'chatCodexReplies',
   pushTabFinished: 'pushTabFinished',
   chatContextLimit: 'chatContextLimit',
@@ -859,10 +864,34 @@ export const TabQuestionScalarFieldEnum = {
   autoAnswer: 'autoAnswer',
   answeredVia: 'answeredVia',
   wokenAt: 'wokenAt',
-  surfacedAt: 'surfacedAt'
+  surfacedAt: 'surfacedAt',
+  precedent: 'precedent'
 } as const
 
 export type TabQuestionScalarFieldEnum = (typeof TabQuestionScalarFieldEnum)[keyof typeof TabQuestionScalarFieldEnum]
+
+
+export const ChatAutoSampleScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tabQuestionId: 'tabQuestionId',
+  questionIndex: 'questionIndex',
+  score: 'score',
+  matched: 'matched',
+  source: 'source',
+  createdAt: 'createdAt'
+} as const
+
+export type ChatAutoSampleScalarFieldEnum = (typeof ChatAutoSampleScalarFieldEnum)[keyof typeof ChatAutoSampleScalarFieldEnum]
+
+
+export const ChatFocusScalarFieldEnum = {
+  userId: 'userId',
+  clientId: 'clientId',
+  seenAt: 'seenAt'
+} as const
+
+export type ChatFocusScalarFieldEnum = (typeof ChatFocusScalarFieldEnum)[keyof typeof ChatFocusScalarFieldEnum]
 
 
 export const ChatDecisionScalarFieldEnum = {
@@ -1192,19 +1221,19 @@ export const SortOrder = {
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
 
 
-export const JsonNullValueInput = {
-  JsonNull: JsonNull
-} as const
-
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
-
-
 export const NullableJsonNullValueInput = {
   DbNull: DbNull,
   JsonNull: JsonNull
 } as const
 
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
+
+
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const QueryMode = {
@@ -1215,14 +1244,6 @@ export const QueryMode = {
 export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
 
 
-export const NullsOrder = {
-  first: 'first',
-  last: 'last'
-} as const
-
-export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
-
-
 export const JsonNullValueFilter = {
   DbNull: DbNull,
   JsonNull: JsonNull,
@@ -1230,4 +1251,12 @@ export const JsonNullValueFilter = {
 } as const
 
 export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 

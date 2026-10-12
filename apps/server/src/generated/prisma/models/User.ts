@@ -27,10 +27,14 @@ export type AggregateUser = {
 }
 
 export type UserAvgAggregateOutputType = {
+  chatAutoHigh: number | null
+  chatAutoLow: number | null
   chatContextLimit: number | null
 }
 
 export type UserSumAggregateOutputType = {
+  chatAutoHigh: number | null
+  chatAutoLow: number | null
   chatContextLimit: number | null
 }
 
@@ -53,6 +57,8 @@ export type UserMinAggregateOutputType = {
   reviewEnabledBy: string | null
   chatSuggestions: boolean | null
   chatAutodecide: boolean | null
+  chatAutoHigh: number | null
+  chatAutoLow: number | null
   chatCodexReplies: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
@@ -82,6 +88,8 @@ export type UserMaxAggregateOutputType = {
   reviewEnabledBy: string | null
   chatSuggestions: boolean | null
   chatAutodecide: boolean | null
+  chatAutoHigh: number | null
+  chatAutoLow: number | null
   chatCodexReplies: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
@@ -111,6 +119,9 @@ export type UserCountAggregateOutputType = {
   reviewEnabledBy: number
   chatSuggestions: number
   chatAutodecide: number
+  chatAutoHigh: number
+  chatAutoLow: number
+  chatAutoCalibration: number
   chatCodexReplies: number
   pushTabFinished: number
   chatContextLimit: number
@@ -124,10 +135,14 @@ export type UserCountAggregateOutputType = {
 
 
 export type UserAvgAggregateInputType = {
+  chatAutoHigh?: true
+  chatAutoLow?: true
   chatContextLimit?: true
 }
 
 export type UserSumAggregateInputType = {
+  chatAutoHigh?: true
+  chatAutoLow?: true
   chatContextLimit?: true
 }
 
@@ -150,6 +165,8 @@ export type UserMinAggregateInputType = {
   reviewEnabledBy?: true
   chatSuggestions?: true
   chatAutodecide?: true
+  chatAutoHigh?: true
+  chatAutoLow?: true
   chatCodexReplies?: true
   pushTabFinished?: true
   chatContextLimit?: true
@@ -179,6 +196,8 @@ export type UserMaxAggregateInputType = {
   reviewEnabledBy?: true
   chatSuggestions?: true
   chatAutodecide?: true
+  chatAutoHigh?: true
+  chatAutoLow?: true
   chatCodexReplies?: true
   pushTabFinished?: true
   chatContextLimit?: true
@@ -208,6 +227,9 @@ export type UserCountAggregateInputType = {
   reviewEnabledBy?: true
   chatSuggestions?: true
   chatAutodecide?: true
+  chatAutoHigh?: true
+  chatAutoLow?: true
+  chatAutoCalibration?: true
   chatCodexReplies?: true
   pushTabFinished?: true
   chatContextLimit?: true
@@ -324,6 +346,9 @@ export type UserGroupByOutputType = {
   reviewEnabledBy: string | null
   chatSuggestions: boolean
   chatAutodecide: boolean
+  chatAutoHigh: number | null
+  chatAutoLow: number | null
+  chatAutoCalibration: runtime.JsonValue | null
   chatCodexReplies: boolean
   pushTabFinished: boolean
   chatContextLimit: number | null
@@ -376,6 +401,9 @@ export type UserWhereInput = {
   reviewEnabledBy?: Prisma.StringNullableFilter<"User"> | string | null
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
+  chatAutoHigh?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -398,6 +426,8 @@ export type UserWhereInput = {
   notifications?: Prisma.UserNotificationListRelationFilter
   chatAttachments?: Prisma.ChatAttachmentListRelationFilter
   chatDecisions?: Prisma.ChatDecisionListRelationFilter
+  chatAutoSamples?: Prisma.ChatAutoSampleListRelationFilter
+  chatFocus?: Prisma.ChatFocusListRelationFilter
   memoryItems?: Prisma.MemoryItemListRelationFilter
   verifiedMemoryItems?: Prisma.MemoryItemListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
@@ -427,6 +457,9 @@ export type UserOrderByWithRelationInput = {
   reviewEnabledBy?: Prisma.SortOrderInput | Prisma.SortOrder
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
+  chatAutoHigh?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -449,6 +482,8 @@ export type UserOrderByWithRelationInput = {
   notifications?: Prisma.UserNotificationOrderByRelationAggregateInput
   chatAttachments?: Prisma.ChatAttachmentOrderByRelationAggregateInput
   chatDecisions?: Prisma.ChatDecisionOrderByRelationAggregateInput
+  chatAutoSamples?: Prisma.ChatAutoSampleOrderByRelationAggregateInput
+  chatFocus?: Prisma.ChatFocusOrderByRelationAggregateInput
   memoryItems?: Prisma.MemoryItemOrderByRelationAggregateInput
   verifiedMemoryItems?: Prisma.MemoryItemOrderByRelationAggregateInput
   standingGrants?: Prisma.ChatStandingGrantOrderByRelationAggregateInput
@@ -481,6 +516,9 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   reviewEnabledBy?: Prisma.StringNullableFilter<"User"> | string | null
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
+  chatAutoHigh?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -503,6 +541,8 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   notifications?: Prisma.UserNotificationListRelationFilter
   chatAttachments?: Prisma.ChatAttachmentListRelationFilter
   chatDecisions?: Prisma.ChatDecisionListRelationFilter
+  chatAutoSamples?: Prisma.ChatAutoSampleListRelationFilter
+  chatFocus?: Prisma.ChatFocusListRelationFilter
   memoryItems?: Prisma.MemoryItemListRelationFilter
   verifiedMemoryItems?: Prisma.MemoryItemListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
@@ -532,6 +572,9 @@ export type UserOrderByWithAggregationInput = {
   reviewEnabledBy?: Prisma.SortOrderInput | Prisma.SortOrder
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
+  chatAutoHigh?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -569,6 +612,9 @@ export type UserScalarWhereWithAggregatesInput = {
   reviewEnabledBy?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
   chatSuggestions?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  chatAutoHigh?: Prisma.FloatNullableWithAggregatesFilter<"User"> | number | null
+  chatAutoLow?: Prisma.FloatNullableWithAggregatesFilter<"User"> | number | null
+  chatAutoCalibration?: Prisma.JsonNullableWithAggregatesFilter<"User">
   chatCodexReplies?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
@@ -597,6 +643,9 @@ export type UserCreateInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -619,6 +668,8 @@ export type UserCreateInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -648,6 +699,9 @@ export type UserUncheckedCreateInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -669,6 +723,8 @@ export type UserUncheckedCreateInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -697,6 +753,9 @@ export type UserUpdateInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -719,6 +778,8 @@ export type UserUpdateInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -748,6 +809,9 @@ export type UserUncheckedUpdateInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -769,6 +833,8 @@ export type UserUncheckedUpdateInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -798,6 +864,9 @@ export type UserCreateManyInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -826,6 +895,9 @@ export type UserUpdateManyMutationInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -855,6 +927,9 @@ export type UserUncheckedUpdateManyInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -884,6 +959,9 @@ export type UserCountOrderByAggregateInput = {
   reviewEnabledBy?: Prisma.SortOrder
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
+  chatAutoHigh?: Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrder
+  chatAutoCalibration?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
@@ -895,6 +973,8 @@ export type UserCountOrderByAggregateInput = {
 }
 
 export type UserAvgOrderByAggregateInput = {
+  chatAutoHigh?: Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
 }
 
@@ -917,6 +997,8 @@ export type UserMaxOrderByAggregateInput = {
   reviewEnabledBy?: Prisma.SortOrder
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
+  chatAutoHigh?: Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
@@ -946,6 +1028,8 @@ export type UserMinOrderByAggregateInput = {
   reviewEnabledBy?: Prisma.SortOrder
   chatSuggestions?: Prisma.SortOrder
   chatAutodecide?: Prisma.SortOrder
+  chatAutoHigh?: Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
@@ -957,6 +1041,8 @@ export type UserMinOrderByAggregateInput = {
 }
 
 export type UserSumOrderByAggregateInput = {
+  chatAutoHigh?: Prisma.SortOrder
+  chatAutoLow?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
 }
 
@@ -1002,6 +1088,14 @@ export type DateTimeFieldUpdateOperationsInput = {
 
 export type BoolFieldUpdateOperationsInput = {
   set?: boolean
+}
+
+export type NullableFloatFieldUpdateOperationsInput = {
+  set?: number | null
+  increment?: number
+  decrement?: number
+  multiply?: number
+  divide?: number
 }
 
 export type NullableIntFieldUpdateOperationsInput = {
@@ -1202,6 +1296,34 @@ export type UserUpdateOneRequiredWithoutChatDefaultRestrictionsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutChatDefaultRestrictionsInput, Prisma.UserUpdateWithoutChatDefaultRestrictionsInput>, Prisma.UserUncheckedUpdateWithoutChatDefaultRestrictionsInput>
 }
 
+export type UserCreateNestedOneWithoutChatAutoSamplesInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatAutoSamplesInput, Prisma.UserUncheckedCreateWithoutChatAutoSamplesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatAutoSamplesInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutChatAutoSamplesNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatAutoSamplesInput, Prisma.UserUncheckedCreateWithoutChatAutoSamplesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatAutoSamplesInput
+  upsert?: Prisma.UserUpsertWithoutChatAutoSamplesInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutChatAutoSamplesInput, Prisma.UserUpdateWithoutChatAutoSamplesInput>, Prisma.UserUncheckedUpdateWithoutChatAutoSamplesInput>
+}
+
+export type UserCreateNestedOneWithoutChatFocusInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatFocusInput, Prisma.UserUncheckedCreateWithoutChatFocusInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatFocusInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutChatFocusNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatFocusInput, Prisma.UserUncheckedCreateWithoutChatFocusInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatFocusInput
+  upsert?: Prisma.UserUpsertWithoutChatFocusInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutChatFocusInput, Prisma.UserUpdateWithoutChatFocusInput>, Prisma.UserUncheckedUpdateWithoutChatFocusInput>
+}
+
 export type UserCreateNestedOneWithoutChatDecisionsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutChatDecisionsInput, Prisma.UserUncheckedCreateWithoutChatDecisionsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatDecisionsInput
@@ -1378,6 +1500,9 @@ export type UserCreateWithoutRoleRefInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1399,6 +1524,8 @@ export type UserCreateWithoutRoleRefInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -1427,6 +1554,9 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1448,6 +1578,8 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -1506,6 +1638,9 @@ export type UserScalarWhereInput = {
   reviewEnabledBy?: Prisma.StringNullableFilter<"User"> | string | null
   chatSuggestions?: Prisma.BoolFilter<"User"> | boolean
   chatAutodecide?: Prisma.BoolFilter<"User"> | boolean
+  chatAutoHigh?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
+  chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -1534,6 +1669,9 @@ export type UserCreateWithoutSessionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1555,6 +1693,8 @@ export type UserCreateWithoutSessionsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -1584,6 +1724,9 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1604,6 +1747,8 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -1648,6 +1793,9 @@ export type UserUpdateWithoutSessionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1669,6 +1817,8 @@ export type UserUpdateWithoutSessionsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -1698,6 +1848,9 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1718,6 +1871,8 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -1746,6 +1901,9 @@ export type UserCreateWithoutMachinesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1767,6 +1925,8 @@ export type UserCreateWithoutMachinesInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -1796,6 +1956,9 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1816,6 +1979,8 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -1860,6 +2025,9 @@ export type UserUpdateWithoutMachinesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1881,6 +2049,8 @@ export type UserUpdateWithoutMachinesInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -1910,6 +2080,9 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1930,6 +2103,8 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -1958,6 +2133,9 @@ export type UserCreateWithoutProjectsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -1979,6 +2157,8 @@ export type UserCreateWithoutProjectsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -2008,6 +2188,9 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2028,6 +2211,8 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -2072,6 +2257,9 @@ export type UserUpdateWithoutProjectsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2093,6 +2281,8 @@ export type UserUpdateWithoutProjectsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -2122,6 +2312,9 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2142,6 +2335,8 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -2170,6 +2365,9 @@ export type UserCreateWithoutIntegrationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2191,6 +2389,8 @@ export type UserCreateWithoutIntegrationsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -2220,6 +2420,9 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2240,6 +2443,8 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -2284,6 +2489,9 @@ export type UserUpdateWithoutIntegrationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2305,6 +2513,8 @@ export type UserUpdateWithoutIntegrationsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -2334,6 +2544,9 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2354,6 +2567,8 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -2382,6 +2597,9 @@ export type UserCreateWithoutUploadsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2403,6 +2621,8 @@ export type UserCreateWithoutUploadsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -2432,6 +2652,9 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2452,6 +2675,8 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -2496,6 +2721,9 @@ export type UserUpdateWithoutUploadsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2517,6 +2745,8 @@ export type UserUpdateWithoutUploadsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -2546,6 +2776,9 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2566,6 +2799,8 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -2594,6 +2829,9 @@ export type UserCreateWithoutApiTokensInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2615,6 +2853,8 @@ export type UserCreateWithoutApiTokensInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -2644,6 +2884,9 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2664,6 +2907,8 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -2708,6 +2953,9 @@ export type UserUpdateWithoutApiTokensInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2729,6 +2977,8 @@ export type UserUpdateWithoutApiTokensInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -2758,6 +3008,9 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2778,6 +3031,8 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -2806,6 +3061,9 @@ export type UserCreateWithoutChatConversationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2827,6 +3085,8 @@ export type UserCreateWithoutChatConversationsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -2856,6 +3116,9 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -2876,6 +3139,8 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -2920,6 +3185,9 @@ export type UserUpdateWithoutChatConversationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2941,6 +3209,8 @@ export type UserUpdateWithoutChatConversationsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -2970,6 +3240,9 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2990,6 +3263,8 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -3018,6 +3293,9 @@ export type UserCreateWithoutChatAttachmentsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3039,6 +3317,8 @@ export type UserCreateWithoutChatAttachmentsInput = {
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -3068,6 +3348,9 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3088,6 +3371,8 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -3132,6 +3417,9 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3153,6 +3441,8 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -3182,6 +3472,9 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3202,6 +3495,8 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -3230,6 +3525,9 @@ export type UserCreateWithoutStandingGrantsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3252,6 +3550,8 @@ export type UserCreateWithoutStandingGrantsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
@@ -3280,6 +3580,9 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3301,6 +3604,8 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
@@ -3344,6 +3649,9 @@ export type UserUpdateWithoutStandingGrantsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3366,6 +3674,8 @@ export type UserUpdateWithoutStandingGrantsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
@@ -3394,6 +3704,9 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3415,6 +3728,8 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
@@ -3442,6 +3757,9 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3464,6 +3782,8 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -3492,6 +3812,9 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3513,6 +3836,8 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -3556,6 +3881,9 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3578,6 +3906,8 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -3606,6 +3936,9 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3627,9 +3960,475 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutChatAutoSamplesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  roleId?: string | null
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutChatAutoSamplesInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatAutoSamplesInput, Prisma.UserUncheckedCreateWithoutChatAutoSamplesInput>
+}
+
+export type UserUpsertWithoutChatAutoSamplesInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutChatAutoSamplesInput, Prisma.UserUncheckedUpdateWithoutChatAutoSamplesInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatAutoSamplesInput, Prisma.UserUncheckedCreateWithoutChatAutoSamplesInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutChatAutoSamplesInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutChatAutoSamplesInput, Prisma.UserUncheckedUpdateWithoutChatAutoSamplesInput>
+}
+
+export type UserUpdateWithoutChatAutoSamplesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  roleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutChatFocusInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutChatFocusInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  roleId?: string | null
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  locale?: string | null
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutChatFocusInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatFocusInput, Prisma.UserUncheckedCreateWithoutChatFocusInput>
+}
+
+export type UserUpsertWithoutChatFocusInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutChatFocusInput, Prisma.UserUncheckedUpdateWithoutChatFocusInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatFocusInput, Prisma.UserUncheckedCreateWithoutChatFocusInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutChatFocusInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutChatFocusInput, Prisma.UserUncheckedUpdateWithoutChatFocusInput>
+}
+
+export type UserUpdateWithoutChatFocusInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutChatFocusInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  roleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
@@ -3654,6 +4453,9 @@ export type UserCreateWithoutChatDecisionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3675,6 +4477,8 @@ export type UserCreateWithoutChatDecisionsInput = {
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -3704,6 +4508,9 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3724,6 +4531,8 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -3768,6 +4577,9 @@ export type UserUpdateWithoutChatDecisionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3789,6 +4601,8 @@ export type UserUpdateWithoutChatDecisionsInput = {
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -3818,6 +4632,9 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3838,6 +4655,8 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -3866,6 +4685,9 @@ export type UserCreateWithoutMemoryItemsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3888,6 +4710,8 @@ export type UserCreateWithoutMemoryItemsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
@@ -3916,6 +4740,9 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3937,6 +4764,8 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
@@ -3969,6 +4798,9 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -3991,6 +4823,8 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
@@ -4019,6 +4853,9 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4040,6 +4877,8 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
@@ -4083,6 +4922,9 @@ export type UserUpdateWithoutMemoryItemsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4105,6 +4947,8 @@ export type UserUpdateWithoutMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
@@ -4133,6 +4977,9 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4154,6 +5001,8 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
@@ -4192,6 +5041,9 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4214,6 +5066,8 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
@@ -4242,6 +5096,9 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4263,6 +5120,8 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
@@ -4290,6 +5149,9 @@ export type UserCreateWithoutProjectGroupsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4311,6 +5173,8 @@ export type UserCreateWithoutProjectGroupsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -4340,6 +5204,9 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4360,6 +5227,8 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -4404,6 +5273,9 @@ export type UserUpdateWithoutProjectGroupsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4425,6 +5297,8 @@ export type UserUpdateWithoutProjectGroupsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -4454,6 +5328,9 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4474,6 +5351,8 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -4502,6 +5381,9 @@ export type UserCreateWithoutDeviceRequestsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4523,6 +5405,8 @@ export type UserCreateWithoutDeviceRequestsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -4552,6 +5436,9 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4572,6 +5459,8 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -4616,6 +5505,9 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4637,6 +5529,8 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -4666,6 +5560,9 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4686,6 +5583,8 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -4714,6 +5613,9 @@ export type UserCreateWithoutDevicesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4735,6 +5637,8 @@ export type UserCreateWithoutDevicesInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -4764,6 +5668,9 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4784,6 +5691,8 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -4828,6 +5737,9 @@ export type UserUpdateWithoutDevicesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4849,6 +5761,8 @@ export type UserUpdateWithoutDevicesInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -4878,6 +5792,9 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4898,6 +5815,8 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -4926,6 +5845,9 @@ export type UserCreateWithoutNotificationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4947,6 +5869,8 @@ export type UserCreateWithoutNotificationsInput = {
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -4976,6 +5900,9 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -4996,6 +5923,8 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -5040,6 +5969,9 @@ export type UserUpdateWithoutNotificationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5061,6 +5993,8 @@ export type UserUpdateWithoutNotificationsInput = {
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -5090,6 +6024,9 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5110,6 +6047,8 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -5138,6 +6077,9 @@ export type UserCreateWithoutAutomationSummariesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5160,6 +6102,8 @@ export type UserCreateWithoutAutomationSummariesInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -5188,6 +6132,9 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5209,6 +6156,8 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -5252,6 +6201,9 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5274,6 +6226,8 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -5302,6 +6256,9 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5323,6 +6280,8 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -5350,6 +6309,9 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5372,6 +6334,8 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -5400,6 +6364,9 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5421,6 +6388,8 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -5464,6 +6433,9 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5486,6 +6458,8 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -5514,6 +6488,9 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5535,6 +6512,8 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -5562,6 +6541,9 @@ export type UserCreateWithoutDataExportsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5584,6 +6566,8 @@ export type UserCreateWithoutDataExportsInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -5612,6 +6596,9 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5633,6 +6620,8 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -5676,6 +6665,9 @@ export type UserUpdateWithoutDataExportsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5698,6 +6690,8 @@ export type UserUpdateWithoutDataExportsInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -5726,6 +6720,9 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5747,6 +6744,8 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -5774,6 +6773,9 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5796,6 +6798,8 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
@@ -5824,6 +6828,9 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -5845,6 +6852,8 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
   chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
@@ -5888,6 +6897,9 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5910,6 +6922,8 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -5938,6 +6952,9 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5959,6 +6976,8 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -5986,6 +7005,9 @@ export type UserCreateManyRoleRefInput = {
   reviewEnabledBy?: string | null
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
@@ -6014,6 +7036,9 @@ export type UserUpdateWithoutRoleRefInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6035,6 +7060,8 @@ export type UserUpdateWithoutRoleRefInput = {
   notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
@@ -6063,6 +7090,9 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6084,6 +7114,8 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
   chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
@@ -6112,6 +7144,9 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6141,6 +7176,8 @@ export type UserCountOutputType = {
   notifications: number
   chatAttachments: number
   chatDecisions: number
+  chatAutoSamples: number
+  chatFocus: number
   memoryItems: number
   verifiedMemoryItems: number
   standingGrants: number
@@ -6165,6 +7202,8 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
   chatAttachments?: boolean | UserCountOutputTypeCountChatAttachmentsArgs
   chatDecisions?: boolean | UserCountOutputTypeCountChatDecisionsArgs
+  chatAutoSamples?: boolean | UserCountOutputTypeCountChatAutoSamplesArgs
+  chatFocus?: boolean | UserCountOutputTypeCountChatFocusArgs
   memoryItems?: boolean | UserCountOutputTypeCountMemoryItemsArgs
   verifiedMemoryItems?: boolean | UserCountOutputTypeCountVerifiedMemoryItemsArgs
   standingGrants?: boolean | UserCountOutputTypeCountStandingGrantsArgs
@@ -6279,6 +7318,20 @@ export type UserCountOutputTypeCountChatDecisionsArgs<ExtArgs extends runtime.Ty
 /**
  * UserCountOutputType without action
  */
+export type UserCountOutputTypeCountChatAutoSamplesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ChatAutoSampleWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountChatFocusArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ChatFocusWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
 export type UserCountOutputTypeCountMemoryItemsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.MemoryItemWhereInput
 }
@@ -6352,6 +7405,9 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   reviewEnabledBy?: boolean
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: boolean
+  chatAutoLow?: boolean
+  chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
@@ -6374,6 +7430,8 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   chatAttachments?: boolean | Prisma.User$chatAttachmentsArgs<ExtArgs>
   chatDecisions?: boolean | Prisma.User$chatDecisionsArgs<ExtArgs>
+  chatAutoSamples?: boolean | Prisma.User$chatAutoSamplesArgs<ExtArgs>
+  chatFocus?: boolean | Prisma.User$chatFocusArgs<ExtArgs>
   memoryItems?: boolean | Prisma.User$memoryItemsArgs<ExtArgs>
   verifiedMemoryItems?: boolean | Prisma.User$verifiedMemoryItemsArgs<ExtArgs>
   standingGrants?: boolean | Prisma.User$standingGrantsArgs<ExtArgs>
@@ -6404,6 +7462,9 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   reviewEnabledBy?: boolean
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: boolean
+  chatAutoLow?: boolean
+  chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
@@ -6434,6 +7495,9 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   reviewEnabledBy?: boolean
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: boolean
+  chatAutoLow?: boolean
+  chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
@@ -6464,6 +7528,9 @@ export type UserSelectScalar = {
   reviewEnabledBy?: boolean
   chatSuggestions?: boolean
   chatAutodecide?: boolean
+  chatAutoHigh?: boolean
+  chatAutoLow?: boolean
+  chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
@@ -6474,7 +7541,7 @@ export type UserSelectScalar = {
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatCodexReplies" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -6490,6 +7557,8 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   notifications?: boolean | Prisma.User$notificationsArgs<ExtArgs>
   chatAttachments?: boolean | Prisma.User$chatAttachmentsArgs<ExtArgs>
   chatDecisions?: boolean | Prisma.User$chatDecisionsArgs<ExtArgs>
+  chatAutoSamples?: boolean | Prisma.User$chatAutoSamplesArgs<ExtArgs>
+  chatFocus?: boolean | Prisma.User$chatFocusArgs<ExtArgs>
   memoryItems?: boolean | Prisma.User$memoryItemsArgs<ExtArgs>
   verifiedMemoryItems?: boolean | Prisma.User$verifiedMemoryItemsArgs<ExtArgs>
   standingGrants?: boolean | Prisma.User$standingGrantsArgs<ExtArgs>
@@ -6524,6 +7593,8 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     notifications: Prisma.$UserNotificationPayload<ExtArgs>[]
     chatAttachments: Prisma.$ChatAttachmentPayload<ExtArgs>[]
     chatDecisions: Prisma.$ChatDecisionPayload<ExtArgs>[]
+    chatAutoSamples: Prisma.$ChatAutoSamplePayload<ExtArgs>[]
+    chatFocus: Prisma.$ChatFocusPayload<ExtArgs>[]
     memoryItems: Prisma.$MemoryItemPayload<ExtArgs>[]
     verifiedMemoryItems: Prisma.$MemoryItemPayload<ExtArgs>[]
     standingGrants: Prisma.$ChatStandingGrantPayload<ExtArgs>[]
@@ -6580,6 +7651,16 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * concierge can only suggest, never schedule an automatic answer.
      */
     chatAutodecide: boolean
+    /**
+     * TER-642: the similarity thresholds this person pinned by hand for automatic answers (send at once
+     * from `high`, suggest and send after the countdown from `low`). Null = calibrated, else the defaults.
+     */
+    chatAutoHigh: number | null
+    chatAutoLow: number | null
+    /**
+     * The last calibration from this person's own answers: `{ high, low, samples, computed_at }`.
+     */
+    chatAutoCalibration: runtime.JsonValue | null
     /**
      * "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
      */
@@ -7021,6 +8102,8 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   notifications<T extends Prisma.User$notificationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UserNotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatAttachments<T extends Prisma.User$chatAttachmentsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatAttachmentsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatAttachmentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatDecisions<T extends Prisma.User$chatDecisionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatDecisionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatDecisionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  chatAutoSamples<T extends Prisma.User$chatAutoSamplesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatAutoSamplesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatAutoSamplePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  chatFocus<T extends Prisma.User$chatFocusArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatFocusArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatFocusPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   memoryItems<T extends Prisma.User$memoryItemsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$memoryItemsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MemoryItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   verifiedMemoryItems<T extends Prisma.User$verifiedMemoryItemsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$verifiedMemoryItemsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MemoryItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   standingGrants<T extends Prisma.User$standingGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$standingGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatStandingGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -7076,6 +8159,9 @@ export interface UserFieldRefs {
   readonly reviewEnabledBy: Prisma.FieldRef<"User", 'String'>
   readonly chatSuggestions: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatAutodecide: Prisma.FieldRef<"User", 'Boolean'>
+  readonly chatAutoHigh: Prisma.FieldRef<"User", 'Float'>
+  readonly chatAutoLow: Prisma.FieldRef<"User", 'Float'>
+  readonly chatAutoCalibration: Prisma.FieldRef<"User", 'Json'>
   readonly chatCodexReplies: Prisma.FieldRef<"User", 'Boolean'>
   readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatContextLimit: Prisma.FieldRef<"User", 'Int'>
@@ -7813,6 +8899,54 @@ export type User$chatDecisionsArgs<ExtArgs extends runtime.Types.Extensions.Inte
   take?: number
   skip?: number
   distinct?: Prisma.ChatDecisionScalarFieldEnum | Prisma.ChatDecisionScalarFieldEnum[]
+}
+
+/**
+ * User.chatAutoSamples
+ */
+export type User$chatAutoSamplesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ChatAutoSample
+   */
+  select?: Prisma.ChatAutoSampleSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ChatAutoSample
+   */
+  omit?: Prisma.ChatAutoSampleOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ChatAutoSampleInclude<ExtArgs> | null
+  where?: Prisma.ChatAutoSampleWhereInput
+  orderBy?: Prisma.ChatAutoSampleOrderByWithRelationInput | Prisma.ChatAutoSampleOrderByWithRelationInput[]
+  cursor?: Prisma.ChatAutoSampleWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ChatAutoSampleScalarFieldEnum | Prisma.ChatAutoSampleScalarFieldEnum[]
+}
+
+/**
+ * User.chatFocus
+ */
+export type User$chatFocusArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ChatFocus
+   */
+  select?: Prisma.ChatFocusSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ChatFocus
+   */
+  omit?: Prisma.ChatFocusOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ChatFocusInclude<ExtArgs> | null
+  where?: Prisma.ChatFocusWhereInput
+  orderBy?: Prisma.ChatFocusOrderByWithRelationInput | Prisma.ChatFocusOrderByWithRelationInput[]
+  cursor?: Prisma.ChatFocusWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ChatFocusScalarFieldEnum | Prisma.ChatFocusScalarFieldEnum[]
 }
 
 /**

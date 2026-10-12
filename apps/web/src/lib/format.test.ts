@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { i18n } from '../i18n';
-import { formatDate, formatNumber, formatTime, relativeTime } from './format';
+import { formatDate, formatNumber, formatSimilarity, formatTime, relativeTime } from './format';
 
 afterEach(() => {
   void i18n.changeLanguage('pt-BR');
@@ -10,6 +10,13 @@ const now = Date.parse('2026-10-04T12:00:00Z');
 const ago = (ms: number) => new Date(now - ms).toISOString();
 
 describe('format helpers follow the language on screen', () => {
+  it('writes a similarity with two decimals', () => {
+    expect(formatSimilarity(0.9)).toBe('0,90');
+    expect(formatSimilarity(1)).toBe('1,00');
+    void i18n.changeLanguage('en');
+    expect(formatSimilarity(0.8512)).toBe('0.85');
+  });
+
   it('writes dates the pt-BR way, then the English way', () => {
     const d = new Date(2026, 9, 4, 14, 5);
     expect(formatDate(d)).toBe('04/10/2026');

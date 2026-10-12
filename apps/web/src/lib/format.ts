@@ -28,6 +28,11 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
   return value.toLocaleString(currentLocale(), options);
 }
 
+/** A similarity or one of its thresholds (0–1) as the screens show it: two decimals ("0,95" / "0.95"). */
+export function formatSimilarity(value: number): string {
+  return formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 /** An `Intl.DateTimeFormat` in the language on screen, for code that needs `formatToParts`. */
 export function dateTimeFormat(options?: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
   return new Intl.DateTimeFormat(currentLocale(), options);

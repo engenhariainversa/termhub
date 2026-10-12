@@ -32,6 +32,7 @@ import { TabQuestionsRepository } from './tab-questions.js';
 import { TabLimitNoticesRepository } from './tab-limit-notices.js';
 import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-attachments.js';
 import { ChatDecisionsRepository } from './chat-decisions.js';
+import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
@@ -90,6 +91,7 @@ export interface Repositories {
   tabLimitNotices: TabLimitNoticesRepository;
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
+  chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
@@ -152,6 +154,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabLimitNotices: new TabLimitNoticesRepository(db),
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
+    chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),

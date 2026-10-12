@@ -22,6 +22,10 @@ export interface AutoDecisionView {
    *  ("Opção recomendada pelo agente") and no sources. `'automation_permission'` (TER-974): a permission the
    *  automatic run allowed by the project's rules, shown the same way. Absent on an action card. */
   by?: AutoAnswerBy | typeof PERMISSION_BY_AUTOMATION;
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent on an action card and on anything from before. */
+  score?: number;
+  thresholds?: { high: number; low: number };
 }
 
 /** `AutoDecisionView.by` of a permission the automatic run allowed by the project's rules (TER-974). */
@@ -32,6 +36,8 @@ export interface AutoDecisionInput {
   reason: string | null;
   refs: string[];
   by?: AutoAnswerBy;
+  score?: number;
+  thresholds?: { high: number; low: number };
 }
 
 /** The tools whose optional `sources`/`reason` mark a send as decided from memory (TER-641). */
@@ -70,6 +76,7 @@ export async function describeAutoDecisions(repos: Pick<Repositories, 'chatDecis
         return { ref, question: d ? d.question : null, answer: d ? answerText(d) : null };
       }),
       ...(input.by ? { by: input.by } : {}),
+      ...(input.score !== undefined && input.thresholds ? { score: input.score, thresholds: input.thresholds } : {}),
     };
   });
 }

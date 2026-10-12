@@ -8,7 +8,7 @@ import type { ControlContext } from '../control/context.js';
 
 vi.mock('./tab-questions.js', () => ({ publishTabQuestions: vi.fn(async () => []) }));
 const { publishTabQuestions } = await import('./tab-questions.js');
-const { cancelAutoAnswer, maybeScheduleRepeat, precedentBacks, recoverLostAutoAnswers, scheduleAutoAnswer, sendDueAutoAnswers, startAutoAnswerSweeper } = await import('./auto-answer.js');
+const { cancelAutoAnswer, maybeScheduleRepeat, precedentBacks, recoverLostAutoAnswers, reportFocus, scheduleAutoAnswer, sendDueAutoAnswers, startAutoAnswerSweeper, syncFocusCountdowns } = await import('./auto-answer.js');
 const { HttpError } = await import('../lib/errors.js');
 
 const yesNo = (question: string, header = 'Isolamento'): ChoicePayload['questions'][number] => ({
@@ -140,16 +140,24 @@ const item = (over: Partial<SuggestionItem> = {}): SuggestionItem => ({
 
 describe('maybeScheduleRepeat', () => {
   const now = new Date('2026-09-26T12:00:00.000Z');
-  const reposFor = (switchOn = true, decisions: ChatDecision[] = [decision({ id: 'd1' }), decision({ id: 'd2', answer: { labels: ['Não'] } })]) => {
+  const reposFor = (
+    switchOn = true,
+    decisions: ChatDecision[] = [decision({ id: 'd1' }), decision({ id: 'd2', answer: { labels: ['Não'] } })],
+    o: { notes?: { id: string; kind: string; text: string }[]; focused?: boolean; pinned?: { high: number; low: number } } = {},
+  ) => {
     const setAutoAnswer = vi.fn(async (_id: string, auto: AutoAnswer) => row({ auto_answer: auto }));
     const chatAutodecide = vi.fn(async () => switchOn);
     const findManyForUser = vi.fn(async (ids: string[], userId: string) => decisions.filter((d) => ids.includes(d.id) && d.user_id === userId));
-    return { repos: { tabQuestions: { setAutoAnswer }, users: { chatAutodecide }, chatDecisions: { findManyForUser } } as unknown as Repositories, setAutoAnswer, chatAutodecide, findManyForUser };
+    const findManyForOwner = vi.fn(async (ids: string[]) => (o.notes ?? []).filter((n) => ids.includes(n.id)));
+    const chatAutoThresholds = vi.fn(async () => ({ high: o.pinned?.high ?? null, low: o.pinned?.low ?? null, calibration: null }));
+    const focusedUsers = vi.fn(async (ids: string[]) => new Set(o.focused ? ids : []));
+    const repos = { tabQuestions: { setAutoAnswer }, users: { chatAutodecide, chatAutoThresholds }, chatDecisions: { findManyForUser }, memoryItems: { findManyForOwner }, chatAuto: { focusedUsers } } as unknown as Repositories;
+    return { repos, setAutoAnswer, chatAutodecide, findManyForUser, findManyForOwner, focusedUsers };
   };
   beforeEach(() => vi.mocked(publishTabQuestions).mockClear());
 
-  it('switch on + every question suggested from a decision: schedules by memory, without publishing', async () => {
-    const { repos, setAutoAnswer, chatAutodecide } = reposFor();
+  it('switch on + every question suggested from a decision at or above the high threshold: sends at once, without publishing', async () => {
+    const { repos, setAutoAnswer, chatAutodecide, focusedUsers } = reposFor();
     const r = await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now);
     expect(chatAutodecide).toHaveBeenCalledWith('u1');
     expect(setAutoAnswer).toHaveBeenCalledWith('q1', {
@@ -157,12 +165,97 @@ describe('maybeScheduleRepeat', () => {
       by: 'memory',
       reason: 'Mesma pergunta respondida antes',
       sources: [{ kind: 'decision', id: 'd1' }],
-      due_at: '2026-09-26T12:01:00.000Z',
+      // no undo window in the high band: only the grace for the tab to draw the question
+      due_at: '2026-09-26T12:00:03.000Z',
       status: 'scheduled',
+      score: 0.99,
+      thresholds: { high: 0.95, low: 0.85 },
+      band: 'high',
     });
     expect(r?.auto_answer?.status).toBe('scheduled');
+    // sent whether or not anyone is looking: focus is never read
+    expect(focusedUsers).not.toHaveBeenCalled();
     // `openTabQuestion` publishes the card once, carrying the countdown.
     expect(publishTabQuestions).not.toHaveBeenCalled();
+  });
+
+  describe('similarity bands (TER-642)', () => {
+    it('between the thresholds: a 60 s countdown that only runs in focus, paused while nobody is looking', async () => {
+      const { repos, setAutoAnswer } = reposFor();
+      await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.9 })] } }), now);
+      expect(setAutoAnswer.mock.calls[0]![1]).toEqual({
+        answer: { answers: [{ selected: [0] }] },
+        by: 'memory',
+        reason: 'Pergunta parecida respondida antes',
+        sources: [{ kind: 'decision', id: 'd1' }],
+        due_at: '2026-09-26T12:01:00.000Z',
+        status: 'scheduled',
+        score: 0.9,
+        thresholds: { high: 0.95, low: 0.85 },
+        band: 'mid',
+        focus: true,
+        paused: true,
+        remaining_ms: 60_000,
+      });
+    });
+
+    it('between the thresholds with termhub in focus: the countdown runs from the start', async () => {
+      const { repos, setAutoAnswer, focusedUsers } = reposFor(true, undefined, { focused: true });
+      await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.9 })] } }), now);
+      expect(focusedUsers).toHaveBeenCalledWith(['u1'], 45_000);
+      const stored = setAutoAnswer.mock.calls[0]![1];
+      expect(stored).toMatchObject({ band: 'mid', focus: true, due_at: '2026-09-26T12:01:00.000Z' });
+      expect(stored.paused).toBeUndefined();
+    });
+
+    it('exactly at a threshold falls in the band above it; below the low one nothing is scheduled', async () => {
+      const at = async (similarity: number) => {
+        const { repos, setAutoAnswer } = reposFor();
+        await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity })] } }), now);
+        return setAutoAnswer.mock.calls[0]?.[1].band ?? null;
+      };
+      expect(await at(0.95)).toBe('high');
+      expect(await at(0.9499)).toBe('mid');
+      expect(await at(0.85)).toBe('mid');
+      expect(await at(0.8499)).toBeNull();
+    });
+
+    it('the card scores as its weakest question', async () => {
+      const { repos, setAutoAnswer } = reposFor();
+      const payload = { questions: [yesNo('Usar git worktree?'), yesNo('Rodar os testes?', 'Testes')] };
+      await maybeScheduleRepeat(repos, row({ payload, suggestion: { items: [item({ similarity: 1 }), item({ question_index: 1, decision_id: 'd2', selected: [1], similarity: 0.88 })] } }), now);
+      expect(setAutoAnswer.mock.calls[0]![1]).toMatchObject({ band: 'mid', score: 0.88 });
+    });
+
+    it("reads the person's own thresholds: pinned by hand, they replace the defaults", async () => {
+      const { repos, setAutoAnswer } = reposFor(true, undefined, { pinned: { high: 0.99, low: 0.97 } });
+      expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.96 })] } }), now)).toBeNull();
+      await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.98 })] } }), now);
+      expect(setAutoAnswer.mock.calls[0]![1]).toMatchObject({ band: 'mid', thresholds: { high: 0.99, low: 0.97 } });
+    });
+
+    const note = (text: string) => ({ id: 'n1', kind: 'note', text });
+    const noteItem = (over: Partial<SuggestionItem> = {}) => item({ decision_id: '', sources: ['note:n1'], ...over });
+
+    it('a note whose decision is one of the options backs the answer like a decision', async () => {
+      const { repos, setAutoAnswer, findManyForOwner } = reposFor(true, [], { notes: [note('Decisão: sim\nMotivo: combinado no chat\nFontes: ')] });
+      await maybeScheduleRepeat(repos, row({ suggestion: { items: [noteItem()] } }), now);
+      expect(findManyForOwner).toHaveBeenCalledWith(['n1'], 'u1');
+      expect(setAutoAnswer.mock.calls[0]![1]).toMatchObject({ answer: { answers: [{ selected: [0] }] }, sources: [{ kind: 'note', id: 'n1' }], band: 'high' });
+    });
+
+    it('a note forgotten since, one that now says something else, or one that is prose → null', async () => {
+      for (const notes of [[], [note('Decisão: Não\nMotivo: mudou')], [note('Decisão: Sim, mas só no projeto novo\nMotivo: m')]]) {
+        const { repos, setAutoAnswer } = reposFor(true, [], { notes });
+        expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [noteItem()] } }), now)).toBeNull();
+        expect(setAutoAnswer).not.toHaveBeenCalled();
+      }
+    });
+
+    it('a note never backs a free text', async () => {
+      const { repos } = reposFor(true, [], { notes: [note('Decisão: usar a main\nMotivo: m')] });
+      expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [noteItem({ selected: [], text: 'usar a main' })] } }), now)).toBeNull();
+    });
   });
 
   it('carries a free-text past answer as text', async () => {
@@ -198,13 +291,6 @@ describe('maybeScheduleRepeat', () => {
   it('a blocked free-text answer → null', async () => {
     const { repos } = reposFor();
     expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ selected: [], text: 'faça o merge' })] } }), now)).toBeNull();
-  });
-
-  it('an item below the 0.98 hard floor → null, whatever the suggestion threshold', async () => {
-    const { repos, setAutoAnswer } = reposFor();
-    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.97 })] } }), now)).toBeNull();
-    expect(setAutoAnswer).not.toHaveBeenCalled();
-    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.98 })] } }), now)).not.toBeNull();
   });
 
   it('two questions, only one suggested → null', async () => {
@@ -442,6 +528,100 @@ describe('sendDueAutoAnswers', () => {
     expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer: vi.fn(async () => ({}) as never) })).toBe(1);
     expect(tabQuestions.finishAutoAnswer).not.toHaveBeenCalled();
   });
+
+  describe('TER-642', () => {
+    const withNotes = (found: string[], auto: Partial<AutoAnswer>) => {
+      const f = fake({ auto });
+      const memoryItems = { findManyForOwner: vi.fn(async (ids: string[]) => ids.filter((id) => found.includes(id)).map((id) => ({ id, kind: 'note' }))) };
+      const chatAuto = { recordSamples: vi.fn(async () => {}) };
+      return { ...f, repos: { ...f.repos, memoryItems, chatAuto }, memoryItems, chatAuto };
+    };
+
+    it('a cited note forgotten mid-countdown → failed PRECEDENT_FORGOTTEN, nothing typed', async () => {
+      const { repos, tabQuestions, memoryItems } = withNotes([], { sources: [{ kind: 'note', id: 'n1' }] });
+      const answer = vi.fn();
+      expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+      expect(memoryItems.findManyForOwner).toHaveBeenCalledWith(['n1'], 'u1');
+      expect(answer).not.toHaveBeenCalled();
+      expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
+    });
+
+    it('logs the score, the band and the thresholds that led to the send — never the answer', async () => {
+      const { repos } = withNotes(['n1'], { sources: [{ kind: 'note', id: 'n1' }], score: 0.97, band: 'high', thresholds: { high: 0.95, low: 0.85 } });
+      const l = log();
+      expect(await sendDueAutoAnswers(repos as unknown as Repositories, l, { now, answer: vi.fn(async () => ({}) as never) })).toBe(1);
+      expect(l.info).toHaveBeenCalledWith({ tabQuestionId: 'q1', by: 'memory', score: 0.97, band: 'high', high: 0.95, low: 0.85 }, 'auto answer sent');
+    });
+
+    it('a countdown that ran out in focus tells calibration the precedent was right; one sent at once tells it nothing', async () => {
+      const precedent = { items: [{ question_index: 0, ref: 'decision:d1', similarity: 0.9, selected: [0] }] };
+      const watched = withNotes([], { sources: [{ kind: 'decision', id: 'd1' }], score: 0.9, band: 'mid', focus: true });
+      watched.tabQuestions.claimAutoAnswer.mockResolvedValue({ ...watched.due, precedent, auto_answer: { ...watched.due.auto_answer!, status: 'sent' } } as never);
+      await sendDueAutoAnswers(watched.repos as unknown as Repositories, log(), { now, answer: vi.fn(async () => ({}) as never) });
+      expect(watched.chatAuto.recordSamples).toHaveBeenCalledWith([{ user_id: 'u1', tab_question_id: 'q1', question_index: 0, score: 0.9, matched: true, source: 'accepted' }]);
+      const instant = withNotes([], { sources: [{ kind: 'decision', id: 'd1' }], score: 0.99, band: 'high' });
+      instant.tabQuestions.claimAutoAnswer.mockResolvedValue({ ...instant.due, precedent, auto_answer: { ...instant.due.auto_answer!, status: 'sent' } } as never);
+      await sendDueAutoAnswers(instant.repos as unknown as Repositories, log(), { now, answer: vi.fn(async () => ({}) as never) });
+      expect(instant.chatAuto.recordSamples).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('syncFocusCountdowns (TER-642)', () => {
+  const now = new Date('2026-09-26T12:00:20.000Z');
+  const focusRepos = (rows: TabQuestion[], focused: string[]) => {
+    const tabQuestions = {
+      listFocusCountdowns: vi.fn(async () => rows),
+      pauseAutoAnswer: vi.fn(async (id: string, _due: string, remaining: number) => row({ id, auto_answer: scheduled({ focus: true, paused: true, remaining_ms: remaining }) })),
+      resumeAutoAnswer: vi.fn(async (id: string, due: string) => row({ id, auto_answer: scheduled({ focus: true, paused: false, due_at: due }) })),
+    };
+    const chatAuto = { focusedUsers: vi.fn(async () => new Set(focused)), touchFocus: vi.fn(async () => {}), clearFocus: vi.fn(async () => {}) };
+    return { repos: { tabQuestions, chatAuto } as unknown as Repositories, tabQuestions, chatAuto };
+  };
+  const running = row({ id: 'q1', auto_answer: scheduled({ focus: true, due_at: '2026-09-26T12:01:00.000Z' }) });
+  const paused = row({ id: 'q2', auto_answer: scheduled({ focus: true, paused: true, remaining_ms: 25_000, due_at: '2026-09-26T11:00:00.000Z' }) });
+  beforeEach(() => vi.mocked(publishTabQuestions).mockClear());
+
+  it('the person looked away: a running countdown pauses with what was left, and the card is republished', async () => {
+    const { repos, tabQuestions, chatAuto } = focusRepos([running], []);
+    expect(await syncFocusCountdowns(repos, undefined, now)).toBe(1);
+    expect(chatAuto.focusedUsers).toHaveBeenCalledWith(['u1'], 45_000);
+    expect(tabQuestions.pauseAutoAnswer).toHaveBeenCalledWith('q1', '2026-09-26T12:01:00.000Z', 40_000);
+    expect(publishTabQuestions).toHaveBeenCalledWith(repos, 'tab_question', [expect.objectContaining({ id: 'q1' })], { update: true });
+  });
+
+  it('the person is back: a paused countdown resumes, due now plus what was left', async () => {
+    const { repos, tabQuestions } = focusRepos([paused], ['u1']);
+    expect(await syncFocusCountdowns(repos, 'u1', now)).toBe(1);
+    expect(tabQuestions.listFocusCountdowns).toHaveBeenCalledWith('u1');
+    expect(tabQuestions.resumeAutoAnswer).toHaveBeenCalledWith('q2', '2026-09-26T12:00:45.000Z');
+  });
+
+  it('nothing changes for a countdown already in the right state, and nothing is published', async () => {
+    const away = focusRepos([paused], []);
+    expect(await syncFocusCountdowns(away.repos, undefined, now)).toBe(0);
+    const here = focusRepos([running], ['u1']);
+    expect(await syncFocusCountdowns(here.repos, undefined, now)).toBe(0);
+    expect(here.tabQuestions.pauseAutoAnswer).not.toHaveBeenCalled();
+    expect(publishTabQuestions).not.toHaveBeenCalled();
+  });
+
+  it('a write that lost its race (cancelled, answered or sent meanwhile) publishes nothing', async () => {
+    const { repos, tabQuestions } = focusRepos([running], []);
+    tabQuestions.pauseAutoAnswer.mockResolvedValue(undefined as never);
+    expect(await syncFocusCountdowns(repos, undefined, now)).toBe(0);
+    expect(publishTabQuestions).not.toHaveBeenCalled();
+  });
+
+  it('reportFocus stores the heartbeat (or takes the screen out) and syncs that person at once', async () => {
+    const { repos, tabQuestions, chatAuto } = focusRepos([paused], ['u1']);
+    await reportFocus(repos, 'u1', 'screen-abcdef', true);
+    expect(chatAuto.touchFocus).toHaveBeenCalledWith('u1', 'screen-abcdef');
+    expect(tabQuestions.listFocusCountdowns).toHaveBeenCalledWith('u1');
+    expect(tabQuestions.resumeAutoAnswer).toHaveBeenCalledTimes(1);
+    await reportFocus(repos, 'u1', 'screen-abcdef', false);
+    expect(chatAuto.clearFocus).toHaveBeenCalledWith('u1', 'screen-abcdef');
+  });
 });
 
 /** The automation side of a card's tab (agentic board D18, F-17): an active run, its project on, not paused. */
@@ -462,12 +642,22 @@ describe('automatic tabs bypass "Responder sozinho" (agentic board D18, prefligh
     const setAutoAnswer = vi.fn(async (_id: string, auto: AutoAnswer) => row({ auto_answer: auto }));
     const repos = {
       tabQuestions: { setAutoAnswer },
-      users: { chatAutodecide: vi.fn(async () => false) },
+      users: { chatAutodecide: vi.fn(async () => false), chatAutoThresholds: vi.fn(async () => ({ high: null, low: null, calibration: null })) },
       chatDecisions: { findManyForUser: vi.fn(async () => [decision({ id: 'd1' })]) },
+      chatAuto: { focusedUsers: vi.fn(async () => new Set<string>()) },
       ...automation(o),
     } as unknown as Repositories;
     return { repos, setAutoAnswer };
   };
+
+  it('nobody watches an automatic tab: a countdown between the thresholds does not wait for focus (TER-642)', async () => {
+    const { repos, setAutoAnswer } = repeatRepos({});
+    await maybeScheduleRepeat(repos, row({ suggestion: { items: [item({ similarity: 0.9 })] } }), now());
+    const stored = setAutoAnswer.mock.calls[0]![1];
+    expect(stored).toMatchObject({ band: 'mid', due_at: '2026-09-26T12:02:05.000Z' });
+    expect(stored.focus).toBeUndefined();
+    expect(stored.paused).toBeUndefined();
+  });
 
   it('the repeat path schedules with the switch off when the tab has a live automatic run', async () => {
     const { repos, setAutoAnswer } = repeatRepos({});
@@ -625,6 +815,20 @@ describe('cancelAutoAnswer', () => {
     expect(tabQuestions.cancelAutoAnswer).toHaveBeenCalledWith('q1', 'u1');
     expect(view).toMatchObject({ id: 'q1', auto_answer: { status: 'cancelled' } });
     expect(publishTabQuestions).toHaveBeenCalledWith(ctx.repos, 'tab_question', [cancelled], { update: true });
+  });
+
+  it('tells calibration the precedent was wrong for the person (TER-642); an automation countdown tells it nothing', async () => {
+    const precedent = { items: [{ question_index: 0, ref: 'decision:d1', similarity: 0.91, selected: [0] }] };
+    const recordSamples = vi.fn(async () => {});
+    const mine = ctxFor(row({ auto_answer: scheduled() }), row({ precedent, auto_answer: scheduled({ status: 'cancelled', decided_by: 'u1' }) }));
+    (mine.ctx.repos as unknown as { chatAuto: unknown }).chatAuto = { recordSamples };
+    await cancelAutoAnswer(mine.ctx, 'q1');
+    expect(recordSamples).toHaveBeenCalledWith([{ user_id: 'u1', tab_question_id: 'q1', question_index: 0, score: 0.91, matched: false, source: 'cancelled' }]);
+    recordSamples.mockClear();
+    const board = ctxFor(row({ auto_answer: scheduled() }), row({ precedent, auto_answer: scheduled({ by: 'automation', status: 'cancelled' }) }));
+    (board.ctx.repos as unknown as { chatAuto: unknown }).chatAuto = { recordSamples };
+    await cancelAutoAnswer(board.ctx, 'q1');
+    expect(recordSamples).not.toHaveBeenCalled();
   });
 
   it('404 for a foreign or missing row, or a suggestion', async () => {

@@ -165,12 +165,13 @@ it('"Esquecer esta decisão" forgets the decision and clears the pre-selection',
   expect(screen.getByRole('radio', { name: /Green/ })).not.toBeChecked();
 });
 
-it('"Esquecer esta decisão" on a suggestion with an empty decision_id only clears the pre-selection', async () => {
-  const onForget = vi.fn(async () => {});
-  render(<TabQuestionCard question={choice({ payload: { questions: [colors] }, suggestion: { items: [{ ...suggestion, decision_id: '', similarity: 0 }] } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} onForget={onForget} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Esquecer esta decisão' }));
-  expect(onForget).not.toHaveBeenCalled();
-  await waitFor(() => expect(screen.getByRole('radio', { name: /Green/ })).not.toBeChecked());
+it('a suggestion backed by a concierge note (TER-642) says so and has no decision to forget', () => {
+  const note = { ...suggestion, decision_id: '', similarity: 0.9, sources: ['note:n1'] };
+  render(<TabQuestionCard question={choice({ payload: { questions: [colors] }, suggestion: { items: [note] } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} onForget={vi.fn(async () => {})} />);
+  expect(screen.getByRole('radio', { name: /Green/ })).toBeChecked();
+  expect(screen.getByText('Sugestão da memória: uma anotação diz «Green» para «Usar worktree?» em termhub, 20/09/2026')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Esquecer esta decisão' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Responder' })).toBeEnabled();
 });
 
 it("forgetting one question's suggestion keeps another question's pre-selection", async () => {
@@ -361,6 +362,60 @@ describe('automatic answer countdown (spec 2026-09-26 concierge memory §6/§8)'
     expect(screen.getByText(new RegExp(`«Opção 2» \\(${'y'.repeat(80)}…\\)\\. Motivo`))).toBeInTheDocument();
   });
 
+  describe('by similarity band, counting only in focus (TER-642)', () => {
+    it('a paused countdown shows the time left frozen, says why, keeps both buttons and never "Enviando…"', async () => {
+      const onAnswer = vi.fn();
+      const onCancelAutoAnswer = vi.fn();
+      // `due_at` already past: while paused it means nothing.
+      const paused = auto({ band: 'mid', focus: true, paused: true, remaining_ms: 37_400, due_at: new Date(now.getTime() - 5000).toISOString() });
+      render(<TabQuestionCard question={card({ auto_answer: paused } as Partial<TabQuestion>)} answering={false} onAnswer={onAnswer} onCancelAutoAnswer={onCancelAutoAnswer} />);
+      expect(screen.getByText('Resposta automática pausada, faltam 0:38 — «Sim». Motivo: Mesma pergunta respondida antes')).toBeInTheDocument();
+      expect(screen.getByText('A contagem só corre com o termhub em foco.')).toBeInTheDocument();
+      expect(screen.queryByText('Enviando…')).toBeNull();
+      await act(async () => vi.advanceTimersByTimeAsync(5000));
+      expect(screen.getByText(/faltam 0:38/)).toBeInTheDocument();
+      expect(screen.queryByText('Enviando…')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Responder agora' }));
+      expect(onAnswer).toHaveBeenCalledWith('q1', { answers: [{ selected: [0] }] });
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(onCancelAutoAnswer).toHaveBeenCalledWith('q1');
+    });
+
+    it('a paused countdown names the chosen option\'s description too', () => {
+      const steps = { question: 'Como seguir?', header: 'Passo', multi_select: false, options: [{ label: 'Opção 1', description: 'faz merge e push para main', recommended: false }] };
+      render(<TabQuestionCard question={choice({ payload: { questions: [steps] }, auto_answer: auto({ focus: true, paused: true, remaining_ms: 60_000 }) } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+      expect(screen.getByText('Resposta automática pausada, faltam 1:00 — «Opção 1» (faz merge e push para main). Motivo: Mesma pergunta respondida antes')).toBeInTheDocument();
+    });
+
+    it('resumes ticking from the fresh due_at once the server republishes the card', async () => {
+      const { rerender } = render(<TabQuestionCard question={card({ auto_answer: auto({ focus: true, paused: true, remaining_ms: 30_000 }) } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+      expect(screen.getByText(/pausada, faltam 0:30/)).toBeInTheDocument();
+      rerender(<TabQuestionCard question={card({ auto_answer: auto({ focus: true, paused: false, due_at: new Date(now.getTime() + 30_000).toISOString() }) } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+      expect(screen.getByText(/Resposta automática em 0:30/)).toBeInTheDocument();
+      expect(screen.queryByText('A contagem só corre com o termhub em foco.')).toBeNull();
+      await act(async () => vi.advanceTimersByTimeAsync(2000));
+      expect(screen.getByText(/Resposta automática em 0:28/)).toBeInTheDocument();
+    });
+
+    it('a high-band answer reads as being sent, with no timer and only "Cancelar"', () => {
+      const onCancelAutoAnswer = vi.fn();
+      const high = auto({ band: 'high', score: 0.97, thresholds: { high: 0.95, low: 0.85 }, due_at: new Date(now.getTime() + 3000).toISOString() });
+      render(<TabQuestionCard question={card({ auto_answer: high } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} onCancelAutoAnswer={onCancelAutoAnswer} />);
+      expect(screen.getByText('Respondendo sozinho — «Sim». Motivo: Mesma pergunta respondida antes')).toBeInTheDocument();
+      expect(screen.queryByText(/\d:\d\d/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Responder agora' })).toBeNull();
+      expect(screen.queryByRole('radio')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      expect(onCancelAutoAnswer).toHaveBeenCalledWith('q1');
+    });
+
+    it('a high-band answer names the description and the memory source like the countdown line', () => {
+      const steps = { question: 'Como seguir?', header: 'Passo', multi_select: false, options: [{ label: 'Opção 1', description: 'faz merge e push para main', recommended: false }] };
+      render(<TabQuestionCard question={choice({ payload: { questions: [steps] }, auto_answer: auto({ band: 'high' }), suggestion: { items: [memorySource] } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+      expect(screen.getByText(/^Respondendo sozinho — «Opção 1» \(faz merge e push para main\)\. Motivo: Mesma pergunta respondida antes Fonte: você respondeu «Opção 1» a «Usar worktree\?» em termhub, 20\/09\/2026$/)).toBeInTheDocument();
+    });
+  });
+
   it('a "sent" countdown on a still-open card shows "Enviando…" with no buttons', () => {
     render(<TabQuestionCard question={card({ auto_answer: auto({ status: 'sent' }) } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
     expect(screen.getByText('Enviando…')).toBeInTheDocument();
@@ -438,6 +493,16 @@ describe('"Decisão automática" (TER-641)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Decisão automática' }));
     expect(screen.getByText('Motivo: Já decidido')).toBeInTheDocument();
     expect(screen.getByText(/«Qual cor\?» → Blue/)).toBeInTheDocument();
+  });
+  it('names the similarity and the thresholds that decided it (TER-642)', () => {
+    render(<TabQuestionCard question={choice({ status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] }, answered_via: 'auto', auto_decision: { ...auto, score: 0.9712, thresholds: { high: 0.95, low: 0.85 } } })} answering={false} onAnswer={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decisão automática' }));
+    expect(screen.getByText('Semelhança 0,97 · limiares 0,95 / 0,85')).toBeInTheDocument();
+  });
+  it('no similarity line from a server that does not send it', () => {
+    render(<TabQuestionCard question={choice({ status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] }, answered_via: 'auto', auto_decision: auto })} answering={false} onAnswer={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Decisão automática' }));
+    expect(screen.queryByText(/Semelhança/)).toBeNull();
   });
   it('marks a permission the automatic run allowed by its rules (TER-974)', () => {
     render(<TabQuestionCard question={permission({ status: 'answered', answer: { allow: true }, auto_decision: { reason: null, sources: [], by: 'automation_permission' } })} answering={false} onAnswer={vi.fn()} />);
