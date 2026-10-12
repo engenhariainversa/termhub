@@ -8,8 +8,9 @@ import { GithubCiError } from '../integrations/github-ci.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { setupSchema, type ProjectSetupData } from '../setup/schema.js';
 import { epicBranchName } from './branches.js';
+import type { TriggeredStart } from './dispatcher.js';
 import { mergeApproved, mergeKey, MERGE_TOOL, runMergeExecutor, type MergeDeps } from './merge.js';
-import { mergeWaitOf, resetMergeWaits } from './merge-wait.js';
+import { mergeWaitEntryOf, mergeWaitOf, resetMergeWaits } from './merge-wait.js';
 
 // The card's sentence is built from many repositories; what matters here is that the card is asked and published.
 vi.mock('../db/repositories/chat-actions-view.js', () => ({ describeActions: vi.fn(async (_r: unknown, rows: ChatAction[]) => rows.map(() => ({ summary: 's', subagent: null }))) }));
@@ -160,6 +161,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
         Object.assign(r, patch);
         return true;
       }),
+      findTriggered: vi.fn(async (taskId: string, role: string, trigger: string) => state.runs.find((r) => r.task_id === taskId && r.role === role && r.trigger_sha === trigger) ?? null),
       lastEndedAt: vi.fn(async (taskId: string) => {
         const ends = state.runs.filter((r) => r.task_id === taskId && r.ended_at).map((r) => r.ended_at!.getTime());
         return ends.length > 0 ? new Date(Math.max(...ends)) : null;
@@ -205,7 +207,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   };
   const ci = { listRuns: vi.fn(async (_t: string, _r: string, _sha: string): Promise<WorkflowRun[]> => [run('ci', 'completed', 'success')]) };
   // a started fixer is a run keyed by the head; it ends at once here (each test drives the runs it needs active)
-  const startFixer = vi.fn(async (i: { taskId: string; triggerSha: string; branch: string }): Promise<'started' | 'taken' | 'waiting' | 'halted'> => {
+  const startFixer = vi.fn(async (i: { taskId: string; triggerSha: string; branch: string }): Promise<TriggeredStart> => {
     state.runs.push({ id: `r${state.runs.length + 1}`, task_id: i.taskId, role: 'fixer', trigger_sha: i.triggerSha, status: 'done', waiting_reason: null, tab_id: null, branch: i.branch, fix_count: 0 });
     return 'started';
   });
@@ -1041,6 +1043,27 @@ describe('red CI (spec D21)', () => {
     expect(requests(w)).toHaveLength(1);
   });
 
+  it('the card\'s open tab is busy or in use (TER-1051): the board says the fix waits for it, asked again at the next sync', async () => {
+    const w = world({ prs: [red('h1')] });
+    w.startFixer.mockResolvedValueOnce('tab_busy');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(requests(w)).toEqual([]);
+    expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_fix_waits_for_tab');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(requests(w)).toHaveLength(1);
+  });
+
+  it('a conflict whose fixer waits for the card\'s open tab (TER-1051): no escalation, the board says why', async () => {
+    const w = world();
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    w.startFixer.mockResolvedValueOnce('tab_busy');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(mergeWaitOf('c1', new Date('2026-10-05T12:00:00Z'))).toBe('merge_fix_waits_for_tab');
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+  });
+
   it('two colours on the same red head at once: one line typed, one fix counted, one request (F-27)', async () => {
     const w = world({ prs: [red('h1')] });
     owningRun(w);
@@ -1145,6 +1168,66 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     expect(w.state.runs.filter((r) => r.waiting_reason === 'conflict_cap')).toHaveLength(1);
   });
 
+  it('the real #397 sequence (TER-1016): conflict_cap → a new run ends without a push → told once more → push → green CI → merge', async () => {
+    const w = world({ setup: setupWith({ fix_attempts: 2 }) });
+    realisticFixer(w);
+    let clock = NOW;
+    w.deps.now = () => clock;
+    const at = (min: number) => new Date(NOW.getTime() + min * 60_000);
+    const dirty = (sha: string) => w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: sha, base_ref: EPIC_BRANCH });
+    w.gh.pull.mockResolvedValue(dirty('h1'));
+    // the conflict fixer ends without a push: escalated for h1
+    await runMergeExecutor(w.deps, 'p1');
+    Object.assign(w.state.runs[0]!, { status: 'done', ended_at: NOW });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', sha: 'h1', cause: 'fixer_no_push' }) })]);
+    expect(mergeWaitEntryOf('c1', NOW)).toEqual({ wait: 'merge_conflict_cap', sha: 'h1' });
+
+    // a new run of the card works and reports done, but pushes nothing: h1 is still the head, still in conflict
+    w.state.runs.push({ id: 'again', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'running', waiting_reason: null, tab_id: 'tab2', branch: BRANCH.c1!, fix_count: 0 });
+    clock = at(5);
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toHaveLength(1);
+    Object.assign(w.state.runs.find((r) => r.id === 'again')!, { status: 'done', ended_at: at(11) });
+    clock = at(12); // inside the grace: a push made right before the end may not be synced yet
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toHaveLength(1);
+    clock = at(15);
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ cause: 'fixer_no_push' }) }),
+      expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', pr: 7, sha: 'h1', cause: 'run_done_no_push' }) }),
+    ]);
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    // neither notice is a fix, and no second fixer ran for the escalated head
+    expect(w.state.runs.filter((r) => r.role === 'fixer' && r.waiting_reason !== 'conflict_cap')).toHaveLength(1);
+    expect(w.state.runs.filter((r) => r.waiting_reason === 'conflict_cap').map((r) => r.trigger_sha)).toEqual(['conflict_cap:h1', 'conflict_cap:h1:run_done_no_push']);
+
+    // a push: h2, CI running, then green and clean — the escalation of h1 holds nothing
+    w.state.prs = [pr({ head_sha: 'h2', ci_state: 'running' })];
+    w.gh.pull.mockResolvedValue(w.pullFor({ head_sha: 'h2' }));
+    clock = at(16);
+    await runMergeExecutor(w.deps, 'p1');
+    w.state.prs = [pr({ head_sha: 'h2' })];
+    await runMergeExecutor(w.deps, 'p1'); // first green reading of h2
+    expect(mergeWaitOf('c1', clock)).toBe('merge_checks_pending');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, expect.objectContaining({ sha: 'h2' }));
+    expect(w.state.events.find((e) => e.kind === 'merged')).toMatchObject({ task_id: 'c1', payload: expect.objectContaining({ pr: 7 }) });
+    expect(escalations(w)).toHaveLength(2);
+  });
+
+  it('a head that stays the same but stops conflicting (the base moved) merges despite its escalation', async () => {
+    const w = world({ triggered: 3 });
+    w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty', head_sha: 'h1', base_ref: EPIC_BRANCH }));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toHaveLength(1);
+    w.gh.pull.mockResolvedValue(w.pullFor());
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, expect.objectContaining({ sha: 'h1' }));
+  });
+
   it('the conflict cap escalates even while the card has a run parked for the person (the marker is never active)', async () => {
     const w = world({ triggered: 3 });
     w.state.runs.push({ id: 'impl', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'waiting', waiting_reason: 'resume_cap', tab_id: 'tab1', branch: BRANCH.c1!, fix_count: 0 });
@@ -1169,6 +1252,31 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     expect(w.state.events.filter((e) => e.kind === 'ci_fix_requested').map((e) => e.payload?.via)).toEqual(['escalated']);
     expect(mergeWaitOf('c1', NOW)).toBe('merge_ci_cap');
     expect(w.startFixer).toHaveBeenCalledTimes(1);
+  });
+
+  it('TER-1025: a fix that ended without a push while GitHub is down is held, then asked once more when GitHub works', async () => {
+    const w = world({ prs: [red('h1')] });
+    realisticFixer(w);
+    let degraded = ['Git Operations'];
+    w.deps.githubHealth = async () => ({ degraded });
+    await runMergeExecutor(w.deps, 'p1');
+    Object.assign(w.state.runs[0]!, { status: 'done', ended_at: new Date(NOW.getTime() - 4 * 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    expect(mergeWaitOf('c1', NOW)).toBe('merge_github_down');
+    expect(w.startFixer).toHaveBeenCalledTimes(1);
+
+    degraded = [];
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([]);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
+    expect(w.startFixer.mock.calls[1]![0]).toMatchObject({ triggerSha: 'h1:github' });
+
+    // the retry ended without a push too: now the person is told
+    Object.assign(w.state.runs[1]!, { status: 'done', ended_at: new Date(NOW.getTime() - 4 * 60_000) });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'ci_cap', cause: 'fixer_no_push' }) })]);
+    expect(w.startFixer).toHaveBeenCalledTimes(2);
   });
 
   it('a red head whose fix is still on (a run of the card active) is not escalated', async () => {

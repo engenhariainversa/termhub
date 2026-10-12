@@ -103,10 +103,18 @@ export const ModelName = {
   Device: 'Device',
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
+  AccessLog: 'AccessLog',
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
-  AutomationSummary: 'AutomationSummary'
+  AutomationSummary: 'AutomationSummary',
+  LegalDocumentVersion: 'LegalDocumentVersion',
+  LegalAcceptance: 'LegalAcceptance',
+  DataExport: 'DataExport',
+  ViewAsAudit: 'ViewAsAudit',
+  SecurityEvent: 'SecurityEvent',
+  FeatureFlag: 'FeatureFlag',
+  FeatureFlagOverride: 'FeatureFlagOverride'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -146,6 +154,7 @@ export const UserScalarFieldEnum = {
   chatAutodecide: 'chatAutodecide',
   chatCodexReplies: 'chatCodexReplies',
   pushTabFinished: 'pushTabFinished',
+  chatContextLimit: 'chatContextLimit',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
@@ -242,10 +251,15 @@ export const MachineScalarFieldEnum = {
   checkedAt: 'checkedAt',
   agentTokenHash: 'agentTokenHash',
   agentTokenCreatedAt: 'agentTokenCreatedAt',
+  agentPairingHash: 'agentPairingHash',
+  agentPairingExpiresAt: 'agentPairingExpiresAt',
+  agentPublicKey: 'agentPublicKey',
+  agentPairedAt: 'agentPairedAt',
   agentVersion: 'agentVersion',
   agentLastSeenAt: 'agentLastSeenAt',
   agentAutoUpdate: 'agentAutoUpdate',
   claudeAutoSwap: 'claudeAutoSwap',
+  aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
@@ -647,6 +661,7 @@ export const ChatConversationScalarFieldEnum = {
   reviewMode: 'reviewMode',
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
+  contextCompactedAt: 'contextCompactedAt',
   lastMessageAt: 'lastMessageAt',
   lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
@@ -706,6 +721,7 @@ export const ChatActionScalarFieldEnum = {
   machineId: 'machineId',
   projectId: 'projectId',
   tabId: 'tabId',
+  tabName: 'tabName',
   grantId: 'grantId',
   errorCode: 'errorCode',
   durationMs: 'durationMs',
@@ -1005,6 +1021,20 @@ export const DeviceChallengeScalarFieldEnum = {
 export type DeviceChallengeScalarFieldEnum = (typeof DeviceChallengeScalarFieldEnum)[keyof typeof DeviceChallengeScalarFieldEnum]
 
 
+export const AccessLogScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
+  ip: 'ip',
+  userId: 'userId',
+  kind: 'kind',
+  method: 'method',
+  route: 'route',
+  status: 'status'
+} as const
+
+export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]
+
+
 export const DeviceEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1056,6 +1086,102 @@ export const AutomationSummaryScalarFieldEnum = {
 } as const
 
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const LegalDocumentVersionScalarFieldEnum = {
+  id: 'id',
+  document: 'document',
+  version: 'version',
+  effectiveAt: 'effectiveAt',
+  url: 'url',
+  requiresAcceptance: 'requiresAcceptance',
+  summary: 'summary',
+  noticeSentAt: 'noticeSentAt',
+  createdAt: 'createdAt'
+} as const
+
+export type LegalDocumentVersionScalarFieldEnum = (typeof LegalDocumentVersionScalarFieldEnum)[keyof typeof LegalDocumentVersionScalarFieldEnum]
+
+
+export const LegalAcceptanceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  versionId: 'versionId',
+  acceptedAt: 'acceptedAt',
+  ip: 'ip',
+  userAgent: 'userAgent',
+  channel: 'channel'
+} as const
+
+export type LegalAcceptanceScalarFieldEnum = (typeof LegalAcceptanceScalarFieldEnum)[keyof typeof LegalAcceptanceScalarFieldEnum]
+
+
+export const DataExportScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  status: 'status',
+  attempts: 'attempts',
+  bytes: 'bytes',
+  errorCode: 'errorCode',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  expiresAt: 'expiresAt',
+  downloadedAt: 'downloadedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type DataExportScalarFieldEnum = (typeof DataExportScalarFieldEnum)[keyof typeof DataExportScalarFieldEnum]
+
+
+export const ViewAsAuditScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  scope: 'scope',
+  targetUserId: 'targetUserId',
+  ip: 'ip',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ViewAsAuditScalarFieldEnum = (typeof ViewAsAuditScalarFieldEnum)[keyof typeof ViewAsAuditScalarFieldEnum]
+
+
+export const SecurityEventScalarFieldEnum = {
+  id: 'id',
+  actorId: 'actorId',
+  actorEmail: 'actorEmail',
+  viewAsId: 'viewAsId',
+  action: 'action',
+  targetType: 'targetType',
+  targetId: 'targetId',
+  targetLabel: 'targetLabel',
+  ip: 'ip',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityEventScalarFieldEnum = (typeof SecurityEventScalarFieldEnum)[keyof typeof SecurityEventScalarFieldEnum]
+
+
+export const FeatureFlagScalarFieldEnum = {
+  key: 'key',
+  enabled: 'enabled',
+  updatedAt: 'updatedAt',
+  updatedBy: 'updatedBy'
+} as const
+
+export type FeatureFlagScalarFieldEnum = (typeof FeatureFlagScalarFieldEnum)[keyof typeof FeatureFlagScalarFieldEnum]
+
+
+export const FeatureFlagOverrideScalarFieldEnum = {
+  flag: 'flag',
+  userId: 'userId',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  createdBy: 'createdBy'
+} as const
+
+export type FeatureFlagOverrideScalarFieldEnum = (typeof FeatureFlagOverrideScalarFieldEnum)[keyof typeof FeatureFlagOverrideScalarFieldEnum]
 
 
 export const SortOrder = {

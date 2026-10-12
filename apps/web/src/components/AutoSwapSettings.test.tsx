@@ -29,6 +29,7 @@ const machine = (id: string, name: string, claude_auto_swap = false): Machine =>
   agent_last_seen_at: null,
   agent_auto_update: false,
   claude_auto_swap,
+  ai_usage_query: true,
   is_local: false,
   owner_id: 'u1',
   owner_name: null,

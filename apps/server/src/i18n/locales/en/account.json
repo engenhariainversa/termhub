@@ -1,5 +1,13 @@
 {
   "Sua conta está desativada porque você pediu para excluí-la. Cancele a exclusão para voltar a usar o termhub.": "Your account is deactivated because you asked to delete it. Cancel the deletion to use termhub again.",
   "Você é o único administrador. Promova outra pessoa a administrador antes de excluir sua conta.": "You are the only administrator. Make someone else an administrator before deleting your account.",
-  "Conta não encontrada": "Account not found"
+  "Conta não encontrada": "Account not found",
+  "Sua exportação ainda está sendo preparada. Você recebe um e-mail quando ela ficar pronta.": "Your export is still being prepared. You will get an e-mail when it is ready.",
+  "Você pode pedir uma exportação por dia. Tente de novo depois de 24 horas do último pedido.": "You can ask for one export a day. Try again 24 hours after the last request.",
+  "Este arquivo não está mais disponível. Peça uma nova exportação no Perfil.": "This file is no longer available. Ask for a new export in Profile.",
+  "Exportação dos seus dados do termhub": "Export of your termhub data",
+  "Gerada em {{date}} (UTC).": "Generated on {{date}} (UTC).",
+  "Cada arquivo .json traz uma lista de registros, com datas em ISO 8601 (UTC) e ids que ligam um arquivo ao outro (project_id, conversation_id, machine_id…).": "Each .json file holds a list of records, with dates in ISO 8601 (UTC) and ids that link one file to another (project_id, conversation_id, machine_id…).",
+  "account.json: sua conta. projects/: projetos, colunas, cards, notas (também em notes/*.md) e tickets. tabs/: abas, últimas respostas dos agentes e perguntas das abas. chat/: conversas, mensagens, ações, decisões e anexos. memory/: a memória do chat. machines/: máquinas, contas de IA e arquivos enviados aos terminais. integrations/: integrações e tokens de API. devices/: aparelhos, histórico deles e notificações.": "account.json: your account. projects/: projects, columns, cards, notes (also in notes/*.md) and tickets. tabs/: tabs, the agents' last answers and the tabs' questions. chat/: conversations, messages, actions, decisions and attachments. memory/: the chat's memory. machines/: machines, AI accounts and files sent to terminals. integrations/: integrations and API tokens. devices/: devices, their history and notifications.",
+  "Senhas, tokens, chaves e segredos das integrações não entram no arquivo.": "Passwords, tokens, keys and integration secrets are not in the file."
 }

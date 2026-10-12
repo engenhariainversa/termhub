@@ -1,5 +1,8 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { User } from '../db/repositories/types.js';
@@ -7,6 +10,7 @@ import type { AuthService } from '../auth/service.js';
 import { buildAuthHook } from '../auth/middleware.js';
 import { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE } from '../auth/tokens.js';
 import { AccountDeletionService } from '../account/deletion.js';
+import type { DataExportService } from '../account/data-export.js';
 import { HttpError, applyErrorHandler } from '../lib/errors.js';
 import { accountRoutes } from './account.js';
 
@@ -40,21 +44,32 @@ async function build(opts: { me?: User } = {}) {
     sendLink: vi.fn(async () => {}),
     confirmLink: vi.fn(async (token: string) => (token === 'a'.repeat(43) ? user(PENDING) : undefined)),
   };
+  const exportFile = path.join(await mkdtemp(path.join(os.tmpdir(), 'th-export-route-')), 'x1.zip');
+  await writeFile(exportFile, 'PK-zip');
+  const exports = {
+    status: vi.fn(async () => ({ export: null, next_allowed_at: null })),
+    request: vi.fn(async () => ({ export: { id: 'x1', status: 'pending' }, next_allowed_at: '2026-10-08T12:00:00.000Z' })),
+    openDownload: vi.fn(async (u: User, id: string) => {
+      if (u.id !== 'u1' || id !== 'x1') throw new HttpError(404, 'Este arquivo não está mais disponível. Peça uma nova exportação no Perfil.', 'EXPORT_NOT_FOUND');
+      return { file: exportFile, bytes: 6, filename: 'termhub-2026-10-07.zip' };
+    }),
+  };
   const repos = { roles: { findById: async () => undefined, permissionsOf: async () => [] } } as unknown as Repositories;
   const app = Fastify();
+  app.addHook('onClose', async () => rm(path.dirname(exportFile), { recursive: true, force: true }));
   applyErrorHandler(app);
   await app.register(fastifyCookie);
   app.decorateRequest('user', null);
   await app.register(
     async (api) => {
       api.addHook('preHandler', buildAuthHook({ service: auth as unknown as AuthService, repos }));
-      await api.register((a) => accountRoutes(a, { auth: auth as unknown as AuthService, deletion: deletion as unknown as AccountDeletionService }), { prefix: '/account' });
+      await api.register((a) => accountRoutes(a, { auth: auth as unknown as AuthService, deletion: deletion as unknown as AccountDeletionService, exports: exports as unknown as DataExportService }), { prefix: '/account' });
       api.get('/machines', async () => ({ machines: [] }));
     },
     { prefix: '/api' },
   );
   await app.ready();
-  return { app, auth, deletion };
+  return { app, auth, deletion, exports };
 }
 
 const signedIn = { cookie: `${SESSION_COOKIE}=session; ${CSRF_COOKIE}=${CSRF}`, [CSRF_HEADER]: CSRF };
@@ -176,5 +191,50 @@ describe('public page routes (TER-728)', () => {
     const bad = await t.app.inject({ method: 'POST', url: '/api/account/deletion/confirm', remoteAddress: '10.0.0.3', payload: { token: 'b'.repeat(43) } });
     expect(bad.statusCode).toBe(400);
     expect(bad.json().code).toBe('LINK_INVALID');
+  });
+});
+
+describe('data export routes (TER-741)', () => {
+  let t: Awaited<ReturnType<typeof build>>;
+  beforeEach(async () => {
+    t = await build();
+  });
+  afterEach(async () => {
+    await t.app.close();
+  });
+
+  it('GET /export reports the latest request of the signed-in account', async () => {
+    const r = await t.app.inject({ method: 'GET', url: '/api/account/export', headers: signedIn });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ export: null, next_allowed_at: null });
+    expect(t.exports.status).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }));
+  });
+
+  it('POST /export files a request for the signed-in account (202)', async () => {
+    const r = await t.app.inject({ method: 'POST', url: '/api/account/export', headers: signedIn });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().export).toEqual({ id: 'x1', status: 'pending' });
+    expect(t.exports.request).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }));
+  });
+
+  it('the download streams the zip as an attachment', async () => {
+    const r = await t.app.inject({ method: 'GET', url: '/api/account/export/x1/download', headers: signedIn });
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toBe('application/zip');
+    expect(r.headers['content-disposition']).toBe('attachment; filename="termhub-2026-10-07.zip"');
+    expect(r.headers['cache-control']).toBe('private, no-store');
+    expect(r.body).toBe('PK-zip');
+  });
+
+  it("another id is a 404, and a malformed one never reaches the service", async () => {
+    expect((await t.app.inject({ method: 'GET', url: '/api/account/export/x2/download', headers: signedIn })).statusCode).toBe(404);
+    expect((await t.app.inject({ method: 'GET', url: '/api/account/export/..%2Fetc/download', headers: signedIn })).statusCode).toBe(400);
+    expect(t.exports.openDownload).toHaveBeenCalledTimes(1);
+  });
+
+  it('needs a session', async () => {
+    const r = await t.app.inject({ method: 'GET', url: '/api/account/export/x1/download' });
+    expect(r.statusCode).toBe(401);
+    expect(t.exports.openDownload).not.toHaveBeenCalled();
   });
 });

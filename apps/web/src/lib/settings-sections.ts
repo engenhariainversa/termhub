@@ -5,7 +5,7 @@ import { tk } from '../i18n';
  * heading each sits under (spec 2026-09-23 app chrome §4). `resource: null` is a section every
  * signed-in user sees; Perfil is one, so `/settings` always has somewhere to land.
  */
-export type SettingsSection = 'profile' | 'city' | 'security' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads';
+export type SettingsSection = 'profile' | 'city' | 'account-security' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
 export type SettingsGroupId = 'account' | 'admin';
 
 export interface SettingsSectionInfo {
@@ -19,7 +19,7 @@ export interface SettingsSectionInfo {
 export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'profile', label: tk('Perfil'), resource: null, group: 'account' },
   { key: 'city', label: tk('Minha cidade'), resource: null, group: 'account' },
-  { key: 'security', label: tk('Segurança'), resource: null, group: 'account' },
+  { key: 'account-security', label: tk('Segurança'), resource: null, group: 'account' },
   { key: 'integrations', label: tk('Integrações'), resource: 'integrations', group: 'account' },
   { key: 'api-tokens', label: tk('Tokens de API'), resource: 'api_tokens', group: 'account' },
   { key: 'devices', label: tk('Aparelhos'), resource: 'devices', group: 'account' },
@@ -31,6 +31,8 @@ export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'roles', label: tk('Roles'), resource: 'roles', group: 'admin' },
   { key: 'permissions', label: tk('Permissões'), resource: 'roles', group: 'admin' },
   { key: 'uploads', label: tk('Arquivos'), resource: 'uploads', group: 'admin' },
+  { key: 'security', label: tk('Auditoria'), resource: 'security_events', group: 'admin' },
+  { key: 'feature-flags', label: tk('Recursos em teste'), resource: 'feature_flags', group: 'admin' },
 ];
 
 /** where `/settings` lands, and where an address this role cannot open falls back to */

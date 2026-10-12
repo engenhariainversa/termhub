@@ -70,6 +70,7 @@ function build() {
         return tab;
       }),
     },
+    legal: { statusFor: vi.fn(async () => ({ pending: [], upcoming: [] })) },
   } as unknown as Repositories;
 
   const app = Fastify();

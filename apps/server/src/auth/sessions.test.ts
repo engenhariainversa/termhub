@@ -37,7 +37,8 @@ function stubRepos(found?: { session: Session; user: User }) {
   };
   const users = { setPassword: vi.fn(async () => undefined), touchLogin: vi.fn(async () => undefined) };
   const loginAttempts = { lockedFor: vi.fn(async () => 0), recordFailure: vi.fn(async () => 0), clear: vi.fn(async () => undefined) };
-  return { sessions, users, loginAttempts, roles: { findById: vi.fn() } };
+  const securityEvents = { record: vi.fn(async () => undefined) };
+  return { sessions, users, loginAttempts, securityEvents, roles: { findById: vi.fn() } };
 }
 
 const asRepos = (r: ReturnType<typeof stubRepos>) => r as unknown as Repositories;
@@ -183,12 +184,14 @@ describe('sessions routes', { timeout: 30_000 }, () => {
     const res = await buildApp().inject({ method: 'POST', url: '/auth/sessions/revoke-others', ...withCookie });
     expect(res.json()).toEqual({ revoked: 1 });
     expect(repos.sessions.deleteAllForUser).toHaveBeenCalledWith('u1', 's1');
+    expect(repos.securityEvents.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'auth.session_revoke', meta: { revoked: 1, others: true } }));
   });
 
   it('changes the password and maps refusals to codes', async () => {
     const app = buildApp();
     const ok = await app.inject({ method: 'POST', url: '/auth/me/password', payload: { new_password: 'brand-new-pass' }, ...withCookie });
     expect(ok.json()).toEqual({ ok: true, revoked: 1 });
+    expect(repos.securityEvents.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'auth.password_change', meta: { first: true, revoked: 1 } }));
     const weak = await app.inject({ method: 'POST', url: '/auth/me/password', payload: { new_password: 'short' }, ...withCookie });
     expect(weak.statusCode).toBe(400);
     expect(weak.json().code).toBe('WEAK_PASSWORD');

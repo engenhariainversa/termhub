@@ -1,8 +1,9 @@
+import { createPublicKey, verify } from 'node:crypto';
 import http from 'node:http';
 import net, { type AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { CLOSE, CONTROL_CHANNEL, HEADER_BYTES, MAX_FRAME, PROTOCOL_VERSION, decodeFrame, encodeFrame, helloMessage } from '@termhub/agent-protocol';
+import { CLOSE, CONTROL_CHANNEL, HEADER_BYTES, MAX_FRAME, PROTOCOL_VERSION, decodeFrame, encodeFrame, helloMessage, proofMessage } from '@termhub/agent-protocol';
 import {
   connectOnce,
   nextBackoff,
@@ -12,6 +13,7 @@ import {
   UpgradeRejectedError,
   type ClientOptions,
 } from './client.js';
+import { generateDeviceKey } from './device-key.js';
 
 const TOKEN = 'thb_ag_' + 'a'.repeat(43);
 
@@ -280,6 +282,72 @@ describe('connectOnce', () => {
     ).rejects.toThrow(/handshake has timed out/i);
 
     expect(Date.now() - startedAt).toBeLessThan(2_000);
+  });
+});
+
+describe('connectOnce — device key (TER-1017)', () => {
+  let srv: TestServer | undefined;
+
+  afterEach(async () => {
+    await srv?.stop();
+    srv = undefined;
+  });
+
+  it('dials with the machine id, waits for the challenge and signs it in the hello', async () => {
+    const capture: AuthCapture = {};
+    const key = generateDeviceKey();
+    let resolveHello!: (msg: Record<string, unknown>) => void;
+    const helloPromise = new Promise<Record<string, unknown>>((res) => (resolveHello = res));
+    const early: unknown[] = [];
+    srv = await startServer({
+      acceptAll: true,
+      capture,
+      onConnection: (ws) => {
+        ws.once('message', (data) => resolveHello(JSON.parse(decodeFrame(asBuffer(data)).payload.toString('utf8'))));
+        // a server message before the hello is not a session yet: the client must not pass it on
+        ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ type: 'close', ch: 1 })));
+        ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ type: 'challenge', nonce: 'n'.repeat(32) })));
+      },
+    });
+
+    const { closed } = await connectOnce({
+      url: base(srv),
+      device: { machineId: 'm-42', key },
+      hello: baseHello,
+      onServerMessage: (m) => early.push(m),
+      onStream: () => {},
+      log: noopLog(),
+    });
+    closed.catch(() => {});
+
+    expect(capture.value).toBe('TermhubDevice m-42');
+    const hello = helloMessage.parse(await helloPromise);
+    expect(hello.proof?.machine_id).toBe('m-42');
+    const spki = createPublicKey({ key: Buffer.from(key.publicKey, 'base64'), format: 'der', type: 'spki' });
+    expect(verify(null, proofMessage('n'.repeat(32), 'm-42', hello.proof!.ts), spki, Buffer.from(hello.proof!.sig, 'base64'))).toBe(true);
+    expect(early).toEqual([]);
+  });
+
+  it('rejects when the server hangs up before sending a challenge', async () => {
+    srv = await startServer({ acceptAll: true, onConnection: (ws) => ws.close(1008, 'hello timeout') });
+    await expect(
+      connectOnce({ url: base(srv), device: { machineId: 'm-42', key: generateDeviceKey() }, hello: baseHello, onServerMessage: () => {}, onStream: () => {}, log: noopLog() }),
+    ).rejects.toThrow(/before hello/);
+  });
+
+  it('hands a paired answer to onHandshake', async () => {
+    srv = await startServer({
+      acceptAll: true,
+      onConnection: (ws) =>
+        ws.once('message', () => {
+          ws.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify({ type: 'paired', machine_id: 'm-42', machine_name: 'mini' })));
+          ws.close(1000, 'paired');
+        }),
+    });
+    const seen: unknown[] = [];
+    const { closed } = await connectOnce({ url: base(srv), token: TOKEN, hello: baseHello, onHandshake: (m) => seen.push(m), onServerMessage: () => {}, onStream: () => {}, log: noopLog() });
+    expect(await closed).toEqual({ code: 1000, reason: 'paired' });
+    expect(seen).toEqual([{ type: 'paired', machine_id: 'm-42', machine_name: 'mini' }]);
   });
 });
 

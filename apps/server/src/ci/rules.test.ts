@@ -42,16 +42,16 @@ describe('ciOf', () => {
 describe('deployOf', () => {
   const runs = [run({ id: 1, name: 'CI e Deploy', path: '.github/workflows/deploy.yml', status: 'in_progress', conclusion: null }), run({ id: 2, name: 'Publish', path: '.github/workflows/publish.yml' })];
   it('is none without a configured workflow or a matching run', () => {
-    expect(deployOf(runs, null)).toEqual({ state: 'none', url: null });
-    expect(deployOf(runs, 'release.yml')).toEqual({ state: 'none', url: null });
+    expect(deployOf(runs, null)).toEqual({ state: 'none', url: null, run: null });
+    expect(deployOf(runs, 'release.yml')).toEqual({ state: 'none', url: null, run: null });
   });
   it('matches by file name or display name', () => {
-    expect(deployOf(runs, 'deploy.yml')).toEqual({ state: 'running', url: runs[0].html_url });
+    expect(deployOf(runs, 'deploy.yml')).toEqual({ state: 'running', url: runs[0].html_url, run: runs[0] });
     expect(deployOf(runs, 'Publish').state).toBe('passed');
   });
   it('treats a cancelled deploy as superseded (none), while CI keeps cancelled as failed', () => {
     const cancelled = [run({ id: 3, status: 'completed', conclusion: 'cancelled' })];
-    expect(deployOf(cancelled, 'deploy.yml')).toEqual({ state: 'none', url: null });
+    expect(deployOf(cancelled, 'deploy.yml')).toEqual({ state: 'none', url: null, run: null });
     expect(ciOf(cancelled).state).toBe('failed');
   });
 });

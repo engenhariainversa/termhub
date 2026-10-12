@@ -237,12 +237,28 @@ export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchem
  * (spec D8), whether embeddings are configured on this server at all (`available: false` hides both
  * switches rather than offering ones that can never do anything), how many decisions are remembered,
  * and how many concierge notes (spec D12) are. */
-export const chatMemoryResponse = z.object({ enabled: z.boolean(), autodecide: z.boolean(), codex_replies: z.boolean().default(false), available: z.boolean(), count: z.number().int(), notes: z.number().int() });
+/** The chat's context meter limit (TER-1038): the meter measures against this many tokens instead of the
+ *  model's window — someone who compacts at 200k on a 1M window. Bounded so a typo is refused. */
+export const CHAT_CONTEXT_LIMIT_MIN = 10_000;
+export const CHAT_CONTEXT_LIMIT_MAX = 10_000_000;
+export const chatContextLimit = z.number().int().min(CHAT_CONTEXT_LIMIT_MIN).max(CHAT_CONTEXT_LIMIT_MAX);
+/** `context_limit`: null = the model's window (the default); absent from a server before TER-1038,
+ *  which reads the same. */
+export const chatMemoryResponse = z.object({
+  enabled: z.boolean(),
+  autodecide: z.boolean(),
+  codex_replies: z.boolean().default(false),
+  context_limit: z.number().int().nullable().optional(),
+  available: z.boolean(),
+  count: z.number().int(),
+  notes: z.number().int(),
+});
 /** At least one of the switches, never none — an empty body is refused rather than a silent no-op.
- * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default). */
+ * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default); `context_limit` null
+ * goes back to the model's window. */
 export const chatMemoryPatchBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
  * `question` is the note's title; `decision`/`reason` are parsed back out of the stored text's

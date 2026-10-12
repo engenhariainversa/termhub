@@ -20,11 +20,15 @@ import type { ProjectSetupData } from '../setup/schema.js';
 import { automationBus, recordEvent } from './events.js';
 import { isPaused } from './pause.js';
 import { runPermission } from './permission.js';
-import { RESUME_TEXT, serverMessage } from './prompts.js';
+import { GITHUB_RETRY_TEXT, RESUME_TEXT, serverMessage } from './prompts.js';
+import { writesDegraded, type GithubHealthReader } from '../integrations/github-status.js';
+import { recordTakenDecisions, type TakenDecision } from './decisions-taken.js';
+import { DECIDE_NUDGES_MAX, DECIDE_TEXT, decisionException, questionOf } from './decision.js';
 import { MAX_RESTARTS } from './restart.js';
-import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
-export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
+import { postAutomationLine } from './chat-line.js';
+export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -48,18 +52,27 @@ export const RETYPE_AFTER_MS = 10 * 60_000;
  * parked for them instead of being typed into.
  */
 export const TRUST_WAIT_MS = 3 * 60_000;
+/** How long a start with no hook waits before the screen is read for the trust question (TER-1025). */
+export const TRUST_LOOK_MS = 30_000;
+/** Trust answers the server sends in one run: a question that keeps coming back goes to the person. */
+export const TRUST_ANSWERS_MAX = 3;
 /**
  * How long an open question card of an automatic tab may wait with no countdown before the person is
  * called: the woken chat had this long to answer it (spec D18 step 3 → 4).
  */
 export const QUESTION_WAIT_MS = 10 * 60_000;
+/**
+ * How long a run parked on a GitHub error (`report_card` with `github_transient`, TER-1025) waits before
+ * each resume: the 1st, the 2nd, the 3rd and on — about half an hour over the default `github_retries`.
+ */
+export const GITHUB_RETRY_DELAYS_MS = [5 * 60_000, 10 * 60_000, 15 * 60_000];
 
 /**
  * The reasons a run goes back to `running` by itself once the person answered the card or acted in the
  * tab (spec §9.3). A resume cap waits for an explicit `resume_automation_run`: acting in the tab would
  * only hand it straight back.
  */
-const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED]);
+const RESUMES_ON_ANSWER = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, DECISION_EXCEPTION, DECISION_NEEDED]);
 
 /** The reasons about a question card: the chat line answers that card instead of standing alone. */
 const CARD_REASONS = new Set([QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED]);
@@ -87,6 +100,15 @@ export interface FollowerDeps {
   wakeStopped?: (i: StoppedTabWake) => Promise<boolean>;
   /** What the tab's pane runs in front (`paneForeground`); null when it could not be read. Default: the real one. */
   foreground?: (tab: Tab) => Promise<PaneForeground | null>;
+  /** The tab's last answer, when still current (TER-1043: a stop on a question). Default: `readLastAnswer`. */
+  lastAnswer?: (tab: Tab) => Promise<string | null>;
+  /** githubstatus.com: a run parked on a GitHub error is not resumed while GitHub reports trouble with
+   *  pushes, the API or pull requests (TER-1025). Left out, only the delay counts. */
+  githubHealth?: GithubHealthReader;
+  /** Answers Claude's trust question in the run's tab when the screen shows it (TER-1025): true when the
+   *  answer was sent. `acceptTrustQuestion` (trust.ts), wired in app.ts; left out, it is never answered
+   *  and the run is parked for the person after TRUST_WAIT_MS, as before. */
+  acceptTrust?: (run: AutomationRun, tab: Tab) => Promise<boolean>;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -264,6 +286,30 @@ async function parkForTrust(repos: Repositories, run: AutomationRun, log: Log): 
 }
 
 /**
+ * Claude's trust question in a run's own worktree (TER-1025): answered by the server, since termhub made the
+ * folder — never while the project is paused (D24), at most TRUST_ANSWERS_MAX times a run. Recorded as
+ * `trust_auto_accepted`. True when the answer was sent; the run is then left alone until its first hook.
+ */
+async function tryAcceptTrust(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
+  const { repos } = deps;
+  if (!deps.acceptTrust) return false;
+  const project = await repos.projects.findById(run.project_id);
+  if (!project || (await isPaused(repos, project.owner_id, run.project_id))) return false;
+  if ((await repos.automationEvents.countForRun(run.id, 'trust_auto_accepted', run.created_at)) >= TRUST_ANSWERS_MAX) return false;
+  const sent = await deps.acceptTrust(run, tab).catch((e: unknown) => {
+    log.warn({ runId: run.id, tabId: tab.id, code: errorCode(e) }, 'automation: trust question not answered');
+    return false;
+  });
+  if (!sent) return false;
+  await repos.automationRuns.noteTyped(run.id, deps.now?.() ?? new Date());
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'trust_auto_accepted', payload: { tab_id: tab.id } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: trust_auto_accepted not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id }, 'automation: trust question answered');
+  return true;
+}
+
+/**
  * The card of a run that ends done (spec D17): it stays where the agent put it. A card whose link failed at
  * the start (`TASK_LINK_FAILED`: the agent ran, the card never moved) is linked to the run's tab now and
  * leaves `todo` for the agent column, as a start would have done — otherwise the dispatcher would take it
@@ -283,8 +329,14 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
 
 /** Ends the run `done` (a report, a PR from its branch, or its card's PR merged) and places its card (not
  *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
-async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_card' | 'pull_request' | 'merged', pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
+async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
+  await recordDone(repos, run, via, pr, log);
+  return true;
+}
+
+/** What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and `pr_opened`. */
+async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number } | null, log: Log): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
@@ -294,6 +346,60 @@ async function finishDone(repos: Repositories, run: AutomationRun, via: 'report_
     );
   }
   log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, via }, 'automation: run done');
+}
+
+/** How a run ended `done` (`run_done.payload.via`). */
+export type RunDoneVia = 'report_card' | 'pull_request' | 'merged' | typeof ADOPTED_VIA;
+
+/** `run_done.payload.via` of a blocked run whose branch got a PR afterwards (TER-1049). */
+export const ADOPTED_VIA = 'pull_request_after_blocked';
+
+/** How long after a blocked run ended a PR from its branch still adopts it (spike TER-1031 §8): an old
+ *  blocked card picked up much later is a person's own PR. */
+export const ADOPT_WINDOW_MS = 7 * 24 * 3600_000;
+
+/**
+ * A PR from the branch of a run that already ended `blocked` (spike TER-1031 §5.1–5.3): the work was finished
+ * by hand, and the merge executor already follows the PR, so the run is adopted — `blocked → done` once,
+ * `run_done` (`via: pull_request_after_blocked`) and `pr_opened` recorded, and one line, no push, in the
+ * project chat the block was told in. Only the implementer run with a branch that ended within ADOPT_WINDOW_MS,
+ * whose card is still tagged and has no newer run (one dispatched again owns the PR; an active run is newer
+ * too). Run by the CI sync right after it links the PRs, on either colour: one conditional write decides
+ * which. Returns how many runs this call adopted. Never throws.
+ */
+export async function adoptBlockedRuns(repos: Repositories, projectId: string, log: Log = noopLog, now: Date = new Date()): Promise<number> {
+  let adopted = 0;
+  try {
+    for (const run of await repos.automationRuns.blockedSince(projectId, new Date(now.getTime() - ADOPT_WINDOW_MS))) {
+      const task = await adoptableTask(repos, run, now);
+      if (task && (await adoptBlockedRun(repos, run, task, log))) adopted++;
+    }
+  } catch (e) {
+    log.warn({ projectId, code: errorCode(e) }, 'automation: blocked runs not adopted');
+  }
+  return adopted;
+}
+
+/**
+ * The card of a run a PR from its branch may still adopt (the rules of `adoptBlockedRuns`), or null: an
+ * implementer run with a branch, not a marker, that ended `blocked` within ADOPT_WINDOW_MS, whose card is still
+ * tagged and has no newer run.
+ */
+async function adoptableTask(repos: Repositories, run: AutomationRun, now: Date): Promise<Task | null> {
+  if (run.status !== 'blocked' || run.role !== 'implementer' || !run.branch || run.trigger_sha !== null || !run.task_id || !run.ended_at) return null;
+  if (now.getTime() - run.ended_at.getTime() > ADOPT_WINDOW_MS) return null;
+  const task = await repos.tasks.findById(run.task_id);
+  if (!task?.auto) return null;
+  return (await repos.automationRuns.latestOfTask(task.id))?.id === run.id ? task : null;
+}
+
+/** Adopts one blocked run whose card `adoptableTask` returned: true when a PR from its branch is linked and
+ *  this call won the `blocked → done` write. */
+async function adoptBlockedRun(repos: Repositories, run: AutomationRun, task: Task, log: Log): Promise<boolean> {
+  const pr = await openPrOfRun(repos, run);
+  if (!pr || !(await repos.automationRuns.finishBlockedAsDone(run.id))) return false;
+  await recordDone(repos, run, ADOPTED_VIA, pr, log);
+  await postAutomationLine(repos, run.project_id, (locale) => t(locale, 'PR #{{n}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge', { n: pr.number, ref: task.ref }), log);
   return true;
 }
 
@@ -396,6 +502,51 @@ const sinceMs = (deps: FollowerDeps, at: string | Date | null | undefined) => (d
 const inGrace = (deps: FollowerDeps, tab: Tab) => sinceMs(deps, tab.state_at) < PR_GRACE_MS;
 
 /**
+ * The agent reported a GitHub error (`report_card` blocked with `github_transient`, TER-1025): instead of
+ * ending and calling the person, the run waits (`waiting`, GITHUB_TRANSIENT; its card and tab stay) and the
+ * follower resumes it later (`resumeAfterGithub`). Past `github_retries` waits it ends blocked and the
+ * person is told, as any other block. False when another instance wrote the run first.
+ */
+async function waitForGithub(repos: Repositories, run: AutomationRun, reason: string | null, log: Log): Promise<boolean> {
+  const setup = await repos.projectSetup.get(run.project_id);
+  const used = await repos.automationEvents.countForRun(run.id, 'github_wait', run.created_at);
+  if (used >= (setup.data.automation.github_retries ?? 0)) return finishBlocked(repos, run, GITHUB_TRANSIENT, reason, log);
+  if (!(await writeRun(repos, run, { status: 'waiting', waiting_reason: GITHUB_TRANSIENT }))) return false;
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'github_wait', payload: { reason: GITHUB_TRANSIENT, attempt: used + 1, tab_id: run.tab_id } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: github_wait not recorded'),
+  );
+  log.info({ runId: run.id, taskId: run.task_id, tabId: run.tab_id, attempt: used + 1 }, 'automation: run waits for GitHub');
+  return true;
+}
+
+/**
+ * A run waiting for GitHub (TER-1025): once its wait's delay passed (GITHUB_RETRY_DELAYS_MS) and GitHub
+ * reports no trouble with pushes, the API or pull requests, it goes back to `running` and the agent is
+ * asked to try again (GITHUB_RETRY_TEXT). Only into a tab at its prompt, with no question open, no limit
+ * and no pause (D24). True when the line was typed.
+ */
+async function resumeAfterGithub(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
+  const { repos } = deps;
+  if (tab.state !== 'waiting_input' || rateLimited(tab) || isAccountSwapState(tab.state_text)) return false;
+  const last = await repos.automationEvents.lastForRun(run.id, 'github_wait');
+  const attempt = typeof last?.payload.attempt === 'number' ? last.payload.attempt : 1;
+  const delay = GITHUB_RETRY_DELAYS_MS[Math.min(attempt - 1, GITHUB_RETRY_DELAYS_MS.length - 1)]!;
+  if (last && sinceMs(deps, last.created_at) < delay) return false;
+  const health = await deps.githubHealth?.().catch(() => null);
+  if (health && writesDegraded(health)) return false;
+  if (await repos.tabQuestions.hasOpenQuestion(tab.id)) return false;
+  const ready = await mayType(deps, run, log);
+  if (!ready) return false;
+  if (!(await writeRun(repos, run, { status: 'running', waiting_reason: null }))) return false;
+  await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(GITHUB_RETRY_TEXT));
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: tab.id, by: 'github', reason: GITHUB_TRANSIENT, count: attempt } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id, attempt }, 'automation: run resumed after GitHub came back');
+  return true;
+}
+
+/**
  * `waiting_input` after a Stop (preflight F-13): end on an open PR, resume, or hand over past the cap.
  * Returns true when something was typed into the tab; every other outcome is looked at again later.
  */
@@ -409,6 +560,8 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   // after an account swap the resumed session may wait on the trust question: never typed into (an Enter
   // would answer it for the person); past TRUST_WAIT_MS the run is parked for them
   if (isAccountSwapState(tab.state_text)) {
+    // TER-1025: the question in the run's own worktree is answered by the server; anything else waits
+    if (await tryAcceptTrust(deps, run, tab, log)) return false;
     if (sinceMs(deps, tab.state_at) >= TRUST_WAIT_MS) await parkForTrust(repos, run, log);
     return false;
   }
@@ -424,6 +577,9 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   if (!ready) return false;
   // R8: past a budget nothing is resumed (a card over its own is escalated, even while paused: D24)
   if (await holdForBudget(deps, run, ready.setup.automation, log)) return false;
+  // TER-1043: a stop on a question is a decision automatic work takes by itself
+  const decided = await onQuestionStop(deps, run, tab, ready, log);
+  if (decided !== null) return decided;
   if (run.resume_count >= ready.setup.automation.resume_max) {
     // paused: the chat is not woken (it could type), but the person still learns (D24, §9.3)
     if (ready.paused) {
@@ -444,6 +600,56 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),
   );
   log.info({ runId: run.id, tabId: tab.id, count }, 'automation: run resumed');
+  return true;
+}
+
+/** The tab's last answer when it is still the current one (`readLastAnswer`); null when there is none or it cannot be read. */
+async function defaultLastAnswer(repos: Repositories, tab: Tab): Promise<string | null> {
+  try {
+    const answer = await repos.tabs.readLastAnswer(tab.id);
+    return answer && !answer.stale ? answer.text : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TER-1043's safety net: the tab stopped and its last answer asks the person something ("Decisão sua: A ou
+ * B? Recomendo A"). Automatic work does not wait on it:
+ *
+ * - the project chose "Parar em decisões de produto" (`stop_on_decisions`) → the run waits for the person
+ *   (DECISION_NEEDED);
+ * - the question falls in an exception (`decisionException`: credentials, deploy, stores, production data,
+ *   scope) → the run waits for the person (DECISION_EXCEPTION), also while paused (D24);
+ * - otherwise DECIDE_TEXT is typed — look for the person's precedent in search_memory, else follow the
+ *   recommendation, record it in the PR and in report_card — and `decided_by_recommendation` (`via: 'nudge'`)
+ *   goes to the feed. Not a resume: `resume_count` stays. Past DECIDE_NUDGES_MAX nudges the stop takes the
+ *   ordinary path (resumes, then the chat's wake).
+ *
+ * True when something was typed, false when the run was held or parked, null when this is not a question
+ * stop (or the nudges ran out). The answer is terminal content: never logged, never put in the event.
+ */
+async function onQuestionStop(deps: FollowerDeps, run: AutomationRun, tab: Tab, ready: { ctx: ControlContext; setup: ProjectSetupData; paused: boolean }, log: Log): Promise<boolean | null> {
+  const { repos } = deps;
+  const question = questionOf(await (deps.lastAnswer ?? ((t: Tab) => defaultLastAnswer(repos, t)))(tab));
+  if (question === null) return null;
+  if (ready.setup.automation.stop_on_decisions) {
+    await parkAndEscalate(repos, run, DECISION_NEEDED, log);
+    return false;
+  }
+  if (decisionException(question)) {
+    await parkAndEscalate(repos, run, DECISION_EXCEPTION, log);
+    return false;
+  }
+  const nudges = (await repos.automationEvents.payloadsForRun(run.id, 'decided_by_recommendation', new Date(0))).filter((p) => p.via === 'nudge').length;
+  if (nudges >= DECIDE_NUDGES_MAX) return null;
+  // D24: nothing is typed while paused; the stop is looked at again once the pause is lifted
+  if (ready.paused || (await isPaused(repos, ready.ctx.scope.ownerId, run.project_id))) return false;
+  await (deps.type ?? defaultType)(ready.ctx, tab.id, serverMessage(DECIDE_TEXT));
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'decided_by_recommendation', payload: { via: 'nudge', tab_id: tab.id, count: nudges + 1 } }).catch((e: unknown) =>
+    log.warn({ runId: run.id, code: errorCode(e) }, 'automation: decided_by_recommendation not recorded'),
+  );
+  log.info({ runId: run.id, tabId: tab.id, count: nudges + 1 }, 'automation: told to follow its recommendation');
   return true;
 }
 
@@ -602,9 +808,15 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       }
       if (!tab.state_at) {
         // start watchdog: no hook at all since the start — Claude waits on the trust question of a new
-        // worktree (it comes before any hook). Parked for the person, never typed into. A pane back at its
+        // worktree (it comes before any hook). The server answers it in the run's own worktree (TER-1025),
+        // also for a run already parked on it; otherwise it is parked for the person. A pane back at its
         // shell is not that: the agent never came up (its launch line failed, TER-1005).
-        if (run.status === 'running' && sinceMs(deps, run.started_at ?? run.created_at) >= TRUST_WAIT_MS) {
+        const quiet = sinceMs(deps, run.started_at ?? run.created_at);
+        const onTrust = run.status === 'running' || run.waiting_reason === NEEDS_PERSON;
+        // an answer sent a moment ago is given time to take before the screen is read again
+        const answeredNow = run.last_typed_at !== null && sinceMs(deps, run.last_typed_at) < TRUST_LOOK_MS;
+        if (onTrust && quiet >= TRUST_LOOK_MS && !answeredNow && (await tryAcceptTrust(deps, run, tab, log))) return;
+        if (run.status === 'running' && quiet >= TRUST_WAIT_MS) {
           const pane = await (deps.foreground ?? ((t: Tab) => defaultForeground(deps.repos, t)))(tab);
           if (pane === 'shell' || pane === 'dead') await parkAndEscalate(deps.repos, run, AGENT_NOT_STARTED, log);
           else await parkForTrust(deps.repos, run, log);
@@ -637,6 +849,8 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
         // D17 in the other order: the PR was linked after the run was parked
         const pr = await openPrOfRun(deps.repos, run);
         if (pr) await finishDone(deps.repos, run, 'pull_request', pr, log);
+        // TER-1025: a run that waits for GitHub is resumed by itself once GitHub works again
+        else if (run.waiting_reason === GITHUB_TRANSIENT && (await resumeAfterGithub(deps, run, tab, log))) await deps.repos.automationRuns.noteTyped(run.id, deps.now?.() ?? new Date());
         return;
       }
       const stopped = tab.state === 'waiting_input';
@@ -710,22 +924,79 @@ export async function tabHasActiveRun(ctx: ControlContext): Promise<boolean> {
   return (await runOfTabToken(ctx).catch(() => null)) !== null;
 }
 
+/** The tab's latest run when it ended `blocked` and a PR from its branch may still adopt it (spike TER-1031
+ *  §5.4), with its card, or null. Only in a project with automation on. */
+async function adoptableRunOfTabToken(ctx: ControlContext): Promise<{ run: AutomationRun; task: Task } | null> {
+  const tab = ctx.token?.tab;
+  if (!tab) return null;
+  const run = await ctx.repos.automationRuns.latestByTab(tab.id);
+  if (!run || run.project_id !== tab.project_id) return null;
+  if (!(await ctx.repos.projectSetup.get(run.project_id)).data.automation.enabled) return null;
+  const task = await adoptableTask(ctx.repos, run, new Date());
+  return task ? { run, task } : null;
+}
+
+/**
+ * The condition of the tab tool `report_card`: an active run in the tab (preflight F-8), or a tab whose latest
+ * run ended `blocked` and may still be adopted, where the agent finished the work by hand (spike TER-1031 §5.4).
+ * Fails closed. `get_card` stays on `tabHasActiveRun`.
+ */
+export async function tabMayReport(ctx: ControlContext): Promise<boolean> {
+  if (await tabHasActiveRun(ctx)) return true;
+  return (await adoptableRunOfTabToken(ctx).catch(() => null)) !== null;
+}
+
 /**
  * The tab tool `report_card` (spec D17): the agent ends its own run. `done` (with the PR URL) leaves the
- * card where the agent put it; `blocked` (with the reason) ends the run and escalates it.
+ * card where the agent put it; `blocked` (with the reason) ends the run and escalates it — except with
+ * `code: github_transient` (TER-1025): the run waits for GitHub and is resumed by itself (`waitForGithub`).
+ * In a tab whose run already ended `blocked` (spike TER-1031 §5.4), only `done` with a `pr_url` is taken: the
+ * run is adopted at once when the CI sync already linked a PR from its branch, else the answer is
+ * `pending` and the sync adopts it once it links the PR. The URL given is never trusted on its own.
  */
-export async function reportCard(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string }): Promise<{ ok: true }> {
+export async function reportCard(
+  ctx: ControlContext,
+  i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient'; decisions?: TakenDecision[] },
+): Promise<{ ok: true; pending?: true; message?: string }> {
   const run = await runOfTabToken(ctx);
-  if (!run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  if (!run) return reportAfterBlocked(ctx, i);
   if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
   const log = ctx.log ?? noopLog;
   const ended =
     i.status === 'done'
       ? await finishDone(ctx.repos, run, 'report_card', i.pr_url ? { url: i.pr_url } : null, log)
-      : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
+      : i.code === GITHUB_TRANSIENT
+        ? await waitForGithub(ctx.repos, run, i.reason ?? null, log)
+        : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
   // another instance took the run over between the read and the write: the agent may simply call again
   if (!ended) throw new ControlError('RUN_MOVED', msg('O trabalho automático desta aba mudou de instância; chame report_card de novo'));
+  // TER-1043: the decisions it took alone, for the person to review later (feed, daily summary, memory)
+  if (i.decisions?.length) await recordTakenDecisions(ctx.repos, run, i.decisions, { log });
   return { ok: true };
+}
+
+/** `report_card` from a tab whose latest run ended `blocked` (spike TER-1031 §5.4). */
+async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; decisions?: TakenDecision[] }): Promise<{ ok: true; pending?: true; message?: string }> {
+  const adoptable = await adoptableRunOfTabToken(ctx).catch(() => null);
+  if (!adoptable) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  const { run, task } = adoptable;
+  if (i.status === 'blocked') throw new ControlError('RUN_BLOCKED', msg('O trabalho automático desta aba já está bloqueado e a pessoa já foi avisada; não há o que reportar'));
+  if (!i.pr_url) throw new ControlError('PR_URL_REQUIRED', msg('O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele'));
+  const log = ctx.log ?? noopLog;
+  // TER-1043: the decisions taken alone while finishing by hand still go to the person for review
+  if (i.decisions?.length) await recordTakenDecisions(ctx.repos, run, i.decisions, { log });
+  if (await adoptBlockedRun(ctx.repos, run, task, log)) return { ok: true };
+  // adopted by the CI sync (or another colour) between the read and the write: nothing left to do
+  if ((await ctx.repos.automationRuns.findById(run.id))?.status === 'done') return { ok: true };
+  const minutes = Math.ceil(PR_GRACE_MS / 60_000);
+  return {
+    ok: true,
+    pending: true,
+    message: t(localeOf(ctx.scope.user.locale), 'O PR ainda não está ligado ao card; a sincronização de CI liga o PR do branch {{branch}} em até {{minutes}} minutos e o automático passa a acompanhá-lo', {
+      branch: run.branch ?? '',
+      minutes,
+    }),
+  };
 }
 
 /**
@@ -759,7 +1030,7 @@ export async function resumeAutomationRun(ctx: ControlContext, i: { run_id: stri
   if (run.status === 'running') return { ok: true, resumed: false };
   // only a run parked for the person: one waiting on its account's limit goes on by itself (typing into a
   // limited tab would only hit the limit again)
-  if (!SLOT_FREE_REASONS.includes(run.waiting_reason ?? '')) return { ok: true, resumed: false };
+  if (!SLOT_FREE_REASONS.includes(run.waiting_reason ?? '') && run.waiting_reason !== GITHUB_TRANSIENT) return { ok: true, resumed: false };
   if (!(await ctx.repos.automationRuns.resumeWaiting(run.id, { fresh: true }))) return { ok: true, resumed: false };
   await recordEvent(ctx.repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'run_resumed', payload: { tab_id: run.tab_id, by: 'person', reason: run.waiting_reason } }).catch(
     (e: unknown) => (ctx.log ?? noopLog).warn({ runId: run.id, code: errorCode(e) }, 'automation: run_resumed not recorded'),

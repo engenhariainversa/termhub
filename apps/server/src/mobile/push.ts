@@ -5,11 +5,11 @@ import { failureLabel } from '../chat/service.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { User } from '../db/repositories/types.js';
+import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { automationEscalationText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginRequiredText, automationEscalationText, automationReleaseText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -257,6 +257,11 @@ export class MobilePushService {
   /** Escalations already pushed, by run and reason (D25: once per episode — a run's keys go when it
    * resumes). In memory: the event is published only in the process that recorded it. */
   private readonly escalations = new Set<string>();
+  /** Tabs already told about their expired login (TER-1046): once until the tab works again. */
+  private readonly authAlerted = new Set<string>();
+
+  /** Releases already pushed, by project, workflow and version. In memory, like `escalations`. */
+  private readonly releases = new Set<string>();
 
   /** The live subscription's unsubscribe, so a second `start()` never subscribes twice. */
   private stop: (() => void) | null = null;
@@ -275,6 +280,7 @@ export class MobilePushService {
     const unsubscribeAutomation = automationBus.subscribe((e) => {
       const fail = (err: unknown) => this.deps.log.warn({ err: failureLabel(err), userId: e.owner_id, runId: e.run_id }, 'mobile push failed');
       if (e.kind === 'escalated') void this.escalated(e).catch(fail);
+      else if (e.kind === 'release_ok') void this.released(e).catch(fail);
       else if (e.kind === 'run_resumed' && e.run_id) void this.runResumed(e.owner_id, e.run_id).catch(fail);
     });
     const stop = () => {
@@ -295,6 +301,23 @@ export class MobilePushService {
    */
   async automationSummary(userId: string, textFor: (locale: Locale) => PushText, data: Record<string, unknown>, collapseId: string): Promise<void> {
     await this.deliver(userId, 'reply', textFor, data, await this.deps.repos.devices.listActiveWithPush(userId), collapseId);
+  }
+
+  /**
+   * An AI account's CLI login expired (TER-1047): one push to every device of the machine's owner, so they
+   * can redo it from the phone. The caller sends it once per expiry (until the login is back). The data
+   * carries the account id only; the tap opens "Refazer login" for it. History kind `confirmation` (it
+   * needs the person), which every app version parses.
+   */
+  async aiLoginRequired(userId: string, info: { accountId: string; machineName: string; provider: AiProvider }): Promise<void> {
+    await this.deliver(
+      userId,
+      'confirmation',
+      (locale) => aiLoginRequiredText(info.provider, info.machineName, locale),
+      { kind: 'ai_login', account_id: info.accountId },
+      await this.deps.repos.devices.listActiveWithPush(userId),
+      `ai_login:${info.accountId}`,
+    );
   }
 
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
@@ -414,6 +437,16 @@ export class MobilePushService {
    * or its agent (`idle`): maybe "aba terminou". */
   private onTabState({ tab, owner_id }: TabStateChange): void {
     const pending = this.settling.get(tab.id);
+    if (tab.state === 'auth_required') {
+      this.working.delete(tab.id);
+      if (owner_id && !this.authAlerted.has(tab.id)) {
+        if (this.authAlerted.size > 10_000) this.authAlerted.clear();
+        this.authAlerted.add(tab.id);
+        void this.authRequired(tab, owner_id).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: owner_id, tabId: tab.id }, 'mobile push failed'));
+      }
+      return;
+    }
+    if (tab.state === 'working') this.authAlerted.delete(tab.id);
     if (tab.state === 'working') {
       if (pending) clearTimeout(pending);
       this.settling.delete(tab.id);
@@ -457,6 +490,21 @@ export class MobilePushService {
   }
 
   /**
+   * A tab's Claude Code needs a new login (TER-1046): urgent and only the person can do it, so it goes to every
+   * device of the owner, like an escalation, and into the notification history with the machine and the
+   * account. The tap opens the tab (`data.tab_id`) on a newer app, the project's chat on an older one.
+   */
+  private async authRequired(tab: TabStateChange['tab'], ownerId: string): Promise<void> {
+    const { repos } = this.deps;
+    const ctx = await this.names(ownerId, tab.project_id, tab.id, tab.machine_id);
+    const account = tab.ai_account_id ? await repos.aiAccounts.findById(tab.ai_account_id) : undefined;
+    const accountLabel = account && account.machine_id === tab.machine_id ? account.label : null;
+    const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
+    const data = { kind: 'tab_auth_required', tab_id: tab.id, project_id: tab.project_id, machine_id: tab.machine_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(ownerId, 'confirmation', (locale) => tabAuthRequiredText({ ...ctx, accountLabel }, locale), data, await repos.devices.listActiveWithPush(ownerId), `auth:${tab.id}`);
+  }
+
+  /**
    * Automatic work stopped on a card and waits for the person (agentic board spec §9.3, D25: the only
    * automation event pushed besides the daily summary): "<projeto> precisa de você" / "<ref> parou:
    * <motivo>", once per run and reason until the run resumes, to every device of the owner: an
@@ -487,6 +535,26 @@ export class MobilePushService {
       await repos.devices.listActiveWithPush(e.owner_id),
       `escalation:${key}`,
     );
+  }
+
+  /**
+   * A release workflow delivered a new version after an automatic merge (TER-1055): "<workflow> publicou a
+   * versão <v>" to every device of the owner, once per project, workflow and version. A release without a
+   * version (an OTA of the app version phones already have) is not pushed: its chat line is enough.
+   */
+  private async released(e: PublishedAutomationEvent): Promise<void> {
+    const { version, workflow } = e.payload;
+    if (typeof version !== 'string' || typeof workflow !== 'string') return;
+    const key = `${e.project_id}:${workflow}:${version}`;
+    if (this.releases.has(key)) return;
+    if (this.releases.size > 10_000) this.releases.clear();
+    this.releases.add(key);
+    const { repos } = this.deps;
+    const ctx = await this.names(e.owner_id, e.project_id, null, null);
+    if (!ctx.projectName) return; // not the owner's project
+    const conversation = await repos.chat.findLatestActiveForProject(e.project_id, e.owner_id);
+    const data = { kind: 'automation_release', project_id: e.project_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(e.owner_id, 'reply', (locale) => automationReleaseText(ctx, workflow, version, locale), data, await repos.devices.listActiveWithPush(e.owner_id), `release:${key}`);
   }
 
   /** The run went on: its escalation may be pushed again next time, and its rows are handled (TER-923). */

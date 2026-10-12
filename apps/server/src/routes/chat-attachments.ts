@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
-import { toPublicAttachment } from '../db/repositories/chat-attachments.js';
+import { toPublicAttachment, type AttachmentRow } from '../db/repositories/chat-attachments.js';
 import type { ChatService } from '../chat/service.js';
 import type { ExtractionQueue } from '../chat/attachments/queue.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
@@ -13,6 +13,8 @@ export interface ChatAttachmentDeps {
   store: AttachmentStore;
   queue: Pick<ExtractionQueue, 'enqueue'>;
   quotaBytes: number;
+  /** A row "try again" put back to pending, for every open screen (`attachment_status`). */
+  onRetry?: (row: AttachmentRow) => void;
 }
 
 export const uploadQuery = z.object({ name: z.string().min(1).max(200), project_id: z.string().min(1).max(64).optional() });
@@ -40,7 +42,8 @@ export function uploadDepsOf(repos: Repositories, deps: ChatAttachmentDeps): Upl
  * the request's own user (spec §5.3): a miss, a stranger's row and another conversation's row all
  * answer the same 404.
  */
-export function registerAttachmentReadRoutes(app: FastifyInstance, repos: Repositories, store: AttachmentStore): void {
+export function registerAttachmentReadRoutes(app: FastifyInstance, repos: Repositories, deps: Pick<ChatAttachmentDeps, 'store' | 'queue' | 'onRetry'>): void {
+  const { store } = deps;
   app.get('/:id', async (request, reply) => {
     const { id } = attachmentIdParam.parse(request.params);
     const row = await repos.chatAttachments.findForUser(id, request.scope.user.id);
@@ -59,6 +62,23 @@ export function registerAttachmentReadRoutes(app: FastifyInstance, repos: Reposi
     const { id } = attachmentIdParam.parse(request.params);
     const row = await repos.chatAttachments.findForUser(id, request.scope.user.id);
     if (!row) throw attachmentNotFound();
+    return { attachment: toPublicAttachment(row) };
+  });
+
+  /**
+   * "Try again" on a transcription whisper could not do (TER-1035): sent or not, the row goes back to
+   * pending and into the queue; its `attachment_status` arrives when whisper is done. `create`, like the upload.
+   */
+  app.post('/:id/retry', { config: { action: 'create' } }, async (request) => {
+    const { id } = attachmentIdParam.parse(request.params);
+    const user = request.scope.user;
+    const row = await repos.chatAttachments.retryTranscription(id, user.id);
+    if (!row) {
+      const existing = await repos.chatAttachments.findForUser(id, user.id);
+      throw existing ? conflict('Este anexo não pode ser processado de novo') : attachmentNotFound();
+    }
+    deps.onRetry?.(row);
+    deps.queue.enqueue(row.id);
     return { attachment: toPublicAttachment(row) };
   });
 
@@ -87,5 +107,5 @@ export async function chatAttachmentRoutes(app: FastifyInstance, repos: Reposito
     return reply.code(201).send({ attachment });
   });
 
-  registerAttachmentReadRoutes(app, repos, deps.store);
+  registerAttachmentReadRoutes(app, repos, deps);
 }

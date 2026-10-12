@@ -36,9 +36,11 @@ function buildApp(opts: { active?: number; viewAs?: string } = {}) {
       return token({ id: 'new', user_id: userId, name: input.name, scopes: input.scopes, expires_at: input.expiresAt?.toISOString() ?? null, gated: input.gated ?? false });
     }),
     revoke: vi.fn(async (id: string, userId: string) => (id === 't1' && userId === 'u1' ? token({ id, revoked_at: '2026-09-19T01:00:00.000Z' }) : undefined)),
+    listEvents: vi.fn(async (id: string, userId: string) => (id === 't1' && userId === 'u1' ? [{ id: 'e1', tool: 'read_screen', ok: true }] : undefined)),
   };
-  app.register((a) => apiTokenRoutes(a, { apiTokens } as unknown as Repositories, { mcpUrl: 'https://termhub.dev/mcp' }), { prefix: '/api-tokens' });
-  return { app, apiTokens };
+  const securityEvents = { record: vi.fn(async () => {}) };
+  app.register((a) => apiTokenRoutes(a, { apiTokens, securityEvents } as unknown as Repositories, { mcpUrl: 'https://termhub.dev/mcp' }), { prefix: '/api-tokens' });
+  return { app, apiTokens, securityEvents };
 }
 
 describe('api token routes', () => {
@@ -132,5 +134,27 @@ describe('api token routes', () => {
     const nope = await app.inject({ method: 'DELETE', url: '/api-tokens/t9' });
     expect(nope.statusCode).toBe(404);
     expect(nope.json().error).toBe('Token não encontrado');
+  });
+
+  it('puts creating and revoking a token on the security trail, never the token itself', async () => {
+    const { app, securityEvents } = buildApp();
+    const created = await app.inject({ method: 'POST', url: '/api-tokens', payload: { name: 'laptop', scopes: ['read'] } });
+    await app.inject({ method: 'DELETE', url: '/api-tokens/t1' });
+    const calls = securityEvents.record.mock.calls.map((c) => (c as unknown[])[0] as { action: string; target_id: string });
+    expect(calls.map((c) => [c.action, c.target_id])).toEqual([
+      ['api_token.create', 'new'],
+      ['api_token.revoke', 't1'],
+    ]);
+    expect(JSON.stringify(calls)).not.toContain(created.json().token);
+  });
+
+  it('lists the MCP calls of the caller\'s own token, and 404s anyone else\'s', async () => {
+    const { app, apiTokens } = buildApp({ viewAs: 'u2' });
+    const ok = await app.inject({ url: '/api-tokens/t1/events?limit=20' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toEqual({ events: [{ id: 'e1', tool: 'read_screen', ok: true }], retention_days: 30 });
+    // the signed-in user's, never the viewed-as person's
+    expect(apiTokens.listEvents).toHaveBeenCalledWith('t1', 'u1', 20);
+    expect((await app.inject({ url: '/api-tokens/t9/events' })).statusCode).toBe(404);
   });
 });

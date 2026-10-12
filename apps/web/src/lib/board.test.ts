@@ -3,7 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   applyMove,
   backlogSections,
+  boardCardPath,
   canHaveSubtasks,
+  cardForRef,
   cardPath,
   cardsIn,
   DEFAULT_FILTER,
@@ -146,5 +148,19 @@ describe('card rules on the web', () => {
     expect(canHaveSubtasks(task({ id: 'b', type: 'bug' }))).toBe(false);
     expect(canHaveSubtasks(task({ id: 's', type: 'story' }))).toBe(true);
     expect(cardPath('TER-12')).toBe('/project/TER-12');
+  });
+});
+
+describe('a card on the board URL (TER-976)', () => {
+  it('builds the board path with the card open', () => {
+    expect(boardCardPath('p1', 'TER-12')).toBe('/projects/p1/tasks?card=TER-12');
+  });
+
+  it('resolves a ref to its top-level card: the card, or a subtask\'s parent', () => {
+    const sub = task({ id: 's', ref: 'P1-9', type: 'subtask', parent_id: 'a' });
+    const tasks = [task({ id: 'a', ref: 'P1-2', type: 'story', subtasks: [sub] }), task({ id: 'b', ref: 'P1-3' })];
+    expect(cardForRef(tasks, 'P1-3')?.id).toBe('b');
+    expect(cardForRef(tasks, 'P1-9')?.id).toBe('a');
+    expect(cardForRef(tasks, 'P1-99')).toBeNull();
   });
 });

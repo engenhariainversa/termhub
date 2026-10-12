@@ -13,7 +13,7 @@ function buildApp(user: { id: string; nickname: string | null }) {
     request.user = user as never;
     request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) } } as unknown as Repositories;
+  const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -75,6 +75,28 @@ describe('PATCH /auth/me/nickname', () => {
     expect(res.json().public_city_url).toBe(config.publicCityUrl);
     expect(res.json().public_city_url).toMatch(/^https?:\/\/[^/]+\/city$/);
   });
+
+  // Same reason: termhub.dev's terms do not cover a self-hosted instance, so the links come from
+  // the server and are absent until it sets TERMS_URL / PRIVACY_URL.
+  it('GET /auth/config serves the legal links, null when the instance has none', async () => {
+    const { config } = await import('../config.js');
+    const saved = { ...config.legal };
+    try {
+      config.legal.termsUrl = null;
+      config.legal.privacyUrl = null;
+      const none = (await buildApp({ id: 'u1', nickname: null }).inject({ method: 'GET', url: '/auth/config' })).json();
+      expect(none.terms_url).toBeNull();
+      expect(none.privacy_url).toBeNull();
+
+      config.legal.termsUrl = 'https://termhub.dev/termos/';
+      config.legal.privacyUrl = 'https://termhub.dev/privacidade/';
+      const set = (await buildApp({ id: 'u1', nickname: null }).inject({ method: 'GET', url: '/auth/config' })).json();
+      expect(set.terms_url).toBe('https://termhub.dev/termos/');
+      expect(set.privacy_url).toBe('https://termhub.dev/privacidade/');
+    } finally {
+      Object.assign(config.legal, saved);
+    }
+  });
 });
 
 describe('PATCH /auth/me/nickname and the short link', () => {
@@ -85,7 +107,7 @@ describe('PATCH /auth/me/nickname and the short link', () => {
       request.user = user as never;
       request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
     });
-    const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) } } as unknown as Repositories;
+    const repos = { users: { setNickname, findByNickname: vi.fn(async () => undefined) }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) } } as unknown as Repositories;
     app.register((a) => authRoutes(a, { repos } as never, { onNicknameClaimed }), { prefix: '/auth' });
     return app;
   }

@@ -1,5 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
+import { belowMinimum, isOutdated, latestAgentVersion } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
 import type { Machine, MachineType, Tab, TabKind, TabState } from '../db/repositories/types.js';
 import { listTmuxSessions } from '../terminal/machine-exec.js';
 import { parseRef } from '../db/repositories/task-rules.js';
@@ -18,6 +20,12 @@ export interface MachineSummary {
   /** agent: connected now; local: always; ssh: null = not checked (probing is slow) */
   online: boolean | null;
   capabilities: string[];
+  /** TER-1056, agent machines only: the connected agent's version (the last one seen when offline) */
+  agent_version?: string | null;
+  /** a newer verified release can be installed now (online agents only) */
+  update_available?: boolean;
+  /** older than the server's minimum: it is updated once idle, switch or not */
+  below_min_version?: boolean;
 }
 
 function online(m: Machine): boolean | null {
@@ -26,13 +34,19 @@ function online(m: Machine): boolean | null {
   return null;
 }
 
-const summary = (m: Machine): MachineSummary => ({ id: m.id, name: m.name, subtitle: m.subtitle, type: m.type, os: m.os, online: online(m), capabilities: m.capabilities });
+function summary(m: Machine): MachineSummary {
+  const base = { id: m.id, name: m.name, subtitle: m.subtitle, type: m.type, os: m.os, online: online(m), capabilities: m.capabilities };
+  if (m.type !== 'agent') return base;
+  const live = agents.info(m.id)?.agent_version;
+  const agent_version = live ?? m.agent_version;
+  return { ...base, agent_version, update_available: !!live && isOutdated(live, latestAgentVersion()), below_min_version: belowMinimum(agent_version) };
+}
 
-export async function listMachines(ctx: ControlContext): Promise<{ machines: MachineSummary[] }> {
+export async function listMachines(ctx: ControlContext): Promise<{ machines: MachineSummary[]; latest_agent_version: string | null; min_agent_version: string }> {
   const machines = await ctx.repos.machines.list(ctx.scope.ownerId);
   // A colour that just started has not met its agents yet (a deploy): the ones on their way get the time to attach.
   await Promise.all(machines.map((m) => agents.awaitHandover(m)));
-  return { machines: machines.map(summary) };
+  return { machines: machines.map(summary), latest_agent_version: latestAgentVersion(), min_agent_version: MIN_AGENT_VERSION };
 }
 
 async function machineNames(ctx: ControlContext): Promise<Map<string, string>> {

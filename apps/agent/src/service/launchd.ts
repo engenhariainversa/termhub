@@ -98,6 +98,28 @@ export async function uninstall(deps: LaunchdDeps = {}): Promise<void> {
 }
 
 /**
+ * First half of `agent.uninstall`, run from inside the service: deletes the plist WITHOUT booting
+ * the job out — that would SIGTERM this very process before it can reply. The job stays loaded
+ * until `stop()`; with the file gone, launchd will not load it again at the next login. Returns
+ * whether there was a plist to remove.
+ */
+export async function removeDefinition(deps: LaunchdDeps = {}): Promise<boolean> {
+  try {
+    fs.unlinkSync(plistPath(deps.home));
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw err;
+  }
+}
+
+/** Second half of `agent.uninstall`: unloads the job (and so terminates this process). Best effort. */
+export async function stop(deps: LaunchdDeps = {}): Promise<void> {
+  const runFn = deps.run ?? run;
+  await runFn('launchctl', ['bootout', `${gui()}/${LABEL}`]);
+}
+
+/**
  * Called right before `process.exit(78)` (revoked token, protocol mismatch, no config).
  * launchd's `KeepAlive.SuccessfulExit=false` restarts the job on ANY non-zero exit — unlike
  * systemd's `RestartPreventExitStatus=78` there is no per-code opt-out — so a revoked token

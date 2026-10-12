@@ -15,7 +15,8 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
  *  `tools/call`, whatever the scopes and grants say. `get_automation_policy` is read-only: the project's autonomy
  *  level and what it covers, so the agent knows what happens after it opens a PR. `report_card` and `get_card`
  *  are listed and callable only by a tab with an active automatic run (their `allowedIf`), and act on that
- *  run's card only: the scopes stay `read`/`memory`. */
+ *  run's card only: the scopes stay `read`/`memory`. `report_card` also answers a tab whose latest run ended
+ *  `blocked` and may still be adopted (spike TER-1031 §5.4), for `done` with the PR the agent opened by hand. */
 export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card'] as const;
 
 /** Scopes of a tab token (D2). The allowlist narrows them further. */
@@ -77,7 +78,8 @@ export function tabInputShape(shape: ZodRawShape): ZodRawShape {
   return out;
 }
 
-/** The tab tools that need an active automatic run in the tab (preflight F-8). */
+/** The tab tools that need an active automatic run in the tab (preflight F-8); `report_card` also takes a
+ *  tab whose run ended blocked within the adoption window, and every other tab gets this refusal. */
 const RUN_ONLY_TOOLS: readonly string[] = ['report_card', 'get_card'];
 
 /** pt-BR answer for a tools/call outside the allowlist (D2): naming a scope, as the ordinary refusal

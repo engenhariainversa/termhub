@@ -15,12 +15,17 @@ export async function statusCommand(json: boolean): Promise<void> {
   const check = await checkServerConnection(config, CHECK_TIMEOUT_MS);
 
   if (json) {
-    console.log(JSON.stringify({ url: config.url, machine_name: config.machine_name || null, version: AGENT_VERSION, connected: check.ok }));
+    console.log(JSON.stringify({ url: config.url, machine_name: config.machine_name || null, version: AGENT_VERSION, credential: config.credential, connected: check.ok }));
     return;
   }
 
   console.log(`Servidor: ${config.url}`);
   console.log(`Máquina: ${config.machine_name || '—'}`);
   console.log(`Versão: ${AGENT_VERSION}`);
+  console.log(
+    config.credential === 'key'
+      ? 'Credencial: chave do dispositivo'
+      : 'Credencial: token permanente (antigo). Para trocar por uma chave do dispositivo, use "Parear de novo" no app.',
+  );
   console.log(check.ok ? 'conectado ✓' : `desconectado ✗${check.error ? ` (${check.error})` : ''}`);
 }

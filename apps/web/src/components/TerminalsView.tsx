@@ -39,7 +39,7 @@ import { setTabView, useTabViews } from '../lib/tab-view';
 import {
   chatTabId,
   closeEditorTab,
-  filePathOf,
+  fileOfTab,
   fileTabId,
   getEditorTabs,
   isChatTabId,
@@ -105,8 +105,9 @@ export function TerminalsView({ project, visible }: Props) {
     () =>
       tabIds.flatMap((id): BarTab[] => {
         if (isFileTabId(id)) {
-          const path = filePathOf(id);
-          return [{ id, kind: 'file', path, name: path.split('/').pop() || path }];
+          const { path, machineId } = fileOfTab(id);
+          const machineName = machineId ? projectMachines.find((m) => m.id === machineId)?.name : undefined;
+          return [{ id, kind: 'file', path, machineId, machineName, name: path.split('/').pop() || path }];
         }
         if (isChatTabId(id)) {
           const terminal = (tabs ?? []).find((x) => x.id === terminalOfChat(id));
@@ -115,7 +116,7 @@ export function TerminalsView({ project, visible }: Props) {
         const t = openTabs.find((x) => x.id === id);
         return t ? [t] : [];
       }),
-    [tabIds, openTabs, tabs],
+    [tabIds, openTabs, tabs, projectMachines],
   );
   /** Terminal tabs switched to their conversation (TER-1003), by id. */
   const tabViews = useTabViews();
@@ -283,6 +284,7 @@ export function TerminalsView({ project, visible }: Props) {
   // once the stored tabs and layout are loaded so they do not replace it.
   const [searchParams, setSearchParams] = useSearchParams();
   const wantedFile = searchParams.get('file');
+  const wantedMachine = searchParams.get('machine');
   const wantedPin = searchParams.get('pin') === '1';
   const ready = tabs !== null && loadedFor.current === project.id;
   useEffect(() => {
@@ -296,9 +298,11 @@ export function TerminalsView({ project, visible }: Props) {
       },
       { replace: true },
     );
-    openTab(fileTabId(wantedFile), wantedPin ? 'pin' : 'preview');
-  }, [wantedFile, wantedPin, ready, openTab, setSearchParams]);
-  const openFile = useCallback((path: string, mode: 'preview' | 'pin') => openTab(fileTabId(path), mode), [openTab]);
+    // ?machine= (the "Arquivos" page, a file cited by a terminal): the tab reads that machine's copy (TER-973)
+    openTab(fileTabId(wantedFile, wantedMachine), wantedPin ? 'pin' : 'preview');
+  }, [wantedFile, wantedMachine, wantedPin, ready, openTab, setSearchParams]);
+  /** A link inside a file opens on the same machine as the file it is in. */
+  const openFile = useCallback((path: string, mode: 'preview' | 'pin', machineId: string | null) => openTab(fileTabId(path, machineId), mode), [openTab]);
 
   /** A terminal's conversation in a tab of its own (TER-1003); the terminal's own tab goes back to the terminal. */
   const openChatTab = useCallback(
@@ -543,7 +547,13 @@ export function TerminalsView({ project, visible }: Props) {
                   }}
                 >
                   {t.kind === 'file' ? (
-                    <FileView projectId={project.id} path={t.path} active={active} onOpenFile={openFile} />
+                    <FileView
+                      projectId={project.id}
+                      path={t.path}
+                      machineId={t.machineId}
+                      active={active}
+                      onOpenFile={(path, mode) => openFile(path, mode, t.machineId)}
+                    />
                   ) : t.kind === 'chat' ? (
                     <TabChatView
                       tabId={t.terminalId}

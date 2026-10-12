@@ -19,7 +19,9 @@
 # Xcode account, as before.
 #
 # Bump `expo.version` and/or `expo.ios.buildNumber` in app.json before each upload: App Store
-# Connect refuses a build number it has already seen for the same version.
+# Connect refuses a build number it has already seen for the same version. BUILD_NUMBER, when set,
+# replaces `expo.ios.buildNumber` in the generated Info.plist without touching app.json
+# (scripts/testflight.sh sets it).
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -53,6 +55,14 @@ mkdir -p "$BUILD_DIR"
 
 npm run build:contract
 npx expo prebuild --platform ios --clean
+
+if [ -n "${BUILD_NUMBER:-}" ]; then
+  case "$BUILD_NUMBER" in
+    *[!0-9]*) echo "BUILD_NUMBER must be a plain integer: $BUILD_NUMBER" >&2; exit 2 ;;
+  esac
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" ios/termhub/Info.plist
+  echo "Build number $BUILD_NUMBER"
+fi
 
 xcodebuild archive \
   -workspace ios/termhub.xcworkspace \

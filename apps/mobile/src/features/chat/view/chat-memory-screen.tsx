@@ -4,6 +4,7 @@ import { Alert, FlatList, Linking, Switch, View } from 'react-native';
 import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
+import { ContextLimitCard } from './context-limit-card';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
 import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
@@ -125,6 +126,7 @@ export function ChatMemoryScreen() {
   const toggle = useChatMemoryStore((s) => s.toggle);
   const setAutodecide = useChatMemoryStore((s) => s.setAutodecide);
   const setCodexReplies = useChatMemoryStore((s) => s.setCodexReplies);
+  const setContextLimit = useChatMemoryStore((s) => s.setContextLimit);
   const forget = useChatMemoryStore((s) => s.forget);
   const cancel = useChatMemoryStore((s) => s.cancel);
   const notes = useChatMemoryStore((s) => s.notes);
@@ -232,6 +234,8 @@ export function ChatMemoryScreen() {
             </AppText>
           </View>
         ) : null}
+        {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
+        {memory ? <ContextLimitCard limit={memory.context_limit ?? null} onSave={setContextLimit} /> : null}
         <Field label={t('Buscar')} value={q} onChangeText={search} placeholder={t('pergunta, resposta ou projeto')} testID="chat-memory-search" />
         {error ? <Banner tone="danger" text={error} /> : null}
       </View>

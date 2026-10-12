@@ -32,7 +32,7 @@ function harness(sessionId: string | null = null) {
     }),
     deleteMessage: vi.fn(async (id: string) => void rows.splice(rows.findIndex((r) => r.id === id), 1)),
     setCliSession: vi.fn(async () => undefined),
-    setContext: vi.fn(async (_id: string, u: { tokens: number; window?: number | null }) => ({ tokens: u.tokens, window: u.window ?? null })),
+    setContext: vi.fn(async (_id: string, u: { tokens: number; window?: number | null }) => ({ tokens: u.tokens, window: u.window ?? null, compacted_at: null })),
   };
   /** Subagent rows as the repository keeps them: one per task, `sa-<task_id>`. */
   const subagentRows = new Map<string, ChatSubagent>();
@@ -357,6 +357,21 @@ it('stores the session the CLI reports, once', async () => {
   expect(h.chat.setCliSession).toHaveBeenCalledTimes(1);
   expect(h.chat.setCliSession).toHaveBeenCalledWith('c1', 'sess-9');
   expect(h.live.sessionId).toBe('sess-9');
+});
+
+it("stamps the CLI's own auto-compact with the fill it left (TER-1038)", async () => {
+  const a = await h.turn(U1, 'a');
+  h.live.add(a.t);
+  const s = manualStream();
+  const consumed = h.live.consume(s.stream);
+  s.push(replay(U1));
+  s.push(JSON.stringify({ type: 'system', subtype: 'compact_boundary', compact_metadata: { trigger: 'auto', pre_tokens: 190_000, post_tokens: 900 } }));
+  s.push(delta('ok')); s.push(result());
+  await settle();
+  s.end();
+  await consumed;
+  expect(h.chat.setContext).toHaveBeenCalledWith('c1', { tokens: 900, compacted: true });
+  expect(await a.done).toMatchObject({ text: 'ok', error_code: null });
 });
 
 it('writes every waiting turn as the first input, one line each', async () => {
