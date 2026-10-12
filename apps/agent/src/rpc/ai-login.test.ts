@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cliReportedSuccess, createAiLogin, failureMessage, parseClaudeLoginScreen, parseClaudeStatus, parseCodexLoginScreen, parseCodexStatus } from './ai-login.js';
+import { claudeStatusAnswered, cliReportedSuccess, createAiLogin, failureMessage, parseClaudeLoginScreen, parseClaudeStatus, parseCodexLoginScreen, parseCodexStatus } from './ai-login.js';
 
 const CLAUDE_SCREEN = `Opening browser to sign in…
 If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=9d1c250a-e61b-44d9-88ed-5944d1962f5e&response_type=code&redirect_uri=https%3A%2F%2Fplatform.claude.com%2Foauth%2Fcode%2Fcallback&scope=org%3Acreate_api_key+user%3Aprofile&code_challenge=MF4K&code_challenge_method=S256&state=rIhl
@@ -44,6 +44,12 @@ describe('status parsing', () => {
     expect(parseClaudeStatus('{"loggedIn": false}')).toBe(false);
     expect(parseClaudeStatus('warning\n{"loggedIn": true}')).toBe(true);
     expect(parseClaudeStatus('garbage')).toBe(false);
+  });
+  it('tells a claude status that answered from one that did not', () => {
+    expect(claudeStatusAnswered('{"loggedIn": false}')).toBe(true);
+    expect(claudeStatusAnswered('warning\n{"loggedIn":true}')).toBe(true);
+    expect(claudeStatusAnswered("error: unknown command 'status'")).toBe(false);
+    expect(claudeStatusAnswered('')).toBe(false);
   });
   it('reads codex login status', () => {
     expect(parseCodexStatus(0, 'Logged in using ChatGPT\n')).toBe(true);

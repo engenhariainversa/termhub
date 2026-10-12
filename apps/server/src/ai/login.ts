@@ -165,7 +165,14 @@ export class AiLoginService {
 
     const loginId = randomBytes(12).toString('hex');
     const session = `${AI_LOGIN_SESSION_PREFIX}${loginId}`;
-    const r = await agentRpc(machine, 'ai.login.start', { provider: account.provider, config_dir: account.config_dir, session });
+    const r = await agentRpc(machine, 'ai.login.start', { provider: account.provider, config_dir: account.config_dir, session }).catch(async (err: unknown) => {
+      // The CLI ran and the agent called it a failure. An agent older than 0.27.0 says that of every CLI
+      // that exits, the one that just logged in through the machine's browser included (TER-1054): the
+      // status decides, and the failure stands only when it says logged out.
+      if (!(err instanceof HttpError && err.code === 'MACHINE_FAILED')) throw err;
+      if ((await this.checkAccountLogin(account, machine, 'force')) !== 'ok') throw err;
+      return { url: null, user_code: null, needs_code: false, logged_in: true };
+    });
     if (r.logged_in) {
       // Nothing to open: the agent already killed the session.
       this.loggedIn(account);
