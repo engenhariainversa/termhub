@@ -5,25 +5,37 @@ import type { ChatDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutoAnswer, AutoAnswerBy, TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
-import type { MemoryRefKind } from '../control/memory.js';
+import type { MemoryItem } from '../db/repositories/memory-items.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
+import { parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { automaticRunOfTab } from '../automation/pause.js';
-import { labelKey, mapAnswer, sameAnswer } from './decision-text.js';
+import { bandOf, thresholdsFor, type AutoBand, type AutoThresholds } from './auto-thresholds.js';
+import { recordAutoSamples } from './decision-memory.js';
+import { labelKey, mapAnswer, mapNoteAnswer, sameAnswer, suggestionRef } from './decision-text.js';
 import { failureLabel } from './service.js';
 import { answerTabQuestion, codeOf, isQuestionRow } from './tab-question-answer.js';
 import { checkChoiceAnswer, type ChoiceAnswer, type ChoicePayload } from './tab-question-payload.js';
 import { publishTabQuestions, type TabQuestionEventType } from './tab-questions.js';
 
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
+const silentLog: Log = { info() {}, warn() {} };
 
-/** The repeat path's reason (spec §6, D9a): shown on the card and told to the concierge as is. */
+/** The memory path's reasons (spec §6, D9a; TER-642), shown on the card as they are: a precedent at or
+ *  above the person's high threshold, and one in the band below it. */
 export const REPEAT_REASON = 'Mesma pergunta respondida antes';
+export const SIMILAR_REASON = 'Pergunta parecida respondida antes';
 /** How often the sender sweeper ticks (spec §6). */
 export const AUTO_ANSWER_SWEEP_MS = 5_000;
-/** The repeat path's own similarity floor (spec §6, D9a "near-verbatim"): independent of
- * `DECISION_SUGGEST_THRESHOLD`, which an operator may lower for suggestions without making them automatic. */
-export const REPEAT_MIN_SIMILARITY = 0.98;
+/** How long an answer in the high band waits before it is sent (TER-642): no undo window, only long
+ *  enough for the tab to have drawn the question the hook announced. */
+export const AUTO_SEND_GRACE_MS = 3_000;
+/** A screen's focus heartbeat older than this no longer counts (TER-642): the browser was closed or the
+ *  app killed without saying so. Clients beat every `FOCUS_BEAT_SECONDS`. */
+export const FOCUS_TTL_MS = 45_000;
+export const FOCUS_BEAT_SECONDS = 15;
+/** Heartbeats this old are deleted: nothing reads them any more. */
+const FOCUS_PURGE_AFTER_MS = 60 * 60_000;
 /** How long after its claim a countdown still `sent` on an open card counts as lost (the sender died). */
 export const SENDER_LOST_AFTER_MS = 2 * 60_000;
 /** How many due countdowns one tick sends at most; the rest wait for the next tick. */
@@ -32,10 +44,10 @@ const SWEEP_BATCH = 20;
 /**
  * Why `answer_tab_question`'s `mode: 'auto'` became a suggestion (spec 2026-09-26 concierge memory
  * §5.4): the person's switch is off (D8); the person already cancelled a countdown on this card; no
- * cited person decision equals the proposed answer (D6); the card names an irreversible act (D7's
- * blocklist); a multi-question card is backed for some of its questions but not all (D7); or the
- * backing decisions are about questions below the similarity floor, or it could not be measured (D6,
- * `AUTO_ANSWER_MIN_SIMILARITY`, fail closed). When several apply, the most decisive is reported:
+ * cited decision or note equals the proposed answer (D6, TER-642); the card names an irreversible act
+ * (D7's blocklist); a multi-question card is backed for some of its questions but not all (D7); or the
+ * backing precedents are about questions below the person's low threshold, or it could not be measured
+ * (TER-642, fail closed). When several apply, the most decisive is reported:
  * `switch_off` > `cancelled_by_person` > `blocked` > `multi_question_partial` > `no_person_precedent`
  * > `not_similar`.
  */
@@ -47,6 +59,24 @@ export interface ScheduleInput {
   by: AutoAnswerBy;
   reason: string;
   sources: { kind: MemoryRefKind; id: string }[];
+  /** TER-642, an answer backed by memory: the similarity that decided it, the person's thresholds and
+   *  the band — `high` is sent after `AUTO_SEND_GRACE_MS`, anything else after the usual countdown. */
+  score?: number;
+  thresholds?: AutoThresholds;
+  band?: AutoBand;
+  /** The countdown only runs while termhub is in focus on one of the person's screens. */
+  focus?: boolean;
+}
+
+/**
+ * Whether a note backs one question's proposed answer (TER-642): the note's decision is the label of
+ * the one option proposed (`mapNoteAnswer`). Never a free text, never two options: a note is prose the
+ * concierge wrote, and only an option the tab itself offered may come out of it.
+ */
+export function noteBacks(note: Pick<MemoryItem, 'kind' | 'text'>, item: ChoicePayload['questions'][number], a: ChoiceAnswer['answers'][number]): boolean {
+  if (note.kind !== 'note' || a.text !== undefined) return false;
+  const mapped = mapNoteAnswer(note.text, item);
+  return mapped !== null && sameAnswer(mapped, { selected: a.selected });
 }
 
 /**
@@ -111,12 +141,15 @@ export async function autoAnswerAllowed(repos: Repositories, row: Pick<TabQuesti
 }
 
 /**
- * Starts a countdown on a still-open `choice` card (spec §6): `auto_answer` in `scheduled`, due
- * `AUTO_ANSWER_DELAY_SECONDS` (default 60 s) from `now`, then the card is republished so every open
- * screen shows the countdown with "Cancelar" and "Responder agora". `setAutoAnswer` is conditional on
- * the row still `open` with no countdown already running, so a card that moved on, or one another
- * caller scheduled first, resolves `null` with nothing published. Sending is the sweeper's job, never
- * this function's. Logs nothing: the reason and answer are the person's words.
+ * Starts an automatic answer on a still-open `choice` card (spec §6, TER-642): `auto_answer` in
+ * `scheduled`, then the card is republished so every open screen shows it. In the high band it is due
+ * `AUTO_SEND_GRACE_MS` from `now` (sent at once, as far as the person can tell); otherwise
+ * `AUTO_ANSWER_DELAY_SECONDS` (default 60 s) from `now`, with "Cancelar" and "Responder agora" on the
+ * card. With `focus`, that countdown only runs while termhub is in focus: it starts paused when none of
+ * the person's screens has it now (`syncFocusCountdowns` runs it once one does). `setAutoAnswer` is
+ * conditional on the row still `open` with no countdown already running, so a card that moved on, or
+ * one another caller scheduled first, resolves `null` with nothing published. Sending is the sweeper's
+ * job, never this function's. Logs nothing: the reason and answer are the person's words.
  */
 export async function scheduleAutoAnswer(repos: Repositories, input: ScheduleInput, now = new Date()): Promise<TabQuestion | null> {
   const row = await storeAutoAnswer(repos, input, now);
@@ -128,44 +161,107 @@ export async function scheduleAutoAnswer(repos: Repositories, input: ScheduleInp
 /** `scheduleAutoAnswer` without the publish: the repeat path runs inside `openTabQuestion`, which
  * announces the card itself, once, countdown included. */
 async function storeAutoAnswer(repos: Repositories, input: ScheduleInput, now: Date): Promise<TabQuestion | null> {
+  const delay = input.band === 'high' ? AUTO_SEND_GRACE_MS : config.autoAnswerDelayMs;
+  const focus = input.focus === true && input.band !== 'high';
+  // Fails closed: a focus that cannot be read is no focus, and the countdown waits.
+  const paused = focus && !(await repos.chatAuto.focusedUsers([input.row.user_id], FOCUS_TTL_MS).catch(() => new Set<string>())).has(input.row.user_id);
   const auto: AutoAnswer = {
     answer: input.answer,
     by: input.by,
     reason: input.reason,
     sources: input.sources,
-    due_at: new Date(now.getTime() + config.autoAnswerDelayMs).toISOString(),
+    due_at: new Date(now.getTime() + delay).toISOString(),
     status: 'scheduled',
+    ...(input.score !== undefined ? { score: Math.round(input.score * 1000) / 1000 } : {}),
+    ...(input.thresholds ? { thresholds: { high: input.thresholds.high, low: input.thresholds.low } } : {}),
+    ...(input.band ? { band: input.band } : {}),
+    ...(focus ? { focus: true } : {}),
+    ...(paused ? { paused: true, remaining_ms: delay } : {}),
   };
   return (await repos.tabQuestions.setAutoAnswer(input.row.id, auto)) ?? null;
 }
 
 /**
- * The repeat path (spec §6, D9a): a fresh `choice` card whose TER-57 suggestion already found a person
- * precedent for every one of its questions — an item with a non-empty `decision_id` and a similarity of
- * at least `REPEAT_MIN_SIMILARITY` (0.98, near-verbatim; its own floor, whatever the suggestion threshold
- * is set to) — starts a countdown on that suggestion by itself, with no LLM call. Everything else is a plain
- * suggested card (`null`): the switch off (D8), a concierge item (it cites no decision of its own), a
- * card with a question left unsuggested, an answer that no longer fits the payload, a card that already
- * had a countdown, a blocklist hit (D7) on any header, question, suggested label, its description or
- * text, or a cited decision that no longer backs the answer (`precedentBacks`: forgotten meanwhile, or
- * its chosen option described differently from this card's). The row is not published here
- * (`openTabQuestion` does it, once). Logs nothing.
+ * The memory path (spec §6, D9a; TER-642): a fresh `choice` card whose suggestion already found a
+ * precedent of the person's own — a past decision or a note — for every one of its questions starts an
+ * automatic answer on that suggestion by itself, with no LLM call. The card's score is the lowest
+ * similarity among its questions, read against the person's thresholds (`thresholdsFor`): from `high`
+ * it is sent at once; from `low` it counts down, in focus only, and is sent unless the person picks
+ * something else; below `low` there is no suggestion to begin with. Everything else is a plain suggested
+ * card (`null`): the switch off (D8), a concierge item (it cites no precedent of its own), a card with a
+ * question left unsuggested, an answer that no longer fits the payload, a card that already had a
+ * countdown, a blocklist hit (D7) on any header, question, suggested label, its description or text, or
+ * a cited precedent that no longer backs its question's answer (forgotten meanwhile, a decision whose
+ * chosen option is described differently from this card's, a note whose decision is no longer one of
+ * the options). In a tab with a live automatic run nobody is watching, so the countdown does not wait
+ * for focus. The row is not published here (`openTabQuestion` does it, once). Logs nothing.
  */
 export async function maybeScheduleRepeat(repos: Repositories, row: TabQuestion, now = new Date()): Promise<TabQuestion | null> {
   if (row.kind !== 'choice' || row.status !== 'open' || row.auto_answer || !row.suggestion) return null;
   const payload = row.payload as ChoicePayload;
-  const items = payload.questions.map((_q, i) => row.suggestion!.items.find((it) => it.question_index === i && it.decision_id !== '' && it.by !== 'concierge' && it.similarity >= REPEAT_MIN_SIMILARITY));
+  const items = payload.questions.map((_q, i) => row.suggestion!.items.find((it) => it.question_index === i && suggestionRef(it) !== null));
   if (items.some((it) => it === undefined)) return null;
   const answer: ChoiceAnswer = { answers: items.map((it) => ({ selected: it!.selected, ...(it!.text !== undefined ? { text: it!.text } : {}) })) };
   if (checkChoiceAnswer(payload, answer)) return null;
   if (autoAnswerBlocked(blocklistParts(payload, answer))) return null;
   if (!(await autoAnswerAllowed(repos, row))) return null;
-  const ids = [...new Set(items.map((it) => it!.decision_id))];
-  // The suggestion only says a decision was similar: re-read the ones it cites (the person's own,
-  // still there) and check each still backs its answer, option descriptions included.
-  const decisions = await repos.chatDecisions.findManyForUser(ids, row.user_id);
-  if (!precedentBacks(decisions, payload, answer)) return null;
-  return storeAutoAnswer(repos, { row, answer, by: 'memory', reason: REPEAT_REASON, sources: ids.map((id) => ({ kind: 'decision' as const, id })) }, now);
+  const thresholds = await thresholdsFor(repos, row.user_id);
+  const score = Math.min(...items.map((it) => it!.similarity));
+  const band = bandOf(score, thresholds);
+  if (!band) return null;
+  const refs = items.map((it) => parseRef(suggestionRef(it!)!));
+  if (refs.some((r) => r === null || (r.kind !== 'decision' && r.kind !== 'note'))) return null;
+  const idsOf = (kind: 'decision' | 'note') => [...new Set(refs.flatMap((r) => (r!.kind === kind ? [r!.id] : [])))];
+  // The suggestion only says a precedent was similar: re-read the ones it cites (the person's own,
+  // still there) and check each still backs its own question's answer, option descriptions included.
+  const [decisions, notes] = await Promise.all([repos.chatDecisions.findManyForUser(idsOf('decision'), row.user_id), idsOf('note').length ? repos.memoryItems.findManyForOwner(idsOf('note'), row.user_id) : Promise.resolve([] as MemoryItem[])]);
+  const backed = payload.questions.every((item, i) => {
+    const ref = refs[i]!;
+    const a = answer.answers[i]!;
+    if (ref.kind === 'decision') return decisions.some((d) => d.id === ref.id && decisionBacks(d, item, a));
+    return notes.some((n) => n.id === ref.id && noteBacks(n, item, a));
+  });
+  if (!backed) return null;
+  // fails open to "watched": a run that cannot be read leaves the countdown waiting for the person
+  const unattended = band === 'mid' && (await automaticRunOfTab(repos, row.tab_id).catch(() => null)) !== null;
+  const sources = [...idsOf('decision').map((id) => ({ kind: 'decision' as const, id })), ...idsOf('note').map((id) => ({ kind: 'note' as const, id }))];
+  return storeAutoAnswer(repos, { row, answer, by: 'memory', reason: band === 'high' ? REPEAT_REASON : SIMILAR_REASON, sources, score, thresholds, band, focus: band === 'mid' && !unattended }, now);
+}
+
+/**
+ * Keeps every in-focus countdown in step with the person's focus (TER-642), for one user (a screen just
+ * said it gained or lost focus) or for all (the sweeper's tick, which also catches a heartbeat that
+ * went stale): with a fresh heartbeat on any of the person's screens a paused countdown resumes, due
+ * now plus what was left; with none a running one pauses, keeping what is left. Both are conditional
+ * writes, so a cancel, an answer or the sender racing this changes nothing. Every card that changed is
+ * republished. Resolves how many changed. Logs nothing.
+ */
+export async function syncFocusCountdowns(repos: Repositories, userId?: string, now = new Date()): Promise<number> {
+  const rows = await repos.tabQuestions.listFocusCountdowns(userId);
+  if (rows.length === 0) return 0;
+  const focused = await repos.chatAuto.focusedUsers([...new Set(rows.map((r) => r.user_id))], FOCUS_TTL_MS);
+  const changed: TabQuestion[] = [];
+  for (const row of rows) {
+    const auto = row.auto_answer!;
+    const inFocus = focused.has(row.user_id);
+    let next: TabQuestion | undefined;
+    if (inFocus && auto.paused) next = await repos.tabQuestions.resumeAutoAnswer(row.id, new Date(now.getTime() + Math.max(0, auto.remaining_ms ?? config.autoAnswerDelayMs)).toISOString());
+    else if (!inFocus && !auto.paused) next = await repos.tabQuestions.pauseAutoAnswer(row.id, auto.due_at, Math.max(0, new Date(auto.due_at).getTime() - now.getTime()));
+    if (next) changed.push(next);
+  }
+  if (changed.length > 0) await publishTabQuestions(repos, 'tab_question', changed, { update: true });
+  return changed.length;
+}
+
+/**
+ * A screen of this person reports its focus (TER-642): `focused` is a heartbeat (web: the page visible
+ * and focused; app: in the foreground), anything else takes that screen out. The person's in-focus
+ * countdowns follow at once.
+ */
+export async function reportFocus(repos: Repositories, userId: string, clientId: string, focused: boolean): Promise<void> {
+  if (focused) await repos.chatAuto.touchFocus(userId, clientId);
+  else await repos.chatAuto.clearFocus(userId, clientId);
+  await syncFocusCountdowns(repos, userId);
 }
 
 /** Which event a card that changed goes out on, by where the row stands now. */
@@ -209,6 +305,9 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
       } else if (!(await autoAnswerAllowed(repos, claimed))) throw new HttpError(409, 'Resposta automática desligada', 'AUTODECIDE_OFF');
       const cited = [...new Set(auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id))];
       if (cited.length && (await repos.chatDecisions.findManyForUser(cited, user.id)).length < cited.length) throw new HttpError(409, 'A decisão usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      // A note that backed it (TER-642) must still be there too.
+      const notes = [...new Set(auto.sources.filter((s) => s.kind === 'note').map((s) => s.id))];
+      if (notes.length && (await repos.memoryItems.findManyForOwner(notes, user.id)).length < notes.length) throw new HttpError(409, 'A anotação usada foi esquecida', 'PRECEDENT_FORGOTTEN');
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });
     } catch (err) {
       const code = codeOf(err, 'AUTO_ANSWER_FAILED');
@@ -223,7 +322,11 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
       continue;
     }
     sent++;
-    log.info({ tabQuestionId: claimed.id, by: auto.by }, 'auto answer sent');
+    // What led to the send (TER-642): who, the similarity, the band and the thresholds in force. The
+    // refs are on the row (`auto_answer.sources`); never the answer nor the reason.
+    log.info({ tabQuestionId: claimed.id, by: auto.by, ...(auto.score !== undefined ? { score: auto.score, band: auto.band, high: auto.thresholds?.high, low: auto.thresholds?.low } : {}) }, 'auto answer sent');
+    // The countdown ran out in front of the person and they let it: the precedent was right for them.
+    if (auto.focus) await recordAutoSamples(repos, claimed, 'accepted', log);
     const ids = auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id);
     try {
       if (ids.length) await repos.chatDecisions.bumpAuto(ids);
@@ -265,6 +368,14 @@ export function startAutoAnswerSweeper(repos: Repositories, log: Log, intervalMs
     } catch (err) {
       log.warn({ code: failureLabel(err) }, 'auto answer recovery failed');
     }
+    // Before anything is sent: a countdown whose person looked away (or whose screen stopped beating)
+    // pauses, and one whose person is back resumes (TER-642).
+    try {
+      await syncFocusCountdowns(repos);
+      await repos.chatAuto.purgeFocus(FOCUS_PURGE_AFTER_MS);
+    } catch (err) {
+      log.warn({ code: failureLabel(err) }, 'auto answer focus sync failed');
+    }
     try {
       await sendDueAutoAnswers(repos, log, { shouldStop: () => stopping });
     } catch (err) {
@@ -299,6 +410,9 @@ export async function cancelAutoAnswer(ctx: ControlContext, id: string): Promise
   if (!isQuestionRow(row)) throw notFound('Pergunta não encontrada');
   const cancelled = await ctx.repos.tabQuestions.cancelAutoAnswer(id, userId);
   if (!cancelled) throw new HttpError(409, 'Não há resposta automática em contagem nesta pergunta', 'NOT_SCHEDULED');
+  // The person stopped it: for calibration the precedent was wrong, unless they then answer the same
+  // on the card (that answer replaces this sample). TER-642.
+  if (cancelled.auto_answer?.by !== 'automation') await recordAutoSamples(ctx.repos, cancelled, 'cancelled', silentLog);
   const [view] = await publishTabQuestions(ctx.repos, 'tab_question', [cancelled], { update: true });
   return view ?? toTabQuestionView(cancelled, null);
 }

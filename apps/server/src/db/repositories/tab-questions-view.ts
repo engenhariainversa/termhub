@@ -44,7 +44,13 @@ function autoDecisionInput(r: TabQuestion): AutoDecisionInput | null {
   // A sent countdown only stays on the view of a card it answered, or one still open (in flight).
   if (auto.status === 'sent' && r.status !== 'open' && r.answered_via !== 'auto') return null;
   // `by` only where screens need it (an automatic board answer): other cards' views stay as they were
-  return { reason: auto.reason, refs: auto.sources.map((s) => `${s.kind}:${s.id}`), ...(auto.by === 'automation' ? { by: auto.by } : {}) };
+  return {
+    reason: auto.reason,
+    refs: auto.sources.map((s) => `${s.kind}:${s.id}`),
+    ...(auto.by === 'automation' ? { by: auto.by } : {}),
+    // TER-642: the score and thresholds that led to it, for the badge.
+    ...(auto.score !== undefined && auto.thresholds ? { score: auto.score, thresholds: auto.thresholds } : {}),
+  };
 }
 
 /** Names resolved owner-scoped, in one batched read: a tab the user cannot see names nothing. The

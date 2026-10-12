@@ -157,18 +157,18 @@ const envSchema = z.object({
   EMBED_URL: z.string().url().optional(),
   /** bearer token for embeddings service authentication */
   EMBED_SECRET: z.string().optional(),
-  /** similarity threshold for suggesting past decisions (0..1), on the normalised question alone
-   *  (TER-204): the worst opposite-meaning pair measured scores 0.948 and a repeat with another header
-   *  or options scores 1.0; lower it to trade precision for paraphrases. */
-  DECISION_SUGGEST_THRESHOLD: z.coerce.number().min(0).max(1).default(0.98),
-  /** seconds an automatic answer stays on the card, cancellable, before the server sends it (spec
-   *  2026-09-26 concierge memory D6, §6). Bounded so a typo can neither remove the undo window nor
-   *  leave a tab waiting for ten minutes. */
+  /** TER-642: the default similarity bands of an automatic answer (cosine 0..1 between the card's
+   *  question and the precedent's, on the normalised question alone — TER-204), for a person with too
+   *  little history to calibrate and no thresholds pinned by hand. From HIGH the answer is sent at once;
+   *  from LOW it is suggested and, with "Responder sozinho" on, sent after the countdown; below LOW
+   *  nothing is suggested. The worst opposite-meaning pair measured scores 0.948 and a repeat with
+   *  another header or options 1.0. LOW above HIGH is read as HIGH. */
+  AUTO_ANSWER_HIGH_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.95),
+  AUTO_ANSWER_LOW_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.85),
+  /** seconds a suggested automatic answer stays on the card, cancellable, before the server sends it
+   *  (spec 2026-09-26 concierge memory D6, §6); it only counts while termhub is in focus (TER-642).
+   *  Bounded so a typo can neither remove the undo window nor leave a tab waiting for ten minutes. */
   AUTO_ANSWER_DELAY_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
-  /** the least cosine similarity (0..1) between a card's question and the cited decision's question for
-   *  `answer_tab_question` to schedule an automatic answer (spec 2026-09-26 concierge memory D6): the
-   *  model judges "the same question", the server checks it is at least close. Below it, a suggestion. */
-  AUTO_ANSWER_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
   /** at most this many concierge wake turns per conversation per hour (spec 2026-09-26 concierge
    *  memory D10): each is a run on the person's own Claude account. 0 disables every wake. */
   AUTO_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(12),
@@ -301,9 +301,9 @@ export const config = {
       : null,
   chatFiles: { dir: env.CHAT_FILES_DIR, quotaBytes: env.CHAT_FILES_QUOTA_BYTES },
   embeddings: env.EMBED_URL && env.EMBED_SECRET ? { url: env.EMBED_URL.replace(/\/$/, ''), secret: env.EMBED_SECRET } : null,
-  decisionSuggestThreshold: env.DECISION_SUGGEST_THRESHOLD,
+  autoAnswerHigh: env.AUTO_ANSWER_HIGH_SIMILARITY,
+  autoAnswerLow: Math.min(env.AUTO_ANSWER_LOW_SIMILARITY, env.AUTO_ANSWER_HIGH_SIMILARITY),
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
-  autoAnswerMinSimilarity: env.AUTO_ANSWER_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
   securityEventRetentionDays: env.SECURITY_EVENT_RETENTION_DAYS,
   automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,

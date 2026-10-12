@@ -12,6 +12,7 @@ const { authState, legalApi, dataMounted } = vi.hoisted(() => ({
       user: { deletion_scheduled_at: null as string | null } as { deletion_scheduled_at: string | null } | null,
       loading: false,
       legal: { pending: [], upcoming: [] } as LegalStatus,
+      can: () => false,
       setLegal: vi.fn(),
       logout: vi.fn(async () => {}),
     },

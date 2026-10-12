@@ -164,5 +164,10 @@
   "Nenhuma fala reconhecida": "No se reconoció ninguna voz",
   "Gravação muito curta": "Grabación demasiado corta",
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Respuesta automática cancelada: el trabajo automático se pausó o se desactivó.",
-  "Opção recomendada pelo agente": "Opción recomendada por el agente"
+  "Opção recomendada pelo agente": "Opción recomendada por el agente",
+  "Resposta automática pausada, faltam {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}": "Respuesta automática en pausa, faltan {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}",
+  "Resposta automática pausada, faltam {{time}} — «{{answer}}». Motivo: {{reason}}": "Respuesta automática en pausa, faltan {{time}} — «{{answer}}». Motivo: {{reason}}",
+  "Respondendo sozinho — «{{answer}}» ({{description}}). Motivo: {{reason}}": "Respondiendo solo — «{{answer}}» ({{description}}). Motivo: {{reason}}",
+  "Respondendo sozinho — «{{answer}}». Motivo: {{reason}}": "Respondiendo solo — «{{answer}}». Motivo: {{reason}}",
+  "uma anotação diz «{{answer}}» para «{{question}}» em {{project}}, {{date}}": "una anotación dice «{{answer}}» para «{{question}}» en {{project}}, {{date}}"
 }

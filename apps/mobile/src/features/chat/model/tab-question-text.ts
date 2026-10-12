@@ -31,6 +31,29 @@ export function autoAnswerSeconds(dueAt: string, now = Date.now()): number {
   return Math.max(0, Math.ceil((Date.parse(dueAt) - now) / 1000));
 }
 
+/** Whole seconds left of a paused countdown (TER-642), from its `remaining_ms`; never negative. */
+export function pausedSeconds(remainingMs: number | undefined): number {
+  return Math.max(0, Math.ceil((remainingMs ?? 0) / 1000));
+}
+
+/** The countdown's own line (TER-642), by what the server says of it: paused (termhub is in focus
+ * nowhere, so the time left stands still), being sent at once (`band: 'high'`, no timer), or counting.
+ * `description` is the chosen options' own (`choiceAnswerDescription`), shown when there is one. */
+export function autoAnswerLine(mode: 'paused' | 'immediate' | 'counting', values: { time: string; answer: string; description: string | null; reason: string }): string {
+  if (mode === 'paused') {
+    return values.description
+      ? t('Resposta automática pausada, faltam {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', values)
+      : t('Resposta automática pausada, faltam {{time}} — «{{answer}}». Motivo: {{reason}}', values);
+  }
+  if (mode === 'immediate') {
+    const { answer, description, reason } = values;
+    return description ? t('Respondendo sozinho — «{{answer}}» ({{description}}). Motivo: {{reason}}', { answer, description, reason }) : t('Respondendo sozinho — «{{answer}}». Motivo: {{reason}}', { answer, reason });
+  }
+  return values.description
+    ? t('Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', values)
+    : t('Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}', values);
+}
+
 /** What a `ChoiceAnswer` would say, one value per question, no question text (the countdown/auto-answer
  * lines only ever show what would be sent, never restate what was asked). */
 export function choiceAnswerLabel(payload: { questions: TabQuestionItem[] }, answer: ChoiceAnswerLike): string {
@@ -135,11 +158,17 @@ function suggestionValue(item: TabQuestionItem, hint: TabQuestionSuggestionItem)
   return hint.text ?? hint.selected.map((i) => item.options[i]?.label ?? '?').join(', ');
 }
 
+/** A memory suggestion backed by a concierge note instead of a past answer (TER-642): no decision id
+ * and not the concierge's own suggestion. It has no decision to forget, and the person answered nothing. */
+export const isNoteSuggestion = (hint: TabQuestionSuggestionItem): boolean => !hint.decision_id && hint.by !== 'concierge';
+
 /** "você respondeu «X» a «pergunta» em termhub, 24/09/2026": the past-decision sentence, reused as the
- * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). */
+ * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`).
+ * A note-backed one says so instead: the person never answered that. */
 export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
   const date = formatDate(hint.source.answered_at);
   const project = hint.source.project_name ?? t('sem projeto');
+  if (isNoteSuggestion(hint)) return t('uma anotação diz «{{answer}}» para «{{question}}» em {{project}}, {{date}}', { answer: suggestionValue(item, hint), question: hint.source.question, project, date });
   return t('você respondeu «{{answer}}» a «{{question}}» em {{project}}, {{date}}', { answer: suggestionValue(item, hint), question: hint.source.question, project, date });
 }
 

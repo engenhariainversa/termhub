@@ -1,4 +1,7 @@
 {
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._one": "Limiares ajustados pelo seu histórico ({{count}} resposta).",
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._other": "Limiares ajustados pelo seu histórico ({{count}} respostas).",
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._zero": "Limiares ajustados pelo seu histórico ({{count}} respostas).",
   "Retomar {{count}} abas?_one": "Retomar {{count}} aba?",
   "Retomar {{count}} abas?_other": "Retomar {{count}} abas?",
   "{{count}} abas retomadas_one": "{{count}} aba retomada",

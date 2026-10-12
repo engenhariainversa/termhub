@@ -21,6 +21,10 @@ export interface AutoDecisionView {
    *  recommended in a tab with an automatic run — screens show its reason in the reader's language
    *  ("Opção recomendada pelo agente") and no sources. Absent on an action card. */
   by?: AutoAnswerBy;
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent on an action card and on anything from before. */
+  score?: number;
+  thresholds?: { high: number; low: number };
 }
 
 /** What a caller knows before resolving: the reason and the cited refs (`kind:id`), or null for no badge. */
@@ -28,6 +32,8 @@ export interface AutoDecisionInput {
   reason: string | null;
   refs: string[];
   by?: AutoAnswerBy;
+  score?: number;
+  thresholds?: { high: number; low: number };
 }
 
 /** The tools whose optional `sources`/`reason` mark a send as decided from memory (TER-641). */
@@ -66,6 +72,7 @@ export async function describeAutoDecisions(repos: Pick<Repositories, 'chatDecis
         return { ref, question: d ? d.question : null, answer: d ? answerText(d) : null };
       }),
       ...(input.by ? { by: input.by } : {}),
+      ...(input.score !== undefined && input.thresholds ? { score: input.score, thresholds: input.thresholds } : {}),
     };
   });
 }

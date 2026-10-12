@@ -295,6 +295,20 @@ export type TabLimitNotice = Prisma.TabLimitNoticeModel
  */
 export type TabQuestion = Prisma.TabQuestionModel
 /**
+ * Model ChatAutoSample
+ * TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+ * thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+ * `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+ * `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+ */
+export type ChatAutoSample = Prisma.ChatAutoSampleModel
+/**
+ * Model ChatFocus
+ * TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+ * A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+ */
+export type ChatFocus = Prisma.ChatFocusModel
+/**
  * Model ChatDecision
  * A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
  * similar questions later (spec 2026-09-26). `embedding` is pgvector, read and written in raw SQL.

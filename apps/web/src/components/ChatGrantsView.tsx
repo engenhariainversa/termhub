@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
 import type { ChatDefault, ChatGrantListItem } from '../lib/types';
+import { ChatAutoThresholds } from './ChatAutoThresholds';
 import { untilLabel } from './chat/grant-time';
 import { endedAtLabel, GRANT_STATE_LABEL, grantOriginLabel, grantTitleLabel } from './chat/grant-list-text';
 import { i18n, useTranslation } from '../i18n';
@@ -15,7 +16,7 @@ const title = (g: ChatGrantListItem) => `${grantTitleLabel(g)}${g.kind === 'tab'
  * "Permissões do chat" (spec 2026-09-26 §4.2, §6): what the chat was allowed to do without asking, in
  * every conversation — trusted tabs, trusted projects and standing grants ("Liberar sem prazo", which
  * have no expiry and outlive their conversation), the grants in force with Revogar, and the
- * paged history. Reads on open, after a revoke and on "Carregar mais"; no live updates.
+ * paged history. Also the thresholds of an automatic answer from memory (TER-642, `ChatAutoThresholds`). Reads on open, after a revoke and on "Carregar mais"; no live updates.
  */
 export function ChatGrantsView() {
   const { t } = useTranslation();
@@ -130,6 +131,7 @@ export function ChatGrantsView() {
           </ul>
         </section>
       )}
+      <ChatAutoThresholds onError={setError} />
       <section aria-labelledby="chat-grants-active" className="space-y-2">
         <h2 id="chat-grants-active" className="text-sm font-semibold text-fg">
           {t('Ativas')}

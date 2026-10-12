@@ -1279,6 +1279,10 @@ export interface AutoDecision {
   sources: { ref: string; question: string | null; answer: string | null }[];
   /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
   by?: TabQuestionAutoAnswer['by'];
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent from an older server and on an action card. */
+  score?: number;
+  thresholds?: AutoThresholdPair;
 }
 
 /** Mirrors the server's `SubagentStatus` (apps/server/src/chat/stream.ts). */
@@ -1432,7 +1436,8 @@ export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
  * indexes (the mapping is done server-side); `text` is set instead for a free-text past answer. */
 export interface TabQuestionSuggestionItem {
   question_index: number;
-  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2). */
+  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2), and
+   *  on one backed by a concierge note instead of a past decision (TER-642: `sources` is `['note:<id>']`). */
   decision_id: string;
   similarity: number;
   selected: number[];
@@ -1449,6 +1454,23 @@ export interface TabQuestionSuggestion {
   items: TabQuestionSuggestionItem[];
 }
 
+/** The similarity thresholds of an automatic answer (TER-642), cosine 0.5–1: from `high` it is sent at
+ * once, from `low` suggested and sent when its countdown runs out, below `low` nothing. */
+export interface AutoThresholdPair {
+  high: number;
+  low: number;
+}
+/** Mirrors the server's `AutoThresholdsView`: the thresholds in force for this person, where they come
+ * from (`manual`: pinned by hand; `calibrated`: from their own answers; `default`: too little history),
+ * the defaults, how many of their answers calibration has seen and how many it needs. */
+export interface AutoThresholds extends AutoThresholdPair {
+  source: 'manual' | 'calibrated' | 'default';
+  defaults: AutoThresholdPair;
+  samples: number;
+  min_samples: number;
+  calibrated_at: string | null;
+}
+
 /** A countdown that sends `answer` by itself at `due_at` unless the person cancels it (spec 2026-09-26
  * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call,
  * `'automation'` the option the agent recommended in a tab with an automatic run (agentic board D18). */
@@ -1462,6 +1484,16 @@ export interface TabQuestionAutoAnswer {
   error_code?: string;
   decided_by?: string;
   claimed_at?: string;
+  // TER-642, all absent from an older server. `score`/`thresholds`/`band` say what led to an answer
+  // backed by memory (`band` 'high': sent at once, no real countdown; 'mid': after the countdown).
+  // `focus`: the countdown only runs while termhub is in focus; `paused` with `remaining_ms` left while
+  // it is not — `due_at` then means nothing until the server republishes the card with a fresh one.
+  score?: number;
+  thresholds?: AutoThresholdPair;
+  band?: 'high' | 'mid';
+  focus?: boolean;
+  paused?: boolean;
+  remaining_ms?: number;
 }
 
 interface TabQuestionBase {
@@ -1530,6 +1562,11 @@ export interface ChatMemory {
   available: boolean;
   count: number;
   notes: number;
+  /** TER-642; all three absent from an older server. `auto_delay_seconds` is the countdown of a
+   *  suggested answer, `focus_beat_seconds` how often a screen in focus says so (`POST /chat/focus`). */
+  auto_thresholds?: AutoThresholds;
+  auto_delay_seconds?: number;
+  focus_beat_seconds?: number;
 }
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
