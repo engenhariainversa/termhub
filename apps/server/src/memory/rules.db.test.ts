@@ -67,14 +67,20 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('current rules (Postgres)'
 
     const approved = await approveRule(repos, ownerId, proposals[0]!.id, {}, deps());
     expect(approved.status).toBe('approved');
-    const superseded = await repos.memoryRules.supersededRefs(ownerId);
-    expect([...superseded].sort()).toEqual([...proposals[0]!.source_refs].sort());
+    const sourceIds = proposals[0]!.source_refs.map((r) => r.slice('note:'.length));
+    const statuses = async () => (await repos.memoryItems.findManyForOwner(sourceIds, ownerId)).map((n) => n.status);
+    expect(await statuses()).toEqual(['superseded', 'superseded', 'superseded', 'superseded']);
+    // the prompts' current rules (TER-1011) have the rule's note and none of its sources
+    expect((await repos.memoryItems.currentNotes(ownerId, projectIds[0]!, 20)).map((n) => n.id)).toEqual([approved.note_id]);
+    // each source names the rule as what replaced it
+    const by = await repos.memoryStatus.supersedersOf(ownerId, proposals[0]!.source_refs);
+    expect([...by.values()].map((s) => s.ref)).toEqual(Array(4).fill(`note:${approved.note_id}`));
     // the rule's own note does not make a new proposal with its sources
     ({ rules } = await refreshRules(repos, ownerId, deps()));
     expect(rules.filter((r) => r.status === 'proposed')).toHaveLength(0);
 
     await removeRule(repos, ownerId, approved.id);
-    expect((await repos.memoryRules.supersededRefs(ownerId)).size).toBe(0);
+    expect(await statuses()).toEqual(['current', 'current', 'current', 'current']);
   });
 
   it('pairs notes whose embeddings are alike, whatever their words', async () => {

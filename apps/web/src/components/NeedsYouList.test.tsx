@@ -18,7 +18,7 @@ function machine(id: string, name = id): Machine {
     agent_version: null,
     agent_last_seen_at: null,
     agent_auto_update: false,
-    claude_auto_swap: false,
+    claude_auto_swap: false, ai_usage_query: true,
     is_local: false,
     owner_id: 'u1',
     owner_name: null,

@@ -25,6 +25,9 @@ function decision(over: Partial<TChatDecision> & { id: string }): TChatDecision 
     suggested_count: 2,
     accepted_count: 1,
     created_at: '2026-09-20T10:00:00.000Z',
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -37,6 +40,9 @@ function note(over: Partial<TConciergeNote> & { id: string }): TConciergeNote {
     decision: 'Sim',
     reason: 'Você sempre isola em worktree',
     created_at: '2026-09-20T10:00:00.000Z',
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -361,6 +367,50 @@ describe('"Anotações do concierge" (spec D12/§8)', () => {
 
     expect(store.getState().notesError).toBe('Não foi possível esquecer a anotação');
     expect(store.getState().notes!.some((n) => n.id === 'n1')).toBe(true); // still there: the delete failed
+  });
+});
+
+describe('Desatualizada / Errada / Substituída por (TER-1013)', () => {
+  it('setStatus marks a decision and "current" undoes it, over the mock server', async () => {
+    const { store } = await setup();
+    await store.getState().load();
+    expect(await store.getState().setStatus('decision', 'd-worktree', 'wrong')).toBe(true);
+    expect(store.getState().decisions!.find((d) => d.id === 'd-worktree')!.status).toBe('wrong');
+    expect(store.getState().statusBusyRef).toBeNull();
+
+    await store.getState().setStatus('decision', 'd-worktree', 'current');
+    expect(store.getState().decisions!.find((d) => d.id === 'd-worktree')).toMatchObject({ status: 'current', superseded_by: null });
+  });
+
+  it('superseded names the replacing item; the picker leaves out the item itself and marked ones', async () => {
+    const { store } = await setup();
+    await store.getState().load();
+    const options = await store.getState().searchReplacements('', 'decision:d-worktree');
+    expect(options!.map((o) => o.ref)).toEqual(['decision:d-branch']);
+
+    await store.getState().setStatus('decision', 'd-worktree', 'superseded', 'decision:d-branch');
+    expect(store.getState().decisions!.find((d) => d.id === 'd-worktree')).toMatchObject({
+      status: 'superseded',
+      superseded_by: { ref: 'decision:d-branch', title: 'Qual branch a partir de main?' },
+    });
+    expect(await store.getState().searchReplacements('', 'decision:d-branch')).toEqual([]);
+  });
+
+  it('a refused replacement shows the server\'s message on the decisions list', async () => {
+    const { store } = await setup();
+    await store.getState().load();
+    expect(await store.getState().setStatus('decision', 'd-worktree', 'superseded', 'decision:d-worktree')).toBe(false);
+    expect(store.getState().error).toBe('Um item não pode substituir a si mesmo');
+    expect(store.getState().decisions!.find((d) => d.id === 'd-worktree')!.status).toBe('current');
+  });
+
+  it('a note\'s failure goes to notesError', async () => {
+    const { store, api } = await setup();
+    jest.spyOn(api, 'chatNotes').mockResolvedValueOnce({ notes: [note({ id: 'n1' })], next_cursor: null });
+    await store.getState().loadNotes();
+    jest.spyOn(api, 'setChatNoteStatus').mockRejectedValueOnce(new Error('boom'));
+    await store.getState().setStatus('note', 'n1', 'outdated');
+    expect(store.getState().notesError).toBe('Não foi possível alterar o estado do item');
   });
 });
 

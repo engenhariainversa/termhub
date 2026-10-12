@@ -9,7 +9,7 @@ import type { MemoryRule, RuleSourceRow } from '../db/repositories/memory-rules.
 import type { Embedder } from '../chat/embeddings.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
-import { indexNote } from './index-items.js';
+import { indexNote, noteItem } from './index-items.js';
 import { consolidate, type ProjectPolicy, type RulePolicy, type RuleSource } from './rules.js';
 
 /**
@@ -59,8 +59,8 @@ async function ownedProject(repos: Repositories, ownerId: string, projectId: str
 
 /**
  * Consolidates the owner's current notes and decisions into proposals and stores them (`syncProposals`),
- * after settling policy proposals whose cards were decided. Answers every row, newest first, and the
- * sources by ref (for the screen to show where each rule came from).
+ * after settling policy proposals whose cards were decided. Answers every row, newest first, and every
+ * source by ref, the superseded ones too (for the screen to show where each rule came from).
  */
 export async function refreshRules(repos: Repositories, ownerId: string, deps: RulesDeps): Promise<{ rules: MemoryRule[]; sources: Map<string, RuleSourceRow> }> {
   const now = deps.now ?? new Date();
@@ -68,7 +68,7 @@ export async function refreshRules(repos: Repositories, ownerId: string, deps: R
     if (rule.status === 'awaiting_confirmation') await settlePolicy(repos, rule, deps);
   }
   const rows = await repos.memoryRules.listSources(ownerId);
-  const sources: RuleSource[] = rows.map((r) => ({ ref: r.ref, project_id: r.project_id, title: r.title, statement: statementOf(r), created_at: r.created_at }));
+  const sources: RuleSource[] = rows.filter((r) => r.current).map((r) => ({ ref: r.ref, project_id: r.project_id, title: r.title, statement: statementOf(r), created_at: r.created_at }));
   let pairs: [string, string][] = [];
   if (deps.embedder) {
     try {
@@ -92,7 +92,8 @@ export async function refreshRules(repos: Repositories, ownerId: string, deps: R
 
 /**
  * "Aprovar". A `rule` becomes `approved` (with the text the person may have edited) and is indexed as a
- * note of theirs (trust `person`), so `search_memory` finds the rule where it used to find its sources. A
+ * note of theirs (trust `person`), so `search_memory` and the prompts' current rules (TER-1011) have the
+ * rule where they used to have its sources, which are marked superseded (`supersedeSources`). A
  * `policy` never changes the Setup here: it asks one `set_automation_policy` card per project still the
  * owner's and waits (`awaiting_confirmation`); only an approved card applies it (`applyPolicyCard`).
  */
@@ -102,16 +103,15 @@ export async function approveRule(repos: Repositories, ownerId: string, id: stri
   if (rule.status !== 'proposed') throw new HttpError(409, msg('Esta proposta já foi decidida'), 'RULE_DECIDED');
   if (rule.kind === 'rule') {
     const text = input.text?.trim() || rule.text;
-    const note = await indexNote(
-      repos,
-      { owner_id: ownerId, project_id: rule.project_id, question: 'Regra vigente', decision: text, reason: 'Regra aprovada pela pessoa na tela Memória.', sources: rule.source_refs, trust: 'person' },
-      deps,
-    );
-    const approved = await repos.memoryRules.decide(id, ownerId, ['proposed'], 'approved', ownerId, { text, note_id: note.id });
+    // A rule the person approved is theirs; a `record_decision` note is the concierge's reading.
+    const item = noteItem({ owner_id: ownerId, project_id: rule.project_id, question: 'Regra vigente', decision: text, reason: 'Regra aprovada pela pessoa na tela Memória.', sources: rule.source_refs });
+    const note = await indexNote(repos, { ...item, trust: 'person' }, deps);
+    const approved = note ? await repos.memoryRules.decide(id, ownerId, ['proposed'], 'approved', ownerId, { text, note_id: note.id }) : null;
     if (!approved) {
-      await repos.memoryItems.deleteNote(note.id, ownerId);
+      if (note) await repos.memoryItems.deleteNote(note.id, ownerId);
       throw new HttpError(409, msg('Esta proposta já foi decidida'), 'RULE_DECIDED');
     }
+    await repos.memoryRules.supersedeSources(ownerId, approved.source_refs);
     return approved;
   }
   const policy = rule.policy;
@@ -140,6 +140,7 @@ export async function removeRule(repos: Repositories, ownerId: string, id: strin
   const removed = await repos.memoryRules.deleteApproved(id, ownerId);
   if (!removed) throw notFound();
   if (removed.note_id) await repos.memoryItems.deleteNote(removed.note_id, ownerId);
+  await repos.memoryRules.restoreSources(ownerId, removed.source_refs);
 }
 
 /**
@@ -195,5 +196,6 @@ async function settlePolicy(repos: Repositories, rule: MemoryRule, deps: RulesDe
   const fresh = await repos.memoryRules.findById(rule.id);
   if (!fresh || fresh.status !== 'awaiting_confirmation') return;
   const took = (fresh.policy?.applied ?? []).length > 0;
-  await repos.memoryRules.decide(rule.id, rule.owner_id, ['awaiting_confirmation'], took ? 'approved' : 'rejected', fresh.decided_by);
+  const settled = await repos.memoryRules.decide(rule.id, rule.owner_id, ['awaiting_confirmation'], took ? 'approved' : 'rejected', fresh.decided_by);
+  if (settled?.status === 'approved') await repos.memoryRules.supersedeSources(rule.owner_id, settled.source_refs);
 }

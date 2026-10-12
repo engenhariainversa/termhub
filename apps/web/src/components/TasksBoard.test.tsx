@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, useLocation } from 'react-router-dom';
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Machine, Project, Tab, Task, TaskColumn } from '../lib/types';
 
@@ -12,6 +12,7 @@ const moveMock = vi.fn();
 const pullRequestsMock = vi.fn();
 const linkTabMock = vi.fn();
 const detachTerminalMock = vi.fn();
+const updateMock = vi.fn();
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
@@ -25,6 +26,7 @@ vi.mock('../lib/api', () => {
         pullRequests: (...a: unknown[]) => pullRequestsMock(...a),
         linkTab: (...a: unknown[]) => linkTabMock(...a),
         detachTerminal: (...a: unknown[]) => detachTerminalMock(...a),
+        update: (...a: unknown[]) => updateMock(...a),
       },
     },
   };
@@ -55,18 +57,27 @@ const col = (id: string, name: string, category: TaskColumn['category'], positio
 const columns = [col('c3', 'Feito', 'done', 2), col('c1', 'A fazer', 'todo', 0), col('c2', 'Em revisão', 'doing', 1)];
 const board = (tasks: Task[]) => ({ tasks, columns, agent_column_id: null });
 
+/** The URL (path and query) and whether the entry was pushed by opening a card on the board. */
 function LocationProbe() {
   const l = useLocation();
-  return <output data-testid="location">{`${l.pathname}|${(l.state as { from?: string } | null)?.from ?? ''}`}</output>;
+  return <output data-testid="location">{`${l.pathname}${l.search}|${(l.state as { boardCard?: boolean } | null)?.boardCard ? 'pushed' : ''}`}</output>;
 }
 
-type Entry = string | { pathname: string; state: unknown };
+/** The browser's back button. */
+function BackButton() {
+  const navigate = useNavigate();
+  return <button onClick={() => navigate(-1)}>voltar</button>;
+}
 
-function mount(openTaskId?: string, entry: Entry = '/projects/p1/tasks') {
+type Entry = string | { pathname: string; search?: string; state?: unknown };
+
+/** The board, with `openCard`'s editor open through `?card=` (a pasted link) when given. */
+function mount(openCard?: string, entries: Entry[] = [openCard ? `/projects/p1/tasks?card=P1-${openCard}` : '/projects/p1/tasks']) {
   return render(
-    <MemoryRouter initialEntries={[entry]}>
-      <TasksBoard projectId="p1" openTaskId={openTaskId} />
+    <MemoryRouter initialEntries={entries} initialIndex={entries.length - 1}>
+      <TasksBoard projectId="p1" />
       <LocationProbe />
+      <BackButton />
     </MemoryRouter>,
   );
 }
@@ -229,11 +240,13 @@ describe('TasksBoard — choosing a machine to open a task terminal', () => {
 });
 
 describe('TasksBoard — card URLs', () => {
-  it('clicking a card\'s title navigates to /project/<ref>, remembering the section', async () => {
+  it('clicking a card\'s title opens its editor through ?card= on the board, without reloading the board', async () => {
     mount();
     await screen.findByText('t1');
     fireEvent.click(screen.getByText('t1'));
-    expect(screen.getByTestId('location').textContent).toBe('/project/P1-t1|/projects/p1/tasks');
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks?card=P1-t1|pushed');
+    expect(await screen.findByRole('heading', { name: 'P1-t1' })).toBeInTheDocument();
+    expect(listMock).toHaveBeenCalledTimes(1);
   });
 
   it('the "Abrir card" button is reachable by keyboard and opens the card', async () => {
@@ -243,16 +256,16 @@ describe('TasksBoard — card URLs', () => {
     openButton.focus();
     expect(openButton).toHaveFocus();
     fireEvent.click(openButton);
-    expect(screen.getByTestId('location').textContent).toBe('/project/P1-t1|/projects/p1/tasks');
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks?card=P1-t1|pushed');
   });
 
-  it('pressing Enter on the focused card navigates to its route', async () => {
+  it('pressing Enter on the focused card opens it', async () => {
     mount();
     await screen.findByText('t1');
     const card = screen.getByRole('button', { name: 'P1-t1 t1' });
     card.focus();
     fireEvent.keyDown(card, { key: 'Enter' });
-    expect(screen.getByTestId('location').textContent).toBe('/project/P1-t1|/projects/p1/tasks');
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks?card=P1-t1|pushed');
   });
 
   it('Enter on a nested control (the move button) does not also open the card', async () => {
@@ -274,17 +287,63 @@ describe('TasksBoard — card URLs', () => {
     expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
   });
 
-  it('shows the editor of the card in the URL; closing goes back to the section it came from', async () => {
-    mount('t1', { pathname: '/project/P1-t1', state: { from: '/projects/p1/backlog' } });
+  it('closing the editor goes back to the board as it was: same mount, no reload', async () => {
+    mount();
+    fireEvent.click(await screen.findByText('t1'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
+    expect(screen.queryByRole('heading', { name: 'P1-t1' })).not.toBeInTheDocument();
+    expect(screen.getByText('t1')).toBeInTheDocument();
+    expect(listMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('the browser\'s back button closes the editor', async () => {
+    mount();
+    fireEvent.click(await screen.findByText('t1'));
+    expect(await screen.findByRole('heading', { name: 'P1-t1' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'voltar' }));
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
+    expect(screen.queryByRole('heading', { name: 'P1-t1' })).not.toBeInTheDocument();
+  });
+
+  it('saving updates the card in place: no board reload, no loading state', async () => {
+    updateMock.mockResolvedValue({ task: task({ id: 't1', title: 'novo título' }) });
+    mount();
+    fireEvent.click(await screen.findByText('t1'));
+    fireEvent.change(await screen.findByLabelText('Título'), { target: { value: 'novo título' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    // optimistic: the new title is on the board before the server answers, and the board never unmounts
+    expect(screen.getByText('novo título')).toBeInTheDocument();
+    expect(screen.queryByText('Carregando o board…')).not.toBeInTheDocument();
+    await waitFor(() => expect(updateMock).toHaveBeenCalledWith('t1', { title: 'novo título' }));
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
+    expect(listMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a pasted ?card= link opens the editor; closing it drops the parameter', async () => {
+    mount('t1');
     expect(await screen.findByRole('heading', { name: 'P1-t1' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
+    expect(screen.queryByRole('heading', { name: 'P1-t1' })).not.toBeInTheDocument();
+  });
+
+  it('a subtask\'s ref opens its parent card', async () => {
+    listMock.mockResolvedValue(board([epic('e1', 'Geral', 1), task({ id: 't1', type: 'story', subtasks: [task({ id: 's1', type: 'subtask', parent_id: 't1', epic_id: null, column_id: null })] })]));
+    mount('s1');
+    expect(await screen.findByRole('heading', { name: 'P1-t1' })).toBeInTheDocument();
+  });
+
+  it('a card opened from the Backlog goes back there when closed', async () => {
+    mount(undefined, ['/projects/p1/backlog', { pathname: '/projects/p1/tasks', search: '?card=P1-t1', state: { boardCard: true } }]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
     expect(screen.getByTestId('location').textContent).toBe('/projects/p1/backlog|');
   });
 
-  it('closing a card opened from a pasted link goes to the board', async () => {
-    mount('t1', '/project/P1-t1');
-    fireEvent.click(await screen.findByRole('button', { name: 'Fechar' }));
-    expect(screen.getByTestId('location').textContent).toBe('/projects/p1/tasks|');
+  it('an unknown ref opens nothing', async () => {
+    mount('nope');
+    await screen.findByText('t1');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 

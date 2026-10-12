@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { memoryCode } from '../chat/embeddings.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { LessonMeta, NewMemoryItem } from '../db/repositories/memory-items.js';
-import { lessonIndexText, splitNote } from '../lessons/note.js';
+import { headingOnly, lessonIndexText, splitNote } from '../lessons/note.js';
 import { embedInserted, type MemoryDeps } from './index-items.js';
 import { cleanMemoryText, ITEM_TEXT_MAX } from './text.js';
 
@@ -58,7 +58,8 @@ const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex
 
 /**
  * Indexes one project's note (spec 2026-09-27 failure lessons §4): the person's own text
- * (`splitNote`'s `sections`) as `project_note` chunks, trust `person`, one `source_id` (`note:<pid>`)
+ * (`splitNote`'s `sections`, minus the ones that are only a heading) as `project_note` chunks, trust
+ * `person`, one `source_id` (`note:<pid>`)
  * with a **running** `chunk_index` across every section — a section longer than `ITEM_TEXT_MAX`
  * becomes several consecutive chunks, never truncated. `upsertMany` writes the current sections, then
  * `deleteChunksFrom` trims whatever tail is left over from a note that used to have more sections (or
@@ -92,7 +93,8 @@ export async function indexProjectNote(repos: Repositories, projectId: string, d
 
     const noteSourceId = `note:${projectId}`;
     const sectionItems: NewMemoryItem[] = [];
-    for (const s of sections) {
+    // A section that is only a heading is left out of the index (TER-1006); the trim below drops its old chunk.
+    for (const s of sections.filter((section) => !headingOnly(section))) {
       const cleaned = cleanMemoryText(s.text);
       for (let i = 0; i < cleaned.length; i += ITEM_TEXT_MAX) {
         sectionItems.push({

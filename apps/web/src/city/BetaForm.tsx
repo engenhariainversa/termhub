@@ -82,7 +82,7 @@ export function BetaForm() {
           linkedin: linkedin || null,
           github: github || null,
           // the e-mails that follow go out in the language the visitor is reading
-          locale: currentLocale() === 'en' ? 'en' : 'pt',
+          locale: currentLocale() === 'pt-BR' ? 'pt' : currentLocale(),
           website,
         }),
       });

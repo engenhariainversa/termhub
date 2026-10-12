@@ -9,6 +9,7 @@ import type { AutomationRun, AutomationRunPatch } from '../db/repositories/autom
 import type { Project, Task } from '../db/repositories/types.js';
 import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
+import { currentRulesBlock } from '../memory/current-rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cleanupRuns } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
@@ -119,14 +120,14 @@ const START_FAILURE_TEXT_MAX = 300;
 
 /**
  * Why a start failed, for the person (TER-987): the message of one of our own errors (a ControlError or an
- * HttpError says what to fix), in pt-BR (`message`) and English (`message_en`), the feed picks the reader's.
+ * HttpError says what to fix), in pt-BR (`message`), English (`message_en`) and Spanish (`message_es`); the feed picks the reader's.
  * Anything else (a bug, the database) has no message fit to show: nothing, the code says it.
  */
-function startFailureText(e: unknown): { message: string; message_en: string } | null {
+function startFailureText(e: unknown): { message: string; message_en: string; message_es: string } | null {
   const localized = (e as { localized?: unknown } | null)?.localized;
   if (!(localized instanceof LocalizedText)) return null;
   const clip = (s: string) => (s.length <= START_FAILURE_TEXT_MAX ? s : `${s.slice(0, START_FAILURE_TEXT_MAX - 1)}…`);
-  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)) };
+  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)), message_es: clip(t('es', localized)) };
 }
 
 /**
@@ -312,6 +313,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           policy: policyText(automation, repo?.deploy_workflow ?? null),
           custom: automation.prompts.implementer,
           description: task.description,
+          rules: await currentRulesBlock(repos, project.owner_id, project.id),
         });
       // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
       // has one, or a question would have nowhere to go (review I1)

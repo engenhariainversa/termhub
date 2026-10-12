@@ -85,3 +85,12 @@ export function automationSummaryText(s: { date: string; cards: number; merges: 
     body: s.waiting === 0 ? done : `${done}\n${t(locale, 'Esperando você: {{total}}', { total: s.waiting })}`,
   };
 }
+
+/** An AI account's CLI login expired on a machine (TER-1047): which CLI and which machine, nothing else. */
+export function aiLoginRequiredText(provider: 'claude' | 'chatgpt' | 'gemini' | 'antigravity', machineName: string, locale: Locale = DEFAULT_LOCALE): PushText {
+  const name = provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'Codex' : provider === 'gemini' ? 'Gemini' : 'Antigravity';
+  return {
+    title: t(locale, 'Login do {{provider}} expirou', { provider: name }),
+    body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
+  };
+}

@@ -1,6 +1,6 @@
 // The app's translation layer (i18n spec §2, §3). The pt-BR text is the key: `t('Salvar')` shows
-// "Salvar" in pt-BR (no catalog needed) and the `en` catalog's entry in English; a missing English
-// entry falls back to the pt-BR text, never to a key. The choice lives on this device only (MMKV);
+// "Salvar" in pt-BR (no catalog needed) and the `en`/`es` catalog's entry in English/Spanish; a
+// missing entry falls back to the pt-BR text, never to a key. The choice lives on this device only (MMKV);
 // null means automatic: the phone's language (`Intl`, no native module — this ships over OTA).
 //
 // Plain module, no React Native: models and viewmodels call `t()` too, and they run in the `logic`
@@ -12,20 +12,20 @@ import { mmkv } from '@/services/storage';
 import { ensurePluralRules } from './plural-rules';
 import { resources } from './resources';
 
-export type Locale = 'pt-BR' | 'en';
-export const LOCALES: Locale[] = ['pt-BR', 'en'];
+export type Locale = 'pt-BR' | 'en' | 'es';
+export const LOCALES: Locale[] = ['pt-BR', 'en', 'es'];
 export const DEFAULT_LOCALE: Locale = 'pt-BR';
 
 /** The MMKV key of the device's explicit choice; absent means automatic. Kept across a wipe. */
 export const LOCALE_STORAGE_KEY = 'locale';
 
 function isLocale(value: unknown): value is Locale {
-  return value === 'pt-BR' || value === 'en';
+  return value === 'pt-BR' || value === 'en' || value === 'es';
 }
 
 /**
- * Explicit choice → the system languages in order (first `pt*` → pt-BR, first `en*` → en) →
- * pt-BR. Anything else (Spanish, say) reads pt-BR until there is a catalog for it.
+ * Explicit choice → the system languages in order (first `pt*` → pt-BR, `en*` → en, `es*` → es)
+ * → pt-BR. Any other language reads pt-BR.
  */
 export function resolveLocale(choice: Locale | null, systemLanguages: readonly string[]): Locale {
   if (choice && isLocale(choice)) return choice;
@@ -33,6 +33,7 @@ export function resolveLocale(choice: Locale | null, systemLanguages: readonly s
     const lang = String(raw).toLowerCase();
     if (lang.startsWith('pt')) return 'pt-BR';
     if (lang.startsWith('en')) return 'en';
+    if (lang.startsWith('es')) return 'es';
   }
   return DEFAULT_LOCALE;
 }

@@ -3,7 +3,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
-import { installHooks, uninstallHooks } from './install.js';
+import { HOOK_SCRIPT_VERSION } from '@termhub/machine-ops';
+import { installHooks, readHooksStatus, uninstallHooks } from './install.js';
 
 /** The shell path for real: a `local` machine runs the same `sh` script, against a throwaway $HOME. */
 const machine = { id: 'm1', type: 'local' } as Machine;
@@ -229,5 +230,41 @@ describe('installHooks: Codex hooks.json on a local/ssh machine', () => {
     await writeFile(path.join(home, '.codex/hooks.json'), `{not json ${home}/.termhub/bin/termhub-hook`);
     await uninstallHooks(machine);
     expect(await read('.codex/hooks.json')).toBe(`{not json ${home}/.termhub/bin/termhub-hook`);
+  });
+});
+
+describe('readHooksStatus on a local/ssh machine', () => {
+  it('reads a bare home as nothing installed', async () => {
+    const s = await readHooksStatus(machine);
+    expect(s.script).toEqual({ installed: false, version: null, expected_version: HOOK_SCRIPT_VERSION, outdated: false });
+    expect(s.claude).toEqual({ present: false, state: 'missing', dirs: [] });
+    expect(s.codex.present).toBe(false);
+    expect(s.cursor.present).toBe(false);
+  });
+
+  it('reads what installHooks wrote as current, with the script at this release, and never answers the token', async () => {
+    await mkdir(path.join(home, '.claude_pedro'), { recursive: true });
+    await mkdir(path.join(home, '.codex'), { recursive: true });
+    await mkdir(path.join(home, '.cursor'), { recursive: true });
+    await installHooks(machine, 'thb_hk_abc', url, ['~/.claude_pedro']);
+    const s = await readHooksStatus(machine, ['~/.claude_pedro']);
+    expect(s.script).toMatchObject({ installed: true, version: HOOK_SCRIPT_VERSION, outdated: false });
+    expect(s.claude).toEqual({ present: true, state: 'current', dirs: [{ dir: '~/.claude', state: 'current' }, { dir: '~/.claude_pedro', state: 'current' }] });
+    expect(s.codex).toEqual({ present: true, state: 'current', notify: true, trusted: 'none' });
+    expect(s.cursor).toEqual({ present: true, state: 'current' });
+    expect(JSON.stringify(s)).not.toContain('thb_hk_abc');
+  });
+
+  it('reads the Codex trust the person gave and a CLI that showed up after the install', async () => {
+    await mkdir(path.join(home, '.codex'), { recursive: true });
+    await installHooks(machine, 'thb_hk_abc', url);
+    const hooksFile = path.join(home, '.codex/hooks.json');
+    const keys = ['user_prompt_submit', 'pre_tool_use', 'permission_request', 'post_tool_use', 'stop', 'interrupt'];
+    const config = await read('.codex/config.toml');
+    await writeFile(path.join(home, '.codex/config.toml'), `${config}\n${keys.map((k) => `[hooks.state."${hooksFile}:${k}:0:0"]\ntrusted_hash = "sha256:abc"\n`).join('\n')}`);
+    await mkdir(path.join(home, '.cursor'), { recursive: true });
+    const s = await readHooksStatus(machine);
+    expect(s.codex.trusted).toBe('all');
+    expect(s.cursor).toEqual({ present: true, state: 'missing' });
   });
 });

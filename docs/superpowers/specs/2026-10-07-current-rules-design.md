@@ -9,13 +9,15 @@ ever with the person's approval.
 - Concierge notes: `memory_items` kind `note`, chunk 0 (`record_decision`, `indexNote`). Their
   statement is the `Decisão:` line.
 - Card decisions: `chat_decisions`. Their statement is `question → answer`.
-- Sources an approved rule supersedes (and the rule's own note) are left out. When TER-1013/1014 land
-  their status columns (`wrong_at`, `superseded_at`, `expires_at`), `listSources` should add their
-  "current" condition (`currentSql`) too; this card does not add competing columns.
+- Only current sources are consolidated: not marked wrong, superseded or outdated, not expired
+  (`currentSql`, TER-1013) and not held in one conversation only (TER-1014). A decision counts only when
+  the person took it (`trust = 'person'`): an automatic answer is never a precedent (TER-1006).
+- Sources an approved rule supersedes carry `superseded_at`, so they are left out like any other
+  replaced item; the rule's own note is left out too. This card adds no status column of its own.
 
 ## Data
 
-New table `memory_rules` (migration `20261014090000_memory_rules`, additive):
+New table `memory_rules` (migration `20261017090000_memory_rules`, additive):
 `id`, `owner_id`, `project_id` (null = user level), `kind` (`rule` | `policy`), `status`
 (`proposed` | `awaiting_confirmation` | `approved` | `rejected`), `text`, `policy`
 (`{ autonomy?, max_parallel?, project_ids[], applied[] }`), `source_refs` (`note:<id>` /
@@ -48,8 +50,10 @@ Routes in `chat-memory.ts`, mounted for the web (`/api/chat`) and the app (`/api
 `GET /rules`, `POST /rules/:id/approve` (`{ text? }`), `POST /rules/:id/reject`, `DELETE /rules/:id`.
 
 - Approving a `rule`: `approved`, and indexed as a note of the person's (trust `person`,
-  title "Regra vigente"), so `search_memory` finds the rule; `search_memory` drops the refs approved rules
-  supersede.
+  title "Regra vigente"). Its sources still current get `superseded_at` (`supersedeSources`), the mark of
+  TER-1013, so `search_memory`, the precedents and the prompts' current rules (TER-1011, and the ai-memory
+  pages of TER-1019, which are nudged) have the rule's note instead of its sources. On the Memória screen
+  each source reads "Substituída por" the rule (`supersedersOf` also looks at approved rules).
 - Approving a `policy` never touches the Setup. It asks one `set_automation_policy` card per project
   (`askForAutomation`, key `memory_rule:<rule>:<project>`) and waits as `awaiting_confirmation`. The
   `onApproved('set_automation_policy')` hook (ignores the concierge's own cards, which have no such key)
@@ -57,7 +61,8 @@ Routes in `chat-memory.ts`, mounted for the web (`/api/chat`) and the app (`/api
   When every card is decided the rule is `approved` if any project took it, else `rejected` (the
   180 days start).
 - Rejecting stores `rejected` and `decided_at`.
-- "Remover" deletes an approved rule and its note; its sources apply again.
+- "Remover" deletes an approved rule and its note; its sources are current again (`restoreSources`),
+  except one the person replaced by hand in the meantime.
 
 ## UI
 

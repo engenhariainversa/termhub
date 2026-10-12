@@ -165,6 +165,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation runs and accou
     expect(await runs.countActive(projectId)).toBe(2);
   });
 
+  it('activeTabRefs lists the tabs of active runs with their card ref, scoped by owner (TER-1044)', async () => {
+    const run = (await claim('blue'))!;
+    expect(await runs.activeTabRefs(userId)).toEqual([]); // no tab yet
+    await runs.update(run.id, 'blue', { status: 'running', tab_id: 'tab-auto' });
+    const number = (await db.task.findUniqueOrThrow({ where: { id: taskId } })).number;
+    expect(await runs.activeTabRefs(userId)).toEqual([{ tab_id: 'tab-auto', ref: `${keyOf(projectId)}-${number}` }]);
+    expect(await runs.activeTabRefs(newId())).toEqual([]);
+    await runs.updateActive(run.id, 'blue', { status: 'done', ended_at: new Date() });
+    expect(await runs.activeTabRefs(userId)).toEqual([]);
+  });
+
   it('update writes the patch; bump returns the new count', async () => {
     const run = (await claim('blue'))!;
     const started = new Date('2026-10-05T10:00:00Z');

@@ -2,6 +2,7 @@ import type { PrismaClient } from '../prisma.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import type { RuleCandidate, RuleKind, RulePolicy, RuleStatus } from '../../memory/rules.js';
+import { currentSql } from '../../memory/status.js';
 
 /** A `memory_rules` row (TER-1010), with the project name joined in for display. */
 export interface MemoryRule {
@@ -21,8 +22,8 @@ export interface MemoryRule {
   created_at: string;
 }
 
-/** A current concierge note or a remembered decision, as consolidation reads it (raw, before the
- *  statement is built). Notes are chunk 0 of `kind: note`; never another owner's rows. */
+/** A concierge note or a remembered decision, as consolidation reads it (raw, before the statement is
+ *  built). Notes are chunk 0 of `kind: note`; never another owner's rows. */
 export interface RuleSourceRow {
   ref: string;
   project_id: string | null;
@@ -32,6 +33,10 @@ export interface RuleSourceRow {
   text: string;
   /** A decision's answer; null for a note. */
   answer: unknown;
+  /** Not marked wrong, superseded or outdated, not expired, and not held in one conversation only
+   *  (TER-1013, TER-1014): only these are consolidated. The others are listed for the screen, which
+   *  shows where an approved rule came from. */
+  current: boolean;
   created_at: string;
 }
 
@@ -71,16 +76,21 @@ export class MemoryRulesRepository {
     return row ? toRule(row) : null;
   }
 
-  /** The current concierge notes and remembered decisions of the owner. */
+  /**
+   * The owner's concierge notes and the decisions the person took themselves (an automatic answer is
+   * `derived`, never a precedent: TER-1006), each with whether it is `current`.
+   */
   async listSources(ownerId: string): Promise<RuleSourceRow[]> {
     const rows = await this.db.$queryRaw<(Omit<RuleSourceRow, 'created_at'> & { created_at: Date })[]>`
-      SELECT 'note:' || m.id AS ref, m.project_id, p.name AS project_name, m.title, m.text, NULL::jsonb AS answer, m.created_at
+      SELECT 'note:' || m.id AS ref, m.project_id, p.name AS project_name, m.title, m.text, NULL::jsonb AS answer,
+        (${currentSql('m')} AND COALESCE(m.scope, '') <> 'conversation') AS current, m.created_at
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.chunk_index = 0
       UNION ALL
-      SELECT 'decision:' || d.id, d.project_id, p.name, d.header, d.question, d.answer, d.created_at
+      SELECT 'decision:' || d.id, d.project_id, p.name, d.header, d.question, d.answer,
+        (${currentSql('d')} AND COALESCE(d.scope, '') <> 'conversation'), d.created_at
       FROM "chat_decisions" d LEFT JOIN "projects" p ON p.id = d.project_id
-      WHERE d.user_id = ${ownerId}`;
+      WHERE d.user_id = ${ownerId} AND d.trust = 'person'`;
     return rows.map((r) => ({ ...r, created_at: r.created_at.toISOString() }));
   }
 
@@ -173,9 +183,39 @@ export class MemoryRulesRepository {
     return rule;
   }
 
-  /** The refs approved rules supersede: `search_memory` leaves them out and returns the rule's note. */
-  async supersededRefs(ownerId: string): Promise<Set<string>> {
-    const rows = await this.db.memoryRule.findMany({ where: { ownerId, status: 'approved' }, select: { sourceRefs: true } });
-    return new Set(rows.flatMap((r) => (Array.isArray(r.sourceRefs) ? (r.sourceRefs as string[]) : [])));
+  /**
+   * An approved rule supersedes the notes and decisions it came from: each one still current gets
+   * `superseded_at`, the mark of TER-1013, so the search, the precedents and the prompts' current rules
+   * leave it out like any other replaced item.
+   */
+  async supersedeSources(ownerId: string, refs: string[]): Promise<void> {
+    const { notes, decisions } = splitRefs(refs);
+    await this.db.$transaction(async (tx) => {
+      if (notes.length > 0) await tx.$executeRaw`UPDATE "memory_items" m SET superseded_at = now() WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.id IN (${Prisma.join(notes)}) AND ${currentSql('m')}`;
+      if (decisions.length > 0) await tx.$executeRaw`UPDATE "chat_decisions" d SET superseded_at = now() WHERE d.user_id = ${ownerId} AND d.id IN (${Prisma.join(decisions)}) AND ${currentSql('d')}`;
+    });
   }
+
+  /**
+   * "Remover regra": the sources the rule superseded are current again. One the person replaced by hand
+   * since (another item's `supersedes` names it) stays superseded.
+   */
+  async restoreSources(ownerId: string, refs: string[]): Promise<void> {
+    const { notes, decisions } = splitRefs(refs);
+    const replaced = (ref: Prisma.Sql) => Prisma.sql`(
+      EXISTS (SELECT 1 FROM "memory_items" x WHERE x.owner_id = ${ownerId} AND x.supersedes = ${ref})
+      OR EXISTS (SELECT 1 FROM "chat_decisions" x WHERE x.user_id = ${ownerId} AND x.supersedes = ${ref}))`;
+    await this.db.$transaction(async (tx) => {
+      if (notes.length > 0)
+        await tx.$executeRaw`UPDATE "memory_items" m SET superseded_at = NULL WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.id IN (${Prisma.join(notes)}) AND NOT ${replaced(Prisma.sql`'note:' || m.id`)}`;
+      if (decisions.length > 0)
+        await tx.$executeRaw`UPDATE "chat_decisions" d SET superseded_at = NULL WHERE d.user_id = ${ownerId} AND d.id IN (${Prisma.join(decisions)}) AND NOT ${replaced(Prisma.sql`'decision:' || d.id`)}`;
+    });
+  }
+}
+
+/** The ids behind `note:<id>` and `decision:<id>` refs; any other ref is ignored. */
+function splitRefs(refs: string[]): { notes: string[]; decisions: string[] } {
+  const ids = (prefix: string) => refs.filter((r) => r.startsWith(prefix)).map((r) => r.slice(prefix.length));
+  return { notes: ids('note:'), decisions: ids('decision:') };
 }

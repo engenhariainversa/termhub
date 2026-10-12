@@ -18,6 +18,8 @@ export type AutomationEventKind =
   | 'merge_needs_approval'
   | 'deploy_ok'
   | 'deploy_failed'
+  // TER-1025: a deploy that failed on GitHub's side, run again ({ pr, sha, attempt, run_id, cause, url, workflow })
+  | 'deploy_retried'
   | 'release_ok'
   | 'release_failed'
   | 'quota_hit'
@@ -40,7 +42,11 @@ export type AutomationEventKind =
   // ({ account_id, from_project_id, to_project_id, via }), and a refused use of it elsewhere
   // ({ account_id, attempted_project_id, path, machine_id?, tab_id? })
   | 'account_exclusive_changed'
-  | 'account_exclusive_blocked';
+  | 'account_exclusive_blocked'
+  // TER-1025: a run that reported a GitHub error waits for GitHub ({ reason, attempt, tab_id }), and Claude's
+  // trust question of a termhub worktree answered by the server ({ tab_id })
+  | 'github_wait'
+  | 'trust_auto_accepted';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;
@@ -134,6 +140,11 @@ export class AutomationEventsRepository {
     const { count } = await this.db.automationEvent.updateMany({ where: { id }, data: { payload } });
     if (count === 0) return null;
     return map(await this.db.automationEvent.findUniqueOrThrow({ where: { id } }));
+  }
+
+  /** How many of the card's events of `kind` hold every pair of `match` in their payload. */
+  async countForTask(taskId: string, kind: AutomationEventKind, match: Record<string, string | number>): Promise<number> {
+    return this.db.automationEvent.count({ where: { taskId, kind, AND: Object.entries(match).map(([k, v]) => ({ payload: { path: [k], equals: v } })) } });
   }
 
   /** The card's event of `kind` whose payload holds every pair of `match` (a once-only claim), or null. */

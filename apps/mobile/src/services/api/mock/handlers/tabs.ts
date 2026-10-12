@@ -25,8 +25,13 @@ function seedItems(prefix: string, at: string, turns: number): TTabChatItem[] {
 
 export function seedTabs(state: MockState, now: number): void {
   const at = new Date(now - 10 * 60_000).toISOString();
-  const tab = (summary: Omit<TTabSummary, 'background' | 'finished' | 'state_at' | 'activity_verb'>, session: string | null, items: TTabChatItem[], screen: string): MockTab => ({
-    summary: { background: false, finished: false, state_at: at, activity_verb: null, ...summary },
+  const tab = (
+    summary: Omit<TTabSummary, 'background' | 'finished' | 'state_at' | 'activity_verb' | 'auto_ref'> & Partial<Pick<TTabSummary, 'auto_ref'>>,
+    session: string | null,
+    items: TTabChatItem[],
+    screen: string,
+  ): MockTab => ({
+    summary: { background: false, finished: false, state_at: at, activity_verb: null, auto_ref: null, ...summary },
     session,
     items,
     mode: 'default',
@@ -35,7 +40,7 @@ export function seedTabs(state: MockState, now: number): void {
   state.tabs.set(
     't-api',
     tab(
-      { id: 't-api', name: 'api', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', needs_you: false, activity: 'Bash', availability: 'ready' },
+      { id: 't-api', name: 'api', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', needs_you: false, activity: 'Bash', availability: 'ready', auto_ref: 'TER-42' },
       's-api',
       [
         ...seedItems('api', at, 3),
@@ -133,7 +138,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const id = `t-${randomId(6)}`;
     const at = new Date(ctx.now()).toISOString();
     state.tabs.set(id, {
-      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready' },
+      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null },
       session: `s-${randomId(6)}`,
       items: [{ kind: 'user', id: `${id}-u0`, at, text: body.prompt, images: 0 }],
       mode: 'default',

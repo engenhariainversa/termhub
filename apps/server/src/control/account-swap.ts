@@ -1,8 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import { linkClaudeSession } from '../ai/claude-session.js';
-import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
-import type { AiUsageWindow } from '../ai/types.js';
+import { getAccountUsage, type AiAccountUsage, type AiUsageWindow } from '../ai/index.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';

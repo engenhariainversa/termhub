@@ -1,6 +1,6 @@
 import { ATTACHMENT_LIMITS } from '@termhub/mobile-api';
 import type { TChatAttachment } from '@/services/api/contract';
-import { attachmentStatusText, checkPick, draftsReducer, formatBytes, invalidAttachments, isUploading, planAdd, thumbSize, uploadedAttachments, type PickedFile } from './attachments';
+import { attachmentStatusText, canRetryAttachment, checkPick, draftsReducer, formatBytes, invalidAttachments, isUploading, planAdd, thumbSize, uploadedAttachments, type PickedFile } from './attachments';
 
 const att = (over: Partial<TChatAttachment> & { id: string }): TChatAttachment => ({
   name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, status: 'pending', error_code: null, meta: null, created_at: '2026-09-26T00:00:00.000Z', ...over,
@@ -75,6 +75,15 @@ describe('copy', () => {
     expect(attachmentStatusText(att({ id: 'a' }))).toBe('processando…');
     expect(attachmentStatusText(att({ id: 'a', status: 'failed', error_code: 'ATTACHMENT_INVALID' }))).toBe('falhou: arquivo inválido');
     expect(attachmentStatusText(att({ id: 'a', status: 'ready' }))).toBeNull();
+  });
+
+  it('an unavailable transcription says why, and only it can be tried again (TER-1035)', () => {
+    const clip = (meta: Record<string, unknown> | null) => att({ id: 'c', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta });
+    expect(attachmentStatusText(clip({ reason: 'refused' }))).toBe('falhou: o serviço de transcrição recusou o acesso');
+    expect(attachmentStatusText(clip({ reason: 'unreachable' }))).toBe('falhou: serviço de transcrição fora do ar');
+    expect(attachmentStatusText(clip(null))).toBe('falhou: transcrição indisponível');
+    expect(canRetryAttachment(clip(null))).toBe(true);
+    expect(canRetryAttachment(att({ id: 'c', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_FAILED' }))).toBe(false);
   });
 });
 

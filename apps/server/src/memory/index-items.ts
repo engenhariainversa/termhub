@@ -2,7 +2,8 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { MemoryItem, MemoryTrust, NewMemoryItem } from '../db/repositories/memory-items.js';
+import type { DecisionScope } from '../db/repositories/decision-scope.js';
+import type { MemoryItem, NewMemoryItem } from '../db/repositories/memory-items.js';
 import { EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { newId } from '../lib/ids.js';
 import { cleanMemoryText, ITEM_TEXT_MAX, memoryText } from './text.js';
@@ -212,14 +213,43 @@ export async function indexTasks(repos: Repositories, ownerId: string, deps: Mem
  * here, this one throws: `record_decision` is a tool call, and the tool reports a failed write instead
  * of pretending the note was saved. The immediate embed, as always, is still best effort and fire-and-
  * forget — a failed embed never fails the note itself.
+ *
+ * TER-1015: with `supersedes`, the note replaces that older note or card decision in the same
+ * transaction (`insertNoteSuperseding`); when the target is no longer there to replace, nothing is
+ * written and this resolves null. With `embedding` (the caller already embedded `memoryText(item)` for
+ * its conflict check), that vector is stored right away instead of embedding the note a second time.
  */
 export async function indexNote(
   repos: Pick<Repositories, 'memoryItems'>,
-  note: { owner_id: string; project_id: string | null; question: string; decision: string; reason: string; sources: string[]; trust?: MemoryTrust },
-  deps: MemoryDeps,
-): Promise<MemoryItem> {
+  item: NewMemoryItem,
+  deps: MemoryDeps & { supersedes?: { kind: 'note' | 'decision'; id: string }; embedding?: { model: string; vector: number[] } },
+): Promise<MemoryItem | null> {
+  let row: MemoryItem | null;
+  if (deps.supersedes) row = await repos.memoryItems.insertNoteSuperseding(item, deps.supersedes);
+  else [row = null] = await repos.memoryItems.upsertMany([item]);
+  if (!row) return null;
+  if (deps.embedding) {
+    const { model, vector } = deps.embedding;
+    void repos.memoryItems.setEmbedding(row.id, vector, model).catch((err: unknown) => deps.log.warn({ count: 1, code: memoryCode(err) }, 'memory embed failed'));
+  } else if (deps.embedder) void embedInserted(repos, deps.embedder, [row], deps.log);
+  return row;
+}
+
+/** The `record_decision` note itself (spec D12/§5.2): `source_id` is its own id, minted here. */
+export function noteItem(note: {
+  owner_id: string;
+  project_id: string | null;
+  question: string;
+  decision: string;
+  reason: string;
+  sources: string[];
+  /** TER-1014: where it holds, the conversation it was taken in, and when it stops holding. */
+  scope?: DecisionScope;
+  conversation_id?: string | null;
+  expires_at?: Date | null;
+}): NewMemoryItem {
   const id = newId();
-  const item: NewMemoryItem = {
+  return {
     id,
     owner_id: note.owner_id,
     project_id: note.project_id,
@@ -228,14 +258,12 @@ export async function indexNote(
     chunk_index: 0,
     title: cleanMemoryText(note.question),
     text: cut(`Decisão: ${note.decision}\nMotivo: ${note.reason}\nFontes: ${note.sources.join(', ')}`),
-    // A rule the person approved (TER-1010) is theirs; a `record_decision` note is the concierge's reading.
-    trust: note.trust ?? 'derived',
+    trust: 'derived',
+    scope: note.scope ?? null,
+    conversation_id: note.conversation_id ?? null,
+    expires_at: note.expires_at ?? null,
     source_at: new Date(),
   };
-  const [inserted] = await repos.memoryItems.upsertMany([item]);
-  const row = inserted!;
-  if (deps.embedder) void embedInserted(repos, deps.embedder, [row], deps.log);
-  return row;
 }
 
 /**

@@ -9,6 +9,7 @@ import { syncTickets } from '../control/tickets.js';
 import { setupInputSchema, sourceIdentity, withSourcesFromLegacy } from '../setup/schema.js';
 import { forgetSync } from '../setup/tickets-sync.js';
 import { recordSetupChange } from '../automation/setup-tools.js';
+import { nudgeAiMemoryRules } from '../memory/ai-memory-sync.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -45,6 +46,9 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     // would reset the stored one, so keep it. A client that sends the block is the one that edits it.
     const sentAutomation = typeof request.body === 'object' && request.body !== null && 'automation' in request.body;
     if (stored.automation && !sentAutomation) data.automation = stored.automation;
+    // Same for ai_memory (TER-1019): a client from before it would turn the option off by leaving it out.
+    const sentAiMemory = typeof request.body === 'object' && request.body !== null && 'ai_memory' in request.body;
+    if (stored.ai_memory && !sentAiMemory) data.ai_memory = stored.ai_memory;
     const kept = new Set(data.ticket_sources.map(sourceIdentity));
     const saved = await repos.projectSetup.save(id, data);
     if (stored.automation) await recordSetupChange(repos, id, stored.automation, saved.data.automation, 'web');
@@ -54,6 +58,9 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     // the sources may have changed: "Sincronizar agora" right after saving must not answer the cached result
     forgetSync(id);
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
+    // Publishes (or, turned off, removes) the rule pages in the background; `fresh` retries checkouts
+    // that had no ai-memory, since the person may just have set it up.
+    if (saved.data.ai_memory?.publish_rules || stored.ai_memory?.publish_rules) nudgeAiMemoryRules(repos, id, request.log, { fresh: true });
     return { setup: saved };
   });
 

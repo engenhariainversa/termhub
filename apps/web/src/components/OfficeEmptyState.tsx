@@ -79,16 +79,16 @@ export function OfficeEmptyState({ project, tabs, machines, reachable, visible, 
   const { t } = useTranslation();
   const { statuses } = useData();
   const { can } = useAuth();
-  const { items, tabState } = useMonitor();
+  const { items, tabState, autoRuns } = useMonitor();
   const narrow = useNarrowWindow();
   const tap = useTapToOpen(onOpen);
   const [scene, setScene] = useState<OfficeScene | null>(null);
 
   // `tabState` reads a ref and never changes identity; `items` is what changes on a live push
   const model = useMemo<CityModel>(
-    () => buildCityModel(projectCity(project, tabs, machines, statuses, reachable), tabState),
+    () => buildCityModel(projectCity(project, tabs, machines, statuses, reachable), tabState, (id) => autoRuns?.get(id)),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `items` stands for the monitor's live state (see above)
-    [project, tabs, machines, statuses, reachable, tabState, items],
+    [project, tabs, machines, statuses, reachable, tabState, items, autoRuns],
   );
   const live = (tab: Tab) => ({ ...tab, ...pickState(tabState(tab.id)) });
 

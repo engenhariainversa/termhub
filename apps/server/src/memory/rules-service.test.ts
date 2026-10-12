@@ -9,7 +9,7 @@ import { setAutomationPolicy } from '../automation/setup-tools.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { MemoryRule } from '../db/repositories/memory-rules.js';
-import { applyPolicyCard, approveRule, policyCardKey, rejectRule, statementOf } from './rules-service.js';
+import { applyPolicyCard, approveRule, policyCardKey, rejectRule, removeRule, statementOf } from './rules-service.js';
 
 const log = { info: vi.fn(), warn: vi.fn() };
 const deps = { embedder: null, log, threshold: 0.9 };
@@ -50,6 +50,9 @@ function fakeRepos(current: MemoryRule) {
       setPolicy: vi.fn(async (_id: string, policy: MemoryRule['policy']) => {
         row = { ...row, policy };
       }),
+      supersedeSources: vi.fn(),
+      restoreSources: vi.fn(),
+      deleteApproved: vi.fn(async () => (row.status === 'approved' ? row : null)),
     },
     memoryItems: { upsertMany: vi.fn(async (items: { id: string }[]) => items), deleteNote: vi.fn() },
     projects: { findById: vi.fn(async (id: string) => ({ id, owner_id: id === 'px' ? 'u2' : 'u1' })) },
@@ -80,6 +83,7 @@ describe('approveRule', () => {
     expect(get().note_id).toBeTruthy();
     const [items] = vi.mocked(repos.memoryItems.upsertMany).mock.calls[0]!;
     expect(items[0]).toMatchObject({ kind: 'note', trust: 'person', owner_id: 'u1' });
+    expect(repos.memoryRules.supersedeSources).toHaveBeenCalledWith('u1', ['note:a', 'note:b']);
   });
 
   it('never changes the Setup for a policy: it asks one set_automation_policy card per project still the owner\'s', async () => {
@@ -92,11 +96,27 @@ describe('approveRule', () => {
       { tool: 'set_automation_policy', args: { project_id: 'p2', autonomy: 'merge' }, key: policyCardKey('r1', 'p2') },
     ]);
     expect(get()).toMatchObject({ status: 'awaiting_confirmation', policy: { project_ids: ['p1', 'p2'], applied: [] } });
+    expect(repos.memoryRules.supersedeSources).not.toHaveBeenCalled();
   });
 
   it('refuses a proposal already decided', async () => {
     const { repos } = fakeRepos(rule({ status: 'rejected' }));
     await expect(approveRule(repos, 'u1', 'r1', {}, deps)).rejects.toMatchObject({ statusCode: 409, code: 'RULE_DECIDED' });
+  });
+});
+
+describe('removeRule', () => {
+  it('removes an approved rule, forgets its note and makes its sources current again', async () => {
+    const { repos } = fakeRepos(rule({ status: 'approved', note_id: 'n9' }));
+    await removeRule(repos, 'u1', 'r1');
+    expect(repos.memoryItems.deleteNote).toHaveBeenCalledWith('n9', 'u1');
+    expect(repos.memoryRules.restoreSources).toHaveBeenCalledWith('u1', ['note:a', 'note:b']);
+  });
+
+  it('404s a proposal that was never approved', async () => {
+    const { repos } = fakeRepos(rule());
+    await expect(removeRule(repos, 'u1', 'r1')).rejects.toMatchObject({ statusCode: 404 });
+    expect(repos.memoryRules.restoreSources).not.toHaveBeenCalled();
   });
 });
 
@@ -120,6 +140,7 @@ describe('applyPolicyCard', () => {
     expect(ctx.approval?.actionId).toBe('a1');
     expect(input).toEqual({ project_id: 'p1', autonomy: 'merge' });
     expect(get()).toMatchObject({ status: 'approved', policy: { applied: ['p1'] } });
+    expect(repos.memoryRules.supersedeSources).toHaveBeenCalledWith('u1', ['note:a', 'note:b']);
   });
 
   it('leaves the concierge\'s own set_automation_policy cards alone', async () => {

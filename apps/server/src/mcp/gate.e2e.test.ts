@@ -766,12 +766,20 @@ it('a tab card keeps its tab\'s project on the row, so it outlives the tab (TER-
   expect(actions.insertPending).toHaveBeenCalledWith(expect.objectContaining({ tab_id: 't1', project_id: 'p1' }));
 });
 
+it('a tab card keeps its tab\'s name on the row, so a closed tab\'s card still names it (TER-1024)', async () => {
+  attachFakeTmux([]);
+  const { app, actions } = build({ gated: true });
+  await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
+  expect(actions.insertPending).toHaveBeenCalledWith(expect.objectContaining({ tab_id: 't1', tab_name: 'Terminal 1' }));
+});
+
 it('a card for a tab that does not resolve for this user keeps no project: nothing foreign is read (TER-986)', async () => {
   attachFakeTmux([]);
   const { app, actions, tabs } = build({ gated: true });
   tabs.delete('t1');
   await callTool(app, 'send_input', { tab_id: 't1', text: 'npm test' });
   expect(actions.insertPending).toHaveBeenCalledWith(expect.objectContaining({ tab_id: 't1', project_id: null }));
+  expect(actions.insertPending.mock.calls[0]![0]).not.toHaveProperty('tab_name');
 });
 
 // The gate origin (spec 2026-09-26 §4): a live run's stream tells `subagentOrigins` which subagent's

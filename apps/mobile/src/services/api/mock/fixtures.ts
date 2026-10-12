@@ -133,6 +133,9 @@ export function seedFixtures(state: MockState, now: number): void {
       suggested_count: 3,
       accepted_count: 2,
       created_at: new Date(now - 2 * 24 * 60 * 60_000).toISOString(),
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     },
     {
       id: 'd-branch',
@@ -146,6 +149,9 @@ export function seedFixtures(state: MockState, now: number): void {
       suggested_count: 1,
       accepted_count: 1,
       created_at: new Date(now - 6 * 60 * 60_000).toISOString(),
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     },
   ];
   state.decisions.push(...decisions);

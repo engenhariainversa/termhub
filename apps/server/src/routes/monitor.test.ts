@@ -21,6 +21,7 @@ function buildApp(ownerId: string | null = 'u1') {
       ]),
     },
     projects: { list: vi.fn(async () => [{ id: 'p1', name: 'p1' }]) },
+    automationRuns: { activeTabRefs: vi.fn(async () => [{ tab_id: 't1', ref: 'TER-7' }]) },
     machines: { list: vi.fn(async () => [{ id: 'm1', name: 'mac' }]) },
   } as unknown as Repositories;
   app.register((a) => monitorRoutes(a, repos), { prefix: '/monitor' });
@@ -42,5 +43,12 @@ describe('GET /monitor', () => {
     expect(repos.tabs.listOpenTerminals).toHaveBeenCalledWith('u1');
     expect(repos.projects.list).toHaveBeenCalledWith({ owner: 'u1' });
     expect(repos.machines.list).toHaveBeenCalledWith('u1');
+  });
+
+  it('/auto-runs lists the tabs of the scope\'s active automatic runs with their card ref (TER-1044)', async () => {
+    const { app, repos } = buildApp(null);
+    const body = (await app.inject({ method: 'GET', url: '/monitor/auto-runs' })).json();
+    expect(body).toEqual({ items: [{ tab_id: 't1', ref: 'TER-7' }] });
+    expect(repos.automationRuns.activeTabRefs).toHaveBeenCalledWith(null);
   });
 });

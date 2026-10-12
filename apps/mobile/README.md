@@ -46,7 +46,7 @@ src/services/
 src/ui/       Screen, Text, Button, Field, PinInput, Sheet, Card, Banner… (NativeWind v4)
 src/theme/tokens.ts  the termhub palette (CSS variables), both colour schemes
 src/i18n/     i18next setup, the language choice, date/number helpers (see "Languages")
-src/locales/  the English catalogs (and pt-BR plural forms), one JSON file per area
+src/locales/  the English and Spanish catalogs (and pt-BR plural forms), one JSON file per area
 test/         jest setup, fakes for MMKV/SecureStore/expo-device/expo-local-authentication/expo-notifications/the
               hardware key module, and shared test helpers (`test/helpers/enrolled-session.ts`,
               `test/helpers/ui-stores.ts`)
@@ -237,19 +237,19 @@ An `ios/` folder generated before this change stays iPhone-only (prebuild does n
 
 ## Languages (i18n)
 
-The app speaks pt-BR (the source language and the fallback) and English (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). `src/i18n` sets up `i18next` + `react-i18next` (plain JS, so a language change ships over OTA):
+The app speaks pt-BR (the source language and the fallback), English and Spanish (spec `docs/superpowers/specs/2026-10-04-i18n-english-design.md`). `src/i18n` sets up `i18next` + `react-i18next` (plain JS, so a language change ships over OTA):
 
-- **The pt-BR text is the key.** Views call `const { t } = useTranslation()` and write `t('Salvar')`; models, viewmodels and services import `t` from `@/i18n` and call it when the text is built. English lives in `src/locales/en/<area>.json`, one file per area of the source tree, merged in `src/i18n/resources.ts`; `src/locales/pt-BR/` holds only plural forms (`t('{{count}} abas', { count })` needs `_one`/`_other` in both languages). A label kept in a table is marked with `tk('…')` and translated where it is shown.
-- **Which language:** Ajustes → Idioma (Automático / Português (Brasil) / English), kept in MMKV on this device (it survives "Sair e remover este aparelho"); automatic follows the phone's language from `Intl` (no `expo-localization`, which is native): `pt*` → pt-BR, `en*` → English, anything else → pt-BR. Hermes has no `Intl.PluralRules`, so `src/i18n/plural-rules.ts` installs the CLDR rules of both languages.
+- **The pt-BR text is the key.** Views call `const { t } = useTranslation()` and write `t('Salvar')`; models, viewmodels and services import `t` from `@/i18n` and call it when the text is built. English lives in `src/locales/en/<area>.json` and Spanish in `src/locales/es/<area>.json` (same files, same keys), one file per area of the source tree, merged in `src/i18n/resources.ts`; `src/locales/pt-BR/` holds only plural forms (`t('{{count}} abas', { count })` needs `_one`/`_other` in every language). A label kept in a table is marked with `tk('…')` and translated where it is shown.
+- **Which language:** Ajustes → Idioma (Automático / Português (Brasil) / English / Español), kept in MMKV on this device (it survives "Sair e remover este aparelho"); automatic follows the phone's language from `Intl` (no `expo-localization`, which is native): `pt*` → pt-BR, `en*` → English, `es*` → Spanish, anything else → pt-BR. Hermes has no `Intl.PluralRules`, so `src/i18n/plural-rules.ts` installs the CLDR rules of the three languages.
 - **The server answers in the same language:** every HTTP call and socket upgrade sends `Accept-Language`, so API errors arrive translated; the app never re-translates server text.
 - **Dates and numbers** go through `src/i18n/format.ts` (`formatDate`, `formatTime`, …); no locale literal in `toLocale*`/`Intl`.
-- **`npm run i18n:check -w @termhub/mobile`** (also a jest test) fails on a key with no English entry, placeholders that differ, an unused entry, and — in the folders listed in `GUARDED` (all of `app/` and `src/`) — JSX text, text attributes (`title`, `label`, `placeholder`, `accessibilityLabel`…) or `Alert.alert` text outside `t()`. `// i18n-ignore` skips a line.
+- **`npm run i18n:check -w @termhub/mobile`** (also a jest test) fails on a key with no English or Spanish entry, placeholders that differ, an unused entry, and — in the folders listed in `GUARDED` (all of `app/` and `src/`) — JSX text, text attributes (`title`, `label`, `placeholder`, `accessibilityLabel`…) or `Alert.alert` text outside `t()`. `// i18n-ignore` skips a line.
 - **Tests run in pt-BR** (`TERMHUB_TEST_LOCALE` in the jest setup), so they query the Portuguese text; a test that needs English calls `setLocale('en')` and `setLocale(null)` afterwards.
 - The native permission texts in `app.json` (camera, microphone, Face ID…) stay pt-BR: translating them needs native localisation files and a new store build.
 
 ## Conventions
 
-- Code, comments and commits in English; every string a person sees goes through `t()` with the pt-BR text as key, and its English entry is added in the same change.
+- Code, comments and commits in English; every string a person sees goes through `t()` with the pt-BR text as key, and its English and Spanish entries are added in the same change.
 - Bundle / package id `dev.termhub.app`, URL scheme `termhub`.
 - Pure logic (`model/`) and viewmodels must not import React Native or `expo-router`: the `logic` jest project runs them in plain Node and fails otherwise.
 - The monorepo pins a single React version (root `package.json` `overrides`); Expo SDK upgrades bump it for every workspace.

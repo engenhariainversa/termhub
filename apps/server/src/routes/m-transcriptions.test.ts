@@ -7,7 +7,7 @@ import type { TranscriptionJob, TranscriptionService, TranscriptionView } from '
 import { MOBILE_TOO_LONG_SECONDS, MOBILE_UPLOADS_PER_10MIN, mobileTranscriptionRoutes } from './m-transcriptions.js';
 
 vi.mock('../config.js', () => ({
-  config: { transcription: { url: 'http://whisper:8000', language: 'pt' } },
+  config: { transcription: { url: 'http://whisper:8000', language: 'pt', secret: 'whisper-secret' } },
 }));
 
 const alice = { id: 'u-alice', name: 'Alice' } as User;

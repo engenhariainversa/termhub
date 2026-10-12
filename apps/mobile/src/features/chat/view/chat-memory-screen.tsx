@@ -4,10 +4,12 @@ import { Alert, FlatList, Linking, Switch, View } from 'react-native';
 import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
+import { ContextLimitCard } from './context-limit-card';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
 import { MemoryRulesSection } from './memory-rules-section';
 import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
+import { MemoryStatusControls, MemoryStatusLine } from './memory-status-controls';
 
 const fmtDate = (iso: string) => formatDate(iso);
 
@@ -42,11 +44,13 @@ function DecisionRow({ decision, forgetting, onForget }: { decision: TChatDecisi
   const { t } = useTranslation();
   return (
     <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-4">
-      <AppText className="font-semibold">{decision.question}</AppText>
+      <AppText className={`font-semibold ${decision.status === 'current' ? '' : 'line-through text-app-muted'}`}>{decision.question}</AppText>
       <AppText variant="muted">{`→ ${answerText(decision)}`}</AppText>
       <AppText variant="muted" className="text-xs">
         {`${decision.project_name ?? t('sem projeto')} · ${fmtDate(decision.created_at)} · ${t('sugerida {{n}}×', { n: decision.suggested_count })} · ${t('aceita {{n}}×', { n: decision.accepted_count })}`}
       </AppText>
+      <MemoryStatusLine status={decision.status} supersededBy={decision.superseded_by} />
+      <MemoryStatusControls kind="decision" id={decision.id} status={decision.status} />
       <Button label={t('Esquecer')} variant="ghost" disabled={forgetting} onPress={onForget} />
     </View>
   );
@@ -58,11 +62,13 @@ function NoteRow({ note, forgetting, onForget }: { note: TConciergeNote; forgett
   const { t } = useTranslation();
   return (
     <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-4">
-      <AppText className="font-semibold">{note.question}</AppText>
+      <AppText className={`font-semibold ${note.status === 'current' ? '' : 'line-through text-app-muted'}`}>{note.question}</AppText>
       <AppText variant="muted">{`→ ${note.decision}`}</AppText>
       <AppText variant="muted" className="text-xs">
         {`${note.reason} · ${note.project_name ?? t('sem projeto')} · ${fmtDate(note.created_at)}`}
       </AppText>
+      <MemoryStatusLine status={note.status} supersededBy={note.superseded_by} />
+      <MemoryStatusControls kind="note" id={note.id} status={note.status} />
       <Button label={t('Esquecer')} variant="ghost" disabled={forgetting} onPress={onForget} />
     </View>
   );
@@ -107,7 +113,8 @@ function LessonRow({
  * "Memória do chat" (chat decision memory spec 2026-09-26 §5.2), route `/chat-memory`, reached from
  * a row in Ajustes: the switch, a search field and the list of remembered decisions, paginated —
  * the mobile twin of the web's `ChatMemoryPage`. "Esquecer" confirms with a native `Alert.alert`
- * (the web asks `window.confirm`); no PIN either way, consistent with TER-56's cards.
+ * (the web asks `window.confirm`); no PIN either way, consistent with TER-56's cards. Each decision
+ * and note also shows its status and "Desatualizada" / "Errada" / "Substituída por…" (TER-1013).
  */
 export function ChatMemoryScreen() {
   const { t } = useTranslation();
@@ -126,6 +133,7 @@ export function ChatMemoryScreen() {
   const toggle = useChatMemoryStore((s) => s.toggle);
   const setAutodecide = useChatMemoryStore((s) => s.setAutodecide);
   const setCodexReplies = useChatMemoryStore((s) => s.setCodexReplies);
+  const setContextLimit = useChatMemoryStore((s) => s.setContextLimit);
   const forget = useChatMemoryStore((s) => s.forget);
   const cancel = useChatMemoryStore((s) => s.cancel);
   const notes = useChatMemoryStore((s) => s.notes);
@@ -233,6 +241,8 @@ export function ChatMemoryScreen() {
             </AppText>
           </View>
         ) : null}
+        {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
+        {memory ? <ContextLimitCard limit={memory.context_limit ?? null} onSave={setContextLimit} /> : null}
         <Field label={t('Buscar')} value={q} onChangeText={search} placeholder={t('pergunta, resposta ou projeto')} testID="chat-memory-search" />
         {error ? <Banner tone="danger" text={error} /> : null}
       </View>
