@@ -41,6 +41,16 @@ it('carries the countdown while the card is open, and afterwards only once sent 
   expect(toTabQuestionView({ ...answered, answered_via: 'automation' }, 'api')).toMatchObject({ answered_via: null });
 });
 
+it('marks a permission the automatic run allowed with the automatic-decision badge, and nothing else (TER-974)', () => {
+  const allowed = row({ status: 'answered', answer: { allow: true }, answered_via: 'automation' });
+  expect(toTabQuestionView(allowed, 'api')).toMatchObject({ answered_via: null, auto_decision: { reason: null, sources: [], by: 'automation_permission' } });
+  expect(toTabQuestionView({ ...allowed, answered_via: 'card' }, 'api').auto_decision).toBeNull();
+  expect(toTabQuestionView({ ...allowed, status: 'answered_in_tab' }, 'api').auto_decision).toBeNull();
+  // a resolved badge (a countdown's) wins
+  const resolved = { reason: 'r', sources: [] };
+  expect(toTabQuestionView(allowed, 'api', resolved).auto_decision).toBe(resolved);
+});
+
 it('carries surfaced_at, null until the card is brought back (TER-477)', () => {
   expect(toTabQuestionView(row(), 'api').surfaced_at).toBeNull();
   expect(toTabQuestionView(row({ surfaced_at: '2026-09-30T06:00:00.000Z' }), 'api').surfaced_at).toBe('2026-09-30T06:00:00.000Z');

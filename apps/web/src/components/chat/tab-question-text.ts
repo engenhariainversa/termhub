@@ -59,7 +59,10 @@ export function choiceAnswerDescription(payload: { questions: TabQuestionItem[] 
 /** A countdown's reason as the card shows it: the option the agent recommended (`by: 'automation'`,
  * agentic board D18) reads in the reader's language; any other reason is shown as it was given. */
 export function autoAnswerReason(auto: { by?: string; reason: string | null }): string {
-  return auto.by === 'automation' ? i18n.t('Opção recomendada pelo agente') : (auto.reason ?? '');
+  if (auto.by === 'automation') return i18n.t('Opção recomendada pelo agente');
+  // a permission the automatic run allowed by the project's rules (TER-974): a badge only, no countdown
+  if (auto.by === 'automation_permission') return i18n.t('Liberada pelas regras do trabalho automático');
+  return auto.reason ?? '';
 }
 
 /** "Não consegui responder sozinho…" (spec 2026-09-26 concierge memory §6/§8, controller ruling): the

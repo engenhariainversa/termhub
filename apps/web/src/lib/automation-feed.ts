@@ -26,6 +26,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'run_done':
       // a blocked run a PR from its branch took over says so (TER-1049)
       return e.reason_text ? t('{{ref}}: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: agente terminou', { ref });
+    case 'run_cancelled':
+      // TER-974: why, when the server knows (the card untagged, the tab closed)
+      return e.reason_text ? t('{{ref}}: cancelado — {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: cancelado', { ref });
     case 'run_blocked':
       // a start that failed says why (TER-987)
       return e.reason_text ? t('{{ref}} não começou: {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: parou e espera você', { ref });

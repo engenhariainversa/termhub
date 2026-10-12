@@ -395,6 +395,7 @@
   "Resposta automática cancelada: o trabalho automático foi pausado ou desligado.": "Automatic answer cancelled: automatic work was paused or turned off.",
   "Opção recomendada pelo agente": "Option the agent recommended",
   "Ver detalhes": "Show details",
+  "Liberada pelas regras do trabalho automático": "Allowed by the automatic work's rules",
   "{{count}} ações executadas_one": "{{count}} action run",
   "{{count}} ações executadas_other": "{{count}} actions run",
   "{{count}} ações em andamento_one": "{{count}} action in progress",
@@ -475,5 +476,4 @@
   "Contexto": "Context",
   "Nenhum subagente rodando agora.": "No subagent running right now.",
   "Atalhos": "Shortcuts",
-  "Memória": "Memory"
-}
+  "Memória": "Memory"}
