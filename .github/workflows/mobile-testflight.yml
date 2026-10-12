@@ -18,6 +18,7 @@ on:
       - 'apps/mobile/app.config.js'
       - 'apps/mobile/package.json'
       - 'apps/mobile/plugins/**'
+      - 'apps/mobile/modules/**'
   workflow_dispatch:
     inputs:
       force:

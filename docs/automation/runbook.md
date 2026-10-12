@@ -115,7 +115,7 @@ Project Setup, "Trabalho automático" section. Fields not listed keep their defa
 | Tipos de card | Story, Tarefa, Bug (default; Spike off) |
 | Até onde os agentes vão sozinhos (`autonomy`) | `release` (Publicação). Consider `deploy` for the first week; the spike leaves that to the maintainer |
 | Caminhos de release (`release_paths`) | `apps/agent/package.json`, `apps/mobile/**`, `packages/mobile-api/**` |
-| Caminhos das lojas (`store_paths`) | `apps/mobile/app.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/plugins/**` |
+| Caminhos das lojas (`store_paths`) | `apps/mobile/app.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/plugins/**`, `apps/mobile/modules/**` |
 | Workflows de release (`release_workflows`) | `Publish @termhub/agent`, `Publish mobile OTA`, `Mobile TestFlight (hulk)` (add it once the hulk runner exists: section 4b) |
 | Checks obrigatórios (`required_checks`) | `CI e Deploy` |
 | Pasta dos worktrees (`worktrees_dir`) | default `~/.termhub/worktrees`, or a folder outside every checkout; the trust prompt above applies to it |
@@ -135,9 +135,9 @@ Notes:
   workflow runs on pull requests to `main` and `epic/**` as well as on push, so the name works for the PR
   head and for the delivery that follows the merge. With the list empty the executor wants every run of the
   PR green on two readings; with it filled, each listed workflow needs a successful run on the head.
-- The store paths include `apps/mobile/package.json` and `apps/mobile/plugins/**` because they change the
-  native binary (CLAUDE.md, "Mobile OTA updates"); `apps/mobile/**` in `release_paths` alone would let them
-  through as an OTA.
+- The store paths include `apps/mobile/package.json`, `apps/mobile/plugins/**` and `apps/mobile/modules/**`
+  (local native modules) because they change the native binary (CLAUDE.md, "Mobile OTA updates");
+  `apps/mobile/**` in `release_paths` alone would let them through as an OTA.
 - Saving with `enabled` checked, or raising the level to Deploy or Publicação, asks for confirmation. Read
   the text it shows before confirming. Through the chat the rule is stricter (section 4a).
 - Setting `release_workflows` makes the base branch count as "pending" while those workflows run, so merges
@@ -174,8 +174,8 @@ runs on a self-hosted runner on hulk, the Mac with Xcode and the Apple credentia
 `apps/mobile/scripts/testflight.sh` (the local flow of `apps/mobile/README.md`, "Releasing to TestFlight", no
 EAS). It never submits for App Store review and builds no Android.
 
-- **Trigger:** a push to `main` that changes `apps/mobile/app.json`, `app.config.js`, `package.json` or
-  `plugins/**`, or Actions → Run workflow (with `force` to re-upload the same version under a new build number).
+- **Trigger:** a push to `main` that changes `apps/mobile/app.json`, `app.config.js`, `package.json`,
+  `plugins/**` or `modules/**`, or Actions → Run workflow (with `force` to re-upload the same version under a new build number).
 - **Once per version:** hulk records each accepted upload in `~/.termhub/testflight/ios-<version>`. A version
   already there is skipped and the run cancels itself; termhub reads a cancelled run as nothing delivered, so no
   `release_ok` and no push. A native change without an `expo.version` bump therefore ships nothing: bump the

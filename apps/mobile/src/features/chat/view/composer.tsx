@@ -4,6 +4,7 @@ import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, use
 import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { Icon, type IconName } from '@/ui';
+import { KeyCommands } from '../../../../modules/key-commands';
 import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
@@ -207,6 +208,10 @@ function HoldMic({ note, disabled }: { note: VoiceNote; disabled: boolean }) {
  * could not read (it would answer 409): the line says to remove it. A message being answered
  * (TER-447) is previewed on top of the pill, with ✕; the screen keeps the reference and sends it. The text clears as soon as it is
  * sent and comes back if the send fails; the chips only go once the server accepted.
+ *
+ * On an iPad with a hardware keyboard (TER-368), Return and ⌘Return send as ↑ does, under the same
+ * rules; Shift+Return, the on-screen keyboard's Return and Return during an IME composition write a
+ * new line, as everywhere else.
  */
 export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox }: Props) {
   const { t } = useTranslation();
@@ -304,6 +309,8 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // An emptied box (sent, or erased) is back to one line at once, without waiting for the native
   // layout; the returned text of a failed send is laid out again by the input.
   const changeText = (next: string) => {
+    // At once, not on the next render: a hardware Return typed right after the last letter sends it.
+    textRef.current = next;
     setText(next);
     if (next === '') {
       setHeight(MIN_HEIGHT);
@@ -331,6 +338,12 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   useEffect(() => {
     if (!recording && !busy) sendAfterDictation.current = false;
   }, [recording, busy]);
+  // A hardware keyboard's Return sends what ↑ would. The native side claims it whatever the box holds
+  // (only Shift+Return writes a new line), so a Return that cannot send does nothing: an empty box, a
+  // chip still uploading or a clip being transcribed get no stray line either.
+  const submitKey = () => {
+    if (!busy) void submit(textRef.current);
+  };
   // The text folds away while recording, so the keyboard goes with it: nothing types into a hidden box.
   useEffect(() => {
     if (recording || noting) inputRef.current?.blur();
@@ -489,25 +502,27 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               laid out taller than a parent of a set height, so inside the frame it could not grow
               past the frame, whose height is the input's. Here it is as tall as its text. */}
           <Animated.View testID="composer-input-slot" style={[{ position: 'absolute', left: 0, right: 0 }, inputStyle]}>
-            <TextInput
-              ref={inputRef}
-              value={text}
-              onChangeText={changeText}
-              editable={!disabled}
-              placeholder={t('Mensagem')}
-              accessibilityLabel={t('Mensagem')}
-              multiline
-              onLayout={onInputLayout}
-              scrollEnabled={height >= MAX_HEIGHT}
-              textAlignVertical="top"
-              // No height: the input grows and shrinks with its text by itself, on both platforms,
-              // between one line and `MAX_ROWS`. No padding of its own (Android adds some by default,
-              // iOS some to a multiline input) and no extra font padding: its height is exactly the
-              // lines it shows. It takes its new height at once; the frame around it glides, and
-              // clips it meanwhile.
-              style={{ minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT, lineHeight: LINE_HEIGHT, fontSize: 16, padding: 0, paddingTop: 0, paddingBottom: 0, includeFontPadding: false }}
-              className="text-app-text placeholder:text-app-muted"
-            />
+            <KeyCommands enabled={!disabled && !recording && !noting} onSubmitKey={submitKey}>
+              <TextInput
+                ref={inputRef}
+                value={text}
+                onChangeText={changeText}
+                editable={!disabled}
+                placeholder={t('Mensagem')}
+                accessibilityLabel={t('Mensagem')}
+                multiline
+                onLayout={onInputLayout}
+                scrollEnabled={height >= MAX_HEIGHT}
+                textAlignVertical="top"
+                // No height: the input grows and shrinks with its text by itself, on both platforms,
+                // between one line and `MAX_ROWS`. No padding of its own (Android adds some by default,
+                // iOS some to a multiline input) and no extra font padding: its height is exactly the
+                // lines it shows. It takes its new height at once; the frame around it glides, and
+                // clips it meanwhile.
+                style={{ minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT, lineHeight: LINE_HEIGHT, fontSize: 16, padding: 0, paddingTop: 0, paddingBottom: 0, includeFontPadding: false }}
+                className="text-app-text placeholder:text-app-muted"
+              />
+            </KeyCommands>
           </Animated.View>
         </Animated.View>
       </View>

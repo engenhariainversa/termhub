@@ -100,7 +100,7 @@ Copy `.env.example` to `.env` for `expo start`: it points the app at `https://te
 
 Builds are made locally on a Mac, without EAS: iOS goes to TestFlight, Android to Firebase App Distribution (next section). `ios/` and `android/` are generated each time and never committed.
 
-**Automatic, on the Mac hulk.** A merge to `main` that changes the native app (`app.json`, `app.config.js`, the app's `package.json` or `plugins/**`) runs the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`) on a self-hosted runner on hulk, the Mac that holds the Apple credentials. It runs `scripts/testflight.sh`, which ships `expo.version` once:
+**Automatic, on the Mac hulk.** A merge to `main` that changes the native app (`app.json`, `app.config.js`, the app's `package.json`, `plugins/**` or `modules/**`) runs the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`) on a self-hosted runner on hulk, the Mac that holds the Apple credentials. It runs `scripts/testflight.sh`, which ships `expo.version` once:
 
 - a version already uploaded from hulk (`~/.termhub/testflight/ios-<version>` there) is skipped and the run cancels itself, so a native change without a version bump builds nothing: bump `expo.version` (CLAUDE.md, "Mobile OTA updates");
 - otherwise it runs `scripts/ios-release.sh --upload` with `BUILD_NUMBER` set to the UTC date and time (`YYYYMMDDHHMM`, the same convention as step 2 below), so `app.json`'s `ios.buildNumber` is not rewritten;
@@ -242,7 +242,9 @@ Everything below is automated except this: run it by hand, on a development buil
 
 ## iPad
 
-The build is universal (`ios.supportsTablet: true`): the iPhone stays in portrait, the iPad rotates freely and supports Split View and Slide Over (Expo writes every `UISupportedInterfaceOrientations~ipad` because full screen is not required). From 700 pt of window width Chats shows the list and the conversation side by side; other screens keep a 720 pt column. Design and manual check: `docs/superpowers/specs/2026-09-28-mobile-ipad-design.md` (§5). Enter-to-send on a hardware keyboard is not there yet (spec §2.5).
+The build is universal (`ios.supportsTablet: true`): the iPhone stays in portrait, the iPad rotates freely and supports Split View and Slide Over (Expo writes every `UISupportedInterfaceOrientations~ipad` because full screen is not required). From 700 pt of window width Chats shows the list and the conversation side by side; other screens keep a 720 pt column. Design and manual check: `docs/superpowers/specs/2026-09-28-mobile-ipad-design.md` (§5).
+
+**Hardware keyboard (TER-368).** In the chat composer, Return and ⌘Return send (same rules as ↑: nothing while a chip uploads, a clip is transcribed or the box is empty, and no stray new line either); Shift+Return writes a new line. The on-screen keyboard's Return, Return while an IME composes (Japanese, Chinese…) and every other text field keep the new line. UIKit reports Return as a key command, which `TextInput` does not expose, so it comes from a local Expo module, `modules/key-commands`: a view around the composer's `TextInput` that, while the input inside it has the focus, claims Return and ⌘Return with `wantsPriorityOverSystemBehavior` and fires `onSubmitKey`. iOS only; on Android the wrapper is a plain view and Return stays a new line. It is native code: a change under `modules/` needs an `expo.version` bump and a new store build, like `plugins/`. Under jest, `test/fakes/key-commands.js` stands in for it.
 
 An `ios/` folder generated before this change stays iPhone-only (prebuild does not rewrite it): after pulling, re-run `npx expo prebuild --clean` before building (e.g. `npm run ios`); `npm run release:ios` already prebuilds with `--clean`, so a TestFlight build picks it up by itself.
 
