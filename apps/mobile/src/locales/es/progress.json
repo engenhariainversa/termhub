@@ -82,6 +82,8 @@
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permiso concedido automáticamente",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} bloqueado por la protección",
   "{{ref}}: ação bloqueada pela trava": "{{ref}}: acción bloqueada por la protección",
+  "{{ref}}: cancelado — {{reason}}": "{{ref}}: cancelado — {{reason}}",
+  "{{ref}}: cancelado": "{{ref}}: cancelado",
   "bloqueado": "bloqueado",
   "login expirado": "login caducado",
   "confiar na pasta?": "¿confiar en la carpeta?"

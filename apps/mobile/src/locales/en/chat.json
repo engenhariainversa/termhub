@@ -169,5 +169,6 @@
   "Resposta automática pausada, faltam {{time}} — «{{answer}}». Motivo: {{reason}}": "Automatic answer paused, {{time}} left — “{{answer}}”. Reason: {{reason}}",
   "Respondendo sozinho — «{{answer}}» ({{description}}). Motivo: {{reason}}": "Answering on its own — “{{answer}}” ({{description}}). Reason: {{reason}}",
   "Respondendo sozinho — «{{answer}}». Motivo: {{reason}}": "Answering on its own — “{{answer}}”. Reason: {{reason}}",
-  "uma anotação diz «{{answer}}» para «{{question}}» em {{project}}, {{date}}": "a note says “{{answer}}” for “{{question}}” in {{project}}, {{date}}"
+  "uma anotação diz «{{answer}}» para «{{question}}» em {{project}}, {{date}}": "a note says “{{answer}}” for “{{question}}” in {{project}}, {{date}}",
+  "Liberada pelas regras do trabalho automático": "Allowed by the automatic work's rules"
 }

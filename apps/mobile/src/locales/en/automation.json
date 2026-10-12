@@ -32,5 +32,8 @@
   "O trabalho automático volta a pegar cards marcados e a agir nas abas dos projetos com ele ligado.": "Automatic work will pick up marked cards again and act on the tabs of projects that have it on.",
   "Retomar": "Resume",
   "Não foi possível mudar o automático. Tente de novo.": "Could not change automatic work. Try again.",
-  "Automático pausado desde {{time}}.": "Automatic work paused since {{time}}."
+  "Automático pausado desde {{time}}.": "Automatic work paused since {{time}}.",
+  "Hora do resumo diário": "Daily summary hour",
+  "Sem resumo": "No summary",
+  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "The day's summary arrives at this hour, in this device's time zone."
 }

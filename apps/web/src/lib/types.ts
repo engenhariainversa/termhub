@@ -1277,8 +1277,9 @@ export interface ChatAction {
 export interface AutoDecision {
   reason: string | null;
   sources: { ref: string; question: string | null; answer: string | null }[];
-  /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
-  by?: TabQuestionAutoAnswer['by'];
+  /** `'automation'` on a question card answered by automatic board work, `'automation_permission'` on a
+   *  permission it allowed by the project's rules (TER-974): the reason is shown translated. */
+  by?: TabQuestionAutoAnswer['by'] | 'automation_permission';
   /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
    *  thresholds at that moment. Absent from an older server and on an action card. */
   score?: number;

@@ -264,6 +264,18 @@ export async function reportFocus(repos: Repositories, userId: string, clientId:
   await syncFocusCountdowns(repos, userId);
 }
 
+/**
+ * Automatic board work's say over a countdown it did not schedule itself (TER-974): the chat woken for a
+ * question of an automatic tab schedules its answer like any other (`by: 'concierge'`), and that answer
+ * must meet the run's caps and cycle detector as the run's own do. `before` runs right before the send:
+ * a code stops it (the countdown fails with it; the run was handed to the person). `sent` counts it for
+ * the run. Given by app.ts (`automation/answers.ts`), so this module stays free of the automation's.
+ */
+export interface WokenAnswerGuard {
+  before(row: TabQuestion, auto: AutoAnswer): Promise<string | null>;
+  sent(row: TabQuestion, auto: AutoAnswer): Promise<void>;
+}
+
 /** Which event a card that changed goes out on, by where the row stands now. */
 const eventFor = (row: TabQuestion): TabQuestionEventType => (row.status === 'open' ? 'tab_question' : row.status === 'answered' || row.status === 'failed' ? 'tab_question_answered' : 'tab_question_closed');
 
@@ -283,7 +295,7 @@ const eventFor = (row: TabQuestion): TabQuestionEventType => (row.status === 'op
  * and republishes the card; nothing else is typed. Resolves how many were sent. Logs ids, `by` and codes
  * only — never the answer nor the reason.
  */
-export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { now?: () => Date; answer?: typeof answerTabQuestion; shouldStop?: () => boolean } = {}): Promise<number> {
+export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { now?: () => Date; answer?: typeof answerTabQuestion; shouldStop?: () => boolean; woken?: WokenAnswerGuard } = {}): Promise<number> {
   const now = (deps.now ?? (() => new Date()))();
   const due = await repos.tabQuestions.listDueAutoAnswers(now, SWEEP_BATCH);
   let sent = 0;
@@ -308,6 +320,8 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
       // A note that backed it (TER-642) must still be there too.
       const notes = [...new Set(auto.sources.filter((s) => s.kind === 'note').map((s) => s.id))];
       if (notes.length && (await repos.memoryItems.findManyForOwner(notes, user.id)).length < notes.length) throw new HttpError(409, 'A anotação usada foi esquecida', 'PRECEDENT_FORGOTTEN');
+      const stopped = deps.woken ? await deps.woken.before(claimed, auto) : null;
+      if (stopped) throw new HttpError(409, 'Respostas automáticas demais nesta execução', stopped);
       await (deps.answer ?? answerTabQuestion)(controlContextFor(repos, user), claimed.id, auto.answer, { log, via: 'auto', embedder: null });
     } catch (err) {
       const code = codeOf(err, 'AUTO_ANSWER_FAILED');
@@ -327,6 +341,8 @@ export async function sendDueAutoAnswers(repos: Repositories, log: Log, deps: { 
     log.info({ tabQuestionId: claimed.id, by: auto.by, ...(auto.score !== undefined ? { score: auto.score, band: auto.band, high: auto.thresholds?.high, low: auto.thresholds?.low } : {}) }, 'auto answer sent');
     // The countdown ran out in front of the person and they let it: the precedent was right for them.
     if (auto.focus) await recordAutoSamples(repos, claimed, 'accepted', log);
+    log.info({ tabQuestionId: claimed.id, by: auto.by }, 'auto answer sent');
+    if (deps.woken) await deps.woken.sent(claimed, auto).catch((err: unknown) => log.warn({ tabQuestionId: claimed.id, code: codeOf(err, 'RECORD_FAILED') }, 'auto answer not counted for the run'));
     const ids = auto.sources.filter((s) => s.kind === 'decision').map((s) => s.id);
     try {
       if (ids.length) await repos.chatDecisions.bumpAuto(ids);
@@ -359,7 +375,7 @@ export async function recoverLostAutoAnswers(repos: Repositories, log: Log): Pro
  * (so shutdown fits in the container's grace period) and resolves once the send already claimed is done
  * — the app awaits it before closing the database, so a claimed send is never cut in half.
  */
-export function startAutoAnswerSweeper(repos: Repositories, log: Log, intervalMs = AUTO_ANSWER_SWEEP_MS): () => Promise<void> {
+export function startAutoAnswerSweeper(repos: Repositories, log: Log, intervalMs = AUTO_ANSWER_SWEEP_MS, woken?: WokenAnswerGuard): () => Promise<void> {
   let inFlight: Promise<void> | null = null;
   let stopping = false;
   const run = async () => {
@@ -377,7 +393,7 @@ export function startAutoAnswerSweeper(repos: Repositories, log: Log, intervalMs
       log.warn({ code: failureLabel(err) }, 'auto answer focus sync failed');
     }
     try {
-      await sendDueAutoAnswers(repos, log, { shouldStop: () => stopping });
+      await sendDueAutoAnswers(repos, log, { shouldStop: () => stopping, woken });
     } catch (err) {
       log.warn({ code: failureLabel(err) }, 'auto answer sweep failed');
     }
