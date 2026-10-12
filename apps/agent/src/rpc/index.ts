@@ -10,6 +10,7 @@ import * as hooks from './hooks.js';
 import * as hw from './hw.js';
 import * as net from './net.js';
 import * as paste from './paste.js';
+import * as repos from './repos.js';
 import * as secret from './secret.js';
 import * as sim from './sim.js';
 import * as tabMcp from './tab-mcp.js';
@@ -69,5 +70,6 @@ export const handlers: Handlers = {
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,
+  'git.repos.scan': repos.scan,
   'net.check': net.check,
 };

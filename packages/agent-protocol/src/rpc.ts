@@ -130,6 +130,13 @@ const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: 
 export const GIT_BRANCH_RE = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/;
 export const gitBranch = z.string().regex(GIT_BRANCH_RE);
 
+/** How deep `git.repos.scan` looks below the project folder (spec 2026-10-07 multi-repo R2). */
+export const REPO_SCAN_MAX_DEPTH = 3;
+/** The most checkouts one `git.repos.scan` answers; past it the answer says `truncated`. */
+export const REPO_SCAN_MAX_REPOS = 200;
+/** The longest repository description `git.repos.scan` answers (spec R10). */
+export const REPO_DESCRIPTION_MAX_CHARS = 200;
+
 export const RPC = {
   'tmux.list': def(z.object({}), z.object({ sessions: z.array(sessionName) })),
   'tmux.kill': def(z.object({ session: sessionName }), z.object({ killed: z.boolean() })),
@@ -330,6 +337,36 @@ export const RPC = {
     z.object({ repo_dir: machinePath, root: machinePath, path: machinePath }),
     z.object({ removed: z.boolean(), dirty: z.boolean() }),
     30_000,
+  ),
+  /**
+   * The git checkouts of a project folder (spec 2026-10-07 multi-repo R2, R4, R10, §5; since agent 0.29.0,
+   * capability `repo_scan`): `dir` itself and its subfolders down to `depth` levels. Hidden folders and
+   * `node_modules` are skipped, a link is never followed, and a subfolder that is a checkout is not walked.
+   * A worktree or a submodule (`.git` is a file) is left out. `/` and the home folder are refused
+   * (`invalid`); a `dir` that is not a folder answers `notfound`.
+   * Per checkout: `dir` relative to the scanned folder with `/` (`.` for the folder itself), the `origin`
+   * URL without credentials (null: no such remote), `default_branch` from `origin/HEAD` (null: not set),
+   * `has_commits`, and a `description` from `package.json` or the first heading of `README.md`.
+   * `truncated`: the walk stopped at REPO_SCAN_MAX_REPOS or at its folder cap. Sorted by `dir`.
+   * git runs with an argv, never a shell; the agent keeps one deadline 10 s under this timeout.
+   */
+  'git.repos.scan': def(
+    z.object({ dir: machinePath, depth: z.number().int().min(1).max(REPO_SCAN_MAX_DEPTH) }),
+    z.object({
+      repos: z
+        .array(
+          z.object({
+            dir: z.string().min(1).max(4096),
+            origin: z.string().max(2048).nullable(),
+            default_branch: z.string().max(255).nullable(),
+            has_commits: z.boolean(),
+            description: z.string().max(REPO_DESCRIPTION_MAX_CHARS).nullable(),
+          }),
+        )
+        .max(REPO_SCAN_MAX_REPOS),
+      truncated: z.boolean(),
+    }),
+    60_000,
   ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */

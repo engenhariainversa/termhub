@@ -5,6 +5,8 @@ import {
   CAPABILITY_FILE_LIST,
   CAPABILITY_WORKTREE,
   WORKTREE_MIN_AGENT_VERSION,
+  CAPABILITY_REPO_SCAN,
+  REPO_SCAN_MIN_AGENT_VERSION,
   CAPABILITY_FILE_READ,
   CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
@@ -167,4 +169,9 @@ it('names the file list capability once', () => {
 it('names the worktree capability once, with the agent version that ships it', () => {
   expect(CAPABILITY_WORKTREE).toBe('worktree');
   expect(WORKTREE_MIN_AGENT_VERSION).toBe('0.18.0');
+});
+
+it('names the repo scan capability once, with the agent version that ships it', () => {
+  expect(CAPABILITY_REPO_SCAN).toBe('repo_scan');
+  expect(REPO_SCAN_MIN_AGENT_VERSION).toBe('0.29.0');
 });
