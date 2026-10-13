@@ -4,5 +4,9 @@
   "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_one": "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefa; repita com confirm: true para confirmar",
   "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_other": "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar",
   "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_one": "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefa; repita com confirm: true para confirmar",
-  "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_other": "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar"
+  "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_other": "Isso exclui a tarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar",
+  "O login do {{provider}} ({{label}}) em {{machine}} expira em {{count}} dias. Refaça o login em Contas de IA, ou peça aqui, antes que os agentes parem._one": "O login do {{provider}} ({{label}}) em {{machine}} expira em {{count}} dia. Refaça o login em Contas de IA, ou peça aqui, antes que os agentes parem.",
+  "O login do {{provider}} ({{label}}) em {{machine}} expira em {{count}} dias. Refaça o login em Contas de IA, ou peça aqui, antes que os agentes parem._other": "O login do {{provider}} ({{label}}) em {{machine}} expira em {{count}} dias. Refaça o login em Contas de IA, ou peça aqui, antes que os agentes parem.",
+  "Login do {{provider}} expira em {{count}} dias_one": "Login do {{provider}} expira em {{count}} dia",
+  "Login do {{provider}} expira em {{count}} dias_other": "Login do {{provider}} expira em {{count}} dias"
 }

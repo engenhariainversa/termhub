@@ -175,7 +175,7 @@ export class AiLoginService {
     });
     if (r.logged_in) {
       // Nothing to open: the agent already killed the session.
-      this.loggedIn(account);
+      await this.loggedIn(repos, account);
       const stuck = await this.findStuckTabs(repos, account, machine);
       return { login_id: loginId, url: null, user_code: null, needs_code: false, expires_at: new Date(this.now()).toISOString(), logged_in: true, stuck_tabs: stuck };
     }
@@ -226,14 +226,23 @@ export class AiLoginService {
       return { ok: false, message: r.message, stuck_tabs: [] };
     }
     this.flows.delete(flow.loginId);
-    this.loggedIn(account);
+    await this.loggedIn(repos, account);
     return { ok: true, message: null, stuck_tabs: await this.findStuckTabs(repos, account, machine) };
   }
 
-  /** The login is back: the warning goes now, not at the next check, and the usage is read again. */
-  private loggedIn(account: AiAccount): void {
+  /**
+   * The login is back: the warning goes now, not at the next check, and the usage is read again. The
+   * expiry date known for the old login goes too (TER-1079); a failure to clear it only leaves the
+   * "expira em N dias" badge until that date passes.
+   */
+  private async loggedIn(repos: Repositories, account: AiAccount): Promise<void> {
     this.states.set(account.id, { state: 'ok', checked_at: this.now() });
     forgetAccountUsage(account.id);
+    try {
+      await repos.aiAccounts.clearLoginExpiry(account.id);
+    } catch {
+      // the badge outlives the login by at most its own date
+    }
   }
 
   /** Ends the flow and kills its hidden session. */

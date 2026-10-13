@@ -45,6 +45,8 @@
   "{{ref}} parou: {{reason}}": "{{ref}} se detuvo: {{reason}}",
   "Um card": "Una tarjeta",
   "Login do {{provider}} expirou": "El login de {{provider}} expiró",
+  "Login do {{provider}} expira em {{count}} dias_one": "El login de {{provider}} expira en {{count}} día",
+  "Login do {{provider}} expira em {{count}} dias_other": "El login de {{provider}} expira en {{count}} días",
   "{{machine}}: toque para refazer o login": "{{machine}}: toca para rehacer el login",
   "uma máquina": "una máquina",
   "Login expirado em {{machine}}": "Login caducado en {{machine}}",

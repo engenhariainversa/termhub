@@ -11,6 +11,9 @@ export interface AiAccountInput {
   exclusive_project_id?: string | null;
 }
 
+/** An expiry date this much later than the known one belongs to a login redone since. */
+const LOGIN_RENEWED_MS = 24 * 60 * 60_000;
+
 /** Every read carries the exclusive project's name: the errors and badges name it (TER-990). */
 const include = { exclusiveProject: { select: { id: true, name: true } } } as const;
 
@@ -49,6 +52,30 @@ export class AiAccountsRepository {
       include,
     });
     return mapAiAccount(a);
+  }
+
+  /**
+   * The CLI's notice told when the login expires (TER-1079). A date that starts another login (none was
+   * known, the known one already passed, or this one is over a day later) also re-arms the warning.
+   */
+  async noteLoginExpiry(id: string, expiresAt: Date, now: Date): Promise<void> {
+    const renewedAfter = new Date(expiresAt.getTime() - LOGIN_RENEWED_MS);
+    const fresh = await this.db.aiAccount.updateMany({
+      where: { id, OR: [{ loginExpiresAt: null }, { loginExpiresAt: { lt: now } }, { loginExpiresAt: { lt: renewedAfter } }] },
+      data: { loginExpiresAt: expiresAt, loginExpiryWarnedAt: null },
+    });
+    if (fresh.count === 0) await this.db.aiAccount.updateMany({ where: { id }, data: { loginExpiresAt: expiresAt } });
+  }
+
+  /** Takes the one warning of this login: true for the caller that got it (both colours may ask). */
+  async claimLoginExpiryWarning(id: string, now: Date): Promise<boolean> {
+    const r = await this.db.aiAccount.updateMany({ where: { id, loginExpiryWarnedAt: null, loginExpiresAt: { gt: now } }, data: { loginExpiryWarnedAt: now } });
+    return r.count > 0;
+  }
+
+  /** The login was redone, or the known date passed: nothing is known about the next expiry. */
+  async clearLoginExpiry(id: string): Promise<void> {
+    await this.db.aiAccount.updateMany({ where: { id, loginExpiresAt: { not: null } }, data: { loginExpiresAt: null, loginExpiryWarnedAt: null } });
   }
 
   async delete(id: string): Promise<boolean> {

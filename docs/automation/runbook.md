@@ -355,6 +355,27 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
 - The server checks every Claude/Codex account of an online agent machine every 10 minutes (and 30 s after
   an agent connects). An account found logged out shows a red warning (web sidebar, Contas de IA, the app's
   banner), and the machine's owner gets one push ("Login do Claude expirou"); no other until it is back.
+- **Warned ahead of the expiry (TER-1079, Claude only).** Claude Code gives the date to nobody but the
+  screen: `claude auth status` has no expiry field and no documented file holds it, and termhub does not
+  read the credential for it. What the CLI does is print a startup notice from three days before, "Your
+  login expires in 3 days · run /login to renew". So when a Claude session starts in a tab (the
+  `SessionStart` hook with `source: startup`), the server reads that tab's screen once, six seconds in; the
+  notice becomes the account's `login_expires_at` (precise to the day, like the notice). The machine's owner
+  is then warned **once per login**: one push ("Login do Claude expira em N dias", the tap opens "Refazer
+  login"), one line in the chat of the projects that list the account (the account chat when none does),
+  an amber line in the sidebar and on the machine's row, and the "Expira em N dias" badge with "Refazer
+  login" in Contas de IA. `list_ai_accounts` answers `login_expires_at` and `expires_soon`, so the concierge
+  can offer `start_ai_login`. How far ahead is the person's own setting in Contas de IA ("Avisar antes de o
+  login expirar": 3 days by default, 2, 1 or never; `users.ai_login_warn_days`); more than 3 is not offered
+  because the CLI says nothing earlier. Automatic work prefers the project's accounts with slack over one
+  expiring within three days (a preference: alone or with the others full, it is still used).
+  Limits to know: an account is only read when one of its Claude sessions starts in a termhub tab during
+  those three days, so a login nobody starts a session on is not warned about; a login redone by hand in a
+  terminal (`/login`) keeps its badge until the old date passes, while "Refazer login" clears it at once;
+  Codex, Gemini and Antigravity print no such notice and are never warned ahead. Nothing of the screen is
+  stored or logged: only ids and the number of days (`ai login expiry read from the screen`, `ai login
+  expires soon`). If Claude Code rewords the notice, the reader is `parseLoginExpiryNotice` in
+  `apps/server/src/ai/login-expiry.ts`.
 - "Refazer login" (web, app, or the chat's `start_ai_login` / `submit_ai_login_code`) needs the machine's
   agent at **0.25.0 or newer** (capability `ai_login`); an older one answers 409 `AGENT_OUTDATED`. SSH and
   local machines, and Gemini/Antigravity accounts, are redone by hand on the machine. Only the machine's

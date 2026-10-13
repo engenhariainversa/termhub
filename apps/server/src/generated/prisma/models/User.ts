@@ -30,12 +30,14 @@ export type UserAvgAggregateOutputType = {
   chatAutoHigh: number | null
   chatAutoLow: number | null
   chatContextLimit: number | null
+  aiLoginWarnDays: number | null
 }
 
 export type UserSumAggregateOutputType = {
   chatAutoHigh: number | null
   chatAutoLow: number | null
   chatContextLimit: number | null
+  aiLoginWarnDays: number | null
 }
 
 export type UserMinAggregateOutputType = {
@@ -66,6 +68,7 @@ export type UserMinAggregateOutputType = {
   deletionScheduledAt: Date | null
   automationPausedAt: Date | null
   timeZone: string | null
+  aiLoginWarnDays: number | null
   locale: string | null
 }
 
@@ -97,6 +100,7 @@ export type UserMaxAggregateOutputType = {
   deletionScheduledAt: Date | null
   automationPausedAt: Date | null
   timeZone: string | null
+  aiLoginWarnDays: number | null
   locale: string | null
 }
 
@@ -129,6 +133,7 @@ export type UserCountAggregateOutputType = {
   deletionScheduledAt: number
   automationPausedAt: number
   timeZone: number
+  aiLoginWarnDays: number
   locale: number
   _all: number
 }
@@ -138,12 +143,14 @@ export type UserAvgAggregateInputType = {
   chatAutoHigh?: true
   chatAutoLow?: true
   chatContextLimit?: true
+  aiLoginWarnDays?: true
 }
 
 export type UserSumAggregateInputType = {
   chatAutoHigh?: true
   chatAutoLow?: true
   chatContextLimit?: true
+  aiLoginWarnDays?: true
 }
 
 export type UserMinAggregateInputType = {
@@ -174,6 +181,7 @@ export type UserMinAggregateInputType = {
   deletionScheduledAt?: true
   automationPausedAt?: true
   timeZone?: true
+  aiLoginWarnDays?: true
   locale?: true
 }
 
@@ -205,6 +213,7 @@ export type UserMaxAggregateInputType = {
   deletionScheduledAt?: true
   automationPausedAt?: true
   timeZone?: true
+  aiLoginWarnDays?: true
   locale?: true
 }
 
@@ -237,6 +246,7 @@ export type UserCountAggregateInputType = {
   deletionScheduledAt?: true
   automationPausedAt?: true
   timeZone?: true
+  aiLoginWarnDays?: true
   locale?: true
   _all?: true
 }
@@ -356,6 +366,7 @@ export type UserGroupByOutputType = {
   deletionScheduledAt: Date | null
   automationPausedAt: Date | null
   timeZone: string | null
+  aiLoginWarnDays: number | null
   locale: string | null
   _count: UserCountAggregateOutputType | null
   _avg: UserAvgAggregateOutputType | null
@@ -411,6 +422,7 @@ export type UserWhereInput = {
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   timeZone?: Prisma.StringNullableFilter<"User"> | string | null
+  aiLoginWarnDays?: Prisma.IntNullableFilter<"User"> | number | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
   sessions?: Prisma.SessionListRelationFilter
@@ -467,6 +479,7 @@ export type UserOrderByWithRelationInput = {
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   timeZone?: Prisma.SortOrderInput | Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrderInput | Prisma.SortOrder
   locale?: Prisma.SortOrderInput | Prisma.SortOrder
   roleRef?: Prisma.RoleOrderByWithRelationInput
   sessions?: Prisma.SessionOrderByRelationAggregateInput
@@ -526,6 +539,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   timeZone?: Prisma.StringNullableFilter<"User"> | string | null
+  aiLoginWarnDays?: Prisma.IntNullableFilter<"User"> | number | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
   roleRef?: Prisma.XOR<Prisma.RoleNullableScalarRelationFilter, Prisma.RoleWhereInput> | null
   sessions?: Prisma.SessionListRelationFilter
@@ -582,6 +596,7 @@ export type UserOrderByWithAggregationInput = {
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   timeZone?: Prisma.SortOrderInput | Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrderInput | Prisma.SortOrder
   locale?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.UserCountOrderByAggregateInput
   _avg?: Prisma.UserAvgOrderByAggregateInput
@@ -622,6 +637,7 @@ export type UserScalarWhereWithAggregatesInput = {
   deletionScheduledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   timeZone?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
+  aiLoginWarnDays?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
   locale?: Prisma.StringNullableWithAggregatesFilter<"User"> | string | null
 }
 
@@ -653,6 +669,7 @@ export type UserCreateInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -709,6 +726,7 @@ export type UserUncheckedCreateInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -763,6 +781,7 @@ export type UserUpdateInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -819,6 +838,7 @@ export type UserUncheckedUpdateInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -874,6 +894,7 @@ export type UserCreateManyInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
 }
 
@@ -905,6 +926,7 @@ export type UserUpdateManyMutationInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -937,6 +959,7 @@ export type UserUncheckedUpdateManyInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -969,6 +992,7 @@ export type UserCountOrderByAggregateInput = {
   deletionScheduledAt?: Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrder
   timeZone?: Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -976,6 +1000,7 @@ export type UserAvgOrderByAggregateInput = {
   chatAutoHigh?: Prisma.SortOrder
   chatAutoLow?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrder
 }
 
 export type UserMaxOrderByAggregateInput = {
@@ -1006,6 +1031,7 @@ export type UserMaxOrderByAggregateInput = {
   deletionScheduledAt?: Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrder
   timeZone?: Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -1037,6 +1063,7 @@ export type UserMinOrderByAggregateInput = {
   deletionScheduledAt?: Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrder
   timeZone?: Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrder
   locale?: Prisma.SortOrder
 }
 
@@ -1044,6 +1071,7 @@ export type UserSumOrderByAggregateInput = {
   chatAutoHigh?: Prisma.SortOrder
   chatAutoLow?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
+  aiLoginWarnDays?: Prisma.SortOrder
 }
 
 export type UserListRelationFilter = {
@@ -1510,6 +1538,7 @@ export type UserCreateWithoutRoleRefInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
@@ -1564,6 +1593,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -1648,6 +1678,7 @@ export type UserScalarWhereInput = {
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   timeZone?: Prisma.StringNullableFilter<"User"> | string | null
+  aiLoginWarnDays?: Prisma.IntNullableFilter<"User"> | number | null
   locale?: Prisma.StringNullableFilter<"User"> | string | null
 }
 
@@ -1679,6 +1710,7 @@ export type UserCreateWithoutSessionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
@@ -1734,6 +1766,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
@@ -1803,6 +1836,7 @@ export type UserUpdateWithoutSessionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
@@ -1858,6 +1892,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
@@ -1911,6 +1946,7 @@ export type UserCreateWithoutMachinesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -1966,6 +2002,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
@@ -2035,6 +2072,7 @@ export type UserUpdateWithoutMachinesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2090,6 +2128,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2143,6 +2182,7 @@ export type UserCreateWithoutProjectsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2198,6 +2238,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2267,6 +2308,7 @@ export type UserUpdateWithoutProjectsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2322,6 +2364,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2375,6 +2418,7 @@ export type UserCreateWithoutIntegrationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2430,6 +2474,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2499,6 +2544,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2554,6 +2600,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2607,6 +2654,7 @@ export type UserCreateWithoutUploadsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2662,6 +2710,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2731,6 +2780,7 @@ export type UserUpdateWithoutUploadsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -2786,6 +2836,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -2839,6 +2890,7 @@ export type UserCreateWithoutApiTokensInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -2894,6 +2946,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -2963,6 +3016,7 @@ export type UserUpdateWithoutApiTokensInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3018,6 +3072,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3071,6 +3126,7 @@ export type UserCreateWithoutChatConversationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3126,6 +3182,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3195,6 +3252,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3250,6 +3308,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3303,6 +3362,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3358,6 +3418,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3427,6 +3488,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3482,6 +3544,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3535,6 +3598,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3590,6 +3654,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3659,6 +3724,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3714,6 +3780,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3767,6 +3834,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -3822,6 +3890,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -3891,6 +3960,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -3946,6 +4016,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -3999,6 +4070,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4054,6 +4126,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4123,6 +4196,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4178,6 +4252,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4231,6 +4306,7 @@ export type UserCreateWithoutChatFocusInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4286,6 +4362,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4355,6 +4432,7 @@ export type UserUpdateWithoutChatFocusInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4410,6 +4488,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4463,6 +4542,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4518,6 +4598,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4587,6 +4668,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4642,6 +4724,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -4695,6 +4778,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4750,6 +4834,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4808,6 +4893,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -4863,6 +4949,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -4932,6 +5019,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -4987,6 +5075,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -5051,6 +5140,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -5106,6 +5196,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -5159,6 +5250,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -5214,6 +5306,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -5283,6 +5376,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -5338,6 +5432,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -5391,6 +5486,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -5446,6 +5542,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -5515,6 +5612,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -5570,6 +5668,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -5623,6 +5722,7 @@ export type UserCreateWithoutDevicesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -5678,6 +5778,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -5747,6 +5848,7 @@ export type UserUpdateWithoutDevicesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -5802,6 +5904,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -5855,6 +5958,7 @@ export type UserCreateWithoutNotificationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -5910,6 +6014,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -5979,6 +6084,7 @@ export type UserUpdateWithoutNotificationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -6034,6 +6140,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -6087,6 +6194,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -6142,6 +6250,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -6211,6 +6320,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -6266,6 +6376,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -6319,6 +6430,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -6374,6 +6486,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -6443,6 +6556,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -6498,6 +6612,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -6551,6 +6666,7 @@ export type UserCreateWithoutDataExportsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -6606,6 +6722,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -6675,6 +6792,7 @@ export type UserUpdateWithoutDataExportsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -6730,6 +6848,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -6783,6 +6902,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
   sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
@@ -6838,6 +6958,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
   sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
   machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
@@ -6907,6 +7028,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
@@ -6962,6 +7084,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -7015,6 +7138,7 @@ export type UserCreateManyRoleRefInput = {
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
   timeZone?: string | null
+  aiLoginWarnDays?: number | null
   locale?: string | null
 }
 
@@ -7046,6 +7170,7 @@ export type UserUpdateWithoutRoleRefInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
@@ -7100,6 +7225,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
   machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
@@ -7154,6 +7280,7 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
@@ -7415,6 +7542,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
   timeZone?: boolean
+  aiLoginWarnDays?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -7472,6 +7600,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
   timeZone?: boolean
+  aiLoginWarnDays?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
@@ -7505,6 +7634,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
   timeZone?: boolean
+  aiLoginWarnDays?: boolean
   locale?: boolean
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
@@ -7538,10 +7668,11 @@ export type UserSelectScalar = {
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
   timeZone?: boolean
+  aiLoginWarnDays?: boolean
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -7690,6 +7821,11 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
      */
     timeZone: string | null
+    /**
+     * TER-1079: how many days before an AI account's login expires this person is warned (0 = never).
+     * Null = the default (3).
+     */
+    aiLoginWarnDays: number | null
     /**
      * The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
      */
@@ -8169,6 +8305,7 @@ export interface UserFieldRefs {
   readonly deletionScheduledAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly automationPausedAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly timeZone: Prisma.FieldRef<"User", 'String'>
+  readonly aiLoginWarnDays: Prisma.FieldRef<"User", 'Int'>
   readonly locale: Prisma.FieldRef<"User", 'String'>
 }
     

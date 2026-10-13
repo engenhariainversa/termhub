@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { isFreshClaudeStart, scheduleLoginExpiryRead } from '../ai/login-expiry.js';
 import { expireTabLimits } from '../chat/tab-limits.js';
 import { noteHookEvent } from '../chat/tab-questions.js';
 import { cancelTabSuggestion, openCodexReply, scheduleTabSuggestion } from '../chat/tab-suggestions.js';
@@ -96,6 +97,8 @@ async function ingestForTab(
     current = await noteClaudeSession(repos, current, input.event, interpreted);
     // The limit ended: a usage-limit card still offering a swap expires (TER-589).
     if (tab.rate_limited_at && !current.rate_limited_at) await expireTabLimits(repos, log, tab.id);
+    // A CLI that just started says on screen when its login is about to expire (TER-1079): read in a moment.
+    if (isFreshClaudeStart(input.event)) scheduleLoginExpiryRead({ repos, log }, tab.id);
   }
   if (!interpreted) return { ok: false, reason: 'ignored' };
   const recorded = await recordInterpretation(repos, log, current, input.tool, interpreted);

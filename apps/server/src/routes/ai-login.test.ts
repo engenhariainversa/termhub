@@ -36,6 +36,8 @@ const acc = (id: string, machine_id: string, provider = 'claude', config_dir: st
 const accounts = [acc('a1', 'm1'), acc('a2', 'm1', 'claude', '~/.claude-2'), acc('c1', 'm2', 'chatgpt'), acc('g1', 'm1', 'gemini'), acc('s1', 'ms')];
 const tab = (id: string, ai_account_id: string | null, machine_id = 'm1', kind = 'terminal') => ({ id, name: `aba ${id}`, project_id: 'p1', machine_id, kind, tmux_session: `th-${id}`, ai_account_id });
 const tabs = [tab('t1', 'a1'), tab('t2', null), tab('t3', 'a2'), tab('t4', 'a1'), tab('t5', 'a1', 'm1', 'simulator')];
+/** users.ai_login_warn_days, by user (TER-1079). */
+const warnDays = new Map<string, number>();
 
 /** `viewer`: the signed-in user; `ownerId`: the scope (an admin "viewing as" u1 has viewer admin). */
 function build(opts: { viewer?: string; prefix?: string } = {}) {
@@ -49,6 +51,10 @@ function build(opts: { viewer?: string; prefix?: string } = {}) {
     machines: { findById: vi.fn(async (id: string) => machines.find((m) => m.id === id)), list: vi.fn(async () => machines) },
     aiAccounts: { findById: vi.fn(async (id: string) => accounts.find((a) => a.id === id)), list: vi.fn(async () => accounts) },
     tabs: { listByMachine: vi.fn(async (id: string) => tabs.filter((t) => t.machine_id === id)) },
+    users: {
+      aiLoginWarnDays: vi.fn(async (id: string) => warnDays.get(id) ?? null),
+      setAiLoginWarnDays: vi.fn(async (id: string, days: number) => void warnDays.set(id, days)),
+    },
   };
   app.register((a) => aiLoginRoutes(a, repos as never), { prefix: opts.prefix ?? '/ai-accounts' });
   return app;
@@ -65,6 +71,7 @@ beforeEach(() => {
   caps.clear();
   caps.set('m1', ['ai_login']).set('m2', ['ai_login']);
   screens.clear();
+  warnDays.clear();
 });
 afterEach(() => {
   aiLogin.stop();
@@ -291,5 +298,45 @@ describe('GET /ai-accounts/login-status', () => {
     expect(row('s1')).toMatchObject({ state: 'unknown', supported: false, machine_name: 'ssh box' });
     expect(row('a1').checked_at).not.toBeNull();
     expect(rpc).toHaveBeenCalledTimes(2);
+  });
+
+  it('TER-1079: says when each login expires, whether that is soon, and the caller\'s window', async () => {
+    const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
+    const soon = inDays(1.5);
+    const dated = [{ ...acc('a1', 'm1'), login_expires_at: soon }, { ...acc('a2', 'm1'), login_expires_at: inDays(10) }, { ...acc('c1', 'm2', 'chatgpt'), login_expires_at: null }];
+    const app = build();
+    const status = async () => {
+      const body = (await app.inject({ method: 'GET', url: '/ai-accounts/login-status' })).json() as { warn_days: number; accounts: Array<{ account_id: string; login_expires_at: string | null; expires_soon: boolean; expires_in_days: number | null }> };
+      return { warn_days: body.warn_days, rows: body.accounts.map((a) => [a.account_id, a.login_expires_at, a.expires_soon, a.expires_in_days]) };
+    };
+    accounts.splice(0, accounts.length, ...(dated as never[]));
+    try {
+      expect(await status()).toEqual({ warn_days: 3, rows: [['a1', soon, true, 2], ['a2', dated[1].login_expires_at, false, 10], ['c1', null, false, null]] });
+      // a login already gone is the red warning's, not "expires soon"
+      aiLogin.markLoginRequired('a1');
+      expect((await status()).rows[0]).toEqual(['a1', null, false, null]);
+    } finally {
+      accounts.splice(0, accounts.length, acc('a1', 'm1'), acc('a2', 'm1', 'claude', '~/.claude-2'), acc('c1', 'm2', 'chatgpt'), acc('g1', 'm1', 'gemini'), acc('s1', 'ms'));
+    }
+  });
+});
+
+describe('PUT /ai-accounts/login-warning (TER-1079)', () => {
+  it('saves the caller\'s own window, which the status then reports', async () => {
+    const app = build();
+    const res = await app.inject({ method: 'PUT', url: '/ai-accounts/login-warning', payload: { days: 1 } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ warn_days: 1 });
+    expect(warnDays.get('u1')).toBe(1);
+    expect((await app.inject({ method: 'GET', url: '/ai-accounts/login-status' })).json().warn_days).toBe(1);
+    expect((await app.inject({ method: 'PUT', url: '/ai-accounts/login-warning', payload: { days: 0 } })).json()).toEqual({ warn_days: 0 });
+  });
+
+  it('refuses a window the CLI cannot honour, and anything that is not a whole number of days', async () => {
+    const app = build();
+    for (const days of [4, -1, 1.5, '2', null]) {
+      expect((await app.inject({ method: 'PUT', url: '/ai-accounts/login-warning', payload: { days } })).statusCode).toBe(400);
+    }
+    expect(warnDays.size).toBe(0);
   });
 });
