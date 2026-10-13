@@ -215,17 +215,49 @@ export function branchFetchRules(branch: string | null): string[] {
   return [`Bash(git fetch origin ${branch})`];
 }
 
-/** Every rule an automatic run gets from its own branch: its pushes and its fetch. */
-export function runBranchRules(branch: string | null): string[] {
-  return [...branchPushRules(branch), ...branchFetchRules(branch)];
-}
-
 /**
  * A worktree path that can sit inside a rule as is: absolute, and none of the characters that would change
  * what the rule means to Claude Code (`*`, a space, `(`/`)`, quotes, shell operators) or a `..` segment.
  */
 const RULE_PATH = /^\/[A-Za-z0-9._@%+=,~/-]*[A-Za-z0-9._@%+=,~-]$/;
 const safeRulePath = (p: string | null): p is string => !!p && RULE_PATH.test(p) && !p.split('/').includes('..');
+/** The path without its trailing slashes, or null when it cannot sit inside a rule. */
+function ruleDir(p: string | null): string | null {
+  const dir = p?.replace(/\/+$/, '') ?? null;
+  return safeRulePath(dir) ? dir : null;
+}
+
+/**
+ * The repo folders of a multi-repo run (spec 2026-10-07 multi-repo R11): its workspace root, the tab's cwd,
+ * and the key of each repo, whose worktree is at `<workspace>/<key>`.
+ */
+export interface RunRepos {
+  workspace: string | null;
+  keys: readonly string[];
+}
+
+/** A repo key that can sit in a path and in a rule as is: the charset the guard accepts, so no `/` and no `..`. */
+const REPO_KEY = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const safeRepoKey = (key: string) => REPO_KEY.test(key) && !key.includes('..');
+
+/** `<workspace>/<key>` for each repo of a run, each once. Nothing for a workspace or a key a rule cannot hold. */
+export function runRepoPaths(repos: RunRepos | null | undefined): string[] {
+  const dir = ruleDir(repos?.workspace ?? null);
+  if (!repos || !dir) return [];
+  return [...new Set(repos.keys.filter(safeRepoKey))].map((key) => `${dir}/${key}`);
+}
+
+/**
+ * Every rule an automatic run gets from its own branch: its pushes and its fetch. With `repos` (spec
+ * 2026-10-07 multi-repo R13), the same rules again as `git -C <workspace>/<key> …` for each repo folder, by
+ * exact path: the form the guard accepts for a push (`guard-script.ts`, version 2). Without repos, the
+ * rules of a single-repo run.
+ */
+export function runBranchRules(branch: string | null, repos?: RunRepos | null): string[] {
+  const own = [...branchPushRules(branch), ...branchFetchRules(branch)];
+  const inRepo = runRepoPaths(repos).flatMap((p) => own.map((r) => r.replace(/^Bash\(git /, `Bash(git -C ${p} `)));
+  return [...own, ...inRepo];
+}
 
 /**
  * The same git rule in the equivalent forms an agent writes (TER-991): `git --no-pager <sub>` and, with the
@@ -234,12 +266,17 @@ const safeRulePath = (p: string | null): p is string => !!p && RULE_PATH.test(p)
  * command's text, so `Bash(git log:*)` misses `git -C <worktree> log`. Only the run's own worktree: a `-C`
  * anywhere else (a subfolder included, since a `*` would also take `../..`) still asks. `-c core.pager=cat`
  * stays denied with every `-c`, and nothing covers `GIT_PAGER=cat git …`: the Bash tool has no pager.
+ *
+ * With `keys` (spec 2026-10-07 multi-repo R13), the worktree is a multi-repo run's workspace root and each
+ * repo folder gets the `-C` forms too, by exact path: `<worktree>/<key>` and, relative to the tab's cwd,
+ * `<key>`. Still no wildcard in a path, and no other subfolder.
  */
-export function gitRuleForms(rule: string, worktree: string | null): string[] {
+export function gitRuleForms(rule: string, worktree: string | null, keys: readonly string[] = []): string[] {
   const m = /^Bash\(git (?!-)([\s\S]+)\)$/.exec(rule);
   if (!m) return [];
-  const dir = worktree?.replace(/\/+$/, '') ?? null;
-  const paths = safeRulePath(dir) ? [dir, `${dir}/`, '.'] : [];
+  const dir = ruleDir(worktree);
+  const repoPaths = runRepoPaths({ workspace: dir, keys });
+  const paths = dir ? [dir, `${dir}/`, '.', ...repoPaths.flatMap((p) => [p, p.slice(dir.length + 1)])] : [];
   const prefixes = ['--no-pager', ...paths.flatMap((p) => [`-C ${p}`, `-C ${p} --no-pager`, `--no-pager -C ${p}`])];
   return prefixes.map((p) => `Bash(git ${p} ${m[1]})`);
 }
@@ -248,12 +285,14 @@ export function gitRuleForms(rule: string, worktree: string | null): string[] {
  * The whole allow list of an automatic tab (TER-989): the fixed read rules, the project's list less what is
  * too broad (`safeAllowedTools`) and the run's own branch rules, each once. With `forms` (TER-991), every git
  * rule also comes in the forms of `gitRuleForms` for the run's worktree; the line must then carry
- * `AUTOMATION_FORM_DENIED_TOOLS` too (`automationDenyList`). The tab's line and the server's
+ * `AUTOMATION_FORM_DENIED_TOOLS` too (`automationDenyList`). `forms.keys` are the repos of a multi-repo run,
+ * whose worktree is the workspace root (`runBranchRules`, `gitRuleForms`). The tab's line and the server's
  * `permissionAllowed` both use it, so they never disagree.
  */
-export function automationAllowList(allowed: readonly string[], branch: string | null, forms?: { worktree: string | null } | null): string[] {
-  const base = [...AUTOMATION_READ_TOOLS, ...safeAllowedTools(allowed).kept, ...runBranchRules(branch)];
-  return [...new Set(forms ? [...base, ...base.flatMap((r) => gitRuleForms(r, forms.worktree))] : base)];
+export function automationAllowList(allowed: readonly string[], branch: string | null, forms?: { worktree: string | null; keys?: readonly string[] } | null): string[] {
+  const keys = forms?.keys ?? [];
+  const base = [...AUTOMATION_READ_TOOLS, ...safeAllowedTools(allowed).kept, ...runBranchRules(branch, forms ? { workspace: forms.worktree, keys } : null)];
+  return [...new Set(forms ? [...base, ...base.flatMap((r) => gitRuleForms(r, forms.worktree, keys))] : base)];
 }
 
 /** The deny list of a line: the fixed one, plus the denies of the git forms when the line allows them. */
