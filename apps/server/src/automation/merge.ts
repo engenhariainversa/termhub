@@ -29,6 +29,7 @@ import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
+import { runBranchOf } from './release.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
 export const MERGE_TOOL = 'automation_merge';
@@ -148,7 +149,8 @@ async function candidateOf(
   const tasks = (await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)))).filter((t): t is Task => !!t);
   let primary: Task | undefined;
   for (const task of tasks) {
-    if (task.auto && (await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
+    // by repository and branch (spec 2026-10-07 multi-repo R14)
+    if (task.auto && (await runBranchOf(repos, base.setup, task.id, row))) {
       primary = task;
       break;
     }
