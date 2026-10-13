@@ -6,6 +6,7 @@ import { LoginCodesRepository } from './login-codes.js';
 import { MachinesRepository } from './machines.js';
 import { ProjectsRepository } from './projects.js';
 import { ProjectMachinesRepository } from './project-machines.js';
+import { ProjectRepositoriesRepository } from './project-repositories.js';
 import { TabsRepository } from './tabs.js';
 import { TasksRepository } from './tasks.js';
 import { TaskColumnsRepository } from './task-columns.js';
@@ -65,6 +66,7 @@ export interface Repositories {
   machines: MachinesRepository;
   projects: ProjectsRepository;
   projectMachines: ProjectMachinesRepository;
+  projectRepositories: ProjectRepositoriesRepository;
   tabs: TabsRepository;
   tasks: TasksRepository;
   taskColumns: TaskColumnsRepository;
@@ -128,6 +130,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     machines: new MachinesRepository(db),
     projects: new ProjectsRepository(db),
     projectMachines: new ProjectMachinesRepository(db),
+    projectRepositories: new ProjectRepositoriesRepository(db),
     tabs: new TabsRepository(db),
     tasks: new TasksRepository(db),
     taskColumns: new TaskColumnsRepository(db),
@@ -185,6 +188,7 @@ export function createRepositories(db: PrismaClient): Repositories {
 export * from './types.js';
 export type { Integration, IntegrationProvider } from './integrations.js';
 export type { ProjectSetup } from './project-setup.js';
+export type { DiscoveredCheckoutInput } from './project-repositories.js';
 export type { WaitlistEntry } from './waitlist.js';
 export type { Role, PermissionGrant } from './roles.js';
 export type { Upload } from './uploads.js';

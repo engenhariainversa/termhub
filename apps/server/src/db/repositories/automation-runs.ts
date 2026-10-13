@@ -343,7 +343,9 @@ export class AutomationRunsRepository {
     return rows.map((r) => r.status as RunStatus);
   }
 
-  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
+  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. A run has
+   *  no repository of its own yet, so these are branches of the project's repository: read them through
+   *  `runBranchOf`, which pairs them with it (spec 2026-10-07 multi-repo R14). */
   async branchesOfTask(taskId: string): Promise<string[]> {
     const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
     return rows.map((r) => r.branch!).filter((b) => b.length > 0);

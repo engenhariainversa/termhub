@@ -61,6 +61,8 @@ export const ModelName = {
   Machine: 'Machine',
   Project: 'Project',
   ProjectMachine: 'ProjectMachine',
+  ProjectRepository: 'ProjectRepository',
+  ProjectRepositoryCheckout: 'ProjectRepositoryCheckout',
   Tab: 'Tab',
   TabEvent: 'TabEvent',
   TabLastAnswer: 'TabLastAnswer',
@@ -303,6 +305,33 @@ export const ProjectMachineScalarFieldEnum = {
 } as const
 
 export type ProjectMachineScalarFieldEnum = (typeof ProjectMachineScalarFieldEnum)[keyof typeof ProjectMachineScalarFieldEnum]
+
+
+export const ProjectRepositoryScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  fullName: 'fullName',
+  key: 'key',
+  description: 'description',
+  status: 'status',
+  discoveredAt: 'discoveredAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProjectRepositoryScalarFieldEnum = (typeof ProjectRepositoryScalarFieldEnum)[keyof typeof ProjectRepositoryScalarFieldEnum]
+
+
+export const ProjectRepositoryCheckoutScalarFieldEnum = {
+  repositoryId: 'repositoryId',
+  machineId: 'machineId',
+  dir: 'dir',
+  defaultBranch: 'defaultBranch',
+  hasCommits: 'hasCommits',
+  seenAt: 'seenAt',
+  missingAt: 'missingAt'
+} as const
+
+export type ProjectRepositoryCheckoutScalarFieldEnum = (typeof ProjectRepositoryCheckoutScalarFieldEnum)[keyof typeof ProjectRepositoryCheckoutScalarFieldEnum]
 
 
 export const TabScalarFieldEnum = {

@@ -246,6 +246,7 @@ model Machine {
   owner                 User?              @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt             DateTime           @default(now()) @map("created_at")
   projectLinks          ProjectMachine[]
+  repositoryCheckouts   ProjectRepositoryCheckout[]
   tabs                  Tab[]
   aiAccounts            AiAccount[]
   hook                  MachineHook?
@@ -285,6 +286,7 @@ model Project {
   tasks               Task[]
   note                Note?
   setup               ProjectSetup?
+  repositories        ProjectRepository[]
   tickets             Ticket[]
   chatConversations   ChatConversation[]
   tabQuestions        TabQuestion[]
@@ -322,6 +324,48 @@ model ProjectMachine {
   @@unique([projectId, machineId])
   @@index([machineId])
   @@map("project_machines")
+}
+
+/// A git repository found in a project's folder (spec 2026-10-07 multi-repo R1, R4). Written only by
+/// discovery; what the person changes about it lives in the setup (`repos`), keyed by `full_name`.
+model ProjectRepository {
+  id           String                      @id
+  projectId    String                      @map("project_id")
+  /// owner/repo, parsed from the checkout's origin
+  fullName     String                      @map("full_name")
+  /// Short name for paths and chips: the folder's base name, slugged, or `main` for the project folder itself. Never changed once given.
+  key          String
+  /// One line read from package.json or the README (≤ 200 chars)
+  description  String?
+  /// ok | unsupported (no GitHub origin) | no_access (the integration does not see it)
+  status       String                      @default("ok")
+  discoveredAt DateTime                    @default(now()) @map("discovered_at")
+  updatedAt    DateTime                    @default(now()) @updatedAt @map("updated_at")
+  project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checkouts    ProjectRepositoryCheckout[]
+
+  @@unique([projectId, fullName])
+  @@unique([projectId, key])
+  @@map("project_repositories")
+}
+
+/// Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). A folder that is gone
+/// is marked with `missing_at`, never deleted.
+model ProjectRepositoryCheckout {
+  repositoryId  String            @map("repository_id")
+  machineId     String            @map("machine_id")
+  /// relative to the project's folder on that machine; `.` for the folder itself
+  dir           String
+  defaultBranch String?           @map("default_branch")
+  hasCommits    Boolean           @default(false) @map("has_commits")
+  seenAt        DateTime          @default(now()) @map("seen_at")
+  missingAt     DateTime?         @map("missing_at")
+  repository    ProjectRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  machine       Machine           @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@id([repositoryId, machineId])
+  @@index([machineId])
+  @@map("project_repository_checkouts")
 }
 
 model Tab {
