@@ -73,6 +73,9 @@ const CLI_SUCCESS_RE = /\bLogin successful\b/i;
 /** A CLI that just said it logged in may still be writing the credentials: the status gets a few more looks. */
 const CONFIRM_POLLS = 3;
 const CONFIRM_POLL_MS = 1_000;
+/** A dead pane's exit status lands a moment after tmux sees the pty close: up to 1 s of reads for it. */
+const DEAD_STATUS_POLLS = 20;
+const DEAD_STATUS_POLL_MS = 50;
 
 function spec(provider: RpcParams<'ai.login.status'>['provider'], deps: AiLoginDeps): CliSpec | null {
   if (provider === 'claude') return { bin: deps.bins.claude, envVar: 'CLAUDE_CONFIG_DIR', status: ['auth', 'status'], login: ['auth', 'login'], needsCode: true };
@@ -163,6 +166,8 @@ export function failureMessage(text: string, secret: string | null = null, maxCh
 
 // ---------- tmux helpers ----------
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const pane = (session: string) => `=${session}:`;
 
 async function tmux(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -189,7 +194,7 @@ interface PaneState {
   exitCode: number | null;
 }
 
-async function paneState(session: string): Promise<PaneState> {
+async function readPaneState(session: string): Promise<PaneState> {
   const r = await tmux(['display-message', '-p', '-t', pane(session), '#{pane_dead} #{pane_dead_status}']);
   if (r.code !== 0) return { state: 'gone', exitCode: null };
   const [dead, status] = r.stdout.trim().split(/\s+/);
@@ -197,12 +202,26 @@ async function paneState(session: string): Promise<PaneState> {
   return { state: 'dead', exitCode: status && /^\d+$/.test(status) ? Number(status) : null };
 }
 
+/**
+ * tmux marks a pane dead when its pty closes, but fills in the exit status only once it reaps the
+ * process (SIGCHLD), a moment later. A dead pane without a status gets a few more reads, so a CLI that
+ * exited 0 is not read as one that said nothing (TER-1077). A CLI killed by a signal never gets one.
+ */
+async function paneState(session: string): Promise<PaneState> {
+  let current = await readPaneState(session);
+  for (let i = 0; current.state === 'dead' && current.exitCode === null && i < DEAD_STATUS_POLLS; i++) {
+    await sleep(DEAD_STATUS_POLL_MS);
+    const next = await readPaneState(session);
+    if (next.state === 'gone') break;
+    current = next;
+  }
+  return current;
+}
+
 /** The CLI ended its login itself: exit 0, or its success line on the pane. */
 export function cliReportedSuccess(exitCode: number | null, text: string): boolean {
   return exitCode === 0 || CLI_SUCCESS_RE.test(text);
 }
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---------- handlers ----------
 
