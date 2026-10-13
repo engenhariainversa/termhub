@@ -103,6 +103,9 @@ model User {
   automationPausedAt      DateTime?                @map("automation_paused_at") @db.Timestamptz
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
   timeZone                String?                  @map("time_zone")
+  /// TER-1079: how many days before an AI account's login expires this person is warned (0 = never).
+  /// Null = the default (3).
+  aiLoginWarnDays         Int?                     @map("ai_login_warn_days")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale                  String?
   automationSummaries     AutomationSummary[]
@@ -791,6 +794,11 @@ model AiAccount {
   /// TER-990: the only project this account may run in (a client's or a company's account). null = any
   /// project of the owner. Deleting the project clears it.
   exclusiveProjectId String?              @map("exclusive_project_id")
+  /// TER-1079: when the CLI's login expires, as far as its own notice on a tab's screen told ("Your login
+  /// expires in N days"). null = unknown. Cleared when the login is redone.
+  loginExpiresAt     DateTime?            @map("login_expires_at") @db.Timestamptz
+  /// When the person was warned about `loginExpiresAt`: one warning per login. null = not yet.
+  loginExpiryWarnedAt DateTime?           @map("login_expiry_warned_at") @db.Timestamptz
   createdAt          DateTime             @default(now()) @map("created_at")
   machine            Machine              @relation(fields: [machineId], references: [id], onDelete: Cascade)
   exclusiveProject   Project?             @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)

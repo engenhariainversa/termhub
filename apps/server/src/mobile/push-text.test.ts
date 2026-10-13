@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aiLoginRequiredText, confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText } from './push-text.js';
+import { aiLoginExpiringText, aiLoginRequiredText,confirmationText, deviceRequestText, replyText, tabFinishedText, tabQuestionText } from './push-text.js';
 
 describe('push texts', () => {
   it('names the project, tab and machine and never anything else', () => {
@@ -47,5 +47,15 @@ describe('aiLoginRequiredText (TER-1047)', () => {
   it('names the CLI and the machine, in pt-BR and in English', () => {
     expect(aiLoginRequiredText('claude', 'jarvis')).toEqual({ title: 'Login do Claude expirou', body: 'jarvis: toque para refazer o login' });
     expect(aiLoginRequiredText('chatgpt', 'hulk', 'en')).toEqual({ title: 'Codex login expired', body: 'hulk: tap to redo the login' });
+  });
+});
+
+describe('aiLoginExpiringText (TER-1079)', () => {
+  it('names the CLI, the days left and the machine, in each language', () => {
+    expect(aiLoginExpiringText('claude', 'jarvis', 3)).toEqual({ title: 'Login do Claude expira em 3 dias', body: 'jarvis: toque para refazer o login' });
+    expect(aiLoginExpiringText('claude', 'jarvis', 1).title).toBe('Login do Claude expira em 1 dia');
+    expect(aiLoginExpiringText('claude', 'hulk', 2, 'en')).toEqual({ title: 'Claude login expires in 2 days', body: 'hulk: tap to redo the login' });
+    expect(aiLoginExpiringText('claude', 'hulk', 1, 'en').title).toBe('Claude login expires in 1 day');
+    expect(aiLoginExpiringText('claude', 'hulk', 2, 'es').title).toBe('El login de Claude expira en 2 días');
   });
 });

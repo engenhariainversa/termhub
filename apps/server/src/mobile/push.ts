@@ -9,7 +9,7 @@ import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { aiLoginRequiredText, automationEscalationText, automationReleaseText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -317,6 +317,22 @@ export class MobilePushService {
       { kind: 'ai_login', account_id: info.accountId },
       await this.deps.repos.devices.listActiveWithPush(userId),
       `ai_login:${info.accountId}`,
+    );
+  }
+
+  /**
+   * An AI account's CLI login expires in a few days (TER-1079): one push to every device of the machine's
+   * owner, once per login (the caller holds the claim). Same data as the expired push, so the tap opens
+   * "Refazer login" for the account on every app version; its own collapse id, so neither replaces the other.
+   */
+  async aiLoginExpiring(userId: string, info: { accountId: string; machineName: string; provider: AiProvider; days: number }): Promise<void> {
+    await this.deliver(
+      userId,
+      'confirmation',
+      (locale) => aiLoginExpiringText(info.provider, info.machineName, info.days, locale),
+      { kind: 'ai_login', account_id: info.accountId },
+      await this.deps.repos.devices.listActiveWithPush(userId),
+      `ai_login_soon:${info.accountId}`,
     );
   }
 

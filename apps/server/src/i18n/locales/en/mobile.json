@@ -49,5 +49,7 @@
   "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code needs /login. Open tab {{tab}} and sign in again.",
   "Um card": "A card",
   "Login do {{provider}} expirou": "{{provider}} login expired",
+  "Login do {{provider}} expira em {{count}} dias_one": "{{provider}} login expires in {{count}} day",
+  "Login do {{provider}} expira em {{count}} dias_other": "{{provider}} login expires in {{count}} days",
   "{{machine}}: toque para refazer o login": "{{machine}}: tap to redo the login"
 }

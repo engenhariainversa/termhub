@@ -164,6 +164,15 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { timeZone } });
   }
 
+  /** How many days ahead this person is warned of an AI login expiring (TER-1079); null = the default. */
+  async aiLoginWarnDays(userId: string): Promise<number | null> {
+    return (await this.db.user.findUnique({ where: { id: userId }, select: { aiLoginWarnDays: true } }))?.aiLoginWarnDays ?? null;
+  }
+
+  async setAiLoginWarnDays(userId: string, days: number): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { aiLoginWarnDays: days } });
+  }
+
   async setChatSuggestions(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { chatSuggestions: enabled } });
   }

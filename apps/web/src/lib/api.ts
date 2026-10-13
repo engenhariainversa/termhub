@@ -505,7 +505,9 @@ export const api = {
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),
     /** TER-1047: the login state of every account in scope; `refresh` asks the machines again. */
-    loginStatus: (refresh = false) => request<{ accounts: AiLoginStatusRow[] }>('GET', `/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`),
+    loginStatus: (refresh = false) => request<{ accounts: AiLoginStatusRow[]; warn_days?: number }>('GET', `/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`),
+    /** TER-1079: how many days before a login expires the person is warned (0 = never, at most 3). */
+    setLoginWarning: (days: number) => request<{ warn_days: number }>('PUT', '/ai-accounts/login-warning', { days }),
     /** Starts a login flow in a hidden session on the account's machine. 400/403/409/503 carry a message to show. */
     startLogin: (id: string) => request<AiLoginStart>('POST', `/ai-accounts/${id}/login`),
     /** Claude: the code the page showed; Codex: null (just "already authorized"). 404 LOGIN_NOT_FOUND once expired. */

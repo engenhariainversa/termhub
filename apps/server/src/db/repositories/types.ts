@@ -501,6 +501,8 @@ export interface AiAccount {
   config_dir: string | null;
   /** TER-990: the only project this account may run in; null = any project of the owner. */
   exclusive_project: { id: string; name: string } | null;
+  /** TER-1079: when the CLI's login expires, as its own notice told; null = unknown. */
+  login_expires_at: string | null;
   created_at: string;
 }
 
@@ -510,6 +512,7 @@ export function mapAiAccount(a: {
   label: string;
   machineId: string;
   configDir: string | null;
+  loginExpiresAt?: Date | null;
   createdAt: Date;
   exclusiveProject?: { id: string; name: string } | null;
 }): AiAccount {
@@ -520,6 +523,7 @@ export function mapAiAccount(a: {
     machine_id: a.machineId,
     config_dir: a.configDir,
     exclusive_project: a.exclusiveProject ? { id: a.exclusiveProject.id, name: a.exclusiveProject.name } : null,
+    login_expires_at: a.loginExpiresAt?.toISOString() ?? null,
     created_at: a.createdAt.toISOString(),
   };
 }

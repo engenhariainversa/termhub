@@ -39,6 +39,24 @@ describe('placeRun', () => {
     expect(p).toMatchObject({ machine: { id: 'm2' }, account: { id: 'a2' }, link: { cwd: '/code/m2' } });
   });
 
+  it('TER-1079: an account whose login expires within three days goes after the ones with slack, and is still used when alone', async () => {
+    reg.online.set('m1', ['worktree']);
+    const now = new Date('2026-10-13T12:00:00Z');
+    const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
+    const soon = { ...account('a1', 'm1'), login_expires_at: inDays(2) };
+    const later = { ...account('a2', 'm1'), login_expires_at: inDays(20) };
+    const unknown = { ...account('a3', 'm1'), login_expires_at: null };
+    const place = (accounts: AiAccount[], listed: string[], usage: (id: string) => Promise<number | null> = async () => 10) =>
+      placeRun({ repos: fakeRepos({ machines: [machine('m1')], accounts }), now: () => now, usage }, project, setup(listed));
+    expect(await place([soon, later, unknown], ['a1', 'a2', 'a3'])).toMatchObject({ account: { id: 'a2' } });
+    expect(await place([soon, unknown], ['a1', 'a3'])).toMatchObject({ account: { id: 'a3' } });
+    // only a preference: with the others full, or alone, it is the one
+    expect(await place([soon, later], ['a1', 'a2'], async (id) => (id === 'a2' ? 95 : 10))).toMatchObject({ account: { id: 'a1' } });
+    expect(await place([soon], ['a1'])).toMatchObject({ account: { id: 'a1' } });
+    // a date already past says nothing about the login now
+    expect(await place([{ ...soon, login_expires_at: inDays(-1) }, later], ['a1', 'a2'])).toMatchObject({ account: { id: 'a1' } });
+  });
+
   it('skips exhausted accounts and those at or above the swap threshold; unknown usage is room', async () => {
     reg.online.set('m1', ['worktree']);
     const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1'), account('a2', 'm1'), account('a3', 'm1')], exhausted: ['a1'] });

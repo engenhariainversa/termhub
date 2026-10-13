@@ -458,8 +458,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
   // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
-  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep.
-  const stopAiLoginChecks = startAiLoginChecks({ repos, log: fastify.log, push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined });
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep. A login about to
+  // expire (TER-1079, read off a starting session's screen) warns once too, ahead of it.
+  const stopAiLoginChecks = startAiLoginChecks({
+    repos,
+    log: fastify.log,
+    push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined,
+    pushExpiring: mobile ? (...a) => mobile.push.aiLoginExpiring(...a) : undefined,
+  });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);

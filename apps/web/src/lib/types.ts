@@ -1019,6 +1019,12 @@ export interface AiLoginStatusRow {
   checked_at: string | null;
   /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
   supported: boolean;
+  /** TER-1079: when the CLI's login expires, as its own notice told; null = unknown. Absent from an older server. */
+  login_expires_at?: string | null;
+  /** still logged in, and expiring within the person's warning window */
+  expires_soon?: boolean;
+  /** whole days left, rounded up */
+  expires_in_days?: number | null;
 }
 
 /** POST /ai-accounts/:id/login */

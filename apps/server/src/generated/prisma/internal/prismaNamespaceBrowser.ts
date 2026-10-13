@@ -164,6 +164,7 @@ export const UserScalarFieldEnum = {
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
   timeZone: 'timeZone',
+  aiLoginWarnDays: 'aiLoginWarnDays',
   locale: 'locale'
 } as const
 
@@ -575,6 +576,8 @@ export const AiAccountScalarFieldEnum = {
   machineId: 'machineId',
   configDir: 'configDir',
   exclusiveProjectId: 'exclusiveProjectId',
+  loginExpiresAt: 'loginExpiresAt',
+  loginExpiryWarnedAt: 'loginExpiryWarnedAt',
   createdAt: 'createdAt'
 } as const
 
