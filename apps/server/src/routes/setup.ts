@@ -17,13 +17,18 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
   app.get('/:id/setup', async (request) => {
     const { id } = idParam.parse(request.params);
     await scoped(repos, request).project(id);
-    return { setup: await repos.projectSetup.get(id) };
+    const setup = await repos.projectSetup.get(id);
+    return { setup, effective_repos: await repos.projectRepositories.effective(id, setup.data) };
   });
 
   app.put('/:id/setup', async (request) => {
     const { id } = idParam.parse(request.params);
     await scoped(repos, request).project(id);
-    const parsed = setupInputSchema.safeParse(request.body);
+    const stored = (await repos.projectSetup.get(id)).data;
+    const sent = (key: string) => typeof request.body === 'object' && request.body !== null && key in request.body;
+    // Overrides are checked against the project's level; with no automation block in the body, that is the stored one.
+    const input = sent('repos') && !sent('automation') && stored.automation ? { ...(request.body as object), automation: stored.automation } : request.body;
+    const parsed = setupInputSchema.safeParse(input);
     if (!parsed.success) {
       if (parsed.error.issues.some((i) => i.message === 'Fonte de tickets repetida')) throw new HttpError(400, 'Fonte de tickets repetida', 'DUPLICATE_SOURCE');
       throw parsed.error;
@@ -35,16 +40,19 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     for (const source of data.ticket_sources) {
       if (!(await exists(s.integration(source.integration_id)))) throw badRequest('Integração de tickets inexistente');
     }
-    if (data.repo?.integration_id && !(await exists(s.integration(data.repo.integration_id)))) throw badRequest('Integração do repositório inexistente');
+    for (const integrationId of new Set([data.repo?.integration_id, data.repo_defaults.integration_id, ...data.repos.map((r) => r.integration_id)])) {
+      if (integrationId && !(await exists(s.integration(integrationId)))) throw badRequest('Integração do repositório inexistente');
+    }
     if (data.runner.machine_id && !(await exists(s.machine(data.runner.machine_id)))) throw badRequest('Máquina do runner inexistente');
-    const stored = (await repos.projectSetup.get(id)).data;
     const before = stored.ticket_sources;
     // The ai block has its own endpoint (TER-589): a form loaded before it, or before the phone's edit, keeps it.
     if (stored.ai) data.ai = stored.ai;
     // An older client (the phone app, a form loaded before the deploy) omits the block: its zod default
     // would reset the stored one, so keep it. A client that sends the block is the one that edits it.
-    const sentAutomation = typeof request.body === 'object' && request.body !== null && 'automation' in request.body;
-    if (stored.automation && !sentAutomation) data.automation = stored.automation;
+    if (stored.automation && !sent('automation')) data.automation = stored.automation;
+    // The same for the per-repo overrides (spec 2026-10-07 multi-repo R1): a client that does not know them must not wipe them.
+    if (stored.repos && !sent('repos')) data.repos = stored.repos;
+    if (stored.repo_defaults && !sent('repo_defaults')) data.repo_defaults = stored.repo_defaults;
     const kept = new Set(data.ticket_sources.map(sourceIdentity));
     const saved = await repos.projectSetup.save(id, data);
     if (stored.automation) await recordSetupChange(repos, id, stored.automation, saved.data.automation, 'web');
@@ -54,7 +62,7 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     // the sources may have changed: "Sincronizar agora" right after saving must not answer the cached result
     forgetSync(id);
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
-    return { setup: saved };
+    return { setup: saved, effective_repos: await repos.projectRepositories.effective(id, saved.data) };
   });
 
   app.post('/:id/tickets/sync', { config: { resource: 'tickets', action: 'update' } }, async (request) => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { automationInputSchema, normalizeSetup, setupInputSchema, UNSAFE_ALLOWED_TOOL, withLegacyMirror, SETUP_VERSION } from './schema.js';
+import { automationInputSchema, DUPLICATE_REPO, INVALID_REPO_GLOB, normalizeSetup, REPO_AUTONOMY_ABOVE_PROJECT, setupInputSchema, UNSAFE_ALLOWED_TOOL, withLegacyMirror, SETUP_VERSION } from './schema.js';
 
 const legacy = { provider: 'linear', integration_id: 'i1', scope: 'EI', filter: null, include_done: true, sync_minutes: 15 };
 
@@ -43,6 +43,64 @@ describe('setup repo.deploy_workflow', () => {
   it('keeps a trimmed workflow name', () => {
     const data = normalizeSetup({ repo: { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: '  deploy.yml ' } }, SETUP_VERSION);
     expect(data.repo?.deploy_workflow).toBe('deploy.yml');
+  });
+});
+
+describe('setup repositories (TER-1076)', () => {
+  const legacyRepo = { integration_id: 'i1', full_name: 'acme/app', base_branch: 'develop', branch_pattern: '{ticket}', draft_pr: false, deploy_workflow: 'deploy.yml' };
+
+  it('a v2 setup with only repo gets the defaults and keeps repo as it was', () => {
+    const d = normalizeSetup({ repo: legacyRepo }, 2);
+    expect(d.repo).toEqual(legacyRepo);
+    expect(d.repo_defaults).toEqual({ integration_id: null, scan_depth: 1 });
+    expect(d.repos).toEqual([]);
+  });
+
+  it('an override with only the name gets every default', () => {
+    expect(setupInputSchema.parse({ repos: [{ full_name: ' acme/bff ' }] }).repos).toEqual([{
+      full_name: 'acme/bff', enabled: true, integration_id: null, description: null, base_branch: null, branch_pattern: null,
+      deploy_workflow: null, autonomy: 'pr', required_checks: [], release_workflows: [], release_paths: [], store_paths: [], merge_order: 0,
+    }]);
+  });
+
+  it('refuses the same repository twice, whatever the case', () => {
+    const r = setupInputSchema.safeParse({ repos: [{ full_name: 'acme/api' }, { full_name: 'Acme/API' }] });
+    expect(r.error?.issues).toEqual([expect.objectContaining({ path: ['repos', 1, 'full_name'], message: DUPLICATE_REPO })]);
+  });
+
+  it('the project autonomy is the ceiling of a repository', () => {
+    const above = setupInputSchema.safeParse({ repos: [{ full_name: 'acme/api', autonomy: 'merge' }] });
+    expect(above.error?.issues).toEqual([expect.objectContaining({ path: ['repos', 0, 'autonomy'], message: REPO_AUTONOMY_ABOVE_PROJECT })]);
+    expect(setupInputSchema.safeParse({ automation: { autonomy: 'deploy' }, repos: [{ full_name: 'acme/api', autonomy: 'merge' }] }).success).toBe(true);
+    expect(setupInputSchema.safeParse({ automation: { autonomy: 'merge' }, repos: [{ full_name: 'acme/api', autonomy: 'merge' }] }).success).toBe(true);
+  });
+
+  it('refuses globs that leave the repository', () => {
+    for (const bad of ['/abs', '../x', 'a/../b', 'a\\b']) {
+      const r = setupInputSchema.safeParse({ repos: [{ full_name: 'acme/api', store_paths: ['ok/**', bad] }] });
+      expect(r.error?.issues, bad).toEqual([expect.objectContaining({ path: ['repos', 0, 'store_paths', 1], message: INVALID_REPO_GLOB })]);
+    }
+    expect(setupInputSchema.safeParse({ repos: [{ full_name: 'acme/api', release_paths: ['apps/**/package.json', '..hidden'] }] }).success).toBe(true);
+  });
+
+  it('refuses a name that is not owner/repo, more than 50 overrides and a scan depth outside 1..3', () => {
+    expect(setupInputSchema.safeParse({ repos: [{ full_name: 'api' }] }).success).toBe(false);
+    expect(setupInputSchema.safeParse({ repos: Array.from({ length: 51 }, (_, i) => ({ full_name: `acme/r${i}` })) }).success).toBe(false);
+    expect(setupInputSchema.safeParse({ repos: Array.from({ length: 50 }, (_, i) => ({ full_name: `acme/r${i}` })) }).success).toBe(true);
+    for (const depth of [0, 4, 1.5]) expect(setupInputSchema.safeParse({ repo_defaults: { scan_depth: depth } }).success, String(depth)).toBe(false);
+    expect(setupInputSchema.parse({ repo_defaults: { scan_depth: 3, integration_id: 'g' } }).repo_defaults).toEqual({ integration_id: 'g', scan_depth: 3 });
+  });
+
+  it('a stored override above the project level is read as stored, never reset', () => {
+    const d = normalizeSetup({ automation: { autonomy: 'pr' }, repos: [{ full_name: 'acme/api', autonomy: 'release' }] }, SETUP_VERSION);
+    expect(d.repos[0].autonomy).toBe('release');
+  });
+
+  it('a corrupt repos value falls back to none without losing the other blocks', () => {
+    const d = normalizeSetup({ repos: [{ full_name: 'nope' }], repo: legacyRepo, runner: { worktree: false } }, SETUP_VERSION);
+    expect(d.repos).toEqual([]);
+    expect(d.repo).toEqual(legacyRepo);
+    expect(d.runner.worktree).toBe(false);
   });
 });
 
