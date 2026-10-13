@@ -73,7 +73,7 @@ const CLI_SUCCESS_RE = /\bLogin successful\b/i;
 /** A CLI that just said it logged in may still be writing the credentials: the status gets a few more looks. */
 const CONFIRM_POLLS = 3;
 const CONFIRM_POLL_MS = 1_000;
-/** A dead pane's exit status lands a moment after tmux sees the pty close: up to 1 s of reads for it. */
+/** A dead pane's exit status can lag the pty closing (see paneState): up to about 1 s of reads for it. */
 const DEAD_STATUS_POLLS = 20;
 const DEAD_STATUS_POLL_MS = 50;
 
@@ -204,13 +204,17 @@ async function readPaneState(session: string): Promise<PaneState> {
 
 /**
  * tmux marks a pane dead when its pty closes, but fills in the exit status only once it reaps the
- * process (SIGCHLD), a moment later. A dead pane without a status gets a few more reads, so a CLI that
- * exited 0 is not read as one that said nothing (TER-1077). A CLI killed by a signal never gets one.
+ * process on SIGCHLD. Before 3.6, a tmux built with utempter can lose that SIGCHLD (libutempter resets
+ * the handler while its helper runs), and the status then waits for some other child of the server to
+ * exit. A dead pane without a status gets more reads, each after `run-shell true`: its child exiting
+ * makes tmux reap every exited process, the pane's included. So a CLI that exited 0 is not read as one
+ * that said nothing (TER-1077). A CLI killed by a signal never gets a status.
  */
 async function paneState(session: string): Promise<PaneState> {
   let current = await readPaneState(session);
   for (let i = 0; current.state === 'dead' && current.exitCode === null && i < DEAD_STATUS_POLLS; i++) {
-    await sleep(DEAD_STATUS_POLL_MS);
+    if (i > 0) await sleep(DEAD_STATUS_POLL_MS);
+    await tmux(['run-shell', 'true']);
     const next = await readPaneState(session);
     if (next.state === 'gone') break;
     current = next;
