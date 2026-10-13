@@ -17,7 +17,7 @@ const pr = (over: Partial<TaskPullRequest> = {}): TaskPullRequest => ({
   ci_state: 'passed', ci_summary: { total: 1, passed: 1, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, release_runs: [], changed_level: 'release', synced_at: '', ...over,
 });
 
-function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; files?: string[]; pkgs?: Record<string, string>; noOwner?: boolean; releaseWorkflows?: string[]; runBranches?: string[] } = {}) {
+function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string, WorkflowRun[]>; headSha?: string | null; ancestor?: boolean; pkg?: string | null; files?: string[]; pkgs?: Record<string, string>; noOwner?: boolean; releaseWorkflows?: string[]; runBranches?: string[]; projectRepo?: string } = {}) {
   const events: AutomationEventInput[] = [];
   const messages: string[] = [];
   const updateCi = vi.fn(async () => {});
@@ -41,7 +41,7 @@ function world(o: { enabled?: boolean; auto?: boolean; byCommit?: Record<string,
     prFiles: vi.fn(async () => o.files ?? []),
     fileAt: vi.fn(async (_t: string, _r: string, path: string) => (o.pkgs ? (o.pkgs[path] ?? null) : o.pkg === undefined ? JSON.stringify({ name: '@termhub/agent', version: '0.19.0' }) : o.pkg)),
   };
-  const setup = { repo: { deploy_workflow: 'deploy.yml' }, automation: { enabled: o.enabled ?? true, release_workflows: o.releaseWorkflows ?? ['publish-agent.yml'], release_paths: ['apps/agent/**', 'package.json'] } } as unknown as ProjectSetupData;
+  const setup = { repo: { deploy_workflow: 'deploy.yml', ...(o.projectRepo ? { full_name: o.projectRepo } : {}) }, automation: { enabled: o.enabled ?? true, release_workflows: o.releaseWorkflows ?? ['publish-agent.yml'], release_paths: ['apps/agent/**', 'package.json'] } } as unknown as ProjectSetupData;
   const ctx: DeliveryCtx = { projectId: 'p1', ownerId: 'u1', token: 'tok', repo: 'acme/app', setup };
   return { deps: { repos, github }, ctx, events, messages, updateCi, github, setup };
 }
@@ -57,6 +57,17 @@ describe('followMerged: deploy', () => {
     expect(w.events[0].payload).toEqual({ pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/1', workflow: 'deploy.yml' });
     expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, { deploy_state: 'passed', deploy_url: 'https://github.com/acme/app/actions/runs/1' });
     expect(pauseAutomation).not.toHaveBeenCalled();
+  });
+
+  it('a PR of another repository from a branch of the same name is not the card\'s delivery: stored, never reported (spec 2026-10-07 multi-repo R14)', async () => {
+    const w = world({ projectRepo: 'acme/app', byCommit: { m1: [run({})] } });
+    await followMerged(w.deps, { ...w.ctx, repo: 'acme/site' }, pr({ repo: 'acme/site', changed_level: 'deploy' }));
+    expect(w.events).toEqual([]);
+    expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/site', 7, { deploy_state: 'passed', deploy_url: 'https://github.com/acme/app/actions/runs/1' });
+    // the project's repository, whatever the case Setup holds its name in
+    const own = world({ projectRepo: 'Acme/App', byCommit: { m1: [run({})] } });
+    await followMerged(own.deps, own.ctx, pr({ changed_level: 'deploy' }));
+    expect(kinds(own.events)).toEqual(['deploy_ok']);
   });
 
   it('a failed deploy stores its state last, so a throw before that retries; the event says whether it paused', async () => {
