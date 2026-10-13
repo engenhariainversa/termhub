@@ -119,6 +119,20 @@ echo "Login successful."
 exit 0
 `;
 
+/**
+ * NO_STATUS_CLAUDE with a slow exit: it closes the pty (ignoring the SIGHUP that follows) and exits 0
+ * a moment later. In between, tmux reports the pane dead without an exit status (TER-1077).
+ */
+const SLOW_EXIT_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+trap '' HUP
+echo "Opening browser to sign in…"
+echo "Login successful."
+exec 0<&- 1>&- 2>&-
+sleep 0.4
+exit 0
+`;
+
 /** Exits 0 without its success line, and has no status command either. */
 const SILENT_CLAUDE = `#!/bin/sh
 if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
@@ -278,6 +292,18 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
     });
     const session = 'termhub-login-no-status';
     expect(await noStatus.start({ provider: 'claude', config_dir: accountDir('claude-no-status'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+    expect(hasSession(session)).toBe(false);
+  }, 15_000);
+
+  it('claude: a dead pane whose exit status lands a moment later is still read as exit 0 (TER-1077)', async () => {
+    const slowExit = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-slow-exit', SLOW_EXIT_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-slow-exit';
+    expect(await slowExit.start({ provider: 'claude', config_dir: accountDir('claude-slow-exit'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
     expect(hasSession(session)).toBe(false);
   }, 15_000);
 
