@@ -470,6 +470,8 @@
   "Ver transcrição": "Show transcript",
   "Ocultar transcrição": "Hide transcript",
   "Baixar {{name}}": "Download {{name}}",
+  "Baixar": "Download",
+  "Baixar como arquivo": "Download as a file",
   "Contexto da conversa: {{tokens}} de {{limit}} tokens ({{share}}), o seu limite": "Conversation context: {{tokens}} of {{limit}} tokens ({{share}}), your limit",
   "{{base}}; janela do modelo: {{window}}": "{{base}}; model window: {{window}}",
   "{{base}}. Última compactação: {{when}}": "{{base}}. Last compacted: {{when}}",

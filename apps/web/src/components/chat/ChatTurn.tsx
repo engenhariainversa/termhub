@@ -3,7 +3,8 @@ import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { appNavigate } from '../../lib/app-navigate';
 import { copyText } from '../../lib/clipboard';
-import { decorateCodeBlocks } from '../../lib/code-blocks';
+import { codeLanguage, decorateCodeBlocks } from '../../lib/code-blocks';
+import { codeFileName, downloadText } from '../../lib/code-download';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
@@ -131,8 +132,24 @@ export function toHtml(markdown: string, projectId: string | null): string {
   return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
 }
 
+/**
+ * The delegated handler for a block's "Baixar" (TER-1084): saves the fenced code as a file named after
+ * its first line and the time, with the language's extension (`codeFileName`). Unlike the copy, the
+ * fence's own trailing newline is kept: it is the block's last line break, and a text file ends with one.
+ * Returns whether the click was on a download button.
+ */
+export function handleDownloadClick(event: MouseEvent<HTMLDivElement>): boolean {
+  const button = (event.target as HTMLElement).closest('[data-download]');
+  if (!button) return false;
+  const code = button.closest('figure')?.querySelector('pre > code');
+  if (!code) return true;
+  const content = code.textContent ?? '';
+  downloadText(codeFileName(content, codeLanguage(code.getAttribute('class'))), content);
+  return true;
+}
+
 /** A click in rendered Markdown: a Markdown path opens its preview in the app (a double click pins it; a
- *  modified click keeps the browser's own), a fence's button copies it. */
+ *  modified click keeps the browser's own), a fence's buttons copy or download it. */
 export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
   const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
   if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
@@ -141,6 +158,7 @@ export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
     appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
     return;
   }
+  if (handleDownloadClick(event)) return;
   handleCopyClick(event);
 }
 

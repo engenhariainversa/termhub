@@ -7,7 +7,7 @@ import { useProjectChat } from '../lib/project-chat';
 import { formatBytes } from '../lib/attachments';
 import { renderFileMarkdown } from '../lib/markdown';
 import type { FilePreview, FilePreviewOk } from '../lib/types';
-import { handleCopyClick } from './chat/ChatTurn';
+import { handleCopyClick, handleDownloadClick } from './chat/ChatTurn';
 import { formatDateTime } from '../lib/format';
 import { tk, useTranslation } from '../i18n';
 
@@ -122,6 +122,7 @@ export function FileView({ projectId, path, machineId = null, active, onOpenFile
       onOpenFile(link.getAttribute('data-file-link')!, e.detail >= 2 ? 'pin' : 'preview');
       return;
     }
+    if (handleDownloadClick(e)) return;
     handleCopyClick(e);
   };
 
