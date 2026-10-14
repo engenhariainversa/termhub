@@ -9,6 +9,7 @@ import * as fs from './fs.js';
 import * as hooks from './hooks.js';
 import * as hw from './hw.js';
 import * as net from './net.js';
+import * as netInfo from './net-info.js';
 import * as paste from './paste.js';
 import * as repos from './repos.js';
 import * as secret from './secret.js';
@@ -72,4 +73,6 @@ export const handlers: Handlers = {
   'git.worktree.remove': worktree.remove,
   'git.repos.scan': repos.scan,
   'net.check': net.check,
+  'net.info': netInfo.info,
+  'net.wake': netInfo.wake,
 };

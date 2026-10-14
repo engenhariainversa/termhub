@@ -109,6 +109,7 @@ function buildApp(
       startAgentPairing,
       update,
       delete: del,
+      networks: async (ids: string[]) => new Map([...savedNetworks].filter(([id]) => ids.includes(id))),
     },
     users: {
       findById: async () => undefined,
@@ -121,11 +122,13 @@ function buildApp(
 
 let app: FastifyInstance;
 let store: Record<string, Machine>;
+let savedNetworks: Map<string, { network: unknown; updated_at: string | null }> = new Map();
 
 beforeEach(() => {
   agents.reset();
   vi.clearAllMocks();
   store = {};
+  savedNetworks = new Map();
 });
 
 /** A connected agent as the registry sees it: hello + an rpc stub, no socket. */
@@ -506,6 +509,46 @@ describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the 
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('machine network and Wake-on-LAN (TER-1080)', () => {
+  const lan = (mac: string, cidr: string) => ({
+    hostname: 'h',
+    default_interface: 'en0',
+    gateway: null,
+    interfaces: [{ name: 'en0', mac, kind: 'ethernet', addresses: [{ family: 'ipv4', address: cidr.split('/')[0], cidr }] }],
+  });
+
+  it('GET /network answers the saved network, and null before any agent reported it', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    ({ app } = buildApp(store));
+    let res = await app.inject({ method: 'GET', url: '/api/machines/m1/network' });
+    expect(res.json()).toEqual({ network: null, updated_at: null, online: false, relays: [] });
+    savedNetworks.set('m1', { network: lan('aa:aa:aa:aa:aa:01', '192.168.1.20/24'), updated_at: '2026-10-14T00:00:00.000Z' });
+    res = await app.inject({ method: 'GET', url: '/api/machines/m1/network' });
+    expect(res.json().network.interfaces[0].mac).toBe('aa:aa:aa:aa:aa:01');
+  });
+
+  it('POST /wake sends the packet through the online machine of the same network', async () => {
+    store.hulk = makeMachine({ id: 'hulk', name: 'hulk', type: 'agent' });
+    store.m1 = makeMachine({ id: 'm1', name: 'jarvis', type: 'agent' });
+    savedNetworks.set('hulk', { network: lan('aa:aa:aa:aa:aa:01', '192.168.1.20/24'), updated_at: null });
+    savedNetworks.set('m1', { network: lan('bb:bb:bb:bb:bb:01', '192.168.1.10/24'), updated_at: null });
+    const rpc = attachAgent('0.30.0', vi.fn(async () => ({ sent: 4, broadcasts: ['192.168.1.255', '255.255.255.255'] })), ['net_wake']);
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'POST', url: '/api/machines/hulk/wake', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('net.wake', { macs: ['aa:aa:aa:aa:aa:01'], broadcasts: ['192.168.1.255', '255.255.255.255'] }, undefined);
+    expect(res.json()).toMatchObject({ via: { id: 'm1', name: 'jarvis' }, sent: 4, warnings: [] });
+  });
+
+  it('POST /wake answers 409 NO_NETWORK for a machine that never reported it', async () => {
+    store.hulk = makeMachine({ id: 'hulk', type: 'agent' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'POST', url: '/api/machines/hulk/wake', payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('NO_NETWORK');
   });
 });
 

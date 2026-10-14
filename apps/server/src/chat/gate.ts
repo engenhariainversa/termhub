@@ -43,6 +43,8 @@ const readTools = new Set([
   'list_tab_questions',
   // TER-1023: the hooks' state on a machine; nothing on the machine is written.
   'get_machine_hooks',
+  // TER-1080: the machine's saved network (IPs, MACs); nothing on the machine is written.
+  'get_machine_network',
   // TER-1038: the chat's own context fill; nothing is changed.
   'get_chat_context',
 ]);
@@ -70,6 +72,8 @@ const writeTools = new Set([
   'install_machine_hooks',
   // TER-1056: installs a newer agent and restarts it (tmux sessions survive). Always a card: no grant or default covers it.
   'update_machine_agent',
+  // TER-1080: another machine sends Wake-on-LAN packets on the local network. Always a card: no grant or default covers it.
+  'wake_machine',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated

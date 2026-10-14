@@ -6,6 +6,7 @@ import { SimulatorSetupCard } from './SimulatorSetupCard';
 import { AgentEnrollment } from './AgentEnrollment';
 import { AgentUpdateCard } from './AgentUpdateCard';
 import { NetworkCheckCard } from './NetworkCheckCard';
+import { MachineNetworkCard } from './MachineNetworkCard';
 import { AutomationAllowedCard } from './AutomationAllowedCard';
 import { AiUsageQueryCard } from './AiUsageQueryCard';
 import { MonitorHooksCard, monitorHealthNote } from './MonitorHooksCard';
@@ -16,12 +17,13 @@ import { api, ApiError } from '../lib/api';
 import { Trans, tk, useTranslation } from '../i18n';
 
 /** The sections of the edit form, one tab each. */
-export const MACHINE_FORM_TABS = ['general', 'agent', 'monitor', 'simulator'] as const;
+export const MACHINE_FORM_TABS = ['general', 'agent', 'network', 'monitor', 'simulator'] as const;
 export type MachineFormTab = (typeof MACHINE_FORM_TABS)[number];
 
 const TAB_LABEL: Record<MachineFormTab, string> = {
   general: tk('Geral'),
   agent: tk('Agente'),
+  network: tk('Rede'),
   monitor: tk('Monitor'),
   simulator: tk('Simulador iOS'),
 };
@@ -34,10 +36,10 @@ interface Props {
   initialTab?: MachineFormTab;
 }
 
-/** Which tabs an existing machine gets: Agente only for agent machines, Simulador iOS only on a Mac with Xcode. */
+/** Which tabs an existing machine gets: Agente and Rede only for agent machines, Simulador iOS only on a Mac with Xcode. */
 export function machineFormTabs(m: Pick<Machine, 'type' | 'os' | 'capabilities'>): MachineFormTab[] {
   const tabs: MachineFormTab[] = ['general'];
-  if (m.type === 'agent') tabs.push('agent');
+  if (m.type === 'agent') tabs.push('agent', 'network');
   tabs.push('monitor');
   if ((m.os === 'macos' && m.capabilities.includes('xcodebuild')) || m.capabilities.includes('wda')) tabs.push('simulator');
   return tabs;
@@ -329,6 +331,8 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
             </div>
           </>
         );
+      case 'network':
+        return <MachineNetworkCard machine={machine} />;
       case 'monitor':
         return <MonitorHooksCard machine={machine} />;
       case 'simulator':

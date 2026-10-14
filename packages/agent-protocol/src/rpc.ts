@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ipv4Address, macAddress, machineNetwork } from './network.js';
 
 export const SESSION_RE = /^[A-Za-z0-9_-]+$/;
 export const sessionName = z.string().min(1).max(128).regex(SESSION_RE);
@@ -458,6 +459,23 @@ export const RPC = {
     z.object({ urls: z.array(z.string().url().max(2048).regex(/^https?:\/\//)).min(1).max(4) }),
     z.object({ results: z.array(z.object({ url: z.string().max(2048), status: z.number().int().nullable(), error: z.string().max(500).nullable() })).max(4) }),
     15_000,
+  ),
+  /**
+   * The machine's network (TER-1080): OS hostname, the interfaces with their MAC and addresses (loopback,
+   * containers and VPN tunnels left out), the default route's interface and gateway. The server asks on
+   * connect and every few minutes, and keeps the answer for when the machine is asleep (capability `net_wake`).
+   */
+  'net.info': def(z.object({}), machineNetwork, 10_000),
+  /**
+   * Sends a Wake-on-LAN magic packet for each of `macs` to each of `broadcasts`, UDP ports 9 and 7, from
+   * this machine (capability `net_wake`). The agent only sends to the limited broadcast and to the directed
+   * broadcast of one of its own IPv4 networks; any other address is refused, so the RPC can never aim at
+   * a host. `sent` counts the datagrams that left.
+   */
+  'net.wake': def(
+    z.object({ macs: z.array(macAddress).min(1).max(4), broadcasts: z.array(ipv4Address).min(1).max(4) }).strict(),
+    z.object({ sent: z.number().int().min(0), broadcasts: z.array(z.string().max(64)).max(4) }),
+    10_000,
   ),
 } as const;
 

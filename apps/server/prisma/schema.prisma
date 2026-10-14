@@ -230,6 +230,10 @@ model Machine {
   agentPairedAt         DateTime?          @map("agent_paired_at")
   agentVersion          String?            @map("agent_version")
   agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
+  /// TER-1080: the agent's last `net.info` (OS hostname, interfaces with MAC and IPs, default route), kept
+  /// while the machine is offline so another machine of its network can wake it. Never in `mapMachine`.
+  network               Json?
+  networkUpdatedAt      DateTime?          @map("network_updated_at") @db.Timestamptz
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
   agentAutoUpdate       Boolean            @default(true) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).

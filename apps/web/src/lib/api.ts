@@ -1,6 +1,6 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { AutomationFeedEvent, FileRecentResponse, NetworkCheck, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
@@ -201,6 +201,10 @@ export const api = {
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
     networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
+    /** TER-1080: IPs and MACs as the agent last reported them, kept while the machine sleeps */
+    network: (id: string) => request<MachineNetworkInfo>('GET', `/machines/${id}/network`),
+    /** Wake-on-LAN through another online machine of the same network (`via` picks it; default: the first that fits) */
+    wake: (id: string, via?: string) => request<WakeResult>('POST', `/machines/${id}/wake`, via ? { via_machine_id: via } : {}),
     startWdaSetup: (id: string) => request<{ ok: true }>('POST', `/machines/${id}/simulator/setup`, {}),
     /** subpastas de `path` (padrão $HOME) + discos/mounts da máquina */
     hardware: (id: string) => request<{ hardware: HardwareSnapshot }>('GET', `/machines/${id}/hardware`),
