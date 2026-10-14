@@ -483,4 +483,13 @@
   "Contexto": "Context",
   "Nenhum subagente rodando agora.": "No subagent running right now.",
   "Atalhos": "Shortcuts",
-  "Memória": "Memory"}
+  "Memória": "Memory",
+  "· liberado por regra": "· allowed by a rule",
+  "em todos os projetos": "in every project",
+  "no projeto {{project}}": "in the project {{project}}",
+  "neste projeto": "in this project",
+  "Comandos que começam com «{{pattern}}» liberados {{where}}": "Commands starting with «{{pattern}}» allowed {{where}}",
+  "Comando «{{pattern}}» liberado {{where}}": "Command «{{pattern}}» allowed {{where}}",
+  "Permitir sempre este comando neste projeto": "Always allow this command in this project",
+  "Permitir sempre comandos que começam com «{{prefix}}»": "Always allow commands starting with «{{prefix}}»"
+}

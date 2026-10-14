@@ -14,7 +14,7 @@ const standingGrantsLine = (standing: StandingGrantKind[]): string => {
   const labels = kinds.map((k) => STANDING_KIND_LABEL[k]).join(', ');
   // Closing a working tab is an exception only when close_tab is granted; other kinds never close tabs.
   const closeTab = active.has('close_tab') ? ', fechar abas trabalhando' : '';
-  return `\nLiberado sem confirmação neste projeto (o usuário liberou sem prazo): ${labels}. As exceções de sempre continuam pedindo: delete_task, run_command, responder permissões, texto com "!" ou caracteres de controle${closeTab}.`;
+  return `\nLiberado sem confirmação neste projeto (o usuário liberou sem prazo): ${labels}. As exceções de sempre continuam pedindo: delete_task, run_command fora das regras de comando, responder permissões, texto com "!" ou caracteres de controle${closeTab}.`;
 };
 
 /** The line telling the model which default allowances (TER-627) are on for this user, or '' when the
@@ -24,7 +24,19 @@ export const defaultsLine = (defaults: DefaultAllowKind[]): string => {
   const kinds = DEFAULT_ALLOW_KINDS.filter((k) => on.has(k));
   if (!kinds.length) return '';
   const labels = kinds.map((k) => DEFAULT_KIND_LABEL[k]).join(', ');
-  return `\nLiberado sem confirmação por padrão (o usuário pode restringir em Permissões do chat): ${labels}; leituras nunca pedem. Continuam pedindo confirmação: delete_task, run_command, responder permissões, texto com "!" ou caracteres de controle, as teclas C-c e Escape, fechar aba trabalhando, integrações, push_ticket_status, set_project_repo, ligar máquinas ao projeto e refazer o login de uma conta de IA (start_ai_login, submit_ai_login_code).`;
+  return `\nLiberado sem confirmação por padrão (o usuário pode restringir em Permissões do chat): ${labels}; leituras nunca pedem. Continuam pedindo confirmação: delete_task, run_command fora dos comandos só de leitura e das regras de comando (list_command_rules), responder permissões, texto com "!" ou caracteres de controle, as teclas C-c e Escape, fechar aba trabalhando, integrações, push_ticket_status, set_project_repo, ligar máquinas ao projeto e refazer o login de uma conta de IA (start_ai_login, submit_ai_login_code).`;
+};
+
+/** The most the command rules line takes of the prompt; past it, the rules that do not fit are dropped
+ *  whole and "…" says so — list_command_rules has them all. */
+const COMMAND_RULES_MAX = 500;
+
+/** The line telling the model which command rules (TER-1081) cover run_command in this project, or ''.
+ *  Each rule as the person sees it: `«git push»` for a command, `«gh pr checks…»` for a prefix. */
+export const commandRulesLine = (rules: { pattern: string; match: 'exact' | 'prefix' }[]): string => {
+  if (!rules.length) return '';
+  const items = rules.map((r) => `«${r.pattern}${r.match === 'prefix' ? '…' : ''}»`);
+  return `\nrun_command roda sem confirmação numa aba de shell para estas regras do usuário: ${fit(items, ', ', COMMAND_RULES_MAX)}. Comandos encadeados, redirecionamentos, substituições, sudo, rm, kill, push forçado e segredos continuam pedindo.`;
 };
 
 /** The most the groups line of a project chat takes of the prompt: room for about forty names. */
@@ -111,7 +123,7 @@ const groupsLine = (groups: PromptGroup[]): string => {
  * sidebar groups with their sibling projects, told in one line after the machines; the groups in it are
  * capped at GROUPS_MAX (the line adds its prefix, a newline and a full stop) and count against the same
  * budget. `defaults` (TER-627) are the default allowances still on for this user, told after the standing
- * line and counted the same way.
+ * line and counted the same way, and so are `commandRules` (TER-1081), the run_command rules in force here.
  */
 export function projectSystemPrompt(
   project: { name: string; key: string },
@@ -119,10 +131,11 @@ export function projectSystemPrompt(
   standing: StandingGrantKind[] = [],
   groups: PromptGroup[] = [],
   defaults: DefaultAllowKind[] = [],
+  commandRules: { pattern: string; match: 'exact' | 'prefix' }[] = [],
 ): string {
   const where = links.length ? links.map((l) => `${l.machine} → ${l.cwd}`).join('; ') : 'no machine linked yet';
   const head = `You are the termhub chat for the project "${project.name}" (key ${project.key}).\n`;
-  const standingLine = standingGrantsLine(standing) + defaultsLine(defaults);
+  const standingLine = standingGrantsLine(standing) + defaultsLine(defaults) + commandRulesLine(commandRules);
   const groupLine = groupsLine(groups);
   const tail =
     '\nAnswer about this project. Do not report on other projects unless the person asks about them by name.\n' +

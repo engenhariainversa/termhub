@@ -1,5 +1,5 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
-import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
@@ -250,7 +250,7 @@ export const api = {
    * predates trusted tabs, trusted projects or standing grants has none. */
   chat: Object.assign(
     (projectId?: string | null) =>
-      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[]; context_limit?: number | null }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; command_rules?: ChatCommandRule[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[]; context_limit?: number | null }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
     {
       /** Files attached to a message before it is sent (spec §5.3). */
       attachments: {
@@ -354,7 +354,7 @@ export const api = {
    * prazo" one, present only for `approve_project_always`.
    */
   decideChatAction: (id: string, decision: ChatDecisionWord) =>
-    request<{ action: { id: string; status: ChatActionStatus }; queued?: true; note?: string; grant?: ChatGrant; project_grant?: ChatProjectGrant; standing_grant?: ChatStandingGrant }>('POST', `/chat/actions/${id}/decision`, { decision }),
+    request<{ action: { id: string; status: ChatActionStatus }; queued?: true; note?: string; grant?: ChatGrant; project_grant?: ChatProjectGrant; standing_grant?: ChatStandingGrant; command_rule?: ChatCommandRule }>('POST', `/chat/actions/${id}/decision`, { decision }),
   /** A grouped confirmation: every decision of the batch in one request, injected as one sentence.
    *  Answers once that run has started, like `decideChatAction`; the answer arrives over `/ws/chat`. */
   decideChatActions: (decisions: { id: string; decision: 'approve' | 'deny' }[]) =>
@@ -368,6 +368,10 @@ export const api = {
   /** "Liberadas por padrão" (TER-627): the chat's default allowances and whether each is on for me. */
   listChatDefaults: () => request<{ defaults: ChatDefault[] }>('GET', '/chat/defaults'),
   setChatDefault: (kind: ChatDefault['kind'], allowed: boolean) => request<{ defaults: ChatDefault[] }>('PUT', `/chat/defaults/${encodeURIComponent(kind)}`, { allowed }),
+  /** "Comandos liberados" (TER-1081): the run_command rules in force and the ones revoked or expired. */
+  listChatCommandRules: () => request<{ active: ChatCommandRule[]; ended: ChatCommandRule[] }>('GET', '/chat/command-rules'),
+  /** Revokes a command rule: 404 unknown/not yours, 409 already revoked. */
+  revokeChatCommandRule: (id: string) => request<{ rule: ChatCommandRule }>('DELETE', `/chat/command-rules/${encodeURIComponent(id)}`),
   /** Answers a tab's question from its card (409 `TAB_PROMPT_CHANGED` when the tab moved on). */
   answerTabQuestion: (id: string, body: TabQuestionAnswer) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/answer`, body),
   /** "Cancelar" on a countdown (spec 2026-09-26 concierge memory §6): nothing is sent, the proposed

@@ -273,3 +273,42 @@ describe('a call that ran under a grant reads as one line (TER-984)', () => {
     expect(screen.queryByRole('button', { name: 'Ver detalhes' })).toBeNull();
   });
 });
+
+describe('command rules (TER-1081)', () => {
+  const cmd = (over: Partial<ChatAction> = {}): ChatAction => card({ tool: 'run_command', args: { tab_id: 't1', command: 'gh pr checks 12' }, summary: 'rodar o comando', ...over });
+
+  it('offers this command and its prefix when the server says a rule could cover it', () => {
+    const onDecide = vi.fn();
+    render(<ChatActionCard action={cmd({ command_rule: { exact: 'gh pr checks 12', prefix: 'gh pr checks' } })} deciding={false} onDecide={onDecide} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Permitir sempre este comando neste projeto' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'approve_command');
+    fireEvent.click(screen.getByRole('button', { name: 'Permitir sempre comandos que começam com «gh pr checks»' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'approve_command_prefix');
+  });
+
+  it('offers only this command when there is no prefix, and nothing without command_rule', () => {
+    render(<ChatActionCard action={cmd({ command_rule: { exact: 'ls', prefix: null } })} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Permitir sempre este comando neste projeto' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /começam com/ })).toBeNull();
+    cleanup();
+    render(<ChatActionCard action={cmd()} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /Permitir sempre/ })).toBeNull();
+  });
+
+  it('the card that created a rule says so and revokes it', () => {
+    const onRevokeRule = vi.fn();
+    const rule = { id: 'cr1', pattern: 'gh pr checks', match: 'prefix' as const, project_id: 'p1', project_name: 'termhub', machine_ids: [], machine_names: [], source_action_id: 'a1', created_at: '', expires_at: null, revoked_at: null, state: 'active' as const };
+    render(<ChatActionCard action={cmd({ status: 'executed' })} deciding={false} onDecide={vi.fn()} commandRule={rule} onRevokeRule={onRevokeRule} />);
+    expect(screen.getByText('Comandos que começam com «gh pr checks» liberados no projeto termhub')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Revogar' }));
+    expect(onRevokeRule).toHaveBeenCalledWith('cr1');
+  });
+
+  it('a command run under a rule or the default list says which', () => {
+    render(<ChatActionCard action={cmd({ status: 'executed', grant_id: 'cr1' })} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByText('Executado · liberado por regra')).toBeInTheDocument();
+    cleanup();
+    render(<ChatActionCard action={cmd({ status: 'executed', grant_id: 'default:read_commands:u1' })} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByText('Executado · liberado por padrão')).toBeInTheDocument();
+  });
+});

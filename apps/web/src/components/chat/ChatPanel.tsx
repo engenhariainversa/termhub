@@ -30,7 +30,7 @@ import { isActive, upsertSubagent } from '../../lib/subagents';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatCommandRule, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /** How often the panel's elapsed labels ("há N min") refresh while it is open. */
 const SUBAGENTS_REFRESH_MS = 30_000;
@@ -138,6 +138,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    *  account-wide chat): from `GET /api/chat`, kept live by `standing_grant`/`standing_grant_revoked`.
    *  They never expire and are not bound to a conversation. */
   const [standingGrants, setStandingGrants] = useState<ChatStandingGrant[]>([]);
+  /** The command rules (TER-1081) in force for this conversation's project (all of them in the account-wide
+   *  chat): from `GET /api/chat` and a decision's answer; only the cards that created one show it. */
+  const [commandRules, setCommandRules] = useState<ChatCommandRule[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   /** The tabs' questions of this conversation (spec 2026-09-25 §6.2), from `GET /api/chat` and the three events. */
   const [tabQuestions, setTabQuestions] = useState<TabQuestion[]>([]);
@@ -275,7 +278,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     const snapshot = await (projectId ? api.chat(projectId) : api.chat()).finally(() => reads.current.delete(arrived));
     if (seq <= appliedSeq.current) return;
     appliedSeq.current = seq;
-    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, tab_questions, tab_suggestions, tab_limits, subagents, compacting, context_limit } = snapshot;
+    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, command_rules, tab_questions, tab_suggestions, tab_limits, subagents, compacting, context_limit } = snapshot;
     // The same conversation: the snapshot merges into the thread, so a row that ended or was removed
     // while this read was in flight is not brought back, and a row the server deleted leaves and is
     // closed (its started mark must not outlive it). Another one (a reset, another project) replaces
@@ -296,6 +299,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     setGrants(grants ?? []);
     setProjectGrants(project_grants ?? []);
     setStandingGrants(standing_grants ?? []);
+    setCommandRules(command_rules ?? []);
     setTabQuestions(tab_questions ?? []);
     setTabSuggestions(tab_suggestions ?? []);
     setTabLimits(tab_limits ?? []);
@@ -387,7 +391,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         setActions((prev) =>
           prev.some((a) => a.id === e.action_id)
             ? prev.map((a) => (a.id === e.action_id ? { ...a, ...(e.subagent ? { subagent: e.subagent } : {}), ...(e.surfaced_at ? { surfaced_at: e.surfaced_at } : {}) } : a))
-            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null }],
+            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null, ...(e.command_rule ? { command_rule: e.command_rule } : {}) }],
         );
       } else if (e.type === 'decision') {
         // Someone answered — possibly in another open tab. Keyed on the action id alone.
@@ -441,6 +445,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       // A re-grant for the same project replaces the older one, as on the server.
       if (res.project_grant) setProjectGrants((prev) => [...prev.filter((g) => g.id !== res.project_grant!.id && g.project_id !== res.project_grant!.project_id), res.project_grant!]);
       if (res.standing_grant) setStandingGrants((prev) => upsertStandingGrant(prev, res.standing_grant!));
+      if (res.command_rule) setCommandRules((prev) => [...prev.filter((r) => r.id !== res.command_rule!.id), res.command_rule!]);
     } catch (e) {
       // A host that cannot run the answer right now (offline, most often) answers this with its own
       // 409 — but `decide` already recorded the decision before that throw, and the server injects it
@@ -513,6 +518,21 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         setProjectGrants((prev) => prev.filter((g) => g.id !== grantId));
         setStandingGrants((prev) => prev.filter((g) => g.id !== grantId));
       } else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível revogar a permissão'));
+    } finally {
+      setRevokingId(null);
+    }
+  }, []);
+
+  /** "Revogar" on a command rule a card created (TER-1081). 409: already revoked elsewhere. */
+  const revokeRule = useCallback(async (ruleId: string) => {
+    setRevokingId(ruleId);
+    setActionError(null);
+    try {
+      await api.revokeChatCommandRule(ruleId);
+      setCommandRules((prev) => prev.filter((r) => r.id !== ruleId));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) setCommandRules((prev) => prev.filter((r) => r.id !== ruleId));
+      else setActionError(e instanceof ApiError ? e.message : i18n.t('Não foi possível revogar a permissão'));
     } finally {
       setRevokingId(null);
     }
@@ -734,12 +754,19 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     for (const g of standingGrants) if (g.source_action_id !== null) map.set(g.source_action_id, g);
     return map;
   }, [standingGrants]);
+  /** And for the command rule a card created (TER-1081). */
+  const commandRuleByAction = useMemo(() => {
+    const map = new Map<string, ChatCommandRule>();
+    for (const r of commandRules) if (r.source_action_id !== null) map.set(r.source_action_id, r);
+    return map;
+  }, [commandRules]);
 
   /** One gate card, alone in the thread or inside a turn's accordion (TER-1024). */
   const renderAction = (action: ChatAction) => {
     const g = grantByAction.get(action.id);
     const pg = projectGrantByAction.get(action.id);
     const sg = standingGrantByAction.get(action.id);
+    const cr = commandRuleByAction.get(action.id);
     return (
       <ChatActionCard
         key={action.id}
@@ -749,8 +776,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         grant={g}
         projectGrant={pg}
         standingGrant={sg}
-        revoking={(g !== undefined && revokingId === g.id) || (pg !== undefined && revokingId === pg.id) || (sg !== undefined && revokingId === sg.id)}
+        commandRule={cr}
+        revoking={(g !== undefined && revokingId === g.id) || (pg !== undefined && revokingId === pg.id) || (sg !== undefined && revokingId === sg.id) || (cr !== undefined && revokingId === cr.id)}
         onRevoke={revoke}
+        onRevokeRule={revokeRule}
         onDecide={decide}
         onRepropose={repropose}
         onReply={startActionReply}

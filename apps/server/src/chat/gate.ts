@@ -47,6 +47,8 @@ const readTools = new Set([
   'get_machine_network',
   // TER-1038: the chat's own context fill; nothing is changed.
   'get_chat_context',
+  // TER-1081: the command rules run_command honours; nothing is changed.
+  'list_command_rules',
 ]);
 
 const writeTools = new Set([
@@ -74,6 +76,9 @@ const writeTools = new Set([
   'update_machine_agent',
   // TER-1080: another machine sends Wake-on-LAN packets on the local network. Always a card: no grant or default covers it.
   'wake_machine',
+  // TER-1081: adds a command rule, so later run_command calls it covers run without a card. Always a card:
+  // a rule is only born from the person's click, never under a grant or a default.
+  'propose_command_rule',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
@@ -277,11 +282,13 @@ export function standingKindOf(tool: string, args: Record<string, unknown>): Sta
  * The standing kinds plus `link_tab_task`, under the same guards as a standing grant and stricter ones
  * where the default reaches further (see `defaultGrantCovering` in gate-runtime.ts). A person restricts
  * any of them in "Permissões do chat" (`chat_default_restrictions`), and then it is asked again unless
- * one of their own grants covers it. Closed on purpose, like the sets above: delete_task, run_command,
+ * one of their own grants covers it. `read_commands` (TER-1081) is `run_command` limited to the read-only
+ * list of chat/command-rules.ts, in a shell tab (`commandRuleCovering` in gate-runtime.ts); `defaultKindOf`
+ * never returns it. Closed on purpose, like the sets above: delete_task, any other run_command,
  * answering a permission, `!`/control characters, an interrupting key, closing a tab at work, the
  * integrations, push_ticket_status and set_project_repo never become a default.
  */
-export const DEFAULT_ALLOW_KINDS = ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab'] as const;
+export const DEFAULT_ALLOW_KINDS = ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab', 'read_commands'] as const;
 export type DefaultAllowKind = (typeof DEFAULT_ALLOW_KINDS)[number];
 export const isDefaultAllowKind = (v: unknown): v is DefaultAllowKind => (DEFAULT_ALLOW_KINDS as readonly string[]).includes(v as string);
 
@@ -293,11 +300,12 @@ export const DEFAULT_KIND_LABEL: Record<DefaultAllowKind, string> = {
   board: 'mexer no quadro (criar, mover e editar cards)',
   terminal: 'teclas e texto nas abas de agente',
   close_tab: 'fechar abas paradas',
+  read_commands: 'rodar comandos só de leitura em abas de shell (git status, gh pr checks, ls, df…)',
 };
 
 /** Which default kind may cover this call, or null. Mirrors `standingKindOf`, plus `link_tab_task`, and
  * minus the interrupting keys (C-c, Escape): a default never stops a process mid-way. */
-export function defaultKindOf(tool: string, args: Record<string, unknown>): DefaultAllowKind | null {
+export function defaultKindOf(tool: string, args: Record<string, unknown>): Exclude<DefaultAllowKind, 'read_commands'> | null {
   if (tool === 'link_tab_task') return idArg(args.tab_id) && idArg(args.task_id) ? 'link_tab_task' : null;
   if (tool === 'send_key' && actionClass(tool, args) === 'irreversible') return null;
   return standingKindOf(tool, args);
@@ -313,8 +321,11 @@ export const STANDING_GRANT_BUDGETS: Record<StandingGrantKind, number> = { open_
 
 /** Calls the defaults cover per user and rolling hour, per kind (TER-627): the standing budgets, the same
  * brake, counted apart from any grant of the person's own. */
-export const DEFAULT_ALLOW_BUDGETS: Record<DefaultAllowKind, number> = { ...STANDING_GRANT_BUDGETS, link_tab_task: 30 };
+export const DEFAULT_ALLOW_BUDGETS: Record<DefaultAllowKind, number> = { ...STANDING_GRANT_BUDGETS, link_tab_task: 30, read_commands: 120 };
 export const STANDING_BUDGET_WINDOW_MS = 60 * 60 * 1000;
+
+/** Commands one command rule (TER-1081) covers per rolling hour, across conversations; past it, they are asked. */
+export const COMMAND_RULE_BUDGET = 60;
 
 /**
  * Decides whether to allow, ask, wait, or refuse a proposed action.

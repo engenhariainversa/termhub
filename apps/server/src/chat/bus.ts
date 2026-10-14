@@ -45,6 +45,8 @@ export type ChatEvent =
        * already published it: screens merge it by `action_id` like any other, but it is the same
        * question, so the push service must not notify (or write a history row for) it again. Never
        * part of the mobile contract — its schema strips it. */
+      /** TER-1081: what a run_command card offers to allow for good (`ChatActionCard.command_rule`). */
+      command_rule?: { exact: string; prefix: string | null };
       origin_update?: true;
       /** When the card was last brought back to the end of the chat (TER-477): screens order by it. */
       surfaced_at?: string | null;
