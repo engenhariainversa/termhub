@@ -4,9 +4,9 @@ name: Publish mobile OTA
 # (apps/mobile/scripts/ota-publish.sh, `production` branch, runtime version = expo.version).
 #
 # A push to main that touches the app publishes by itself, unless the push also changes what goes
-# into the native binary (app.json, app.config.js, the app's package.json) without bumping
-# expo.version: that bundle could need native code the installed binaries lack, so it is skipped
-# and needs a new store build with a new version. Running the workflow by hand always publishes
+# into the native binary (app.json, app.config.js, the app's package.json, the local native modules
+# in modules/) without bumping expo.version: that bundle could need native code the installed
+# binaries lack, so it is skipped and needs a new store build with a new version. Running the workflow by hand always publishes
 # (use it for a JS-only change the guard was too cautious about).
 #
 # Runs on jarvis (no Node there): the publish itself runs in a node:22 container as the runner's
@@ -48,7 +48,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" != push ]; then echo 'publish=true' >> "$GITHUB_OUTPUT"; exit 0; fi
           version_at() { git show "${1}:apps/mobile/app.json" | grep -m1 '"version"' | sed -E 's/.*"version": *"([^"]+)".*/\1/'; }
           if ! git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then BEFORE="$(git rev-parse HEAD^)"; fi
-          native=$(git diff --name-only "$BEFORE" HEAD -- apps/mobile/app.json apps/mobile/app.config.js apps/mobile/package.json)
+          native=$(git diff --name-only "$BEFORE" HEAD -- apps/mobile/app.json apps/mobile/app.config.js apps/mobile/package.json apps/mobile/modules)
           if [ -n "$native" ] && [ "$(version_at "$BEFORE")" = "$(version_at HEAD)" ]; then
             {
               echo "### OTA não publicado"

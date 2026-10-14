@@ -11,9 +11,10 @@
 // TestFlight on its own after the merge ("Mobile TestFlight (hulk)" workflow); review this list in the
 // same PR as the bump, not after the build.
 module.exports = {
-  for: '0.6.0',
-  // 0.5.0 → 0.6.0 (ec517b7c) only added the iOS privacy manifest and Android's AD_ID permission.
-  runtimes: ['0.5.0'],
+  for: '0.7.0',
+  // 0.6.0 → 0.7.0 added a native module the composer imports (modules/key-commands, TER-368): no
+  // older binary can run this JS.
+  runtimes: [],
 };
 
 /** The extra runtimes to publish to when the app is at `version`. */
