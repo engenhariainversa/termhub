@@ -143,6 +143,18 @@ function build(opts: {
       findByIdForUser: opts.findStandingGrantByIdForUser ?? vi.fn(async () => undefined),
       listForUser: opts.listForUserStanding ?? vi.fn(async () => ({ grants: [], next: null })),
     },
+    // Command rules (TER-1081): none by default.
+    chatCommandRules: {
+      create: vi.fn(async (input: { user_id: string; project_id: string | null; words: string[]; match: string; conversation_id?: string | null; source_action_id?: string | null }) => ({
+        rule: { id: 'cr1', machine_ids: [], expires_at: null, revoked_at: null, revoked_by: null, created_at: '2026-10-14T10:00:00.000Z', conversation_id: null, source_action_id: null, ...input },
+        created: true,
+      })),
+      listActiveFor: vi.fn(async (): Promise<unknown[]> => []),
+      listForUser: vi.fn(async (): Promise<unknown[]> => []),
+      findByIdForUser: vi.fn(async (): Promise<unknown> => undefined),
+      findActiveBySourceAction: vi.fn(async (): Promise<unknown> => undefined),
+      revoke: vi.fn(async (): Promise<unknown> => undefined),
+    },
   };
   const app = Fastify();
   applyErrorHandler(app);
@@ -1237,5 +1249,79 @@ describe('default allowances (TER-627)', () => {
     const res = await app.inject({ method: 'PUT', url, payload });
     expect(res.statusCode).toBe(400);
     expect(repos.chatDefaultRestrictions.setAllowed).not.toHaveBeenCalled();
+  });
+});
+
+describe('command rules of run_command (TER-1081)', () => {
+  const commandCard = { ...pendingAction, status: 'pending', tool: 'run_command', args: { tab_id: 't1', command: 'git push origin main' }, tab_id: 't1' };
+  const tabs = [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }];
+
+  it('approve_command decides and adds an exact rule for the tab\'s project', async () => {
+    const { app, decide, repos, startAfterDecision } = build({ findByIdForUser: vi.fn(async () => commandCard), tabs, projects: [{ id: 'p1', owner_id: 'u1', name: 'App' }] });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_command' } });
+    expect(res.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledWith('act1', 'u1', 'approved');
+    expect(repos.chatCommandRules.create).toHaveBeenCalledWith({ user_id: 'u1', project_id: 'p1', words: ['git', 'push', 'origin', 'main'], match: 'exact', conversation_id: 'c1', source_action_id: 'act1' });
+    expect(res.json().command_rule).toMatchObject({ id: 'cr1', pattern: 'git push origin main', match: 'exact', project_id: 'p1', project_name: 'App', state: 'active' });
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
+  });
+
+  it('approve_command_prefix adds the prefix the card showed', async () => {
+    const { app, repos } = build({ findByIdForUser: vi.fn(async () => commandCard), tabs });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_command_prefix' } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatCommandRules.create).toHaveBeenCalledWith(expect.objectContaining({ words: ['git', 'push'], match: 'prefix' }));
+    expect(res.json().command_rule).toMatchObject({ pattern: 'git push', match: 'prefix' });
+  });
+
+  it.each([
+    ['a chained command', { ...commandCard, args: { tab_id: 't1', command: 'git push; rm -rf /' } }, 'approve_command'],
+    ['a command on the never list', { ...commandCard, args: { tab_id: 't1', command: 'git push --force' } }, 'approve_command'],
+    ['a secret', { ...commandCard, args: { tab_id: 't1', command: 'cat .env' } }, 'approve_command'],
+    ['a prefix of ssh', { ...commandCard, args: { tab_id: 't1', command: 'ssh hulk uptime' } }, 'approve_command_prefix'],
+    ['a one-word command as a prefix', { ...commandCard, args: { tab_id: 't1', command: 'ls' } }, 'approve_command_prefix'],
+    ['another tool', { ...commandCard, tool: 'send_input', args: { tab_id: 't1', text: 'git push' } }, 'approve_command'],
+  ])('%s answers 400 GRANT_NOT_ALLOWED and decides nothing', async (_l, row, decision) => {
+    const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => row), tabs });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('GRANT_NOT_ALLOWED');
+    expect(decide).not.toHaveBeenCalled();
+    expect(repos.chatCommandRules.create).not.toHaveBeenCalled();
+  });
+
+  it('a tab of another user is never trusted', async () => {
+    const { app, decide, repos } = build({ findByIdForUser: vi.fn(async () => commandCard), tabs, fixturesOwner: 'someone-else' });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/act1/decision', payload: { decision: 'approve_command' } });
+    expect(res.statusCode).not.toBe(200);
+    expect(decide).not.toHaveBeenCalled();
+    expect(repos.chatCommandRules.create).not.toHaveBeenCalled();
+  });
+
+  it('GET /chat/command-rules lists the active and ended rules', async () => {
+    const { app, repos } = build({});
+    const active = { id: 'cr1', user_id: 'u1', project_id: null, words: ['git', 'push'], match: 'prefix', machine_ids: [], conversation_id: null, source_action_id: null, created_at: '2026-10-14T10:00:00.000Z', expires_at: null, revoked_at: null, revoked_by: null };
+    vi.mocked(repos.chatCommandRules.listForUser).mockImplementation(async (...a: unknown[]) => (a[1] === 'active' ? [active] : [{ ...active, id: 'cr0', revoked_at: '2026-10-14T11:00:00.000Z' }]));
+    const res = await app.inject({ method: 'GET', url: '/chat/command-rules' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().active).toEqual([expect.objectContaining({ id: 'cr1', pattern: 'git push', project_name: null, state: 'active' })]);
+    expect(res.json().ended).toEqual([expect.objectContaining({ id: 'cr0', state: 'revoked' })]);
+  });
+
+  it('DELETE /chat/command-rules/:id revokes, 404 for an unknown one', async () => {
+    const { app, repos } = build({});
+    vi.mocked(repos.chatCommandRules.revoke).mockResolvedValueOnce({ id: 'cr1', user_id: 'u1', project_id: null, words: ['ls'], match: 'exact', machine_ids: [], conversation_id: null, source_action_id: null, created_at: '', expires_at: null, revoked_at: '2026-10-14T11:00:00.000Z', revoked_by: 'u1' });
+    const ok = await app.inject({ method: 'DELETE', url: '/chat/command-rules/cr1' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().rule).toMatchObject({ id: 'cr1', state: 'revoked' });
+    expect(repos.chatCommandRules.revoke).toHaveBeenCalledWith('cr1', 'u1');
+    const missing = await app.inject({ method: 'DELETE', url: '/chat/command-rules/nope' });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it('GET /chat carries the command rules a card may have created', async () => {
+    const { app } = build({});
+    const res = await app.inject({ method: 'GET', url: '/chat' });
+    expect(res.json().command_rules).toEqual([]);
   });
 });

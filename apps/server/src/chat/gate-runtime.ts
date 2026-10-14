@@ -16,7 +16,8 @@ import { HttpError } from '../lib/errors.js';
 import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
+import { isReadOnlyCommand, ruleEligible, ruleMatches } from './command-rules.js';
+import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, COMMAND_RULE_BUDGET, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
@@ -197,11 +198,14 @@ const targetOf = (args: Record<string, unknown>) => ({
  * user's) adds nothing. Best-effort: a failed read keeps the target as the call named it.
  */
 type Target = ReturnType<typeof targetOf> & { tab_name?: string | null };
-async function withTabSnapshot(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<Target> {
+async function withTabSnapshot(ctx: ControlContext, target: ReturnType<typeof targetOf>, tool?: string): Promise<Target> {
   if (!target.tab_id) return target;
   try {
     const [tab] = await ctx.repos.tabs.findByIdsForOwner([target.tab_id], ctx.scope.user.id);
-    return tab ? { ...target, project_id: target.project_id ?? tab.project_id, tab_name: tab.name } : target;
+    if (!tab) return target;
+    // A command also keeps the machine it ran on (TER-1081): the audit of a rule says where.
+    const machine_id = target.machine_id ?? (tool === 'run_command' ? tab.machine_id : null);
+    return { ...target, machine_id, project_id: target.project_id ?? tab.project_id, tab_name: tab.name };
   } catch {
     return target;
   }
@@ -357,7 +361,7 @@ function actionNotRecorded(): never {
 
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
-  const target = await withTabSnapshot(ctx, targetOf(call.args));
+  const target = await withTabSnapshot(ctx, targetOf(call.args), call.tool);
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
@@ -399,6 +403,7 @@ async function publishCard(repos: Repositories, userId: string, row: ChatAction)
     summary: card.summary,
     subagent: card.subagent,
     created_at: row.created_at,
+    ...(card.command_rule ? { command_rule: card.command_rule } : {}),
   });
 }
 
@@ -447,7 +452,7 @@ export async function askForAutomation(
  * live, since no card was ever shown for it.
  */
 async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
-  const target = await withTabSnapshot(ctx, targetOf(call.args));
+  const target = await withTabSnapshot(ctx, targetOf(call.args), call.tool);
   let row: ChatAction;
   try {
     row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target, ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
@@ -648,6 +653,48 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
   return grantId;
 }
 
+/** Tab states a covered command may be typed in (TER-1081): a shell. `null` is a tab that never reported
+ * (no agent hooks fired in it), `idle` one whose agent session ended and left its shell behind. A tab with
+ * an agent in it would read the command as a prompt, so every other state asks. */
+const SHELL_TAB_STATES: ReadonlySet<string | null> = new Set([null, 'idle']);
+
+/**
+ * The command rule (TER-1081) that covers a `run_command`, as the grant id it is audited under, or null:
+ * the command parses as one simple command and is not on the "never" list (chat/command-rules.ts); the
+ * tab resolves owner-scoped and is a shell; then the person's own rules in force for the tab's project
+ * (or every project) and machine, each with its budget, and last the read-only default list unless the
+ * person restricted it. The screen is read last, once something covers the call: an agent's input box or
+ * a dialog on it (`claudeScreenState`), or a capture that fails, asks. Not atomic with the insert, like
+ * every budget here.
+ */
+async function commandRuleCovering(ctx: ControlContext, call: GatedCall): Promise<string | null> {
+  if (call.tool !== 'run_command' || typeof call.args.command !== 'string' || !targetId(call.args.tab_id)) return null;
+  const parsed = ruleEligible(call.args.command);
+  if (!parsed.ok) return null;
+  const [tab] = await ctx.repos.tabs.findByIdsForOwner([call.args.tab_id as string], ctx.scope.user.id);
+  if (!tab || tab.kind !== 'terminal' || !SHELL_TAB_STATES.has(tab.state)) return null;
+  const since = new Date(Date.now() - STANDING_BUDGET_WINDOW_MS);
+  let grantId: string | null = null;
+  for (const rule of await ctx.repos.chatCommandRules.listActiveFor(ctx.scope.user.id, tab.project_id)) {
+    if (rule.machine_ids.length > 0 && !rule.machine_ids.includes(tab.machine_id)) continue;
+    if (!ruleMatches(rule, parsed.words)) continue;
+    if ((await ctx.repos.chatActions.countByGrantSince(rule.id, since)) >= COMMAND_RULE_BUDGET) continue;
+    grantId = rule.id;
+    break;
+  }
+  if (!grantId && isReadOnlyCommand(parsed.words) && !(await ctx.repos.chatDefaultRestrictions.listForUser(ctx.scope.user.id)).has('read_commands')) {
+    const id = defaultGrantId(ctx.scope.user.id, 'read_commands');
+    if ((await ctx.repos.chatActions.countByGrantSince(id, since)) < DEFAULT_ALLOW_BUDGETS.read_commands) grantId = id;
+  }
+  if (!grantId) return null;
+  try {
+    const { text } = await readScreen(ctx, { tab_id: tab.id, lines: 40 }, { plain: true });
+    return claudeScreenState(text) === null ? grantId : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * `actionClass`, plus what only the current state can tell (TER-975): a `set_automation_policy` change is a
  * brake or a widening only against the Setup it changes. A brake goes through like `pause_automation`; a
@@ -706,6 +753,11 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
     // Last, the standing grants (TER-386): after every conversation-bound one, so their budgets are spent first.
     if (!row) {
       const grantId = await standingGrantCovering(ctx, call);
+      if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
+    }
+    // run_command under a command rule of the person's, or the read-only default list (TER-1081).
+    if (!row) {
+      const grantId = await commandRuleCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // Then the defaults every user gets unless they restricted them (TER-627).

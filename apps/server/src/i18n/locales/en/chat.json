@@ -69,5 +69,10 @@
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Sending to the tab needs the terminals:write permission in your role",
   "Não foi possível enviar para a aba": "Could not send to the tab",
   "Trabalho automático pausado ou desligado": "Automatic work is paused or turned off",
-  "Respostas automáticas demais nesta execução": "Too many automatic answers in this run"
+  "Respostas automáticas demais nesta execução": "Too many automatic answers in this run",
+  "Só dá para permitir sempre um comando simples, fora da lista de comandos que sempre pedem confirmação, numa aba sua": "Only a simple command, outside the list of commands that always ask for confirmation, in one of your tabs, can be always allowed",
+  "Esta regra já foi revogada": "This rule was already revoked",
+  "Regra não encontrada": "Rule not found",
+  "Este padrão não pode virar uma regra ({{reason}}): só um comando simples, sem encadear nem expandir nada, fora da lista que sempre pede confirmação. Um prefixo não pode começar por ssh, um shell ou outro programa que roda comandos; para esses, use match \"exact\".": "This pattern cannot become a rule ({{reason}}): only a simple command, chaining or expanding nothing, outside the list that always asks for confirmation. A prefix cannot start with ssh, a shell or another program that runs commands; for those, use match \"exact\".",
+  "A validade da regra já passou: use uma data no futuro ou deixe sem validade.": "The rule's expiry is already past: use a future date or leave it without one."
 }

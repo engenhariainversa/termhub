@@ -6,6 +6,7 @@ import type { ChatGrant, ChatGrantWithConversation } from './chat-grants.js';
 import type { ChatProjectGrant, ChatProjectGrantWithConversation, ProjectGrantScope } from './chat-project-grants.js';
 import type { ChatStandingGrant, ChatStandingGrantWithConversation, StandingGrantKind } from './chat-standing-grants.js';
 import type { Task, Ticket } from './types.js';
+import { commandRuleOffer } from '../../chat/command-rules.js';
 
 /**
  * The trimmed, human-facing shape of a chat action: what the card needs to read like a sentence
@@ -38,6 +39,9 @@ export interface ChatActionCard {
    * `sources`, and `reason`), with the cited decisions resolved owner-scoped. Null when it cited none.
    * Screens show "Decisão automática" only when the call also ran without a click (`grant_id`). */
   auto_decision: AutoDecisionView | null;
+  /** TER-1081: what a pending run_command card offers to allow for good — the command and its prefix, as
+   * text — absent when no rule could cover it. The decision route checks it again, with the tab. */
+  command_rule?: { exact: string; prefix: string | null };
 }
 
 const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -136,6 +140,13 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return `digitar \`${asString(args.text)}\``;
     case 'run_command':
       return `rodar o comando \`${asString(args.command)}\``;
+    case 'propose_command_rule': {
+      const pattern = asString(args.pattern);
+      const what = args.match === 'prefix' ? `os comandos que começam com «${pattern}»` : `o comando «${pattern}»`;
+      const machines = Array.isArray(args.machine_ids) && args.machine_ids.length ? `, só em ${args.machine_ids.length === 1 ? '1 máquina' : `${args.machine_ids.length} máquinas`}` : '';
+      const until = typeof args.expires_at === 'string' ? `, até ${args.expires_at.slice(0, 10)}` : '';
+      return `liberar sem confirmação ${what} no run_command${args.project_id ? '' : ', em todos os projetos'}${machines}${until}`;
+    }
     case 'send_key':
       return `enviar a tecla \`${asString(args.key)}\``;
     case 'open_tab':
@@ -282,6 +293,12 @@ function summarize(action: ChatAction, task: Task | undefined, loc: Location, ti
   return where ? `${verb} ${where}` : verb;
 }
 
+/** A pending run_command card's `command_rule`, only when there is one: the key is absent otherwise. */
+const commandRuleOf = (action: ChatAction): Pick<ChatActionCard, 'command_rule'> => {
+  const offer = action.tool === 'run_command' && action.status === 'pending' ? commandRuleOffer((action.args as Record<string, unknown> | null)?.command) : null;
+  return offer ? { command_rule: offer } : {};
+};
+
 const toCard = (action: ChatAction, summary: string, subagent: { id: string; description: string } | null, autoDecision: AutoDecisionView | null): ChatActionCard => ({
   id: action.id,
   tool: action.tool,
@@ -298,6 +315,7 @@ const toCard = (action: ChatAction, summary: string, subagent: { id: string; des
   error_code: action.error_code,
   surfaced_at: action.surfaced_at ?? null,
   auto_decision: autoDecision,
+  ...commandRuleOf(action),
 });
 
 /**

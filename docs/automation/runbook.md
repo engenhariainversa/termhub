@@ -170,6 +170,28 @@ Every change, from the chat, an MCP client, the web or the app, is an automation
 `fields`), `tagged` / `untagged` (with how many `cards`), `machine_opt_in` / `machine_opt_out` (on every
 project linked to the machine). They show in the feed and in `list_automation_events`.
 
+### Commands the chat runs without a card (TER-1081)
+
+`run_command` asks for every command except two cases, both only in a shell tab (no agent in it):
+
+- **The read-only list**, on for everyone: `git status`, `git log`, `git diff`, `git show`, `git branch`
+  (listing only), `gh pr view/checks/list`, `gh run view/list`, `ls`, `pwd`, `df`, `du`, `ps`, `uptime`,
+  `which`, `whoami`, `uname`, `cat`/`head`/`tail` of files under the tab's directory, `<program> --version`.
+  Turn it off in Permissões do chat › Liberadas por padrão.
+- **Your command rules.** On a command's confirmation card, "Permitir sempre este comando neste projeto"
+  (that exact command) or "Permitir sempre comandos que começam com «git push»" (the command's first
+  words). Or ask the chat ("libera git push neste projeto"): it proposes the rule with
+  `propose_command_rule` — project or every project, some machines, an expiry — and you approve that card
+  once. `list_command_rules` is how the chat knows what it may run directly. List and revoke them in
+  Permissões do chat › Comandos liberados.
+
+Never covered, whatever the rule: chained commands (`;`, `&&`, `|`), redirections, `$(…)`, backticks,
+variables, globs, `!`, a newline, `sudo`, `rm`, `kill`, `git push --force`/`-f`, `git reset --hard`,
+`git clean`, and anything naming a secret (`.env`, keys, `~/.ssh`, tokens). A prefix rule never covers
+`ssh`, a shell or `xargs` (an exact rule can, e.g. `ssh hulk uptime`). Budgets: 60 commands per rule and
+120 for the read-only list per hour. Each command run this way shows in the chat as "Executado · liberado
+por regra" (or "por padrão") and is kept in the audit like any card.
+
 ## 4b. TestFlight on hulk (TER-1055)
 
 A native change to the app (a store path) still waits for a person to merge it. After that merge, the iOS build

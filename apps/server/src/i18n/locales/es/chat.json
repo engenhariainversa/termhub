@@ -69,5 +69,10 @@
   "Enviar para a aba precisa da permissão terminals:write na sua role": "Enviar a la pestaña requiere el permiso terminals:write en tu rol",
   "Não foi possível enviar para a aba": "No se pudo enviar a la pestaña",
   "Trabalho automático pausado ou desligado": "El trabajo automático está pausado o desactivado",
-  "Respostas automáticas demais nesta execução": "Demasiadas respuestas automáticas en esta ejecución"
+  "Respostas automáticas demais nesta execução": "Demasiadas respuestas automáticas en esta ejecución",
+  "Só dá para permitir sempre um comando simples, fora da lista de comandos que sempre pedem confirmação, numa aba sua": "Solo se puede permitir siempre un comando simple, fuera de la lista de comandos que siempre piden confirmación, en una de tus pestañas",
+  "Esta regra já foi revogada": "Esta regla ya fue revocada",
+  "Regra não encontrada": "Regla no encontrada",
+  "Este padrão não pode virar uma regra ({{reason}}): só um comando simples, sem encadear nem expandir nada, fora da lista que sempre pede confirmação. Um prefixo não pode começar por ssh, um shell ou outro programa que roda comandos; para esses, use match \"exact\".": "Este patrón no puede ser una regla ({{reason}}): solo un comando simple, sin encadenar ni expandir nada, fuera de la lista que siempre pide confirmación. Un prefijo no puede empezar por ssh, un shell u otro programa que ejecuta comandos; para esos, usa match \"exact\".",
+  "A validade da regra já passou: use uma data no futuro ou deixe sem validade.": "La validez de la regla ya pasó: usa una fecha futura o déjala sin validez."
 }

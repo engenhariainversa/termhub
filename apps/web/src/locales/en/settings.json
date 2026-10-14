@@ -197,7 +197,7 @@
   "Não foi possível salvar. Tente de novo.": "Could not save. Try again.",
   "Não foi possível trocar de conta": "Could not switch accounts",
   "O apelido não pode ser trocado: os links que você já compartilhou dependem dele.": "The nickname cannot be changed: the links you already shared depend on it.",
-  "O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.": "The chat does these actions without asking for confirmation; reads never ask. Uncheck to have it ask again. Always asking for confirmation: deleting a card, running a command, answering permission requests, text with “!”, the Ctrl+C and Esc keys, closing a working tab, integrations and ticket status.",
+  "O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando fora da lista de leitura e das regras, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.": "The chat does these actions without asking for confirmation; reads never ask. Uncheck to have it ask again. Always asking for confirmation: deleting a card, running a command outside the read-only list and the rules, answering permission requests, text with “!”, the Ctrl+C and Esc keys, closing a working tab, integrations and ticket status.",
   "O código na tela do celular é {{code}}?": "Is the code on the phone's screen {{code}}?",
   "O endereço da cidade pública ainda não foi carregado.": "The public city's address has not loaded yet.",
   "O limiar de sugestão não pode passar do limiar de envio.": "The suggestion threshold cannot be above the send threshold.",
@@ -543,5 +543,14 @@
   "Já entrei pelo navegador da máquina": "I signed in from the machine's browser",
   "Saída da CLI": "CLI output",
   "Encerrou sessões": "Ended sessions",
-  "Trocou a senha": "Changed the password"
+  "Trocou a senha": "Changed the password",
+  "só em {{machines}}": "only on {{machines}}",
+  "máquinas que não existem mais": "machines that no longer exist",
+  "todas as máquinas": "every machine",
+  "revogada em {{date}}": "revoked on {{date}}",
+  "venceu em {{date}}": "expired on {{date}}",
+  "até {{date}}": "until {{date}}",
+  "Comandos liberados": "Allowed commands",
+  "Comandos que o chat roda sem pedir confirmação numa aba de shell. Crie uma regra pelo card de confirmação de um comando ou pedindo ao chat. Sempre pedem confirmação, com ou sem regra: comandos encadeados (;, &&, |), redirecionamentos, substituições, sudo, rm, kill, git push --force, git reset --hard, git clean, “!” e o que tocar segredos.": "Commands the chat runs in a shell tab without asking for confirmation. Create a rule from a command's confirmation card or by asking the chat. Always asking for confirmation, rule or not: chained commands (;, &&, |), redirections, substitutions, sudo, rm, kill, git push --force, git reset --hard, git clean, “!” and anything touching secrets.",
+  "Nenhuma regra de comando ativa.": "No active command rule."
 }

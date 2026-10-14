@@ -301,6 +301,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     chatGrants: { revokeForConversation: vi.fn(async () => 0), findActiveBySourceAction: vi.fn(async () => undefined) },
     chatProjectGrants: { revokeForConversation: vi.fn(async () => 0), findActiveBySourceAction: vi.fn(async () => undefined) },
     chatStandingGrants: { findActiveBySourceAction: vi.fn(async () => undefined), listActive: vi.fn(async () => []) },
+    chatCommandRules: { findActiveBySourceAction: vi.fn(async () => undefined), listActiveFor: vi.fn(async () => []) },
     chatDefaultRestrictions: { listForUser: vi.fn(async () => new Set()) },
     chatAttachments,
     chatSubagents,
@@ -1351,6 +1352,17 @@ it('resumeAfterDecision appends the standing grant note when the approval create
   );
   expect(messages[0].text).toContain('delete_task continua pedindo.');
   expect(messages[0].text.endsWith('só faça o que o usuário pediu.')).toBe(true);
+});
+
+it('resumeAfterDecision appends the command rule note when the approval created one (TER-1081)', async () => {
+  const { service, messages, repos } = build([delta('feito'), done()]);
+  vi.mocked(repos.chatCommandRules.findActiveBySourceAction).mockResolvedValueOnce({ id: 'cr1', words: ['git', 'push'], match: 'prefix' } as never);
+
+  await service.resumeAfterDecision(user, action({ tool: 'run_command', args: { tab_id: 't1', command: 'git push origin main' } }));
+
+  expect(repos.chatCommandRules.findActiveBySourceAction).toHaveBeenCalledWith('u1', 'a1');
+  expect(messages[0].text).toContain('O usuário também liberou os comandos que começam com «git push» neste projeto:');
+  expect(messages[0].text).toContain('git push --force');
 });
 
 it('resumeAfterDecision says nothing about a standing grant when none is active, and never for a denial (TER-386)', async () => {
