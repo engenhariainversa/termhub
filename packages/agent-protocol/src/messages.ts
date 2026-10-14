@@ -92,6 +92,12 @@ export const AI_LOGIN_MIN_AGENT_VERSION = '0.26.0';
 export const CAPABILITY_REPO_SCAN = 'repo_scan';
 export const REPO_SCAN_MIN_AGENT_VERSION = '0.29.0';
 
+/** The agent answers `net.info` and `net.wake` (TER-1080): the server keeps the machine's IPs and MACs and
+ *  can have it wake another machine of its network with a Wake-on-LAN packet. An older agent drops both
+ *  RPCs, which would read as a timeout, so the server requires this first. Ships in agent 0.30.0. */
+export const CAPABILITY_NET_WAKE = 'net_wake';
+export const NET_WAKE_MIN_AGENT_VERSION = '0.30.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

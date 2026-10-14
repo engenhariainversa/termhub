@@ -798,6 +798,41 @@ export interface NetworkCheck {
   error: string | null;
 }
 
+/** One interface of a machine's network (TER-1080). */
+export interface MachineNetInterface {
+  name: string;
+  mac: string | null;
+  kind: 'ethernet' | 'wifi' | 'other' | null;
+  addresses: { family: 'ipv4' | 'ipv6'; address: string; cidr: string | null }[];
+}
+
+/** Another machine of the owner and whether it could wake this one now (Wake-on-LAN). */
+export interface WakeRelay {
+  id: string;
+  name: string;
+  online: boolean;
+  capable: boolean;
+  same_network: boolean;
+}
+
+/** GET /machines/:id/network: the network as the agent last reported it (null until an agent 0.30.0+ did). */
+export interface MachineNetworkInfo {
+  network: { hostname: string; default_interface: string | null; gateway: string | null; interfaces: MachineNetInterface[] } | null;
+  updated_at: string | null;
+  online: boolean;
+  relays: WakeRelay[];
+}
+
+/** POST /machines/:id/wake */
+export interface WakeResult {
+  machine_id: string;
+  via: { id: string; name: string };
+  macs: string[];
+  broadcasts: string[];
+  sent: number;
+  warnings: ('wifi' | 'macos')[];
+}
+
 export interface MonitorItem {
   tab: Tab;
   project: Project;

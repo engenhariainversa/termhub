@@ -31,6 +31,7 @@ import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
+import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
@@ -367,6 +368,23 @@ export const TOOLS: ToolDef[] = [
     strict: true,
     input: { machine_id: id.optional(), all: z.literal(true).optional() },
     run: (ctx, a) => updateMachineAgent(ctx, a as { machine_id?: string; all?: boolean }),
+  },
+  {
+    name: 'get_machine_network',
+    description:
+      "Read a machine's network as its agent last reported it, kept while the machine is offline or asleep: hostname (the OS's own, often not the machine's name in termhub), default_interface and gateway, and interfaces (name, mac, kind ethernet/wifi/other, IPv4/IPv6 addresses with their CIDR). network is null until an agent 0.30.0+ connected once. relays lists the person's other agent machines and whether each could wake this one now (online, capable, same_network). Reads only.",
+    scope: 'read', resource: 'machines', action: 'read',
+    input: { machine_id: id },
+    run: (ctx, a) => getMachineNetwork(ctx, a as { machine_id: string }),
+  },
+  {
+    name: 'wake_machine',
+    description:
+      "Wake a sleeping machine with Wake-on-LAN, as the Acordar button of the machine screen does: another online machine of the person on the same local network (via_machine_id, or the first one that fits; see get_machine_network relays) sends the magic packet to the MACs saved for it, UDP ports 9 and 7. It sends packets on the local network, so it always asks the person first. Answers via, macs, sent and notes (Wi-Fi interface, the macOS \"Wake for network access\" setting); the machine reconnects on its own once awake — check list_machines a minute later. NO_NETWORK: its agent never reported the network (update it to 0.30.0+); NO_WAKE_RELAY: no machine online on the same network can send it.",
+    scope: 'terminals', resource: 'machines', action: 'update',
+    strict: true,
+    input: { machine_id: id, via_machine_id: id.optional() },
+    run: (ctx, a) => wakeMachineTool(ctx, a as { machine_id: string; via_machine_id?: string }),
   },
   {
     name: 'report_card',

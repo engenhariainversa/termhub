@@ -52,6 +52,7 @@ export type MachineMinAggregateOutputType = {
   agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean | null
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
@@ -79,6 +80,7 @@ export type MachineMaxAggregateOutputType = {
   agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean | null
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
@@ -107,6 +109,8 @@ export type MachineCountAggregateOutputType = {
   agentPairedAt: number
   agentVersion: number
   agentLastSeenAt: number
+  network: number
+  networkUpdatedAt: number
   agentAutoUpdate: number
   claudeAutoSwap: number
   aiUsageQuery: number
@@ -144,6 +148,7 @@ export type MachineMinAggregateInputType = {
   agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
   aiUsageQuery?: true
@@ -171,6 +176,7 @@ export type MachineMaxAggregateInputType = {
   agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
   aiUsageQuery?: true
@@ -199,6 +205,8 @@ export type MachineCountAggregateInputType = {
   agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  network?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
   aiUsageQuery?: true
@@ -314,6 +322,8 @@ export type MachineGroupByOutputType = {
   agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  network: runtime.JsonValue | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean
   claudeAutoSwap: boolean
   aiUsageQuery: boolean
@@ -365,6 +375,8 @@ export type MachineWhereInput = {
   agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
@@ -401,6 +413,8 @@ export type MachineOrderByWithRelationInput = {
   agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  network?: Prisma.SortOrderInput | Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
@@ -440,6 +454,8 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
@@ -476,6 +492,8 @@ export type MachineOrderByWithAggregationInput = {
   agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  network?: Prisma.SortOrderInput | Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
@@ -512,6 +530,8 @@ export type MachineScalarWhereWithAggregatesInput = {
   agentPairedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableWithAggregatesFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
@@ -540,6 +560,8 @@ export type MachineCreateInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -575,6 +597,8 @@ export type MachineUncheckedCreateInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -610,6 +634,8 @@ export type MachineUpdateInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -645,6 +671,8 @@ export type MachineUncheckedUpdateInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -680,6 +708,8 @@ export type MachineCreateManyInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -708,6 +738,8 @@ export type MachineUpdateManyMutationInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -735,6 +767,8 @@ export type MachineUncheckedUpdateManyInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -773,6 +807,8 @@ export type MachineCountOrderByAggregateInput = {
   agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  network?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
@@ -804,6 +840,7 @@ export type MachineMaxOrderByAggregateInput = {
   agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
@@ -831,6 +868,7 @@ export type MachineMinOrderByAggregateInput = {
   agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
@@ -1019,6 +1057,8 @@ export type MachineCreateWithoutOwnerInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1053,6 +1093,8 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1116,6 +1158,8 @@ export type MachineScalarWhereInput = {
   agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
@@ -1144,6 +1188,8 @@ export type MachineCreateWithoutProjectLinksInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1178,6 +1224,8 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1228,6 +1276,8 @@ export type MachineUpdateWithoutProjectLinksInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1262,6 +1312,8 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1296,6 +1348,8 @@ export type MachineCreateWithoutRepositoryCheckoutsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1330,6 +1384,8 @@ export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1380,6 +1436,8 @@ export type MachineUpdateWithoutRepositoryCheckoutsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1414,6 +1472,8 @@ export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1448,6 +1508,8 @@ export type MachineCreateWithoutTabsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1482,6 +1544,8 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1532,6 +1596,8 @@ export type MachineUpdateWithoutTabsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1566,6 +1632,8 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1600,6 +1668,8 @@ export type MachineCreateWithoutHookInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1634,6 +1704,8 @@ export type MachineUncheckedCreateWithoutHookInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1684,6 +1756,8 @@ export type MachineUpdateWithoutHookInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1718,6 +1792,8 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1752,6 +1828,8 @@ export type MachineCreateWithoutAiAccountsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1786,6 +1864,8 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1836,6 +1916,8 @@ export type MachineUpdateWithoutAiAccountsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1870,6 +1952,8 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1904,6 +1988,8 @@ export type MachineCreateWithoutUploadsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1938,6 +2024,8 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -1988,6 +2076,8 @@ export type MachineUpdateWithoutUploadsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2022,6 +2112,8 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2056,6 +2148,8 @@ export type MachineCreateWithoutChatConversationsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2090,6 +2184,8 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2140,6 +2236,8 @@ export type MachineUpdateWithoutChatConversationsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2174,6 +2272,8 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2208,6 +2308,8 @@ export type MachineCreateManyOwnerInput = {
   agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2235,6 +2337,8 @@ export type MachineUpdateWithoutOwnerInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2269,6 +2373,8 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2303,6 +2409,8 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
   agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2406,6 +2514,8 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2443,6 +2553,8 @@ export type MachineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2472,6 +2584,8 @@ export type MachineSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2501,6 +2615,8 @@ export type MachineSelectScalar = {
   agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
@@ -2510,7 +2626,7 @@ export type MachineSelectScalar = {
   createdAt?: boolean
 }
 
-export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
+export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
 export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
@@ -2582,6 +2698,12 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     agentPairedAt: Date | null
     agentVersion: string | null
     agentLastSeenAt: Date | null
+    /**
+     * TER-1080: the agent's last `net.info` (OS hostname, interfaces with MAC and IPs, default route), kept
+     * while the machine is offline so another machine of its network can wake it. Never in `mapMachine`.
+     */
+    network: runtime.JsonValue | null
+    networkUpdatedAt: Date | null
     /**
      * Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
      */
@@ -3057,6 +3179,8 @@ export interface MachineFieldRefs {
   readonly agentPairedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentVersion: Prisma.FieldRef<"Machine", 'String'>
   readonly agentLastSeenAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly network: Prisma.FieldRef<"Machine", 'Json'>
+  readonly networkUpdatedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentAutoUpdate: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly claudeAutoSwap: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly aiUsageQuery: Prisma.FieldRef<"Machine", 'Boolean'>

@@ -18,5 +18,10 @@
   "npm não encontrado na máquina; rode: npm i -g @termhub/agent@latest": "npm not found on the machine; run: npm i -g @termhub/agent@latest",
   "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para testar os endereços": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer) to test the addresses",
   "Refazer login pela tela só funciona em máquinas com o agente do termhub": "Redoing the login from the screen only works on machines with the termhub agent",
-  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer) to redo the login from the screen"
+  "Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela": "Update this machine's agent (npm i -g @termhub/agent, version {{version}} or newer) to redo the login from the screen",
+  "Ainda não sabemos o IP e o MAC desta máquina: atualize o agente dela para a versão {{version}} ou mais nova e deixe-a online uma vez": "We do not know this machine's IP and MAC yet: update its agent to version {{version}} or newer and let it come online once",
+  "Essa máquina não pode acordar a outra: ela precisa estar online, com o agente {{version}} ou mais novo, e na mesma rede local": "That machine cannot wake the other one: it must be online, with agent {{version}} or newer, and on the same local network",
+  "Nenhuma máquina online na mesma rede local pode acordar esta (é preciso o agente {{version}} ou mais novo)": "No online machine on the same local network can wake this one (agent {{version}} or newer is needed)",
+  "A interface salva é Wi-Fi: o Wake-on-LAN raramente funciona por Wi-Fi. Se a máquina não acordar, ligue-a no cabo.": "The saved interface is Wi-Fi: Wake-on-LAN rarely works over Wi-Fi. If the machine does not wake up, connect it by cable.",
+  "No macOS, o Wake-on-LAN só funciona com \"Despertar para acesso à rede\" (Wake for network access) ligado em Ajustes do Sistema > Bateria/Energia.": "On macOS, Wake-on-LAN only works with \"Wake for network access\" turned on in System Settings > Battery/Energy."
 }

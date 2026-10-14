@@ -12,6 +12,7 @@ import { browseMachine, makeDirectory } from '../terminal/machine-fs.js';
 import { collectHardware } from '../system/hardware.js';
 import { newAgentToken } from '../agent/token.js';
 import { agents } from '../agent/registry.js';
+import { wakeMachine, wakeRelays } from '../agent/network.js';
 import { AGENT_UNINSTALL_MIN_VERSION, belowMinimum, isOutdated, latestAgentRelease, latestAgentVersion, MIN_SELF_UPDATE_VERSION, runAgentUpdate } from '../agent/latest-version.js';
 import { MIN_AGENT_VERSION } from '../agent/min-version.js';
 import { followAgentUpdate } from '../agent/after-update.js';
@@ -31,6 +32,7 @@ const idParam = z.object({ id: z.string().min(1).max(64) });
 /** `?uninstall=1`: also remove the agent from the machine before deleting it (spec 2026-10-07 §3). */
 const deleteQuery = z.object({ uninstall: z.enum(['1', 'true', '0', 'false']).optional() });
 const fsQuery = z.object({ path: z.string().max(4096).optional() });
+const wakeBody = z.object({ via_machine_id: z.string().min(1).max(64).optional() }).strict();
 const mkdirBody = z.object({ parent: z.string().min(1).max(4096), name: z.string().trim().min(1).max(255) });
 
 /** Optional line under the name: trimmed, at most 80 chars, and an empty one is no subtitle at all. */
@@ -302,6 +304,33 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     });
     request.log.info({ machineId: machine.id, checks: checks.map((c) => ({ name: c.name, ok: c.ok, status: c.status })) }, 'machine network check');
     return { checks };
+  });
+
+  /**
+   * The machine's network as its agent last reported it (TER-1080): OS hostname, interfaces with MAC and
+   * IPs, default route; null until an agent 0.30.0+ connected once. `relays` are the owner's other agent
+   * machines and whether each could wake this one now (online, capable, on the same network).
+   */
+  app.get('/:id/network', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const machine = await scoped(repos, request).machine(id);
+    const machines = await repos.machines.list(request.scope.ownerId);
+    const nets = await repos.machines.networks(machines.filter((m) => m.type === 'agent').map((m) => m.id));
+    const saved = nets.get(machine.id) ?? null;
+    return {
+      network: saved?.network ?? null,
+      updated_at: saved?.updated_at ?? null,
+      online: agents.isOnline(machine.id),
+      relays: wakeRelays(machine, saved?.network ?? null, machines, nets),
+    };
+  });
+
+  /** Wake-on-LAN (TER-1080): another online machine of the same network sends the magic packet to this one. */
+  app.post('/:id/wake', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const { via_machine_id } = wakeBody.parse(request.body ?? {});
+    const machine = await scoped(repos, request).machine(id);
+    return await wakeMachine(repos, machine, await repos.machines.list(request.scope.ownerId), { viaId: via_machine_id, log: request.log });
   });
 
   /**

@@ -265,6 +265,8 @@ export const MachineScalarFieldEnum = {
   agentPairedAt: 'agentPairedAt',
   agentVersion: 'agentVersion',
   agentLastSeenAt: 'agentLastSeenAt',
+  network: 'network',
+  networkUpdatedAt: 'networkUpdatedAt',
   agentAutoUpdate: 'agentAutoUpdate',
   claudeAutoSwap: 'claudeAutoSwap',
   aiUsageQuery: 'aiUsageQuery',

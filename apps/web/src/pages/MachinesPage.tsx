@@ -99,6 +99,16 @@ export function MachinesPage() {
                     {t('sem tmux')}
                   </span>
                 )}
+                {m.type === 'agent' && status === 'offline' && (
+                  <button
+                    type="button"
+                    className="rounded px-1 text-[11px] text-fg-muted hover:bg-bg-3 hover:text-fg"
+                    title={t('Acordar pela rede (Wake-on-LAN), por outra máquina online da mesma rede')}
+                    onClick={() => setForm({ open: true, machine: m, tab: 'network' })}
+                  >
+                    {t('acordar')}
+                  </button>
+                )}
                 {m.type === 'agent' && m.hooks_installed_at === null && (
                   <button
                     type="button"
