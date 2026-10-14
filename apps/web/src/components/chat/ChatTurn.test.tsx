@@ -17,6 +17,13 @@ vi.mock('../../lib/code-blocks', async (importOriginal) => {
   return { ...actual, decorateCodeBlocks: decorateCodeBlocks.mockImplementation(actual.decorateCodeBlocks) };
 });
 
+// The file name and Blob are `code-download.test.ts`'s; here only what reaches the download is checked.
+const downloadText = vi.hoisted(() => vi.fn(() => true));
+vi.mock('../../lib/code-download', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/code-download')>();
+  return { ...actual, downloadText };
+});
+
 const appNavigate = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/app-navigate', () => ({ appNavigate }));
 
@@ -441,6 +448,76 @@ describe('ChatTurn', () => {
 
       expect(getAllByRole('button', { name: /copiar/i })).toHaveLength(1);
       expect(getByText('código')).not.toBeNull();
+    });
+
+    describe('download (TER-1084)', () => {
+      beforeEach(() => {
+        downloadText.mockClear();
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date(2026, 9, 14, 16, 30));
+      });
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('puts a "Baixar como arquivo" button next to copy, focusable, on every fence and none on inline code', () => {
+        renderMarkdown.mockReturnValueOnce('<p>rode <code>npm test</code></p><pre><code>sem linguagem\n</code></pre><pre><code class="language-json">{}\n</code></pre>');
+        const { getAllByRole } = render(
+          <ol>
+            <ChatTurn message={answer()} waiting={false} failed={false} />
+          </ol>,
+        );
+
+        const buttons = getAllByRole('button', { name: 'Baixar como arquivo' });
+        expect(buttons).toHaveLength(2);
+        expect(buttons[0].tagName).toBe('BUTTON');
+        expect(buttons[0].textContent).toBe('Baixar');
+        // Same toolbar as copy: the two sit together in the block's header.
+        expect(buttons[0].parentElement?.querySelector('[data-copy]')).not.toBeNull();
+      });
+
+      it('downloads a multi-line text block as a .txt with exactly its content, emojis and line breaks included', () => {
+        renderMarkdown.mockReturnValueOnce('<pre><code class="language-text">Prompt integração Keycloak\nlinha 2 🚀\n\nfim &lt;ok&gt;\n</code></pre>');
+        const { getByRole } = render(
+          <ol>
+            <ChatTurn message={answer()} waiting={false} failed={false} />
+          </ol>,
+        );
+
+        fireEvent.click(getByRole('button', { name: 'Baixar como arquivo' }));
+        expect(downloadText).toHaveBeenCalledWith('prompt-integracao-keycloak-2026-10-14-1630.txt', 'Prompt integração Keycloak\nlinha 2 🚀\n\nfim <ok>\n');
+      });
+
+      it.each([
+        ['bash', 'sh'],
+        ['json', 'json'],
+        ['toml', 'toml'],
+      ])('a ```%s block downloads as .%s', (language, ext) => {
+        renderMarkdown.mockReturnValueOnce(`<pre><code class="language-${language}">valor\n</code></pre>`);
+        const { getByRole } = render(
+          <ol>
+            <ChatTurn message={answer()} waiting={false} failed={false} />
+          </ol>,
+        );
+
+        fireEvent.click(getByRole('button', { name: 'Baixar como arquivo' }));
+        expect(downloadText).toHaveBeenCalledWith(`valor-2026-10-14-1630.${ext}`, 'valor\n');
+      });
+
+      it('does not copy when the download is clicked', () => {
+        const writeText = vi.fn().mockResolvedValue(undefined);
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+        renderMarkdown.mockReturnValueOnce('<pre><code>x\n</code></pre>');
+        const { getByRole } = render(
+          <ol>
+            <ChatTurn message={answer()} waiting={false} failed={false} />
+          </ol>,
+        );
+
+        fireEvent.click(getByRole('button', { name: 'Baixar como arquivo' }));
+        expect(writeText).not.toHaveBeenCalled();
+        expect(downloadText).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('does not throw when writeText returns something that is not a promise', () => {

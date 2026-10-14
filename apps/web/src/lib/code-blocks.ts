@@ -1,5 +1,5 @@
 import { i18n } from '../i18n';
-// Decorates the sanitised HTML `renderMarkdown` returns with a header (language + copy button) on
+// Decorates the sanitised HTML `renderMarkdown` returns with a header (language + copy and download buttons) on
 // every fenced code block. This runs *after* the sanitiser (see `markdown.ts`), on the one piece of
 // that HTML that is still model-written text: a fence's `language-*` class, taken verbatim from the
 // answer's own fence info string. Everything this module writes into the DOM goes through DOM APIs
@@ -68,6 +68,19 @@ export function decorateCodeBlocks(html: string): string {
     buttonLabel.textContent = i18n.t('Copiar');
     button.appendChild(buttonLabel);
 
+    // Saves the block as a file (TER-1084); `ChatTurn`'s delegated handler finds it by `data-download`.
+    const download = doc.createElement('button');
+    download.setAttribute('type', 'button');
+    download.setAttribute('data-download', '');
+    download.setAttribute('aria-label', i18n.t('Baixar como arquivo'));
+    download.className = 'code-block__copy code-block__download';
+    download.textContent = i18n.t('Baixar');
+
+    const actions = doc.createElement('span');
+    actions.className = 'code-block__actions';
+    actions.appendChild(button);
+    actions.appendChild(download);
+
     // The block's own live region, part of it from the moment it is built rather than created when a
     // copy happens: a region a browser inserts together with its text is not reliably announced.
     // `ChatTurn`'s copy handler writes the outcome in here; `sr-only` takes it out of the picture
@@ -79,7 +92,7 @@ export function decorateCodeBlocks(html: string): string {
     live.className = 'sr-only';
 
     header.appendChild(languageLabel);
-    header.appendChild(button);
+    header.appendChild(actions);
     header.appendChild(live);
 
     pre.replaceWith(figure);
