@@ -328,11 +328,12 @@ export class ChatRepository {
     return row?.lastTypedAt?.toISOString() ?? null;
   }
 
-  async addMessage(input: { conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string | null; role: ChatRole; excerpt: string; card?: ReplyCardRef } }): Promise<ChatMessage> {
+  /** `id`: a row whose id was handed out before it existed (a held audio turn's answer, TER-1085). */
+  async addMessage(input: { id?: string; conversation_id: string; role: ChatRole; text: string; usage?: unknown; error_code?: string | null; reply_to?: { id: string | null; role: ChatRole; excerpt: string; card?: ReplyCardRef } }): Promise<ChatMessage> {
     const [message] = await this.db.$transaction([
       this.db.chatMessage.create({
         data: {
-          id: newId(),
+          id: input.id ?? newId(),
           conversationId: input.conversation_id,
           role: input.role,
           text: input.text,
