@@ -242,7 +242,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       language: config.transcription?.language ?? null,
       whisperSecret: config.transcription?.secret ?? null,
     },
-    onDone: (row) => publishAttachment(row),
+    // TER-1085: a held audio message runs now, and a run told "still transcribing" gets the text.
+    onDone: (row) => {
+      publishAttachment(row);
+      chat.transcriptSettled(row);
+    },
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes, onRetry: (row) => publishAttachment(row) };
