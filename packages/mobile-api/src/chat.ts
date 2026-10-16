@@ -131,6 +131,16 @@ export function isTerminalGrantable(action: { tool: string; args: unknown; tab_i
   return (action.tool === 'send_input' || action.tool === 'send_key') && args.answering_permission !== true && Boolean(action.tab_id);
 }
 
+/** Mirrors the server's `fileGrantable` and `assertFileGrantableAction` (TER-1086), which are the judge: a
+ * `share_file` card naming a machine, for a file inside a folder (never straight in `~` or `/`). Decides
+ * whether the card offers "Permitir sempre nesta pasta". */
+export function isFolderGrantable(action: { tool: string; args: unknown }): boolean {
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  if (action.tool !== 'share_file' || typeof args.machine_id !== 'string' || typeof args.path !== 'string') return false;
+  const folder = args.path.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
+  return folder !== '' && folder !== '~' && folder !== '.';
+}
+
 /** Mirrors the server's `BOARD_GRANT_TOOLS` (apps/server/src/chat/gate.ts); the server is the judge
  * and refuses a card whose project does not resolve. */
 export const BOARD_GRANT_TOOLS = ['create_task', 'add_subtasks', 'update_task', 'move_task'] as const;

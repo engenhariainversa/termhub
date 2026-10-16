@@ -2,6 +2,10 @@ import { render, screen } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }));
+jest.mock('./message-attachments', () => {
+  const { Text } = require('react-native');
+  return { MessageAttachments: ({ attachments, tone }: { attachments: { name: string }[]; tone?: string }) => <Text>{`anexos:${tone}:${attachments.map((a) => a.name).join(',')}`}</Text> };
+});
 import type { ChatMessage } from '../model/types';
 import { MessageBubble } from './message-bubble';
 
@@ -47,5 +51,15 @@ describe('MessageBubble file paths', () => {
     await render(<MessageBubble message={answer({ text: 'Escrevi /tmp/x.md' })} streamed={undefined} started />);
     expect(lastMarkdown().children).toBe('Escrevi /tmp/x.md');
     expect(lastMarkdown().onLinkPress).toBeUndefined();
+  });
+});
+
+// TER-1086: a file the assistant published from a machine rides under the answer, on its own surface.
+describe('MessageBubble attachments', () => {
+  it('shows the files of an answer, on the answer\'s surface', async () => {
+    const file = { id: 'f1', name: 'post-1.png', mime: 'image/png', kind: 'image', bytes: 10, status: 'ready', error_code: null, meta: null, created_at: '' };
+    await render(<MessageBubble message={answer({ text: 'Arquivo de hulk: post-1.png', attachments: [file] } as Partial<ChatMessage>)} streamed={undefined} started={false} />);
+    expect(screen.getByText('anexos:surface:post-1.png')).toBeTruthy();
+    expect(screen.queryByText(/parou no meio/)).toBeNull();
   });
 });
