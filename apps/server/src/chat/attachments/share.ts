@@ -5,22 +5,17 @@ import { ATTACHMENT_LIMITS, type ChatAttachment } from '@termhub/mobile-api';
 import { isSecretPath } from '@termhub/machine-ops';
 import { agentRpc, requireFileShareCapable } from '../../agent/errors.js';
 import { recordSecurityEvent } from '../../auth/audit.js';
-import { ControlError, type ControlContext } from '../../control/context.js';
+import { ControlError, type ControlContext, type ShareDeps } from '../../control/context.js';
 import { toPublicAttachment } from '../../db/repositories/chat-attachments.js';
 import type { ChatConversation, ChatMessage } from '../../db/repositories/chat.js';
 import type { Machine } from '../../db/repositories/types.js';
 import { localeOf, msg, t, tk } from '../../i18n/index.js';
 import { newId } from '../../lib/ids.js';
 import { chatBus } from '../bus.js';
-import type { ExtractionQueue } from './queue.js';
 import { sniff } from './sniff.js';
 import { sanitiseFileName } from './upload.js';
 
-/** What `share_file` needs besides the context: where the bytes go and the person's attachment quota. */
-export interface ShareDeps {
-  queue: Pick<ExtractionQueue, 'enqueue'>;
-  quotaBytes: number;
-}
+export type { ShareDeps };
 
 /** Per person, per rolling 24 h (TER-1086): a brake on what a prompt injected into a screen could carry out. */
 export const SHARE_DAILY_LIMIT = { files: 100, bytes: 500 * 1024 * 1024 } as const;

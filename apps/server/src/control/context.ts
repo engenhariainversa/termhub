@@ -4,9 +4,15 @@ import type { User } from '../db/repositories/types.js';
 import type { ApiTokenScope } from '../auth/api-tokens.js';
 import { canAccess, type Action, type Resource } from '../auth/permissions.js';
 import { Scoped, type Scope } from '../auth/scope.js';
-import type { ShareDeps } from '../chat/attachments/share.js';
+import type { ExtractionQueue } from '../chat/attachments/queue.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
 import { LocalizedText } from '../i18n/index.js';
+
+/** What `share_file` needs besides the context (TER-1086): the extraction queue and the person's attachment quota. */
+export interface ShareDeps {
+  queue: Pick<ExtractionQueue, 'enqueue'>;
+  quotaBytes: number;
+}
 
 /** What every control operation runs with: the data scope of one user and their grants. */
 export interface ControlContext {
