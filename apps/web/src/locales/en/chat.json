@@ -485,4 +485,6 @@
   "Contexto": "Context",
   "Nenhum subagente rodando agora.": "No subagent running right now.",
   "Atalhos": "Shortcuts",
-  "Memória": "Memory"}
+  "Memória": "Memory",
+  "Permitir sempre nesta pasta": "Always allow in this folder"
+}

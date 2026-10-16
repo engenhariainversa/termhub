@@ -41,6 +41,17 @@ afterEach(() => {
 });
 
 describe('ChatTurn', () => {
+  it('an answer carrying a file a machine shared shows it under the text (TER-1086)', () => {
+    const file = { id: 'f1', name: 'post-1.png', mime: 'image/png', kind: 'image' as const, bytes: 10, status: 'ready' as const, error_code: null, meta: null, created_at: '' };
+    render(
+      <ol>
+        <ChatTurn message={answer({ text: 'Arquivo de hulk: post-1.png', attachments: [file] })} waiting={false} failed={false} />
+      </ol>,
+    );
+    expect(screen.getByRole('button', { name: 'Abrir imagem post-1.png' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Baixar post-1.png' })).toBeTruthy();
+  });
+
   it('renders the answer through the markdown-only path, not the notes one', () => {
     render(
       <ol>

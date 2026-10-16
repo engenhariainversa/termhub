@@ -543,5 +543,9 @@
   "Já entrei pelo navegador da máquina": "I signed in from the machine's browser",
   "Saída da CLI": "CLI output",
   "Encerrou sessões": "Ended sessions",
-  "Trocou a senha": "Changed the password"
+  "Trocou a senha": "Changed the password",
+  "em {{machine}} · sem prazo": "on {{machine}} · no expiry",
+  "O chat mostra arquivos destas pastas sem pedir confirmação, até você revogar. Chaves, credenciais e arquivos .env nunca saem da máquina.": "The chat shows files from these folders without asking, until you revoke it. Keys, credentials and .env files never leave the machine.",
+  "Pastas liberadas para mostrar arquivos": "Folders allowed for showing files",
+  "Mostrou um arquivo da máquina no chat": "Showed a machine's file in the chat"
 }

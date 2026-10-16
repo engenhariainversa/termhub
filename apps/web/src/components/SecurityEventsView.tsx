@@ -26,6 +26,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'machine.delete': tk('Excluiu máquina'),
   'machine.transfer': tk('Transferiu máquina'),
   'machine.agent_token_rotate': tk('Gerou novo token do agente'),
+  'machine.file_share': tk('Mostrou um arquivo da máquina no chat'),
   'api_token.create': tk('Criou token de API'),
   'api_token.revoke': tk('Revogou token de API'),
   'integration.create': tk('Adicionou integração'),

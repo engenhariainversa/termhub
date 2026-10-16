@@ -11,6 +11,8 @@ const setDefaultMock = vi.fn();
 const defaultsMock = vi.fn();
 const memoryMock = vi.fn();
 const setMemoryMock = vi.fn();
+const fileGrantsMock = vi.fn(async () => ({ grants: [] as unknown[] }));
+const revokeFileMock = vi.fn(async () => ({ grant: { id: 'fg1', revoked_at: 'x' } }));
 vi.mock('../lib/api', () => {
   class ApiError extends Error {
     constructor(public status: number, message: string) {
@@ -24,6 +26,8 @@ vi.mock('../lib/api', () => {
       setChatDefault: (...a: unknown[]) => setDefaultMock(...a),
       chatMemory: (...a: unknown[]) => memoryMock(...a),
       setChatMemory: (...a: unknown[]) => setMemoryMock(...a),
+      listChatFileGrants: () => fileGrantsMock(),
+      revokeChatFileGrant: (id: string) => revokeFileMock(id),
     },
   };
 });
@@ -264,4 +268,16 @@ describe('"Resposta automática" (TER-642)', () => {
     expect(await screen.findByText('Nenhuma permissão ativa agora.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Resposta automática' })).toBeNull();
   });
+});
+
+it('lists the folders allowed for share_file (TER-1086) and revokes one', async () => {
+  serve([], [{ grants: [], next_cursor: null }]);
+  fileGrantsMock.mockResolvedValueOnce({ grants: [{ id: 'fg1', machine_id: 'm1', machine_name: 'hulk', folder: '~/termhub-linkedin', created_at: '' }] });
+  render(<ChatGrantsView />);
+  const section = await screen.findByRole('region', { name: 'Pastas liberadas para mostrar arquivos' });
+  expect(within(section).getByText('~/termhub-linkedin')).toBeInTheDocument();
+  expect(within(section).getByText('em hulk · sem prazo')).toBeInTheDocument();
+  fireEvent.click(within(section).getByRole('button', { name: 'Revogar' }));
+  await waitFor(() => expect(revokeFileMock).toHaveBeenCalledWith('fg1'));
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Pastas liberadas para mostrar arquivos' })).toBeNull());
 });
