@@ -76,6 +76,9 @@ export const mobileDecisionBody = z
     /** Approve *and* trust this kind of routine action in the card's project with no expiry ("Liberar
      * sem prazo", spec 2026-09-28 TER-386), until revoked. Always PIN-proven. */
     z.object({ decision: z.literal('approve_project_always'), ...proof }),
+    /** Approve *and* trust share_file from the card's folder of that machine with no expiry ("Permitir
+     * sempre nesta pasta", TER-1086), until revoked. Always PIN-proven. */
+    z.object({ decision: z.literal('approve_folder_always'), ...proof }),
   ])
   .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 

@@ -42,6 +42,7 @@ type FakeTab = { id: string; project_id: string; state: string | null; state_at:
 
 let actions: ReturnType<typeof fakeActions>;
 let standing: StandingGrant[];
+let fileGrants: { id: string; user_id: string; machine_id: string; folder: string }[];
 let projectGrants: ProjectGrant[];
 let tabs: Map<string, FakeTab>;
 let tabsFind: ReturnType<typeof vi.fn>;
@@ -79,6 +80,7 @@ beforeEach(() => {
   vi.spyOn(chatBus, 'publish').mockImplementation(() => {});
   actions = fakeActions();
   standing = [];
+  fileGrants = [];
   projectGrants = [];
   tabs = new Map([
     ['t1', tab('t1', 'waiting_input')],
@@ -93,6 +95,7 @@ beforeEach(() => {
     // Every default allowance (TER-627) restricted: these tests are about the person's own grants.
     chatDefaultRestrictions: { listForUser: vi.fn(async () => new Set(DEFAULT_ALLOW_KINDS)) },
     chatStandingGrants: { findActive: vi.fn(async (u: string, p: string, k: StandingGrantKind) => standing.find((g) => g.user_id === u && g.project_id === p && g.kind === k && !g.revoked_at)) },
+    chatFileGrants: { listActiveForMachine: vi.fn(async (u: string, m: string) => fileGrants.filter((g) => g.user_id === u && g.machine_id === m)) },
     projects: { findByIdsForOwner: vi.fn(async (ids: string[], o: string) => (o === 'u1' ? ids.filter((i) => i === 'p1' || i === 'p2').map((id) => ({ id, name: id })) : [])) },
     tasks: { findByIdsForOwner: vi.fn(async (ids: string[], o: string) => (o === 'u1' ? ids.filter((i) => i === 'k1').map((id) => ({ id, project_id: 'p1', ref: 'APP-1', title: 't' })) : [])) },
     tabs: { findByIdsForOwner: tabsFind },
@@ -227,5 +230,32 @@ describe('standing grants in the gate', () => {
     expect((res as { message: string }).message).toMatch(/antes desta ação/);
     expect(run).not.toHaveBeenCalled();
     expect(actions.rows[0]).toMatchObject({ status: 'failed', error_code: 'WAITING_PERMISSION', grant_id: 'sg1' });
+  });
+});
+
+describe('folder grants for share_file (TER-1086)', () => {
+  const share = (path: string, machine_id = 'm1') => ({ machine_id, path });
+  beforeEach(() => {
+    fileGrants.push({ id: 'fg1', user_id: 'u1', machine_id: 'm1', folder: '~/termhub-linkedin' });
+  });
+
+  it('a file of the granted folder (or a subfolder) runs under the grant', async () => {
+    await expectRuns('share_file', share('~/termhub-linkedin/post-1.png'), 'fg1');
+    await expectRuns('share_file', share('~/termhub-linkedin/v2/post-2.png'), 'fg1');
+  });
+
+  it('asks for another folder, another machine, a sibling with the same prefix and a path that climbs out', async () => {
+    await expectAsks('share_file', share('~/other/a.png'));
+    actions.rows.length = 0;
+    await expectAsks('share_file', share('~/termhub-linkedin/a.png', 'm2'));
+    actions.rows.length = 0;
+    await expectAsks('share_file', share('~/termhub-linkedin-old/a.png'));
+    actions.rows.length = 0;
+    await expectAsks('share_file', share('~/termhub-linkedin/../.ssh/id.png'));
+  });
+
+  it('asks once the budget of the hour is spent', async () => {
+    for (let i = 0; i < 30; i++) actions.rows.push(fakeRow({ grant_id: 'fg1', tool: 'share_file' }));
+    await expectAsks('share_file', share('~/termhub-linkedin/post-1.png'));
   });
 });

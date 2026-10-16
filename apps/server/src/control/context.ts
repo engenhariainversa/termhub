@@ -4,6 +4,7 @@ import type { User } from '../db/repositories/types.js';
 import type { ApiTokenScope } from '../auth/api-tokens.js';
 import { canAccess, type Action, type Resource } from '../auth/permissions.js';
 import { Scoped, type Scope } from '../auth/scope.js';
+import type { ShareDeps } from '../chat/attachments/share.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
 import { LocalizedText } from '../i18n/index.js';
 
@@ -19,6 +20,8 @@ export interface ControlContext {
   token?: ControlToken;
   /** The chat-files store, for `read_attachment`; set by the MCP route, absent for web-session contexts. */
   attachments?: AttachmentStore;
+  /** The extraction queue and the attachment quota, for `share_file` (TER-1086); set with `attachments`. */
+  chatFiles?: ShareDeps;
   /** The request's logger, set by the MCP route: best-effort work a tool fires (e.g. `record_lesson`'s
    *  note re-index) logs through it — ids and codes only — instead of falling back to `console`. */
   log?: Pick<FastifyBaseLogger, 'info' | 'warn'>;

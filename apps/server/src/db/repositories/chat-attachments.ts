@@ -48,6 +48,8 @@ export interface ChatAttachmentsRepo {
   retryTranscription(id: string, userId: string): Promise<AttachmentRow | null>;
   deleteUnsent(id: string, userId: string): Promise<boolean>;
   usageBytes(userId: string): Promise<number>;
+  /** How many files `share_file` published for this user since `since`, and their bytes (TER-1086). */
+  sharedSince(userId: string, since: Date): Promise<{ files: number; bytes: number }>;
   /** Bumps `meta.attempts` of a pending row and answers the new count; null when the row is gone or no longer pending. */
   markAttempt(id: string): Promise<number | null>;
   /** Every pending row, or only the ones created before `olderThan`. */
@@ -168,6 +170,11 @@ export class ChatAttachmentsRepository implements ChatAttachmentsRepo {
   async usageBytes(userId: string): Promise<number> {
     const r = await this.db.chatAttachment.aggregate({ where: { userId }, _sum: { bytes: true } });
     return r._sum.bytes ?? 0;
+  }
+
+  async sharedSince(userId: string, since: Date): Promise<{ files: number; bytes: number }> {
+    const r = await this.db.chatAttachment.aggregate({ where: { userId, createdAt: { gte: since }, meta: { path: ['source'], equals: 'machine' } }, _sum: { bytes: true }, _count: { _all: true } });
+    return { files: r._count._all, bytes: r._sum.bytes ?? 0 };
   }
 
   async markAttempt(id: string): Promise<number | null> {

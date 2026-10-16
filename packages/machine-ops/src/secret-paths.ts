@@ -8,9 +8,9 @@
  */
 
 /** Folders (any segment) whose contents are secret: SSH, GPG, cloud and container credentials, the
- *  AI CLIs' config dirs (`.claude`, `.claude_<account>`, `.codex`, `.gemini`, …), the agent's own. */
+ *  AI CLIs' config dirs (`.claude`, `.claude_<account>`, `.codex`, `.gemini`, …). */
 const SECRET_DIRS = [
-  '.ssh', '.gnupg', '.aws', '.azure', '.gcloud', '.kube', '.docker', '.config', '.local', '.termhub',
+  '.ssh', '.gnupg', '.aws', '.azure', '.gcloud', '.kube', '.docker', '.config', '.local',
   '.claude', '.codex', '.gemini', '.cursor', '.antigravity', '.password-store', 'keychains',
 ];
 /** A segment starting with one of these is one of the dirs above under another name (`.claude_work`). */
@@ -48,5 +48,9 @@ export function isSecretPath(path: string): boolean {
   const name = segs[segs.length - 1]!;
   if (segs.some((s) => SECRET_DIRS.includes(s) || SECRET_DIR_PREFIXES.some((p) => s.startsWith(p)))) return true;
   if (dirs.includes('library') && segs.includes('keychains')) return true;
+  // The agent's own dir holds its key and token; the worktrees automatic work runs in are project files.
+  const agentDir = segs.indexOf('.termhub');
+  if (agentDir !== -1 && agentDir < segs.length - 1 && segs[agentDir + 1] !== 'worktrees') return true;
+  if (agentDir === segs.length - 1) return true;
   return SECRET_NAMES.some((re) => re.test(name));
 }

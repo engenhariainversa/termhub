@@ -26,6 +26,7 @@ import { ChatActionsRepository } from './chat-actions.js';
 import { ChatGrantsRepository } from './chat-grants.js';
 import { ChatProjectGrantsRepository } from './chat-project-grants.js';
 import { ChatStandingGrantsRepository } from './chat-standing-grants.js';
+import { ChatFileGrantsRepository } from './chat-file-grants.js';
 import { ChatDefaultRestrictionsRepository } from './chat-default-restrictions.js';
 import { ChatSubagentsRepository } from './chat-subagents.js';
 import { ChatLiveRunsRepository } from './chat-live-runs.js';
@@ -86,6 +87,7 @@ export interface Repositories {
   chatGrants: ChatGrantsRepository;
   chatProjectGrants: ChatProjectGrantsRepository;
   chatStandingGrants: ChatStandingGrantsRepository;
+  chatFileGrants: ChatFileGrantsRepository;
   chatDefaultRestrictions: ChatDefaultRestrictionsRepository;
   chatSubagents: ChatSubagentsRepository;
   chatLiveRuns: ChatLiveRunsRepository;
@@ -150,6 +152,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatGrants: new ChatGrantsRepository(db),
     chatProjectGrants: new ChatProjectGrantsRepository(db),
     chatStandingGrants: new ChatStandingGrantsRepository(db),
+    chatFileGrants: new ChatFileGrantsRepository(db),
     chatDefaultRestrictions: new ChatDefaultRestrictionsRepository(db),
     chatSubagents: new ChatSubagentsRepository(db),
     chatLiveRuns: new ChatLiveRunsRepository(db),

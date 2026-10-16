@@ -23,7 +23,7 @@ describe('isSecretPath', () => {
     '/home/u/notes/tokens.txt',
   ])('refuses %s', (p) => expect(isSecretPath(p)).toBe(true));
 
-  it.each(['~/termhub-linkedin/post-1.png', '/home/u/app/docs/report.pdf', '/tmp/screenshot.png', '/home/u/app/keyboard.png', '/home/u/app/environment.md', '/home/u/app/README.md'])('accepts %s', (p) =>
+  it.each(['~/termhub-linkedin/post-1.png', '/home/u/app/docs/report.pdf', '/tmp/screenshot.png', '/home/u/app/keyboard.png', '/home/u/app/environment.md', '/home/u/app/README.md', '/home/u/.termhub/worktrees/p1/TER-1/shot.png'])('accepts %s', (p) =>
     expect(isSecretPath(p)).toBe(false),
   );
 });
