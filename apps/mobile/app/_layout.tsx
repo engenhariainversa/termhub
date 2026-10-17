@@ -20,6 +20,7 @@ import { logScreen } from '@/services/analytics';
 import { configurePush, pushNotificationId, pushRoute } from '@/services/push';
 import { socketWake } from '@/services/api/wake';
 import { ThemeProvider, useSchemeName } from '@/ui/theme-provider';
+import { ToastHost } from '@/ui/toast';
 
 // Viewmodels never import react-native: the permissions store opens the system settings through this.
 setSystemSettingsOpener(() => Linking.openSettings());
@@ -133,6 +134,7 @@ function Navigator() {
       </Stack>
       <PinPromptSheet />
       <PushPrimerSheet />
+      <ToastHost />
     </>
   );
 }
