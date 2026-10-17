@@ -27,6 +27,17 @@ describe('ChatReplyQuote (TER-447)', () => {
     expect(screen.queryByText('Mensagem original indisponível')).toBeNull();
   });
 
+  it('links a URL in the excerpt, and a click on it does not open the original (TER-1089)', () => {
+    const onOpen = vi.fn(() => true);
+    render(<ChatReplyQuote reply={{ id: 'm1', role: 'assistant', excerpt: 'Abra https://termhub.dev/x.' }} onOpen={onOpen} />);
+    const link = screen.getByRole('link', { name: 'https://termhub.dev/x' });
+    expect(link.getAttribute('href')).toBe('https://termhub.dev/x');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    fireEvent.click(link);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
   it('a deleted original is unavailable without asking the panel', () => {
     const onOpen = vi.fn(() => true);
     render(<ChatReplyQuote reply={{ id: null, role: 'assistant', excerpt: 'oi' }} onOpen={onOpen} />);
