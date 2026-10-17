@@ -19,6 +19,7 @@ import { permissionsOf } from '../auth/permissions.js';
 import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
+import { mobileSignals } from '../chat/client-origin.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { chatBus } from '../chat/bus.js';
 import { openAnswersIn } from '../chat/open-answers.js';
@@ -264,7 +265,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
    */
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = mobileMessageBody.parse(request.body);
-    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) });
+    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}), client: mobileSignals(request, deviceOf(request)) });
     started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'mobile run failed after start'));
     return reply.code(202).send(sendAccepted.parse({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id }));
   });

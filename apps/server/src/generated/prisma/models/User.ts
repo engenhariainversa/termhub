@@ -62,6 +62,7 @@ export type UserMinAggregateOutputType = {
   chatAutoHigh: number | null
   chatAutoLow: number | null
   chatCodexReplies: boolean | null
+  chatClientContext: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
   deletionRequestedAt: Date | null
@@ -94,6 +95,7 @@ export type UserMaxAggregateOutputType = {
   chatAutoHigh: number | null
   chatAutoLow: number | null
   chatCodexReplies: boolean | null
+  chatClientContext: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
   deletionRequestedAt: Date | null
@@ -127,6 +129,7 @@ export type UserCountAggregateOutputType = {
   chatAutoLow: number
   chatAutoCalibration: number
   chatCodexReplies: number
+  chatClientContext: number
   pushTabFinished: number
   chatContextLimit: number
   deletionRequestedAt: number
@@ -175,6 +178,7 @@ export type UserMinAggregateInputType = {
   chatAutoHigh?: true
   chatAutoLow?: true
   chatCodexReplies?: true
+  chatClientContext?: true
   pushTabFinished?: true
   chatContextLimit?: true
   deletionRequestedAt?: true
@@ -207,6 +211,7 @@ export type UserMaxAggregateInputType = {
   chatAutoHigh?: true
   chatAutoLow?: true
   chatCodexReplies?: true
+  chatClientContext?: true
   pushTabFinished?: true
   chatContextLimit?: true
   deletionRequestedAt?: true
@@ -240,6 +245,7 @@ export type UserCountAggregateInputType = {
   chatAutoLow?: true
   chatAutoCalibration?: true
   chatCodexReplies?: true
+  chatClientContext?: true
   pushTabFinished?: true
   chatContextLimit?: true
   deletionRequestedAt?: true
@@ -360,6 +366,7 @@ export type UserGroupByOutputType = {
   chatAutoLow: number | null
   chatAutoCalibration: runtime.JsonValue | null
   chatCodexReplies: boolean
+  chatClientContext: boolean
   pushTabFinished: boolean
   chatContextLimit: number | null
   deletionRequestedAt: Date | null
@@ -416,6 +423,7 @@ export type UserWhereInput = {
   chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  chatClientContext?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -474,6 +482,7 @@ export type UserOrderByWithRelationInput = {
   chatAutoLow?: Prisma.SortOrderInput | Prisma.SortOrder
   chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  chatClientContext?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -535,6 +544,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  chatClientContext?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -593,6 +603,7 @@ export type UserOrderByWithAggregationInput = {
   chatAutoLow?: Prisma.SortOrderInput | Prisma.SortOrder
   chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  chatClientContext?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -634,6 +645,7 @@ export type UserScalarWhereWithAggregatesInput = {
   chatAutoLow?: Prisma.FloatNullableWithAggregatesFilter<"User"> | number | null
   chatAutoCalibration?: Prisma.JsonNullableWithAggregatesFilter<"User">
   chatCodexReplies?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  chatClientContext?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
   deletionRequestedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
@@ -666,6 +678,7 @@ export type UserCreateInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -724,6 +737,7 @@ export type UserUncheckedCreateInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -780,6 +794,7 @@ export type UserUpdateInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -838,6 +853,7 @@ export type UserUncheckedUpdateInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -895,6 +911,7 @@ export type UserCreateManyInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -927,6 +944,7 @@ export type UserUpdateManyMutationInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -960,6 +978,7 @@ export type UserUncheckedUpdateManyInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -993,6 +1012,7 @@ export type UserCountOrderByAggregateInput = {
   chatAutoLow?: Prisma.SortOrder
   chatAutoCalibration?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  chatClientContext?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
@@ -1032,6 +1052,7 @@ export type UserMaxOrderByAggregateInput = {
   chatAutoHigh?: Prisma.SortOrder
   chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  chatClientContext?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
@@ -1064,6 +1085,7 @@ export type UserMinOrderByAggregateInput = {
   chatAutoHigh?: Prisma.SortOrder
   chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
+  chatClientContext?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
@@ -1553,6 +1575,7 @@ export type UserCreateWithoutRoleRefInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -1609,6 +1632,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -1695,6 +1719,7 @@ export type UserScalarWhereInput = {
   chatAutoLow?: Prisma.FloatNullableFilter<"User"> | number | null
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
+  chatClientContext?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -1727,6 +1752,7 @@ export type UserCreateWithoutSessionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -1784,6 +1810,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -1855,6 +1882,7 @@ export type UserUpdateWithoutSessionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1912,6 +1940,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1967,6 +1996,7 @@ export type UserCreateWithoutMachinesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2024,6 +2054,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2095,6 +2126,7 @@ export type UserUpdateWithoutMachinesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2152,6 +2184,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2207,6 +2240,7 @@ export type UserCreateWithoutProjectsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2264,6 +2298,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2335,6 +2370,7 @@ export type UserUpdateWithoutProjectsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2392,6 +2428,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2447,6 +2484,7 @@ export type UserCreateWithoutIntegrationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2504,6 +2542,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2575,6 +2614,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2632,6 +2672,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2687,6 +2728,7 @@ export type UserCreateWithoutUploadsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2744,6 +2786,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2815,6 +2858,7 @@ export type UserUpdateWithoutUploadsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2872,6 +2916,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2927,6 +2972,7 @@ export type UserCreateWithoutApiTokensInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -2984,6 +3030,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3055,6 +3102,7 @@ export type UserUpdateWithoutApiTokensInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3112,6 +3160,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3167,6 +3216,7 @@ export type UserCreateWithoutChatConversationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3224,6 +3274,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3295,6 +3346,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3352,6 +3404,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3407,6 +3460,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3464,6 +3518,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3535,6 +3590,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3592,6 +3648,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3647,6 +3704,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3704,6 +3762,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3775,6 +3834,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3832,6 +3892,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3887,6 +3948,7 @@ export type UserCreateWithoutFileGrantsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -3944,6 +4006,7 @@ export type UserUncheckedCreateWithoutFileGrantsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4015,6 +4078,7 @@ export type UserUpdateWithoutFileGrantsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4072,6 +4136,7 @@ export type UserUncheckedUpdateWithoutFileGrantsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4127,6 +4192,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4184,6 +4250,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4255,6 +4322,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4312,6 +4380,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4367,6 +4436,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4424,6 +4494,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4495,6 +4566,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4552,6 +4624,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4607,6 +4680,7 @@ export type UserCreateWithoutChatFocusInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4664,6 +4738,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4735,6 +4810,7 @@ export type UserUpdateWithoutChatFocusInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4792,6 +4868,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4847,6 +4924,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4904,6 +4982,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -4975,6 +5054,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5032,6 +5112,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5087,6 +5168,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5144,6 +5226,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5204,6 +5287,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5261,6 +5345,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5332,6 +5417,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5389,6 +5475,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5455,6 +5542,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5512,6 +5600,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5567,6 +5656,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5624,6 +5714,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5695,6 +5786,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5752,6 +5844,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5807,6 +5900,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5864,6 +5958,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -5935,6 +6030,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5992,6 +6088,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6047,6 +6144,7 @@ export type UserCreateWithoutDevicesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6104,6 +6202,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6175,6 +6274,7 @@ export type UserUpdateWithoutDevicesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6232,6 +6332,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6287,6 +6388,7 @@ export type UserCreateWithoutNotificationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6344,6 +6446,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6415,6 +6518,7 @@ export type UserUpdateWithoutNotificationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6472,6 +6576,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6527,6 +6632,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6584,6 +6690,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6655,6 +6762,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6712,6 +6820,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6767,6 +6876,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6824,6 +6934,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -6895,6 +7006,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6952,6 +7064,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7007,6 +7120,7 @@ export type UserCreateWithoutDataExportsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -7064,6 +7178,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -7135,6 +7250,7 @@ export type UserUpdateWithoutDataExportsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7192,6 +7308,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7247,6 +7364,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -7304,6 +7422,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -7375,6 +7494,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7432,6 +7552,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7487,6 +7608,7 @@ export type UserCreateManyRoleRefInput = {
   chatAutoLow?: number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: number | null
   deletionRequestedAt?: Date | string | null
@@ -7519,6 +7641,7 @@ export type UserUpdateWithoutRoleRefInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7575,6 +7698,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7631,6 +7755,7 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7902,6 +8027,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   chatAutoLow?: boolean
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
   deletionRequestedAt?: boolean
@@ -7961,6 +8087,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatAutoLow?: boolean
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
   deletionRequestedAt?: boolean
@@ -7995,6 +8122,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatAutoLow?: boolean
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
   deletionRequestedAt?: boolean
@@ -8029,6 +8157,7 @@ export type UserSelectScalar = {
   chatAutoLow?: boolean
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
+  chatClientContext?: boolean
   pushTabFinished?: boolean
   chatContextLimit?: boolean
   deletionRequestedAt?: boolean
@@ -8039,7 +8168,7 @@ export type UserSelectScalar = {
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "chatClientContext" | "pushTabFinished" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -8165,6 +8294,11 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
      */
     chatCodexReplies: boolean
+    /**
+     * "Contar ao chat de onde estou falando" (TER-1088): client, device and same-network-as-a-machine go
+     * with each typed message. On by default; the person can turn it off in Memória do chat.
+     */
+    chatClientContext: boolean
     /**
      * Push "aba terminou" to the phone (TER-925): opt-in, off by default.
      */
@@ -8669,6 +8803,7 @@ export interface UserFieldRefs {
   readonly chatAutoLow: Prisma.FieldRef<"User", 'Float'>
   readonly chatAutoCalibration: Prisma.FieldRef<"User", 'Json'>
   readonly chatCodexReplies: Prisma.FieldRef<"User", 'Boolean'>
+  readonly chatClientContext: Prisma.FieldRef<"User", 'Boolean'>
   readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatContextLimit: Prisma.FieldRef<"User", 'Int'>
   readonly deletionRequestedAt: Prisma.FieldRef<"User", 'DateTime'>

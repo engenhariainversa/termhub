@@ -87,6 +87,12 @@ it('sends the app header, bearer and a DPoP proof bound to method, canonical url
   expect(calls[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/projects');
 });
 
+it('sends the phone time zone, for the chat origin line (TER-1088)', async () => {
+  const { transport, calls } = scripted([{ status: 200, body: { projects: [] } }]);
+  await make(transport).chatProjects({ accessToken: 'tok' });
+  expect(calls[0]!.headers['X-Termhub-Time-Zone']).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+});
+
 it('sends Accept-Language with the language the app shows, read on every call (i18n spec §2)', async () => {
   const { transport, calls } = scripted([
     { status: 200, body: { projects: [] } },

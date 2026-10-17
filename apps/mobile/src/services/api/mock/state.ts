@@ -275,6 +275,7 @@ export interface MockState {
   chatAutodecideEnabled: boolean;
   /** "Responder perguntas do Codex pelo chat"; defaults to `false`, like the server's column default. */
   chatCodexRepliesEnabled: boolean;
+  chatClientContextEnabled: boolean;
   /** The chat's context meter limit (TER-1038); null = the model's window. */
   chatContextLimit: number | null;
   /** The automatic answer's thresholds pinned by hand (TER-642); null = the defaults. */
@@ -339,6 +340,7 @@ export function createMockState(): MockState {
     chatMemoryEnabled: true,
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
+    chatClientContextEnabled: true,
     chatContextLimit: null,
     chatAutoThresholds: null,
     notes: [],

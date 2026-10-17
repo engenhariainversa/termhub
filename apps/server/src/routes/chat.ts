@@ -13,6 +13,7 @@ import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answe
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
+import { webSignals } from '../chat/client-origin.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { chatBus } from '../chat/bus.js';
 import { openAnswersIn } from '../chat/open-answers.js';
@@ -199,7 +200,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // `wait` is read and ignored: a page loaded before this release still sends it.
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = messageBody.parse(request.body);
     // Each only when the body carried it, so a plain message calls the service exactly as before.
-    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) };
+    // `client`: where it came from (TER-1088), read from the request, never from the body.
+    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}), client: webSignals(request) };
     // A refusal (host problem, archived conversation, an attachment that is not this user's) rejects
     // `start` itself and keeps its status. The answer streams over `/ws/chat`; a failure after this
     // point is logged by label, and a run that could not be attempted says so on the stream.

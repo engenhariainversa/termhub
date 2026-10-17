@@ -21,6 +21,9 @@ export interface HostAgents {
   /** The same wait, only for an agent this instance never held: what a read for the screen may afford
    *  (`AgentRegistry.awaitHandover`). */
   awaitHandover(machine: Pick<Machine, 'id' | 'type' | 'agent_last_seen_at'>): Promise<boolean>;
+  /** The address the machine's live agent connected from (TER-1088, `AgentRegistry.publicIp`); absent in
+   *  stand-ins that never compare networks. */
+  publicIp?(machineId: string): string | null;
 }
 
 /** Everything `resolveHost` needs, so it can be exercised without a server: the owner-scoped reads
