@@ -585,6 +585,18 @@ describe('ChatTurn', () => {
     expect(quote.compareDocumentPosition(screen.getByText('faz de novo')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("links the URLs of the person's own message, as typed otherwise (TER-1089)", () => {
+    render(
+      <ol>
+        <ChatTurn message={answer({ role: 'user', text: 'abre http://192.168.68.114:8765/a.png. e **isto**' })} waiting={false} failed={false} />
+      </ol>,
+    );
+    const link = screen.getByRole('link', { name: 'http://192.168.68.114:8765/a.png' });
+    expect(link.getAttribute('href')).toBe('http://192.168.68.114:8765/a.png');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(screen.getByText(/e \*\*isto\*\*/)).toBeTruthy();
+  });
+
   it('offers "Responder" only on a row that can be answered (TER-447)', () => {
     const onReply = vi.fn();
     const { rerender } = render(<ol><ChatTurn message={answer()} waiting={false} failed={false} onReply={onReply} /></ol>);

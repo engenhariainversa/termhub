@@ -5,6 +5,7 @@ import { appNavigate } from '../../lib/app-navigate';
 import { copyText } from '../../lib/clipboard';
 import { codeLanguage, decorateCodeBlocks } from '../../lib/code-blocks';
 import { codeFileName, downloadText } from '../../lib/code-download';
+import { openLinksInNewTab } from '../../lib/links';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
@@ -13,6 +14,7 @@ import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
 import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
+import { LinkedText } from './LinkedText';
 import { MessageAttachments } from './MessageAttachments';
 
 const COPY_FEEDBACK_MS = 2000;
@@ -129,7 +131,8 @@ export function toHtml(markdown: string, projectId: string | null): string {
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
   // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
   const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
-  return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
+  // A URL in the answer (a Markdown link or a bare one `marked` autolinked) opens in a new tab (TER-1089).
+  return linkifyMdPaths(openLinksInNewTab(decorated), (path) => filePreviewHref(projectId, path));
 }
 
 /**
@@ -223,7 +226,11 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
             (spec §3): then there is no text line at all. */}
         <div className={`max-w-[85%] [overflow-wrap:anywhere] rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg transition-shadow ${ring}`}>
           {message.reply_to && <ChatReplyQuote reply={message.reply_to} onOpen={onOpenReply} />}
-          {message.text && <div className="whitespace-pre-wrap">{message.text}</div>}
+          {message.text && (
+            <div className="whitespace-pre-wrap">
+              <LinkedText text={message.text} />
+            </div>
+          )}
           {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
         </div>
       </li>
