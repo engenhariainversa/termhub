@@ -191,6 +191,15 @@ describe('Memória do chat', () => {
     expect(spy).toHaveBeenCalledWith(expect.anything(), { codex_replies: true });
   });
 
+  it('the "where I am writing from" switch is on by default and calls setChatMemory({ client_context }) (TER-1088)', async () => {
+    const spy = jest.spyOn(stores.api, 'setChatMemory').mockResolvedValue({ enabled: true, autodecide: false, codex_replies: false, client_context: false, available: true, count: 2, notes: 0 });
+    await render(<ChatMemoryScreen />);
+    const sw = await screen.findByRole('switch', { name: 'Contar ao chat de onde estou falando' }, LOAD);
+    expect(sw.props.value).toBe(true);
+    await act(async () => fireEvent(sw, 'valueChange', false));
+    expect(spy).toHaveBeenCalledWith(expect.anything(), { client_context: false });
+  });
+
   it('the "Responder sozinho" switch reflects autodecide and calls setAutodecide(true)', async () => {
     const spy = jest.spyOn(stores.api, 'setChatMemory').mockResolvedValue({ enabled: true, autodecide: true, codex_replies: false, available: true, count: 2, notes: 0 });
     await render(<ChatMemoryScreen />);

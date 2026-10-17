@@ -23,6 +23,7 @@ import { ChatService, CANCEL_TIMEOUT_MS, purgeExpiredActions, scrubSecretArgs, t
 import { RESUME_WINDOW_MS, STALE_MS } from './resume.js';
 import { ORCHESTRATOR_PROMPT, streamedSystemPrompt } from './concierge-prompt.js';
 import { messageRefLine } from './message-ref.js';
+import { recalledOrigin, type ClientSignals } from './client-origin.js';
 
 /** What the model gets for a message the person typed: its ref line (TER-1037), then the run text. */
 const typed = (id: string, body: string) => `${messageRefLine(id, 'x')}\n\n${body}`;
@@ -4288,5 +4289,47 @@ describe('ChatService.afterDecisions', () => {
     expect(() => s.afterDecisions([row({})])).not.toThrow();
     await vi.waitFor(() => expect(errors).toHaveBeenCalledWith('chat: approval hook failed', expect.objectContaining({ action_id: 'a1', tool: 'automation_merge' })));
     errors.mockRestore();
+  });
+});
+
+describe('client origin (TER-1088)', () => {
+  const signals: ClientSignals = { client: 'ios', app_version: '0.6.0', device: 'phone', os: 'iOS 18.1', ip: '203.0.113.7', time_zone: null, locale: 'pt-BR' };
+  const withOrigin = (enabled = true) => {
+    const b = build([delta('ok'), done()], { host: { machines: [{ id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.5.0' }, { id: 'm2', name: 'hulk', type: 'agent', agent_version: '0.5.0' }, { id: 'm3', name: 'vps', type: 'agent', agent_version: '0.5.0' }] } });
+    Object.assign(b.repos.users, { chatClientContext: vi.fn(async () => enabled), timeZone: vi.fn(async () => 'America/Sao_Paulo') });
+    Object.assign(b.agents, { publicIp: vi.fn((id: string) => ({ m1: '203.0.113.7', m2: '::ffff:203.0.113.7', m3: '198.51.100.1' })[id] ?? null) });
+    return b;
+  };
+
+  it('puts the origin line after the ref line of a typed message, with the machines on the same network and no IP', async () => {
+    const { service, inputs } = withOrigin();
+    const started = await service.start(user, 'mostra a imagem', { client: signals });
+    await started.done;
+    const text = inputs()[0]!.text;
+    const [refLine, originLine, , body] = text.split('\n');
+    expect(refLine).toBe(messageRefLine(started.user_message_id, 'x'));
+    expect(originLine).toBe(
+      '[termhub origin] Where the person sent the message below from, as the server saw it: iOS app 0.6.0 · phone, iOS 18.1 · same network as: jarvis, hulk · time zone America/Sao_Paulo · language pt-BR. Use this before asking where they are or whether they are near a machine; get_client_context has the details.',
+    );
+    expect(body).toBe('mostra a imagem');
+    expect(text).not.toContain('203.0.113.7');
+    expect(recalledOrigin(started.conversation_id)).toMatchObject({ ip: '203.0.113.7', same_network_as: ['jarvis', 'hulk'], time_zone: 'America/Sao_Paulo' });
+  });
+
+  it('sends nothing, and forgets what it kept, when the person turned it off', async () => {
+    const on = withOrigin();
+    await (await on.service.start(user, 'oi', { client: signals })).done;
+    expect(recalledOrigin('c1')).not.toBeNull();
+    const { service, inputs } = withOrigin(false);
+    const started = await service.start(user, 'oi', { client: signals });
+    await started.done;
+    expect(inputs()[0]!.text).toBe(typed(started.user_message_id, 'oi'));
+    expect(recalledOrigin('c1')).toBeNull();
+  });
+
+  it('a wake never carries an origin line', async () => {
+    const { service, inputs } = withOrigin();
+    await (await service.wake(user, 'c1', 'A aba terminou.')).done;
+    expect(inputs()[0]!.text).toBe('A aba terminou.');
   });
 });

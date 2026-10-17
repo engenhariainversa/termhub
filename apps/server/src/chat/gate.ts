@@ -47,6 +47,8 @@ const readTools = new Set([
   'get_machine_network',
   // TER-1038: the chat's own context fill; nothing is changed.
   'get_chat_context',
+  // TER-1088: where the person's last message came from, as the server read it; nothing is changed.
+  'get_client_context',
 ]);
 
 const writeTools = new Set([
