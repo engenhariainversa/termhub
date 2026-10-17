@@ -1599,6 +1599,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default. Absent from an older server. */
+  client_context?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
   available: boolean;

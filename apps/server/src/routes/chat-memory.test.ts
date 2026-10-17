@@ -41,6 +41,8 @@ function fakeRepos() {
       chatAutodecide: vi.fn(async () => false),
       setChatAutodecide: vi.fn(async () => undefined),
       chatCodexReplies: vi.fn(async () => false),
+      chatClientContext: vi.fn(async () => true),
+      setChatClientContext: vi.fn(async () => undefined),
       setChatCodexReplies: vi.fn(async () => undefined),
       chatContextLimit: vi.fn(async (): Promise<number | null> => null),
       setChatContextLimit: vi.fn(async () => undefined),
@@ -188,7 +190,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2, ...AUTO_DEFAULTS });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, client_context: true, context_limit: null, available: false, count: 7, notes: 2, ...AUTO_DEFAULTS });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -200,7 +202,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0, ...AUTO_DEFAULTS });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, client_context: true, context_limit: null, available: false, count: 3, notes: 0, ...AUTO_DEFAULTS });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {

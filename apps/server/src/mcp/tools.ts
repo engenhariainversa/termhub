@@ -29,6 +29,7 @@ import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } 
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
+import { getClientContext } from '../control/client-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
 import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.js';
@@ -562,6 +563,16 @@ export const TOOLS: ToolDef[] = [
     action: 'read',
     input: {},
     run: (ctx) => getChatContext(ctx),
+  },
+  {
+    name: 'get_client_context',
+    description:
+      "Where the person's last message in this chat came from, as the server read it from the request (never typed by them): client (web, iOS or Android app) and version, device (phone, tablet or computer) and system, public IP, same_network_as (their machines whose agent connects from the same public network: same IPv4, or same IPv6 /64), time zone and language. The same data as the [termhub origin] line before each message. Use it before asking where they are or whether they are near a machine: on the same network, a machine's file can be served over the local network. Kept in memory only; enabled false when the person turned it off. Only works in the termhub chat.",
+    scope: 'read',
+    resource: 'chat',
+    action: 'read',
+    input: {},
+    run: (ctx) => getClientContext(ctx),
   },
   {
     name: 'answer_tab_question',

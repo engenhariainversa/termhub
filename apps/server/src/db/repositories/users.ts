@@ -216,6 +216,16 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { chatCodexReplies: enabled } });
   }
 
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default, so a missing row reads as on too. */
+  async chatClientContext(userId: string): Promise<boolean> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatClientContext: true } });
+    return u?.chatClientContext ?? true;
+  }
+
+  async setChatClientContext(userId: string, enabled: boolean): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatClientContext: enabled } });
+  }
+
   /** The token count the chat's context meter measures against (TER-1038); null = the model's window. */
   async chatContextLimit(userId: string): Promise<number | null> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatContextLimit: true } });
