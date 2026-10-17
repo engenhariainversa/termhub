@@ -97,6 +97,7 @@ model User {
   memoryItems             MemoryItem[]
   verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
   standingGrants          ChatStandingGrant[]
+  fileGrants              ChatFileGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
   deletionRequestedAt     DateTime?                @map("deletion_requested_at")
@@ -255,6 +256,7 @@ model Machine {
   projectLinks          ProjectMachine[]
   repositoryCheckouts   ProjectRepositoryCheckout[]
   tabs                  Tab[]
+  chatFileGrants        ChatFileGrant[]
   aiAccounts            AiAccount[]
   hook                  MachineHook?
   uploads               Upload[]
@@ -1024,6 +1026,7 @@ model ChatConversation {
   subagents          ChatSubagent[]
   liveRun            ChatLiveRun?
   standingGrants     ChatStandingGrant[]
+  fileGrants         ChatFileGrant[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -1254,6 +1257,27 @@ model ChatStandingGrant {
 
   @@index([userId, projectId])
   @@map("chat_standing_grants")
+}
+
+/// "Permitir sempre nesta pasta" (TER-1086): `share_file` from one folder of one machine, for one user, with
+/// no expiry until revoked. `folder` is lexical, as the card showed it (`~` kept); the agent still checks
+/// every file against its own rules.
+model ChatFileGrant {
+  id             String            @id
+  userId         String            @map("user_id")
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machineId      String            @map("machine_id")
+  machine        Machine           @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  folder         String
+  conversationId String?           @map("conversation_id")
+  conversation   ChatConversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+  sourceActionId String?           @map("source_action_id")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  revokedAt      DateTime?         @map("revoked_at")
+  revokedBy      String?           @map("revoked_by")
+
+  @@index([userId, machineId])
+  @@map("chat_file_grants")
 }
 
 /// A default allowance of the chat (TER-627, `DEFAULT_ALLOW_KINDS` in chat/gate.ts) this user took back:

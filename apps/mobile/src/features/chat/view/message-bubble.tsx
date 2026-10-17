@@ -109,6 +109,8 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
           {tail}
         </Markdown>
       ) : null}
+      {/* A file the assistant published from a machine (TER-1086): preview and "Baixar", on the answer's own surface. */}
+      {message.attachments && message.attachments.length > 0 ? <MessageAttachments attachments={message.attachments} tone="surface" /> : null}
       {message.error_code !== null ? (
         <Text className="text-sm text-app-danger">{message.error_code === 'USAGE_LIMIT' ? limitSentence(message.notice) : failureSentence(message.error_code)}</Text>
       ) : !body && started ? (

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, REPO_DESCRIPTION_MAX_CHARS, REPO_SCAN_MAX_REPOS, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
+import { FILE_LIST_MAX_ENTRIES, FILE_READ_MAX_BYTES, FILE_SHARE_CHUNK_BYTES, FILE_SHARE_MAX_BYTES, REPO_DESCRIPTION_MAX_CHARS, REPO_SCAN_MAX_REPOS, RPC, RPC_METHODS, TMUX_KEYS, docPath, isWdaPort, rpcErrorSchema, tmuxKey } from './rpc.js';
 
 describe('rpc catalog', () => {
   it('lists the v1 methods', () => {
     expect([...RPC_METHODS].sort()).toEqual([
-      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'fs.list', 'fs.mkdir', 'git.repos.scan', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
+      'agent.uninstall', 'agent.update', 'ai.login.cancel', 'ai.login.start', 'ai.login.status', 'ai.login.submit', 'ai.usage', 'claude.linkSession', 'docs.read', 'docs.scan', 'file.list', 'file.paste', 'file.read', 'file.share', 'fs.list', 'fs.mkdir', 'git.repos.scan', 'git.worktree.ensure', 'git.worktree.remove', 'hooks.install',
       'hooks.status', 'hooks.uninstall', 'hw.probe', 'net.check', 'net.info', 'net.wake', 'secret.read', 'sim.boot', 'sim.list', 'tab.mcp.remove', 'tab.mcp.write', 'tmux.capture', 'tmux.ensure', 'tmux.foreground',
       'tmux.kill', 'tmux.list', 'tmux.scroll', 'tmux.sendKey', 'tmux.sendText', 'tools.detect', 'transcript.read', 'wda.runner.alive', 'wda.runner.start', 'wda.runner.tail',
       'wda.setup.start', 'wda.setup.state',
@@ -298,6 +298,24 @@ describe('file.read', () => {
     expect(RPC['file.read'].result.safeParse({ status: 'outside' }).success).toBe(true);
     expect(RPC['file.read'].result.safeParse({ status: 'gone' }).success).toBe(false);
     expect(RPC['file.read'].result.safeParse({ ...ok, size: FILE_READ_MAX_BYTES + 1 }).success).toBe(false);
+  });
+});
+
+describe('file.share', () => {
+  const params = { path: '~/out/a.png', roots: [], only_roots: false, offset: 0, length: FILE_SHARE_CHUNK_BYTES };
+  const ok = { status: 'ok', path: '/home/u/out/a.png', size: 3, mtime_ms: 1, offset: 0, content_b64: 'YWJj' };
+  it('takes a path, the roots and one chunk at most', () => {
+    expect(RPC['file.share'].params.safeParse(params).success).toBe(true);
+    expect(RPC['file.share'].params.safeParse({ ...params, length: FILE_SHARE_CHUNK_BYTES + 1 }).success).toBe(false);
+    expect(RPC['file.share'].params.safeParse({ ...params, path: 'out/a.png' }).success).toBe(false);
+    expect(RPC['file.share'].params.safeParse({ ...params, offset: FILE_SHARE_MAX_BYTES + 1 }).success).toBe(false);
+  });
+  it('validates both shapes of the result', () => {
+    expect(RPC['file.share'].result.safeParse(ok).success).toBe(true);
+    expect(RPC['file.share'].result.safeParse({ status: 'secret' }).success).toBe(true);
+    expect(RPC['file.share'].result.safeParse({ status: 'too_large', size: FILE_SHARE_MAX_BYTES + 1 }).success).toBe(true);
+    expect(RPC['file.share'].result.safeParse({ ...ok, size: FILE_SHARE_MAX_BYTES + 1 }).success).toBe(false);
+    expect(RPC['file.share'].result.safeParse({ ...ok, content_b64: 'A'.repeat(Math.ceil(FILE_SHARE_CHUNK_BYTES / 3) * 4 + 4) }).success).toBe(false);
   });
 });
 

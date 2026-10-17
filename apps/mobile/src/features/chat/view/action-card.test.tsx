@@ -274,3 +274,21 @@ describe('ActionCard: a call that ran under a grant reads as one line (TER-984)'
     expect(screen.queryByRole('button', { name: 'Ver detalhes' })).toBeNull();
   });
 });
+
+describe('ActionCard: "Permitir sempre nesta pasta" (TER-1086)', () => {
+  const share = (path: string): ChatAction => ({ ...BASE_ACTION, tool: 'share_file', args: { machine_id: 'm1', path }, machine_id: 'm1', project_id: null, summary: `mostrar o arquivo \`${path}\` aqui no chat` });
+
+  it('offers it on a share_file card from a folder, with the approve_folder_always word', async () => {
+    const onDecide = jest.fn();
+    await render(<ActionCard action={share('~/termhub-linkedin/post-1.png')} busy={false} onDecide={onDecide} revoking={false} onRevoke={jest.fn()} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Permitir sempre nesta pasta' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'approve_folder_always');
+  });
+
+  it('does not offer it for a file straight in ~, nor on a board card', async () => {
+    await render(<ActionCard action={share('~/post.png')} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta pasta' })).toBeNull();
+    await render(<ActionCard action={BASE_ACTION} busy={false} onDecide={jest.fn()} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta pasta' })).toBeNull();
+  });
+});

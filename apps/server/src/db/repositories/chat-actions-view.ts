@@ -176,6 +176,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
     }
     case 'update_machine_agent':
       return args.all === true ? 'atualizar o agente do termhub em todas as máquinas (o agente reinicia; as sessões do tmux continuam)' : 'atualizar o agente do termhub na máquina (o agente reinicia; as sessões do tmux continuam)';
+    case 'share_file':
+      return `mostrar o arquivo \`${asString(args.path)}\` aqui no chat (com prévia e download)`;
     case 'wake_machine':
       return 'acordar a máquina pela rede (Wake-on-LAN), com o pacote enviado por outra máquina da mesma rede local';
     case 'resume_automation_run':

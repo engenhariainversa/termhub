@@ -98,6 +98,12 @@ export const REPO_SCAN_MIN_AGENT_VERSION = '0.29.0';
 export const CAPABILITY_NET_WAKE = 'net_wake';
 export const NET_WAKE_MIN_AGENT_VERSION = '0.30.0';
 
+/** The agent answers `file.share` (TER-1086): a file the chat publishes in the conversation, read in
+ *  chunks. An older agent drops the RPC, which would read as a timeout, so the server requires this first.
+ *  Ships in agent 0.31.0. */
+export const CAPABILITY_FILE_SHARE = 'file_share';
+export const FILE_SHARE_MIN_AGENT_VERSION = '0.31.0';
+
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
 export function streamUserMessageLine(text: string, uuid: string): string {

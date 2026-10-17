@@ -16,7 +16,7 @@ import { HttpError } from '../lib/errors.js';
 import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
+import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, FILE_GRANT_BUDGET, fileGrantable, gateDecision, insideFolder, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
@@ -586,6 +586,22 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
   return grant.id;
 }
 
+/**
+ * The folder grant ("Permitir sempre nesta pasta", TER-1086) that covers a `share_file`, if any: an active
+ * grant of this user for the call's machine whose folder holds the path, lexically, and budget left this
+ * hour. The machine is the call's own id; `shareFile` resolves it owner-scoped before anything is read, so
+ * a foreign id finds no grant and fails there like any other call. Not atomic with the insert, like the
+ * other budgets.
+ */
+async function fileGrantCovering(ctx: ControlContext, call: GatedCall): Promise<string | null> {
+  if (!fileGrantable(call.tool, call.args)) return null;
+  const grants = await ctx.repos.chatFileGrants.listActiveForMachine(ctx.scope.user.id, call.args.machine_id);
+  const grant = grants.find((g) => insideFolder(call.args.path as string, g.folder));
+  if (!grant) return null;
+  const used = await ctx.repos.chatActions.countByGrantSince(grant.id, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
+  return used < FILE_GRANT_BUDGET ? grant.id : null;
+}
+
 /** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
  * that reported and asks nothing (TER-972), and `blocked`, a run that reported itself blocked (TER-1046). A
  * login that expired is the person's to see. `null` (a tab that never reported, a bare shell that may be
@@ -706,6 +722,11 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
     // Last, the standing grants (TER-386): after every conversation-bound one, so their budgets are spent first.
     if (!row) {
       const grantId = await standingGrantCovering(ctx, call);
+      if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
+    }
+    // A folder the person trusted for share_file (TER-1086). Never a default.
+    if (!row) {
+      const grantId = await fileGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // Then the defaults every user gets unless they restricted them (TER-627).

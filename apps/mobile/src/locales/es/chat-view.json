@@ -265,5 +265,8 @@
   "definir repositório": "definir repositorio",
   "Ver ações": "Ver acciones",
   "A contagem só corre com o termhub em foco.": "La cuenta atrás solo corre con termhub en primer plano.",
-  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similitud {{score}} · umbrales {{high}} / {{low}}"
+  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similitud {{score}} · umbrales {{high}} / {{low}}",
+  "Permitir sempre nesta pasta": "Permitir siempre en esta carpeta",
+  "Não foi possível baixar o arquivo": "No se pudo descargar el archivo",
+  "Baixar {{name}}": "Descargar {{name}}"
 }

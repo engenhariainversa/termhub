@@ -543,5 +543,9 @@
   "Trocou a senha": "Cambió la contraseña",
   "esta sessão": "esta sesión",
   "{{count}} sessões encerradas._one": "{{count}} sesión cerrada.",
-  "{{count}} sessões encerradas._other": "{{count}} sesiones cerradas."
+  "{{count}} sessões encerradas._other": "{{count}} sesiones cerradas.",
+  "em {{machine}} · sem prazo": "en {{machine}} · sin plazo",
+  "O chat mostra arquivos destas pastas sem pedir confirmação, até você revogar. Chaves, credenciais e arquivos .env nunca saem da máquina.": "El chat muestra archivos de estas carpetas sin pedir confirmación, hasta que lo revoques. Las claves, credenciales y archivos .env nunca salen de la máquina.",
+  "Pastas liberadas para mostrar arquivos": "Carpetas permitidas para mostrar archivos",
+  "Mostrou um arquivo da máquina no chat": "Mostró un archivo de la máquina en el chat"
 }

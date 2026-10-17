@@ -132,7 +132,7 @@ const denyGlob = (rule: string) => {
   const spec = m[1]!.endsWith(':*') ? `${m[1]!.slice(0, -2)} *` : m[1]!;
   return new RegExp(`^Bash\\(${spec.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}\\)$`);
 };
-const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
+const MCP_FLAGS = `--mcp-config "$HOME"/'.termhub/tabs/abc/mcp.json' --allowedTools 'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card' 'mcp__termhub_tab__share_file'`;
 /** What the line of an account without a config dir starts with: the CLI's variable cleared in the tab's shell (TER-499). */
 const CLEAR_CLAUDE = 'command -v unset >/dev/null 2>&1 && unset CLAUDE_CONFIG_DIR; ';
 const CLEAR_CODEX = 'command -v unset >/dev/null 2>&1 && unset CODEX_HOME; ';
@@ -839,7 +839,7 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
   const SID_GUARD = '123e4567-e89b-12d3-a456-426614174000';
   const PERMISSION = { mode: 'acceptEdits' as const, allowedTools: ['Bash(git status:*)', 'Bash(npm test:*)'], branch: null };
   const TOOLS = `${READ} 'Bash(git status:*)' 'Bash(npm test:*)'`;
-  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card'`;
+  const TAB_TOOLS = `'mcp__termhub_tab__search_memory' 'mcp__termhub_tab__record_lesson' 'mcp__termhub_tab__get_automation_policy' 'mcp__termhub_tab__report_card' 'mcp__termhub_tab__get_card' 'mcp__termhub_tab__share_file'`;
   const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
 
   it('the default allow list is the closed F-6 list: no push (only the run\'s own branch, TER-968), no generic npm run', () => {

@@ -7,6 +7,7 @@ import { Icon } from '@/ui';
 import { ApiError } from '@/services/api/errors';
 import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../viewmodel/attachments';
 import { cachedAudio } from '../viewmodel/audio-cache';
+import { saveAttachment } from '../viewmodel/attachment-save';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ATTACHMENT_ICON, KIND_ICON } from './attachment-chip';
 
@@ -79,6 +80,37 @@ function metaDuration(meta: Record<string, unknown> | null): number | null {
 }
 
 const PLAY_ICON = { ios: 'play.fill', android: 'play_arrow' } as const;
+const SAVE_ICON = { ios: 'square.and.arrow.down', android: 'download' } as const;
+
+/** The bubble an attachment sits in: the person's (accent, white text) or the assistant's (surface, TER-1086). */
+export type BubbleTone = 'accent' | 'surface';
+const TONE = {
+  accent: { box: 'bg-black/10', text: 'text-white', muted: 'text-white/70', icon: 'rgba(255,255,255,0.85)' },
+  surface: { box: 'bg-app-surface2', text: 'text-app-text', muted: 'text-app-muted', icon: undefined },
+} as const;
+
+/**
+ * "Baixar" (TER-1086): the file under its own name, through the share sheet (iOS: photo library, Files)
+ * or the folder picker (Android). Says so when it could not, and nothing when the person cancelled.
+ */
+function SaveButton({ attachment, tone, onError, overlay = false }: { attachment: TChatAttachment; tone: BubbleTone; onError(id: string, message: string | null): void; overlay?: boolean }) {
+  const { t } = useTranslation();
+  const sign = useChatStore((s) => s.attachmentSource);
+  const [busy, setBusy] = useState(false);
+  const save = () => {
+    setBusy(true);
+    onError(attachment.id, null);
+    saveAttachment(attachment, sign)
+      .catch(() => onError(attachment.id, t('Não foi possível baixar o arquivo')))
+      .finally(() => setBusy(false));
+  };
+  const box = overlay ? 'absolute bottom-1 right-1 h-8 w-8 items-center justify-center rounded-full bg-black/55' : 'h-8 w-8 items-center justify-center rounded-full';
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={t('Baixar {{name}}', { name: attachment.name })} onPress={save} disabled={busy} hitSlop={6} className={box}>
+      {busy ? <ActivityIndicator size="small" /> : <Icon name={SAVE_ICON} size={16} color={overlay ? 'white' : TONE[tone].icon} tone="muted" />}
+    </Pressable>
+  );
+}
 const PAUSE_ICON = { ios: 'pause.fill', android: 'pause' } as const;
 
 /**
@@ -89,7 +121,7 @@ const PAUSE_ICON = { ios: 'pause.fill', android: 'pause' } as const;
  * play, into the cache (`cachedAudio`): a thread full of notes fetches nothing on open. A transcription
  * whisper could not do offers "Tentar de novo" (TER-1035), which the parent runs.
  */
-function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attachment: TChatAttachment; retrying: boolean; retryError: string | null; onRetry: (id: string) => void }) {
+function AudioAttachment({ attachment, retrying, retryError, onRetry, tone, saveError, onSaveError }: { attachment: TChatAttachment; retrying: boolean; retryError: string | null; onRetry: (id: string) => void; tone: BubbleTone; saveError: string | null; onSaveError(id: string, message: string | null): void }) {
   const { t } = useTranslation();
   const heard = useChatStore((s) => s.attachmentStatuses[attachment.id]);
   const sign = useChatStore((s) => s.attachmentSource);
@@ -129,7 +161,7 @@ function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attach
   };
 
   return (
-    <View className="min-w-52 gap-1 rounded-lg bg-black/10 px-2 py-1.5">
+    <View className={`min-w-52 gap-1 rounded-lg px-2 py-1.5 ${TONE[tone].box}`}>
       <View className="flex-row items-center gap-2">
         <Pressable
           accessibilityRole="button"
@@ -141,21 +173,24 @@ function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attach
         >
           {loading ? <ActivityIndicator size="small" /> : <Icon name={playback.playing ? PAUSE_ICON : PLAY_ICON} size={14} tone="accent" />}
         </Pressable>
-        <Text className="text-xs text-white/80">
+        <Text className={`text-xs ${TONE[tone].muted}`}>
           {playback.playing || playback.currentTime > 0 ? `${clock(playback.currentTime)} / ` : ''}
           {duration !== null ? clock(duration) : '–:––'}
         </Text>
+        <View className="flex-1" />
+        <SaveButton attachment={a} tone={tone} onError={onSaveError} />
       </View>
-      {failed ? <Text className="text-xs text-white/80">{t('Não foi possível carregar o áudio')}</Text> : null}
+      {saveError ? <Text className="text-xs text-app-danger">{saveError}</Text> : null}
+      {failed ? <Text className={`text-xs ${TONE[tone].muted}`}>{t('Não foi possível carregar o áudio')}</Text> : null}
       {transcript ? (
         <>
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} hitSlop={4}>
-            <Text className="text-xs text-white/70 underline">{open ? t('Ocultar transcrição') : t('Ver transcrição')}</Text>
+            <Text className={`text-xs underline ${TONE[tone].muted}`}>{open ? t('Ocultar transcrição') : t('Ver transcrição')}</Text>
           </Pressable>
-          {open ? <Text className="text-sm text-white">{transcript}</Text> : null}
+          {open ? <Text className={`text-sm ${TONE[tone].text}`}>{transcript}</Text> : null}
         </>
       ) : status ? (
-        <Text className={`text-xs ${a.status === 'failed' ? 'text-app-danger' : 'text-white/70'}`}>{status}</Text>
+        <Text className={`text-xs ${a.status === 'failed' ? 'text-app-danger' : TONE[tone].muted}`}>{status}</Text>
       ) : null}
       {canRetryAttachment(a) ? (
         <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying} onPress={() => onRetry(a.id)} className="self-start rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
@@ -168,12 +203,18 @@ function AudioAttachment({ attachment, retrying, retryError, onRetry }: { attach
 }
 
 /**
- * What the person sent with a message (spec 2026-09-26 §5.6): an image as a thumbnail that opens full
- * screen; a sound as a player with its transcription (TER-1036); every other kind as its name, size and status — opening a file on the phone is out of scope.
+ * What the person sent with a message (spec 2026-09-26 §5.6), or what the assistant published from a
+ * machine (TER-1086, `tone="surface"`): an image as a thumbnail that opens full screen; a sound as a
+ * player with its transcription (TER-1036); every other kind as its name, size and status. Every one has
+ * "Baixar" (`saveAttachment`): photo library or Files on iOS, a folder of the person's choice on Android.
  * The size, the `·` and the status are separate `Text`s, so each reads as exactly its own text.
  */
-export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: TChatAttachment[] }) {
+export const MessageAttachments = memo(function MessageAttachments({ attachments, tone = 'accent' }: { attachments: TChatAttachment[]; tone?: BubbleTone }) {
   const { t } = useTranslation();
+  const c = TONE[tone];
+  /** The attachment whose save failed, with why (TER-1086). */
+  const [saveError, setSaveError] = useState<{ id: string; message: string } | null>(null);
+  const onSaveError = (id: string, message: string | null) => setSaveError(message ? { id, message } : (prev) => (prev?.id === id ? null : prev));
   const [viewing, setViewing] = useState<TChatAttachment | null>(null);
   const retryAttachment = useChatStore((s) => s.retryAttachment);
   /** The ids whose retry is on its way, and the one the server refused, with why (TER-1035). */
@@ -198,34 +239,51 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
       {attachments.map((a) => {
         if (a.kind === 'image') {
           return (
-            <Pressable key={a.id} accessibilityRole="button" accessibilityLabel={t('Abrir imagem {{name}}', { name: a.name })} onPress={() => setViewing(a)}>
-              <AuthImage attachment={a} className="h-40 w-40 rounded-lg" resizeMode="cover" size={thumbSize(a.meta, THUMB_BOX, THUMB_MIN)} />
-            </Pressable>
+            <View key={a.id} className="self-start">
+              <Pressable accessibilityRole="button" accessibilityLabel={t('Abrir imagem {{name}}', { name: a.name })} onPress={() => setViewing(a)}>
+                <AuthImage attachment={a} className="h-40 w-40 rounded-lg" resizeMode="cover" size={thumbSize(a.meta, THUMB_BOX, THUMB_MIN)} />
+              </Pressable>
+              <SaveButton attachment={a} tone={tone} onError={onSaveError} overlay />
+              {saveError?.id === a.id ? <Text className="text-xs text-app-danger">{saveError.message}</Text> : null}
+            </View>
           );
         }
         if (a.kind === 'audio') {
-          return <AudioAttachment key={a.id} attachment={a} retrying={retrying.has(a.id)} retryError={retryError?.id === a.id ? retryError.message : null} onRetry={retry} />;
+          return (
+            <AudioAttachment
+              key={a.id}
+              attachment={a}
+              retrying={retrying.has(a.id)}
+              retryError={retryError?.id === a.id ? retryError.message : null}
+              onRetry={retry}
+              tone={tone}
+              saveError={saveError?.id === a.id ? saveError.message : null}
+              onSaveError={onSaveError}
+            />
+          );
         }
         const status = attachmentStatusText(a);
-        const tone = a.status === 'failed' ? 'text-app-danger' : 'text-white/70';
+        const line = a.status === 'failed' ? 'text-app-danger' : c.muted;
         return (
-          <View key={a.id} className="flex-row items-center gap-2 rounded-lg bg-black/10 px-2 py-1">
-            <Icon name={KIND_ICON[a.kind] ?? ATTACHMENT_ICON} size={18} color="rgba(255,255,255,0.85)" />
+          <View key={a.id} className={`flex-row items-center gap-2 rounded-lg px-2 py-1 ${c.box}`}>
+            <Icon name={KIND_ICON[a.kind] ?? ATTACHMENT_ICON} size={18} color={c.icon} tone="muted" />
             <View className="shrink">
-              <Text className="text-sm text-white" numberOfLines={1}>
+              <Text className={`text-sm ${c.text}`} numberOfLines={1}>
                 {a.name}
               </Text>
               <View className="flex-row items-center gap-1">
-                <Text className={`text-xs ${tone}`}>{formatBytes(a.bytes)}</Text>
+                <Text className={`text-xs ${line}`}>{formatBytes(a.bytes)}</Text>
                 {status ? (
                   <>
-                    <Text className={`text-xs ${tone}`}>·</Text>
-                    <Text className={`text-xs ${tone}`}>{status}</Text>
+                    <Text className={`text-xs ${line}`}>·</Text>
+                    <Text className={`text-xs ${line}`}>{status}</Text>
                   </>
                 ) : null}
               </View>
               {retryError?.id === a.id ? <Text className="text-xs text-app-danger">{retryError.message}</Text> : null}
+              {saveError?.id === a.id ? <Text className="text-xs text-app-danger">{saveError.message}</Text> : null}
             </View>
+            <SaveButton attachment={a} tone={tone} onError={onSaveError} />
             {canRetryAttachment(a) ? (
               <Pressable accessibilityRole="button" accessibilityLabel={t('Tentar de novo')} disabled={retrying.has(a.id)} onPress={() => retry(a.id)} className="rounded-md bg-black/20 px-2 py-1" hitSlop={8}>
                 <Text className={`text-xs text-white ${retrying.has(a.id) ? 'opacity-50' : ''}`}>{t('Tentar de novo')}</Text>
@@ -238,6 +296,11 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
         <Pressable className="flex-1 items-center justify-center bg-black/95" accessibilityRole="button" accessibilityLabel={t('Fechar imagem')} onPress={() => setViewing(null)}>
           {viewing ? <AuthImage attachment={viewing} className="h-full w-full" resizeMode="contain" /> : null}
         </Pressable>
+        {viewing ? (
+          <View className="absolute right-4 top-14">
+            <SaveButton attachment={viewing} tone={tone} onError={onSaveError} overlay />
+          </View>
+        ) : null}
       </Modal>
     </View>
   );

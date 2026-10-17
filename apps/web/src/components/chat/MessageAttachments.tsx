@@ -12,8 +12,9 @@ const THUMB_BOX = 240;
 const THUMB_MIN = 48;
 
 /**
- * What the person sent with a message (spec §5.6): images as thumbnails that open the viewer, every
- * other kind as a chip that downloads, with what the server is doing to it. Memoised like the row:
+ * What the person sent with a message (spec §5.6), or what the assistant published from a machine
+ * (TER-1086): images as thumbnails that open the viewer, with a download button, every other kind as a
+ * chip that downloads, with what the server is doing to it. Memoised like the row:
  * an `attachment_status` event replaces the message object, which is the only time this re-renders.
  */
 export const MessageAttachments = memo(function MessageAttachments({ attachments }: { attachments: ChatAttachment[] }) {
@@ -44,11 +45,21 @@ export const MessageAttachments = memo(function MessageAttachments({ attachments
           if (a.kind === 'image') {
             const size = thumbSize(a.meta, THUMB_BOX, THUMB_MIN);
             return (
-              <li key={a.id}>
+              <li key={a.id} className="relative">
                 <button type="button" className="block overflow-hidden rounded-lg" aria-label={t('Abrir imagem {{name}}', { name: a.name })} onClick={() => setViewing(a)}>
                   {/* Sized from meta before it loads, so rows below do not move (TER-197). */}
                   <img src={api.chat.attachments.url(a.id)} alt={a.name} loading="lazy" className="max-h-60 max-w-60 object-cover" style={size ?? undefined} />
                 </button>
+                {/* TER-1086: saved under its own name, without opening the viewer first. */}
+                <a
+                  href={api.chat.attachments.url(a.id)}
+                  download={a.name}
+                  className="absolute bottom-1 right-1 rounded-full bg-black/55 p-1.5 text-white hover:bg-black/75"
+                  aria-label={t('Baixar {{name}}', { name: a.name })}
+                  title={t('Baixar {{name}}', { name: a.name })}
+                >
+                  <Download size={14} aria-hidden="true" />
+                </a>
               </li>
             );
           }

@@ -15,9 +15,10 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
  *  `tools/call`, whatever the scopes and grants say. `get_automation_policy` is read-only: the project's autonomy
  *  level and what it covers, so the agent knows what happens after it opens a PR. `report_card` and `get_card`
  *  are listed and callable only by a tab with an active automatic run (their `allowedIf`), and act on that
- *  run's card only: the scopes stay `read`/`memory`. `report_card` also answers a tab whose latest run ended
+ *  run's card only: the scopes stay `read`/`memory`. `share_file` (TER-1086) publishes a file of the tab's own
+ *  folder in the project's chat. `report_card` also answers a tab whose latest run ended
  *  `blocked` and may still be adopted (spike TER-1031 §5.4), for `done` with the PR the agent opened by hand. */
-export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card'] as const;
+export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'share_file'] as const;
 
 /** Scopes of a tab token (D2). The allowlist narrows them further. */
 export const TAB_TOKEN_SCOPES: ApiTokenScope[] = ['read', 'memory'];

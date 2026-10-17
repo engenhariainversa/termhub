@@ -31,9 +31,11 @@ import {
   assertGrantableAction,
   assertProjectAllGrantableAction,
   assertProjectGrantableAction,
+  assertFileGrantableAction,
   assertStandingGrantableAction,
   assertTabTerminalGrantableAction,
   grantProject,
+  grantFolder,
   grantStanding,
   grantTab,
   grantTabTerminal,
@@ -291,6 +293,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
 
     let projectId: string | undefined;
     let standing: { kind: StandingGrantKind; projectId: string } | undefined;
+    let folder: { machineId: string; folder: string } | undefined;
     if (body.decision !== 'deny') {
       const device = deviceOf(request);
       // A card whose tab was closed is retired, not approved (TER-986) — before the PIN is asked for.
@@ -306,6 +309,10 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         const r = await assertStandingGrantableAction(repos, user.id, id);
         existing = r.action;
         standing = { kind: r.kind, projectId: r.projectId };
+      } else if (body.decision === 'approve_folder_always') {
+        const r = await assertFileGrantableAction(repos, user.id, id);
+        existing = r.action;
+        folder = { machineId: r.machineId, folder: r.folder };
       } else existing = await repos.chatActions.findByIdForUser(id, user.id);
       if (!existing) throw notFound('Ação não encontrada');
       if (existing.status !== 'pending') throw conflict('Esta ação já foi decidida');
@@ -364,12 +371,20 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         request.log.warn({ code: failureLabel(err), actionId }, 'chat standing grant failed after approval');
       }
     }
+    let file_grant: Awaited<ReturnType<typeof grantFolder>> | undefined;
+    if (folder) {
+      try {
+        file_grant = await grantFolder(repos, user.id, action, folder.machineId, folder.folder);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId }, 'chat folder grant failed after approval');
+      }
+    }
     // Only the start is awaited here: `startAfterDecision` already logs a run that fails after it
     // started, so this catch sees a failure to start and nothing else (one line per failure).
     void Promise.resolve()
       .then(() => deps.chat.startAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
-    return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant };
+    return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant, file_grant };
   });
 
   /**
