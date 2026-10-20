@@ -24,6 +24,11 @@ export function autoAnswerSeconds(dueAt: string, now = Date.now()): number {
   return Math.max(0, Math.ceil((Date.parse(dueAt) - now) / 1000));
 }
 
+/** Whole seconds left on a paused countdown (TER-642: `remaining_ms`), never negative. */
+export function pausedAutoAnswerSeconds(remainingMs: number): number {
+  return Math.max(0, Math.ceil(remainingMs / 1000));
+}
+
 /** What a `ChoiceAnswer` would say, one value per question, no question text (the countdown/auto-answer
  *  lines only ever show what would be sent, never restate what was asked). */
 export function choiceAnswerLabel(payload: { questions: TabQuestionItem[] }, answer: ChoiceAnswer): string {
@@ -59,7 +64,10 @@ export function choiceAnswerDescription(payload: { questions: TabQuestionItem[] 
 /** A countdown's reason as the card shows it: the option the agent recommended (`by: 'automation'`,
  * agentic board D18) reads in the reader's language; any other reason is shown as it was given. */
 export function autoAnswerReason(auto: { by?: string; reason: string | null }): string {
-  return auto.by === 'automation' ? i18n.t('Opção recomendada pelo agente') : (auto.reason ?? '');
+  if (auto.by === 'automation') return i18n.t('Opção recomendada pelo agente');
+  // a permission the automatic run allowed by the project's rules (TER-974): a badge only, no countdown
+  if (auto.by === 'automation_permission') return i18n.t('Liberada pelas regras do trabalho automático');
+  return auto.reason ?? '';
 }
 
 /** "Não consegui responder sozinho…" (spec 2026-09-26 concierge memory §6/§8, controller ruling): the
@@ -132,11 +140,19 @@ function suggestionValue(item: TabQuestionItem, hint: TabQuestionSuggestionItem)
   return hint.text ?? hint.selected.map((i) => item.options[i]?.label ?? '?').join(', ');
 }
 
+/** A memory suggestion backed by a concierge note instead of a past decision (TER-642): no decision id,
+ * no `by`, and a `note:` ref. Its `source` is the note's title, project and date. */
+export function isNoteSuggestion(hint: TabQuestionSuggestionItem): boolean {
+  return !hint.decision_id && hint.by !== 'concierge' && (hint.sources ?? []).some((ref) => ref.startsWith('note:'));
+}
+
 /** "você respondeu «X» a «pergunta» em termhub, 24/09/2026": the past-decision sentence, reused as the
- * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). */
+ * countdown's "Fonte:" (spec 2026-09-26 concierge memory §8, controller ruling for `by: 'memory'`). A
+ * note is not an answer the person gave, so it reads as what the note says. */
 export function suggestionSourceSentence(item: TabQuestionItem, hint: TabQuestionSuggestionItem): string {
   const date = formatDate(hint.source.answered_at);
   const project = hint.source.project_name ?? i18n.t('sem projeto');
+  if (isNoteSuggestion(hint)) return i18n.t('uma anotação diz «{{answer}}» para «{{question}}» em {{project}}, {{date}}', { answer: suggestionValue(item, hint), question: hint.source.question, project, date });
   return i18n.t('você respondeu «{{answer}}» a «{{question}}» em {{project}}, {{date}}', { answer: suggestionValue(item, hint), question: hint.source.question, project, date });
 }
 

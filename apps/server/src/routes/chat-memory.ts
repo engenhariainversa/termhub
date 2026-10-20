@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { chatContextLimit } from '@termhub/mobile-api';
+import { autoThresholdsBody, chatContextLimit } from '@termhub/mobile-api';
+import { FOCUS_BEAT_SECONDS, reportFocus } from '../chat/auto-answer.js';
+import { thresholdsFor } from '../chat/auto-thresholds.js';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -55,8 +57,21 @@ const STATUS_ERRORS = {
 /** `PATCH /memory` (spec D8/§8): at least one of the switches, never none — an empty body is a
  *  400, not a silent no-op. */
 const memoryBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
+  .object({
+    enabled: z.boolean().optional(),
+    autodecide: z.boolean().optional(),
+    codex_replies: z.boolean().optional(),
+    // TER-1088: "Contar ao chat de onde estou falando" (on by default).
+    client_context: z.boolean().optional(),
+    context_limit: chatContextLimit.nullable().optional(),
+    // TER-642: the automatic-answer thresholds pinned by hand; null hands them back to calibration.
+    auto_thresholds: autoThresholdsBody.nullable().optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit ou auto_thresholds',
+  });
+/** `POST /focus` (TER-642): one screen's heartbeat. `client_id` is that screen's own random id. */
+const focusBody = z.object({ client_id: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
 
 /** Newest decisions the memory report measures at most (TER-1009): an exact scan per decision. */
 export const REPORT_DECISIONS = 2000;
@@ -320,6 +335,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     autodecide: await repos.users.chatAutodecide(userId),
     // "Responder perguntas do Codex pelo chat": off by default, opt-in per user.
     codex_replies: await repos.users.chatCodexReplies(userId),
+    // "Contar ao chat de onde estou falando" (TER-1088): on by default, the person can turn it off.
+    client_context: await repos.users.chatClientContext(userId),
     // The chat's context meter limit (TER-1038): null = the model's window, the default.
     context_limit: await repos.users.chatContextLimit(userId),
     // `false` when embeddings are not configured on this server at all: the switch has nothing to do.
@@ -328,6 +345,12 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     // "Anotações do concierge" (spec D12): the ruling is `countNotesSince(userId, epoch)` — every note
     // this user has, not a windowed count.
     notes: await repos.memoryItems.countNotesSince(userId, new Date(0)),
+    // TER-642: the similarity thresholds of an automatic answer, this person's own — in force, where
+    // they come from (pinned by hand, calibrated from their answers, or the defaults) and the defaults.
+    auto_thresholds: await thresholdsFor(repos, userId),
+    // How long an answer in the band between them counts down, and how often a screen in focus beats.
+    auto_delay_seconds: Math.round(config.autoAnswerDelayMs / 1000),
+    focus_beat_seconds: FOCUS_BEAT_SECONDS,
   });
   app.get('/memory', async (request) => memory(request.scope.user.id));
   app.patch('/memory', async (request) => {
@@ -336,7 +359,11 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.enabled !== undefined) await repos.users.setChatSuggestions(userId, body.enabled);
     if (body.autodecide !== undefined) await repos.users.setChatAutodecide(userId, body.autodecide);
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
+    if (body.client_context !== undefined) await repos.users.setChatClientContext(userId, body.client_context);
     if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
+    // Pinning turns calibration off for this person; null turns it back on. A countdown already
+    // running keeps the thresholds it was scheduled under.
+    if (body.auto_thresholds !== undefined) await repos.users.setChatAutoThresholds(userId, body.auto_thresholds);
     if (body.autodecide === false) {
       // Turning "Responder sozinho" off also stops what it already started: every countdown still
       // `scheduled` becomes `cancelled` (the card keeps its proposed answer as a pre-selection), and
@@ -354,7 +381,20 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
   app.get('/memory/report', async (request) => {
     const { threshold, period } = reportQuery.parse(request.query);
     const ds = await repos.chatDecisions.replayDataset(request.scope.user.id, '#' + EMBED_TEXT_VERSION, SUGGEST_K, REPORT_DECISIONS);
-    return memoryReport(ds, { threshold: threshold ?? config.decisionSuggestThreshold, period, maxMisses: REPORT_MISSES });
+    return memoryReport(ds, { threshold: threshold ?? config.autoAnswerLow, period, maxMisses: REPORT_MISSES });
+  });
+
+  /**
+   * A screen says whether termhub is in focus on it (TER-642) — web: the page visible and focused; app:
+   * in the foreground. Sent on every change and every `focus_beat_seconds` while in focus. A suggested
+   * answer's countdown only runs while one of the person's screens has a fresh heartbeat; this pauses
+   * or resumes theirs at once. Only ever the requester's own rows. `update`: it changes nothing but
+   * the pace of the person's own countdowns.
+   */
+  app.post('/focus', { config: { action: 'update' } }, async (request, reply) => {
+    const { client_id, focused } = focusBody.parse(request.body);
+    await reportFocus(repos, request.scope.user.id, client_id, focused);
+    return reply.code(204).send();
   });
 
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `/decisions`. */

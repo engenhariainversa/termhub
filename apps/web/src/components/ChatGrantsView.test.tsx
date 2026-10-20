@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 import type { ChatGrantListItem } from '../lib/types';
 
 const listMock = vi.fn();
 const revokeMock = vi.fn();
-const defaultsMock = vi.fn();
 const setDefaultMock = vi.fn();
+const defaultsMock = vi.fn();
+const memoryMock = vi.fn();
+const setMemoryMock = vi.fn();
+const fileGrantsMock = vi.fn(async () => ({ grants: [] as unknown[] }));
+const revokeFileMock = vi.fn(async () => ({ grant: { id: 'fg1', revoked_at: 'x' } }));
 vi.mock('../lib/api', () => {
   class ApiError extends Error {
     constructor(public status: number, message: string) {
@@ -19,6 +24,10 @@ vi.mock('../lib/api', () => {
       revokeChatGrant: (...a: unknown[]) => revokeMock(...a),
       listChatDefaults: (...a: unknown[]) => defaultsMock(...a),
       setChatDefault: (...a: unknown[]) => setDefaultMock(...a),
+      chatMemory: (...a: unknown[]) => memoryMock(...a),
+      setChatMemory: (...a: unknown[]) => setMemoryMock(...a),
+      listChatFileGrants: () => fileGrantsMock(),
+      revokeChatFileGrant: (id: string) => revokeFileMock(id),
     },
   };
 });
@@ -38,6 +47,9 @@ beforeEach(() => {
   defaultsMock.mockReset();
   setDefaultMock.mockReset();
   defaultsMock.mockRejectedValue(new Error('not in this test'));
+  memoryMock.mockReset();
+  setMemoryMock.mockReset();
+  memoryMock.mockRejectedValue(new Error('not in this test'));
 });
 afterEach(() => cleanup());
 
@@ -151,4 +163,121 @@ it('a failed defaults read hides that section and keeps the grants', async () =>
   render(<ChatGrantsView />);
   expect(await screen.findByText('Nenhuma permissão ativa agora.')).toBeInTheDocument();
   expect(screen.queryByRole('region', { name: 'Liberadas por padrão' })).toBeNull();
+});
+
+// TER-642: the similarity thresholds of an automatic answer, read from (and pinned through) the chat memory settings.
+describe('"Resposta automática" (TER-642)', () => {
+  const thresholds = (over: Record<string, unknown> = {}) => ({ high: 0.95, low: 0.85, source: 'default', defaults: { high: 0.95, low: 0.85 }, samples: 3, min_samples: 20, calibrated_at: null, ...over });
+  const memory = (over: Record<string, unknown> = {}) => ({ enabled: true, autodecide: true, codex_replies: false, available: true, count: 4, notes: 0, auto_thresholds: thresholds(), auto_delay_seconds: 60, focus_beat_seconds: 15, ...over });
+  const open = async () => {
+    serve([], [{ grants: [], next_cursor: null }]);
+    render(
+      <MemoryRouter>
+        <ChatGrantsView />
+      </MemoryRouter>,
+    );
+    return screen.findByRole('region', { name: 'Resposta automática' });
+  };
+
+  it('shows the thresholds in force, what each band does, the default source and where the switch lives', async () => {
+    memoryMock.mockResolvedValue(memory());
+    const section = await open();
+    expect(within(section).getByText('A partir de 0,95: envia a resposta sozinho.')).toBeInTheDocument();
+    expect(within(section).getByText('De 0,85 até 0,95: sugere a resposta e envia em 60 s, contando só com o termhub em foco.')).toBeInTheDocument();
+    expect(within(section).getByText('Abaixo de 0,85: não sugere nada.')).toBeInTheDocument();
+    expect(within(section).getByText('Limiares padrão — o ajuste automático começa com 20 respostas suas (3 até agora).')).toBeInTheDocument();
+    expect(within(section).getByRole('link', { name: 'Memória do chat' })).toHaveAttribute('href', '/chat/memoria');
+    expect(within(section).getByText(/Só age com «Responder sozinho» ligado/)).toBeInTheDocument();
+    expect(within(section).getByLabelText('Limiar de envio')).toHaveValue(0.95);
+    expect(within(section).getByLabelText('Limiar de sugestão')).toHaveValue(0.85);
+    // only a pinned pair can be handed back to calibration
+    expect(within(section).queryByRole('button', { name: 'Voltar ao ajuste automático' })).toBeNull();
+  });
+
+  it('names a calibrated source with how many answers it saw, and says when the switch is off', async () => {
+    memoryMock.mockResolvedValue(memory({ autodecide: false, auto_thresholds: thresholds({ high: 0.93, low: 0.8, source: 'calibrated', samples: 42, calibrated_at: '2026-10-10T10:00:00.000Z' }) }));
+    const section = await open();
+    expect(within(section).getByText('Limiares ajustados pelo seu histórico (42 respostas).')).toBeInTheDocument();
+    expect(within(section).getByText('A partir de 0,93: envia a resposta sozinho.')).toBeInTheDocument();
+    expect(within(section).getByText(/«Responder sozinho» está desligado/)).toBeInTheDocument();
+  });
+
+  it('"Fixar limiares" pins the pair and shows what the server answered', async () => {
+    memoryMock.mockResolvedValue(memory());
+    setMemoryMock.mockResolvedValue(memory({ auto_thresholds: thresholds({ high: 0.9, low: 0.7, source: 'manual' }) }));
+    const section = await open();
+    fireEvent.change(within(section).getByLabelText('Limiar de envio'), { target: { value: '0.9' } });
+    fireEvent.change(within(section).getByLabelText('Limiar de sugestão'), { target: { value: '0.7' } });
+    fireEvent.click(within(section).getByRole('button', { name: 'Fixar limiares' }));
+    expect(setMemoryMock).toHaveBeenCalledWith({ auto_thresholds: { high: 0.9, low: 0.7 } });
+    expect(await within(section).findByText('Limiares fixados por você: o ajuste automático está desligado.')).toBeInTheDocument();
+    expect(within(section).getByText('De 0,70 até 0,90: sugere a resposta e envia em 60 s, contando só com o termhub em foco.')).toBeInTheDocument();
+    expect(within(section).getByLabelText('Limiar de envio')).toHaveValue(0.9);
+  });
+
+  it('"Voltar ao ajuste automático" hands a pinned pair back to calibration', async () => {
+    memoryMock.mockResolvedValue(memory({ auto_thresholds: thresholds({ high: 0.9, low: 0.7, source: 'manual' }) }));
+    setMemoryMock.mockResolvedValue(memory());
+    const section = await open();
+    fireEvent.click(within(section).getByRole('button', { name: 'Voltar ao ajuste automático' }));
+    expect(setMemoryMock).toHaveBeenCalledWith({ auto_thresholds: null });
+    expect(await within(section).findByText(/^Limiares padrão/)).toBeInTheDocument();
+    expect(within(section).getByLabelText('Limiar de envio')).toHaveValue(0.95);
+    expect(within(section).queryByRole('button', { name: 'Voltar ao ajuste automático' })).toBeNull();
+  });
+
+  it('refuses a pair out of range or out of order, with the reason beside the form', async () => {
+    memoryMock.mockResolvedValue(memory());
+    const section = await open();
+    const pin = within(section).getByRole('button', { name: 'Fixar limiares' });
+    expect(pin).toBeEnabled();
+    fireEvent.change(within(section).getByLabelText('Limiar de sugestão'), { target: { value: '0.97' } });
+    expect(within(section).getByText('O limiar de sugestão não pode passar do limiar de envio.')).toBeInTheDocument();
+    expect(pin).toBeDisabled();
+    fireEvent.change(within(section).getByLabelText('Limiar de sugestão'), { target: { value: '0.4' } });
+    expect(within(section).getByText('Use valores entre 0,50 e 1,00.')).toBeInTheDocument();
+    expect(pin).toBeDisabled();
+    fireEvent.change(within(section).getByLabelText('Limiar de sugestão'), { target: { value: '' } });
+    expect(pin).toBeDisabled();
+    fireEvent.submit(pin.closest('form')!);
+    expect(setMemoryMock).not.toHaveBeenCalled();
+    fireEvent.change(within(section).getByLabelText('Limiar de sugestão'), { target: { value: '0.95' } }); // equal is allowed
+    expect(pin).toBeEnabled();
+  });
+
+  it('a refused save shows the server message with the view\'s other errors and keeps the thresholds', async () => {
+    memoryMock.mockResolvedValue(memory());
+    setMemoryMock.mockRejectedValue(new ApiError(400, 'O limiar de sugestão não pode passar do limiar de envio'));
+    const section = await open();
+    fireEvent.click(within(section).getByRole('button', { name: 'Fixar limiares' }));
+    expect(await screen.findByText('O limiar de sugestão não pode passar do limiar de envio')).toBeInTheDocument();
+    expect(within(section).getByText('A partir de 0,95: envia a resposta sozinho.')).toBeInTheDocument();
+    expect(within(section).getByRole('button', { name: 'Fixar limiares' })).toBeEnabled();
+  });
+
+  it('is hidden without memory on the server, and on a server that predates the thresholds', async () => {
+    memoryMock.mockResolvedValue(memory({ available: false }));
+    serve([], [{ grants: [], next_cursor: null }]);
+    const first = render(<ChatGrantsView />);
+    expect(await screen.findByText('Nenhuma permissão ativa agora.')).toBeInTheDocument();
+    await waitFor(() => expect(memoryMock).toHaveBeenCalled());
+    expect(screen.queryByRole('region', { name: 'Resposta automática' })).toBeNull();
+    first.unmount();
+    memoryMock.mockResolvedValue(memory({ auto_thresholds: undefined }));
+    render(<ChatGrantsView />);
+    expect(await screen.findByText('Nenhuma permissão ativa agora.')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Resposta automática' })).toBeNull();
+  });
+});
+
+it('lists the folders allowed for share_file (TER-1086) and revokes one', async () => {
+  serve([], [{ grants: [], next_cursor: null }]);
+  fileGrantsMock.mockResolvedValueOnce({ grants: [{ id: 'fg1', machine_id: 'm1', machine_name: 'hulk', folder: '~/termhub-linkedin', created_at: '' }] });
+  render(<ChatGrantsView />);
+  const section = await screen.findByRole('region', { name: 'Pastas liberadas para mostrar arquivos' });
+  expect(within(section).getByText('~/termhub-linkedin')).toBeInTheDocument();
+  expect(within(section).getByText('em hulk · sem prazo')).toBeInTheDocument();
+  fireEvent.click(within(section).getByRole('button', { name: 'Revogar' }));
+  await waitFor(() => expect(revokeFileMock).toHaveBeenCalledWith('fg1'));
+  await waitFor(() => expect(screen.queryByRole('region', { name: 'Pastas liberadas para mostrar arquivos' })).toBeNull());
 });

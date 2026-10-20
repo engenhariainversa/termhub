@@ -54,9 +54,14 @@ export const chatActionStatus = z.enum(['pending', 'approved', 'denied', 'expire
 export const autoDecisionSchema = z.object({
   reason: z.string().nullable(),
   sources: z.array(z.object({ ref: z.string(), question: z.string().nullable(), answer: z.string().nullable() })),
-  /** `'automation'` on a question card answered by automatic board work (the agent's recommended option):
-   *  its reason is shown translated. Plain string, optional: absent from an older server. */
+  /** `'automation'` on a question card answered by automatic board work (the agent's recommended option),
+   *  `'automation_permission'` on a permission it allowed by the project's rules (TER-974): the reason is
+   *  shown translated. Plain string, optional: absent from an older server. */
   by: z.string().optional(),
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent from an older server and on an action card. */
+  score: z.number().optional(),
+  thresholds: z.object({ high: z.number(), low: z.number() }).optional(),
 });
 export type TAutoDecision = z.infer<typeof autoDecisionSchema>;
 
@@ -215,6 +220,16 @@ export const tabQuestionAutoAnswerSchema = z.object({
   error_code: z.string().optional(),
   decided_by: z.string().optional(),
   claimed_at: z.string().optional(),
+  // TER-642, all absent from an older server. `score`/`thresholds`/`band` say what led to an answer
+  // backed by memory (`band` 'high': sent at once; 'mid': after the countdown). `focus`: the countdown
+  // only runs while termhub is in focus; `paused` with `remaining_ms` left while it is not — `due_at`
+  // then means nothing until it resumes.
+  score: z.number().optional(),
+  thresholds: z.object({ high: z.number(), low: z.number() }).optional(),
+  band: z.string().optional(),
+  focus: z.boolean().optional(),
+  paused: z.boolean().optional(),
+  remaining_ms: z.number().optional(),
 });
 
 const tabQuestionCommon = {
@@ -248,7 +263,8 @@ export const tabQuestionSchema = z.discriminatedUnion('kind', [
   z.object({
     ...tabQuestionCommon,
     kind: z.literal('permission'),
-    payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional() }),
+    // `hint` (TER-614): the start of the command or the file's name, from a machine that opted in.
+    payload: z.object({ tool_name: z.string(), agent: z.string().optional(), question: z.string().optional(), hint: z.string().optional() }),
     // `option` (TER-995): the dialog option chosen on the card; absent from an older server.
     answer: z.object({ allow: z.boolean(), text: z.string().optional(), option: z.object({ number: z.number().int(), label: z.string(), summary: z.string().optional() }).optional() }).nullable(),
   }),

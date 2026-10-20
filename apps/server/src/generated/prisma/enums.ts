@@ -50,7 +50,10 @@ export const TabState = {
   idle: 'idle',
   error: 'error',
   waiting_background: 'waiting_background',
-  finished: 'finished'
+  finished: 'finished',
+  blocked: 'blocked',
+  auth_required: 'auth_required',
+  trust_prompt: 'trust_prompt'
 } as const
 
 export type TabState = (typeof TabState)[keyof typeof TabState]

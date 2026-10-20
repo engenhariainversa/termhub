@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from '../../i18n';
 import type { TabChatRow, ToolRow } from '../../lib/tab-chat';
 import { handleMarkdownClick, toHtml } from '../chat/ChatTurn';
+import { LinkedText } from '../chat/LinkedText';
 
 const COPY_FEEDBACK_MS = 1500;
 
@@ -119,7 +120,11 @@ function MessageRow({ row, projectId }: { row: Extract<TabChatRow, { kind: 'mess
       <li data-item-id={row.id} className="group flex items-center justify-end gap-1">
         <CopyMessageButton text={row.text} />
         <div className="max-w-[85%] rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg [overflow-wrap:anywhere]">
-          {row.text && <div className="whitespace-pre-wrap">{row.text}</div>}
+          {row.text && (
+            <div className="whitespace-pre-wrap">
+              <LinkedText text={row.text} />
+            </div>
+          )}
           {row.images > 0 && <div className="mt-1 text-xs text-fg-dim">{t('{{count}} imagens', { count: row.images })}</div>}
         </div>
       </li>

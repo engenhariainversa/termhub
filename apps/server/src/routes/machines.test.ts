@@ -86,6 +86,10 @@ function buildApp(
     delete store[id];
     return true;
   });
+  const setPermissionHint = vi.fn(async (id: string, enabled: boolean) => {
+    store[id] = { ...store[id], permission_hint: enabled } as Machine;
+    return store[id];
+  });
 
   const revokeForTabs = vi.fn(async (ids: string[]) => ids.length);
 
@@ -111,6 +115,8 @@ function buildApp(
       startAgentPairing,
       update,
       delete: del,
+      networks: async (ids: string[]) => new Map([...savedNetworks].filter(([id]) => ids.includes(id))),
+      setPermissionHint,
     },
     users: {
       findById: async () => undefined,
@@ -118,16 +124,18 @@ function buildApp(
   } as unknown as Repositories;
 
   app.register((instance) => machineRoutes(instance, repos), { prefix: '/api/machines' });
-  return { app, repos: { create, startAgentPairing, update, delete: del, machineHooks, revokeForTabs } };
+  return { app, repos: { create, startAgentPairing, update, delete: del, machineHooks, revokeForTabs, setPermissionHint } };
 }
 
 let app: FastifyInstance;
 let store: Record<string, Machine>;
+let savedNetworks: Map<string, { network: unknown; updated_at: string | null }> = new Map();
 
 beforeEach(() => {
   agents.reset();
   vi.clearAllMocks();
   store = {};
+  savedNetworks = new Map();
 });
 
 /** A connected agent as the registry sees it: hello + an rpc stub, no socket. */
@@ -479,6 +487,58 @@ describe('GET /api/machines/:id/simulators', () => {
   });
 });
 
+describe('/api/machines/:id/permission-hint (TER-614)', () => {
+  const put = (enabled: unknown) => app.inject({ method: 'PUT', url: '/api/machines/m1/permission-hint', payload: { enabled } });
+
+  it('changes the machine through hooks.hint first, then saves the switch', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const rpc = attachAgent('0.33.0', vi.fn(async () => ({ enabled: true })));
+    const built = buildApp(store);
+    app = built.app;
+    const res = await put(true);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().machine.permission_hint).toBe(true);
+    expect(rpc).toHaveBeenCalledWith('hooks.hint', { enabled: true }, undefined);
+    expect(built.repos.setPermissionHint).toHaveBeenCalledWith('m1', true);
+  });
+
+  it('saves nothing when the agent predates hooks.hint, is offline, or the machine refused', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    const old = attachAgent('0.32.0');
+    let built = buildApp(store);
+    app = built.app;
+    const outdated = await put(true);
+    expect(outdated.statusCode).toBe(409);
+    expect(outdated.json().code).toBe('AGENT_OUTDATED');
+    expect(old).not.toHaveBeenCalled();
+
+    agents.reset();
+    built = buildApp(store);
+    app = built.app;
+    expect((await put(true)).statusCode).toBe(503);
+
+    attachAgent('0.33.0', vi.fn(async () => { throw new AgentRpcError({ code: 'failed', message: 'EACCES', path: '.termhub/permission-hint' }); }));
+    built = buildApp(store);
+    app = built.app;
+    expect((await put(true)).statusCode).toBe(502);
+    expect(built.repos.setPermissionHint).not.toHaveBeenCalled();
+  });
+
+  it('refuses a body that is not a boolean', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    ({ app } = buildApp(store));
+    expect((await put('yes')).statusCode).toBe(400);
+  });
+
+  it('puts the opt-in file back on a reinstall when the switch is on', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent', permission_hint: true });
+    const rpc = attachAgent('0.33.0', vi.fn(async (method: string) => (method === 'hooks.hint' ? { enabled: true } : { home: '/Users/p', claude: 'installed', codex: 'skipped' })));
+    ({ app } = buildApp(store));
+    expect((await app.inject({ method: 'POST', url: '/api/machines/m1/hooks' })).statusCode).toBe(200);
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['hooks.install', 'hooks.hint']);
+  });
+});
+
 describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the machine)', () => {
   it('answers 409 AGENT_OUTDATED for an agent without net_check, without calling it', async () => {
     store.m1 = makeMachine({ id: 'm1', type: 'agent' });
@@ -508,6 +568,46 @@ describe('GET /api/machines/:id/network-check (hooks and MCP addresses from the 
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/network-check' });
     expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('machine network and Wake-on-LAN (TER-1080)', () => {
+  const lan = (mac: string, cidr: string) => ({
+    hostname: 'h',
+    default_interface: 'en0',
+    gateway: null,
+    interfaces: [{ name: 'en0', mac, kind: 'ethernet', addresses: [{ family: 'ipv4', address: cidr.split('/')[0], cidr }] }],
+  });
+
+  it('GET /network answers the saved network, and null before any agent reported it', async () => {
+    store.m1 = makeMachine({ id: 'm1', type: 'agent' });
+    ({ app } = buildApp(store));
+    let res = await app.inject({ method: 'GET', url: '/api/machines/m1/network' });
+    expect(res.json()).toEqual({ network: null, updated_at: null, online: false, relays: [] });
+    savedNetworks.set('m1', { network: lan('aa:aa:aa:aa:aa:01', '192.168.1.20/24'), updated_at: '2026-10-14T00:00:00.000Z' });
+    res = await app.inject({ method: 'GET', url: '/api/machines/m1/network' });
+    expect(res.json().network.interfaces[0].mac).toBe('aa:aa:aa:aa:aa:01');
+  });
+
+  it('POST /wake sends the packet through the online machine of the same network', async () => {
+    store.hulk = makeMachine({ id: 'hulk', name: 'hulk', type: 'agent' });
+    store.m1 = makeMachine({ id: 'm1', name: 'jarvis', type: 'agent' });
+    savedNetworks.set('hulk', { network: lan('aa:aa:aa:aa:aa:01', '192.168.1.20/24'), updated_at: null });
+    savedNetworks.set('m1', { network: lan('bb:bb:bb:bb:bb:01', '192.168.1.10/24'), updated_at: null });
+    const rpc = attachAgent('0.30.0', vi.fn(async () => ({ sent: 4, broadcasts: ['192.168.1.255', '255.255.255.255'] })), ['net_wake']);
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'POST', url: '/api/machines/hulk/wake', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(rpc).toHaveBeenCalledWith('net.wake', { macs: ['aa:aa:aa:aa:aa:01'], broadcasts: ['192.168.1.255', '255.255.255.255'] }, undefined);
+    expect(res.json()).toMatchObject({ via: { id: 'm1', name: 'jarvis' }, sent: 4, warnings: [] });
+  });
+
+  it('POST /wake answers 409 NO_NETWORK for a machine that never reported it', async () => {
+    store.hulk = makeMachine({ id: 'hulk', type: 'agent' });
+    ({ app } = buildApp(store));
+    const res = await app.inject({ method: 'POST', url: '/api/machines/hulk/wake', payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('NO_NETWORK');
   });
 });
 
@@ -880,7 +980,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET on a machine that did not opt in answers disabled without reaching the machine', async () => {
     store.m1 = makeMachine({ type: 'agent' });
-    const rpc = attachAgent('0.27.0');
+    const rpc = attachAgent('0.35.0');
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(200);
@@ -891,7 +991,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET asks the agent with the machine URL and returns what it detected', async () => {
     store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true, ai_memory_url: 'http://localhost:5000' });
-    const rpc = attachAgent('0.27.0', vi.fn(async () => ({ installed: true, version: '2.6.0', server_up: true })));
+    const rpc = attachAgent('0.35.0', vi.fn(async () => ({ installed: true, version: '2.6.0', server_up: true })));
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(200);
@@ -901,7 +1001,7 @@ describe('ai-memory (TER-1018)', () => {
 
   it('GET answers 409 AGENT_OUTDATED for an agent that predates aimemory.status, without calling it', async () => {
     store.m1 = makeMachine({ type: 'agent', ai_memory_enabled: true });
-    const rpc = attachAgent('0.26.0');
+    const rpc = attachAgent('0.34.0');
     ({ app } = buildApp(store));
     const res = await app.inject({ method: 'GET', url: '/api/machines/m1/ai-memory' });
     expect(res.statusCode).toBe(409);

@@ -10,6 +10,7 @@ const usageOfMock = vi.fn();
 const createMock = vi.fn();
 const updateMock = vi.fn();
 const loginStatusMock = vi.fn();
+const setLoginWarningMock = vi.fn();
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
@@ -22,6 +23,7 @@ vi.mock('../lib/api', () => {
         create: (...a: unknown[]) => createMock(...a),
         update: (...a: unknown[]) => updateMock(...a),
         loginStatus: (...a: unknown[]) => loginStatusMock(...a),
+        setLoginWarning: (...a: unknown[]) => setLoginWarningMock(...a),
       },
     },
   };
@@ -266,5 +268,38 @@ describe('AiAccountsView: expired CLI login (TER-1047)', () => {
     await screen.findAllByRole('listitem');
     await waitFor(() => expect(loginStatusMock).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Refazer login' })).not.toBeInTheDocument();
+  });
+
+  it('TER-1079: marks the account whose login is about to expire, with the days left and the way to redo it', async () => {
+    listMock.mockResolvedValue({ accounts: [account({ id: 'home' }), account({ id: 'work', config_dir: '~/.claude-work' }), account({ id: 'far', config_dir: '~/.claude-far' })] });
+    loginStatusMock.mockResolvedValue({
+      warn_days: 3,
+      accounts: [
+        row('home', 'ok'),
+        { ...row('work', 'ok'), login_expires_at: '2026-10-15T12:00:00.000Z', expires_soon: true, expires_in_days: 2 },
+        { ...row('far', 'ok'), login_expires_at: '2026-10-30T12:00:00.000Z', expires_soon: false, expires_in_days: 17 },
+      ],
+    });
+    render(<AiAccountsView />);
+    await waitFor(() => expect(screen.getByText('Expira em 2 dias')).toBeInTheDocument());
+    const [home, work, far] = screen.getAllByRole('listitem');
+    expect(within(work!).getByText('O login do CLI expira em 2 dias nesta máquina. Refaça agora para os agentes não pararem.')).toBeInTheDocument();
+    expect(within(work!).getAllByRole('button', { name: 'Refazer login' })).toHaveLength(2);
+    expect(within(home!).queryByText(/Expira em/)).not.toBeInTheDocument();
+    expect(within(far!).queryByText(/Expira em/)).not.toBeInTheDocument();
+  });
+
+  it('TER-1079: shows the person\'s warning window and saves another', async () => {
+    loginStatusMock.mockResolvedValue({ warn_days: 3, accounts: [] });
+    setLoginWarningMock.mockResolvedValue({ warn_days: 1 });
+    render(<AiAccountsView />);
+    const select = (await screen.findByLabelText('Avisar antes de o login expirar')) as HTMLSelectElement;
+    await waitFor(() => expect(loginStatusMock).toHaveBeenCalled());
+    expect(select.value).toBe('3');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['Não avisar', '1 dia antes', '2 dias antes', '3 dias antes']);
+    loginStatusMock.mockResolvedValue({ warn_days: 1, accounts: [] });
+    fireEvent.change(select, { target: { value: '1' } });
+    expect(setLoginWarningMock).toHaveBeenCalledWith(1);
+    await waitFor(() => expect(select.value).toBe('1'));
   });
 });

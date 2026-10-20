@@ -1,4 +1,5 @@
 import { epicBranchName } from '../automation/branches.js';
+import { adoptBlockedRuns } from '../automation/follower.js';
 import { deliveryPending, deliveryRow, followMerged } from '../automation/release.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
@@ -105,6 +106,8 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       if (page.etag) deps.etags.set(projectId, page.etag);
       pulls = page.pulls.length;
     }
+    // a PR from the branch of a run that ended blocked takes that run over (TER-1049)
+    if (setup.automation?.enabled) await adoptBlockedRuns(repos, projectId, deps.log, deps.now?.() ?? new Date());
     const seen = new Set<number>();
     // Only the current repo's PRs; merged ones only when there is a deploy or a release to follow.
     const releases = !!setup.automation?.enabled && setup.automation.release_workflows.length > 0;
@@ -113,7 +116,7 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       if (seen.has(first.number)) continue;
       seen.add(first.number);
       // a merged PR's delivery is told on the card whose run made it, not on one it only cites (TER-1004)
-      const w = first.state === 'open' || !setup.automation?.enabled ? first : await deliveryRow(repos, watched.filter((r) => r.number === first.number));
+      const w = first.state === 'open' || !setup.automation?.enabled ? first : await deliveryRow(repos, setup, watched.filter((r) => r.number === first.number));
       if (w.state === 'open') {
         const { state, summary } = ciOf(await deps.github.listRuns(token, w.repo, w.head_sha));
         await repos.taskPullRequests.updateCi(projectId, w.repo, w.number, { ci_state: state, ci_summary: summary });

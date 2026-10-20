@@ -17,6 +17,7 @@ import type {
   TChatEvent,
   TChatGrantListResponse,
   TChatMemory,
+  TChatMemoryPatchBody,
   TChatProjectsResponse,
   TChatResponse,
   TDecisionsResponse,
@@ -34,6 +35,7 @@ import type {
   TMemoryRule,
   TMemoryRulesResponse,
   TMobileBatchDecisionBody,
+  TLegalStatus,
   TDecisionChallengesBody,
   TDecisionChallengesResponse,
   TMobileDecisionBody,
@@ -63,6 +65,10 @@ import type {
   TFileRecentResponse,
   TTabFileResponse,
   TTabScreenResponse,
+  TInstallHooksResponse,
+  TStartTabAgentBody,
+  TStartTabAgentResponse,
+  TTabAgentOptions,
   TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
@@ -119,6 +125,12 @@ export interface MobileApi {
   requestAccountDeletion(auth: Auth, body: AccountDeletionBody): Promise<AccountDeletionStatus>;
   cancelAccountDeletion(auth: Auth): Promise<AccountDeletionStatus>;
 
+  // legal acceptance (TER-742): the Terms and Privacy Policy versions in force still to accept.
+  // A server that predates them answers 404; the app reads that as nothing pending.
+  legalStatus(auth: Auth): Promise<TLegalStatus>;
+  /** Records the acceptance of `versionIds` (channel `mobile`, set by the server); answers the new status. */
+  acceptLegal(auth: Auth, versionIds: string[]): Promise<TLegalStatus>;
+
   // chat (P§6, §6.1)
   chatProjects(auth: Auth): Promise<TChatProjectsResponse>;
   /** Pins or unpins a project in the person's Favoritos, the web sidebar's group (TER-541). */
@@ -173,8 +185,9 @@ export interface MobileApi {
   getAutomationSetup(auth: Auth, projectId: string): Promise<TAutomationSetup>;
   /** Saves the block. Turning it on, or raising the level to deploy/release, needs `proof` (a PIN proof over a
    * decision challenge for `automationSetupActionId(projectId)`, signed `automation_setup`): without one the
-   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. */
-  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }): Promise<TAutomationSetup>;
+   * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. `timeZone` (TER-974): the
+   * phone's zone, sent with a summary hour so the daily summary runs on the person's clock. */
+  saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string): Promise<TAutomationSetup>;
   /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
   setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
   /** The pause switch ("Pausar tudo"): the person's pause and the projects paused on their own. */
@@ -229,7 +242,10 @@ export interface MobileApi {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with neither key. */
-  setChatMemory(auth: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; context_limit?: number | null }): Promise<TChatMemory>;
+  setChatMemory(auth: Auth, body: boolean | TChatMemoryPatchBody): Promise<TChatMemory>;
+  /** `POST chat/focus` (TER-642): whether termhub is in focus on this app launch (`clientId`), sent on
+   *  every change and as a heartbeat — an automatic answer's countdown only runs while it is. */
+  reportChatFocus(auth: Auth, clientId: string, focused: boolean): Promise<void>;
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, `cursor` is `next_cursor`. */
   chatNotes(auth: Auth, cursor?: string | null): Promise<TNotesResponse>;
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other
@@ -293,6 +309,13 @@ export interface MobileApi {
   uploadTabFile(auth: Auth, tabId: string, fileUri: string, name: string, mime: string): Promise<TTabFileResponse>;
   /** The last `lines` lines of the tab's pane, as plain text. */
   tabScreen(auth: Auth, tabId: string, lines?: number): Promise<TTabScreenResponse>;
+  /** "Instalar hooks" on the machine (TER-1091), offered by a conversation empty because it never had them. Needs `machines:update`. */
+  installMachineHooks(auth: Auth, machineId: string): Promise<TInstallHooksResponse>;
+  /** The accounts "Iniciar sessão" can start the tab's agent with, and the one picked without asking (TER-1094). */
+  tabAgentOptions(auth: Auth, tabId: string): Promise<TTabAgentOptions>;
+  /** Starts the agent in the tab, or in a new tab when its shell is busy. 409 `ACCOUNT_CHOICE_REQUIRED` without
+   *  `account_id` when no account is picked without asking, `ACCOUNT_REQUIRED` when the machine has none. */
+  startTabAgent(auth: Auth, tabId: string, body: TStartTabAgentBody): Promise<TStartTabAgentResponse>;
   /** The tab's live socket (`/ws/m/tabs/:id`), opened from `after()` on every (re)connect. `onClose`'s
    * `final` is true for 4400, 4401, 4403 and 4404. A refused upgrade renews a stale token before the next
    * attempt, as `events` does. Returns the socket's `close`. */

@@ -41,6 +41,7 @@ vi.mock('../lib/project-chat', () => ({
 vi.mock('../lib/auth', () => ({ useAuth: () => ({ can: () => true }) }));
 // The banner reads the API on mount; not this test's concern.
 vi.mock('./DeviceRequestBanner', () => ({ DeviceRequestBanner: () => null }));
+vi.mock('./LegalNoticeBanner', () => ({ LegalNoticeBanner: () => null }));
 
 import { FocusProvider } from '../lib/focus';
 import { Chrome, Layout } from './Layout';

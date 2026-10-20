@@ -19,6 +19,7 @@ import { permissionsOf } from '../auth/permissions.js';
 import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
+import { mobileSignals } from '../chat/client-origin.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { chatBus } from '../chat/bus.js';
 import { openAnswersIn } from '../chat/open-answers.js';
@@ -30,9 +31,11 @@ import {
   assertGrantableAction,
   assertProjectAllGrantableAction,
   assertProjectGrantableAction,
+  assertFileGrantableAction,
   assertStandingGrantableAction,
   assertTabTerminalGrantableAction,
   grantProject,
+  grantFolder,
   grantStanding,
   grantTab,
   grantTabTerminal,
@@ -262,7 +265,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
    */
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = mobileMessageBody.parse(request.body);
-    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) });
+    const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}), client: mobileSignals(request, deviceOf(request)) });
     started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'mobile run failed after start'));
     return reply.code(202).send(sendAccepted.parse({ conversation_id: started.conversation_id, user_message_id: started.user_message_id, assistant_message_id: started.assistant_message_id }));
   });
@@ -290,6 +293,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
 
     let projectId: string | undefined;
     let standing: { kind: StandingGrantKind; projectId: string } | undefined;
+    let folder: { machineId: string; folder: string } | undefined;
     if (body.decision !== 'deny') {
       const device = deviceOf(request);
       // A card whose tab was closed is retired, not approved (TER-986) — before the PIN is asked for.
@@ -305,6 +309,10 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         const r = await assertStandingGrantableAction(repos, user.id, id);
         existing = r.action;
         standing = { kind: r.kind, projectId: r.projectId };
+      } else if (body.decision === 'approve_folder_always') {
+        const r = await assertFileGrantableAction(repos, user.id, id);
+        existing = r.action;
+        folder = { machineId: r.machineId, folder: r.folder };
       } else existing = await repos.chatActions.findByIdForUser(id, user.id);
       if (!existing) throw notFound('Ação não encontrada');
       if (existing.status !== 'pending') throw conflict('Esta ação já foi decidida');
@@ -363,12 +371,20 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
         request.log.warn({ code: failureLabel(err), actionId }, 'chat standing grant failed after approval');
       }
     }
+    let file_grant: Awaited<ReturnType<typeof grantFolder>> | undefined;
+    if (folder) {
+      try {
+        file_grant = await grantFolder(repos, user.id, action, folder.machineId, folder.folder);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId }, 'chat folder grant failed after approval');
+      }
+    }
     // Only the start is awaited here: `startAfterDecision` already logs a run that fails after it
     // started, so this catch sees a failure to start and nothing else (one line per failure).
     void Promise.resolve()
       .then(() => deps.chat.startAfterDecision(user, action))
       .catch((err) => request.log.warn({ code: failureLabel(err), actionId }, 'mobile decision resume failed'));
-    return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant };
+    return { action, queued: true, note: DECISION_NOTE, grant, project_grant, standing_grant, file_grant };
   });
 
   /**

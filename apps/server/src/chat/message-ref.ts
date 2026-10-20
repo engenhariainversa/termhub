@@ -14,8 +14,9 @@ export function messageRefLine(messageId: string, text: string): string | null {
   return `[termhub] The person typed the message below; its ref is ${ref}. To relay what it asks to a tab, pass on_behalf_of: ["${ref}"] to send_input, or the tab reads the text as your own words; when a subagent will send it, put the ref in its prompt and tell it to pass it.`;
 }
 
-/** `runText` with the typed message's ref line first, or as it is when there is none. */
-export function withMessageRef(runText: string, messageId: string, text: string, typed: boolean | undefined): string {
-  const line = typed ? messageRefLine(messageId, text) : null;
-  return line ? `${line}\n\n${runText}` : runText;
+/** `runText` with the typed message's ref line first, then its origin line (TER-1088, `originLine`), or as
+ *  it is when there is neither. Only a typed message gets either. */
+export function withMessageRef(runText: string, messageId: string, text: string, typed: boolean | undefined, origin?: string | null): string {
+  const lines = typed ? [messageRefLine(messageId, text), origin ?? null].filter((l): l is string => !!l) : [];
+  return lines.length > 0 ? `${lines.join('\n')}\n\n${runText}` : runText;
 }

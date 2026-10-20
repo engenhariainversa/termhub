@@ -81,7 +81,7 @@ export function MachinesPage() {
                 {m.os && <span className="text-[11px] text-fg-dim">{m.os === 'macos' ? '' : m.os}</span>}
                 {badge &&
                   (badge.outdated ? (
-                    <button type="button" className="rounded px-1 text-[11px] text-warn hover:bg-bg-3" title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
+                    <button type="button" className={`rounded px-1 text-[11px] hover:bg-bg-3 ${badge.critical ? 'font-medium text-danger' : 'text-warn'}`} title={badge.title} onClick={() => setForm({ open: true, machine: m, tab: 'agent' })}>
                       {badge.text}
                     </button>
                   ) : (
@@ -98,6 +98,16 @@ export function MachinesPage() {
                   <span className="text-[11px] text-warn" title={t('tmux não está instalado nesta máquina')}>
                     {t('sem tmux')}
                   </span>
+                )}
+                {m.type === 'agent' && status === 'offline' && (
+                  <button
+                    type="button"
+                    className="rounded px-1 text-[11px] text-fg-muted hover:bg-bg-3 hover:text-fg"
+                    title={t('Acordar pela rede (Wake-on-LAN), por outra máquina online da mesma rede')}
+                    onClick={() => setForm({ open: true, machine: m, tab: 'network' })}
+                  >
+                    {t('acordar')}
+                  </button>
                 )}
                 {m.type === 'agent' && m.hooks_installed_at === null && (
                   <button

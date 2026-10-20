@@ -25,7 +25,7 @@ function Agent({ agent }: { agent: TAgentOnCard }) {
   return (
     <View className="flex-row flex-wrap items-center gap-2">
       <Text className={agent.needs_you ? 'text-xs text-amber-400' : 'text-xs text-zinc-400'}>
-        {`${agent.tab_name} · ${stateLabel(agent.state, agent.background, agent.finished)}${since} · ${agent.machine_name}`}
+        {`${agent.tab_name} · ${stateLabel(agent.state, agent.background, agent.finished, agent)}${since} · ${agent.machine_name}`}
       </Text>
       {agent.automatic ? <AutoBadge /> : null}
     </View>

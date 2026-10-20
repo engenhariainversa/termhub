@@ -350,6 +350,18 @@ it('the Codex reply switch is off by default, explains itself and PATCHes codex_
   await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'));
 });
 
+it('the "where I am writing from" switch is on by default (an older server too) and PATCHes client_context (TER-1088)', async () => {
+  chatMemoryMock.mockResolvedValue({ enabled: true, available: true, count: 0, autodecide: false, codex_replies: false, notes: 0 });
+  chatDecisionsMock.mockResolvedValue({ decisions: [], next_cursor: null });
+  setChatMemoryMock.mockResolvedValue({ enabled: true, available: true, count: 0, autodecide: false, codex_replies: false, client_context: false, notes: 0 });
+  render(<ChatMemoryPage />, { wrapper: MemoryRouter });
+  const sw = await screen.findByRole('switch', { name: 'Contar ao chat de onde estou falando' });
+  expect(sw).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(sw);
+  expect(setChatMemoryMock).toHaveBeenCalledWith({ client_context: false });
+  await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'));
+});
+
 it('"Anotações do concierge" lists question, decision, reason and date, and "Esquecer" removes the row after confirming', async () => {
   chatMemoryMock.mockResolvedValue({ enabled: true, available: true, count: 0, autodecide: false, codex_replies: false, notes: 1 });
   chatDecisionsMock.mockResolvedValue({ decisions: [], next_cursor: null });

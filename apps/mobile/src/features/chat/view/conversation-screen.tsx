@@ -20,6 +20,7 @@ import { Composer } from './composer';
 import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
+import { MessageMenu } from './message-menu';
 import { PendingBar } from './pending-bar';
 import { SwipeToReply } from './swipe-to-reply';
 import { TabLimitCard } from './tab-limit-card';
@@ -29,11 +30,19 @@ import { TabSuggestionCard } from './tab-suggestion-card';
 /** How far from its end (the inverted list's offset 0) the reader counts as scrolled up (TER-984), like
  * the web's `isNearBottom`; within it, the thread follows what arrives (TER-1001). */
 const NEAR_END = 80;
-/** The inverted list's offset 0 is the thread's end, and new rows come in at index 0, before every row
- * on screen: the scroll view keeps the first visible row where it is when rows come in or grow before
- * it (TER-1001), so a reader scrolled up stays on the line they were reading; a reader within
- * `NEAR_END` of the end is taken along to the new end instead. */
-const KEEP_READING_POSITION = { minIndexForVisible: 0, autoscrollToTopThreshold: NEAR_END };
+/**
+ * The inverted list's offset 0 is the thread's end, and new rows come in at index 0, before every row
+ * on screen: for a reader scrolled up past `NEAR_END`, the scroll view keeps the first visible row where
+ * it is when rows come in or grow before it (TER-1001), so they stay on the line they were reading.
+ *
+ * Only then (TER-1057). At the end the inverted list already shows what arrives, with no help: offset 0
+ * stays the end. The scroll view's own anchoring there takes the newest row on screen, shifts the offset
+ * by however far that row moved and animates back to the end — and the newest rows are exactly the ones
+ * a turn reorders and regroups (a decided card moving above its answer, two settled cards folding into
+ * one accordion, TER-1024). A row that moved, or one unmounted and its view recycled elsewhere, sent the
+ * thread a whole answer's height up.
+ */
+const KEEP_READING_POSITION = { minIndexForVisible: 0 };
 /** How often the grant index re-checks expiry (spec §4.2 "Stable rows"): never during render. */
 const GRANT_TICK_MS = 30_000;
 /** The header's way to the conversation's settings (TER-1039). */
@@ -45,10 +54,11 @@ const entryKey = (entry: ChatEntry) =>
       `m:${entry.message.row_key ?? entry.message.id}`
     : entry.kind === 'action'
       ? `a:${entry.action.id}`
-      : entry.kind === 'action_group'
-        ? `g:${entry.actions[0]!.id}`
-        : entry.kind === 'action_trail'
-          ? `t:${entry.actions[0]!.id}`
+      : // A card, a group of pending cards and a turn's accordion share their first card's key: a settled
+        // card folding into an accordion (TER-1024), or a group shrinking to one card, keeps its row
+        // mounted instead of swapping it for another (TER-1057). A card is in one entry only.
+        entry.kind === 'action_group' || entry.kind === 'action_trail'
+        ? `a:${entry.actions[0]!.id}`
         : entry.kind === 'tab_suggestion'
           ? `s:${entry.suggestion.id}`
           : entry.kind === 'tab_limit'
@@ -95,9 +105,13 @@ const MessageRow = memo(function MessageRow({
   const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
   // Only a row the server has, with something in it, can be answered (TER-447). The wrapper stays either
   // way: a sent row becoming the server's, or an answer getting its text, is not remounted (TER-1001).
+  // A touch held on it opens its menu (TER-1090).
+  const replyable = isReplyable(message);
   return (
-    <SwipeToReply onReply={reply} enabled={isReplyable(message)}>
-      {bubble}
+    <SwipeToReply onReply={reply} enabled={replyable}>
+      <MessageMenu message={message} onReply={replyable ? reply : undefined}>
+        {bubble}
+      </MessageMenu>
     </SwipeToReply>
   );
 });
@@ -242,6 +256,9 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   // (`KEEP_READING_POSITION`, TER-1001) and is told how many rows arrived at the end — the rows newer
   // than the end they last saw, or one when the newest row was replaced — and the pill takes them back.
   const farFromEnd = useRef(false);
+  /** `farFromEnd` as state, flipped only when the reader crosses `NEAR_END`: it switches the scroll
+   * view's anchoring on while they read further up (`KEEP_READING_POSITION`, TER-1057). */
+  const [reading, setReading] = useState(false);
   const [unread, setUnread] = useState(0);
   const lastEnd = useRef(entries[0] ? entryKey(entries[0]) : '');
   useEffect(() => {
@@ -253,10 +270,12 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
   }, [entries]);
   const onScroll = useCallback((e: { nativeEvent: { contentOffset: { y: number } } }) => {
     farFromEnd.current = e.nativeEvent.contentOffset.y > NEAR_END;
+    setReading(farFromEnd.current);
     if (!farFromEnd.current) setUnread(0);
   }, []);
   const toEnd = useCallback(() => {
     farFromEnd.current = false;
+    setReading(false);
     setUnread(0);
     listRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
@@ -454,7 +473,7 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
             extraData={extra}
             renderItem={renderItem}
             onScrollToIndexFailed={onScrollToIndexFailed}
-            maintainVisibleContentPosition={KEEP_READING_POSITION}
+            maintainVisibleContentPosition={reading ? KEEP_READING_POSITION : undefined}
             onScroll={onScroll}
             scrollEventThrottle={64}
           />

@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { t, tk, useTranslation } from '@/i18n';
-import { actionAutoDecision, isBoardGrantable, isTabGrantable, isTerminalGrantable, standingKindOf, type StandingGrantKind } from '@/services/api/contract';
+import { actionAutoDecision, isBoardGrantable, isFolderGrantable, isTabGrantable, isTerminalGrantable, standingKindOf, type StandingGrantKind } from '@/services/api/contract';
 import { AppText, Button } from '@/ui';
 import { untilLabel } from '../model/grant-time';
 import { approveAlwaysLabel } from '../model/messages';
@@ -156,6 +156,9 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
           ) : null}
           {standingKind ? (
             <Button label={approveAlwaysLabel(standingKind)} variant="secondary" onPress={() => onDecide(action.id, 'approve_project_always')} disabled={busy} />
+          ) : null}
+          {isFolderGrantable({ tool: action.tool, args: action.args }) ? (
+            <Button label={t('Permitir sempre nesta pasta')} variant="secondary" onPress={() => onDecide(action.id, 'approve_folder_always')} disabled={busy} />
           ) : null}
         </View>
       ) : stale ? (

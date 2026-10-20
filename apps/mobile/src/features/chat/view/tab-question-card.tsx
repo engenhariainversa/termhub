@@ -4,7 +4,7 @@ import type { TTabQuestionAnswerBody, TTabQuestionScreenResponse } from '@/servi
 import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { AutoDecisionBadge } from './auto-decision-badge';
-import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
+import { answerSummary, autoAnswerFailureText, autoAnswerLine, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, pausedSeconds, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
 import type { TabQuestion, TabQuestionSuggestionItem } from '../model/types';
 
 type Props = {
@@ -87,16 +87,21 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
    *  hands this card the updated question back, so the countdown/cancelled/sent/failed state always
    *  follows the current prop (a socket event updates it exactly the same way). */
   const auto = question.auto_answer ?? null;
-  const [seconds, setSeconds] = useState(() => (auto?.status === 'scheduled' ? autoAnswerSeconds(auto.due_at) : 0));
+  // TER-642: the countdown only runs while termhub is in focus somewhere. Paused, `due_at` means nothing:
+  // the time left is `remaining_ms`, standing still until the server republishes the card with a new `due_at`.
+  const paused = auto?.status === 'scheduled' && auto.paused === true;
+  const pausedLeft = paused ? pausedSeconds(auto.remaining_ms) : 0;
+  const [seconds, setSeconds] = useState(() => (auto?.status !== 'scheduled' ? 0 : paused ? pausedLeft : autoAnswerSeconds(auto.due_at)));
   const [forgettingPrecedent, setForgettingPrecedent] = useState(false);
   useEffect(() => {
     if (auto?.status !== 'scheduled') return;
+    if (paused) return setSeconds(pausedLeft);
     const dueAt = auto.due_at;
     const tick = () => setSeconds(autoAnswerSeconds(dueAt));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [auto?.status, auto?.status === 'scheduled' ? auto.due_at : null]);
+  }, [auto?.status, auto?.status === 'scheduled' ? auto.due_at : null, paused, pausedLeft]);
   // "Cancelar" resolved (or a socket event landed): the proposed answer becomes this question's own
   // pre-selection, now editable — regardless of whether a matching `suggestion` item also exists.
   useEffect(() => {
@@ -147,15 +152,22 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
   const sending = auto?.status === 'sent';
   const counting = auto?.status === 'scheduled';
   if (counting || sending) {
-    const description = choiceAnswerDescription(question.payload, auto!.answer);
-    const lineValues = { time: formatCountdown(seconds), answer: choiceAnswerLabel(question.payload, auto!.answer), description, reason: autoAnswerReason(auto!) };
-    let line = description
-      ? t('Resposta automática em {{time}} — «{{answer}}» ({{description}}). Motivo: {{reason}}', lineValues)
-      : t('Resposta automática em {{time}} — «{{answer}}». Motivo: {{reason}}', lineValues);
+    // `band: 'high'` (TER-642): similar enough to be sent at once — no timer, only the chance to cancel.
+    const immediate = !paused && auto!.band === 'high';
+    const left = paused ? pausedLeft : seconds;
+    let line = autoAnswerLine(paused ? 'paused' : immediate ? 'immediate' : 'counting', {
+      time: formatCountdown(left),
+      answer: choiceAnswerLabel(question.payload, auto!.answer),
+      description: choiceAnswerDescription(question.payload, auto!.answer),
+      reason: autoAnswerReason(auto!),
+    });
     if (auto!.by === 'memory') {
+      // What backed it: a past decision by its id, or a concierge note by its ref (`note:<id>`, TER-642).
       const decisionIds = new Set(auto!.sources.filter((s) => s.kind === 'decision').map((s) => s.id));
-      const idx = items.findIndex((_, i) => hint.some((h) => h.question_index === i && decisionIds.has(h.decision_id)));
-      const backing = idx === -1 ? undefined : hint.find((h) => h.question_index === idx);
+      const refs = new Set(auto!.sources.map((s) => `${s.kind}:${s.id}`));
+      const backs = (h: TabQuestionSuggestionItem) => (h.decision_id ? decisionIds.has(h.decision_id) : (h.sources ?? []).some((r) => refs.has(r)));
+      const idx = items.findIndex((_, i) => hint.some((h) => h.question_index === i && backs(h)));
+      const backing = idx === -1 ? undefined : hint.find((h) => h.question_index === idx && backs(h));
       if (backing) line += ` ${t('Fonte: {{source}}', { source: suggestionSourceSentence(items[idx]!, backing) })}`;
     }
     return (
@@ -166,15 +178,19 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
         ) : (
           <View className="gap-2">
             <AppText>{line}</AppText>
+            {paused ? <AppText variant="muted">{t('A contagem só corre com o termhub em foco.')}</AppText> : null}
             <View className="flex-row gap-2">
               <View className="flex-1">
                 <Button label={t('Cancelar')} variant="secondary" disabled={busy} onPress={() => onCancelAutoAnswer?.(question.id)} />
               </View>
-              <View className="flex-1">
-                <Button label={t('Responder agora')} disabled={busy} onPress={() => onAnswer(question.id, auto!.answer)} />
-              </View>
+              {immediate ? null : (
+                <View className="flex-1">
+                  <Button label={t('Responder agora')} disabled={busy} onPress={() => onAnswer(question.id, auto!.answer)} />
+                </View>
+              )}
             </View>
-            {seconds <= 0 ? <AppText variant="muted">{t('Enviando…')}</AppText> : null}
+            {/* Never while paused (nothing is being sent), nor on an answer sent at once (it has no clock). */}
+            {!paused && !immediate && seconds <= 0 ? <AppText variant="muted">{t('Enviando…')}</AppText> : null}
           </View>
         )}
       </View>
@@ -201,7 +217,7 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
       setSelected((prev) => prev.map((s, j) => (j === h.question_index ? [] : s)));
       setTexts((prev) => prev.map((x, j) => (j === h.question_index ? '' : x)));
     };
-    // An empty id (a concierge suggestion that cited no decision): forgetting only clears the pre-selection.
+    // An empty id (no decision behind the suggestion): forgetting only clears the pre-selection.
     const result = h.decision_id ? onForget?.(h.decision_id) : undefined;
     if (result) void result.then(clear, clear);
     else clear();
@@ -264,8 +280,9 @@ function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: 
       {currentHint ? (
         <View className="gap-1">
           <AppText variant="muted">{suggestionLine(item, currentHint)}</AppText>
-          {/* A concierge suggestion that cited no decision (`decision_id: ""`) has nothing to forget. */}
-          {!(currentHint.by === 'concierge' && !currentHint.decision_id) ? (
+          {/* No decision behind it (`decision_id: ""`: a concierge suggestion that cited none, or one backed
+              by a note, TER-642): nothing to forget. */}
+          {currentHint.decision_id ? (
             <Button label={t('Esquecer esta decisão')} variant="ghost" disabled={busy} onPress={() => forget(currentHint)} />
           ) : null}
         </View>
@@ -303,6 +320,7 @@ function PermissionBody({ question, busy, onAnswer, loadScreen }: Props & { ques
   return (
     <View className="gap-2">
       <AppText>{permissionTitle(question)}</AppText>
+      {!codex && question.payload.hint ? <AppText className="font-mono text-xs">{question.payload.hint}</AppText> : null}
       {codex ? (
         <View className="gap-1">
           {question.payload.question ? <AppText>{question.payload.question}</AppText> : null}

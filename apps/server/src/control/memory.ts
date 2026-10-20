@@ -3,8 +3,10 @@ import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-de
 import { holdsAt, inferScope, isExpired, type DecisionPlace, type DecisionScope } from '../db/repositories/decision-scope.js';
 import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust, NewMemoryItem } from '../db/repositories/memory-items.js';
 import { checkChoiceAnswer, choiceAnswerBody, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
-import { autoAnswerAllowed, blocklistParts, decisionBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
-import { embedTag, embedText, labelKey, type SuggestionItem } from '../chat/decision-text.js';
+import { autoAnswerAllowed, blocklistParts, decisionBacks, noteBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
+import { bandOf, thresholdsFor, type AutoBand } from '../chat/auto-thresholds.js';
+import { cosine, embedTag, embedText, labelKey, type SuggestionItem } from '../chat/decision-text.js';
+import { automaticRunOfTab } from '../automation/pause.js';
 import { config } from '../config.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
 import { autoAnswerBlocked } from '../memory/blocklist.js';
@@ -24,7 +26,6 @@ import { parseRef, type MemoryRefKind } from '../memory/refs.js';
 import { msg, tk } from '../i18n/index.js';
 import type { MemoryStatus } from '../memory/status.js';
 import { recordEvent } from '../automation/events.js';
-import { automaticRunOfTab } from '../automation/pause.js';
 import { answerWhy, roundScore } from '../automation/why.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 
@@ -361,8 +362,9 @@ async function expiryOf(ctx: ControlContext, a: { expires_at?: string; expires_a
 /**
  * `record_decision` (spec 2026-09-26 concierge memory D12, §5.2): writes a `note` memory item, trust
  * `derived`, owned by the calling user — a decision the concierge took alone, or one the person spoke
- * in the chat, so it can be found again and, on the Memória screen, forgotten. Never a basis for an
- * automatic answer (D12): only a `person` decision in `chat_decisions` backs `mode: 'auto'`.
+ * in the chat, so it can be found again and, on the Memória screen, forgotten. It backs an automatic
+ * answer only when its decision is, word for word, the label of an option the tab offers (TER-642,
+ * `noteBacks`): nothing a note says is ever typed into a tab.
  *
  * `project_id`, when given, is checked through `ctx.scoped.project` first — a foreign or missing
  * project 404s with nothing written. `sources` are re-verified (`verifySources`) before anything is
@@ -621,6 +623,13 @@ function suggestionSource(first: ResolvedSource): SuggestionItem['source'] {
   return { question: item.title, project_name: item.project_name, answered_at: item.source_at };
 }
 
+/** What backs one question's proposed answer among the cited sources: the person's past decisions that
+ *  answered exactly this (`decisionBacks`) and the notes whose decision is this option (`noteBacks`). */
+interface Backers {
+  decisions: ChatDecision[];
+  notes: MemoryItem[];
+}
+
 /**
  * The concierge just scheduled a countdown on a card of a tab with a live automatic run (TER-1011): that is an
  * automatic answer of the run, so the feed gets its `question_answered` line with why (the precedent cited,
@@ -637,39 +646,51 @@ async function noteAutomaticAnswer(ctx: ControlContext, row: TabQuestion): Promi
 }
 
 /**
- * The similarity floor behind `auto` (spec D6): for every question, one of the decisions that back its
- * answer (`backers[i]`) must also be about a similar question — cosine(embedding of this question's
- * `embedText`, the decision's stored embedding) ≥ `AUTO_ANSWER_MIN_SIMILARITY`, computed in SQL
- * (`similarityTo`, owner-scoped, only vectors of the same model and text version — `embedTag`, TER-204).
- * Fails closed: no embedder, an embed that fails or times out, a question that normalises to '' (it
- * would match every other empty question at 1.0), or a decision with no embedding of this version yet
- * all answer `false`. One embed call for the whole card.
+ * The similarity behind `auto` (spec D6, TER-642): for every question, how close its best backer
+ * (`backers[i]`) is to it, question to question — a decision by cosine(embedding of this question's
+ * `embedText`, the decision's stored embedding), computed in SQL (`similarityTo`, owner-scoped, only
+ * vectors of the same model and text version — `embedTag`, TER-204); a note by its title, embedded here
+ * the same way (its stored vector is of its whole text). The card scores as its weakest question.
+ * Fails closed, with null: no embedder, an embed that fails or times out, a question that normalises to
+ * '' (it would match every other empty question at 1.0), or a question whose backers cannot be measured
+ * (a decision with no embedding of this version yet, a note with an empty title). One embed call for
+ * the whole card.
  */
-async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backers: ChatDecision[][], embedder: Embedder | null): Promise<number | null> {
+async function cardScore(ctx: ControlContext, payload: ChoicePayload, backers: Backers[], embedder: Embedder | null): Promise<number | null> {
   if (!embedder) return null;
   const texts = payload.questions.map(embedText);
   if (texts.some((t) => t === '')) return null;
+  const notes = [...new Map(backers.flatMap((b) => b.notes).map((n) => [n.id, n])).values()].filter((n) => embedText({ question: n.title }) !== '');
   let model: string;
   let vectors: number[][];
   try {
-    ({ model, vectors } = await withTimeout(embedder.embed(texts), EMBED_TIMEOUT_MS, () => {}));
+    ({ model, vectors } = await withTimeout(embedder.embed([...texts, ...notes.map((n) => embedText({ question: n.title }))]), EMBED_TIMEOUT_MS, () => {}));
   } catch {
     return null;
   }
-  // the weakest question's best backer: the score the feed shows (TER-1011)
   let score = 1;
-  for (const [i, ds] of backers.entries()) {
+  for (const [i, b] of backers.entries()) {
     const vector = vectors[i];
-    if (!vector || ds.length === 0) return null;
-    const sims = await ctx.repos.chatDecisions.similarityTo(
-      ds.map((d) => d.id),
-      ctx.scope.user.id,
-      vector,
-      embedTag(model),
-    );
-    const best = Math.max(...sims.values());
-    if (!(best >= config.autoAnswerMinSimilarity)) return null;
-    score = Math.min(score, best);
+    if (!vector) return null;
+    const sims = b.decisions.length
+      ? [
+          ...(
+            await ctx.repos.chatDecisions.similarityTo(
+              b.decisions.map((d) => d.id),
+              ctx.scope.user.id,
+              vector,
+              embedTag(model),
+            )
+          ).values(),
+        ]
+      : [];
+    for (const n of b.notes) {
+      const at = notes.findIndex((x) => x.id === n.id);
+      const noteVector = at === -1 ? undefined : vectors[texts.length + at];
+      if (noteVector) sims.push(cosine(vector, noteVector));
+    }
+    if (sims.length === 0) return null;
+    score = Math.min(score, Math.max(...sims));
   }
   return score;
 }
@@ -699,10 +720,14 @@ export interface AnswerToolResult {
  * documents), when the person's "Responder sozinho" switch is off; when the person already cancelled a
  * countdown on this card; when any question's header, text or chosen answer (label, description or
  * free text) hits the blocklist; when
- * not every question has a cited `decision` (a person's own past answer, trust `person`) that maps to exactly the
- * proposed answer, option descriptions included (`decisionBacks`); or when those decisions are not about a similar enough question
- * (`similarEnough`, fail closed). A doc, card, message or note can never back `auto`: text an agent
- * wrote may carry an injection (D2).
+ * not every question has a cited precedent that maps to exactly the proposed answer — a `decision` (the
+ * person's own past answer, trust `person` and not replaced — TER-1006, TER-1015 — option descriptions
+ * included: `decisionBacks`) or a `note` whose decision is
+ * the option proposed (`noteBacks`, TER-642); or when those precedents are about questions scoring
+ * under the person's low threshold (`cardScore`, fail closed). From the low threshold the answer counts
+ * down on the card, in focus only; from the high one it is sent at once (TER-642). A doc, card or
+ * message can never back `auto`, and a note only through the label of an option the tab itself
+ * offered: text an agent wrote may carry an injection (D2), and none of it is ever typed.
  *
  * A suggestion replaces the card's items (the answers cover every question) and is republished; a
  * countdown is `scheduleAutoAnswer`'s. A row that moved on between the read and the write answers
@@ -732,25 +757,37 @@ export async function answerTabQuestionTool(
   const result = (r: AnswerToolResult): AnswerToolResult => (otherProject.length > 0 ? { ...r, other_project_sources: otherProject } : r);
 
   let downgrade: Downgrade | undefined;
-  let score: number | null = null;
   if ((a.mode ?? 'auto') === 'auto') {
     // A replaced decision (TER-1015) never backs `auto`: citing only that one is `no_person_precedent`.
     // Nor does one the countdown made: only the person's own click is a precedent (`derived`, TER-1006, D2/D11).
     const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at && s.decision.trust === 'person' ? [s.decision] : []));
-    const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
-    const backed = backers.filter((ds) => ds.length > 0).length;
+    const notes = sources.flatMap((s) => (s.kind === 'note' && !s.item.superseded_at && s.item.status === 'current' ? [s.item] : []));
+    const backers: Backers[] = payload.questions.map((item, i) => ({
+      decisions: decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)),
+      notes: notes.filter((n) => noteBacks(n, item, answer.answers[i]!)),
+    }));
+    const backed = backers.filter((b) => b.decisions.length + b.notes.length > 0).length;
     const parts = blocklistParts(payload, answer);
+    // The person's own thresholds decide the band (TER-642): sent at once, counted down, or neither.
+    const thresholds = await thresholdsFor(ctx.repos, userId);
+    let score: number | null = null;
+    let band: AutoBand | null = null;
     // in a tab with a live automatic run, `automation.enabled` stands in for the switch (D18, F-17)
     if (!(await autoAnswerAllowed(ctx.repos, row))) downgrade = 'switch_off';
     else if (autoStatus === 'cancelled') downgrade = 'cancelled_by_person';
     else if (autoAnswerBlocked(parts)) downgrade = 'blocked';
     else if (payload.questions.length > 1 && backed > 0 && backed < payload.questions.length) downgrade = 'multi_question_partial';
     else if (backed < payload.questions.length) downgrade = 'no_person_precedent';
-    else score = await similarEnough(ctx, payload, backers, deps.embedder !== undefined ? deps.embedder : defaultEmbedder());
-    if (!downgrade && score === null) downgrade = 'not_similar';
+    else {
+      score = await cardScore(ctx, payload, backers, deps.embedder !== undefined ? deps.embedder : defaultEmbedder());
+      band = score === null ? null : bandOf(score, thresholds);
+      if (!band) downgrade = 'not_similar';
+    }
 
-    if (!downgrade) {
-      const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score: roundScore(score) });
+    if (!downgrade && band && score !== null) {
+      // The countdown waits for the person's focus, except in a tab automatic work runs unattended.
+      const unattended = band === 'mid' && (await automaticRunOfTab(ctx.repos, row.tab_id).catch(() => null)) !== null;
+      const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score, thresholds, band, focus: band === 'mid' && !unattended });
       if (scheduled?.auto_answer) {
         await noteAutomaticAnswer(ctx, scheduled);
         return result({ mode: 'auto', due_at: scheduled.auto_answer.due_at });

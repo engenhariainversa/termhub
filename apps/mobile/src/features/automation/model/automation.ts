@@ -42,6 +42,9 @@ export const AUTOMATION_MSG = {
   pinTitle: tk('Trabalho automático'),
   network: tk('Não foi possível falar com o servidor. Tente de novo.'),
   confirmTitle: tk('Trabalho automático'),
+  summary: tk('Hora do resumo diário'),
+  summaryOff: tk('Sem resumo'),
+  summaryHint: tk('O resumo do dia chega nesta hora, no fuso deste aparelho.'),
 } as const;
 
 /** Whether saving `to` over `from` asks first (turning on, or raising to Deploy or Publicação). The server enforces the same rule with the PIN. */
@@ -58,3 +61,27 @@ const sameBlock = (a: TAutomationSetup, b: TAutomationSetup) => JSON.stringify(a
 
 /** Something differs from what the server has. */
 export const isChanged = (saved: TAutomationSetup, draft: TAutomationSetup): boolean => !sameBlock(saved, draft);
+
+/** The hours the daily summary can be sent at (spec D26): 0 to 23, in the person's own zone. */
+export const SUMMARY_HOURS: readonly number[] = Array.from({ length: 24 }, (_, h) => h);
+
+/** The block's `summary_hour` (TER-974): a field the server added, kept loose like the rest of the block. */
+export function summaryHourOf(a: TAutomationSetup): number | null {
+  const h = (a as { summary_hour?: unknown }).summary_hour;
+  return typeof h === 'number' && Number.isInteger(h) && h >= 0 && h <= 23 ? h : null;
+}
+
+/** Sets the summary hour, or turns the summary off with null. */
+export const withSummaryHour = (a: TAutomationSetup, hour: number | null): TAutomationSetup => ({ ...a, summary_hour: hour });
+
+/** "08:00": how an hour reads on its chip. */
+export const hourLabel = (hour: number): string => `${String(hour).padStart(2, '0')}:00`;
+
+/** The phone's IANA zone, sent with a summary hour so the server sends it on this clock; null when unknown. */
+export function deviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}

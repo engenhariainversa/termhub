@@ -7,7 +7,7 @@ import { DICT, HTML_LANG, LANG_KEY, LANG_NAMES, LANGS, LangContext, OG_LOCALE, d
 /**
  * What every page of termhub.dev shares: the language switch, analytics and
  * the cookie banner (`Site`), plus the header and footer chrome. The home
- * page and the adjacent ones (/brand/, /security/, /excluir-conta/, later terms and privacy) are separate
+ * page and the adjacent ones (/brand/, /security/, /excluir-conta/, /termos/, /privacidade/) are separate
  * Vite entries, so each mounts its own tree inside a `Site`.
  */
 
@@ -81,6 +81,8 @@ export function SiteFooter() {
         <a href={`${REPO_URL}/blob/main/README.md`} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.docs}</a>
         <a href="/security/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.security}</a>
         <a href="/brand/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.brand}</a>
+        <a href="/termos/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.terms}</a>
+        <a href="/privacidade/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.privacy}</a>
         <a href="/excluir-conta/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.deleteAccount}</a>
         <a href={COFFEE_URL} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.coffee}</a>
         {ANALYTICS_ENABLED && (

@@ -9,6 +9,8 @@ import {
   choiceAnswerDescription,
   choiceAnswerLabel,
   formatCountdown,
+  isNoteSuggestion,
+  pausedAutoAnswerSeconds,
   statusLabel,
   suggestionLine,
   suggestionSourceSentence,
@@ -57,6 +59,26 @@ it('a concierge suggestion names its own reason instead of the past-decision sen
   expect(
     suggestionLine(item, { question_index: 0, decision_id: '', similarity: 0, selected: [1], by: 'concierge', reason: 'Você prefere Verde em specs de UI', sources: ['doc:i1'], source: { question: 'Qual cor prefere?', project_name: 'termhub', answered_at: '2026-09-20T10:00:00.000Z' } }),
   ).toBe('Sugestão do concierge: «Verde». Motivo: Você prefere Verde em specs de UI');
+});
+
+it('a suggestion backed by a concierge note reads as what the note says, not as an answer of the person (TER-642)', () => {
+  const item = choice().payload.questions[0]!;
+  const source = { question: 'Cor das specs', project_name: 'termhub', answered_at: '2026-09-20T10:00:00.000Z' };
+  const note = { question_index: 0, decision_id: '', similarity: 0.9, selected: [1], sources: ['note:n1'], source };
+  expect(isNoteSuggestion(note)).toBe(true);
+  expect(suggestionSourceSentence(item, note)).toBe('uma anotação diz «Verde» para «Cor das specs» em termhub, 20/09/2026');
+  expect(suggestionLine(item, note)).toBe('Sugestão da memória: uma anotação diz «Verde» para «Cor das specs» em termhub, 20/09/2026');
+  // a past decision, and a concierge suggestion that happens to cite a note, are not note-backed
+  expect(isNoteSuggestion({ ...note, decision_id: 'd1', sources: undefined })).toBe(false);
+  expect(isNoteSuggestion({ ...note, by: 'concierge', reason: 'x' })).toBe(false);
+  expect(isNoteSuggestion({ ...note, sources: undefined })).toBe(false);
+});
+
+it('reads the whole seconds left on a paused countdown, never negative', () => {
+  expect(pausedAutoAnswerSeconds(37_400)).toBe(38);
+  expect(pausedAutoAnswerSeconds(60_000)).toBe(60);
+  expect(pausedAutoAnswerSeconds(0)).toBe(0);
+  expect(pausedAutoAnswerSeconds(-500)).toBe(0);
 });
 
 it('formats a countdown as m:ss, never negative', () => {

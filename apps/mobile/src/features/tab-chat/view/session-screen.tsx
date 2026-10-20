@@ -1,7 +1,9 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
+import { replyRefOf, type ReplyRef } from '@/features/chat/model/reply';
 import { MessageBubble } from '@/features/chat/view/message-bubble';
+import { MessageMenu } from '@/features/chat/view/message-menu';
 import { Composer } from '@/features/chat/view/composer';
 import { TabQuestionCard } from '@/features/chat/view/tab-question-card';
 import { TabSuggestionCard } from '@/features/chat/view/tab-suggestion-card';
@@ -11,12 +13,15 @@ import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTab
 import { ApiError } from '@/services/api/errors';
 import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { availabilityText } from '../model/availability-text';
+import { emptyReasonText } from '../model/empty-reason-text';
 import { TAB_CHAT_MSG } from '../model/messages';
+import { quotedText } from '../model/reply-text';
 import { buildRows, type Row } from '../model/timeline';
 import { useTabChatStore } from '../viewmodel/useTabChatStore';
 import { RawScreenSheet } from './raw-screen-sheet';
 import { SessionHeader } from './session-header';
 import { SessionMenu, type SessionMenuChoice } from './session-menu';
+import { StartAgentPanel } from './start-agent-panel';
 import { ToolsRow } from './tools-row';
 
 const READABLE_COLUMN = readableColumn(MAX_READABLE_WIDTH);
@@ -30,15 +35,20 @@ type Entry = { kind: 'row'; row: Row } | { kind: 'question'; question: TTabQuest
 
 const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 'question' ? `q:${e.question.id}` : `s:${e.suggestion.id}`);
 
-/** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. */
-function SessionMessage({ row, tabId }: { row: Extract<Row, { kind: 'message' }>; tabId: string }) {
+/** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. A
+ * touch held on it opens its menu, with "Responder" quoting it above the composer (TER-1090). */
+function SessionMessage({ row, tabId, onReply }: { row: Extract<Row, { kind: 'message' }>; tabId: string; onReply(ref: ReplyRef): void }) {
   const { t } = useTranslation();
   const message = useMemo(() => ({ id: row.id, conversation_id: '', role: row.role, text: row.text, usage: null, error_code: null, created_at: row.at }), [row]);
   // A Markdown path in the session's answer opens as a preview, read on the tab's machine.
   const fileContext = useMemo(() => ({ tabId }), [tabId]);
   return (
     <View className="gap-1">
-      {row.text ? <MessageBubble message={message} streamed={undefined} started={false} fileContext={fileContext} /> : null}
+      {row.text ? (
+        <MessageMenu message={message} onReply={() => onReply({ ...replyRefOf(message), ...(message.role === 'assistant' ? { author: 'Claude' } : {}) })}>
+          <MessageBubble message={message} streamed={undefined} started={false} fileContext={fileContext} />
+        </MessageMenu>
+      ) : null}
       {row.images > 0 ? (
         <AppText variant="muted" className={row.role === 'user' ? 'self-end' : 'self-start'}>
           {t('{{count}} imagens', { count: row.images })}
@@ -78,10 +88,20 @@ export function SessionView({ tabId }: { tabId: string }) {
   const questionErrors = store((s) => s.questionErrors);
   const busySuggestionIds = store((s) => s.busySuggestionIds);
   const suggestionErrors = store((s) => s.suggestionErrors);
-  const { send, act, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
+  const emptyReason = store((s) => s.emptyReason);
+  const installingHooks = store((s) => s.installingHooks);
+  const hooksInstalled = store((s) => s.hooksInstalled);
+  const agentOptions = store((s) => s.agentOptions);
+  const agentOptionsError = store((s) => s.agentOptionsError);
+  const startingAgent = store((s) => s.startingAgent);
+  const startAgentError = store((s) => s.startAgentError);
+  const agentStarted = store((s) => s.agentStarted);
+  const { send, act, installHooks, startAgent, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<ReplyRef | null>(null);
+  const cancelReply = useCallback(() => setReplyTo(null), []);
 
   const working = tab?.state === 'working' && !tab.background;
   const rows = useMemo(() => buildRows(items, tab?.state === 'working'), [items, tab?.state]);
@@ -124,7 +144,7 @@ export function SessionView({ tabId }: { tabId: string }) {
           />
         );
       const row = item.row;
-      if (row.kind === 'message') return <SessionMessage row={row} tabId={tabId} />;
+      if (row.kind === 'message') return <SessionMessage row={row} tabId={tabId} onReply={setReplyTo} />;
       if (row.kind === 'tools') return <ToolsRow tools={row.tools} />;
       return (
         <AppText variant="muted" className="self-center text-center text-xs">
@@ -151,8 +171,13 @@ export function SessionView({ tabId }: { tabId: string }) {
   // A file saved on the machine stays there: a removed chip only leaves the message.
   const deleteAttachment = useCallback(async () => undefined, []);
   const onSend = useCallback(
-    (text: string, attachments: TChatAttachment[]) => send([text.trim(), ...attachments.map((a) => a.id)].filter(Boolean).join('\n')),
-    [send],
+    async (text: string, attachments: TChatAttachment[]) => {
+      const quoted = replyTo;
+      const ok = await send(quotedText(quoted, [text.trim(), ...attachments.map((a) => a.id)].filter(Boolean).join('\n')));
+      if (ok && quoted) setReplyTo((current) => (current === quoted ? null : current));
+      return ok;
+    },
+    [send, replyTo],
   );
 
   const onMenu = (choice: SessionMenuChoice) => {
@@ -161,6 +186,18 @@ export function SessionView({ tabId }: { tabId: string }) {
   };
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/chats' as Href));
   const why = availabilityText(availability);
+  const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '');
+  // An agent started in another tab (this one's shell was busy): the screen follows it there.
+  const onStartAgent = async (accountId?: string) => {
+    const newTab = await startAgent(accountId);
+    if (newTab) router.replace(`/session/${newTab}` as Href);
+  };
+  const emptyAction =
+    emptyReason === 'no_agent' && !agentStarted && !BLOCKED.has(availability) ? (
+      <StartAgentPanel options={agentOptions} optionsError={agentOptionsError} starting={startingAgent} error={startAgentError} onStart={(id) => void onStartAgent(id)} />
+    ) : empty.install && !hooksInstalled && !BLOCKED.has(availability) ? (
+      <Button testID="session-install-hooks" label={empty.install} onPress={() => void installHooks()} loading={installingHooks} />
+    ) : undefined;
 
   return (
     <Screen padded={false} width="full">
@@ -177,7 +214,18 @@ export function SessionView({ tabId }: { tabId: string }) {
             <ActivityIndicator />
           </View>
         ) : entries.length === 0 ? (
-          <View className="flex-1">{status === 'ready' ? <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para falar com o Claude nesta aba.')} /> : null}</View>
+          <View className="flex-1">
+            {status === 'ready' ? (
+              // Never blank without a reason (TER-1091): why there is no history, and what brings it.
+              <View testID="session-empty" className="flex-1">
+                <EmptyState
+                  title={empty.title}
+                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? TAB_CHAT_MSG.hooksInstalled : empty.hint}
+                  action={emptyAction}
+                />
+              </View>
+            ) : null}
+          </View>
         ) : (
           <FlatList
             testID="session-thread"
@@ -208,6 +256,8 @@ export function SessionView({ tabId }: { tabId: string }) {
           <Composer
             sending={sending}
             onSend={onSend}
+            replyTo={replyTo}
+            onCancelReply={cancelReply}
             uploadAttachment={uploadAttachment}
             deleteAttachment={deleteAttachment}
             disabled={BLOCKED.has(availability)}

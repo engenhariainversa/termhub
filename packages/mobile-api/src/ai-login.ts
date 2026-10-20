@@ -34,24 +34,31 @@ export type AiLoginStatusRow = z.infer<typeof aiLoginStatusRow>;
 export const aiLoginStatusResponse = z.object({ accounts: z.array(aiLoginStatusRow) });
 export type AiLoginStatusResponse = z.infer<typeof aiLoginStatusResponse>;
 
-export const aiLoginStartResponse = z.object({
-  login_id: z.string(),
-  /** the page to open in a browser */
-  url: z.string(),
-  /** Codex's one-time device code to type on that page; null for Claude */
-  user_code: z.string().nullable(),
-  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
-  needs_code: z.boolean(),
-  expires_at: z.string(),
-});
-export type AiLoginStartResponse = z.infer<typeof aiLoginStartResponse>;
 
-/** The code the login page showed (Claude); null or absent for Codex, which needs none. */
+/** The code the login page showed (Claude); null or absent for Codex, which needs none, and for a Claude login finished in the machine's own browser. */
 export const aiLoginSubmitBody = z.object({ code: z.string().trim().min(1).max(2000).nullable().optional() });
 export type AiLoginSubmitBody = z.infer<typeof aiLoginSubmitBody>;
 
 export const aiLoginStuckTab = z.object({ id: z.string(), name: z.string(), project_id: z.string() });
 export type AiLoginStuckTab = z.infer<typeof aiLoginStuckTab>;
+
+export const aiLoginStartResponse = z.object({
+  login_id: z.string(),
+  /** the page to open in a browser; null when `logged_in` */
+  url: z.string().nullable(),
+  /** Codex's one-time device code to type on that page; null for Claude */
+  user_code: z.string().nullable(),
+  /** true (Claude): paste the code the page shows back; false (Codex): just confirm once authorized */
+  needs_code: z.boolean(),
+  expires_at: z.string(),
+  /**
+   * The CLI already finished the login on the machine (its own browser took it, TER-1054): nothing to open,
+   * the login is done and `stuck_tabs` lists the tabs to offer to resume. Absent from an older server.
+   */
+  logged_in: z.boolean().default(false),
+  stuck_tabs: z.array(aiLoginStuckTab).default([]),
+});
+export type AiLoginStartResponse = z.infer<typeof aiLoginStartResponse>;
 
 export const aiLoginSubmitResponse = z.object({
   ok: z.boolean(),

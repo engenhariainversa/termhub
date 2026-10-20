@@ -96,7 +96,10 @@ describe('AiLoginDialog (TER-1047)', () => {
     render(<AiLoginDialog account={claude} onClose={() => {}} />);
     fireEvent.change(await screen.findByLabelText('Cole o código aqui'), { target: { value: 'wrong' } });
     fireEvent.click(screen.getByRole('button', { name: 'Enviar código' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Código inválido');
+    // the CLI's output is a detail behind a toggle, not the error itself
+    expect(await screen.findByRole('alert')).toHaveTextContent('O login não foi confirmado');
+    expect(screen.getByText('Saída da CLI')).toBeInTheDocument();
+    expect(screen.getByText('Código inválido')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
     await waitFor(() => expect(startMock).toHaveBeenCalledTimes(2));
     // the field starts empty again: the code is never kept
@@ -123,6 +126,37 @@ describe('AiLoginDialog (TER-1047)', () => {
     expect(screen.queryByText(/Retomar/)).not.toBeInTheDocument();
   });
 
+  it('a login the CLI finished on its own in the machine\'s browser is a success, not an error (TER-1054)', async () => {
+    startMock.mockResolvedValue({ login_id: 'L3', url: null, user_code: null, needs_code: false, expires_at: expires, logged_in: true, stuck_tabs: [{ id: 't1', name: 'api', project_id: 'p' }] });
+    const onLoggedIn = vi.fn();
+    render(<AiLoginDialog account={claude} onClose={() => {}} onLoggedIn={onLoggedIn} />);
+    expect(await screen.findByText('Login refeito')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(onLoggedIn).toHaveBeenCalled();
+    expect(statusMock).toHaveBeenCalled();
+    expect(screen.getByText('Retomar 1 aba?')).toBeInTheDocument();
+    expect(submitMock).not.toHaveBeenCalled();
+    cleanup();
+    expect(cancelMock).not.toHaveBeenCalled();
+  });
+
+  it('Claude: "Já entrei pelo navegador da máquina" checks the login without a code (TER-1054)', async () => {
+    startMock.mockResolvedValue({ login_id: 'L4', url: 'https://claude.com/x', user_code: null, needs_code: true, expires_at: expires, logged_in: false, stuck_tabs: [] });
+    submitMock.mockResolvedValue({ ok: true, message: null, stuck_tabs: [] });
+    render(<AiLoginDialog account={claude} onClose={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Já entrei pelo navegador da máquina' }));
+    expect(await screen.findByText('Login refeito')).toBeInTheDocument();
+    expect(submitMock).toHaveBeenCalledWith('acc1', 'L4', null);
+  });
+
+  it('a start that fails on the machine says so and keeps the CLI output as a detail', async () => {
+    startMock.mockRejectedValue(new ApiError(502, 'error: network unreachable', 'MACHINE_FAILED'));
+    render(<AiLoginDialog account={claude} onClose={() => {}} />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Não deu para abrir o login na máquina');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('network unreachable');
+    expect(screen.getByText('error: network unreachable')).toBeInTheDocument();
+  });
+
   it("shows the server's message when the login cannot start (outdated agent)", async () => {
     startMock.mockRejectedValue(new ApiError(409, 'Atualize o agente desta máquina para refazer o login', 'AGENT_OUTDATED'));
     render(<AiLoginDialog account={claude} onClose={() => {}} />);
@@ -138,6 +172,8 @@ describe('AiLoginDialog (TER-1047)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
     expect(onClose).toHaveBeenCalled();
     expect(cancelMock).toHaveBeenCalledWith('acc1', 'L9');
+    // the server re-checked the login on cancel: the warnings re-read it
+    await waitFor(() => expect(statusMock).toHaveBeenCalled());
     cleanup();
     expect(cancelMock).toHaveBeenCalledTimes(1);
   });

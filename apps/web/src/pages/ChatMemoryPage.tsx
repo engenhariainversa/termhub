@@ -51,6 +51,7 @@ export function ChatMemoryPage() {
   const [switching, setSwitching] = useState(false);
   const [autodeciding, setAutodeciding] = useState(false);
   const [codexSwitching, setCodexSwitching] = useState(false);
+  const [originSwitching, setOriginSwitching] = useState(false);
   const [forgettingId, setForgettingId] = useState<string | null>(null);
   // "Anotações do concierge" (spec D12/§8): its own list, independent of the search box above (which
   // only ever filters decisions) — fetched once, not re-read on every keystroke of `q`.
@@ -219,6 +220,24 @@ export function ChatMemoryPage() {
       setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar as respostas do Codex'));
     } finally {
       if (mountedRef.current) setCodexSwitching(false);
+    }
+  };
+
+  /** "Contar ao chat de onde estou falando" (TER-1088): its own busy flag, like the Codex switch. */
+  const toggleClientContext = async () => {
+    if (!memory) return;
+    setOriginSwitching(true);
+    setError(null);
+    try {
+      const next = await api.setChatMemory({ client_context: !(memory.client_context ?? true) });
+      togglesRef.current += 1;
+      if (!mountedRef.current) return;
+      setMemory(next);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar o que o chat sabe de onde você fala'));
+    } finally {
+      if (mountedRef.current) setOriginSwitching(false);
     }
   };
 
@@ -416,6 +435,29 @@ export function ChatMemoryPage() {
             </button>
           </div>
           <p className="mt-1 text-xs text-fg-dim">{t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}</p>
+        </div>
+      )}
+
+      {/* TER-1088: where the person writes from; not tied to embeddings either. */}
+      {memory && (
+        <div className="mt-3 rounded-lg border border-line bg-bg-2 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg">{t('Contar ao chat de onde estou falando')}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={memory.client_context ?? true}
+              aria-label={t('Contar ao chat de onde estou falando')}
+              disabled={originSwitching}
+              onClick={() => void toggleClientContext()}
+              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${(memory.client_context ?? true) ? 'bg-accent' : 'bg-fg-dim/40'}`}
+            >
+              <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full transition-transform ${(memory.client_context ?? true) ? 'translate-x-[18px] bg-white' : 'translate-x-0.5 bg-fg-muted'}`} />
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-fg-dim">
+            {t('Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.')}
+          </p>
         </div>
       )}
 

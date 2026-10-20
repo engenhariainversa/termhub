@@ -11,6 +11,8 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'auth.logout': tk('Saiu'),
   'auth.view_as': tk('Começou a ver como outra pessoa'),
   'auth.view_as_end': tk('Parou de ver como outra pessoa'),
+  'auth.session_revoke': tk('Encerrou sessões'),
+  'auth.password_change': tk('Trocou a senha'),
   'user.invite': tk('Convidou usuário'),
   'user.role_change': tk('Mudou a role de usuário'),
   'user.delete': tk('Excluiu usuário'),
@@ -24,6 +26,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'machine.delete': tk('Excluiu máquina'),
   'machine.transfer': tk('Transferiu máquina'),
   'machine.agent_token_rotate': tk('Gerou novo token do agente'),
+  'machine.file_share': tk('Mostrou um arquivo da máquina no chat'),
   'api_token.create': tk('Criou token de API'),
   'api_token.revoke': tk('Revogou token de API'),
   'integration.create': tk('Adicionou integração'),
@@ -33,6 +36,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'audit.export': tk('Exportou a auditoria'),
   'feature_flag.update': tk('Ligou ou desligou um recurso em teste'),
   'feature_flag.override': tk('Mudou um recurso em teste para uma pessoa'),
+  'support.troubleshoot': tk('Consultou dados de suporte de um usuário'),
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -45,6 +49,7 @@ const GROUP_LABELS: Record<string, string> = {
   terminal: tk('Terminais'),
   audit: tk('Auditoria'),
   feature_flag: tk('Recursos em teste'),
+  support: tk('Suporte'),
 };
 
 /** A local calendar day (`2026-10-07`) as the instant it starts; `plusDays` 1 gives the exclusive end of the day. */

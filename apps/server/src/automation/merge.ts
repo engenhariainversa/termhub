@@ -30,6 +30,7 @@ import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
+import { runBranchOf } from './release.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
 export const MERGE_TOOL = 'automation_merge';
@@ -149,7 +150,8 @@ async function candidateOf(
   const tasks = (await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)))).filter((t): t is Task => !!t);
   let primary: Task | undefined;
   for (const task of tasks) {
-    if (task.auto && (await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
+    // by repository and branch (spec 2026-10-07 multi-repo R14)
+    if (task.auto && (await runBranchOf(repos, base.setup, task.id, row))) {
       primary = task;
       break;
     }
@@ -411,9 +413,11 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
+  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
+  // TER-1051: the card's open tab is busy or in use; the next sync asks again
+  if (started === 'tab_busy') return waitOn(c, 'merge_fix_waits_for_tab');
   if (started !== 'taken') return;
   // taken: a run of the card is still on (it may be the fixer itself), or this head's fixer already ended
   if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
@@ -547,8 +551,10 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
     }
 
     const started = await startCiFixer(c, row, sha);
-    // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
-    if (started === 'waiting' || started === 'halted') return void (await giveBack());
+    // waiting for a place or for the card's open tab (TER-1051), or halted: the next sync asks again. Taken: a
+    // fixer already holds this head's trigger.
+    if (started === 'tab_busy') waitOn(c, 'merge_fix_waits_for_tab');
+    if (started === 'waiting' || started === 'halted' || started === 'tab_busy') return void (await giveBack());
     acted = true;
     await settle('fixer');
     if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
@@ -563,7 +569,7 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
 async function startCiFixer(c: PullCtx, row: TaskPullRequest, trigger: string): Promise<TriggeredStart> {
   const base = row.base_ref ?? c.baseBranch;
   const rules = await currentRulesBlock(c.deps.repos, c.project.owner_id, c.project.id);
-  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, custom: c.setup.automation.prompts.fixer, rules });
+  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
   return c.deps.startFixer({ projectId: c.project.id, taskId: c.primary.id, role: 'fixer', triggerSha: trigger, branch: row.head_ref, base, prompt });
 }
 
@@ -616,10 +622,10 @@ async function retryAfterGithub(c: PullCtx, row: TaskPullRequest, claim: Automat
   const won = await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, via: 'fixer', github_retry: true });
   if (!won) return true;
   const started = await startCiFixer(c, row, `${row.head_sha}:github`);
-  // no place for it now: the hold stays, the next sync asks again
-  if (started === 'waiting' || started === 'halted') await repos.automationEvents.replacePayloadIf(claim.id, { via: 'fixer' }, { ...claim.payload, github_hold: true });
+  // no place for it now (or the card's open tab is busy): the hold stays, the next sync asks again
+  if (started === 'waiting' || started === 'halted' || started === 'tab_busy') await repos.automationEvents.replacePayloadIf(claim.id, { via: 'fixer' }, { ...claim.payload, github_hold: true });
   else (c.deps.log ?? noopLog).info({ projectId: c.project.id, taskId: c.primary.id, pr: row.number, started }, 'automation: red CI asked again after GitHub came back');
-  waitOn(c, 'merge_github_down');
+  waitOn(c, started === 'tab_busy' ? 'merge_fix_waits_for_tab' : 'merge_github_down');
   return true;
 }
 

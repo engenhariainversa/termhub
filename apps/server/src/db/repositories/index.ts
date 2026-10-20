@@ -6,6 +6,7 @@ import { LoginCodesRepository } from './login-codes.js';
 import { MachinesRepository } from './machines.js';
 import { ProjectsRepository } from './projects.js';
 import { ProjectMachinesRepository } from './project-machines.js';
+import { ProjectRepositoriesRepository } from './project-repositories.js';
 import { TabsRepository } from './tabs.js';
 import { TasksRepository } from './tasks.js';
 import { TaskColumnsRepository } from './task-columns.js';
@@ -25,6 +26,7 @@ import { ChatActionsRepository } from './chat-actions.js';
 import { ChatGrantsRepository } from './chat-grants.js';
 import { ChatProjectGrantsRepository } from './chat-project-grants.js';
 import { ChatStandingGrantsRepository } from './chat-standing-grants.js';
+import { ChatFileGrantsRepository } from './chat-file-grants.js';
 import { ChatDefaultRestrictionsRepository } from './chat-default-restrictions.js';
 import { ChatSubagentsRepository } from './chat-subagents.js';
 import { ChatLiveRunsRepository } from './chat-live-runs.js';
@@ -32,6 +34,7 @@ import { TabQuestionsRepository } from './tab-questions.js';
 import { TabLimitNoticesRepository } from './tab-limit-notices.js';
 import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-attachments.js';
 import { ChatDecisionsRepository } from './chat-decisions.js';
+import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
 import { MemoryStatusRepository } from './memory-status.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
@@ -53,8 +56,10 @@ import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
 import { MemoryRulesRepository } from './memory-rules.js';
+import { LegalRepository } from './legal.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
+import { SupportRepository } from './support.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
 import { AiMemoryPagesRepository } from './ai-memory-pages.js';
 
@@ -66,6 +71,7 @@ export interface Repositories {
   machines: MachinesRepository;
   projects: ProjectsRepository;
   projectMachines: ProjectMachinesRepository;
+  projectRepositories: ProjectRepositoriesRepository;
   tabs: TabsRepository;
   tasks: TasksRepository;
   taskColumns: TaskColumnsRepository;
@@ -85,6 +91,7 @@ export interface Repositories {
   chatGrants: ChatGrantsRepository;
   chatProjectGrants: ChatProjectGrantsRepository;
   chatStandingGrants: ChatStandingGrantsRepository;
+  chatFileGrants: ChatFileGrantsRepository;
   chatDefaultRestrictions: ChatDefaultRestrictionsRepository;
   chatSubagents: ChatSubagentsRepository;
   chatLiveRuns: ChatLiveRunsRepository;
@@ -92,6 +99,7 @@ export interface Repositories {
   tabLimitNotices: TabLimitNoticesRepository;
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
+  chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
   memoryRules: MemoryRulesRepository;
   memoryStatus: MemoryStatusRepository;
@@ -114,7 +122,9 @@ export interface Repositories {
   tabUsage: TabUsageRepository;
   accessLogs: AccessLogsRepository;
   aiAccountExhaustions: AiAccountExhaustionsRepository;
+  legal: LegalRepository;
   securityEvents: SecurityEventsRepository;
+  support: SupportRepository;
   featureFlags: FeatureFlagsRepository;
   aiMemoryPages: AiMemoryPagesRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
@@ -130,6 +140,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     machines: new MachinesRepository(db),
     projects: new ProjectsRepository(db),
     projectMachines: new ProjectMachinesRepository(db),
+    projectRepositories: new ProjectRepositoriesRepository(db),
     tabs: new TabsRepository(db),
     tasks: new TasksRepository(db),
     taskColumns: new TaskColumnsRepository(db),
@@ -149,6 +160,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatGrants: new ChatGrantsRepository(db),
     chatProjectGrants: new ChatProjectGrantsRepository(db),
     chatStandingGrants: new ChatStandingGrantsRepository(db),
+    chatFileGrants: new ChatFileGrantsRepository(db),
     chatDefaultRestrictions: new ChatDefaultRestrictionsRepository(db),
     chatSubagents: new ChatSubagentsRepository(db),
     chatLiveRuns: new ChatLiveRunsRepository(db),
@@ -156,6 +168,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabLimitNotices: new TabLimitNoticesRepository(db),
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
+    chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
     memoryRules: new MemoryRulesRepository(db),
     memoryStatus: new MemoryStatusRepository(db),
@@ -178,7 +191,9 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabUsage: new TabUsageRepository(db),
     accessLogs: new AccessLogsRepository(db),
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
+    legal: new LegalRepository(db),
     securityEvents: new SecurityEventsRepository(db),
+    support: new SupportRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
     aiMemoryPages: new AiMemoryPagesRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
@@ -188,6 +203,7 @@ export function createRepositories(db: PrismaClient): Repositories {
 export * from './types.js';
 export type { Integration, IntegrationProvider } from './integrations.js';
 export type { ProjectSetup } from './project-setup.js';
+export type { DiscoveredCheckoutInput } from './project-repositories.js';
 export type { WaitlistEntry } from './waitlist.js';
 export type { Role, PermissionGrant } from './roles.js';
 export type { Upload } from './uploads.js';
@@ -221,4 +237,6 @@ export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';
 export { AUTOMATION_EVENT_RETENTION_MS, AUTOMATION_EVENTS_PAGE_MAX } from './automation-events.js';
+export type { LegalVersion, LegalStatus, LegalDocument, LegalChannel } from './legal.js';
+export { LEGAL_NOTICE_MS } from './legal.js';
 export { VIEW_AS_AUDIT_RETENTION_MS } from './view-as-audit.js';

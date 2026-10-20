@@ -6,11 +6,14 @@ import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
 import * as fileRead from './file-read.js';
+import * as fileShare from './file-share.js';
 import * as fs from './fs.js';
 import * as hooks from './hooks.js';
 import * as hw from './hw.js';
 import * as net from './net.js';
+import * as netInfo from './net-info.js';
 import * as paste from './paste.js';
+import * as repos from './repos.js';
 import * as secret from './secret.js';
 import * as sim from './sim.js';
 import * as tabMcp from './tab-mcp.js';
@@ -55,8 +58,10 @@ export const handlers: Handlers = {
   'file.paste': paste.pasteFile,
   'file.read': fileRead.read,
   'file.list': fileList.list,
+  'file.share': fileShare.share,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
+  'hooks.hint': hooks.hint,
   'hooks.status': hooks.status,
   'agent.update': update.update,
   'agent.uninstall': uninstall.uninstall,
@@ -73,5 +78,8 @@ export const handlers: Handlers = {
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,
+  'git.repos.scan': repos.scan,
   'net.check': net.check,
+  'net.info': netInfo.info,
+  'net.wake': netInfo.wake,
 };

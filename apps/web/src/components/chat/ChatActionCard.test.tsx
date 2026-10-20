@@ -273,3 +273,19 @@ describe('a call that ran under a grant reads as one line (TER-984)', () => {
     expect(screen.queryByRole('button', { name: 'Ver detalhes' })).toBeNull();
   });
 });
+
+describe('"Permitir sempre nesta pasta" (TER-1086)', () => {
+  const share = (path: string) => card({ tool: 'share_file', args: { machine_id: 'm1', path }, tab_id: null, machine_id: 'm1' });
+  it('a pending share_file card offers it and sends approve_folder_always', () => {
+    const onDecide = vi.fn();
+    render(<ChatActionCard action={share('~/termhub-linkedin/post-1.png')} deciding={false} onDecide={onDecide} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Permitir sempre nesta pasta' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'approve_folder_always');
+  });
+  it('is not offered for a file straight in ~ or /, nor for another tool', () => {
+    render(<ChatActionCard action={share('~/post.png')} deciding={false} onDecide={vi.fn()} />);
+    render(<ChatActionCard action={share('/post.png')} deciding={false} onDecide={vi.fn()} />);
+    render(<ChatActionCard action={base} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Permitir sempre nesta pasta' })).toBeNull();
+  });
+});

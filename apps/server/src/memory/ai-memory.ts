@@ -15,7 +15,7 @@ import { embedInserted, type MemoryDeps } from './index-items.js';
 import { cleanMemoryText, ITEM_TEXT_MAX } from './text.js';
 
 /** First agent release that answers `aimemory.status` (TER-1018). */
-export const AI_MEMORY_MIN_AGENT_VERSION = '0.27.0';
+export const AI_MEMORY_MIN_AGENT_VERSION = '0.35.0';
 
 export type AiMemoryState =
   | { enabled: false; url: string }
@@ -63,7 +63,7 @@ export async function aiMemoryState(machine: Machine): Promise<AiMemoryState> {
  */
 
 /** First agent release that answers `aimemory.pages` (TER-1021). */
-export const AI_MEMORY_PAGES_MIN_AGENT_VERSION = '0.28.0';
+export const AI_MEMORY_PAGES_MIN_AGENT_VERSION = '0.35.0';
 
 /** The `source_id` of an ai-memory lesson: `<link id>:ai-memory/<path in the wiki>`. Under the link
  *  id like a file lesson, so `deleteDocsNotInLinks` drops it with its link. */

@@ -32,5 +32,8 @@
   "O trabalho automático volta a pegar cards marcados e a agir nas abas dos projetos com ele ligado.": "El trabajo automático vuelve a tomar las tarjetas marcadas y a actuar en las pestañas de los proyectos que lo tienen activado.",
   "Retomar": "Reanudar",
   "Não foi possível mudar o automático. Tente de novo.": "No se pudo cambiar el trabajo automático. Reintenta.",
-  "Automático pausado desde {{time}}.": "Trabajo automático en pausa desde {{time}}."
+  "Automático pausado desde {{time}}.": "Trabajo automático en pausa desde {{time}}.",
+  "Hora do resumo diário": "Hora del resumen diario",
+  "Sem resumo": "Sin resumen",
+  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "El resumen del día llega a esta hora, en la zona horaria de este dispositivo."
 }

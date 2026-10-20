@@ -17,7 +17,7 @@ ever with the person's approval.
 
 ## Data
 
-New table `memory_rules` (migration `20261017090000_memory_rules`, additive):
+New table `memory_rules` (migration `20261020190600_memory_rules`, additive):
 `id`, `owner_id`, `project_id` (null = user level), `kind` (`rule` | `policy`), `status`
 (`proposed` | `awaiting_confirmation` | `approved` | `rejected`), `text`, `policy`
 (`{ autonomy?, max_parallel?, project_ids[], applied[] }`), `source_refs` (`note:<id>` /

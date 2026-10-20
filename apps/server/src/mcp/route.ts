@@ -8,9 +8,10 @@ import { isToolContent, type ToolContent } from '../chat/attachments/read-tool.j
 import type { AttachmentStore } from '../chat/attachments/store.js';
 import { applyGate } from '../chat/gate-runtime.js';
 import { toolUseIdOf } from '../chat/subagent-origin.js';
-import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
+import { controlContextFor, ControlError, type ControlContext, type ShareDeps } from '../control/context.js';
 import { HttpError, sendError } from '../lib/errors.js';
 import { authenticateToken } from './auth.js';
+import { legalRefusal } from './legal-gate.js';
 import { TokenRateLimiter } from './rate-limit.js';
 import { pinTabArgs, tabInputShape, tabRefusalMessage } from './tab-token.js';
 import { allowedTools, inputSchemaOf, parseArgs, refusalMessage, type ToolDef } from './tools.js';
@@ -54,14 +55,14 @@ function withDefaultArguments(body: unknown): unknown {
  * a personal API token authenticates each request, and the token's user is the data scope. Stateless:
  * a fresh McpServer per request, so a revoked token stops working on the next call.
  */
-export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter; attachments?: AttachmentStore }) {
+export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter; attachments?: AttachmentStore; chatFiles?: ShareDeps }) {
   const { repos } = deps;
   const limiter = deps.limiter ?? new TokenRateLimiter();
 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await authenticateToken(repos, request.headers.authorization);
     if (!auth) return sendError(request, reply, 401, 'Não autenticado', 'UNAUTHORIZED');
-    request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated, tab: auth.tab ?? undefined, chat_conversation_id: auth.token.chat_conversation_id }), attachments: deps.attachments, log: request.log } };
+    request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated, tab: auth.tab ?? undefined, chat_conversation_id: auth.token.chat_conversation_id }), attachments: deps.attachments, chatFiles: deps.chatFiles, log: request.log } };
     void repos.apiTokens.touchLastUsed(auth.token.id).catch((err) => request.log.warn({ err }, 'mcp: touchLastUsed failed'));
   };
 
@@ -162,6 +163,17 @@ export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositorie
     const msg = body as { id?: unknown; method?: unknown; params?: { name?: unknown; arguments?: unknown } } | null;
     // A notification (no `id`) gets no body: answering one with `id: null` is a protocol error on the client side.
     if (msg && typeof msg === 'object' && !('id' in msg) && typeof msg.method === 'string') return reply.code(202).send();
+    // The Terms (TER-742): no tool runs for an account that has not accepted the version in force. Only
+    // tools/call is refused, so the client still connects and the agent can pass the message on.
+    if (msg && typeof msg === 'object' && msg.method === 'tools/call') {
+      const legal = await legalRefusal(repos, token.user_id, locale);
+      if (legal) {
+        const params = msg.params && typeof msg.params === 'object' ? msg.params : undefined;
+        audit(typeof params?.name === 'string' ? params.name : '', params?.arguments, 'LEGAL_ACCEPTANCE_REQUIRED', 0);
+        if (closed) return gone();
+        return reply.code(200).send({ jsonrpc: '2.0', id: msg.id ?? null, result: text(legal, true) });
+      }
+    }
     // A non-string name is left to the SDK, which rejects the request itself (nothing to audit it as).
     if (msg && typeof msg === 'object' && msg.method === 'tools/call' && msg.params && typeof msg.params === 'object' && typeof msg.params.name === 'string') {
       const name = msg.params.name;

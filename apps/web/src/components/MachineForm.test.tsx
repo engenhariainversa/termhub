@@ -15,6 +15,7 @@ vi.mock('../lib/api', () => ({
 vi.mock('./AgentEnrollment', () => ({ AgentEnrollment: () => null }));
 vi.mock('./AgentUpdateCard', () => ({ AgentUpdateCard: () => <p>agent card</p> }));
 vi.mock('./NetworkCheckCard', () => ({ NetworkCheckCard: () => <p>network card</p> }));
+vi.mock('./MachineNetworkCard', () => ({ MachineNetworkCard: () => <p>machine network card</p> }));
 vi.mock('./MonitorHooksCard', async (orig) => ({ ...(await orig<typeof import('./MonitorHooksCard')>()), MonitorHooksCard: () => <p>monitor card</p> }));
 vi.mock('./SimulatorSetupCard', () => ({ SimulatorSetupCard: () => <p>simulator card</p> }));
 vi.mock('./AutomationAllowedCard', () => ({ AutomationAllowedCard: () => null }));
@@ -68,7 +69,7 @@ describe('MachineForm tabs', () => {
   it('opens on Geral, shows Simulador iOS only on a Mac with Xcode, and keeps what was typed across tabs', async () => {
     updateMachineMock.mockResolvedValue(machine);
     render(<MachineForm open onClose={() => {}} machine={machine} />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Geral', 'Agente', 'Monitor']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Geral', 'Agente', 'Rede', 'Monitor']);
     expect(screen.getByRole('tab', { name: 'Geral' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'renomeada' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Agente' }));
@@ -89,9 +90,9 @@ describe('MachineForm tabs', () => {
     expect(agent).toHaveAttribute('aria-selected', 'true');
     expect(agent).toHaveAttribute('tabindex', '0');
     fireEvent.keyDown(agent, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: 'Monitor' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Monitor' })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Monitor' }), { key: 'Home' });
+    expect(screen.getByRole('tab', { name: 'Rede' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Rede' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Rede' }), { key: 'Home' });
     expect(screen.getByRole('tab', { name: 'Geral' })).toHaveAttribute('aria-selected', 'true');
   });
 

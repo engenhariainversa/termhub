@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AnsweredChoiceRow, DecisionNeighbour, NewDecision } from '../db/repositories/chat-decisions.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import type { TabQuestionSuggestion } from './decision-text.js';
-import { backfillDecisions, decisionsOf, embedPending, recordDecisions, startDecisionSweeper, SWEEP_INTERVAL_MS, suggestFor } from './decision-memory.js';
+import { backfillDecisions, decisionsOf, embedPending, recallFor, recordAutoSamples, recordDecisions, startDecisionSweeper, SWEEP_INTERVAL_MS, suggestFor } from './decision-memory.js';
 import { EmbedError } from './embeddings.js';
 import type { ChoicePayload } from './tab-question-payload.js';
 
@@ -471,5 +471,116 @@ describe('startDecisionSweeper', () => {
     expect(l.warn).toHaveBeenCalledWith({ code: 'P2024' }, expect.any(String));
     expect(JSON.stringify(l.warn.mock.calls)).not.toContain('Qual cor');
     stop();
+  });
+});
+
+describe('recallFor (TER-642)', () => {
+  const note = (over: { id?: string; title?: string; text?: string } = {}) => ({
+    id: 'n1', owner_id: 'u1', project_id: 'p1', project_name: 'Proj', kind: 'note', title: 'Qual cor?', text: 'Decisão: Sim\nMotivo: combinado\nFontes: ', source_at: '2026-09-22T00:00:00.000Z', similarity: 0.4, rank: 1, ...over,
+  });
+  /** Embeds a question as [1, 0] and anything listed in `apart` as [0, 1]: cosine 1 or 0 between them. */
+  const titleEmbedder = (apart: string[] = []) => ({ embed: vi.fn(async (texts: string[]) => ({ model: 'm', vectors: texts.map((t) => (apart.includes(t) ? [0, 1] : [1, 0])) })) });
+  const withNotes = (notes: ReturnType<typeof note>[], nearest: DecisionNeighbour[] = []) => ({
+    ...fakeRepos({ nearest: async () => nearest }),
+    memoryItems: { nearest: vi.fn(async () => notes) },
+  });
+
+  it('keeps the best precedent for calibration even when it is too far to suggest', async () => {
+    const far = neighbour({ id: 'd-far', similarity: 0.7, answer: { labels: ['Não'] } });
+    const repos = fakeRepos({ nearest: async () => [far] });
+    const r = await recallFor(repos as never, row(), { embedder: embedder(), threshold: 0.85, high: 0.95, log: log() });
+    expect(r.suggestion).toBeNull();
+    expect(r.precedent).toEqual({ items: [{ question_index: 0, ref: 'decision:d-far', similarity: 0.7, selected: [1] }] });
+    expect(repos.chatDecisions.bumpSuggested).not.toHaveBeenCalled();
+  });
+
+  it('a precedent about something else altogether is not even kept', async () => {
+    const repos = fakeRepos({ nearest: async () => [neighbour({ similarity: 0.3 })] });
+    expect(await recallFor(repos as never, row(), { embedder: embedder(), threshold: 0.85, high: 0.95, log: log() })).toEqual({ suggestion: null, precedent: null });
+  });
+
+  it('at or above the high threshold the newest wins; under it, the closest', async () => {
+    const olderExact = neighbour({ id: 'd-old', similarity: 1, created_at: '2026-09-01T00:00:00.000Z', answer: { labels: ['Não'] } });
+    const newerExact = neighbour({ id: 'd-new', similarity: 0.96, created_at: '2026-09-20T00:00:00.000Z', answer: { labels: ['Sim'] } });
+    const top = await recallFor(fakeRepos({ nearest: async () => [olderExact, newerExact] }) as never, row(), { embedder: embedder(), threshold: 0.85, high: 0.95, log: log() });
+    expect(top.suggestion?.items[0]).toMatchObject({ decision_id: 'd-new', selected: [0] });
+    // a fresh but loose match must not beat a near-verbatim one
+    const loose = neighbour({ id: 'd-loose', similarity: 0.86, created_at: '2026-09-25T00:00:00.000Z', answer: { labels: ['Sim'] } });
+    const mixed = await recallFor(fakeRepos({ nearest: async () => [olderExact, loose] }) as never, row(), { embedder: embedder(), threshold: 0.85, high: 0.95, log: log() });
+    expect(mixed.suggestion?.items[0]).toMatchObject({ decision_id: 'd-old', selected: [1] });
+    const closer = neighbour({ id: 'd-closer', similarity: 0.92, created_at: '2026-09-02T00:00:00.000Z', answer: { labels: ['Não'] } });
+    const mid = await recallFor(fakeRepos({ nearest: async () => [closer, loose] }) as never, row(), { embedder: embedder(), threshold: 0.85, high: 0.95, log: log() });
+    expect(mid.suggestion?.items[0]).toMatchObject({ decision_id: 'd-closer' });
+  });
+
+  it('a note whose decision is one of the options is a precedent, scored by its title against the question', async () => {
+    const repos = withNotes([note()]);
+    const e = titleEmbedder();
+    const r = await recallFor(repos as never, row(), { embedder: e, threshold: 0.85, high: 0.95, log: log() });
+    expect(repos.memoryItems.nearest).toHaveBeenCalledWith({ ownerId: 'u1', kinds: ['note'], place: { projectId: 'p1', conversationId: 'c1' } }, [1, 0], 5, 'm');
+    // the title is embedded like a question (`embedText`), in its own call
+    expect(e.embed).toHaveBeenNthCalledWith(2, ['qual cor']);
+    expect(r.suggestion).toEqual({
+      items: [{ question_index: 0, decision_id: '', similarity: 1, selected: [0], sources: ['note:n1'], source: { question: 'Qual cor?', project_name: 'Proj', answered_at: '2026-09-22T00:00:00.000Z' } }],
+    });
+    expect(r.precedent).toEqual({ items: [{ question_index: 0, ref: 'note:n1', similarity: 1, selected: [0] }] });
+    // a note has no decision counter to bump
+    expect(repos.chatDecisions.bumpSuggested).toHaveBeenCalledWith([]);
+  });
+
+  it('a note in prose, or about another question, suggests nothing', async () => {
+    const prose = withNotes([note({ text: 'Decisão: Sim, mas só às terças\nMotivo: m' })]);
+    const e = titleEmbedder();
+    expect((await recallFor(prose as never, row(), { embedder: e, threshold: 0.85, high: 0.95, log: log() })).suggestion).toBeNull();
+    // nothing maps onto an option: no second embed call at all
+    expect(e.embed).toHaveBeenCalledTimes(1);
+    const other = withNotes([note({ title: 'Qual banco?' })]);
+    const r = await recallFor(other as never, row(), { embedder: titleEmbedder(['qual banco']), threshold: 0.85, high: 0.95, log: log() });
+    expect(r).toEqual({ suggestion: null, precedent: null });
+  });
+
+  it('notes failing to embed leave the decisions found standing', async () => {
+    const repos = withNotes([note()], [neighbour({ id: 'd1x', similarity: 0.9 })]);
+    let calls = 0;
+    const flaky = { embed: vi.fn(async (texts: string[]) => { if (++calls > 1) throw new EmbedError('EMBED_TIMEOUT'); return { model: 'm', vectors: texts.map(() => [1, 0]) }; }) };
+    const l = log();
+    const r = await recallFor(repos as never, row(), { embedder: flaky, threshold: 0.85, high: 0.95, log: l });
+    expect(r.suggestion?.items[0]).toMatchObject({ decision_id: 'd1x' });
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: 'EMBED_TIMEOUT' }, 'note precedents skipped');
+  });
+});
+
+describe('recordAutoSamples (TER-642)', () => {
+  const precedent = { items: [{ question_index: 0, ref: 'decision:d1', similarity: 0.91, selected: [0] }] };
+  const repos = () => ({ chatAuto: { recordSamples: vi.fn(async () => {}) } });
+
+  it('an answer on the card is compared with what memory would have answered', async () => {
+    const same = repos();
+    await recordAutoSamples(same as never, row({ precedent, status: 'answered', answered_by: 'u1', answer: { answers: [{ selected: [0] }] } }), 'answer', log());
+    expect(same.chatAuto.recordSamples).toHaveBeenCalledWith([{ user_id: 'u1', tab_question_id: 'q1', question_index: 0, score: 0.91, matched: true, source: 'answer' }]);
+    const other = repos();
+    await recordAutoSamples(other as never, row({ precedent, status: 'answered', answered_by: 'u1', answer: { answers: [{ selected: [1] }] } }), 'answer', log());
+    expect(other.chatAuto.recordSamples).toHaveBeenCalledWith([expect.objectContaining({ matched: false, source: 'answer' })]);
+  });
+
+  it('a countdown let through counts for the precedent, a cancelled one against it', async () => {
+    const r = repos();
+    await recordAutoSamples(r as never, row({ precedent }), 'accepted', log());
+    await recordAutoSamples(r as never, row({ precedent }), 'cancelled', log());
+    expect(r.chatAuto.recordSamples.mock.calls.map((c) => (c as unknown as [{ matched: boolean; source: string }[]])[0][0])).toEqual([
+      expect.objectContaining({ matched: true, source: 'accepted' }),
+      expect.objectContaining({ matched: false, source: 'cancelled' }),
+    ]);
+  });
+
+  it('a card memory found nothing for, or a permission, records nothing; a failing write never throws', async () => {
+    const r = repos();
+    await recordAutoSamples(r as never, row({ answer: { answers: [{ selected: [0] }] } }), 'answer', log());
+    await recordAutoSamples(r as never, row({ kind: 'permission', precedent }), 'answer', log());
+    expect(r.chatAuto.recordSamples).not.toHaveBeenCalled();
+    const l = log();
+    r.chatAuto.recordSamples.mockRejectedValueOnce(Object.assign(new Error('db'), { code: 'P1001' }));
+    await expect(recordAutoSamples(r as never, row({ precedent }), 'cancelled', l)).resolves.toBeUndefined();
+    expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', code: expect.any(String) }, 'auto answer sample not recorded');
   });
 });

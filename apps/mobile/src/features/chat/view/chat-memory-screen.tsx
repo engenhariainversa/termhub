@@ -135,6 +135,7 @@ export function ChatMemoryScreen() {
   const toggle = useChatMemoryStore((s) => s.toggle);
   const setAutodecide = useChatMemoryStore((s) => s.setAutodecide);
   const setCodexReplies = useChatMemoryStore((s) => s.setCodexReplies);
+  const setClientContext = useChatMemoryStore((s) => s.setClientContext);
   const setContextLimit = useChatMemoryStore((s) => s.setContextLimit);
   const forget = useChatMemoryStore((s) => s.forget);
   const cancel = useChatMemoryStore((s) => s.cancel);
@@ -240,6 +241,18 @@ export function ChatMemoryScreen() {
             </View>
             <AppText variant="muted" className="text-xs">
               {t('Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.')}
+            </AppText>
+          </View>
+        ) : null}
+        {/* TER-1088: where the person writes from; not tied to embeddings either. */}
+        {memory ? (
+          <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-3">
+            <View className="flex-row items-center justify-between gap-3">
+              <AppText className="flex-1">{t('Contar ao chat de onde estou falando')}</AppText>
+              <Switch accessibilityLabel={t('Contar ao chat de onde estou falando')} value={memory.client_context ?? true} onValueChange={(v) => void setClientContext(v)} />
+            </View>
+            <AppText variant="muted" className="text-xs">
+              {t('Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.')}
             </AppText>
           </View>
         ) : null}

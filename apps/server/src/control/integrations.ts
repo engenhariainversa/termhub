@@ -2,6 +2,7 @@ import type { Integration, IntegrationProvider } from '../db/repositories/integr
 import { getProvider } from '../integrations/index.js';
 import { readMachineSecret, type SecretSource } from '../integrations/machine-secret.js';
 import { encryptionAvailable } from '../lib/crypto.js';
+import type { EffectiveRepo } from '../setup/repos.js';
 import { repoSchema, setupInputSchema, type ProjectSetupData } from '../setup/schema.js';
 import { ControlError, type ControlContext } from './context.js';
 import { msg } from '../i18n/index.js';
@@ -77,11 +78,24 @@ async function repoIntegration(ctx: ControlContext, repo: RepoBlock | null): Pro
   return i ? integrationOut(i) : null;
 }
 
-/** The project's repository setup (integration, `owner/repo`, base branch, deploy workflow). */
-export async function getProjectSetup(ctx: ControlContext, input: { project_id: string }): Promise<{ project_id: string; repo: RepoBlock | null; automation: ProjectSetupData['automation']; integration: IntegrationOut | null; updated_at: string | null }> {
+/**
+ * The project's repository setup (integration, `owner/repo`, base branch, deploy workflow), and `repos`: every
+ * repository of the project with its own policy (spec 2026-10-07 multi-repo R1).
+ */
+export async function getProjectSetup(
+  ctx: ControlContext,
+  input: { project_id: string },
+): Promise<{ project_id: string; repo: RepoBlock | null; repos: EffectiveRepo[]; automation: ProjectSetupData['automation']; integration: IntegrationOut | null; updated_at: string | null }> {
   const { project } = await ctx.scoped.project(input.project_id);
   const setup = await ctx.repos.projectSetup.get(project.id);
-  return { project_id: project.id, repo: setup.data.repo, automation: setup.data.automation, integration: await repoIntegration(ctx, setup.data.repo), updated_at: setup.updated_at };
+  return {
+    project_id: project.id,
+    repo: setup.data.repo,
+    repos: await ctx.repos.projectRepositories.effective(project.id, setup.data),
+    automation: setup.data.automation,
+    integration: await repoIntegration(ctx, setup.data.repo),
+    updated_at: setup.updated_at,
+  };
 }
 
 /**

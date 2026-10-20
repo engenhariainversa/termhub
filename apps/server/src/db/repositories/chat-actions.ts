@@ -123,6 +123,13 @@ export class ChatActionsRepository {
    * `decide` and got `undefined` can tell "nothing here" from "here, but already decided" with one
    * indexed lookup, instead of scanning the whole trail or re-deriving the ownership rule itself.
    */
+  /** Whether this conversation already ran `tool` with `args[key] === value` (TER-1092: only the first
+   * support query about a user is asked). */
+  async executedWithArg(conversationId: string, tool: string, key: string, value: string): Promise<boolean> {
+    const n = await this.db.chatAction.count({ where: { conversationId, tool, status: 'executed', args: { path: [key], equals: value } } });
+    return n > 0;
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatAction | undefined> {
     const row = await this.db.chatAction.findFirst({ where: { id, conversation: { userId } } });
     return row ? mapAction(row) : undefined;

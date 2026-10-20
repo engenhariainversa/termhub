@@ -2,9 +2,9 @@ import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, Prog
 import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { escalationEventText } from '../automation/escalation-text.js';
-import type { Locale } from '../i18n/index.js';
+import { t, tk, type Locale } from '../i18n/index.js';
 import { whyText } from '../automation/why.js';
-import { NEEDS_YOU } from '../monitor/state.js';
+import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
 type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -59,12 +59,9 @@ function agentOf(tab: ProgressTabRow, subtaskRef: string | null): AgentOnCard {
     tab_name: tab.name,
     machine_name: tab.machine_name,
     subtask_ref: subtaskRef,
-    // the contract's state predates `waiting_background`: still at work, flagged (TER-644); and `finished`:
-    // stopped, flagged, never waiting for the person (TER-972)
-    state: tab.state === 'waiting_background' ? 'working' : tab.state === 'finished' ? 'idle' : tab.state,
+    // the contract's state predates the newer states: each travels as an older one, flagged (contractStateOf)
+    ...contractStateOf(tab.state),
     state_at: iso(tab.state_at),
-    background: tab.state === 'waiting_background',
-    finished: tab.state === 'finished',
     needs_you: tab.state !== null && NEEDS_YOU.includes(tab.state),
     activity: tab.activity,
     activity_verb: tab.activity_verb,
@@ -212,11 +209,31 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
-  // TER-1011: every automatic answer is in the feed with its why, permissions included
-  'permission_auto_approved',
+  // TER-974: a cancelled run, and the TER-993 lines both clients already write; TER-1011: every
+  // automatic answer is in the feed with its why, permissions included
+  'run_cancelled', 'permission_auto_approved', 'guard_blocked',
   // TER-1025
   'deploy_retried', 'github_wait', 'trust_auto_accepted',
 ] as const satisfies readonly AutomationEvent['kind'][];
+
+/** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
+const CANCEL_TEXT: Record<string, string> = {
+  untagged: tk('o card saiu do automático'),
+  tab_closed: tk('a aba foi fechada'),
+};
+
+/** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
+ *  over (TER-1049) or a cancel's (TER-974). */
+function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
+  if (e.kind === 'escalated') return escalationEventText(p, locale);
+  if (e.kind === 'run_blocked') return startFailureOf(p, locale);
+  if (e.kind === 'run_done') return adoptedOf(p, locale);
+  if (e.kind === 'run_cancelled') {
+    const reason = str(p.reason);
+    return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;
+  }
+  return null;
+}
 
 /** An event with what its sentence names, looked up by the repository. */
 export interface FeedRow {
@@ -236,6 +253,11 @@ const num = (v: unknown): number | null => (typeof v === 'number' ? v : null);
 function startFailureOf(p: Record<string, unknown>, locale: Locale): string | null {
   if (p.stage !== 'start') return null;
   return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
+}
+
+/** A blocked run a PR from its branch took over (TER-1049, follower's ADOPTED_VIA): what its `run_done` line says. */
+function adoptedOf(p: Record<string, unknown>, locale: Locale): string | null {
+  return p.via === 'pull_request_after_blocked' ? t(locale, 'PR aberto depois do bloqueio; o automático acompanha até o merge') : null;
 }
 
 /**
@@ -265,13 +287,15 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       url: str(p.url) ?? str(p.pr_url),
       until: str(p.until),
       paused: typeof p.paused === 'boolean' ? p.paused : null,
-      reason_text: e.kind === 'escalated' ? escalationEventText(p, locale) : e.kind === 'run_blocked' ? startFailureOf(p, locale) : null,
+      reason_text: reasonTextOf(e, p, locale),
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
       // TER-1011: why an automatic answer or an escalation happened, the rule or precedent, its similarity
       why_text: whyText(str(p.why), locale),
       rule_ref: str(p.rule_ref),
       score: num(p.score),
+      // the decision a decided_by_recommendation line names (TER-1043)
+      summary: str(p.summary),
     };
   });
 }

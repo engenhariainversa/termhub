@@ -12,6 +12,8 @@ export const SECURITY_EVENT_ACTIONS = [
   'auth.logout',
   'auth.view_as',
   'auth.view_as_end',
+  'auth.session_revoke',
+  'auth.password_change',
   'user.invite',
   'user.role_change',
   'user.delete',
@@ -25,6 +27,7 @@ export const SECURITY_EVENT_ACTIONS = [
   'machine.delete',
   'machine.transfer',
   'machine.agent_token_rotate',
+  'machine.file_share',
   'api_token.create',
   'api_token.revoke',
   'integration.create',
@@ -34,6 +37,7 @@ export const SECURITY_EVENT_ACTIONS = [
   'audit.export',
   'feature_flag.update',
   'feature_flag.override',
+  'support.troubleshoot',
 ] as const;
 
 export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];

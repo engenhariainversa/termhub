@@ -20,11 +20,21 @@ const item = (id: string, state: 'active' | 'expired' = 'active') => ({
   ended_at: state === 'active' ? null : '2026-09-25T11:00:00.000Z',
 });
 
-function setup(listGrants: jest.Mock, revokeGrant: jest.Mock = jest.fn(async () => undefined)) {
-  const api = { listGrants, revokeGrant } as never;
+function setup(listGrants: jest.Mock, revokeGrant: jest.Mock = jest.fn(async () => undefined), memoryApi: { chatMemory?: jest.Mock; setChatMemory?: jest.Mock } = {}) {
+  const api = { listGrants, revokeGrant, ...memoryApi } as never;
   const session = () => ({ auth: () => ({ accessToken: 'tok' }), handleApiError: () => false });
   return { store: createChatGrantsStore({ api, session }), listGrants, revokeGrant };
 }
+
+const memory = (high: number, low: number, source = 'default') => ({
+  enabled: true,
+  autodecide: true,
+  codex_replies: false,
+  available: true,
+  count: 0,
+  notes: 0,
+  auto_thresholds: { high, low, source, defaults: { high: 0.95, low: 0.85 }, samples: 0, min_samples: 30, calibrated_at: null },
+});
 
 it('load reads active and the first history page', async () => {
   const { store } = setup(
@@ -80,4 +90,51 @@ it('a failed revoke shows the error and frees the button', async () => {
   await store.getState().revoke('g1');
   expect(store.getState()).toMatchObject({ revokingId: null, error: 'Erro do servidor (500)' });
   expect(listGrants).not.toHaveBeenCalled();
+});
+
+describe('automatic answer thresholds (TER-642)', () => {
+  const noGrants = () => jest.fn(async () => ({ grants: [], next_cursor: null }));
+
+  it('loadMemory reads the thresholds in force, and a failure leaves them out without an error on the lists', async () => {
+    const chatMemory = jest.fn(async () => memory(0.95, 0.85));
+    const { store } = setup(noGrants(), undefined, { chatMemory });
+    await store.getState().loadMemory();
+    expect(store.getState().memory?.auto_thresholds).toMatchObject({ high: 0.95, low: 0.85, source: 'default' });
+    chatMemory.mockRejectedValueOnce(new ApiError(500, 'INTERNAL', 'Erro do servidor (500)'));
+    await store.getState().loadMemory();
+    expect(store.getState()).toMatchObject({ error: null, thresholdsError: null });
+    expect(store.getState().memory?.auto_thresholds?.high).toBe(0.95);
+  });
+
+  it('setThresholds pins them, keeps the server\'s answer, and null hands them back', async () => {
+    const setChatMemory = jest.fn(async (_a: unknown, body: { auto_thresholds: { high: number; low: number } | null }) =>
+      body.auto_thresholds ? memory(body.auto_thresholds.high, body.auto_thresholds.low, 'manual') : memory(0.95, 0.85)
+    );
+    const { store } = setup(noGrants(), undefined, { setChatMemory });
+    expect(await store.getState().setThresholds({ high: 0.9, low: 0.8 })).toBe(true);
+    expect(setChatMemory).toHaveBeenLastCalledWith({ accessToken: 'tok' }, { auto_thresholds: { high: 0.9, low: 0.8 } });
+    expect(store.getState()).toMatchObject({ savingThresholds: false, thresholdsError: null, memory: { auto_thresholds: { high: 0.9, source: 'manual' } } });
+    expect(await store.getState().setThresholds(null)).toBe(true);
+    expect(setChatMemory).toHaveBeenLastCalledWith({ accessToken: 'tok' }, { auto_thresholds: null });
+    expect(store.getState().memory?.auto_thresholds).toMatchObject({ high: 0.95, source: 'default' });
+  });
+
+  it('a refused save shows its own error, keeps what was in force and ignores a second tap while busy', async () => {
+    let fail!: () => void;
+    const setChatMemory = jest.fn(
+      () =>
+        new Promise((_res, rej) => {
+          fail = () => rej(new ApiError(400, 'VALIDATION', 'O limiar de sugestão não pode passar do limiar de envio'));
+        })
+    );
+    const { store } = setup(noGrants(), undefined, { chatMemory: jest.fn(async () => memory(0.95, 0.85)), setChatMemory });
+    await store.getState().loadMemory();
+    const first = store.getState().setThresholds({ high: 0.9, low: 0.8 });
+    expect(await store.getState().setThresholds({ high: 0.9, low: 0.8 })).toBe(false);
+    expect(setChatMemory).toHaveBeenCalledTimes(1);
+    fail();
+    expect(await first).toBe(false);
+    expect(store.getState()).toMatchObject({ savingThresholds: false, error: null, thresholdsError: 'O limiar de sugestão não pode passar do limiar de envio' });
+    expect(store.getState().memory?.auto_thresholds?.high).toBe(0.95);
+  });
 });

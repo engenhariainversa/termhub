@@ -83,6 +83,30 @@ describe('interpretHookEvent — claude', () => {
   });
 });
 
+describe('interpretHookEvent — claude permission hints (TER-614)', () => {
+  it('keeps only the filtered excerpt of a prompt sent whole, on the card', () => {
+    const out = interpretHookEvent('claude', {
+      session_id: 's1', cwd: '/w', permission_mode: 'default', hook_event_name: 'PermissionRequest', tool_name: 'Bash',
+      tool_input: { command: "curl -H 'Authorization: Bearer abc123' https://x.test", description: 'Call' }, permission_suggestions: [{ type: 'addRules' }],
+    });
+    expect(out).toEqual({
+      kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'Bash' },
+      question: { kind: 'permission', payload: { tool_name: 'Bash', hint: "curl -H 'Authorization: •••' https://x.test" }, tool_use_id: null },
+    });
+  });
+
+  it("names a subagent's file relative to its directory, and keeps the id", () => {
+    const out = interpretHookEvent('claude', { cwd: '/w', agent_id: 'a1b2c3', agent_type: 'general-purpose', hook_event_name: 'PermissionRequest', tool_name: 'Edit', tool_input: { file_path: '/w/src/a.ts', old_string: 'x', new_string: 'y' } });
+    expect(out).toMatchObject({ meta: { subagent: true, agent_id: 'a1b2c3' }, question: { payload: { tool_name: 'Edit', hint: 'src/a.ts' } } });
+  });
+
+  it('has no hint for a reduced prompt, another tool, or Codex', () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'Bash' })?.question?.payload).toEqual({ tool_name: 'Bash' });
+    expect(interpretHookEvent('claude', { hook_event_name: 'PermissionRequest', tool_name: 'WebFetch', tool_input: { url: 'https://x.test' } })?.question?.payload).toEqual({ tool_name: 'WebFetch' });
+    expect(interpretHookEvent('codex', { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'ls', description: 'Listar?' } })?.question?.payload).not.toHaveProperty('hint');
+  });
+});
+
 describe('interpretHookEvent — claude subagents (spec 2026-09-26 §4.5)', () => {
   it('flags an event the script marked, or one that carries its own agent_id', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'PreToolUse', tool_name: 'Bash', subagent: true })).toEqual({
@@ -471,9 +495,14 @@ describe('claude StopFailure', () => {
   it('a usage limit without a message still says so', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'rate_limit' })).toMatchObject({ text: 'Limite de uso da conta atingido' });
   });
-  it('any other API error is an error state', () => {
+  it('a login that expired needs the person to log in again (TER-1046)', () => {
     const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'authentication_failed' });
-    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(i).toMatchObject({ kind: 'auth_required', text: 'Login da conta expirou: rode /login nesta aba (authentication_failed)', meta: { event: 'StopFailure', error: 'authentication_failed' } });
+    expect(isRateLimit(i)).toBe(false);
+  });
+  it('any other API error is an error state', () => {
+    const i = interpretHookEvent('claude', { hook_event_name: 'StopFailure', error: 'server_error' });
+    expect(i).toMatchObject({ kind: 'error', text: 'Erro da API do Claude (server_error)', meta: { event: 'StopFailure', error: 'server_error' } });
     expect(isRateLimit(i)).toBe(false);
   });
   it('an unknown error value is not echoed', () => {
@@ -528,10 +557,12 @@ describe('interpretHookEvent — claude questions (spec 2026-09-25 §4.2)', () =
       meta: { event: 'PermissionRequest', tool: 'Bash' },
       question: { kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null },
     });
-    // The whole captured event (an old script, or a future one) still yields the name only.
+    // The whole captured event (a machine that opted in to hints, TER-614) yields the name and the
+    // filtered excerpt of the command only: never the description or the suggestions, never in meta or
+    // text. The ingest drops the hint again when the machine's switch is off.
     const whole = interpretHookEvent('claude', fixture('permissionrequest-bash.json'));
-    expect(JSON.stringify(whole)).not.toContain('probe-file');
-    expect(whole?.question).toEqual({ kind: 'permission', payload: { tool_name: 'Bash' }, tool_use_id: null });
+    expect(whole?.question).toEqual({ kind: 'permission', payload: { tool_name: 'Bash', hint: 'touch probe-file.txt' }, tool_use_id: null });
+    expect({ ...whole, question: undefined }).toEqual({ kind: 'waiting_permission', text: null, meta: { event: 'PermissionRequest', tool: 'Bash' }, question: undefined });
   });
 
   it('AskUserQuestion\'s own PermissionRequest opens nothing (its PreToolUse did), and an odd name neither', () => {
@@ -608,8 +639,8 @@ describe('the whole answer (spec 2026-09-30 last answer)', () => {
   });
 
   it('keeps the answer of a Claude Stop with background tasks still running', () => {
-    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Pronto.', background_tasks: [{ status: 'running' }] })!;
-    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Pronto.' });
+    const out = interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: 'Aguardando o build.', background_tasks: [{ status: 'running' }] })!;
+    expect(out).toMatchObject({ backgroundTasks: 1, answer: 'Aguardando o build.' });
   });
 
   it.each([
@@ -675,9 +706,13 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     expect(i?.backgroundTasks).toBeUndefined();
   });
 
-  it('a message that ends in a question, or offers something, still waits for the person', () => {
+  it('a message that ends in a question still waits for the person; an offer is part of the report (TER-1046)', () => {
     expect(stop('Deploy feito. Quer que eu feche a aba?')?.kind).toBe('waiting_input');
-    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('waiting_input');
+    expect(stop('Deploy feito. Se quiser, posso abrir o PR do próximo card.')?.kind).toBe('finished');
+  });
+
+  it("Claude Code's login error is auth_required, keeping its text (TER-1046)", () => {
+    expect(stop('Login expired · Please run /login')).toMatchObject({ kind: 'auth_required', text: 'Login expired · Please run /login' });
   });
 
   it('a Stop with no last message still waits for the person', () => {
@@ -685,10 +720,37 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     expect(stop('   ')?.kind).toBe('waiting_input');
   });
 
-  it('background work still running wins, whatever the message says', () => {
-    const running = [{ id: 'b1', type: 'shell', status: 'running' }];
-    expect(stop('Merge e deploy feitos.', running)?.kind).toBe('waiting_background');
-    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_background');
+  it('background work still running holds the tab only when the message says it waits on it (TER-1053)', () => {
+    const running = [{ id: 'b1', type: 'monitor', status: 'running' }];
+    for (const waits of ['Aguardando o CI do #940.', 'Disparei 3 agentes em background; consolido quando terminarem.', 'Vou acompanhar o deploy e te aviso.', "Started the build; I'll report once it finishes.", '   ']) {
+      expect(stop(waits, running)).toMatchObject({ kind: 'waiting_background', backgroundTasks: 1 });
+    }
+    // a report or a request ends the work, whatever the background still does (a Monitor never ends)
+    const done = stop('Merge e deploy feitos.', running);
+    expect(done).toMatchObject({ kind: 'finished', meta: { event: 'Stop', background_tasks: 1 } });
+    expect(done?.backgroundTasks).toBeUndefined();
+    expect(stop('Quer que eu espere?', running)?.kind).toBe('waiting_input');
+  });
+
+  it('the case that hung (TER-1053): a final report with a Monitor left running is the end of the turn and reaches the person', () => {
+    const last = [
+      'O PR está aberto, e parei aqui como pedido.',
+      '',
+      '- **PR:** https://github.com/acme/monorepo/pull/940',
+      '  - Um único commit, `f2a0a3a8d`, assinado e sem Co-Authored-By.',
+      '',
+      '**Ficou de fora:**',
+      '- **Link "relates" entre os tickets.** A descrição já cita o #928. Posso criar o link se ele quiser.',
+      '- **Citar o #940 na descrição do #849.** Não editei, e espero a próxima etapa.',
+      '',
+      'O CI do #940, do #849 e do #851 ainda não foi verificado.',
+    ].join('\n');
+    const i = stop(last, [{ id: 'm1', type: 'monitor', status: 'running' }]);
+    // an offer ("Posso…") is a report (TER-1046): finished, which reaches the person — never "still working"
+    expect(i?.kind).toBe('finished');
+    expect(i?.backgroundTasks).toBeUndefined();
+    // the same report with a direct question waits for the person
+    expect(stop(last.replace(' Posso criar o link se ele quiser.', ' Quer que eu crie o link?'), [{ id: 'm1', type: 'monitor', status: 'running' }])?.kind).toBe('waiting_input');
   });
 
   it('a subagent Stop is classified the same way and keeps no answer', () => {
@@ -707,6 +769,13 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     const at = '2026-10-05T15:00:00.000Z';
     expect(NEEDS_YOU).not.toContain('finished');
     expect(needsYou({ state: 'finished', state_at: at, state_seen_at: null })).toBe(false);
-    expect(AT_PROMPT).toEqual(['waiting_input', 'finished']);
+    expect(AT_PROMPT).toEqual(['waiting_input', 'finished', 'blocked']);
+  });
+
+  it('a login that expired and the trust dialog need the person; a blocked run does not (TER-1046)', () => {
+    const at = '2026-10-08T15:00:00.000Z';
+    expect(needsYou({ state: 'auth_required', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'trust_prompt', state_at: at, state_seen_at: null })).toBe(true);
+    expect(needsYou({ state: 'blocked', state_at: at, state_seen_at: null })).toBe(false);
   });
 });

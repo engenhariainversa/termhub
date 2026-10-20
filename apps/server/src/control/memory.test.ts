@@ -865,6 +865,10 @@ interface AnswerSetup {
   autodecide?: boolean;
   /** cosine similarity of each decision to the card's question (default 0.95 for every cited one). */
   similarity?: Record<string, number>;
+  /** Thresholds the person pinned by hand (TER-642); the defaults (0.95 / 0.85) otherwise. */
+  pinned?: { high: number; low: number };
+  /** Whether one of the person's screens has termhub in focus (default: none). */
+  focused?: boolean;
 }
 
 /** An embedder that always answers; tests of the similarity floor pass their own. */
@@ -886,9 +890,10 @@ function ctxForAnswer(setup: AnswerSetup = {}) {
   const findManyForOwner = vi.fn(async (ids: string[], ownerId: string) => items.filter((it) => ids.includes(it.id) && it.owner_id === ownerId));
   const repos = {
     tabQuestions: { findByIdForUser, setAutoAnswer, setSuggestion },
-    users: { chatAutodecide },
+    users: { chatAutodecide, chatAutoThresholds: vi.fn(async () => ({ high: setup.pinned?.high ?? null, low: setup.pinned?.low ?? null, calibration: null })) },
     chatDecisions: { findManyForUser, similarityTo },
     memoryItems: { findManyForOwner },
+    chatAuto: { focusedUsers: vi.fn(async (ids: string[]) => new Set(setup.focused ? ids : [])) },
   } as unknown as Repositories;
   const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' as const }, ownerId: 'u1', createAs: 'u1' };
   const ctx: ControlContext = { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
@@ -969,8 +974,8 @@ describe('answerTabQuestionTool', () => {
     });
   });
 
-  it('auto with the switch on and a matching person decision schedules a 60 s countdown and republishes', async () => {
-    const { ctx, calls } = ctxForAnswer();
+  it('auto with the switch on and a matching person decision between the thresholds schedules a 60 s countdown, in focus only, and republishes', async () => {
+    const { ctx, calls } = ctxForAnswer({ similarity: { d1: 0.9 }, focused: true });
     const r = await callTool(ctx, yes);
     expect(r).toEqual({ mode: 'auto', due_at: '2026-09-26T12:01:00.000Z' });
     expect(calls.setAutoAnswer).toHaveBeenCalledWith('q1', {
@@ -982,6 +987,10 @@ describe('answerTabQuestionTool', () => {
       score: 0.95,
       due_at: '2026-09-26T12:01:00.000Z',
       status: 'scheduled',
+      score: 0.9,
+      thresholds: { high: 0.95, low: 0.85 },
+      band: 'mid',
+      focus: true,
     });
     expect(calls.setSuggestion).not.toHaveBeenCalled();
     expect(publishTabQuestions).toHaveBeenCalledTimes(1);
@@ -1007,6 +1016,56 @@ describe('answerTabQuestionTool', () => {
     const { ctx } = ctxForAnswer();
     expect((await callTool(ctx, yes)).mode).toBe('auto');
     expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  describe('similarity bands (TER-642)', () => {
+    it('at or above the high threshold the answer is sent at once: no countdown, focus not needed', async () => {
+      const { ctx, calls } = ctxForAnswer({ similarity: { d1: 0.95 } });
+      expect(await callTool(ctx, yes)).toEqual({ mode: 'auto', due_at: '2026-09-26T12:00:03.000Z' });
+      const stored = calls.setAutoAnswer.mock.calls[0]![1];
+      expect(stored).toMatchObject({ band: 'high', score: 0.95, thresholds: { high: 0.95, low: 0.85 } });
+      expect(stored.focus).toBeUndefined();
+    });
+
+    it('between the thresholds with nobody looking, the countdown starts paused', async () => {
+      const { ctx, calls } = ctxForAnswer({ similarity: { d1: 0.9 } });
+      await callTool(ctx, yes);
+      expect(calls.setAutoAnswer.mock.calls[0]![1]).toMatchObject({ band: 'mid', focus: true, paused: true, remaining_ms: 60_000 });
+    });
+
+    it("the person's own thresholds decide: pinned higher, the same score is only a suggestion", async () => {
+      const { ctx, calls } = ctxForAnswer({ similarity: { d1: 0.9 }, pinned: { high: 0.99, low: 0.95 } });
+      expect(await callTool(ctx, yes)).toEqual({ mode: 'suggest', downgraded_because: 'not_similar' });
+      expect(calls.setAutoAnswer).not.toHaveBeenCalled();
+    });
+
+    const note = (text: string, title = 'Usar git worktree para isolar o trabalho?') => memoryItem({ id: 'n1', kind: 'note', title, text });
+    const fromNote = { ...yes, sources: ['note:n1'] };
+
+    it('a note whose decision is the option proposed backs auto, scored by its title against the question', async () => {
+      const embedder = upEmbedder();
+      const { ctx, calls } = ctxForAnswer({ decisions: [], items: [note('Decisão: Sim\nMotivo: combinado no chat\nFontes: ')] });
+      expect((await callTool(ctx, fromNote, { embedder })).mode).toBe('auto');
+      // one embed call for the card: the question, then the note's title, both as `embedText`
+      expect(embedder.embed).toHaveBeenCalledTimes(1);
+      expect(embedder.embed).toHaveBeenCalledWith(['usar git worktree para isolar o trabalho', 'usar git worktree para isolar o trabalho']);
+      expect(calls.setAutoAnswer.mock.calls[0]![1]).toMatchObject({ sources: [{ kind: 'note', id: 'n1' }], band: 'high', score: 1 });
+    });
+
+    it('a note about another question is not similar; one that decided something else, or in prose, is no precedent', async () => {
+      const apart: Embedder = { embed: vi.fn(async (texts: string[]) => ({ model: 'm', vectors: texts.map((_t, i) => (i === 0 ? [1, 0, 0] : [0, 1, 0])) })) };
+      const far = ctxForAnswer({ decisions: [], items: [note('Decisão: Sim\nMotivo: m', 'Qual banco usar?')] });
+      expect(await callTool(far.ctx, fromNote, { embedder: apart })).toEqual({ mode: 'suggest', downgraded_because: 'not_similar' });
+      for (const text of ['Decisão: Não\nMotivo: m', 'Decisão: Sim, sempre que der\nMotivo: m']) {
+        const other = ctxForAnswer({ decisions: [], items: [note(text)] });
+        expect(await callTool(other.ctx, fromNote)).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
+      }
+    });
+
+    it('a note never backs a free-text answer', async () => {
+      const { ctx } = ctxForAnswer({ decisions: [], items: [note('Decisão: use a main\nMotivo: m')] });
+      expect(await callTool(ctx, { ...fromNote, answers: [{ text: 'use a main' }] })).toEqual({ mode: 'suggest', downgraded_because: 'no_person_precedent' });
+    });
   });
 
   it('mode defaults to auto; label case and accents do not matter', async () => {
@@ -1064,7 +1123,7 @@ describe('answerTabQuestionTool', () => {
   it('lists the cited decisions answered in another project, without changing the answer (TER-1006)', async () => {
     const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', project_id: 'p9', project_name: 'outro' }), pastDecision({ id: 'd2' })] });
     const r = await callTool(ctx, { ...yes, sources: ['decision:d1', 'decision:d2'] });
-    expect(r).toEqual({ mode: 'auto', due_at: '2026-09-26T12:01:00.000Z', other_project_sources: ['decision:d1'] });
+    expect(r).toEqual({ mode: 'auto', due_at: '2026-09-26T12:00:03.000Z', other_project_sources: ['decision:d1'] });
     expect(calls.setAutoAnswer).toHaveBeenCalledTimes(1);
     const suggested = await callTool(ctxForAnswer({ decisions: [pastDecision({ id: 'd1', project_id: null, project_name: null })] }).ctx, { ...yes, mode: 'suggest' });
     expect(suggested).toEqual({ mode: 'suggest', other_project_sources: ['decision:d1'] });
@@ -1156,11 +1215,13 @@ describe('answerTabQuestionTool', () => {
       expect(calls.similarityTo).toHaveBeenCalledWith(['d1'], 'u1', [1, 0, 0], 'm#q1');
     });
 
-    it('at or above the floor (0.80) is auto; the new question is embedded as embedText (question only)', async () => {
+    it("at or above the person's low threshold (0.85) is auto, just under it is not; the new question is embedded as embedText (question only)", async () => {
       const embedder = upEmbedder();
-      const { ctx } = ctxForAnswer({ similarity: { d1: 0.8 } });
+      const { ctx } = ctxForAnswer({ similarity: { d1: 0.85 } });
       expect((await callTool(ctx, yes, { embedder })).mode).toBe('auto');
       expect(embedder.embed).toHaveBeenCalledWith(['usar git worktree para isolar o trabalho']);
+      const under = ctxForAnswer({ similarity: { d1: 0.8499 } });
+      expect((await callTool(under.ctx, yes)).downgraded_because).toBe('not_similar');
     });
 
     it('fails closed: no embedder, a failing one, or a decision with no embedding all downgrade (not_similar)', async () => {

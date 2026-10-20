@@ -203,5 +203,21 @@
   "Não foi possível gerar o arquivo. Peça de novo.": "No se pudo generar el archivo. Pídelo de nuevo.",
   "O arquivo da última exportação expirou.": "El archivo de la última exportación expiró.",
   "Você pode pedir outra exportação a partir de {{date}}.": "Puedes pedir otra exportación a partir del {{date}}.",
-  "Auditoria": "Auditoría"
+  "Auditoria": "Auditoría",
+  "A Política de Privacidade muda em {{date}}.": "La Política de Privacidad cambia el {{date}}.",
+  "Li e aceito": "He leído y acepto",
+  "Li e aceito a <0>Política de Privacidade</0>.": "He leído y acepto la <0>Política de Privacidad</0>.",
+  "Li e aceito os <0>Termos de Uso</0> e a <1>Política de Privacidade</1>.": "He leído y acepto los <0>Términos de Uso</0> y la <1>Política de Privacidad</1>.",
+  "Li e aceito os <0>Termos de Uso</0>.": "He leído y acepto los <0>Términos de Uso</0>.",
+  "Não foi possível registrar o aceite.": "No se pudo registrar la aceptación.",
+  "Os Termos de Uso mudam em {{date}}.": "Los Términos de Uso cambian el {{date}}.",
+  "Para continuar usando o termhub, leia e aceite a versão em vigor dos documentos abaixo.": "Para seguir usando termhub, lee y acepta la versión vigente de los documentos de abajo.",
+  "Política de Privacidade": "Política de Privacidad",
+  "Termos de Uso": "Términos de Uso",
+  "Termos de Uso e Política de Privacidade": "Términos de Uso y Política de Privacidad",
+  "Ver o que muda": "Ver qué cambia",
+  "Versão {{version}}, em vigor desde {{date}}": "Versión {{version}}, vigente desde el {{date}}",
+  "Termos de uso": "Términos de uso",
+  "Política de privacidade": "Política de privacidad",
+  "Documentos legais": "Documentos legales"
 }

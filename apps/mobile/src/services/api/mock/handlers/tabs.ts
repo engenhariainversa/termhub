@@ -3,7 +3,7 @@
 // (opapingou, waiting on a permission). A page is the last `PAGE_ITEMS` items before a cursor; a cursor
 // is `<session id>.<item index>`, as opaque to the app as the server's byte offsets.
 import { randomId } from '../../../crypto/random';
-import { startSessionBody, tabActionBody, tabMessageBody, type TTabChatFrame, type TTabChatItem, type TTabChatPage, type TTabQuestion, type TTabSuggestion, type TTabSummary } from '../../contract';
+import { startSessionBody, startTabAgentBody, tabActionBody, tabMessageBody, type TTabChatFrame, type TTabChatItem, type TTabAgentChoice, type TTabChatPage, type TTabQuestion, type TTabSuggestion, type TTabSummary } from '../../contract';
 import type { MockRouter } from '../router';
 import { isUploadBody } from '../router';
 import { type MockState, type MockTab, verifyAuth, WireError } from '../state';
@@ -13,6 +13,12 @@ export const PAGE_ITEMS = 6;
 const MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'];
 
 const TAB_NOT_FOUND = () => new WireError(404, 'NOT_FOUND', 'Aba não encontrada');
+
+/** The accounts every mock machine can start an agent with (TER-1094): Claude Code is the one picked without asking. */
+const AGENT_CHOICES: TTabAgentChoice[] = [
+  { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null },
+  { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null },
+];
 
 function seedItems(prefix: string, at: string, turns: number): TTabChatItem[] {
   const items: TTabChatItem[] = [];
@@ -26,12 +32,12 @@ function seedItems(prefix: string, at: string, turns: number): TTabChatItem[] {
 export function seedTabs(state: MockState, now: number): void {
   const at = new Date(now - 10 * 60_000).toISOString();
   const tab = (
-    summary: Omit<TTabSummary, 'background' | 'finished' | 'state_at' | 'activity_verb' | 'auto_ref'> & Partial<Pick<TTabSummary, 'auto_ref'>>,
+    summary: Omit<TTabSummary, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'state_at' | 'activity_verb' | 'auto_ref'> & Partial<Pick<TTabSummary, 'auto_ref'>>,
     session: string | null,
     items: TTabChatItem[],
     screen: string,
   ): MockTab => ({
-    summary: { background: false, finished: false, state_at: at, activity_verb: null, auto_ref: null, ...summary },
+    summary: { background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, activity_verb: null, auto_ref: null, ...summary },
     session,
     items,
     mode: 'default',
@@ -92,7 +98,16 @@ function page(state: MockState, tab: MockTab, before: string | undefined): TTabC
     degraded: false,
     questions: state.tabQuestions.filter((q) => q.tab_id === tab.summary.id && q.status === 'open').map((q) => strip(q) as TTabQuestion),
     suggestions: state.tabSuggestions.filter((s) => s.tab_id === tab.summary.id && s.status === 'open').map((x) => strip(x) as TTabSuggestion),
+    empty_reason: emptyReason(tab, ready, before),
   };
+}
+
+/** The server's `emptyReasonOf` (TER-1091), over the mock's tab. */
+function emptyReason(tab: MockTab, ready: boolean, before: string | undefined): string | null {
+  if (tab.noSessionReason === 'no_agent') return 'no_agent';
+  if (tab.summary.availability === 'no_session') return tab.noSessionReason ?? 'not_reported';
+  if (ready && !before && tab.items.length === 0) return 'new_session';
+  return null;
 }
 
 /** Sends `frame` to every socket open on `tabId`. */
@@ -138,7 +153,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const id = `t-${randomId(6)}`;
     const at = new Date(ctx.now()).toISOString();
     state.tabs.set(id, {
-      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null },
+      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null },
       session: `s-${randomId(6)}`,
       items: [{ kind: 'user', id: `${id}-u0`, at, text: body.prompt, images: 0 }],
       mode: 'default',
@@ -194,5 +209,41 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
   router.route('GET', '/api/m/v1/tabs/:id/screen', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     return { status: 200, body: { text: load(ctx.params.id!).screen } };
+  });
+
+  // "Iniciar sessão" (TER-1094): a plain shell starts the agent in place; any other tab gets a new one.
+  router.route('GET', '/api/m/v1/tabs/:id/agent', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    load(ctx.params.id!);
+    return { status: 200, body: { choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id } };
+  });
+
+  router.route('POST', '/api/m/v1/tabs/:id/agent', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const tab = load(ctx.params.id!);
+    const { account_id } = startTabAgentBody.parse(ctx.body ?? {});
+    const choice = AGENT_CHOICES.find((c) => c.account_id === (account_id ?? AGENT_CHOICES[0]!.account_id));
+    if (!choice) throw new WireError(404, 'NOT_FOUND', 'Conta não encontrada');
+    const at = new Date(ctx.now()).toISOString();
+    let id = tab.summary.id;
+    if (tab.noSessionReason === 'no_agent') {
+      tab.noSessionReason = undefined;
+      tab.session = `s-${randomId(6)}`;
+      tab.items = [];
+      tab.summary = { ...tab.summary, availability: 'ready', state: 'idle', state_at: at };
+    } else {
+      id = `t-${randomId(6)}`;
+      state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
+    }
+    return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider } };
+  });
+
+  // "Instalar hooks" (TER-1091): the machine's tabs stop being `no_hooks`; their sessions still wait for Claude.
+  router.route('POST', '/api/m/v1/machines/:id/hooks', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const tabs = [...state.tabs.values()].filter((t) => t.summary.machine.id === ctx.params.id);
+    if (tabs.length === 0) throw new WireError(404, 'NOT_FOUND', 'Máquina não encontrada');
+    for (const t of tabs) if (t.noSessionReason === 'no_hooks') t.noSessionReason = 'not_reported';
+    return { status: 200, body: { installed_at: new Date(ctx.now()).toISOString() } };
   });
 }

@@ -37,6 +37,15 @@ export function registerAiLoginRoutes(router: MockRouter, state: MockState): voi
     verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
     const row = account(ctx.params.id!);
     const loginId = `login-${++started}`;
+    const expiresAt = new Date(ctx.now() + 15 * 60_000).toISOString();
+    if (state.aiLoginFinishOnMachine.delete(row.account_id)) {
+      const wasRequired = state.aiLoginStates.get(row.account_id) === 'login_required';
+      state.aiLoginStates.set(row.account_id, 'ok');
+      return {
+        status: 200,
+        body: { login_id: loginId, url: null, user_code: null, needs_code: false, expires_at: expiresAt, logged_in: true, stuck_tabs: wasRequired ? [STUCK_TAB] : [] },
+      };
+    }
     const needsCode = row.provider === 'claude';
     state.aiLoginFlows.set(loginId, { accountId: row.account_id, needsCode });
     return {
@@ -46,7 +55,9 @@ export function registerAiLoginRoutes(router: MockRouter, state: MockState): voi
         url: needsCode ? 'https://claude.com/cai/oauth/authorize?code=true' : 'https://auth.openai.com/codex/device',
         user_code: needsCode ? null : 'ABCD-EFGH1',
         needs_code: needsCode,
-        expires_at: new Date(ctx.now() + 15 * 60_000).toISOString(),
+        expires_at: expiresAt,
+        logged_in: false,
+        stuck_tabs: [],
       },
     };
   });
@@ -64,9 +75,8 @@ export function registerAiLoginRoutes(router: MockRouter, state: MockState): voi
     account(accountId);
     const f = flow(accountId, ctx.params.loginId!);
     const { code } = aiLoginSubmitBody.parse(ctx.body ?? {});
-    if (f.needsCode && !code) throw new WireError(400, 'CODE_REQUIRED', 'Cole o código que a página mostrou.');
     state.aiLoginFlows.delete(ctx.params.loginId!);
-    if (f.needsCode && code === 'errado') return { status: 200, body: { ok: false, message: 'O Claude recusou o código. Comece de novo.', stuck_tabs: [] } };
+    if (f.needsCode && code === 'errado') return { status: 200, body: { ok: false, message: 'OAuth error: invalid_grant', stuck_tabs: [] } };
     const wasRequired = state.aiLoginStates.get(accountId) === 'login_required';
     state.aiLoginStates.set(accountId, 'ok');
     return { status: 200, body: { ok: true, message: null, stuck_tabs: wasRequired ? [STUCK_TAB] : [] } };

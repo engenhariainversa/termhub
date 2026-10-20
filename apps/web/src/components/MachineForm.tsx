@@ -6,10 +6,12 @@ import { SimulatorSetupCard } from './SimulatorSetupCard';
 import { AgentEnrollment } from './AgentEnrollment';
 import { AgentUpdateCard } from './AgentUpdateCard';
 import { NetworkCheckCard } from './NetworkCheckCard';
+import { MachineNetworkCard } from './MachineNetworkCard';
 import { AutomationAllowedCard } from './AutomationAllowedCard';
 import { AiUsageQueryCard } from './AiUsageQueryCard';
 import { AiMemoryCard } from './AiMemoryCard';
 import { MonitorHooksCard, monitorHealthNote } from './MonitorHooksCard';
+import { PermissionHintCard } from './PermissionHintCard';
 import { useData } from '../lib/data';
 import type { Machine, User } from '../lib/types';
 import { TYPE_LABEL } from '../lib/machine-status';
@@ -17,12 +19,13 @@ import { api, ApiError } from '../lib/api';
 import { Trans, tk, useTranslation } from '../i18n';
 
 /** The sections of the edit form, one tab each. */
-export const MACHINE_FORM_TABS = ['general', 'agent', 'monitor', 'simulator'] as const;
+export const MACHINE_FORM_TABS = ['general', 'agent', 'network', 'monitor', 'simulator'] as const;
 export type MachineFormTab = (typeof MACHINE_FORM_TABS)[number];
 
 const TAB_LABEL: Record<MachineFormTab, string> = {
   general: tk('Geral'),
   agent: tk('Agente'),
+  network: tk('Rede'),
   monitor: tk('Monitor'),
   simulator: tk('Simulador iOS'),
 };
@@ -35,17 +38,20 @@ interface Props {
   initialTab?: MachineFormTab;
 }
 
-/** Which tabs an existing machine gets: Agente only for agent machines, Simulador iOS only on a Mac with Xcode. */
+/** Which tabs an existing machine gets: Agente and Rede only for agent machines, Simulador iOS only on a Mac with Xcode. */
 export function machineFormTabs(m: Pick<Machine, 'type' | 'os' | 'capabilities'>): MachineFormTab[] {
   const tabs: MachineFormTab[] = ['general'];
-  if (m.type === 'agent') tabs.push('agent');
+  if (m.type === 'agent') tabs.push('agent', 'network');
   tabs.push('monitor');
   if ((m.os === 'macos' && m.capabilities.includes('xcodebuild')) || m.capabilities.includes('wda')) tabs.push('simulator');
   return tabs;
 }
 
 /** The warning a tab carries as a badge, so it shows without opening the tab. */
-export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string } | null {
+export function machineTabBadge(tab: MachineFormTab, m: Machine): { text: string; title: string; critical?: boolean } | null {
+  if (tab === 'agent' && m.below_min_version) {
+    return { text: tk('desatualizado'), title: tk('Agente abaixo da versão mínima do termhub — ele se atualiza quando a máquina ficar ociosa; abra a máquina para atualizar agora'), critical: true };
+  }
   if (tab === 'agent' && m.update_available) {
     return { text: tk('nova versão'), title: tk('Nova versão do agente disponível — abra a máquina para atualizar') };
   }
@@ -328,8 +334,15 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
             </div>
           </>
         );
+      case 'network':
+        return <MachineNetworkCard machine={machine} />;
       case 'monitor':
-        return <MonitorHooksCard machine={machine} />;
+        return (
+          <>
+            <MonitorHooksCard machine={machine} />
+            <PermissionHintCard machine={machine} />
+          </>
+        );
       case 'simulator':
         return <SimulatorSetupCard machine={machine} />;
     }
@@ -366,7 +379,7 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
                   >
                     {t(TAB_LABEL[key])}
                     {badge && (
-                      <span className="rounded-full bg-warn/10 px-1.5 text-[10px] text-warn" title={t(badge.title)}>
+                      <span className={`rounded-full px-1.5 text-[10px] ${badge.critical ? 'bg-danger/10 text-danger' : 'bg-warn/10 text-warn'}`} title={t(badge.title)}>
                         {t(badge.text)}
                       </span>
                     )}

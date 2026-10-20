@@ -16,7 +16,7 @@ import { HttpError } from '../lib/errors.js';
 import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, gateDecision, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
+import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, FILE_GRANT_BUDGET, fileGrantable, gateDecision, insideFolder, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
@@ -503,7 +503,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'blocked' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -586,11 +586,28 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
   return grant.id;
 }
 
+/**
+ * The folder grant ("Permitir sempre nesta pasta", TER-1086) that covers a `share_file`, if any: an active
+ * grant of this user for the call's machine whose folder holds the path, lexically, and budget left this
+ * hour. The machine is the call's own id; `shareFile` resolves it owner-scoped before anything is read, so
+ * a foreign id finds no grant and fails there like any other call. Not atomic with the insert, like the
+ * other budgets.
+ */
+async function fileGrantCovering(ctx: ControlContext, call: GatedCall): Promise<string | null> {
+  if (!fileGrantable(call.tool, call.args)) return null;
+  const grants = await ctx.repos.chatFileGrants.listActiveForMachine(ctx.scope.user.id, call.args.machine_id);
+  const grant = grants.find((g) => insideFolder(call.args.path as string, g.folder));
+  if (!grant) return null;
+  const used = await ctx.repos.chatActions.countByGrantSince(grant.id, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
+  return used < FILE_GRANT_BUDGET ? grant.id : null;
+}
+
 /** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
- * that reported and asks nothing (TER-972). `null` (a tab that never reported, a bare shell that may be
+ * that reported and asks nothing (TER-972), and `blocked`, a run that reported itself blocked (TER-1046). A
+ * login that expired is the person's to see. `null` (a tab that never reported, a bare shell that may be
  * running anything) is not among them, nor `working` read at face value, nor `waiting_permission`, which
  * the person has to see. */
-const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'idle', 'error']);
+const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'blocked', 'idle', 'error']);
 
 /**
  * A Claude Code `working` tab whose state is stale in the TER-615 sense — no hook event for `STALE_WORKING_MS` — and
@@ -605,7 +622,9 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
   if (!Number.isFinite(since) || Date.now() - since < STALE_WORKING_MS) return false;
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_STATE_LINES + 20 }, { plain: true });
-    return claudeScreenState(text) === 'prompt';
+    // back at the input box, also when its last answer is the login error (TER-1046)
+    const screen = claudeScreenState(text);
+    return screen === 'prompt' || screen === 'auth';
   } catch {
     return false;
   }
@@ -636,7 +655,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished' && tab?.state !== 'blocked') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
@@ -654,7 +673,20 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
 async function classOf(ctx: ControlContext, call: GatedCall): Promise<ActionClass> {
   const cls = actionClass(call.tool, call.args);
   if (call.token.gated && cls === 'write' && call.tool === 'set_automation_policy' && (await automationCallIsBrake(ctx, call.args))) return 'self_mediated';
+  if (call.token.gated && cls === 'write' && call.tool === 'admin_user_troubleshoot' && (await troubleshootUserApproved(ctx, call))) return 'read';
   return cls;
+}
+
+/**
+ * TER-1092: whether the person already let a query about this user run in this conversation. The first
+ * one is a card ("consultar dados de suporte de …"); once it ran, the next queries about the same user
+ * in the same conversation are not asked again — each is still written to the security trail.
+ */
+async function troubleshootUserApproved(ctx: ControlContext, call: GatedCall): Promise<boolean> {
+  const userId = call.args.user_id;
+  if (typeof userId !== 'string' || !userId) return false;
+  const conversationId = call.token.chat_conversation_id ?? (await ctx.repos.chat.getOrCreateForUser(ctx.scope.user.id)).id;
+  return ctx.repos.chatActions.executedWithArg(conversationId, call.tool, 'user_id', userId);
 }
 
 /** The gate itself: run the call, or answer why it did not run. */
@@ -703,6 +735,11 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
     // Last, the standing grants (TER-386): after every conversation-bound one, so their budgets are spent first.
     if (!row) {
       const grantId = await standingGrantCovering(ctx, call);
+      if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
+    }
+    // A folder the person trusted for share_file (TER-1086). Never a default.
+    if (!row) {
+      const grantId = await fileGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // Then the defaults every user gets unless they restricted them (TER-627).

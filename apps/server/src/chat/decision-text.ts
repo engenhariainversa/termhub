@@ -33,6 +33,66 @@ export interface TabQuestionSuggestion {
 }
 
 /**
+ * The best precedent memory found for one question when its card opened (TER-642), whatever its score —
+ * also below the person's suggestion threshold, where nothing is shown. `ref` is the decision or note it
+ * came from; the answer is already mapped onto this question's options. Kept on the row so the person's
+ * own answer can later be compared with it (`recordAutoSamples`).
+ */
+export interface PrecedentItem {
+  question_index: number;
+  ref: string;
+  similarity: number;
+  selected: number[];
+  text?: string;
+}
+
+export interface TabQuestionPrecedent {
+  items: PrecedentItem[];
+}
+
+/** The memory ref a memory suggestion item came from — its decision, else the note it cites — or null
+ *  for a concierge item or one that names neither. */
+export function suggestionRef(it: SuggestionItem): string | null {
+  if (it.by === 'concierge') return null;
+  if (it.decision_id) return `decision:${it.decision_id}`;
+  return it.sources?.find((s) => s.startsWith('note:')) ?? null;
+}
+
+/** A note's decision, out of its stored text (`Decisão: …\nMotivo: …\nFontes: …`, `indexNote`); `''`
+ *  for a text with no such line. */
+export function noteDecision(text: string): string {
+  const prefix = 'Decisão: ';
+  return text.split('\n').find((l) => l.startsWith(prefix))?.slice(prefix.length).trim() ?? '';
+}
+
+/**
+ * A note as an answer to this question (TER-642): its decision must be one of the question's own option
+ * labels (`labelKey`: case, accents and punctuation do not matter). A note's decision is prose the
+ * concierge wrote, so anything else — a sentence, two options, free text — is no answer at all: nothing
+ * a note says is ever typed into a tab except the label of an option the tab itself offered.
+ */
+export function mapNoteAnswer(text: string, item: ChoiceItem): ItemAnswer | null {
+  const decision = noteDecision(text);
+  if (!labelKey(decision)) return null;
+  const mapped = mapAnswer({ labels: [decision] }, item);
+  return mapped && mapped.selected.length === 1 ? { selected: mapped.selected } : null;
+}
+
+/** Cosine similarity of two vectors of the same model; 0 for mismatched lengths or a zero vector. */
+export function cosine(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  return na === 0 || nb === 0 ? 0 : dot / Math.sqrt(na * nb);
+}
+
+/**
  * Normalizes a label for comparison: removes accents, case insensitive, strips punctuation/spaces.
  * "Não, obrigado!" → "nao obrigado"
  */

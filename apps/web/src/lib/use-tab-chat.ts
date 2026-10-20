@@ -31,6 +31,8 @@ export interface TabChatData {
   connected: boolean;
   /** The last failure of the view, translated. */
   error: string | null;
+  /** Why the conversation has no history (`TabChatPage.empty_reason`); null when it has some. */
+  emptyReason: string | null;
 }
 
 export const initialTabChat = (): TabChatData => ({
@@ -48,6 +50,7 @@ export const initialTabChat = (): TabChatData => ({
   loadingEarlier: false,
   connected: false,
   error: null,
+  emptyReason: null,
 });
 
 /** A page's fields, as the view keeps them. */
@@ -63,6 +66,7 @@ export function fromPage(page: TabChatPage): Partial<TabChatData> {
     degraded: page.degraded,
     questions: page.questions,
     suggestions: page.suggestions,
+    emptyReason: page.empty_reason ?? null,
   };
 }
 
@@ -72,12 +76,22 @@ export function applyFrame(s: TabChatData, f: Exclude<TabChatFrame, { type: 'res
     case 'hello':
       return { ...s, availability: f.availability };
     case 'items':
-      return { ...s, items: mergeItems(s.items, f.items, 'append'), live: f.live, mode: f.mode ?? s.mode };
+      return { ...s, items: mergeItems(s.items, f.items, 'append'), live: f.live, mode: f.mode ?? s.mode, emptyReason: f.items.length ? null : s.emptyReason };
     case 'state':
       return { ...s, tab: f.tab, availability: f.tab.availability };
     case 'unavailable':
       return { ...s, availability: f.availability };
   }
+}
+
+/**
+ * The tab became readable while the page had no transcript to follow (TER-1091): its first session was
+ * reported, or a missing transcript came back. The socket follows from the end of the file, so what the
+ * session already holds only comes with the page, read again.
+ */
+export function becameReadable(s: TabChatData, f: Exclude<TabChatFrame, { type: 'reset' }>): boolean {
+  const next = f.type === 'state' ? f.tab.availability : f.type === 'hello' ? f.availability : null;
+  return next === 'ready' && s.availability !== 'ready' && s.live === null && s.status === 'ready';
 }
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError && e.code && !e.code.startsWith('HTTP_') ? e.message : fallback);
@@ -152,7 +166,12 @@ export function useTabChat(tabId: string, enabled: boolean): TabChat {
         return;
       }
       const previous = latest.current.tab;
+      const reread = becameReadable(latest.current, f);
       set((s) => applyFrame(s, f));
+      if (reread) {
+        void reload();
+        return;
+      }
       // A tab that starts or stops needing the person is when a card appeared or went.
       if (f.type === 'state' && previous && (previous.needs_you !== f.tab.needs_you || previous.state !== f.tab.state)) void refreshCards();
     };

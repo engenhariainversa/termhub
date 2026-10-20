@@ -29,9 +29,13 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('budget (Postgres)', () =>
     projectId = newId();
     await db.user.create({ data: { id: userId, email: `${userId}@test.local`, name: 'u', timeZone: 'America/Sao_Paulo' } });
     await db.project.create({ data: { id: projectId, ownerId: userId, key: keyOf(projectId), name: 'p' } });
+    // a usage cursor needs its tab (TER-974)
+    const machineId = newId();
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
+    await db.tab.create({ data: { id: `t-${projectId}`, projectId, machineId, name: 'tab' } });
     return async () => {
-      await db.tabUsage.deleteMany({ where: { tabId: `t-${projectId}` } });
       await db.project.deleteMany({ where: { id: projectId } });
+      await db.machine.deleteMany({ where: { id: machineId } });
       await db.user.delete({ where: { id: userId } });
     };
   });

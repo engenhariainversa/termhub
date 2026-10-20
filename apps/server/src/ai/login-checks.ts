@@ -1,8 +1,9 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { AiProvider } from '../db/repositories/types.js';
+import type { AiAccount, AiProvider, Machine } from '../db/repositories/types.js';
 import { aiLogin, aiLoginSupported, mapBounded, type AiLoginService } from './login.js';
+import { cancelLoginExpiryReads, setLoginExpiringPush, warnLoginExpiry, type LoginExpiringPush } from './login-expiry.js';
 
 /** How often every account of an online agent machine is checked. */
 export const LOGIN_CHECK_INTERVAL_MS = 10 * 60_000;
@@ -15,10 +16,13 @@ const CHECK_CONCURRENCY = 4;
 export type LoginRequiredPush = (userId: string, info: { accountId: string; machineName: string; provider: AiProvider }) => Promise<void>;
 
 export interface LoginCheckDeps {
-  repos: Pick<Repositories, 'aiAccounts' | 'machines'>;
+  repos: Repositories;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
   push?: LoginRequiredPush;
+  /** The push of a login about to expire (TER-1079). */
+  pushExpiring?: LoginExpiringPush;
   service?: AiLoginService;
+  now?: () => Date;
 }
 
 /**
@@ -44,7 +48,8 @@ export class LoginChecker {
     try {
       const machines = (await this.deps.repos.machines.list(null)).filter((m) => m.type === 'agent' && (!machineId || m.id === machineId));
       const byId = new Map(machines.map((m) => [m.id, m]));
-      const accounts = (await this.deps.repos.aiAccounts.list(null)).filter((a) => aiLoginSupported(a, byId.get(a.machine_id)));
+      const all = await this.deps.repos.aiAccounts.list(null);
+      const accounts = all.filter((a) => aiLoginSupported(a, byId.get(a.machine_id)));
       await mapBounded(accounts, CHECK_CONCURRENCY, async (account) => {
         const machine = byId.get(account.machine_id)!;
         const state = await this.service.checkAccountLogin(account, machine);
@@ -56,10 +61,25 @@ export class LoginChecker {
           this.deps.log.warn({ accountId: account.id, code: (err as { code?: string }).code ?? 'ERROR' }, 'ai login push failed'),
         );
       });
+      await this.checkExpiries(all.filter((a) => a.login_expires_at && (!machineId || a.machine_id === machineId)), byId);
     } catch (err) {
       this.deps.log.warn({ code: (err as { code?: string }).code ?? 'ERROR' }, 'ai login check failed');
     } finally {
       if (!machineId) this.running = false;
+    }
+  }
+
+  /**
+   * The accounts with a known expiry date (TER-1079): a date that passed is forgotten (the login either
+   * expired, which the check above reports, or was redone on the machine); one inside its owner's window
+   * warns them, once per login. This is what honours a window shorter than the CLI's own three days.
+   */
+  private async checkExpiries(accounts: AiAccount[], machines: Map<string, Machine>): Promise<void> {
+    const now = this.deps.now?.() ?? new Date();
+    for (const account of accounts) {
+      const machine = machines.get(account.machine_id);
+      if (Date.parse(account.login_expires_at!) <= now.getTime()) await this.deps.repos.aiAccounts.clearLoginExpiry(account.id);
+      else if (machine && this.service.loginStatusOf(account.id).state !== 'login_required') await warnLoginExpiry({ repos: this.deps.repos, log: this.deps.log, push: this.deps.pushExpiring, now: () => now }, account, machine);
     }
   }
 }
@@ -82,7 +102,10 @@ export function startAiLoginChecks(deps: LoginCheckDeps, opts: { intervalMs?: nu
   const onOnline = (machineId: string) => later(ONLINE_CHECK_DELAY_MS, () => void checker.run(machineId));
   agents.on('online', onOnline);
   (deps.service ?? aiLogin).startSweeper();
+  setLoginExpiringPush(deps.pushExpiring);
   return () => {
+    setLoginExpiringPush(undefined);
+    cancelLoginExpiryReads();
     clearInterval(interval);
     for (const timer of timers) clearTimeout(timer);
     timers.clear();

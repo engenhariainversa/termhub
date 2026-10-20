@@ -25,11 +25,17 @@ export function machineLabel(m: Pick<Machine, 'name'> & { subtitle?: string | nu
   return m.subtitle ? `${m.name} — ${m.subtitle}` : m.name;
 }
 
-/** The small "vX.Y.Z" next to an agent machine; `outdated` turns it into the update hint (the card in the machine form does the update). */
-export function agentVersionBadge(m: Machine): { text: string; title: string; outdated: boolean } | null {
+/**
+ * The small "vX.Y.Z" next to an agent machine; `outdated` turns it into the update hint (the card in the machine
+ * form does the update), and `critical` into the red one of an agent below the server's minimum (TER-1056).
+ */
+export function agentVersionBadge(m: Machine): { text: string; title: string; outdated: boolean; critical: boolean } | null {
   if (m.type !== 'agent' || !m.agent_version) return null;
-  if (m.update_available) return { text: `v${m.agent_version} ↑`, title: i18n.t('Nova versão do agente disponível — abra a máquina para atualizar'), outdated: true };
-  return { text: `v${m.agent_version}`, title: i18n.t('agente v{{version}}', { version: m.agent_version }), outdated: false };
+  if (m.below_min_version) {
+    return { text: `v${m.agent_version} !`, title: i18n.t('Agente abaixo da versão mínima do termhub — ele se atualiza quando a máquina ficar ociosa; abra a máquina para atualizar agora'), outdated: true, critical: true };
+  }
+  if (m.update_available) return { text: `v${m.agent_version} ↑`, title: i18n.t('Nova versão do agente disponível — abra a máquina para atualizar'), outdated: true, critical: false };
+  return { text: `v${m.agent_version}`, title: i18n.t('agente v{{version}}', { version: m.agent_version }), outdated: false, critical: false };
 }
 
 /** True when `version` ("X.Y.Z", an optional "-pre" suffix ignored) is at least `min`. Missing/unparseable → false. */

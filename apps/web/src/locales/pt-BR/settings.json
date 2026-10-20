@@ -1,4 +1,7 @@
 {
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._one": "Limiares ajustados pelo seu histórico ({{count}} resposta).",
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._other": "Limiares ajustados pelo seu histórico ({{count}} respostas).",
+  "Limiares ajustados pelo seu histórico ({{count}} respostas)._zero": "Limiares ajustados pelo seu histórico ({{count}} respostas).",
   "Retomar {{count}} abas?_one": "Retomar {{count}} aba?",
   "Retomar {{count}} abas?_other": "Retomar {{count}} abas?",
   "{{count}} abas retomadas_one": "{{count}} aba retomada",
@@ -18,5 +21,19 @@
   "{{count}} máquinas_zero": "{{count}} máquinas",
   "publicado · {{count}} terminais agora_one": "publicado · {{count}} terminal agora",
   "publicado · {{count}} terminais agora_other": "publicado · {{count}} terminais agora",
-  "publicado · {{count}} terminais agora_zero": "publicado · {{count}} terminais agora"
+  "publicado · {{count}} terminais agora_zero": "publicado · {{count}} terminais agora",
+  "Senha salva. {{count}} outras sessões foram encerradas._one": "Senha salva. {{count}} outra sessão foi encerrada.",
+  "Senha salva. {{count}} outras sessões foram encerradas._other": "Senha salva. {{count}} outras sessões foram encerradas.",
+  "Senha salva. {{count}} outras sessões foram encerradas._zero": "Senha salva. {{count}} outras sessões foram encerradas.",
+  "{{count}} sessões encerradas._one": "{{count}} sessão encerrada.",
+  "{{count}} sessões encerradas._other": "{{count}} sessões encerradas.",
+  "{{count}} sessões encerradas._zero": "{{count}} sessões encerradas.",
+  "Expira em {{count}} dias_one": "Expira em {{count}} dia",
+  "Expira em {{count}} dias_other": "Expira em {{count}} dias",
+  "O login do CLI expira em {{count}} dias nesta máquina. Refaça agora para os agentes não pararem._one": "O login do CLI expira em {{count}} dia nesta máquina. Refaça agora para os agentes não pararem.",
+  "O login do CLI expira em {{count}} dias nesta máquina. Refaça agora para os agentes não pararem._other": "O login do CLI expira em {{count}} dias nesta máquina. Refaça agora para os agentes não pararem.",
+  "{{count}} dias antes_one": "{{count}} dia antes",
+  "{{count}} dias antes_other": "{{count}} dias antes",
+  "O login do {{provider}} em {{machine}} expira em {{count}} dias_one": "O login do {{provider}} em {{machine}} expira em {{count}} dia",
+  "O login do {{provider}} em {{machine}} expira em {{count}} dias_other": "O login do {{provider}} em {{machine}} expira em {{count}} dias"
 }

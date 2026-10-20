@@ -31,7 +31,7 @@ vi.mock('../lib/data', () => {
   };
 });
 vi.mock('../components/MachineForm', () => ({
-  MACHINE_FORM_TABS: ['general', 'agent', 'monitor', 'simulator'],
+  MACHINE_FORM_TABS: ['general', 'agent', 'network', 'monitor', 'simulator'],
   MachineForm: ({ open, machine, initialTab }: { open: boolean; machine?: { name: string } | null; initialTab?: string }) =>
     open ? <div>machine-form-marker {machine?.name} {initialTab ?? 'general'}</div> : null,
 }));

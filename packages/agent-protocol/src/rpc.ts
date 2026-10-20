@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { aiMemoryUrl } from './ai-memory.js';
+import { ipv4Address, macAddress, machineNetwork } from './network.js';
 
 export const SESSION_RE = /^[A-Za-z0-9_-]+$/;
 export const sessionName = z.string().min(1).max(128).regex(SESSION_RE);
@@ -42,8 +43,18 @@ export const aiUsageResult = z.object({
 /** `ai.login.status` answer (TER-1047). */
 export const aiLoginStatusResult = z.object({ supported: z.boolean(), logged_in: z.boolean() });
 export type AiLoginStatusResult = z.infer<typeof aiLoginStatusResult>;
-/** `ai.login.start` answer: the page to open and, for a device flow, the code to type there. */
-export const aiLoginStartResult = z.object({ url: z.string().min(1).max(4000), user_code: z.string().max(64).nullable(), needs_code: z.boolean() });
+/**
+ * `ai.login.start` answer: the page to open and, for a device flow, the code to type there.
+ * `logged_in: true` (since agent 0.27.0, TER-1054): the CLI finished the login on its own (the machine's
+ * browser) and its status confirms it; `url` is null and there is nothing left to do. Older agents leave
+ * it out, which reads as false.
+ */
+export const aiLoginStartResult = z.object({
+  url: z.string().min(1).max(4000).nullable(),
+  user_code: z.string().max(64).nullable(),
+  needs_code: z.boolean(),
+  logged_in: z.boolean().default(false),
+});
 export type AiLoginStartResult = z.infer<typeof aiLoginStartResult>;
 /** `ai.login.submit` answer. `message`: why it did not finish, never containing the submitted code. */
 export const aiLoginSubmitResult = z.object({ logged_in: z.boolean(), message: z.string().max(500).nullable() });
@@ -100,6 +111,23 @@ export const relDir = z.string().min(1).max(512).regex(REL_DIR_RE);
 export const FILE_READ_REFUSALS = ['missing', 'outside', 'hidden', 'type', 'not_file', 'too_large', 'binary', 'eperm'] as const;
 export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
 
+/** The largest file `file.share` sends (TER-1086); the server keeps its own, possibly lower, limits per kind. */
+export const FILE_SHARE_MAX_BYTES = 25 * 1024 * 1024;
+/** One `file.share` answer carries at most this much of the file: base64 in one control frame (`MAX_FRAME`, 1 MiB). */
+export const FILE_SHARE_CHUNK_BYTES = 512 * 1024;
+/** The only extensions `file.share` opens, compared lowercase on the path asked and on the resolved file:
+ *  the kinds the chat already shows (images, PDF, Word, Excel, audio, video, text). Nothing that runs. */
+export const FILE_SHARE_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.webp',
+  '.pdf', '.docx', '.xlsx',
+  '.mp3', '.m4a', '.wav', '.ogg', '.opus', '.webm', '.mp4', '.mov',
+  '.txt', '.md', '.csv', '.json', '.log', '.yaml', '.yml',
+] as const;
+/** Why `file.share` answered without a body: `file.read`'s reasons, plus `secret` (a key, a credentials or
+ *  env file, a keychain: never sent, whatever asks) and `changed` (the file changed between two chunks). */
+export const FILE_SHARE_REFUSALS = ['missing', 'outside', 'hidden', 'secret', 'type', 'not_file', 'too_large', 'eperm', 'changed'] as const;
+export type FileShareRefusal = (typeof FILE_SHARE_REFUSALS)[number];
+
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
    *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED).
@@ -124,6 +152,13 @@ const def = <P extends z.ZodTypeAny, R extends z.ZodTypeAny>(params: P, result: 
  */
 export const GIT_BRANCH_RE = /^(?!-)(?!.*\.\.)[A-Za-z0-9._/-]{1,200}$/;
 export const gitBranch = z.string().regex(GIT_BRANCH_RE);
+
+/** How deep `git.repos.scan` looks below the project folder (spec 2026-10-07 multi-repo R2). */
+export const REPO_SCAN_MAX_DEPTH = 3;
+/** The most checkouts one `git.repos.scan` answers; past it the answer says `truncated`. */
+export const REPO_SCAN_MAX_REPOS = 200;
+/** The longest repository description `git.repos.scan` answers (spec R10). */
+export const REPO_DESCRIPTION_MAX_CHARS = 200;
 
 export const RPC = {
   'tmux.list': def(z.object({}), z.object({ sessions: z.array(sessionName) })),
@@ -191,8 +226,8 @@ export const RPC = {
    */
   'ai.login.start': def(z.object({ provider: aiProvider, config_dir: machinePath.nullable(), session: sessionName }), aiLoginStartResult, 45_000),
   /**
-   * Types `code` into the login session (null: nothing to type, Codex) and waits up to 45 s for the
-   * login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
+   * Types `code` into the login session (null: nothing to type — Codex, or a Claude login the person
+   * finished in the machine's own browser) and waits up to 45 s for the login to finish. The code is never logged nor echoed back: `message` drops any line containing it.
    * The session is killed once the login is done or failed; a Codex session that only timed out is kept
    * so a later submit can wait again. Since agent 0.26.0.
    */
@@ -225,7 +260,8 @@ export const RPC = {
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
    * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
-   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   * transcript, here or in the account's other project dirs (since agent 0.15.0). A Codex session's
+   * `rollout-*.jsonl` is read the same way, at its own path only (capability `transcript.codex`).
    */
   /**
    * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
@@ -326,6 +362,66 @@ export const RPC = {
     z.object({ removed: z.boolean(), dirty: z.boolean() }),
     30_000,
   ),
+  /**
+   * The git checkouts of a project folder (spec 2026-10-07 multi-repo R2, R4, R10, §5; since agent 0.29.0,
+   * capability `repo_scan`): `dir` itself and its subfolders down to `depth` levels. Hidden folders and
+   * `node_modules` are skipped, a link is never followed, and a subfolder that is a checkout is not walked.
+   * A worktree or a submodule (`.git` is a file) is left out. `/` and the home folder are refused
+   * (`invalid`); a `dir` that is not a folder answers `notfound`.
+   * Per checkout: `dir` relative to the scanned folder with `/` (`.` for the folder itself), the `origin`
+   * URL without credentials (null: no such remote), `default_branch` from `origin/HEAD` (null: not set),
+   * `has_commits`, and a `description` from `package.json` or the first heading of `README.md`.
+   * `truncated`: the walk stopped at REPO_SCAN_MAX_REPOS or at its folder cap. Sorted by `dir`.
+   * git runs with an argv, never a shell; the agent keeps one deadline 10 s under this timeout.
+   */
+  'git.repos.scan': def(
+    z.object({ dir: machinePath, depth: z.number().int().min(1).max(REPO_SCAN_MAX_DEPTH) }),
+    z.object({
+      repos: z
+        .array(
+          z.object({
+            dir: z.string().min(1).max(4096),
+            origin: z.string().max(2048).nullable(),
+            default_branch: z.string().max(255).nullable(),
+            has_commits: z.boolean(),
+            description: z.string().max(REPO_DESCRIPTION_MAX_CHARS).nullable(),
+          }),
+        )
+        .max(REPO_SCAN_MAX_REPOS),
+      truncated: z.boolean(),
+    }),
+    60_000,
+  ),
+  /**
+   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.34.0, capability
+   * `file_share`). `path` is absolute or `~/…`. The allowed folders are `roots` and, unless `only_roots`,
+   * the agent's own (home, the temp dirs, `file-read-roots`). Checked on every chunk, on the path as asked
+   * and on the resolved file: under a folder, no dot segment below it, not a secret, one of
+   * FILE_SHARE_EXTENSIONS, a regular file of at most FILE_SHARE_MAX_BYTES. `size` and `mtime_ms` are the
+   * whole file's: the server asks the next `offset` until it has `size` bytes, and refuses a file whose
+   * size or date moved between chunks. Any refusal is a `status`, never a thrown error.
+   */
+  'file.share': def(
+    z.object({
+      path: machinePath,
+      roots: z.array(machinePath).max(16),
+      only_roots: z.boolean(),
+      offset: z.number().int().min(0).max(FILE_SHARE_MAX_BYTES),
+      length: z.number().int().min(1).max(FILE_SHARE_CHUNK_BYTES),
+    }),
+    z.discriminatedUnion('status', [
+      z.object({
+        status: z.literal('ok'),
+        path: z.string().max(4096),
+        size: z.number().int().min(0).max(FILE_SHARE_MAX_BYTES),
+        mtime_ms: z.number().min(0),
+        offset: z.number().int().min(0),
+        content_b64: z.string().max(Math.ceil(FILE_SHARE_CHUNK_BYTES / 3) * 4),
+      }),
+      z.object({ status: z.enum(FILE_SHARE_REFUSALS), size: z.number().int().min(0).optional() }),
+    ]),
+    15_000,
+  ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */
   /** `claude_dirs`: Claude config dirs besides ~/.claude (accounts with CLAUDE_CONFIG_DIR), hooked when they exist; since agent 0.1.5. */
@@ -346,6 +442,8 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /** The machine's opt-in to permission hints (TER-614): writes or removes ~/.termhub/permission-hint; since agent 0.33.0. */
+  'hooks.hint': def(z.object({ enabled: z.boolean() }), z.object({ enabled: z.boolean() })),
   /**
    * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
    * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.
@@ -403,7 +501,7 @@ export const RPC = {
    * Current rules as pinned ai-memory pages (TER-1019): runs `@termhub/machine-ops`'s
    * `buildAiMemoryRulesScript` in `cwd` (the checkout) against the ai-memory server at `server_url`.
    * Raw tagged stdout (`skip …`, `ok|fail write|delete <path>`, `ok|fail briefing`); `parseAiMemorySync`
-   * on the server reads it back (since agent 0.27.0).
+   * on the server reads it back (since agent 0.35.0).
    */
   'ai_memory.rules.sync': def(
     z.object({
@@ -419,7 +517,7 @@ export const RPC = {
    * The deliberate ai-memory pages (`_rules/`, `gotchas/`, `decisions/`) of the project checked out at
    * `cwd`, never `sessions/`, observations or handoffs (TER-1021): `F\t<sha256>\t<size>\t<relpath>` +
    * base64 body + `E` per page, `@termhub/machine-ops`'s `parseAiMemoryPages` reads it back (since
-   * agent 0.28.0).
+   * agent 0.35.0).
    */
   'aimemory.pages': def(z.object({ cwd: machinePath }), z.object({ stdout: z.string() }), 20_000),
   /**
@@ -443,12 +541,29 @@ export const RPC = {
   /**
    * Is `ai-memory` on the machine, which version, and does its server answer at `url` (loopback or a
    * private network only, TER-1018)? Only these three facts travel back: nothing ai-memory stores
-   * (observations, sessions, pages) ever reaches the server (since agent 0.27.0).
+   * (observations, sessions, pages) ever reaches the server (since agent 0.35.0).
    */
   'aimemory.status': def(
     z.object({ url: aiMemoryUrl }),
     z.object({ installed: z.boolean(), version: z.string().max(32).nullable(), server_up: z.boolean() }),
     15_000,
+  ),
+  /**
+   * The machine's network (TER-1080): OS hostname, the interfaces with their MAC and addresses (loopback,
+   * containers and VPN tunnels left out), the default route's interface and gateway. The server asks on
+   * connect and every few minutes, and keeps the answer for when the machine is asleep (capability `net_wake`).
+   */
+  'net.info': def(z.object({}), machineNetwork, 10_000),
+  /**
+   * Sends a Wake-on-LAN magic packet for each of `macs` to each of `broadcasts`, UDP ports 9 and 7, from
+   * this machine (capability `net_wake`). The agent only sends to the limited broadcast and to the directed
+   * broadcast of one of its own IPv4 networks; any other address is refused, so the RPC can never aim at
+   * a host. `sent` counts the datagrams that left.
+   */
+  'net.wake': def(
+    z.object({ macs: z.array(macAddress).min(1).max(4), broadcasts: z.array(ipv4Address).min(1).max(4) }).strict(),
+    z.object({ sent: z.number().int().min(0), broadcasts: z.array(z.string().max(64)).max(4) }),
+    10_000,
   ),
 } as const;
 

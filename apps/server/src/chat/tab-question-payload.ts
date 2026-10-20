@@ -63,13 +63,18 @@ export const choicePayload = z.object({
     .max(4),
   agent: z.literal('codex').optional(),
 });
-/** A permission prompt: the tool's name only, never its input (spec §4.1). */
+/**
+ * A permission prompt: the tool's name (spec §4.1) and, from a machine that opted in to hints (TER-614),
+ * a filtered excerpt of what it approves (`chat/permission-hint.ts`).
+ */
 export interface PermissionPayload {
   tool_name: string;
   /** Absent = Claude Code. */
   agent?: 'codex';
   /** Codex only: `tool_input.description`, the question written for the person. Never the command. */
   question?: string;
+  /** Claude only, opt-in per machine: the start of the command or the file's name, secrets redacted. */
+  hint?: string;
 }
 /**
  * Claude Code's dimmed next prompt, read off the tab's screen (spec 2026-09-25 tab suggestions §6.1), and the

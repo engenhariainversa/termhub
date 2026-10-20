@@ -1,4 +1,7 @@
+import http from 'node:http';
+import https from 'node:https';
 import type { RpcParams, RpcResult } from '@termhub/agent-protocol';
+import { proxyConnection, proxyFor } from '../proxy.js';
 
 export interface UrlCheck {
   url: string;
@@ -15,8 +18,18 @@ export const URL_CHECK_TIMEOUT_MS = 5_000;
  * MCP addresses to a caller without a token, so 401 proves the path from this machine to the app; a
  * proxy or firewall in the way answers something else, or nothing (TER-586).
  */
-export async function checkUrl(url: string, timeoutMs = URL_CHECK_TIMEOUT_MS, fetchImpl: typeof fetch = fetch): Promise<UrlCheck> {
+export async function checkUrl(
+  url: string,
+  timeoutMs = URL_CHECK_TIMEOUT_MS,
+  fetchImpl: typeof fetch = fetch,
+  env: Record<string, string | undefined> = process.env,
+): Promise<UrlCheck> {
   try {
+    // `fetch` ignores HTTPS_PROXY; behind an explicit proxy the check takes the same CONNECT tunnel as
+    // the agent's WebSocket, or it would report a blocked host on a network the hooks get through.
+    const target = new URL(url);
+    const proxy = proxyFor(target, env);
+    if (proxy) return { url, status: await postThroughProxy(target, proxy, timeoutMs), error: null };
     const res = await fetchImpl(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -30,6 +43,30 @@ export async function checkUrl(url: string, timeoutMs = URL_CHECK_TIMEOUT_MS, fe
   } catch (err) {
     return { url, status: null, error: fetchErrorText(err) };
   }
+}
+
+/** The same empty POST over a CONNECT tunnel through `proxy`; answers the HTTP status. */
+function postThroughProxy(target: URL, proxy: URL, timeoutMs: number): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const secure = target.protocol === 'https:';
+    const req = (secure ? https : http).request(
+      target,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        timeout: timeoutMs,
+        signal: AbortSignal.timeout(timeoutMs),
+        createConnection: proxyConnection(proxy, secure) as never,
+      },
+      (res) => {
+        // Only the status matters; drop the body and the tunnel with it.
+        resolve(res.statusCode ?? null);
+        res.destroy();
+      },
+    );
+    req.on('error', reject);
+    req.end('{}');
+  });
 }
 
 /** `fetch failed` says nothing: the useful part (ENOTFOUND, ECONNREFUSED, a TLS error) is in `cause`. */

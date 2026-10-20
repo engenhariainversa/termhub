@@ -60,6 +60,20 @@ export function tabFinishedText(ctx: PushContext, locale: Locale = DEFAULT_LOCAL
   };
 }
 
+/**
+ * A tab's Claude Code cannot use its account until the person logs in again (TER-1046): the machine and the
+ * account's label, never what the tab showed.
+ */
+export function tabAuthRequiredText(ctx: PushContext & { accountLabel: string | null }, locale: Locale = DEFAULT_LOCALE): PushText {
+  const where = ctx.machineName ?? t(locale, 'uma máquina');
+  return {
+    title: t(locale, 'Login expirado em {{machine}}', { machine: where }),
+    body: ctx.accountLabel
+      ? t(locale, 'A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.', { account: ctx.accountLabel, tab: ctx.tabName ?? '—' })
+      : t(locale, 'O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.', { tab: ctx.tabName ?? '—' }),
+  };
+}
+
 /** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
 export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission', locale: Locale = DEFAULT_LOCALE): PushText {
   const tab = ctx.tabName ? msg('A aba {{tab}}', { tab: ctx.tabName }) : msg('Uma aba');
@@ -77,6 +91,17 @@ export function automationEscalationText(ctx: PushContext, cardRef: string, reas
   return { title: needsYou(locale, ctx), body: t(locale, '{{ref}} parou: {{reason}}', { ref: cardRef, reason }) };
 }
 
+/**
+ * A release workflow delivered a new version after an automatic merge (TER-1055): the workflow's name (e.g.
+ * "Mobile TestFlight (hulk)") and the version, nothing else.
+ */
+export function automationReleaseText(ctx: PushContext, workflow: string, version: string, locale: Locale = DEFAULT_LOCALE): PushText {
+  return {
+    title: t(locale, '{{project}}: versão {{version}} publicada', { project: ctx.projectName ?? 'termhub', version }),
+    body: t(locale, '{{workflow}} publicou a versão {{version}}.', { workflow, version }),
+  };
+}
+
 /** The daily summary of the automatic work (spec D26): what was done and how many things wait; counts only. */
 export function automationSummaryText(s: { date: string; cards: number; merges: number; deploys: number; waiting: number }, locale: Locale = DEFAULT_LOCALE): PushText {
   const done = t(locale, 'Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys', { cards: s.cards, merges: s.merges, deploys: s.deploys });
@@ -91,6 +116,15 @@ export function aiLoginRequiredText(provider: 'claude' | 'chatgpt' | 'gemini' | 
   const name = provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'Codex' : provider === 'gemini' ? 'Gemini' : 'Antigravity';
   return {
     title: t(locale, 'Login do {{provider}} expirou', { provider: name }),
+    body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
+  };
+}
+
+/** An AI account's CLI login is about to expire (TER-1079): which CLI, in how many days, on which machine. */
+export function aiLoginExpiringText(provider: 'claude' | 'chatgpt' | 'gemini' | 'antigravity', machineName: string, days: number, locale: Locale = DEFAULT_LOCALE): PushText {
+  const name = provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'Codex' : provider === 'gemini' ? 'Gemini' : 'Antigravity';
+  return {
+    title: t(locale, 'Login do {{provider}} expira em {{count}} dias', { provider: name, count: days }),
     body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
   };
 }

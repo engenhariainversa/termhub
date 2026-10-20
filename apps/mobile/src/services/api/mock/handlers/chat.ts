@@ -5,10 +5,12 @@ import { z } from 'zod';
 import { decisionProof } from '../../../crypto/pin';
 import { randomId } from '../../../crypto/random';
 import {
+  chatFocusBody,
   chatGrantListQuery,
   chatMemoryPatchBody,
   memoryStatusSchema,
   type TMemoryReplacement,
+  FOCUS_BEAT_SECONDS,
   decisionChallengesBody,
   isBoardGrantable,
   isTabGrantable,
@@ -710,7 +712,22 @@ function matchesLessonQuery(l: MockLesson, q: string): boolean {
 function chatMemoryView(state: MockState): TChatMemory {
   // `available` has no fixture for "false" (no server config to mirror in the mock) — every mock
   // run behaves as if embeddings were configured, like a dev server normally would be.
-  return { enabled: state.chatMemoryEnabled, autodecide: state.chatAutodecideEnabled, codex_replies: state.chatCodexRepliesEnabled, context_limit: state.chatContextLimit, available: true, count: state.decisions.length, notes: state.notes.length };
+  // The thresholds (TER-642): the mock never calibrates, so they are pinned by hand or the defaults.
+  const defaults = { high: 0.95, low: 0.85 };
+  const pinned = state.chatAutoThresholds;
+  return {
+    enabled: state.chatMemoryEnabled,
+    autodecide: state.chatAutodecideEnabled,
+    codex_replies: state.chatCodexRepliesEnabled,
+    client_context: state.chatClientContextEnabled,
+    context_limit: state.chatContextLimit,
+    available: true,
+    count: state.decisions.length,
+    notes: state.notes.length,
+    auto_thresholds: { ...(pinned ?? defaults), source: pinned ? 'manual' : 'default', defaults, samples: 0, min_samples: 30, calibrated_at: null },
+    auto_delay_seconds: 60,
+    focus_beat_seconds: FOCUS_BEAT_SECONDS,
+  };
 }
 
 // --- routes ---------------------------------------------------------------------------------
@@ -1319,8 +1336,17 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     if (body.enabled !== undefined) state.chatMemoryEnabled = body.enabled;
     if (body.autodecide !== undefined) state.chatAutodecideEnabled = body.autodecide;
     if (body.codex_replies !== undefined) state.chatCodexRepliesEnabled = body.codex_replies;
+    if (body.client_context !== undefined) state.chatClientContextEnabled = body.client_context;
     if (body.context_limit !== undefined) state.chatContextLimit = body.context_limit;
+    if (body.auto_thresholds !== undefined) state.chatAutoThresholds = body.auto_thresholds;
     return { status: 200, body: chatMemoryView(state) };
+  });
+
+  /** The mock has no countdown to pause: the report is validated and dropped. */
+  router.route('POST', '/api/m/v1/chat/focus', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    chatFocusBody.parse(ctx.body);
+    return { status: 204, body: {} };
   });
 
   // --- "Anotações do concierge" (spec D12/§8) -----------------------------------------------

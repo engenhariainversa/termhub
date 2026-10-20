@@ -76,6 +76,9 @@ export const mobileDecisionBody = z
     /** Approve *and* trust this kind of routine action in the card's project with no expiry ("Liberar
      * sem prazo", spec 2026-09-28 TER-386), until revoked. Always PIN-proven. */
     z.object({ decision: z.literal('approve_project_always'), ...proof }),
+    /** Approve *and* trust share_file from the card's folder of that machine with no expiry ("Permitir
+     * sempre nesta pasta", TER-1086), until revoked. Always PIN-proven. */
+    z.object({ decision: z.literal('approve_folder_always'), ...proof }),
   ])
   .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 
@@ -126,6 +129,16 @@ export function isTabGrantable(action: { tool: string; args: unknown; tab_id: st
 export function isTerminalGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {
   const args = (action.args ?? {}) as Record<string, unknown>;
   return (action.tool === 'send_input' || action.tool === 'send_key') && args.answering_permission !== true && Boolean(action.tab_id);
+}
+
+/** Mirrors the server's `fileGrantable` and `assertFileGrantableAction` (TER-1086), which are the judge: a
+ * `share_file` card naming a machine, for a file inside a folder (never straight in `~` or `/`). Decides
+ * whether the card offers "Permitir sempre nesta pasta". */
+export function isFolderGrantable(action: { tool: string; args: unknown }): boolean {
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  if (action.tool !== 'share_file' || typeof args.machine_id !== 'string' || typeof args.path !== 'string') return false;
+  const folder = args.path.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
+  return folder !== '' && folder !== '~' && folder !== '.';
 }
 
 /** Mirrors the server's `BOARD_GRANT_TOOLS` (apps/server/src/chat/gate.ts); the server is the judge
@@ -280,21 +293,63 @@ export const CHAT_CONTEXT_LIMIT_MAX = 10_000_000;
 export const chatContextLimit = z.number().int().min(CHAT_CONTEXT_LIMIT_MIN).max(CHAT_CONTEXT_LIMIT_MAX);
 /** `context_limit`: null = the model's window (the default); absent from a server before TER-1038,
  *  which reads the same. */
+/** The similarity thresholds of an automatic answer a person may pin by hand (TER-642), cosine 0.5–1:
+ *  from `high` an answer backed by memory is sent at once; from `low` it is suggested and sent when its
+ *  countdown runs out; below `low` nothing is suggested. `low` never above `high`. */
+export const AUTO_THRESHOLD_MIN = 0.5;
+export const AUTO_THRESHOLD_MAX = 1;
+const autoThreshold = z.number().min(AUTO_THRESHOLD_MIN).max(AUTO_THRESHOLD_MAX);
+export const autoThresholdsBody = z.object({ high: autoThreshold, low: autoThreshold }).refine((t) => t.low <= t.high, { message: 'O limiar de sugestão não pode passar do limiar de envio' });
+/** Mirrors the server's `AutoThresholdsView` (auto-thresholds.ts): the thresholds in force for this
+ *  person, where they come from (`manual`: pinned by hand; `calibrated`: from their own answers;
+ *  `default`: too little history), the defaults, how many of their answers calibration has seen and how
+ *  many it needs. `source` is a plain string: a value a newer server adds must not break an installed app. */
+export const autoThresholdsSchema = z.object({
+  high: z.number(),
+  low: z.number(),
+  source: z.string(),
+  defaults: z.object({ high: z.number(), low: z.number() }),
+  samples: z.number().int(),
+  min_samples: z.number().int(),
+  calibrated_at: z.string().nullable(),
+});
+export type TAutoThresholds = z.infer<typeof autoThresholdsSchema>;
 export const chatMemoryResponse = z.object({
   enabled: z.boolean(),
   autodecide: z.boolean(),
   codex_replies: z.boolean().default(false),
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default; absent from an older server, read as on. */
+  client_context: z.boolean().optional(),
   context_limit: z.number().int().nullable().optional(),
   available: z.boolean(),
   count: z.number().int(),
   notes: z.number().int(),
+  /** TER-642; all three absent from an older server. */
+  auto_thresholds: autoThresholdsSchema.optional(),
+  auto_delay_seconds: z.number().int().optional(),
+  focus_beat_seconds: z.number().int().optional(),
 });
 /** At least one of the switches, never none — an empty body is refused rather than a silent no-op.
  * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default); `context_limit` null
- * goes back to the model's window. */
+ * goes back to the model's window; `auto_thresholds` null hands the thresholds back to calibration. */
 export const chatMemoryPatchBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
+  .object({
+    enabled: z.boolean().optional(),
+    autodecide: z.boolean().optional(),
+    codex_replies: z.boolean().optional(),
+    // TER-1088: "Contar ao chat de onde estou falando" (on by default).
+    client_context: z.boolean().optional(),
+    context_limit: chatContextLimit.nullable().optional(),
+    auto_thresholds: autoThresholdsBody.nullable().optional(),
+  })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit ou auto_thresholds',
+  });
+/** `POST chat/focus` (TER-642): one screen says whether termhub is in focus on it — the app, in the
+ *  foreground. `client_id` is that screen's own random id. Sent on every change and as a heartbeat. */
+export const chatFocusBody = z.object({ client_id: z.string().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
+/** How often a screen in focus beats when the server does not say (`focus_beat_seconds`). */
+export const FOCUS_BEAT_SECONDS = 15;
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
  * `question` is the note's title; `decision`/`reason` are parsed back out of the stored text's

@@ -60,6 +60,10 @@ export const CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input';
  *  requires it before either: an older agent drops the RPC and refuses the key. */
 export const CAPABILITY_TRANSCRIPT = 'transcript';
 
+/** `transcript.read` also reads a Codex session (`<codex home>/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl`,
+ *  TER-1095). An older agent refuses that path as `invalid`, so the server asks for it only with this. */
+export const CAPABILITY_TRANSCRIPT_CODEX = 'transcript.codex';
+
 /** The agent answers `file.read` (spec 2026-10-04 file preview, TER-941). The server requires it before
  *  the call: an older agent drops an unknown RPC, which would read as a timeout. */
 export const CAPABILITY_FILE_READ = 'file_read';
@@ -85,6 +89,24 @@ export const NET_CHECK_MIN_AGENT_VERSION = '0.23.0';
  *  which would read as a timeout. */
 export const CAPABILITY_AI_LOGIN = 'ai_login';
 export const AI_LOGIN_MIN_AGENT_VERSION = '0.26.0';
+
+/** The agent answers `git.repos.scan` (spec 2026-10-07 multi-repo R2, R18): the git checkouts of a project
+ *  folder, for repository discovery. The server requires it before the call; a machine without it keeps
+ *  working for single-repo projects. Ships in agent 0.29.0. */
+export const CAPABILITY_REPO_SCAN = 'repo_scan';
+export const REPO_SCAN_MIN_AGENT_VERSION = '0.29.0';
+
+/** The agent answers `net.info` and `net.wake` (TER-1080): the server keeps the machine's IPs and MACs and
+ *  can have it wake another machine of its network with a Wake-on-LAN packet. An older agent drops both
+ *  RPCs, which would read as a timeout, so the server requires this first. Ships in agent 0.30.0. */
+export const CAPABILITY_NET_WAKE = 'net_wake';
+export const NET_WAKE_MIN_AGENT_VERSION = '0.30.0';
+
+/** The agent answers `file.share` (TER-1086): a file the chat publishes in the conversation, read in
+ *  chunks. An older agent drops the RPC, which would read as a timeout, so the server requires this first.
+ *  Ships in agent 0.34.0. */
+export const CAPABILITY_FILE_SHARE = 'file_share';
+export const FILE_SHARE_MIN_AGENT_VERSION = '0.34.0';
 
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */

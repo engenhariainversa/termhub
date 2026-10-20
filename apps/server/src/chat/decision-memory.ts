@@ -2,80 +2,147 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { AnsweredChoiceRow, ChatDecision, DecisionNeighbour, DecisionTrust, NewDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
-import { answerToDecision, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, sameAnswer, type ItemAnswer, type SuggestionItem, type TabQuestionSuggestion } from './decision-text.js';
+import type { AutoSampleSource } from '../db/repositories/chat-auto.js';
+import { answerToDecision, cosine, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, mapNoteAnswer, sameAnswer, type ItemAnswer, type PrecedentItem, type SuggestionItem, type TabQuestionPrecedent, type TabQuestionSuggestion } from './decision-text.js';
+import { recalibrate } from './auto-thresholds.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from './embeddings.js';
 import { checkChoiceAnswer, choiceAnswerBody, choicePayload, type ChoiceAnswer, type ChoicePayload } from './tab-question-payload.js';
 
 /** Neighbours asked per question of a `choice` payload (spec 2026-09-26 §4). */
 export const SUGGEST_K = 5;
 
+/** Notes asked per question (TER-642): few on purpose, each one costs an embedding of its title. */
+export const NOTE_K = 5;
+/** A precedent scoring under this is not even kept for calibration: it is about something else. */
+export const OBSERVE_FLOOR = 0.5;
+
 export interface MemoryDeps {
   embedder: Embedder | null;
+  /** The least similarity a precedent needs to be suggested: the person's low threshold (TER-642). */
   threshold: number;
+  /** The person's high threshold: from it, the newest precedent wins; under it, the closest. Left out,
+   *  it is `threshold` (one band: newest first among everything close enough). */
+  high?: number;
   timeoutMs?: number;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
 }
 
-/**
- * The past decision a question's suggestion comes from, among its `nearest` neighbours (spec 2026-09-26
- * §4): only the ones at or above `threshold`, newest first — a fresher decision beats a stronger but
- * stale match — and the first whose answer still maps onto this question's options. Shared by
- * `suggestFor` and the memory replay (TER-1009), so the replay measures the rule the cards actually use.
- */
-export function pickPrecedent(near: DecisionNeighbour[], item: { multi_select: boolean; options: { label: string }[] }, threshold: number): { decision: DecisionNeighbour; mapped: ItemAnswer } | null {
-  const candidates = near.filter((n) => n.similarity >= threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
-  for (const c of candidates) {
-    const mapped = mapAnswer(c.answer, item);
-    if (mapped) return { decision: c, mapped }; // otherwise the past labels no longer match this question's options — try the next
-  }
-  return null;
+/** What memory found for a freshly opened card: the suggestion to show (precedents at or above the
+ *  threshold), and every question's best precedent whatever its score (`precedent`, for calibration). */
+export interface Recall {
+  suggestion: TabQuestionSuggestion | null;
+  precedent: TabQuestionPrecedent | null;
+}
+
+interface Candidate {
+  ref: string;
+  decision_id: string;
+  similarity: number;
+  at: string;
+  answer: { selected: number[]; text?: string };
+  source: SuggestionItem['source'];
+}
+
+/** The precedent to go with (TER-642): the newest among those at or above `high` (a fresher decision
+ *  beats a stronger but stale one, once both are near-certain), else the closest. */
+function pick(candidates: Candidate[], high: number): Candidate | undefined {
+  const top = candidates.filter((c) => c.similarity >= high).sort((a, b) => b.at.localeCompare(a.at));
+  return top[0] ?? [...candidates].sort((a, b) => b.similarity - a.similarity)[0];
 }
 
 /**
- * A suggestion to pre-select on a freshly opened `choice` question, drawn from the person's own past
- * decisions (spec 2026-09-26 §4): suggest only, never sent — nothing here touches the tab. Best effort
- * throughout, and never throws: a slow or failing embeddings service, an unlucky query, the setting
- * being off, or a payload with nothing similar all resolve to `null` rather than delay or fail the
- * card. Never logs question or answer text, only ids, counts, codes and similarity numbers.
+ * The past decision a question's suggestion would come from, among its `nearest` neighbours: each one
+ * mapped onto this question's options (a decision whose labels no longer match is skipped), then the
+ * cards' own rule (`pick`, TER-642) — the newest at or above `high`, else the closest — and only when it
+ * is at or above `threshold`. Used by the memory replay (TER-1009), so the replay measures the rule the
+ * cards actually use. `high` left out is `threshold` (one band).
  */
-export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisions'>, row: TabQuestion, deps: MemoryDeps): Promise<TabQuestionSuggestion | null> {
-  if (row.kind !== 'choice' || !deps.embedder) return null;
+export function pickPrecedent(near: DecisionNeighbour[], item: { multi_select: boolean; options: { label: string }[] }, threshold: number, high = threshold): { decision: DecisionNeighbour; mapped: ItemAnswer } | null {
+  const candidates: (Candidate & { neighbour: DecisionNeighbour })[] = [];
+  for (const c of near) {
+    const mapped = mapAnswer(c.answer, item);
+    if (mapped) candidates.push({ ref: `decision:${c.id}`, decision_id: c.id, similarity: c.similarity, at: c.created_at, answer: mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at }, neighbour: c });
+  }
+  const c = pick(candidates, high) as (Candidate & { neighbour: DecisionNeighbour }) | undefined;
+  if (!c || c.similarity < threshold) return null;
+  return { decision: c.neighbour, mapped: c.answer as ItemAnswer };
+}
+
+/**
+ * What the person's own memory says about a freshly opened `choice` question (spec 2026-09-26 §4,
+ * TER-642): for each question, the nearest past decisions and — when `repos.memoryItems` is given — the
+ * nearest notes, each mapped onto this question's own options (a precedent whose answer is not one of
+ * them is no precedent). A decision scores by its stored question vector; a note's stored vector is of
+ * its whole text, so its title (the question it records) is embedded here and compared question to
+ * question, like a decision. Nothing here touches the tab. Best effort throughout, and never throws: a
+ * slow or failing embeddings service, the setting being off, or nothing similar all resolve to nulls
+ * rather than delay or fail the card. Never logs question or answer text, only ids, counts, codes and
+ * similarity numbers.
+ */
+export async function recallFor(repos: Pick<Repositories, 'users' | 'chatDecisions'> & Partial<Pick<Repositories, 'memoryItems'>>, row: TabQuestion, deps: MemoryDeps): Promise<Recall> {
+  const nothing: Recall = { suggestion: null, precedent: null };
+  if (row.kind !== 'choice' || !deps.embedder) return nothing;
   const embedder = deps.embedder;
   const items = (row.payload as ChoicePayload).questions;
-  if (items.length === 0) return null;
+  if (items.length === 0) return nothing;
+  const high = deps.high ?? deps.threshold;
 
   // Set once the caller has stopped waiting (the timeout fired): `work()` below keeps running past
   // that point (nothing here cancels an in-flight embed or query), and must not bump counters or log
   // a "found" line for a suggestion the card was already published without.
   let abandoned = false;
 
-  const work = async (): Promise<TabQuestionSuggestion | null> => {
-    if (!(await repos.users.chatSuggestions(row.user_id))) return null;
+  const work = async (): Promise<Recall> => {
+    if (!(await repos.users.chatSuggestions(row.user_id))) return nothing;
     const texts = items.map(embedText);
     const { model, vectors } = await embedder.embed(texts);
-    const found: SuggestionItem[] = [];
+    const candidates: Candidate[][] = items.map(() => []);
+    const notes: { index: number; id: string; title: string; candidate: Omit<Candidate, 'similarity'> }[] = [];
     for (const [i, item] of items.entries()) {
       // A question that normalises to '' (e.g. only "?" or "...") would embed identically to every
       // other empty question and match them at similarity 1.0 — never a real match, so it never even
       // asks `nearest`.
       if (texts[i] === '') continue;
-      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, {
-        multiSelect: item.multi_select,
-        k: SUGGEST_K,
-        embedModel: embedTag(model),
-        // TER-1014: only decisions that hold on this card — not expired, in scope for its project and conversation.
-        place: { projectId: row.project_id, conversationId: row.conversation_id },
-      });
-      const picked = pickPrecedent(near, item, deps.threshold);
-      if (!picked) continue;
-      const c = picked.decision;
-      found.push({ question_index: i, decision_id: c.id, similarity: c.similarity, ...picked.mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
+      // TER-1014: only precedents that hold on this card — not expired, in scope for its project and conversation.
+      const place = { projectId: row.project_id, conversationId: row.conversation_id };
+      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model), place });
+      for (const c of near) {
+        const mapped = mapAnswer(c.answer, item);
+        if (!mapped) continue; // the past labels no longer match this question's options
+        candidates[i]!.push({ ref: `decision:${c.id}`, decision_id: c.id, similarity: c.similarity, at: c.created_at, answer: mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
+      }
+      if (!repos.memoryItems) continue;
+      for (const n of await repos.memoryItems.nearest({ ownerId: row.user_id, kinds: ['note'], place }, vectors[i]!, NOTE_K, model)) {
+        const mapped = mapNoteAnswer(n.text, item);
+        if (!mapped || embedText({ question: n.title }) === '') continue;
+        notes.push({ index: i, id: n.id, title: n.title, candidate: { ref: `note:${n.id}`, decision_id: '', at: n.source_at, answer: mapped, source: { question: n.title, project_name: n.project_name, answered_at: n.source_at } } });
+      }
     }
-    if (found.length === 0 || abandoned) return null;
-    await repos.chatDecisions.bumpSuggested(found.map((f) => f.decision_id));
+    if (notes.length > 0) {
+      try {
+        const embedded = await embedder.embed(notes.map((n) => embedText({ question: n.title })));
+        for (const [k, n] of notes.entries()) candidates[n.index]!.push({ ...n.candidate, similarity: cosine(vectors[n.index]!, embedded.vectors[k] ?? []) });
+      } catch (err) {
+        // Notes are an extra: the decisions found above still stand.
+        deps.log.warn({ tabQuestionId: row.id, code: memoryCode(err) }, 'note precedents skipped');
+      }
+    }
+    const found: SuggestionItem[] = [];
+    const observed: PrecedentItem[] = [];
+    for (const [i, list] of candidates.entries()) {
+      const c = pick(list, high);
+      if (!c) continue;
+      if (c.similarity >= OBSERVE_FLOOR) observed.push({ question_index: i, ref: c.ref, similarity: c.similarity, ...c.answer });
+      if (c.similarity < deps.threshold) continue;
+      found.push({ question_index: i, decision_id: c.decision_id, similarity: c.similarity, ...c.answer, source: c.source, ...(c.decision_id ? {} : { sources: [c.ref] }) });
+    }
+    if (abandoned) return nothing;
+    const precedent = observed.length > 0 ? { items: observed } : null;
+    if (found.length === 0) return { suggestion: null, precedent };
+    await repos.chatDecisions.bumpSuggested(found.flatMap((f) => (f.decision_id ? [f.decision_id] : [])));
     const best = Math.round(Math.max(...found.map((f) => f.similarity)) * 1000) / 1000;
     deps.log.info({ tabQuestionId: row.id, items: found.length, best }, 'decision suggestion found');
-    return { items: found };
+    return { suggestion: { items: found }, precedent };
   };
 
   try {
@@ -84,7 +151,42 @@ export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisi
     });
   } catch (err) {
     deps.log.warn({ tabQuestionId: row.id, code: memoryCode(err) }, 'decision suggestion skipped');
-    return null;
+    return nothing;
+  }
+}
+
+/**
+ * A suggestion to pre-select on a freshly opened `choice` question, drawn from the person's own memory
+ * (`recallFor`): suggest only, never sent. Null when nothing is close enough.
+ */
+export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisions'> & Partial<Pick<Repositories, 'memoryItems'>>, row: TabQuestion, deps: MemoryDeps): Promise<TabQuestionSuggestion | null> {
+  return (await recallFor(repos, row, deps)).suggestion;
+}
+
+/**
+ * Tells calibration how a precedent fared against what the person did (TER-642): one sample per
+ * question the card opened with a precedent for (`row.precedent`), scored by that precedent's
+ * similarity. `answer`: the row's own answer is compared with it; `accepted`: the countdown sent the
+ * precedent's answer in front of the person; `cancelled`: they stopped the countdown (a later answer on
+ * the card replaces this sample with the comparison). Never throws; logs ids and codes only.
+ */
+export async function recordAutoSamples(repos: Pick<Repositories, 'chatAuto'>, row: TabQuestion, source: AutoSampleSource, log: Pick<FastifyBaseLogger, 'warn'>): Promise<void> {
+  const observed = row.precedent?.items ?? [];
+  if (row.kind !== 'choice' || observed.length === 0) return;
+  try {
+    const answer = row.answer as ChoiceAnswer | null;
+    const samples = observed.flatMap((p) => {
+      let matched: boolean;
+      if (source === 'answer') {
+        const a = answer?.answers[p.question_index];
+        if (!a) return [];
+        matched = sameAnswer({ selected: p.selected, text: p.text }, { selected: a.selected, text: a.text });
+      } else matched = source === 'accepted';
+      return [{ user_id: row.answered_by ?? row.user_id, tab_question_id: row.id, question_index: p.question_index, score: p.similarity, matched, source }];
+    });
+    await repos.chatAuto.recordSamples(samples);
+  } catch (err) {
+    log.warn({ tabQuestionId: row.id, code: memoryCode(err) }, 'auto answer sample not recorded');
   }
 }
 
@@ -282,6 +384,12 @@ export function startDecisionSweeper(repos: Repositories, log: Pick<FastifyBaseL
         if (inserted > 0) log.info({ backfilled: inserted }, 'chat decisions backfilled');
       } catch (err) {
         log.warn({ code: memoryCode(err) }, 'chat decision backfill failed');
+      }
+      // TER-642: each person's automatic-answer thresholds, from their own answers since the last tick.
+      try {
+        await recalibrate(repos, log);
+      } catch (err) {
+        log.warn({ code: memoryCode(err) }, 'auto answer calibration sweep failed');
       }
       if (!embed) return;
       try {

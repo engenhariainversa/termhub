@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { availabilityText, buildRows, canType, mergeItems, modeLabel, stateLine, withAttachedPaths } from './tab-chat';
-import { applyFrame, initialTabChat } from './use-tab-chat';
-import type { TabChatItem, TabChatSummary } from './types';
+import { availabilityText, buildRows, canType, cliName, mergeItems, modeLabel, startAgentPlan, stateLine, withAttachedPaths } from './tab-chat';
+import { applyFrame, becameReadable, fromPage, initialTabChat } from './use-tab-chat';
+import type { TabAgentChoice, TabChatItem, TabChatPage, TabChatSummary } from './types';
 
 const at = '2026-10-07T10:00:00.000Z';
 const user = (id: string, text: string): TabChatItem => ({ kind: 'user', id, at, text, images: 0 });
@@ -75,6 +75,9 @@ describe('labels', () => {
     expect(availabilityText('ready')).toBeNull();
     expect(availabilityText('agent_outdated')).toBe('Atualize o agente desta máquina');
     expect(availabilityText('something_new')).toBe('Indisponível no momento');
+    // TER-1095: a Codex tab with untrusted hooks says how to trust them; any other reason keeps the line
+    expect(availabilityText('no_session', 'codex_untrusted')).toContain('Trust all');
+    expect(availabilityText('no_session', 'not_reported')).toBe('Nenhuma sessão informada nesta aba');
   });
 
   it('only an offline machine stops the box', () => {
@@ -111,5 +114,49 @@ describe('applyFrame', () => {
   it('takes the availability from hello, state and unavailable', () => {
     expect(applyFrame(initialTabChat(), { type: 'hello', protocol: 1, server_time: at, availability: 'agent_outdated' }).availability).toBe('agent_outdated');
     expect(applyFrame(initialTabChat(), { type: 'unavailable', availability: 'offline' }).availability).toBe('offline');
+  });
+});
+
+describe('becameReadable (TER-1091)', () => {
+  const noSession = { ...initialTabChat(), status: 'ready' as const, availability: 'no_session', live: null };
+  const hello = (availability: string) => ({ type: 'hello' as const, protocol: 1, server_time: at, availability });
+
+  it('a page with no transcript followed re-reads when the tab turns ready', () => {
+    expect(becameReadable(noSession, hello('ready'))).toBe(true);
+  });
+
+  it('never while a transcript is followed, while loading, or for another availability', () => {
+    expect(becameReadable({ ...noSession, live: 'sid.10' }, hello('ready'))).toBe(false);
+    expect(becameReadable({ ...noSession, status: 'loading' }, hello('ready'))).toBe(false);
+    expect(becameReadable(noSession, hello('offline'))).toBe(false);
+    expect(becameReadable({ ...noSession, availability: 'ready' }, hello('ready'))).toBe(false);
+  });
+});
+
+describe('a tab with no agent (TER-1094)', () => {
+  const claude: TabAgentChoice = { account_id: 'a1', label: 'Pessoal', provider: 'claude', model: 'opus' };
+  const codex: TabAgentChoice = { account_id: 'a2', label: 'Trabalho', provider: 'chatgpt', model: null };
+
+  it("keeps the page's empty_reason, and drops it once items arrive", () => {
+    const page = { tab: { availability: 'no_session' }, session_id: null, items: [], before: null, live: null, mode: null, degraded: false, questions: [], suggestions: [], empty_reason: 'no_agent' } as unknown as TabChatPage;
+    const s = { ...initialTabChat(), ...fromPage(page) };
+    expect(s.emptyReason).toBe('no_agent');
+    expect(fromPage({ ...page, empty_reason: undefined }).emptyReason).toBeNull();
+    expect(applyFrame(s, { type: 'items', items: [assistant('b', 'olá')], live: 'sid.10', mode: null }).emptyReason).toBeNull();
+    expect(applyFrame(s, { type: 'items', items: [], live: 'sid.10', mode: null }).emptyReason).toBe('no_agent');
+  });
+
+  it('offers the suggested account with the others behind it, the list when none is suggested, or nothing', () => {
+    expect(startAgentPlan({ choices: [claude, codex], suggested: 'a2' })).toEqual({ kind: 'suggested', choice: codex, others: [claude] });
+    expect(startAgentPlan({ choices: [claude, codex], suggested: null })).toEqual({ kind: 'choose', choices: [claude, codex] });
+    // a suggestion that is not among the choices is no suggestion
+    expect(startAgentPlan({ choices: [claude], suggested: 'gone' })).toEqual({ kind: 'choose', choices: [claude] });
+    expect(startAgentPlan({ choices: [], suggested: null })).toEqual({ kind: 'none' });
+  });
+
+  it('names the CLI of each provider', () => {
+    expect(cliName('claude')).toBe('Claude Code');
+    expect(cliName('chatgpt')).toBe('Codex');
+    expect(cliName('gemini')).toBe('gemini');
   });
 });

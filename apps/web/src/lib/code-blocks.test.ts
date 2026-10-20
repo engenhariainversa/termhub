@@ -44,6 +44,15 @@ describe('decorateCodeBlocks', () => {
     expect(live?.textContent).toBe('');
   });
 
+  it('puts a download button next to the copy one, named "Baixar como arquivo" (TER-1084)', () => {
+    const el = parse(decorateCodeBlocks('<pre><code class="language-bash">npm test</code></pre>'));
+    const download = el.querySelector('[data-download]');
+    expect(download?.tagName).toBe('BUTTON');
+    expect(download?.getAttribute('type')).toBe('button');
+    expect(download?.getAttribute('aria-label')).toBe('Baixar como arquivo');
+    expect(download?.parentElement).toBe(el.querySelector('[data-copy]')?.parentElement);
+  });
+
   it('gives a fence with no language a header reading "código"', () => {
     const el = parse(decorateCodeBlocks('<pre><code>npm test</code></pre>'));
     expect(el.querySelector('[data-code-language]')?.textContent).toBe('código');

@@ -10,6 +10,7 @@ import { TabQuestionCard } from '../chat/TabQuestionCard';
 import { TabSuggestionCard } from '../chat/TabSuggestionCard';
 import { TabChatComposer } from './TabChatComposer';
 import { TabChatRowView } from './TabChatRows';
+import { TabChatStartAgent } from './TabChatStartAgent';
 import type { TabSuggestion } from '../../lib/types';
 
 export interface TabChatViewProps {
@@ -24,6 +25,8 @@ export interface TabChatViewProps {
   onOpenBeside?: () => void;
   /** "Abrir em aba própria": offered while the conversation is shown in its terminal's tab. */
   onOpenTab?: () => void;
+  /** Show another tab: where "Iniciar sessão" started the agent when this tab's pane was busy (TER-1094). */
+  onOpenOtherTab?: (tabId: string) => void;
 }
 
 /** "Ver tela": the raw pane as plain text, for what the transcript does not show (a dialog, the footer). */
@@ -77,7 +80,7 @@ function SuggestionRow({ suggestion, busy, error, onSend, onDismiss }: { suggest
  * Scrolling: the list follows new items only while the reader is at the bottom; reading further up, a
  * live item never moves what is on screen, and an earlier page keeps the reader's place (TER-1001).
  */
-export function TabChatView({ tabId, projectId, machineId, active, onShowTerminal, onOpenBeside, onOpenTab }: TabChatViewProps) {
+export function TabChatView({ tabId, projectId, machineId, active, onShowTerminal, onOpenBeside, onOpenTab, onOpenOtherTab }: TabChatViewProps) {
   const { t } = useTranslation();
   const chat = useTabChat(tabId, active);
   const [screenOpen, setScreenOpen] = useState(false);
@@ -153,7 +156,9 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
     ...(onOpenTab ? [{ kind: 'item' as const, label: t('Abrir em aba própria'), onSelect: onOpenTab }] : []),
   ];
 
-  const reason = availabilityText(chat.availability);
+  // A plain terminal (TER-1094): the empty state explains it, so the availability banner would only repeat it.
+  const noAgent = chat.status === 'ready' && chat.emptyReason === 'no_agent' && rows.length === 0;
+  const reason = noAgent ? null : availabilityText(chat.availability, chat.emptyReason);
   const mode = modeLabel(chat.mode);
 
   return (
@@ -210,7 +215,8 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
                   </button>
                 </div>
               )}
-              {rows.length === 0 && chat.status === 'ready' && !reason && <p className="py-8 text-center text-sm text-fg-dim">{t('Nada nesta sessão ainda.')}</p>}
+              {noAgent && <TabChatStartAgent tabId={tabId} onOpenOtherTab={onOpenOtherTab} />}
+              {rows.length === 0 && chat.status === 'ready' && !reason && !noAgent && <p className="py-8 text-center text-sm text-fg-dim">{t('Nada nesta sessão ainda.')}</p>}
               <ol className="flex flex-col gap-3" aria-label={t('Conversa da aba')}>
                 {rows.map((row) => (
                   <TabChatRowView key={row.id} row={row} projectId={projectId} />

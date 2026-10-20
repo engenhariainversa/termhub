@@ -3,18 +3,25 @@ import { api } from './api';
 import type { AiLoginStatusRow } from './types';
 
 /**
- * Whether each AI account's CLI is still logged in on its machine (TER-1047), shared by every place that
- * warns about it (sidebar, Máquinas, Contas de IA): one subscription, one poll. The server keeps the state
- * (its background check runs every 10 min), so this only re-reads what it has — every 2 min while the app
- * is open and whenever the window regains focus.
+ * Whether each AI account's CLI is still logged in on its machine (TER-1047), and whether that login is
+ * about to expire (TER-1079), shared by every place that warns about it (sidebar, Máquinas, Contas de IA):
+ * one subscription, one poll. The server keeps the state (its background check runs every 10 min), so this
+ * only re-reads what it has — every 2 min while the app is open and whenever the window regains focus.
  */
 export const LOGIN_STATUS_POLL_MS = 2 * 60_000;
+/** The server's default window, shown until the first read (and with a server that does not send one). */
+export const LOGIN_WARN_DEFAULT_DAYS = 3;
 
-let state: AiLoginStatusRow[] | null = null;
+interface LoginStatus {
+  accounts: AiLoginStatusRow[];
+  warnDays: number;
+}
+
+let state: LoginStatus | null = null;
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | null = null;
 
-function publish(next: AiLoginStatusRow[]) {
+function publish(next: LoginStatus) {
   state = next;
   listeners.forEach((l) => l());
 }
@@ -22,10 +29,17 @@ function publish(next: AiLoginStatusRow[]) {
 /** Re-reads the login state; a failed read keeps the last good one. */
 export async function refreshAiLoginStatus(): Promise<void> {
   try {
-    publish((await api.aiAccounts.loginStatus()).accounts);
+    const r = await api.aiAccounts.loginStatus();
+    publish({ accounts: r.accounts, warnDays: r.warn_days ?? LOGIN_WARN_DEFAULT_DAYS });
   } catch {
     /* keep what is on screen */
   }
+}
+
+/** Saves the person's warning window and re-reads the state it changes ("expires soon" follows it). Throws on failure. */
+export async function saveAiLoginWarnDays(days: number): Promise<void> {
+  await api.aiAccounts.setLoginWarning(days);
+  await refreshAiLoginStatus();
 }
 
 const onFocus = () => {
@@ -62,8 +76,15 @@ export function accountsNeedingLogin(rows: AiLoginStatusRow[] | null): AiLoginSt
   return (rows ?? []).filter((r) => r.state === 'login_required');
 }
 
-export function useAiLoginStatus(): { accounts: AiLoginStatusRow[] | null; needsLogin: AiLoginStatusRow[]; refresh: () => Promise<void> } {
-  const accounts = useSyncExternalStore(subscribe, () => state);
+/** The accounts still logged in whose login ends within the person's window (TER-1079). Pure. */
+export function accountsExpiringSoon(rows: AiLoginStatusRow[] | null): AiLoginStatusRow[] {
+  return (rows ?? []).filter((r) => r.expires_soon === true && r.state !== 'login_required');
+}
+
+export function useAiLoginStatus(): { accounts: AiLoginStatusRow[] | null; needsLogin: AiLoginStatusRow[]; expiringSoon: AiLoginStatusRow[]; warnDays: number; refresh: () => Promise<void> } {
+  const status = useSyncExternalStore(subscribe, () => state);
+  const accounts = status?.accounts ?? null;
   const needsLogin = useMemo(() => accountsNeedingLogin(accounts), [accounts]);
-  return { accounts, needsLogin, refresh: refreshAiLoginStatus };
+  const expiringSoon = useMemo(() => accountsExpiringSoon(accounts), [accounts]);
+  return { accounts, needsLogin, expiringSoon, warnDays: status?.warnDays ?? LOGIN_WARN_DEFAULT_DAYS, refresh: refreshAiLoginStatus };
 }

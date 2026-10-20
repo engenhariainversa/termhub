@@ -75,6 +75,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
     expect(secondSeen!.state_seen_at).not.toBe(firstSeen!.state_seen_at);
   });
 
+  it('promptedSince (TER-1051): a main-thread prompt submitted after the time counts; earlier ones and other events do not', async () => {
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+    const since = new Date(Date.now() + 1);
+    await new Promise((r) => setTimeout(r, 5));
+    await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'pronto', meta: { event: 'Stop' } });
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit', subagent: true } });
+    expect(await repo.promptedSince(tabId, since)).toBe(false);
+    await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+    expect(await repo.promptedSince(tabId, since)).toBe(true);
+  });
+
   it('clearState also clears state_seen_at', async () => {
     await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: null });
     await repo.markSeen(tabId);
@@ -276,6 +287,33 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
       const fresh = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: null, meta: { event: 'ScreenCheck', screen: 'prompt' }, ifStateAt: late.tab.state_at! });
       expect(fresh.event).not.toBeNull();
       expect(fresh.tab).toMatchObject({ state: 'waiting_input', state_seen_at: null });
+    });
+  });
+
+  describe('tabs that never reported (TER-1046)', () => {
+    it('lists them inside the window, and the screen check writes only while the tab still has no state', async () => {
+      const now = Date.now();
+      expect((await repo.listUnreported(new Date(now - 60_000), new Date(now + 1000))).map((t) => t.id)).toContain(tabId);
+      expect((await repo.listUnreported(new Date(now + 1000), new Date(now + 2000))).map((t) => t.id)).not.toContain(tabId);
+      const trust = await repo.recordEvent(tabId, { kind: 'trust_prompt', tool: 'claude', text: 'x', meta: { event: 'ScreenCheck', screen: 'trust' }, ifStateAt: null, ifStateIn: [null] });
+      expect(trust.event).not.toBeNull();
+      expect(trust.tab).toMatchObject({ state: 'trust_prompt', state_seen_at: null });
+      expect(needsYou(trust.tab)).toBe(true);
+      expect((await repo.listUnreported(new Date(now - 60_000), new Date(now + 1000))).map((t) => t.id)).not.toContain(tabId);
+      // once it reported, a second read of a stale capture writes nothing
+      const again = await repo.recordEvent(tabId, { kind: 'auth_required', tool: 'claude', text: 'x', meta: { event: 'ScreenCheck', screen: 'auth' }, ifStateAt: null, ifStateIn: [null] });
+      expect(again.event).toBeNull();
+      expect(again.tab.state).toBe('trust_prompt');
+    });
+
+    it('a login error read off a wait: written only while that wait is the current state', async () => {
+      const { tab } = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', meta: { event: 'Notification', type: 'idle_prompt' } });
+      const auth = await repo.recordEvent(tabId, { kind: 'auth_required', tool: 'claude', text: 'x', meta: { event: 'ScreenCheck', screen: 'auth' }, ifStateAt: tab.state_at, ifStateIn: ['waiting_input'] });
+      expect(auth.tab.state).toBe('auth_required');
+      // the reminder that follows keeps it there
+      const reminder = await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Claude is waiting for your input', meta: { event: 'Notification', type: 'idle_prompt' }, continuesWait: true, keepsWaitText: true });
+      expect(reminder.event).toBeNull();
+      expect(reminder.tab.state).toBe('auth_required');
     });
   });
 

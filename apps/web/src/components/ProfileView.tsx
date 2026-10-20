@@ -6,6 +6,7 @@ import { ANALYTICS_ENABLED } from '../lib/analytics';
 import { useAuth } from '../lib/auth';
 import { openCookieBanner } from './AnalyticsGate';
 import { Avatar } from './Avatar';
+import { LegalLinks } from './LegalLinks';
 import { DataExportSection } from './DataExportSection';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { LanguageSetting } from './LanguageSetting';
@@ -44,6 +45,7 @@ export function ProfileView() {
           {t('Sair')}
         </button>
       </div>
+      <LegalLinks />
       <DataExportSection />
       <section aria-label={t('Excluir minha conta')} className="rounded-lg border border-danger/40 p-4">
         <h3 className="text-sm font-semibold text-danger">{t('Excluir minha conta')}</h3>
