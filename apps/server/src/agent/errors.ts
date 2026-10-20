@@ -1,4 +1,4 @@
-import { AI_LOGIN_MIN_AGENT_VERSION, CAPABILITY_AI_LOGIN, CAPABILITY_FILE_READ, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { AI_LOGIN_MIN_AGENT_VERSION, CAPABILITY_AI_LOGIN, CAPABILITY_FILE_READ, CAPABILITY_FILE_SHARE, FILE_SHARE_MIN_AGENT_VERSION, CAPABILITY_NET_CHECK, CAPABILITY_SIM, NET_CHECK_MIN_AGENT_VERSION, CAPABILITY_TRANSCRIPT, type RpcMethod, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import type { Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
@@ -137,6 +137,16 @@ export function requireAiLoginCapable(machine: Machine): void {
   if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
   if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_AI_LOGIN)) {
     throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para refazer o login pela tela', { version: AI_LOGIN_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
+  }
+}
+
+/** Publishing a machine's file in the chat (TER-1086) needs an agent machine whose connected agent claims
+ *  `file_share`: an older agent drops the RPC, which would read as a timeout. */
+export function requireFileShareCapable(machine: Machine): void {
+  if (machine.type !== 'agent') throw new HttpError(400, msg('Compartilhar arquivos no chat só funciona em máquinas com o agente do termhub'), 'UNSUPPORTED_MACHINE');
+  if (!agents.isOnline(machine.id)) throw new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE');
+  if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_FILE_SHARE)) {
+    throw new HttpError(409, msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova) para compartilhar arquivos no chat', { version: FILE_SHARE_MIN_AGENT_VERSION }), 'AGENT_OUTDATED');
   }
 }
 

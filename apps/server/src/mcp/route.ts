@@ -8,7 +8,7 @@ import { isToolContent, type ToolContent } from '../chat/attachments/read-tool.j
 import type { AttachmentStore } from '../chat/attachments/store.js';
 import { applyGate } from '../chat/gate-runtime.js';
 import { toolUseIdOf } from '../chat/subagent-origin.js';
-import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
+import { controlContextFor, ControlError, type ControlContext, type ShareDeps } from '../control/context.js';
 import { HttpError, sendError } from '../lib/errors.js';
 import { authenticateToken } from './auth.js';
 import { legalRefusal } from './legal-gate.js';
@@ -55,14 +55,14 @@ function withDefaultArguments(body: unknown): unknown {
  * a personal API token authenticates each request, and the token's user is the data scope. Stateless:
  * a fresh McpServer per request, so a revoked token stops working on the next call.
  */
-export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter; attachments?: AttachmentStore }) {
+export async function mcpRoutes(app: FastifyInstance, deps: { repos: Repositories; version: string; limiter?: TokenRateLimiter; attachments?: AttachmentStore; chatFiles?: ShareDeps }) {
   const { repos } = deps;
   const limiter = deps.limiter ?? new TokenRateLimiter();
 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = await authenticateToken(repos, request.headers.authorization);
     if (!auth) return sendError(request, reply, 401, 'Não autenticado', 'UNAUTHORIZED');
-    request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated, tab: auth.tab ?? undefined, chat_conversation_id: auth.token.chat_conversation_id }), attachments: deps.attachments, log: request.log } };
+    request.mcp = { token: auth.token, ctx: { ...controlContextFor(repos, auth.user, { id: auth.token.id, scopes: auth.token.scopes, gated: auth.token.gated, tab: auth.tab ?? undefined, chat_conversation_id: auth.token.chat_conversation_id }), attachments: deps.attachments, chatFiles: deps.chatFiles, log: request.log } };
     void repos.apiTokens.touchLastUsed(auth.token.id).catch((err) => request.log.warn({ err }, 'mcp: touchLastUsed failed'));
   };
 

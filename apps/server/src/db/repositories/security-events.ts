@@ -27,6 +27,7 @@ export const SECURITY_EVENT_ACTIONS = [
   'machine.delete',
   'machine.transfer',
   'machine.agent_token_rotate',
+  'machine.file_share',
   'api_token.create',
   'api_token.revoke',
   'integration.create',

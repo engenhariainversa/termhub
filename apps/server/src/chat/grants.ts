@@ -8,7 +8,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 import { boardProjectOf } from './board-project.js';
 import { chatBus } from './bus.js';
-import { boardGrantable, grantable, GRANTABLE_TOOL, standingKindOf, TAB_TERMINAL_GRANT, terminalGrantable, type StandingGrantKind } from './gate.js';
+import { boardGrantable, fileGrantable, folderOf, grantable, GRANTABLE_TOOL, standingKindOf, TAB_TERMINAL_GRANT, terminalGrantable, type StandingGrantKind } from './gate.js';
 import { standingProjectOf } from './standing-project.js';
 
 /**
@@ -143,6 +143,45 @@ export async function grantStanding(repos: Repositories, userId: string, action:
   const [grant] = await describeStandingGrants(repos, [created], userId);
   chatBus.publish({ type: 'standing_grant', user_id: userId, conversation_id: action.conversation_id, grant });
   return grant;
+}
+
+const FILE_GRANT_NOT_ALLOWED = () => new HttpError(400, 'Só dá para permitir sempre uma pasta ao compartilhar um arquivo de uma máquina sua', 'GRANT_NOT_ALLOWED');
+
+/** "Permitir sempre nesta pasta" (TER-1086) only for a pending `share_file` card naming one of this user's
+ *  machines. Checked before anything is decided and before the phone's PIN challenge is spent. Answers the
+ *  folder it trusts: the one the file sits in, as the card showed it. */
+export async function assertFileGrantableAction(repos: Repositories, userId: string, actionId: string): Promise<{ action: ChatAction; machineId: string; folder: string }> {
+  const row = await pendingRow(repos, userId, actionId);
+  const args = (row.args ?? {}) as Record<string, unknown>;
+  if (!fileGrantable(row.tool, args)) throw FILE_GRANT_NOT_ALLOWED();
+  const machine = await repos.machines.findById(args.machine_id);
+  if (!machine || machine.owner_id !== userId) throw FILE_GRANT_NOT_ALLOWED();
+  const folder = folderOf(args.path);
+  // "/" or "~" would trust every file of the machine: never a folder grant.
+  if (folder === '/' || folder === '~' || folder === '.') throw FILE_GRANT_NOT_ALLOWED();
+  return { action: row, machineId: machine.id, folder };
+}
+
+/** What a folder grant looks like to the screens: the machine by name. */
+export interface ChatFileGrantResponse {
+  id: string;
+  machine_id: string;
+  machine_name: string;
+  folder: string;
+  created_at: string;
+}
+
+/** Trusts the folder of a `share_file` the user just approved, with no expiry. No live event: the card
+ *  answers it, and the permissions screen reads the list on its own. */
+export async function grantFolder(repos: Repositories, userId: string, action: ChatAction, machineId: string, folder: string): Promise<ChatFileGrantResponse> {
+  const created = await repos.chatFileGrants.grant({ user_id: userId, machine_id: machineId, folder, conversation_id: action.conversation_id, source_action_id: action.id });
+  const machine = await repos.machines.findById(machineId);
+  return { id: created.id, machine_id: machineId, machine_name: machine?.name ?? '', folder, created_at: created.created_at };
+}
+
+/** The user's folder grants in force, newest first. */
+export async function activeFileGrants(repos: Repositories, userId: string): Promise<ChatFileGrantResponse[]> {
+  return (await repos.chatFileGrants.listActive(userId)).map((g) => ({ id: g.id, machine_id: g.machine_id, machine_name: g.machine_name, folder: g.folder, created_at: g.created_at }));
 }
 
 /** The user's standing grants in force, as `GET /chat` (web and phone) returns them: the conversation's

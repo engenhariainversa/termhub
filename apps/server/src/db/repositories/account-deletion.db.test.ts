@@ -69,6 +69,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.chatAction.create({ data: { id: newId(), conversationId, tool: 'send_input', args: {}, class: 'write', status: 'pending' } });
     await db.chatStandingGrant.create({ data: { id: newId(), userId, projectId, kind: 'board' } });
     await db.chatDefaultRestriction.create({ data: { userId, kind: 'close_tab' } });
+    // TER-1086: a trusted folder for share_file (cascades with the user and the machine).
+    await db.chatFileGrant.create({ data: { id: newId(), userId, machineId, folder: '~/fotos', conversationId } });
     await db.chatDecision.create({
       data: { id: newId(), userId, projectId, questionIndex: 0, header: 'h', question: 'q?', options: [], multiSelect: false, answer: {} },
     });

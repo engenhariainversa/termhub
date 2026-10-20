@@ -65,3 +65,6 @@ jest.mock('expo-clipboard', () => require('./fakes/expo-clipboard'));
 
 // The bubble's audio player (TER-1036): no native audio under jest.
 jest.mock('expo-audio', () => require('./fakes/expo-audio'));
+
+// The composer's hardware Return (TER-368): its native view has no binding under jest.
+jest.mock('../modules/key-commands', () => require('./fakes/key-commands'));

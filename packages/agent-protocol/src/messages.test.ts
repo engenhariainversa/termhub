@@ -8,6 +8,8 @@ import {
   CAPABILITY_REPO_SCAN,
   REPO_SCAN_MIN_AGENT_VERSION,
   CAPABILITY_FILE_READ,
+  CAPABILITY_FILE_SHARE,
+  FILE_SHARE_MIN_AGENT_VERSION,
   CAPABILITY_TRANSCRIPT,
   CAPABILITY_SIM,
   claudeOpenParams,
@@ -160,6 +162,11 @@ it('names the transcript capability once', () => {
 
 it('names the file read capability once', () => {
   expect(CAPABILITY_FILE_READ).toBe('file_read');
+});
+
+it('names the file share capability once, with the agent version that ships it', () => {
+  expect(CAPABILITY_FILE_SHARE).toBe('file_share');
+  expect(FILE_SHARE_MIN_AGENT_VERSION).toBe('0.34.0');
 });
 
 it('names the file list capability once', () => {

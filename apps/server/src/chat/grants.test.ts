@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from '../lib/errors.js';
 import { chatBus } from './bus.js';
-import { activeStandingGrants, assertProjectAllGrantableAction, assertProjectGrantableAction, assertStandingGrantableAction, assertTabTerminalGrantableAction, decodeGrantCursor, encodeGrantCursor, grantProject, grantStanding, grantTabTerminal, listGrants, revokeGrant } from './grants.js';
+import { activeStandingGrants, assertFileGrantableAction, grantFolder, assertProjectAllGrantableAction, assertProjectGrantableAction, assertStandingGrantableAction, assertTabTerminalGrantableAction, decodeGrantCursor, encodeGrantCursor, grantProject, grantStanding, grantTabTerminal, listGrants, revokeGrant } from './grants.js';
 
 it('round-trips a cursor', () => {
   const c = { created_at: '2026-09-25T10:00:00.000Z', id: 'abc123' };
@@ -356,5 +356,28 @@ describe('listGrants kinds=all_standing (TER-386)', () => {
     const out = await listGrants(r as never, 'u1', { state: 'ended', limit: 50, kinds: 'all' });
     expect(out.grants.map((g) => g.id)).toEqual(['pg1', 'g1']);
     expect(r.chatStandingGrants.listForUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('folder grants (TER-1086)', () => {
+  const row = (args: Record<string, unknown>, tool = 'share_file') => ({ id: 'a1', conversation_id: 'c1', tool, args, status: 'pending', tab_id: null });
+  const repos = (action: unknown, owner = 'u1') =>
+    ({
+      chatActions: { findByIdForUser: vi.fn(async () => action) },
+      machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? { id: 'm1', name: 'hulk', owner_id: owner } : undefined)) },
+      chatFileGrants: { grant: vi.fn(async (i: Record<string, unknown>) => ({ id: 'fg1', ...i, created_at: 'now', revoked_at: null })) },
+    }) as never;
+
+  it('trusts the folder the file sits in, on the card\'s machine', async () => {
+    const r = await assertFileGrantableAction(repos(row({ machine_id: 'm1', path: '~/termhub-linkedin/post-1.png' })), 'u1', 'a1');
+    expect(r).toMatchObject({ machineId: 'm1', folder: '~/termhub-linkedin' });
+    expect(await grantFolder(repos(row({})), 'u1', r.action, 'm1', r.folder)).toMatchObject({ id: 'fg1', machine_name: 'hulk', folder: '~/termhub-linkedin' });
+  });
+
+  it('refuses another tool, another person\'s machine and a file straight in ~ or /', async () => {
+    await expect(assertFileGrantableAction(repos(row({ tab_id: 't1', text: 'x' }, 'send_input')), 'u1', 'a1')).rejects.toMatchObject({ code: 'GRANT_NOT_ALLOWED' });
+    await expect(assertFileGrantableAction(repos(row({ machine_id: 'm1', path: '~/a/b.png' }), 'u2'), 'u1', 'a1')).rejects.toMatchObject({ code: 'GRANT_NOT_ALLOWED' });
+    await expect(assertFileGrantableAction(repos(row({ machine_id: 'm1', path: '~/b.png' })), 'u1', 'a1')).rejects.toMatchObject({ code: 'GRANT_NOT_ALLOWED' });
+    await expect(assertFileGrantableAction(repos(row({ machine_id: 'm1', path: '/b.png' })), 'u1', 'a1')).rejects.toMatchObject({ code: 'GRANT_NOT_ALLOWED' });
   });
 });

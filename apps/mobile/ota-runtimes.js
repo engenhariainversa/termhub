@@ -12,8 +12,8 @@
 // same PR as the bump, not after the build.
 module.exports = {
   for: '0.7.1',
-  // 0.7.1 adds the expo-clipboard native module (TER-994): no older binary can run its JS.
-  // (0.5.0 → 0.6.0, ec517b7c, only added the iOS privacy manifest and Android's AD_ID permission.)
+  // 0.7.0 → 0.7.1 adds the expo-clipboard native module (TER-994), and 0.6.0 → 0.7.0 added
+  // modules/key-commands (TER-368), which the composer imports: no older binary can run this JS.
   runtimes: [],
 };
 

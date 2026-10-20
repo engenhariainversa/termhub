@@ -281,6 +281,8 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}
         </div>
       )}
+      {/* A file the assistant published from a machine (TER-1086): the same previews and downloads as the person's own. */}
+      {(message.attachments ?? []).length > 0 && <MessageAttachments attachments={message.attachments!} />}
       {(tools ?? []).length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {(tools ?? []).map((a, i) => (

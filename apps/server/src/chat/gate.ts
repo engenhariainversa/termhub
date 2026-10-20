@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import path from 'node:path';
 import type { ChatAction, ChatActionStatus } from '../db/repositories/chat-actions.js';
 import { STANDING_GRANT_KINDS, type StandingGrantKind } from '../db/repositories/chat-standing-grants.js';
 import { hasAutomationPatch } from '../automation/setup-patch.js';
@@ -76,6 +77,9 @@ const writeTools = new Set([
   'update_machine_agent',
   // TER-1080: another machine sends Wake-on-LAN packets on the local network. Always a card: no grant or default covers it.
   'wake_machine',
+  // TER-1086: a file of a machine published in the chat. A card each time, or the person's own "Permitir
+  // sempre nesta pasta" grant for that machine and folder (`FILE_GRANT_TOOL`); never a default.
+  'share_file',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
@@ -235,6 +239,30 @@ export function grantable(tool: string, args: Record<string, unknown>): args is 
   const tab = args.tab_id;
   return tool === GRANTABLE_TOOL && args.answering_permission !== true && typeof tab === 'string' && tab.length >= 1 && tab.length <= 64;
 }
+
+/** The one tool "Permitir sempre nesta pasta" covers (TER-1086): a file of that folder of that machine. */
+export const FILE_GRANT_TOOL = 'share_file';
+
+/** Whether "Permitir sempre nesta pasta" may cover this call: `share_file` naming a machine and a path.
+ *  Shared by the gate and the decision routes, so the button is offered for exactly what the gate honours. */
+export function fileGrantable(tool: string, args: Record<string, unknown>): args is Record<string, unknown> & { machine_id: string; path: string } {
+  return tool === FILE_GRANT_TOOL && idArg(args.machine_id) && typeof args.path === 'string' && args.path.length > 0;
+}
+
+/** The lexical folder a path sits in, `~` kept: what "Permitir sempre nesta pasta" trusts (TER-1086). */
+export function folderOf(p: string): string {
+  return path.posix.dirname(path.posix.normalize(p));
+}
+
+/** Whether `p` is inside `folder` (or a subfolder), lexically, both normalized. */
+export function insideFolder(p: string, folder: string): boolean {
+  const file = path.posix.normalize(p);
+  const root = path.posix.normalize(folder).replace(/\/+$/, '');
+  return root !== '' && root !== '~' && file.startsWith(`${root}/`) && !file.split('/').includes('..');
+}
+
+/** Files one folder grant covers per rolling hour; past it, each one is asked again. */
+export const FILE_GRANT_BUDGET = 30;
 
 /**
  * The board tools "Permitir sempre neste projeto" may cover (spec 2026-09-26 project grant §2). Closed
