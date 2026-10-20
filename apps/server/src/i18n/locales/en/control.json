@@ -117,5 +117,6 @@
   "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "This tool only works in the termhub chat: it reads the conversation's own context.",
   "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Only the person redoes an AI account's login, never an agent in a tab",
   "Só a dona da máquina pode refazer o login": "Only the machine's owner can redo the login",
-  "Sem permissão para escrever nas abas": "No permission to type into tabs"
+  "Sem permissão para escrever nas abas": "No permission to type into tabs",
+  "URL do ai-memory inválida": "Invalid ai-memory URL"
 }

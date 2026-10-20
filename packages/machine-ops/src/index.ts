@@ -18,3 +18,4 @@ export * from './hooks-status.js';
 export * from './ai-usage.js';
 export * from './ai-usage-script.js';
 export * from './ai-memory-script.js';
+export * from './ai-memory-run-script.js';
