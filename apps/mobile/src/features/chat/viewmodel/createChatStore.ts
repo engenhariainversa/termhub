@@ -34,8 +34,9 @@ import { replyBody, replyOnRow, replyRefOfRow, type ReplyRef } from '../model/re
  * `approve_project` approves it *and* trusts its project's board ("Permitir sempre neste projeto");
  * `approve_tab_terminal` trusts the tab's keys and shell ("Liberar teclas e shell nesta aba") and
  * `approve_project_all` everything in the project ("Liberar tudo neste projeto"); `approve_project_always`
- * trusts one kind of action on the card's project with no expiry ("Liberar sem prazo", TER-386). */
-export type ChatDecision = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always';
+ * trusts one kind of action on the card's project with no expiry ("Liberar sem prazo", TER-386);
+ * `approve_folder_always` trusts share_file from the card's folder of that machine (TER-1086). */
+export type ChatDecision = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always' | 'approve_folder_always';
 
 /** What the chat store needs from the session store (read through a getter, so tests can inject
  * a session store built over the same mock transport). */

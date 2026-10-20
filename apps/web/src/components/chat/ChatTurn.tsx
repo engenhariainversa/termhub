@@ -1,5 +1,5 @@
 import { i18n, tk } from '../../i18n';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import type { MouseEvent } from 'react';
 import { appNavigate } from '../../lib/app-navigate';
 import { copyText } from '../../lib/clipboard';
@@ -12,6 +12,7 @@ import { splitSettled } from '../../lib/markdown-split';
 import { limitSentence, swapSentence } from '../../lib/chat-notice';
 import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
+import { ChatMessageMenu, ChatMoreButton, keepsNativeMenu, type MenuPoint } from './ChatMessageMenu';
 import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
 import { LinkedText } from './LinkedText';
@@ -211,14 +212,28 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   const settledHtml = useMemo(() => toHtml(settled, projectId), [settled, projectId]);
   const tailHtml = useMemo(() => toHtml(tail, projectId), [tail, projectId]);
 
-  const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
+  const replyable = Boolean(onReply) && isReplyable(message);
+  const reply = replyable ? <ChatReplyButton onClick={() => onReply?.(message)} /> : null;
+  // The row's menu (TER-1090): a right click or "⋯". Text selected in the row keeps the browser's own
+  // menu, to copy just that. A row with nothing in it yet (an answer being written) has no menu.
+  const [menuAt, setMenuAt] = useState<MenuPoint | null>(null);
+  const closeMenu = useCallback(() => setMenuAt(null), []);
+  const hasMenu = message.text.length > 0 || (message.attachments?.length ?? 0) > 0;
+  const onContextMenu = (e: MouseEvent<HTMLLIElement>) => {
+    if (!hasMenu || keepsNativeMenu()) return;
+    e.preventDefault();
+    setMenuAt({ x: e.clientX, y: e.clientY });
+  };
+  const more = hasMenu ? <ChatMoreButton onOpen={setMenuAt} /> : null;
+  const menu = menuAt ? <ChatMessageMenu message={message} onReply={replyable ? () => onReply?.(message) : undefined} at={menuAt} onClose={closeMenu} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
   const ring = highlighted ? 'ring-2 ring-accent/60' : 'ring-2 ring-transparent';
 
   if (message.role === 'user') {
     const attachments = message.attachments ?? [];
     return (
-      <li data-message-id={message.id} className="chat-enter group flex items-center justify-end gap-1">
+      <li data-message-id={message.id} onContextMenu={onContextMenu} className="chat-enter group flex items-center justify-end gap-1">
+        {more}
         {reply}
         {/* `overflow-wrap: anywhere` so a pasted path or URL wraps instead of widening the column:
             `break-words` (`break-word`) wraps too, but keeps the token's min-content width, which is
@@ -233,12 +248,13 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           )}
           {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
         </div>
+        {menu}
       </li>
     );
   }
 
   return (
-    <li data-message-id={message.id} className={`chat-enter group rounded-2xl text-fg transition-shadow ${ring}`}>
+    <li data-message-id={message.id} onContextMenu={onContextMenu} className={`chat-enter group rounded-2xl text-fg transition-shadow ${ring}`}>
       {/* The one place in the chat that renders HTML, and only ever `renderMarkdown`'s output: this
        * text comes from an agent that reads real terminal screens, so `markdownOnly` keeps this to
        * the elements Markdown itself produces — nothing here can make the browser fetch a URL.
@@ -265,6 +281,8 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}
         </div>
       )}
+      {/* A file the assistant published from a machine (TER-1086): the same previews and downloads as the person's own. */}
+      {(message.attachments ?? []).length > 0 && <MessageAttachments attachments={message.attachments!} />}
       {(tools ?? []).length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {(tools ?? []).map((a, i) => (
@@ -274,8 +292,14 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           ))}
         </div>
       )}
-      {reply && <div className="mt-1">{reply}</div>}
+      {(reply || more) && (
+        <div className="mt-1 flex items-center gap-1">
+          {reply}
+          {more}
+        </div>
+      )}
       {failed && <p className="mt-1 text-xs text-danger">{failureLine(message)}</p>}
+      {menu}
     </li>
   );
 });

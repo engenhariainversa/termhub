@@ -553,6 +553,10 @@
   "Comandos liberados": "Comandos permitidos",
   "Comandos que o chat roda sem pedir confirmação numa aba de shell. Crie uma regra pelo card de confirmação de um comando ou pedindo ao chat. Sempre pedem confirmação, com ou sem regra: comandos encadeados (;, &&, |), redirecionamentos, substituições, sudo, rm, kill, git push --force, git reset --hard, git clean, “!” e o que tocar segredos.": "Comandos que el chat ejecuta en una pestaña de shell sin pedir confirmación. Crea una regla desde la tarjeta de confirmación de un comando o pidiéndoselo al chat. Siempre piden confirmación, con o sin regla: comandos encadenados (;, &&, |), redirecciones, sustituciones, sudo, rm, kill, git push --force, git reset --hard, git clean, “!” y lo que toque secretos.",
   "Nenhuma regra de comando ativa.": "Ninguna regla de comando activa.",
+  "em {{machine}} · sem prazo": "en {{machine}} · sin plazo",
+  "O chat mostra arquivos destas pastas sem pedir confirmação, até você revogar. Chaves, credenciais e arquivos .env nunca saem da máquina.": "El chat muestra archivos de estas carpetas sin pedir confirmación, hasta que lo revoques. Las claves, credenciales y archivos .env nunca salen de la máquina.",
+  "Pastas liberadas para mostrar arquivos": "Carpetas permitidas para mostrar archivos",
+  "Mostrou um arquivo da máquina no chat": "Mostró un archivo de la máquina en el chat",
   "Consultou dados de suporte de um usuário": "Consultó datos de soporte de un usuario",
   "Suporte": "Soporte"
 }

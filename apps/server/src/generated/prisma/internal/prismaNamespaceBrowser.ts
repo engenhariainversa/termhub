@@ -93,6 +93,7 @@ export const ModelName = {
   ChatGrant: 'ChatGrant',
   ChatProjectGrant: 'ChatProjectGrant',
   ChatStandingGrant: 'ChatStandingGrant',
+  ChatFileGrant: 'ChatFileGrant',
   ChatDefaultRestriction: 'ChatDefaultRestriction',
   ChatCommandRule: 'ChatCommandRule',
   TabLimitNotice: 'TabLimitNotice',
@@ -273,6 +274,7 @@ export const MachineScalarFieldEnum = {
   claudeAutoSwap: 'claudeAutoSwap',
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
+  permissionHint: 'permissionHint',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
   createdAt: 'createdAt'
@@ -851,6 +853,21 @@ export const ChatStandingGrantScalarFieldEnum = {
 } as const
 
 export type ChatStandingGrantScalarFieldEnum = (typeof ChatStandingGrantScalarFieldEnum)[keyof typeof ChatStandingGrantScalarFieldEnum]
+
+
+export const ChatFileGrantScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  machineId: 'machineId',
+  folder: 'folder',
+  conversationId: 'conversationId',
+  sourceActionId: 'sourceActionId',
+  createdAt: 'createdAt',
+  revokedAt: 'revokedAt',
+  revokedBy: 'revokedBy'
+} as const
+
+export type ChatFileGrantScalarFieldEnum = (typeof ChatFileGrantScalarFieldEnum)[keyof typeof ChatFileGrantScalarFieldEnum]
 
 
 export const ChatDefaultRestrictionScalarFieldEnum = {

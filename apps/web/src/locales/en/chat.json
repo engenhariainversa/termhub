@@ -496,5 +496,12 @@
   "Comandos que começam com «{{pattern}}» liberados {{where}}": "Commands starting with «{{pattern}}» allowed {{where}}",
   "Comando «{{pattern}}» liberado {{where}}": "Command «{{pattern}}» allowed {{where}}",
   "Permitir sempre este comando neste projeto": "Always allow this command in this project",
-  "Permitir sempre comandos que começam com «{{prefix}}»": "Always allow commands starting with «{{prefix}}»"
+  "Permitir sempre comandos que começam com «{{prefix}}»": "Always allow commands starting with «{{prefix}}»",
+  "Permitir sempre nesta pasta": "Always allow in this folder",
+  "Copiado": "Copied",
+  "Copiar": "Copy",
+  "Copiar link": "Copy link",
+  "Abrir link": "Open link",
+  "Mais ações da mensagem": "More message actions",
+  "Ações da mensagem": "Message actions"
 }

@@ -20,12 +20,15 @@ import { openAnswersIn } from '../chat/open-answers.js';
 import {
   activeGrants,
   activeProjectGrants,
+  activeFileGrants,
   activeStandingGrants,
+  assertFileGrantableAction,
   assertGrantableAction,
   assertProjectAllGrantableAction,
   assertProjectGrantableAction,
   assertStandingGrantableAction,
   assertTabTerminalGrantableAction,
+  grantFolder,
   grantProject,
   grantStanding,
   grantTab,
@@ -66,7 +69,7 @@ const messageBody = z
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
-const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab', 'approve_project', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always', 'approve_command', 'approve_command_prefix']) });
+const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab', 'approve_project', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always', 'approve_command', 'approve_command_prefix', 'approve_folder_always']) });
 const batchBody = z.object({
   decisions: z
     .array(z.object({ id: z.string().min(1).max(64), decision: z.enum(['approve', 'deny']) }))
@@ -264,6 +267,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // "Permitir sempre este comando / comandos que começam com «…»" (TER-1081) likewise: the rule the gate
     // will honour, judged with its own functions, on a tab of this user's.
     const commandCheck = decision === 'approve_command' || decision === 'approve_command_prefix' ? await assertCommandRuleAction(repos, user.id, id, decision) : undefined;
+    // "Permitir sempre nesta pasta" (TER-1086) likewise: a share_file card, from a machine of this user.
+    const folderCheck = decision === 'approve_folder_always' ? await assertFileGrantableAction(repos, user.id, id) : undefined;
 
     // The decision itself, and only it, decides who may answer this row — `decide` filters by the
     // owning conversation's user_id in SQL, so wrong id, another user's row and an already-decided
@@ -325,17 +330,25 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
         request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat command rule failed after approval');
       }
     }
+    let file_grant: Awaited<ReturnType<typeof grantFolder>> | undefined;
+    if (folderCheck) {
+      try {
+        file_grant = await grantFolder(repos, user.id, action, folderCheck.machineId, folderCheck.folder);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat folder grant failed after approval');
+      }
+    }
 
     try {
       // Awaits the start of the injected run, never its end: an answer longer than the edge allows
       // used to cut this request and show an error for a decision that was recorded.
       await deps.service.startAfterDecision(user, action);
-      return { action, grant, project_grant, standing_grant, command_rule };
+      return { action, grant, project_grant, standing_grant, command_rule, file_grant };
     } catch (err) {
       // The decision above already happened and was already published — a busy run must not turn a
       // successful decision into a 409. The row stays approved/denied with no injection yet; the run
       // holding the lock will pick it up and inject it through `drainNextDecision` once it finishes.
-      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant, project_grant, standing_grant, command_rule };
+      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant, project_grant, standing_grant, command_rule, file_grant };
       throw err;
     }
   });
@@ -370,6 +383,17 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
   /** "Abas confiáveis" (Configurações): every grant of this user, active or a page of the history. */
   app.get('/grants', async (request) => listGrants(repos, request.scope.user.id, chatGrantListQuery.parse(request.query)));
+
+  /** "Pastas liberadas" (TER-1086): the folders this user trusted for share_file, in force. */
+  app.get('/file-grants', async (request) => ({ grants: await activeFileGrants(repos, request.scope.user.id) }));
+
+  /** "Revogar" a folder grant. `create`, like the other grants. 404 unknown, another user's or already revoked. */
+  app.delete('/file-grants/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    const revoked = await repos.chatFileGrants.revoke(id, request.scope.user.id);
+    if (!revoked) throw notFound('Liberação não encontrada');
+    return { grant: { id: revoked.id, revoked_at: revoked.revoked_at } };
+  });
 
   /** "Liberadas por padrão" (TER-627): every default allowance of the chat, on or restricted for this user. */
   app.get('/defaults', async (request) => ({ defaults: await chatDefaultsOf(repos, request.scope.user.id) }));

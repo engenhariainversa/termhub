@@ -14,7 +14,7 @@ export function ReplyPreview({ reply, onCancel }: { reply: ReplyRef; onCancel?()
     <View testID="reply-preview" className="mx-1 mb-2 mt-1 flex-row items-center gap-2 rounded-2xl bg-app-surface px-3 py-2">
       <View className="w-0.5 self-stretch rounded-full bg-app-accent" />
       <View className="flex-1">
-        <Text className="text-xs font-semibold text-app-accent">{reply.card ? t(CARD_HEADING[reply.card]) : reply.role === 'assistant' ? t('Respondendo a Concierge') : t('Respondendo a você')}</Text>
+        <Text className="text-xs font-semibold text-app-accent">{reply.card ? t(CARD_HEADING[reply.card]) : reply.role === 'assistant' ? (reply.author ? t('Respondendo a {{author}}', { author: reply.author }) : t('Respondendo a Concierge')) : t('Respondendo a você')}</Text>
         <Text className="text-sm text-app-muted" numberOfLines={1}>
           {reply.excerpt}
         </Text>

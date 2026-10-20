@@ -103,9 +103,11 @@ export type TTabChatPage = z.infer<typeof tabChatPage>;
  * (the session's file is no longer on the machine), `new_session` (the current session has nothing yet:
  * a new tab, or a `/clear` or a restart of Claude, which starts a new session), `no_agent` (TER-1094: the
  * tab is a plain terminal, its shell at the prompt with no AI CLI in front, so there is no session to show;
- * `tabs/:id/agent` starts one).
+ * `tabs/:id/agent` starts one). A Codex tab (TER-1095) reads its Codex session the same way, and adds
+ * `codex_untrusted`: the hooks are installed, but Codex runs them only once the person trusts them in Codex
+ * itself, so it reports no session until then.
  */
-export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'no_agent'] as const;
+export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'no_agent', 'codex_untrusted'] as const;
 export type TTabChatEmptyReason = (typeof TAB_CHAT_EMPTY_REASONS)[number];
 
 /** One account "Iniciar sessão" can start the tab's agent with (TER-1094): `provider` is `claude` (Claude Code)

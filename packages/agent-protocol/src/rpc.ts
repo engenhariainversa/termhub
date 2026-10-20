@@ -106,6 +106,23 @@ export const relDir = z.string().min(1).max(512).regex(REL_DIR_RE);
 export const FILE_READ_REFUSALS = ['missing', 'outside', 'hidden', 'type', 'not_file', 'too_large', 'binary', 'eperm'] as const;
 export type FileReadRefusal = (typeof FILE_READ_REFUSALS)[number];
 
+/** The largest file `file.share` sends (TER-1086); the server keeps its own, possibly lower, limits per kind. */
+export const FILE_SHARE_MAX_BYTES = 25 * 1024 * 1024;
+/** One `file.share` answer carries at most this much of the file: base64 in one control frame (`MAX_FRAME`, 1 MiB). */
+export const FILE_SHARE_CHUNK_BYTES = 512 * 1024;
+/** The only extensions `file.share` opens, compared lowercase on the path asked and on the resolved file:
+ *  the kinds the chat already shows (images, PDF, Word, Excel, audio, video, text). Nothing that runs. */
+export const FILE_SHARE_EXTENSIONS = [
+  '.png', '.jpg', '.jpeg', '.gif', '.webp',
+  '.pdf', '.docx', '.xlsx',
+  '.mp3', '.m4a', '.wav', '.ogg', '.opus', '.webm', '.mp4', '.mov',
+  '.txt', '.md', '.csv', '.json', '.log', '.yaml', '.yml',
+] as const;
+/** Why `file.share` answered without a body: `file.read`'s reasons, plus `secret` (a key, a credentials or
+ *  env file, a keychain: never sent, whatever asks) and `changed` (the file changed between two chunks). */
+export const FILE_SHARE_REFUSALS = ['missing', 'outside', 'hidden', 'secret', 'type', 'not_file', 'too_large', 'eperm', 'changed'] as const;
+export type FileShareRefusal = (typeof FILE_SHARE_REFUSALS)[number];
+
 export const rpcErrorSchema = z.object({
   /** `failed`: the operation ran on the machine and `message` says why it failed, in words meant for the user.
    *  `refused`: a `tcp` open found nothing listening on the port (ECONNREFUSED).
@@ -238,7 +255,8 @@ export const RPC = {
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
    * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
-   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   * transcript, here or in the account's other project dirs (since agent 0.15.0). A Codex session's
+   * `rollout-*.jsonl` is read the same way, at its own path only (capability `transcript.codex`).
    */
   /**
    * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
@@ -369,6 +387,36 @@ export const RPC = {
     }),
     60_000,
   ),
+  /**
+   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.34.0, capability
+   * `file_share`). `path` is absolute or `~/…`. The allowed folders are `roots` and, unless `only_roots`,
+   * the agent's own (home, the temp dirs, `file-read-roots`). Checked on every chunk, on the path as asked
+   * and on the resolved file: under a folder, no dot segment below it, not a secret, one of
+   * FILE_SHARE_EXTENSIONS, a regular file of at most FILE_SHARE_MAX_BYTES. `size` and `mtime_ms` are the
+   * whole file's: the server asks the next `offset` until it has `size` bytes, and refuses a file whose
+   * size or date moved between chunks. Any refusal is a `status`, never a thrown error.
+   */
+  'file.share': def(
+    z.object({
+      path: machinePath,
+      roots: z.array(machinePath).max(16),
+      only_roots: z.boolean(),
+      offset: z.number().int().min(0).max(FILE_SHARE_MAX_BYTES),
+      length: z.number().int().min(1).max(FILE_SHARE_CHUNK_BYTES),
+    }),
+    z.discriminatedUnion('status', [
+      z.object({
+        status: z.literal('ok'),
+        path: z.string().max(4096),
+        size: z.number().int().min(0).max(FILE_SHARE_MAX_BYTES),
+        mtime_ms: z.number().min(0),
+        offset: z.number().int().min(0),
+        content_b64: z.string().max(Math.ceil(FILE_SHARE_CHUNK_BYTES / 3) * 4),
+      }),
+      z.object({ status: z.enum(FILE_SHARE_REFUSALS), size: z.number().int().min(0).optional() }),
+    ]),
+    15_000,
+  ),
   'file.paste': def(z.object({ name: pasteName, data_b64: z.string().min(1).max(28 * 1024 * 1024) }), z.object({ path: z.string() }), 60_000),
   /** Monitor hooks (see @termhub/machine-ops hooks.ts): the agent writes the script, env and config entries under its own $HOME. */
   /** `claude_dirs`: Claude config dirs besides ~/.claude (accounts with CLAUDE_CONFIG_DIR), hooked when they exist; since agent 0.1.5. */
@@ -389,6 +437,8 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /** The machine's opt-in to permission hints (TER-614): writes or removes ~/.termhub/permission-hint; since agent 0.33.0. */
+  'hooks.hint': def(z.object({ enabled: z.boolean() }), z.object({ enabled: z.boolean() })),
   /**
    * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
    * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.

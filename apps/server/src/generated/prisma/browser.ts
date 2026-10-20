@@ -283,6 +283,13 @@ export type ChatProjectGrant = Prisma.ChatProjectGrantModel
  */
 export type ChatStandingGrant = Prisma.ChatStandingGrantModel
 /**
+ * Model ChatFileGrant
+ * "Permitir sempre nesta pasta" (TER-1086): `share_file` from one folder of one machine, for one user, with
+ * no expiry until revoked. `folder` is lexical, as the card showed it (`~` kept); the agent still checks
+ * every file against its own rules.
+ */
+export type ChatFileGrant = Prisma.ChatFileGrantModel
+/**
  * Model ChatDefaultRestriction
  * A default allowance of the chat (TER-627, `DEFAULT_ALLOW_KINDS` in chat/gate.ts) this user took back:
  * that kind is asked again. No row means every default is on, so users who never opened "Permissões

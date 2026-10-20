@@ -345,6 +345,7 @@ export type ChatConversationWhereInput = {
   liveRun?: Prisma.XOR<Prisma.ChatLiveRunNullableScalarRelationFilter, Prisma.ChatLiveRunWhereInput> | null
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
   commandRules?: Prisma.ChatCommandRuleListRelationFilter
+  fileGrants?: Prisma.ChatFileGrantListRelationFilter
 }
 
 export type ChatConversationOrderByWithRelationInput = {
@@ -382,6 +383,7 @@ export type ChatConversationOrderByWithRelationInput = {
   liveRun?: Prisma.ChatLiveRunOrderByWithRelationInput
   standingGrants?: Prisma.ChatStandingGrantOrderByRelationAggregateInput
   commandRules?: Prisma.ChatCommandRuleOrderByRelationAggregateInput
+  fileGrants?: Prisma.ChatFileGrantOrderByRelationAggregateInput
 }
 
 export type ChatConversationWhereUniqueInput = Prisma.AtLeast<{
@@ -422,6 +424,7 @@ export type ChatConversationWhereUniqueInput = Prisma.AtLeast<{
   liveRun?: Prisma.XOR<Prisma.ChatLiveRunNullableScalarRelationFilter, Prisma.ChatLiveRunWhereInput> | null
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
   commandRules?: Prisma.ChatCommandRuleListRelationFilter
+  fileGrants?: Prisma.ChatFileGrantListRelationFilter
 }, "id">
 
 export type ChatConversationOrderByWithAggregationInput = {
@@ -503,6 +506,7 @@ export type ChatConversationCreateInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateInput = {
@@ -536,6 +540,7 @@ export type ChatConversationUncheckedCreateInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUpdateInput = {
@@ -569,6 +574,7 @@ export type ChatConversationUpdateInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateInput = {
@@ -602,6 +608,7 @@ export type ChatConversationUncheckedUpdateInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateManyInput = {
@@ -1048,6 +1055,22 @@ export type ChatConversationUpdateOneWithoutStandingGrantsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ChatConversationUpdateToOneWithWhereWithoutStandingGrantsInput, Prisma.ChatConversationUpdateWithoutStandingGrantsInput>, Prisma.ChatConversationUncheckedUpdateWithoutStandingGrantsInput>
 }
 
+export type ChatConversationCreateNestedOneWithoutFileGrantsInput = {
+  create?: Prisma.XOR<Prisma.ChatConversationCreateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedCreateWithoutFileGrantsInput>
+  connectOrCreate?: Prisma.ChatConversationCreateOrConnectWithoutFileGrantsInput
+  connect?: Prisma.ChatConversationWhereUniqueInput
+}
+
+export type ChatConversationUpdateOneWithoutFileGrantsNestedInput = {
+  create?: Prisma.XOR<Prisma.ChatConversationCreateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedCreateWithoutFileGrantsInput>
+  connectOrCreate?: Prisma.ChatConversationCreateOrConnectWithoutFileGrantsInput
+  upsert?: Prisma.ChatConversationUpsertWithoutFileGrantsInput
+  disconnect?: Prisma.ChatConversationWhereInput | boolean
+  delete?: Prisma.ChatConversationWhereInput | boolean
+  connect?: Prisma.ChatConversationWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ChatConversationUpdateToOneWithWhereWithoutFileGrantsInput, Prisma.ChatConversationUpdateWithoutFileGrantsInput>, Prisma.ChatConversationUncheckedUpdateWithoutFileGrantsInput>
+}
+
 export type ChatConversationCreateNestedOneWithoutCommandRulesInput = {
   create?: Prisma.XOR<Prisma.ChatConversationCreateWithoutCommandRulesInput, Prisma.ChatConversationUncheckedCreateWithoutCommandRulesInput>
   connectOrCreate?: Prisma.ChatConversationCreateOrConnectWithoutCommandRulesInput
@@ -1138,6 +1161,7 @@ export type ChatConversationCreateWithoutUserInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutUserInput = {
@@ -1170,6 +1194,7 @@ export type ChatConversationUncheckedCreateWithoutUserInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutUserInput = {
@@ -1251,6 +1276,7 @@ export type ChatConversationCreateWithoutMachineInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutMachineInput = {
@@ -1283,6 +1309,7 @@ export type ChatConversationUncheckedCreateWithoutMachineInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutMachineInput = {
@@ -1341,6 +1368,7 @@ export type ChatConversationCreateWithoutProjectInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutProjectInput = {
@@ -1373,6 +1401,7 @@ export type ChatConversationUncheckedCreateWithoutProjectInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutProjectInput = {
@@ -1431,6 +1460,7 @@ export type ChatConversationCreateWithoutAiAccountInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutAiAccountInput = {
@@ -1463,6 +1493,7 @@ export type ChatConversationUncheckedCreateWithoutAiAccountInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutAiAccountInput = {
@@ -1521,6 +1552,7 @@ export type ChatConversationCreateWithoutApiTokensInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutApiTokensInput = {
@@ -1553,6 +1585,7 @@ export type ChatConversationUncheckedCreateWithoutApiTokensInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutApiTokensInput = {
@@ -1601,6 +1634,7 @@ export type ChatConversationUpdateWithoutApiTokensInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutApiTokensInput = {
@@ -1633,6 +1667,7 @@ export type ChatConversationUncheckedUpdateWithoutApiTokensInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutMessagesInput = {
@@ -1665,6 +1700,7 @@ export type ChatConversationCreateWithoutMessagesInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutMessagesInput = {
@@ -1697,6 +1733,7 @@ export type ChatConversationUncheckedCreateWithoutMessagesInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutMessagesInput = {
@@ -1745,6 +1782,7 @@ export type ChatConversationUpdateWithoutMessagesInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutMessagesInput = {
@@ -1777,6 +1815,7 @@ export type ChatConversationUncheckedUpdateWithoutMessagesInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutAttachmentsInput = {
@@ -1809,6 +1848,7 @@ export type ChatConversationCreateWithoutAttachmentsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutAttachmentsInput = {
@@ -1841,6 +1881,7 @@ export type ChatConversationUncheckedCreateWithoutAttachmentsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutAttachmentsInput = {
@@ -1889,6 +1930,7 @@ export type ChatConversationUpdateWithoutAttachmentsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutAttachmentsInput = {
@@ -1921,6 +1963,7 @@ export type ChatConversationUncheckedUpdateWithoutAttachmentsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutActionsInput = {
@@ -1953,6 +1996,7 @@ export type ChatConversationCreateWithoutActionsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutActionsInput = {
@@ -1985,6 +2029,7 @@ export type ChatConversationUncheckedCreateWithoutActionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutActionsInput = {
@@ -2033,6 +2078,7 @@ export type ChatConversationUpdateWithoutActionsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutActionsInput = {
@@ -2065,6 +2111,7 @@ export type ChatConversationUncheckedUpdateWithoutActionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutSubagentsInput = {
@@ -2097,6 +2144,7 @@ export type ChatConversationCreateWithoutSubagentsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutSubagentsInput = {
@@ -2129,6 +2177,7 @@ export type ChatConversationUncheckedCreateWithoutSubagentsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutSubagentsInput = {
@@ -2177,6 +2226,7 @@ export type ChatConversationUpdateWithoutSubagentsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutSubagentsInput = {
@@ -2209,6 +2259,7 @@ export type ChatConversationUncheckedUpdateWithoutSubagentsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutLiveRunInput = {
@@ -2241,6 +2292,7 @@ export type ChatConversationCreateWithoutLiveRunInput = {
   subagents?: Prisma.ChatSubagentCreateNestedManyWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutLiveRunInput = {
@@ -2273,6 +2325,7 @@ export type ChatConversationUncheckedCreateWithoutLiveRunInput = {
   subagents?: Prisma.ChatSubagentUncheckedCreateNestedManyWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutLiveRunInput = {
@@ -2321,6 +2374,7 @@ export type ChatConversationUpdateWithoutLiveRunInput = {
   subagents?: Prisma.ChatSubagentUpdateManyWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutLiveRunInput = {
@@ -2353,6 +2407,7 @@ export type ChatConversationUncheckedUpdateWithoutLiveRunInput = {
   subagents?: Prisma.ChatSubagentUncheckedUpdateManyWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutGrantsInput = {
@@ -2385,6 +2440,7 @@ export type ChatConversationCreateWithoutGrantsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutGrantsInput = {
@@ -2417,6 +2473,7 @@ export type ChatConversationUncheckedCreateWithoutGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutGrantsInput = {
@@ -2465,6 +2522,7 @@ export type ChatConversationUpdateWithoutGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutGrantsInput = {
@@ -2497,6 +2555,7 @@ export type ChatConversationUncheckedUpdateWithoutGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutProjectGrantsInput = {
@@ -2529,6 +2588,7 @@ export type ChatConversationCreateWithoutProjectGrantsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutProjectGrantsInput = {
@@ -2561,6 +2621,7 @@ export type ChatConversationUncheckedCreateWithoutProjectGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutProjectGrantsInput = {
@@ -2609,6 +2670,7 @@ export type ChatConversationUpdateWithoutProjectGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutProjectGrantsInput = {
@@ -2641,6 +2703,7 @@ export type ChatConversationUncheckedUpdateWithoutProjectGrantsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutStandingGrantsInput = {
@@ -2673,6 +2736,7 @@ export type ChatConversationCreateWithoutStandingGrantsInput = {
   subagents?: Prisma.ChatSubagentCreateNestedManyWithoutConversationInput
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutStandingGrantsInput = {
@@ -2705,6 +2769,7 @@ export type ChatConversationUncheckedCreateWithoutStandingGrantsInput = {
   subagents?: Prisma.ChatSubagentUncheckedCreateNestedManyWithoutConversationInput
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutStandingGrantsInput = {
@@ -2753,6 +2818,7 @@ export type ChatConversationUpdateWithoutStandingGrantsInput = {
   subagents?: Prisma.ChatSubagentUpdateManyWithoutConversationNestedInput
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutStandingGrantsInput = {
@@ -2784,6 +2850,155 @@ export type ChatConversationUncheckedUpdateWithoutStandingGrantsInput = {
   chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutConversationNestedInput
   subagents?: Prisma.ChatSubagentUncheckedUpdateManyWithoutConversationNestedInput
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
+  commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
+}
+
+export type ChatConversationCreateWithoutFileGrantsInput = {
+  id: string
+  title?: string | null
+  cliSessionId?: string | null
+  model?: string | null
+  archivedAt?: Date | string | null
+  tabId?: string | null
+  reviewMode?: boolean
+  contextTokens?: number | null
+  contextWindow?: number | null
+  contextCompactedAt?: Date | string | null
+  lastMessageAt?: Date | string | null
+  lastTypedAt?: Date | string | null
+  createdAt?: Date | string
+  user: Prisma.UserCreateNestedOneWithoutChatConversationsInput
+  machine?: Prisma.MachineCreateNestedOneWithoutChatConversationsInput
+  aiAccount?: Prisma.AiAccountCreateNestedOneWithoutChatConversationsInput
+  project?: Prisma.ProjectCreateNestedOneWithoutChatConversationsInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutChatConversationInput
+  messages?: Prisma.ChatMessageCreateNestedManyWithoutConversationInput
+  actions?: Prisma.ChatActionCreateNestedManyWithoutConversationInput
+  grants?: Prisma.ChatGrantCreateNestedManyWithoutConversationInput
+  projectGrants?: Prisma.ChatProjectGrantCreateNestedManyWithoutConversationInput
+  tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutConversationInput
+  tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutConversationInput
+  attachments?: Prisma.ChatAttachmentCreateNestedManyWithoutConversationInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutConversationInput
+  subagents?: Prisma.ChatSubagentCreateNestedManyWithoutConversationInput
+  liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
+  commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+}
+
+export type ChatConversationUncheckedCreateWithoutFileGrantsInput = {
+  id: string
+  userId: string
+  title?: string | null
+  cliSessionId?: string | null
+  model?: string | null
+  machineId?: string | null
+  aiAccountId?: string | null
+  projectId?: string | null
+  archivedAt?: Date | string | null
+  tabId?: string | null
+  reviewMode?: boolean
+  contextTokens?: number | null
+  contextWindow?: number | null
+  contextCompactedAt?: Date | string | null
+  lastMessageAt?: Date | string | null
+  lastTypedAt?: Date | string | null
+  createdAt?: Date | string
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutChatConversationInput
+  messages?: Prisma.ChatMessageUncheckedCreateNestedManyWithoutConversationInput
+  actions?: Prisma.ChatActionUncheckedCreateNestedManyWithoutConversationInput
+  grants?: Prisma.ChatGrantUncheckedCreateNestedManyWithoutConversationInput
+  projectGrants?: Prisma.ChatProjectGrantUncheckedCreateNestedManyWithoutConversationInput
+  tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutConversationInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutConversationInput
+  attachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutConversationInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutConversationInput
+  subagents?: Prisma.ChatSubagentUncheckedCreateNestedManyWithoutConversationInput
+  liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
+  commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+}
+
+export type ChatConversationCreateOrConnectWithoutFileGrantsInput = {
+  where: Prisma.ChatConversationWhereUniqueInput
+  create: Prisma.XOR<Prisma.ChatConversationCreateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedCreateWithoutFileGrantsInput>
+}
+
+export type ChatConversationUpsertWithoutFileGrantsInput = {
+  update: Prisma.XOR<Prisma.ChatConversationUpdateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedUpdateWithoutFileGrantsInput>
+  create: Prisma.XOR<Prisma.ChatConversationCreateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedCreateWithoutFileGrantsInput>
+  where?: Prisma.ChatConversationWhereInput
+}
+
+export type ChatConversationUpdateToOneWithWhereWithoutFileGrantsInput = {
+  where?: Prisma.ChatConversationWhereInput
+  data: Prisma.XOR<Prisma.ChatConversationUpdateWithoutFileGrantsInput, Prisma.ChatConversationUncheckedUpdateWithoutFileGrantsInput>
+}
+
+export type ChatConversationUpdateWithoutFileGrantsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  contextCompactedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  user?: Prisma.UserUpdateOneRequiredWithoutChatConversationsNestedInput
+  machine?: Prisma.MachineUpdateOneWithoutChatConversationsNestedInput
+  aiAccount?: Prisma.AiAccountUpdateOneWithoutChatConversationsNestedInput
+  project?: Prisma.ProjectUpdateOneWithoutChatConversationsNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutChatConversationNestedInput
+  messages?: Prisma.ChatMessageUpdateManyWithoutConversationNestedInput
+  actions?: Prisma.ChatActionUpdateManyWithoutConversationNestedInput
+  grants?: Prisma.ChatGrantUpdateManyWithoutConversationNestedInput
+  projectGrants?: Prisma.ChatProjectGrantUpdateManyWithoutConversationNestedInput
+  tabQuestions?: Prisma.TabQuestionUpdateManyWithoutConversationNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutConversationNestedInput
+  attachments?: Prisma.ChatAttachmentUpdateManyWithoutConversationNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutConversationNestedInput
+  subagents?: Prisma.ChatSubagentUpdateManyWithoutConversationNestedInput
+  liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
+  commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+}
+
+export type ChatConversationUncheckedUpdateWithoutFileGrantsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  contextTokens?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  contextWindow?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  contextCompactedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastMessageAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutChatConversationNestedInput
+  messages?: Prisma.ChatMessageUncheckedUpdateManyWithoutConversationNestedInput
+  actions?: Prisma.ChatActionUncheckedUpdateManyWithoutConversationNestedInput
+  grants?: Prisma.ChatGrantUncheckedUpdateManyWithoutConversationNestedInput
+  projectGrants?: Prisma.ChatProjectGrantUncheckedUpdateManyWithoutConversationNestedInput
+  tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutConversationNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutConversationNestedInput
+  attachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutConversationNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutConversationNestedInput
+  subagents?: Prisma.ChatSubagentUncheckedUpdateManyWithoutConversationNestedInput
+  liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
 }
 
@@ -2817,6 +3032,7 @@ export type ChatConversationCreateWithoutCommandRulesInput = {
   subagents?: Prisma.ChatSubagentCreateNestedManyWithoutConversationInput
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutCommandRulesInput = {
@@ -2849,6 +3065,7 @@ export type ChatConversationUncheckedCreateWithoutCommandRulesInput = {
   subagents?: Prisma.ChatSubagentUncheckedCreateNestedManyWithoutConversationInput
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutCommandRulesInput = {
@@ -2897,6 +3114,7 @@ export type ChatConversationUpdateWithoutCommandRulesInput = {
   subagents?: Prisma.ChatSubagentUpdateManyWithoutConversationNestedInput
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutCommandRulesInput = {
@@ -2929,6 +3147,7 @@ export type ChatConversationUncheckedUpdateWithoutCommandRulesInput = {
   subagents?: Prisma.ChatSubagentUncheckedUpdateManyWithoutConversationNestedInput
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutTabLimitNoticesInput = {
@@ -2961,6 +3180,7 @@ export type ChatConversationCreateWithoutTabLimitNoticesInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutTabLimitNoticesInput = {
@@ -2993,6 +3213,7 @@ export type ChatConversationUncheckedCreateWithoutTabLimitNoticesInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutTabLimitNoticesInput = {
@@ -3041,6 +3262,7 @@ export type ChatConversationUpdateWithoutTabLimitNoticesInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutTabLimitNoticesInput = {
@@ -3073,6 +3295,7 @@ export type ChatConversationUncheckedUpdateWithoutTabLimitNoticesInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutTabQuestionsInput = {
@@ -3105,6 +3328,7 @@ export type ChatConversationCreateWithoutTabQuestionsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutTabQuestionsInput = {
@@ -3137,6 +3361,7 @@ export type ChatConversationUncheckedCreateWithoutTabQuestionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutTabQuestionsInput = {
@@ -3185,6 +3410,7 @@ export type ChatConversationUpdateWithoutTabQuestionsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutTabQuestionsInput = {
@@ -3217,6 +3443,7 @@ export type ChatConversationUncheckedUpdateWithoutTabQuestionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateWithoutChatDecisionsInput = {
@@ -3249,6 +3476,7 @@ export type ChatConversationCreateWithoutChatDecisionsInput = {
   liveRun?: Prisma.ChatLiveRunCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationUncheckedCreateWithoutChatDecisionsInput = {
@@ -3281,6 +3509,7 @@ export type ChatConversationUncheckedCreateWithoutChatDecisionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedCreateNestedOneWithoutConversationInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutConversationInput
   commandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutConversationInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutConversationInput
 }
 
 export type ChatConversationCreateOrConnectWithoutChatDecisionsInput = {
@@ -3329,6 +3558,7 @@ export type ChatConversationUpdateWithoutChatDecisionsInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutChatDecisionsInput = {
@@ -3361,6 +3591,7 @@ export type ChatConversationUncheckedUpdateWithoutChatDecisionsInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationCreateManyUserInput = {
@@ -3412,6 +3643,7 @@ export type ChatConversationUpdateWithoutUserInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutUserInput = {
@@ -3444,6 +3676,7 @@ export type ChatConversationUncheckedUpdateWithoutUserInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateManyWithoutUserInput = {
@@ -3514,6 +3747,7 @@ export type ChatConversationUpdateWithoutMachineInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutMachineInput = {
@@ -3546,6 +3780,7 @@ export type ChatConversationUncheckedUpdateWithoutMachineInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateManyWithoutMachineInput = {
@@ -3616,6 +3851,7 @@ export type ChatConversationUpdateWithoutProjectInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutProjectInput = {
@@ -3648,6 +3884,7 @@ export type ChatConversationUncheckedUpdateWithoutProjectInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateManyWithoutProjectInput = {
@@ -3718,6 +3955,7 @@ export type ChatConversationUpdateWithoutAiAccountInput = {
   liveRun?: Prisma.ChatLiveRunUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateWithoutAiAccountInput = {
@@ -3750,6 +3988,7 @@ export type ChatConversationUncheckedUpdateWithoutAiAccountInput = {
   liveRun?: Prisma.ChatLiveRunUncheckedUpdateOneWithoutConversationNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutConversationNestedInput
   commandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutConversationNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutConversationNestedInput
 }
 
 export type ChatConversationUncheckedUpdateManyWithoutAiAccountInput = {
@@ -3789,6 +4028,7 @@ export type ChatConversationCountOutputType = {
   subagents: number
   standingGrants: number
   commandRules: number
+  fileGrants: number
 }
 
 export type ChatConversationCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -3804,6 +4044,7 @@ export type ChatConversationCountOutputTypeSelect<ExtArgs extends runtime.Types.
   subagents?: boolean | ChatConversationCountOutputTypeCountSubagentsArgs
   standingGrants?: boolean | ChatConversationCountOutputTypeCountStandingGrantsArgs
   commandRules?: boolean | ChatConversationCountOutputTypeCountCommandRulesArgs
+  fileGrants?: boolean | ChatConversationCountOutputTypeCountFileGrantsArgs
 }
 
 /**
@@ -3900,6 +4141,13 @@ export type ChatConversationCountOutputTypeCountCommandRulesArgs<ExtArgs extends
   where?: Prisma.ChatCommandRuleWhereInput
 }
 
+/**
+ * ChatConversationCountOutputType without action
+ */
+export type ChatConversationCountOutputTypeCountFileGrantsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ChatFileGrantWhereInput
+}
+
 
 export type ChatConversationSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -3936,6 +4184,7 @@ export type ChatConversationSelect<ExtArgs extends runtime.Types.Extensions.Inte
   liveRun?: boolean | Prisma.ChatConversation$liveRunArgs<ExtArgs>
   standingGrants?: boolean | Prisma.ChatConversation$standingGrantsArgs<ExtArgs>
   commandRules?: boolean | Prisma.ChatConversation$commandRulesArgs<ExtArgs>
+  fileGrants?: boolean | Prisma.ChatConversation$fileGrantsArgs<ExtArgs>
   _count?: boolean | Prisma.ChatConversationCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["chatConversation"]>
 
@@ -4026,6 +4275,7 @@ export type ChatConversationInclude<ExtArgs extends runtime.Types.Extensions.Int
   liveRun?: boolean | Prisma.ChatConversation$liveRunArgs<ExtArgs>
   standingGrants?: boolean | Prisma.ChatConversation$standingGrantsArgs<ExtArgs>
   commandRules?: boolean | Prisma.ChatConversation$commandRulesArgs<ExtArgs>
+  fileGrants?: boolean | Prisma.ChatConversation$fileGrantsArgs<ExtArgs>
   _count?: boolean | Prisma.ChatConversationCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ChatConversationIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -4061,6 +4311,7 @@ export type $ChatConversationPayload<ExtArgs extends runtime.Types.Extensions.In
     liveRun: Prisma.$ChatLiveRunPayload<ExtArgs> | null
     standingGrants: Prisma.$ChatStandingGrantPayload<ExtArgs>[]
     commandRules: Prisma.$ChatCommandRulePayload<ExtArgs>[]
+    fileGrants: Prisma.$ChatFileGrantPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -4517,6 +4768,7 @@ export interface Prisma__ChatConversationClient<T, Null = never, ExtArgs extends
   liveRun<T extends Prisma.ChatConversation$liveRunArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ChatConversation$liveRunArgs<ExtArgs>>): Prisma.Prisma__ChatLiveRunClient<runtime.Types.Result.GetResult<Prisma.$ChatLiveRunPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   standingGrants<T extends Prisma.ChatConversation$standingGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ChatConversation$standingGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatStandingGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   commandRules<T extends Prisma.ChatConversation$commandRulesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ChatConversation$commandRulesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatCommandRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  fileGrants<T extends Prisma.ChatConversation$fileGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ChatConversation$fileGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatFileGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -5325,6 +5577,30 @@ export type ChatConversation$commandRulesArgs<ExtArgs extends runtime.Types.Exte
   take?: number
   skip?: number
   distinct?: Prisma.ChatCommandRuleScalarFieldEnum | Prisma.ChatCommandRuleScalarFieldEnum[]
+}
+
+/**
+ * ChatConversation.fileGrants
+ */
+export type ChatConversation$fileGrantsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ChatFileGrant
+   */
+  select?: Prisma.ChatFileGrantSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ChatFileGrant
+   */
+  omit?: Prisma.ChatFileGrantOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ChatFileGrantInclude<ExtArgs> | null
+  where?: Prisma.ChatFileGrantWhereInput
+  orderBy?: Prisma.ChatFileGrantOrderByWithRelationInput | Prisma.ChatFileGrantOrderByWithRelationInput[]
+  cursor?: Prisma.ChatFileGrantWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ChatFileGrantScalarFieldEnum | Prisma.ChatFileGrantScalarFieldEnum[]
 }
 
 /**

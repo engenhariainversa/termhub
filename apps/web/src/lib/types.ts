@@ -164,6 +164,8 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
+  permission_hint: boolean;
   /**
    * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
    * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
@@ -1271,15 +1273,25 @@ export type ChatHostState =
 export type ChatActionClass = 'read' | 'write' | 'irreversible';
 export type ChatActionStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'executed' | 'failed';
 
+/** "Permitir sempre nesta pasta" (TER-1086): share_file from `folder` of that machine, until revoked. */
+export interface ChatFileGrant {
+  id: string;
+  machine_id: string;
+  machine_name: string;
+  folder: string;
+  created_at: string;
+}
+
 /**
  * A pending card's decision word, sent to `POST /api/chat/actions/:id/decision`: `approve`/`deny` decide
  * this one call; `approve_tab`/`approve_project` are the narrow standing grants (agent text on one tab /
  * board tools on one project); `approve_tab_terminal`/`approve_project_all` are the wider ones (keys and
  * shell typing on one tab / everything above plus that on every tab of the project) — spec 2026-09-27 §6.
  * `approve_project_always` is "Liberar sem prazo": this card's kind of action on its project, with no
- * expiry, until revoked (spec 2026-09-28 TER-386).
+ * expiry, until revoked (spec 2026-09-28 TER-386). `approve_folder_always` is "Permitir sempre nesta pasta":
+ * share_file from the card's folder of that machine, until revoked (TER-1086).
  */
-export type ChatDecisionWord = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always' | 'approve_command' | 'approve_command_prefix';
+export type ChatDecisionWord = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always' | 'approve_command' | 'approve_command_prefix' | 'approve_folder_always';
 
 /**
  * A write the concierge proposed on a gated token, as the server enriches it: `summary` is the
@@ -1584,7 +1596,7 @@ interface TabQuestionBase {
   auto_decision?: AutoDecision | null;
 }
 export type TabQuestionChoice = TabQuestionBase & { kind: 'choice'; payload: { questions: TabQuestionItem[]; agent?: 'codex' }; answer: ChoiceAnswer | null };
-export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string }; answer: PermissionAnswer | null };
+export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string; hint?: string }; answer: PermissionAnswer | null };
 /**
  * A question an agent in a tab asked (spec 2026-09-25): shown as a card in the project's chat and
  * answered from there. Plain text only — never render any of it as HTML: it is what an agent wrote.

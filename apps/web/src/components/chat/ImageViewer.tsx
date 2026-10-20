@@ -1,5 +1,5 @@
 import { useTranslation } from '../../i18n';
-import { X } from 'lucide-react';
+import { Download, X } from 'lucide-react';
 import { useRef } from 'react';
 import { api } from '../../lib/api';
 import type { ChatAttachment } from '../../lib/types';
@@ -20,6 +20,16 @@ export function ImageViewer({ attachment, onClose }: { attachment: ChatAttachmen
   return (
     <div ref={dialogRef} tabIndex={-1} onKeyDown={onKeyDown} role="dialog" aria-modal="true" aria-label={attachment.name} className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 outline-none" onMouseDown={onClose}>
       <img src={api.chat.attachments.url(attachment.id)} alt={attachment.name} className="max-h-full max-w-full rounded object-contain" onMouseDown={(e) => e.stopPropagation()} />
+      <a
+        href={api.chat.attachments.url(attachment.id)}
+        download={attachment.name}
+        className="absolute right-16 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+        aria-label={t('Baixar {{name}}', { name: attachment.name })}
+        title={t('Baixar {{name}}', { name: attachment.name })}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <Download size={18} aria-hidden="true" />
+      </a>
       <button ref={closeRef} type="button" className="absolute right-4 top-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70" aria-label={t('Fechar')} onClick={onClose}>
         <X size={18} aria-hidden="true" />
       </button>
