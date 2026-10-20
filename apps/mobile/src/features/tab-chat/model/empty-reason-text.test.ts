@@ -6,6 +6,7 @@ it.each([
   ['not_reported', 'O Claude desta aba ainda não informou a sessão', 'Reinstalar hooks'],
   ['transcript_missing', 'O histórico desta sessão não está mais na máquina', null],
   ['new_session', 'Nenhuma mensagem nesta sessão ainda', null],
+  ['no_agent', 'Esta aba é um terminal sem agente', null],
 ])('%s reads "%s"', (reason, title, install) => {
   const text = emptyReasonText(reason, 'box');
   expect(text.title).toBe(title);
@@ -14,6 +15,7 @@ it.each([
 
 it('names the machine where it matters', () => {
   expect(emptyReasonText('no_hooks', 'box').hint).toContain('em box');
+  expect(emptyReasonText('no_agent', 'box').hint).toContain('em box');
 });
 
 it('every reason of the contract has its own text', () => {

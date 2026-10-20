@@ -79,5 +79,15 @@
   "Nenhuma mensagem nesta sessão ainda": "Aún no hay mensajes en esta sesión",
   "Aqui aparece a sessão atual do Claude nesta aba: uma aba nova, um /clear ou um reinício do Claude começam do zero. Escreva abaixo para falar com o Claude.": "Aquí aparece la sesión actual de Claude en esta pestaña: una pestaña nueva, un /clear o un reinicio de Claude empiezan de cero. Escribe abajo para hablar con Claude.",
   "Não foi possível instalar os hooks. Tente de novo.": "No se pudieron instalar los hooks. Inténtalo de nuevo.",
-  "Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.": "Hooks instalados. Reinicia Claude en esta pestaña (claude --continue retoma la conversación) para que el historial aparezca aquí."
+  "Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.": "Hooks instalados. Reinicia Claude en esta pestaña (claude --continue retoma la conversación) para que el historial aparezca aquí.",
+  "Esta aba é um terminal sem agente": "Esta pestaña es una terminal sin agente",
+  "Inicie uma sessão para conversar por aqui. O agente começa nesta aba com a conta padrão do projeto em {{machine}}.": "Inicia una sesión para conversar desde aquí. El agente arranca en esta pestaña con la cuenta predeterminada del proyecto en {{machine}}.",
+  "Não foi possível carregar as contas de IA.": "No se pudieron cargar las cuentas de IA.",
+  "Não foi possível iniciar o agente. Tente de novo.": "No se pudo iniciar el agente. Inténtalo de nuevo.",
+  "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Sesión iniciada. La conversación aparece aquí en cuanto el agente responda.",
+  "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "Ninguna cuenta de IA de esta máquina puede iniciar un agente. Registra una en Cuentas de IA.",
+  "Iniciar com {{account}} ({{cli}})": "Iniciar con {{account}} ({{cli}})",
+  "Iniciar sessão": "Iniciar sesión",
+  "Com {{account}} ({{cli}})": "Con {{account}} ({{cli}})",
+  "Escolher outra conta": "Elegir otra cuenta"
 }

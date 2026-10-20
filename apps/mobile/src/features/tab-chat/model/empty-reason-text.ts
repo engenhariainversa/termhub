@@ -32,6 +32,11 @@ const TEXT: Record<string, { title: string; hint: string; install: string | null
     hint: tk('Aqui aparece a sessão atual do Claude nesta aba: uma aba nova, um /clear ou um reinício do Claude começam do zero. Escreva abaixo para falar com o Claude.'),
     install: null,
   },
+  no_agent: {
+    title: tk('Esta aba é um terminal sem agente'),
+    hint: tk('Inicie uma sessão para conversar por aqui. O agente começa nesta aba com a conta padrão do projeto em {{machine}}.'),
+    install: null,
+  },
 };
 
 /** What the empty conversation says for `reason`; the generic line for null or a reason this build does not know. */

@@ -31,6 +31,8 @@ export interface TabChatData {
   connected: boolean;
   /** The last failure of the view, translated. */
   error: string | null;
+  /** Why the conversation has no history (`TabChatPage.empty_reason`); null when it has some. */
+  emptyReason: string | null;
 }
 
 export const initialTabChat = (): TabChatData => ({
@@ -48,6 +50,7 @@ export const initialTabChat = (): TabChatData => ({
   loadingEarlier: false,
   connected: false,
   error: null,
+  emptyReason: null,
 });
 
 /** A page's fields, as the view keeps them. */
@@ -63,6 +66,7 @@ export function fromPage(page: TabChatPage): Partial<TabChatData> {
     degraded: page.degraded,
     questions: page.questions,
     suggestions: page.suggestions,
+    emptyReason: page.empty_reason ?? null,
   };
 }
 
@@ -72,7 +76,7 @@ export function applyFrame(s: TabChatData, f: Exclude<TabChatFrame, { type: 'res
     case 'hello':
       return { ...s, availability: f.availability };
     case 'items':
-      return { ...s, items: mergeItems(s.items, f.items, 'append'), live: f.live, mode: f.mode ?? s.mode };
+      return { ...s, items: mergeItems(s.items, f.items, 'append'), live: f.live, mode: f.mode ?? s.mode, emptyReason: f.items.length ? null : s.emptyReason };
     case 'state':
       return { ...s, tab: f.tab, availability: f.tab.availability };
     case 'unavailable':

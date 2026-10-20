@@ -79,5 +79,15 @@
   "Nenhuma mensagem nesta sessão ainda": "No messages in this session yet",
   "Aqui aparece a sessão atual do Claude nesta aba: uma aba nova, um /clear ou um reinício do Claude começam do zero. Escreva abaixo para falar com o Claude.": "This shows the current Claude session in this tab: a new tab, a /clear or a restart of Claude starts from scratch. Write below to talk to Claude.",
   "Não foi possível instalar os hooks. Tente de novo.": "Could not install the hooks. Try again.",
-  "Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.": "Hooks installed. Restart Claude in this tab (claude --continue picks the conversation back up) for the history to show up here."
+  "Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.": "Hooks installed. Restart Claude in this tab (claude --continue picks the conversation back up) for the history to show up here.",
+  "Esta aba é um terminal sem agente": "This tab is a terminal with no agent",
+  "Inicie uma sessão para conversar por aqui. O agente começa nesta aba com a conta padrão do projeto em {{machine}}.": "Start a session to talk from here. The agent starts in this tab with the project's default account on {{machine}}.",
+  "Não foi possível carregar as contas de IA.": "Could not load the AI accounts.",
+  "Não foi possível iniciar o agente. Tente de novo.": "Could not start the agent. Try again.",
+  "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Session started. The conversation shows up here as soon as the agent answers.",
+  "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one in AI accounts.",
+  "Iniciar com {{account}} ({{cli}})": "Start with {{account}} ({{cli}})",
+  "Iniciar sessão": "Start session",
+  "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
+  "Escolher outra conta": "Choose another account"
 }

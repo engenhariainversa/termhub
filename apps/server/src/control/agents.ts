@@ -3,13 +3,13 @@ import { buildGuardSettings, isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_D
 import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
 import { getAccountUsage } from '../ai/index.js';
-import { accountsOn, isAlias, modelFor } from '../ai/project-accounts.js';
+import { accountsOn, isAgentProvider, isAlias, loadProjectAi, modelFor } from '../ai/project-accounts.js';
 import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
-import type { AiAccount, AiProvider, Machine, Project, Task } from '../db/repositories/types.js';
+import type { AiAccount, AiProvider, Machine, Project, Tab, Task } from '../db/repositories/types.js';
 import { HttpError, localizedOf } from '../lib/errors.js';
 import { mintTabToken, TAB_TOKEN_TOOLS } from '../mcp/tab-token.js';
-import { typeCommandLine } from '../terminal/session-ops.js';
+import { paneForeground, typeCommandLine } from '../terminal/session-ops.js';
 import { GUARD_MIN_AGENT_VERSION, guardSupported, installTabMcp, TAB_MCP_SERVER, tabMcpSupported } from '../terminal/tab-mcp.js';
 import { ControlError, type ControlContext } from './context.js';
 import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
@@ -259,12 +259,13 @@ function modelFlag(provider: AiProvider, model: string | null | undefined): stri
 /**
  * The exact line typed into the tab; every value goes through `shellQuote`, so nothing in it is interpreted.
  * With `mcp`, the CLI also gets the tab's memory MCP (D8 Claude, D9 Codex): the line names only the file on
- * the machine that holds the token, never the token itself.
+ * the machine that holds the token, never the token itself. A null `prompt` starts the CLI with no first
+ * message (TER-1094, "Iniciar sessão" in a tab's conversation): the person writes it.
  */
 export function launchLine(
   provider: AiProvider,
   configDir: string | null,
-  prompt: string,
+  prompt: string | null,
   mcp?: { tabId: string; url: string } | null,
   model?: string | null,
   permission?: AgentPermission | null,
@@ -273,18 +274,21 @@ export function launchLine(
   const { binary: bin, configEnv, flags } = launcher(provider);
   const binary = `${bin}${flags}${modelFlag(provider, model)}`;
   const { clear, prefix } = accountEnv(configEnv, configDir);
+  const quoted = prompt === null ? '' : ` ${shellQuote(prompt)}`;
+  // after variadic options: `--` ends them, so the prompt is never read as one of their values
+  const afterOptions = prompt === null ? '' : ` --${quoted}`;
   // Claude only: automation runs only Claude accounts; Codex gets the plain line.
   if (permission && provider === 'claude') {
     if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
     // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
-    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? null)} -- ${shellQuote(prompt)}`;
+    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? null)}${afterOptions}`;
   }
-  if (!mcp) return `${clear}${prefix}${binary} ${shellQuote(prompt)}`;
+  if (!mcp) return `${clear}${prefix}${binary}${quoted}`;
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
-  if (provider === 'claude') return `${clear}${prefix}${binary} ${claudeMcpFlags(mcp.tabId)} -- ${shellQuote(prompt)}`;
+  if (provider === 'claude') return `${clear}${prefix}${binary} ${claudeMcpFlags(mcp.tabId)}${afterOptions}`;
   const tokenEnv = `TERMHUB_MCP_TOKEN="$(cat ${tabMcpPath(mcp.tabId, 'token')})"`;
   const server = `mcp_servers.${TAB_MCP_SERVER}`;
-  return `${clear}${tokenEnv} ${prefix}${binary} -c ${shellQuote(`${server}.url="${mcp.url}"`)} -c ${shellQuote(`${server}.bearer_token_env_var="TERMHUB_MCP_TOKEN"`)} ${shellQuote(prompt)}`;
+  return `${clear}${tokenEnv} ${prefix}${binary} -c ${shellQuote(`${server}.url="${mcp.url}"`)} -c ${shellQuote(`${server}.bearer_token_env_var="TERMHUB_MCP_TOKEN"`)}${quoted}`;
 }
 
 /**
@@ -644,6 +648,87 @@ export async function linkTabTask(ctx: ControlContext, input: { tab_id: string; 
     previous_tab_id: task.tab_id && task.tab_id !== tab.id ? task.tab_id : null,
     board_url: boardUrl(task.project_id),
   };
+}
+
+/** One account "Iniciar sessão" can start a tab's agent with (TER-1094). */
+export interface TabAgentChoice {
+  account_id: string;
+  label: string;
+  provider: AiProvider;
+  model: string | null;
+}
+
+/**
+ * The accounts a tab's agent can start with (TER-1094): the accounts of the tab's machine whose CLI the
+ * machine has, usable in the project (TER-990), the project's own list first and in its order. `suggested`
+ * is what starts without asking: the project's first listed account with room (as `start_agent` picks it);
+ * without a list on that machine, the machine's only account, else its only default login (no config dir).
+ * Anything else (say a default Claude and a default Codex) is the person's choice: null.
+ */
+export async function tabAgentOptions(ctx: ControlContext, project: Project, machine: Machine): Promise<{ choices: TabAgentChoice[]; suggested: string | null }> {
+  const { ai, accounts } = await loadProjectAi(ctx.repos, project.id, ctx.scope.ownerId);
+  const here = accounts.filter((a) => a.machine_id === machine.id && isAgentProvider(a.provider) && usableIn(a, project.id) && machine.capabilities.includes(launcher(a.provider).binary));
+  const listed = accountsOn(project.id, ai, here, machine.id);
+  const ordered = [...listed, ...here.filter((a) => !listed.includes(a))];
+  const choices = ordered.map((a) => ({ account_id: a.id, label: a.label, provider: a.provider, model: modelFor(ai, a.provider) }));
+  let suggested: AiAccount | undefined;
+  if (listed.length) suggested = (await firstWithRoom(listed, () => machine)) ?? listed[0];
+  else if (here.length === 1) suggested = here[0];
+  else {
+    const defaults = here.filter((a) => a.config_dir === null);
+    if (defaults.length === 1) suggested = defaults[0];
+  }
+  return { choices, suggested: suggested?.id ?? null };
+}
+
+export interface StartTabAgentResult {
+  /** the tab the agent runs in: this one, or a new tab of the same project and machine */
+  tab_id: string;
+  new_tab: boolean;
+  account: { id: string; label: string };
+  provider: AiProvider;
+}
+
+/**
+ * "Iniciar sessão" in the conversation of a tab that is a plain terminal (TER-1094): the account's CLI,
+ * with the project's model and the tab's memory MCP, as `start_agent` launches it but with no first
+ * message. It is typed into the tab itself only when its shell is in front (`paneForeground`); a pane busy
+ * with something else, gone, or on an agent too old to tell gets a new tab of the same project and
+ * machine instead, so nothing is ever typed into a program that is not the shell.
+ */
+export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Project, machine: Machine, accountId?: string): Promise<StartTabAgentResult> {
+  if (tab.kind !== 'terminal' || !tab.tmux_session) throw new ControlError('NOT_A_TERMINAL', 'Só abas de terminal podem iniciar um agente');
+  const { choices, suggested } = await tabAgentOptions(ctx, project, machine);
+  const id = accountId ?? suggested;
+  if (id === null) {
+    if (choices.length === 0) throw new ControlError('ACCOUNT_REQUIRED', msg('Nenhuma conta de IA em {{machine}} pode iniciar um agente neste projeto: cadastre uma em Contas de IA', { machine: machine.name }));
+    throw new ControlError('ACCOUNT_CHOICE_REQUIRED', 'Escolha a conta para iniciar a sessão');
+  }
+  const choice = choices.find((c) => c.account_id === id);
+  if (!choice) throw new ControlError('ACCOUNT_OTHER_MACHINE', msg('Esta conta não pode iniciar um agente em {{machine}} neste projeto', { machine: machine.name }));
+  // an account exclusive to another project (TER-990) is never among the choices
+  const account = await accountOnMachine(ctx, choice.account_id, machine);
+  // checked before anything is typed or opened
+  launchLine(account.provider, account.config_dir, null, null, choice.model);
+
+  const pane = await paneForeground(machine, tab.tmux_session).catch((e: unknown) => {
+    if (e instanceof HttpError && e.code === 'AGENT_OUTDATED') return null;
+    throw e;
+  });
+  let target: { tab_id: string; name: string; tmux_session: string };
+  if (pane === 'shell') target = { tab_id: tab.id, name: tab.name, tmux_session: tab.tmux_session };
+  else {
+    const opened = await openTab(ctx, { project_id: project.id, machine_id: machine.id, name: `${launcher(account.provider).binary} · ${account.label}`.slice(0, TAB_NAME_MAX) });
+    target = { tab_id: opened.tab_id, name: opened.name, tmux_session: opened.tmux_session as string };
+  }
+  // the tab's earlier MCP token (an agent that exited) dies before a new one is minted; best effort
+  if (target.tab_id === tab.id) await ctx.repos.apiTokens.revokeForTab(tab.id).catch(() => undefined);
+  const mcp = await tabMcp(ctx, machine, account.provider, target);
+  const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
+  await typeCommandLine(machine, target.tmux_session, line);
+  await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
+  ctx.log?.info({ tabId: target.tab_id, machineId: machine.id, provider: account.provider, newTab: target.tab_id !== tab.id }, 'tab chat: agent started');
+  return { tab_id: target.tab_id, new_tab: target.tab_id !== tab.id, account: { id: account.id, label: account.label }, provider: account.provider };
 }
 
 /** Why a tab started without its memory MCP: the log's code and the note's pt-BR reason (D10). */
