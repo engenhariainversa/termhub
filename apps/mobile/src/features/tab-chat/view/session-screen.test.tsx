@@ -72,6 +72,37 @@ async function renderSession(tabId = 't-api') {
   return view;
 }
 
+describe('an empty conversation says why (TER-1091)', () => {
+  const empty = (emptyReason: string, availability = 'no_session') => act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason, availability }));
+
+  it('a machine without the hooks says so and offers to install them', async () => {
+    await renderSession();
+    const installHooks = jest.fn(async () => undefined);
+    await act(() => current().setState({ installHooks }));
+    await empty('no_hooks');
+    expect(screen.getByText('Sem histórico: a máquina não tem os hooks do termhub')).toBeTruthy();
+    expect(screen.getByText(/Instale os hooks em jarvis/)).toBeTruthy();
+    expect(screen.queryByText('Nenhuma mensagem ainda')).toBeNull();
+    fireEvent.press(screen.getByText('Instalar hooks'));
+    expect(installHooks).toHaveBeenCalledTimes(1);
+  });
+
+  it('once installed, it says what comes next instead of the button', async () => {
+    await renderSession();
+    await empty('not_reported');
+    await act(() => current().setState({ hooksInstalled: true }));
+    expect(screen.getByText(/Hooks instalados. Reinicie o Claude nesta aba/)).toBeTruthy();
+    expect(screen.queryByText('Reinstalar hooks')).toBeNull();
+  });
+
+  it('a new session says that only the current session shows, with no button', async () => {
+    await renderSession();
+    await empty('new_session', 'ready');
+    expect(screen.getByText('Nenhuma mensagem nesta sessão ainda')).toBeTruthy();
+    expect(screen.queryByTestId('session-install-hooks')).toBeNull();
+  });
+});
+
 describe('the conversation', () => {
   it('shows the messages, the tools folded in one row, and the header with state and mode', async () => {
     await renderSession();

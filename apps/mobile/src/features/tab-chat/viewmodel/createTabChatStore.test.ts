@@ -180,6 +180,81 @@ describe('frames', () => {
   });
 });
 
+/** `t-api`'s page as a tab that has not reported a session yet (TER-1091). */
+async function noSessionPage(ctx: Awaited<ReturnType<typeof setup>>, emptyReason = 'no_hooks'): Promise<TTabChatPage> {
+  const real = await ctx.api.tabChat(ctx.store.getState().auth(), 't-api');
+  return { ...real, tab: { ...real.tab, availability: 'no_session' }, session_id: null, items: [], before: null, live: null, mode: null, empty_reason: emptyReason };
+}
+
+describe('an empty conversation (TER-1091)', () => {
+  it('keeps why it is empty from the page', async () => {
+    const ctx = await setup();
+    const empty = await noSessionPage(ctx);
+    jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty);
+    await ctx.chat.getState().open();
+    expect(ctx.chat.getState().emptyReason).toBe('no_hooks');
+  });
+
+  it('a hello that says ready to a page that had no session loads the page again, history included', async () => {
+    const ctx = await setup();
+    const empty = await noSessionPage(ctx, 'not_reported');
+    const read = jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty);
+    await ctx.chat.getState().open();
+    expect(ctx.chat.getState().items).toEqual([]);
+    await jest.advanceTimersByTimeAsync(0); // the socket's hello: the session was reported meanwhile
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(ctx.chat.getState().items.length).toBeGreaterThan(0);
+    expect(ctx.chat.getState().live).not.toBeNull();
+    expect(ctx.chat.getState().emptyReason).toBeNull();
+  });
+
+  it('a state frame turning the tab readable while nothing was followed loads the page again', async () => {
+    const ctx = await setup();
+    const empty = await noSessionPage(ctx, 'not_reported');
+    const read = jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty).mockResolvedValueOnce(empty);
+    await openAndConnect(ctx.chat);
+    expect(ctx.chat.getState().items).toEqual([]);
+    ctx.controls.tabFrame('t-api', { type: 'state', tab: { ...ctx.chat.getState().tab!, availability: 'ready' } });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(ctx.chat.getState().items.length).toBeGreaterThan(0);
+  });
+
+  it('a state frame of a tab already followed never re-reads the page', async () => {
+    const ctx = await setup();
+    await openAndConnect(ctx.chat);
+    ctx.controls.tabFrame('t-api', { type: 'unavailable', availability: 'offline' });
+    const read = jest.spyOn(ctx.api, 'tabChat');
+    ctx.controls.tabFrame('t-api', { type: 'state', tab: { ...ctx.chat.getState().tab!, availability: 'ready' } });
+    await jest.advanceTimersByTimeAsync(0);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('"Instalar hooks" installs on the tab\'s machine, then reads the page again', async () => {
+    const ctx = await setup();
+    // the first page, the hello's re-read (the mock's socket says ready), then the one after the install
+    const [noHooks, notReported] = [await noSessionPage(ctx), await noSessionPage(ctx, 'not_reported')];
+    jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(noHooks).mockResolvedValueOnce(noHooks).mockResolvedValueOnce(notReported);
+    const install = jest.spyOn(ctx.api, 'installMachineHooks');
+    await openAndConnect(ctx.chat);
+    expect(ctx.chat.getState().emptyReason).toBe('no_hooks');
+    await ctx.chat.getState().installHooks();
+    expect(install).toHaveBeenCalledWith(expect.anything(), 'm-jarvis');
+    expect(ctx.chat.getState()).toMatchObject({ hooksInstalled: true, installingHooks: false, emptyReason: 'not_reported', error: null });
+  });
+
+  it('a refused install says why, and nothing is marked installed', async () => {
+    const ctx = await setup();
+    jest.spyOn(ctx.api, 'installMachineHooks').mockRejectedValueOnce(new ApiError(503, 'AGENT_OFFLINE', 'Máquina offline'));
+    await openAndConnect(ctx.chat);
+    await ctx.chat.getState().installHooks();
+    expect(ctx.chat.getState()).toMatchObject({ hooksInstalled: false, installingHooks: false, error: 'Máquina offline' });
+    jest.spyOn(ctx.api, 'installMachineHooks').mockRejectedValueOnce(new Error('network'));
+    await ctx.chat.getState().installHooks();
+    expect(ctx.chat.getState().error).toBe('Não foi possível instalar os hooks. Tente de novo.');
+  });
+});
+
 describe('loadEarlier', () => {
   it('prepends the page before, once per page', async () => {
     const { chat, api } = await setup();

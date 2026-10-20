@@ -11,6 +11,7 @@ import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTab
 import { ApiError } from '@/services/api/errors';
 import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { availabilityText } from '../model/availability-text';
+import { emptyReasonText } from '../model/empty-reason-text';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { buildRows, type Row } from '../model/timeline';
 import { useTabChatStore } from '../viewmodel/useTabChatStore';
@@ -78,7 +79,10 @@ export function SessionView({ tabId }: { tabId: string }) {
   const questionErrors = store((s) => s.questionErrors);
   const busySuggestionIds = store((s) => s.busySuggestionIds);
   const suggestionErrors = store((s) => s.suggestionErrors);
-  const { send, act, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
+  const emptyReason = store((s) => s.emptyReason);
+  const installingHooks = store((s) => s.installingHooks);
+  const hooksInstalled = store((s) => s.hooksInstalled);
+  const { send, act, installHooks, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
@@ -161,6 +165,7 @@ export function SessionView({ tabId }: { tabId: string }) {
   };
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/chats' as Href));
   const why = availabilityText(availability);
+  const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '');
 
   return (
     <Screen padded={false} width="full">
@@ -177,7 +182,22 @@ export function SessionView({ tabId }: { tabId: string }) {
             <ActivityIndicator />
           </View>
         ) : entries.length === 0 ? (
-          <View className="flex-1">{status === 'ready' ? <EmptyState title={t('Nenhuma mensagem ainda')} hint={t('Escreva abaixo para falar com o Claude nesta aba.')} /> : null}</View>
+          <View className="flex-1">
+            {status === 'ready' ? (
+              // Never blank without a reason (TER-1091): why there is no history, and what brings it.
+              <View testID="session-empty" className="flex-1">
+                <EmptyState
+                  title={empty.title}
+                  hint={hooksInstalled ? TAB_CHAT_MSG.hooksInstalled : empty.hint}
+                  action={
+                    empty.install && !hooksInstalled && !BLOCKED.has(availability) ? (
+                      <Button testID="session-install-hooks" label={empty.install} onPress={() => void installHooks()} loading={installingHooks} />
+                    ) : undefined
+                  }
+                />
+              </View>
+            ) : null}
+          </View>
         ) : (
           <FlatList
             testID="session-thread"
