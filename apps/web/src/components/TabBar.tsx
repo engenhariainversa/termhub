@@ -54,8 +54,8 @@ interface Props {
   onToggleView?: (id: string) => void;
 }
 
-/** A terminal can be read as a conversation unless its hooks say it runs another agent (Codex, Cursor): only Claude Code's transcript is read. */
-const canToggle = (tab: BarTab): tab is Tab => tab.kind === 'terminal' && (!tab.state_tool || tab.state_tool === 'claude');
+/** A terminal can be read as a conversation unless its hooks say it runs an agent whose transcript is not read (Cursor): Claude Code's and Codex's are (TER-1095). */
+const canToggle = (tab: BarTab): tab is Tab => tab.kind === 'terminal' && (!tab.state_tool || tab.state_tool === 'claude' || tab.state_tool === 'codex');
 
 /** 16×12 glyph of the preset's cell arrangement. */
 function PresetIcon({ preset }: { preset: Preset }) {

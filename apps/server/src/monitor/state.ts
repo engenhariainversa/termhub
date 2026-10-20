@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops';
+import { isClaudeSessionId, isClaudeTranscriptPath, isCodexTranscriptPath } from '@termhub/machine-ops';
 import { QUESTION_MAX, parseAskUserQuestion, parseCodexUserInput, parsePermissionTool, sliceUnits, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
+import { permissionHint } from '../chat/permission-hint.js';
 import { activityOf } from './activity.js';
 import { classifyBackgroundTurnEnd, classifyTurnEnd } from './turn-end.js';
 
@@ -128,6 +129,17 @@ export function claudeSessionOf(ev: unknown): { session_id: string; transcript_p
 }
 
 /**
+ * The Codex session a hook payload of the main thread belongs to (TER-1095): Codex's hooks send the same
+ * `session_id` / `transcript_path` pair as Claude's, the path being the session's `rollout-*.jsonl`. A
+ * subagent's event (an `agent_id`) is its own thread, not the tab's conversation. `notify` carries no path.
+ */
+export function codexSessionOf(ev: unknown): { session_id: string; transcript_path: string } | null {
+  if (!isObj(ev) || !isClaudeSessionId(ev.session_id) || 'agent_id' in ev || ev.subagent === true) return null;
+  const sid = ev.session_id;
+  return isCodexTranscriptPath(ev.transcript_path, sid) ? { session_id: sid, transcript_path: ev.transcript_path } : null;
+}
+
+/**
  * How many entries of a Claude `Stop`'s `background_tasks` have `status: "running"` (Claude Code 2.1.283 sends
  * `[{ id, type, status, description, command }]`). Anything else counts as 0. Descriptions and commands are the
  * person's and are never read.
@@ -162,10 +174,15 @@ function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
       // already carried the question (the current script drops it; this covers anything else).
       // ExitPlanMode's dialog is not a yes/no prompt either (its "1" is "Yes, and use auto mode"),
       // so it opens nothing and stays in the tab.
+      // From a machine that opted in to hints (TER-614) the prompt of a command or file tool arrives
+      // whole: only the filtered excerpt of `tool_input` is kept, on the card's payload, never in meta
+      // or text. The ingest drops it again when the machine's switch is off.
       const tool = str(ev.tool_name);
       const base: Interpreted = { kind: 'waiting_permission', text: null, meta: { event: name, tool } };
       const payload = tool === 'AskUserQuestion' || tool === 'ExitPlanMode' ? null : parsePermissionTool(tool);
-      return payload ? { ...base, question: { kind: 'permission', payload, tool_use_id: null } } : base;
+      if (!payload) return base;
+      const hint = permissionHint(payload.tool_name, ev.tool_input, ev.cwd);
+      return { ...base, question: { kind: 'permission', payload: hint ? { ...payload, hint } : payload, tool_use_id: null } };
     }
     case 'Notification': {
       const type = str(ev.notification_type);

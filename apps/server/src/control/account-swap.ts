@@ -1,3 +1,4 @@
+import { isClaudeTranscriptPath } from '@termhub/machine-ops';
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import { linkClaudeSession } from '../ai/claude-session.js';
@@ -150,7 +151,8 @@ export async function swapAccount(
   const session = tab.tmux_session;
   const sessionId = tab.agent_session_id;
   const transcriptPath = tab.agent_transcript_path;
-  if (!sessionId || !transcriptPath) {
+  // A Codex session (TER-1095) is reported the same way, but only a Claude one moves between accounts.
+  if (!sessionId || !transcriptPath || !isClaudeTranscriptPath(transcriptPath, sessionId)) {
     throw new ControlError('NO_SESSION', 'O termhub não sabe qual sessão do Claude roda nesta aba (os hooks da máquina estão instalados?)');
   }
   // an agent moving between instances (a deploy) gets a few seconds to attach before it is called offline

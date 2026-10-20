@@ -158,7 +158,7 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
 
   // A plain terminal (TER-1094): the empty state explains it, so the availability banner would only repeat it.
   const noAgent = chat.status === 'ready' && chat.emptyReason === 'no_agent' && rows.length === 0;
-  const reason = noAgent ? null : availabilityText(chat.availability);
+  const reason = noAgent ? null : availabilityText(chat.availability, chat.emptyReason);
   const mode = modeLabel(chat.mode);
 
   return (

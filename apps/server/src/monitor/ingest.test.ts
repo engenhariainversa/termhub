@@ -65,6 +65,33 @@ function repos(current: Tab) {
 }
 const pre = (tool_name: string, verb?: string) => ({ machineId: 'm1', tool: 'claude' as const, session: 'th-t1', event: { hook_event_name: 'PreToolUse', tool_name, ...(verb ? { verb } : {}) } });
 
+describe('ingestHookEvent — permission hints (TER-614)', () => {
+  const whole = {
+    machineId: 'm1',
+    tool: 'claude' as const,
+    session: 'th-t1',
+    event: { session_id: 's1', cwd: '/w', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'export TOKEN=abc && npm test', description: 'd' }, permission_suggestions: [] },
+  };
+  const opened = () => (note.mock.calls.at(-1)![3] as { question?: { payload: Record<string, unknown> } }).question?.payload;
+
+  it('keeps the filtered hint from a machine whose switch is on', async () => {
+    note.mockClear();
+    const { r } = repos(tab({ state: 'working' }));
+    (r.machines.findById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'm1', owner_id: 'u1', permission_hint: true });
+    await ingestHookEvent(r, log, whole);
+    expect(opened()).toEqual({ tool_name: 'Bash', hint: 'export TOKEN=••• && npm test' });
+  });
+
+  it('drops it when the switch is off, whatever the machine sent', async () => {
+    note.mockClear();
+    const { r, recordEvent } = repos(tab({ state: 'working' }));
+    (r.machines.findById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'm1', owner_id: 'u1', permission_hint: false });
+    await ingestHookEvent(r, log, whole);
+    expect(opened()).toEqual({ tool_name: 'Bash' });
+    expect(JSON.stringify(recordEvent.mock.calls)).not.toContain('TOKEN');
+  });
+});
+
 describe('ingestHookEvent — activity', () => {
   it('records an event when the state changes, carrying the activity', async () => {
     publish.mockClear();
@@ -550,12 +577,49 @@ describe('ingestHookEvent — the tab chat is told (spec 2026-10-01 tab chat §5
     expect(onTabEvent).toHaveBeenCalledWith('t1');
   });
 
-  it('a Codex event, or a session of no tab, does not', async () => {
+  it('a Codex event calls it too (TER-1095): its conversation is read the same way', async () => {
+    const { r } = repos(tab({ state: 'waiting_input' }));
+    const onTabEvent = vi.fn();
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    expect(onTabEvent).toHaveBeenCalledWith('t1');
+  });
+
+  it('a Cursor event, or a session of no tab, does not', async () => {
     const onTabEvent = vi.fn();
     const { r } = repos(tab({ state: 'waiting_input' }));
-    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'cursor', session: 'th-t1', event: { hook_event_name: 'beforeSubmitPrompt' } }, undefined, onTabEvent);
     const none = { tabs: { findByTmuxSession: vi.fn(async () => undefined) } } as unknown as Repositories;
     await ingestHookEvent(none, log, { machineId: 'm1', tool: 'claude', session: 'th-x', event: { hook_event_name: 'Stop' } }, undefined, onTabEvent);
     expect(onTabEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestHookEvent — the Codex session a tab runs (TER-1095)', () => {
+  const SID = '01a15a47-61e1-79b1-90a3-ab914bf01695';
+  const PATH = `/home/p/.codex/sessions/2026/10/20/rollout-2026-10-20T14-06-29-${SID}.jsonl`;
+  // the fields codex-cli 0.159.x sends before hook_event_name (spec 2026-09-29 codex monitor hooks §2)
+  const hook = (event: object) => ({ machineId: 'm1', tool: 'codex' as const, session: 'th-t1', event: { session_id: SID, turn_id: 't1', transcript_path: PATH, cwd: '/w', ...event } });
+
+  it('keeps the session id and rollout path a prompt or a turn end reports', async () => {
+    for (const ev of [{ hook_event_name: 'UserPromptSubmit', prompt: 'x' }, { hook_event_name: 'Stop', last_assistant_message: 'ok' }]) {
+      const { r, setAgentFields } = repos(tab({ state: 'waiting_input', state_tool: 'codex' }));
+      await ingestHookEvent(r, log, hook(ev));
+      expect(setAgentFields).toHaveBeenCalledWith('t1', { agent_session_id: SID, agent_transcript_path: PATH });
+    }
+  });
+
+  it('writes nothing when the session is the same, for a notify, a subagent or a path that is not a rollout', async () => {
+    const same = repos(tab({ state: 'working', state_tool: 'codex', agent_session_id: SID, agent_transcript_path: PATH }));
+    await ingestHookEvent(same.r, log, hook({ hook_event_name: 'Stop', last_assistant_message: 'ok' }));
+    expect(same.setAgentFields).not.toHaveBeenCalled();
+    for (const event of [
+      { type: 'agent-turn-complete', 'thread-id': SID, 'last-assistant-message': 'ok' },
+      { session_id: SID, transcript_path: PATH, agent_id: 'sub', hook_event_name: 'Stop', last_assistant_message: 'ok' },
+      { session_id: SID, transcript_path: `/home/p/.claude/projects/-w/${SID}.jsonl`, hook_event_name: 'Stop', last_assistant_message: 'ok' },
+    ]) {
+      const { r, setAgentFields } = repos(tab({ state: 'working', state_tool: 'codex' }));
+      await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event });
+      expect(setAgentFields).not.toHaveBeenCalled();
+    }
   });
 });

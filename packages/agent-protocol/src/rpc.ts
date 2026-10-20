@@ -238,7 +238,8 @@ export const RPC = {
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
    * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
-   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   * transcript, here or in the account's other project dirs (since agent 0.15.0). A Codex session's
+   * `rollout-*.jsonl` is read the same way, at its own path only (capability `transcript.codex`).
    */
   /**
    * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
@@ -389,6 +390,8 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /** The machine's opt-in to permission hints (TER-614): writes or removes ~/.termhub/permission-hint; since agent 0.33.0. */
+  'hooks.hint': def(z.object({ enabled: z.boolean() }), z.object({ enabled: z.boolean() })),
   /**
    * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
    * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.

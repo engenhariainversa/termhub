@@ -120,6 +120,8 @@ export interface Machine {
   ai_usage_query: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
+  /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
+  permission_hint: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
   is_local: boolean;
   /** null = orphan (only visible to admins viewing "all") */
@@ -390,6 +392,7 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   claude_auto_swap: m.claudeAutoSwap,
   ai_usage_query: m.aiUsageQuery,
   automation_allowed: m.automationAllowed,
+  permission_hint: m.permissionHint,
   is_local: m.isLocal,
   owner_id: m.ownerId,
   owner_name: m.owner?.name ?? null,

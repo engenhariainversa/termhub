@@ -12,7 +12,7 @@ import { takeInputOrigin } from '../terminal/input-origin.js';
 import { buildOriginNote } from '../terminal/origin-note.js';
 import { applyRunOutcome, checkAuthOnScreen, defaultAuthScreenDeps } from './attention.js';
 import { monitorBus } from './bus.js';
-import { claudeSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
+import { claudeSessionOf, codexSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
 
 /** `origin_note`: what the hook prints back for a prompt termhub typed (TER-851), when one matched. */
 export type IngestResult = ({ ok: true; tab: Tab } | { ok: false; reason: 'unknown_session' | 'ignored' }) & { origin_note?: string };
@@ -22,7 +22,7 @@ export type IngestResult = ({ ok: true; tab: Tab } | { ok: false; reason: 'unkno
  * the event as the tab's state and tell the subscribers. Logs metadata only (never `text`). `waker`
  * (spec 2026-09-26 concierge memory §7) reaches `noteHookEvent` from here — the route's own deps,
  * passed down from `app.ts` next to `repos` and `log` — since this module already sits between the
- * hooks route and the tab-question bookkeeping. `onTabEvent` is told the tab of every Claude event
+ * hooks route and the tab-question bookkeeping. `onTabEvent` is told the tab of every Claude and Codex event
  * (the tab chat hub's `poke`).
  */
 export async function ingestHookEvent(
@@ -37,10 +37,10 @@ export async function ingestHookEvent(
   // Taken before anything else reads the event: the prompt is compared in memory and dropped here.
   const originNote = input.tool === 'claude' ? originNoteFor(repos, log, tab, input.event) : null;
   const result = await ingestForTab(repos, log, tab, input, waker);
-  // A Claude hook means the session's transcript moved: an open tab chat reads it now, after the tab
-  // row (session id, state) is updated (spec 2026-10-01 tab chat §5.3). Every event, even one the wait
+  // A Claude or Codex hook means the session's transcript moved: an open tab chat reads it now, after the
+  // tab row (session id, state) is updated (spec 2026-10-01 tab chat §5.3). Every event, even one the wait
   // rule dropped: a dropped event still wrote lines.
-  if (input.tool === 'claude' && onTabEvent) {
+  if ((input.tool === 'claude' || input.tool === 'codex') && onTabEvent) {
     try {
       onTabEvent(tab.id);
     } catch (err) {
@@ -79,7 +79,7 @@ async function ingestForTab(
   input: { machineId: string; tool: HookTool; session: string; event: unknown },
   waker?: Waker,
 ): Promise<IngestResult> {
-  const raw = interpretHookEvent(input.tool, input.event);
+  const raw = await dropHintUnlessOptedIn(repos, tab, interpretHookEvent(input.tool, input.event));
   // A turn end right after the tab's automatic run reported: its report decides between finished and blocked
   // (TER-1046). A failed read keeps the hook's own reading.
   const interpreted = raw ? await applyRunOutcome(repos, tab, input.tool, raw).catch(() => raw) : raw;
@@ -99,6 +99,8 @@ async function ingestForTab(
     if (tab.rate_limited_at && !current.rate_limited_at) await expireTabLimits(repos, log, tab.id);
     // A CLI that just started says on screen when its login is about to expire (TER-1079): read in a moment.
     if (isFreshClaudeStart(input.event)) scheduleLoginExpiryRead({ repos, log }, tab.id);
+  } else if (input.tool === 'codex') {
+    current = await noteCodexSession(repos, current, input.event);
   }
   if (!interpreted) return { ok: false, reason: 'ignored' };
   const recorded = await recordInterpretation(repos, log, current, input.tool, interpreted);
@@ -138,6 +140,20 @@ interface Recorded {
   tab: Tab;
   /** the wait rule dropped the event: the tab is as it was and nothing was published */
   dropped: boolean;
+}
+
+/**
+ * A permission hint (TER-614) only survives from a machine whose switch is on. The hook script sends the
+ * prompt whole only while the machine's opt-in file exists, but that file lives on the machine: one left
+ * behind (a switch turned off while the machine was offline, a hand-made file) must not put commands on
+ * cards the person turned off.
+ */
+async function dropHintUnlessOptedIn(repos: Repositories, tab: Tab, interpreted: Interpreted | null): Promise<Interpreted | null> {
+  const question = interpreted?.question;
+  if (!interpreted || question?.kind !== 'permission' || question.payload.hint === undefined) return interpreted;
+  if ((await repos.machines.findById(tab.machine_id))?.permission_hint) return interpreted;
+  const { hint: _hint, ...payload } = question.payload;
+  return { ...interpreted, question: { ...question, payload } };
 }
 
 /** The tab's side of an interpreted event: the light activity path, or a recorded state. */
@@ -218,6 +234,13 @@ function endsLimit(i: Interpreted | null, newSession: boolean): boolean {
     default:
       return false;
   }
+}
+
+/** The Codex session the tab runs (TER-1095), which its conversation reads. One write, only when it changed. */
+async function noteCodexSession(repos: Repositories, tab: Tab, event: unknown): Promise<Tab> {
+  const session = codexSessionOf(event);
+  if (!session || (session.session_id === tab.agent_session_id && session.transcript_path === tab.agent_transcript_path)) return tab;
+  return (await repos.tabs.setAgentFields(tab.id, { agent_session_id: session.session_id, agent_transcript_path: session.transcript_path })) ?? tab;
 }
 
 /**

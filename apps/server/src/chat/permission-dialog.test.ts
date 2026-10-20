@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { dialogTool, permissionDialogVisible, promptVisible } from './permission-dialog.js';
+import { dialogTool, hintVisible, permissionDialogVisible, permissionToolOnScreen, promptVisible } from './permission-dialog.js';
+import { REDACTED } from './permission-hint.js';
 
 const fx = (name: string) => readFileSync(new URL(`./fixtures/permission-dialogs/${name}`, import.meta.url), 'utf8');
 const real = readFileSync(new URL('./fixtures/tab-questions/screen-permission.txt', import.meta.url), 'utf8');
@@ -144,6 +145,42 @@ describe('promptVisible permission tool check', () => {
     ['Bash', 'Bash without a footer', real.slice(0, real.indexOf(' Esc to cancel')), false],
   ])('%s card on %s', (tool_name, _label, screen, expected) => {
     expect(promptVisible(screen, { kind: 'permission', payload: { tool_name } })).toBe(expected);
+  });
+});
+
+describe('promptVisible with a permission hint (TER-614)', () => {
+  const card = (tool_name: string, hint?: string) => ({ kind: 'permission' as const, payload: { tool_name, ...(hint === undefined ? {} : { hint }) } });
+  /** The real Bash dialog, now approving another command: the transcript above still shows the first one. */
+  const otherCommand = real.replace('   touch probe-file.txt\n   Create', '   rm -rf build\n   Create');
+
+  it.each([
+    ['its own command', real, card('Bash', 'touch probe-file.txt'), true],
+    ['another command of the same tool', real, card('Bash', 'rm -rf build'), false],
+    ['its command only in the transcript above the dialog', otherCommand, card('Bash', 'touch probe-file.txt'), false],
+    ["a subagent's command, with a redaction in the middle", fx('claude-bash-subagent.txt'), card('Bash', `touch ${REDACTED}/a-done && sleep 3`), true],
+    ['a cut command', fx('claude-bash-subagent.txt'), card('Bash', 'touch /tmp/th-f8/a-done…'), true],
+    ['the relative file the Edit dialog names', fx('claude-edit.txt'), card('Edit', 'src/app.ts'), true],
+    ['an absolute file outside the session, by its name', fx('claude-edit.txt'), card('Edit', '/elsewhere/src/app.ts'), true],
+    ['another file', fx('claude-edit.txt'), card('Edit', 'src/other.ts'), false],
+    ['no hint, as before', real, card('Bash'), true],
+    ['a dialog whose top is off screen (no rule)', croppedBash, card('Bash', 'rm -rf build'), true],
+  ])('%s', (_label, screen, row, expected) => {
+    expect(promptVisible(screen, row)).toBe(expected);
+  });
+
+  it('matches accents whichever way the screen composes them', () => {
+    const decomposed = real.replace('   touch probe-file.txt', '   mkdir "relato\u0301rio de ac\u0327a\u0303o"');
+    expect(hintVisible(decomposed, { tool_name: 'Bash', hint: 'mkdir "relatório de ação"' })).toBe(true);
+    expect(hintVisible(decomposed, { tool_name: 'Bash', hint: 'mkdir "relatorio de acao"' })).toBe(false);
+  });
+
+  it('needs the runs of a command in order', () => {
+    expect(hintVisible(fx('claude-bash-subagent.txt'), { tool_name: 'Bash', hint: `sleep 3 ${REDACTED} touch` })).toBe(false);
+  });
+
+  it('keeps an automatic answer from approving another command', () => {
+    expect(permissionToolOnScreen(real, card('Bash', 'touch probe-file.txt'))).toBe(true);
+    expect(permissionToolOnScreen(real, card('Bash', 'rm -rf build'))).toBe(false);
   });
 });
 

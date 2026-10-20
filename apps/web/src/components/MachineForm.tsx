@@ -10,6 +10,7 @@ import { MachineNetworkCard } from './MachineNetworkCard';
 import { AutomationAllowedCard } from './AutomationAllowedCard';
 import { AiUsageQueryCard } from './AiUsageQueryCard';
 import { MonitorHooksCard, monitorHealthNote } from './MonitorHooksCard';
+import { PermissionHintCard } from './PermissionHintCard';
 import { useData } from '../lib/data';
 import type { Machine, User } from '../lib/types';
 import { TYPE_LABEL } from '../lib/machine-status';
@@ -334,7 +335,12 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
       case 'network':
         return <MachineNetworkCard machine={machine} />;
       case 'monitor':
-        return <MonitorHooksCard machine={machine} />;
+        return (
+          <>
+            <MonitorHooksCard machine={machine} />
+            <PermissionHintCard machine={machine} />
+          </>
+        );
       case 'simulator':
         return <SimulatorSetupCard machine={machine} />;
     }
