@@ -92,7 +92,15 @@ function page(state: MockState, tab: MockTab, before: string | undefined): TTabC
     degraded: false,
     questions: state.tabQuestions.filter((q) => q.tab_id === tab.summary.id && q.status === 'open').map((q) => strip(q) as TTabQuestion),
     suggestions: state.tabSuggestions.filter((s) => s.tab_id === tab.summary.id && s.status === 'open').map((x) => strip(x) as TTabSuggestion),
+    empty_reason: emptyReason(tab, ready, before),
   };
+}
+
+/** The server's `emptyReasonOf` (TER-1091), over the mock's tab. */
+function emptyReason(tab: MockTab, ready: boolean, before: string | undefined): string | null {
+  if (tab.summary.availability === 'no_session') return tab.noSessionReason ?? 'not_reported';
+  if (ready && !before && tab.items.length === 0) return 'new_session';
+  return null;
 }
 
 /** Sends `frame` to every socket open on `tabId`. */
@@ -194,5 +202,14 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
   router.route('GET', '/api/m/v1/tabs/:id/screen', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     return { status: 200, body: { text: load(ctx.params.id!).screen } };
+  });
+
+  // "Instalar hooks" (TER-1091): the machine's tabs stop being `no_hooks`; their sessions still wait for Claude.
+  router.route('POST', '/api/m/v1/machines/:id/hooks', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const tabs = [...state.tabs.values()].filter((t) => t.summary.machine.id === ctx.params.id);
+    if (tabs.length === 0) throw new WireError(404, 'NOT_FOUND', 'Máquina não encontrada');
+    for (const t of tabs) if (t.noSessionReason === 'no_hooks') t.noSessionReason = 'not_reported';
+    return { status: 200, body: { installed_at: new Date(ctx.now()).toISOString() } };
   });
 }

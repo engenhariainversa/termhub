@@ -97,6 +97,8 @@ export interface MockTab {
   items: TTabChatItem[];
   mode: string;
   screen: string;
+  /** With no session: why (TER-1091), `not_reported` when unset. `machines/:id/hooks` turns `no_hooks` into `not_reported`. */
+  noSessionReason?: 'no_hooks' | 'not_reported' | 'transcript_missing';
 }
 
 /** `chat/projects`' rows minus the derived fields (`busy`, `pending_confirmations`,

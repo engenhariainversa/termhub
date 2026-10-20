@@ -71,7 +71,7 @@ const question = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web' } = {}) {
+function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean } = {}) {
   const grants = new Set(opts.grants ?? ['terminals:read', 'terminals:write']);
   const tabs = opts.tabs ?? [tabRow(), tabRow({ id: 't2', project_id: 'p2' })];
   const repos = {
@@ -86,6 +86,7 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
     automationRuns: { activeTabRefs: vi.fn(async (_owner: string | null) => [{ tab_id: 't1', ref: 'TH-12' }]) },
     tabQuestions: { listOpenForTab: vi.fn(async (_tab: string, _user: string) => opts.questions ?? []) },
     chatDecisions: {},
+    machineHooks: { findByMachine: vi.fn(async (id: string) => (opts.hooksInstalled === false ? undefined : { machine_id: id, installed_at: '2026-10-01T09:00:00.000Z' })) },
   };
   const readPage = vi.fn(opts.readPage ?? (async () => ({ items: [], before: null, live: `${SID}.0`, mode: null, degraded: false, missing: false })));
   const hub = { poke: vi.fn() };
@@ -218,6 +219,39 @@ describe('GET /tabs/:id/chat', () => {
     const res = await gone.app.inject({ method: 'GET', url: '/tabs/t1/chat' });
     expect(res.statusCode).toBe(200);
     expect(res.json().tab.availability).toBe('offline');
+  });
+
+  // TER-1091: an empty conversation says why, so the screen never stays blank without a reason.
+  it('a tab whose machine never had the hooks installed says no_hooks', async () => {
+    const { app, repos } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null })], hooksInstalled: false });
+    const page = tabChatPage.parse((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json());
+    expect(page.tab.availability).toBe('no_session');
+    expect(page.empty_reason).toBe('no_hooks');
+    expect(repos.machineHooks.findByMachine).toHaveBeenCalledWith('m1');
+  });
+
+  it('hooks installed but no session reported yet says not_reported', async () => {
+    const { app } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null, state_tool: null })] });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+  });
+
+  it('a session whose transcript is gone from the machine says transcript_missing', async () => {
+    const { app } = build({ readPage: async () => ({ items: [], before: null, live: null, mode: null, degraded: false, missing: true }) });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('transcript_missing');
+  });
+
+  it('a readable session with nothing in it yet says new_session; one with history says nothing', async () => {
+    const empty = build();
+    expect((await empty.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('new_session');
+    const item = { kind: 'assistant', id: 'a1', at: '2026-10-01T10:00:00.000Z', text: 'oi' };
+    const full = build({ readPage: async () => ({ items: [item as never], before: null, live: `${SID}.40`, mode: null, degraded: false, missing: false }) });
+    expect((await full.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+  });
+
+  it('a tab that cannot be read for another reason (offline) has no empty_reason', async () => {
+    agentState.online = false;
+    const { app } = build();
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
   });
 });
 

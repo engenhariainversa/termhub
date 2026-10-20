@@ -63,8 +63,15 @@ export interface TabChatState {
   questionErrors: Record<string, string>;
   busySuggestionIds: string[];
   suggestionErrors: Record<string, string>;
+  /** Why the conversation has no history (TER-1091): a `TAB_CHAT_EMPTY_REASONS` value, read as a plain string. */
+  emptyReason: string | null;
+  installingHooks: boolean;
+  /** "Instalar hooks" succeeded on this screen: it says what happens next. */
+  hooksInstalled: boolean;
 
   open(): Promise<void>;
+  /** "Instalar hooks" on the tab's machine, then the page again. A refusal is the screen's `error`. */
+  installHooks(): Promise<void>;
   close(): void;
   loadEarlier(): Promise<void>;
   /** Resolves `true` once the server typed it into the tab; `false` leaves the text with the composer. */
@@ -105,6 +112,9 @@ const initialData = (): Data => ({
   questionErrors: {},
   busySuggestionIds: [],
   suggestionErrors: {},
+  emptyReason: null,
+  installingHooks: false,
+  hooksInstalled: false,
 });
 
 const isApiError = (e: unknown, code?: string): e is ApiError => e instanceof ApiError && (code === undefined || e.code === code);
@@ -137,7 +147,15 @@ export function createTabChatStore(deps: TabChatDeps) {
       degraded: page.degraded,
       questions: page.questions,
       suggestions: page.suggestions,
+      emptyReason: page.empty_reason,
     });
+
+    /**
+     * The tab became readable while this screen had no transcript to follow (TER-1091): its first session
+     * was reported, or a missing transcript came back. The socket follows from the end of the file, so
+     * what the session already holds comes with the page, read again.
+     */
+    const becameReadable = (availability: string): boolean => availability === 'ready' && get().availability !== 'ready' && get().live === null && get().status === 'ready';
 
     /** A failed action: session-ending errors go to the session store, a locked one says nothing. */
     const handled = (gen: number, e: unknown): boolean => gen !== generation || isLocked(e) || session().handleApiError(e);
@@ -180,15 +198,23 @@ export function createTabChatStore(deps: TabChatDeps) {
         return;
       }
       switch (f.type) {
-        case 'hello':
+        case 'hello': {
+          const reread = becameReadable(f.availability);
           set({ availability: f.availability });
+          if (reread) void reload();
           return;
+        }
         case 'items':
           set((s) => ({ items: mergeItems(s.items, f.items, 'append'), live: f.live, mode: f.mode ?? s.mode }));
           return;
         case 'state': {
           const previous = get().tab;
+          const reread = becameReadable(f.tab.availability);
           set({ tab: f.tab, availability: f.tab.availability });
+          if (reread) {
+            void reload();
+            return;
+          }
           // The cards come with the page, not over this socket: a tab that starts or stops needing the
           // person is when one appeared or went.
           if (previous && previous.needs_you !== f.tab.needs_you) void refreshCards();
@@ -270,6 +296,25 @@ export function createTabChatStore(deps: TabChatDeps) {
         unsubscribeSessionEnded = null;
         closeSocket?.();
         closeSocket = null;
+      },
+
+      async installHooks() {
+        const machineId = get().tab?.machine.id;
+        if (!machineId || get().installingHooks) return;
+        const gen = generation;
+        set({ installingHooks: true, error: null });
+        try {
+          await api.installMachineHooks(session().auth(), machineId);
+          if (gen !== generation) return;
+          set({ hooksInstalled: true });
+          await reload();
+        } catch (e) {
+          if (handled(gen, e)) return;
+          // The server explains its refusals (offline, an old agent, what the machine reported) in pt-BR.
+          set({ error: isApiError(e) && !e.code.startsWith('HTTP_') && e.code !== 'BAD_RESPONSE' ? e.message : TAB_CHAT_MSG.installFailed });
+        } finally {
+          if (gen === generation) set({ installingHooks: false });
+        }
       },
 
       async loadEarlier() {

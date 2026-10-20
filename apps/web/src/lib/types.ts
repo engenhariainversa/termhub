@@ -2011,6 +2011,8 @@ export interface TabChatPage {
   degraded: boolean;
   questions: TabQuestion[];
   suggestions: TabSuggestion[];
+  /** Why there is no history (TER-1091): `no_hooks`, `not_reported`, `transcript_missing` or `new_session`; null otherwise. Shown by the app for now. */
+  empty_reason?: string | null;
 }
 
 export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';

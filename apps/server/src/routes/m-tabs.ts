@@ -23,7 +23,7 @@ import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-quest
 import { HttpError, badRequest } from '../lib/errors.js';
 import { claudeFooterMode } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
-import { availabilityOf, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
+import { availabilityOf, emptyReasonOf, hasReportedSession, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
 import { tk } from '../i18n/index.js';
@@ -144,7 +144,10 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     }
     const rows = await repos.tabQuestions.listOpenForTab(tab.id, request.scope.user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, rows, request.scope.user.id));
-    request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded }, 'tab chat: page');
+    // Only a tab that never reported a session needs to know whether the machine has the hooks (TER-1091).
+    const hooksInstalled = avail === 'no_session' && !hasReportedSession(tab) ? !!(await repos.machineHooks.findByMachine(machine.id)) : true;
+    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooksInstalled);
+    request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded, emptyReason: empty_reason }, 'tab chat: page');
     return {
       tab: tabSummaryOf(tab, project, machine, avail),
       session_id: tab.agent_session_id,
@@ -156,6 +159,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       // the views' fields are the contract's (events-parity.test.ts keeps them in step)
       questions: tab_questions as TTabChatPage['questions'],
       suggestions: tab_suggestions as TTabChatPage['suggestions'],
+      empty_reason,
     };
   });
 
