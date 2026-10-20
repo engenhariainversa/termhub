@@ -444,5 +444,8 @@
   "push ou PR com erro do GitHub; depois disso, chama você": "push o PR con error de GitHub; después de eso, te llama",
   "Deploy falhou por problema do GitHub; rodando de novo": "El deploy falló por un problema de GitHub; ejecutándolo de nuevo",
   "{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar": "{{ref}}: error de GitHub; termhub lo intenta de nuevo cuando vuelva",
-  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: confianza de la carpeta confirmada automáticamente"
+  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: confianza de la carpeta confirmada automáticamente",
+  "Lições do ai-memory": "Lecciones de ai-memory",
+  "Importar as páginas deliberadas do ai-memory como lições não verificadas": "Importar las páginas deliberadas de ai-memory como lecciones no verificadas",
+  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Lee solo las páginas _rules/, gotchas/ y decisions/ de este proyecto en el ai-memory de cada máquina vinculada; las sesiones, observaciones y handoffs nunca salen de la máquina. Las lecciones aparecen en Memoria del chat, para que las verifiques o descartes."
 }

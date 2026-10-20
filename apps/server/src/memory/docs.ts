@@ -199,7 +199,10 @@ export async function indexDocsForLink(
   if (scan.err !== null) return skip(`DOCS_${scan.err.replace(/[^A-Za-z]/g, '').toUpperCase().slice(0, 20)}`);
 
   const prefix = `${link.id}:`;
-  const [known, knownLessons] = await Promise.all([repos.memoryItems.listSourceHashes('doc', prefix), repos.memoryItems.listSourceHashes('lesson', prefix)]);
+  const [known, linkLessons] = await Promise.all([repos.memoryItems.listSourceHashes('doc', prefix), repos.memoryItems.listSourceHashes('lesson', prefix)]);
+  // Only `docs/lessons/*.md` lessons are this pass's: the link's ai-memory lessons (TER-1021) share its
+  // prefix but belong to `indexAiMemoryForLink`, and must never be "gone" from a docs scan.
+  const knownLessons = new Map([...linkLessons].filter(([sourceId]) => sourceId.startsWith(`${prefix}docs/`)));
   // A scan that succeeds but lists nothing while this link has docs/lessons stored is far more likely a
   // transient state (an unmounted disk, a branch switch mid-checkout) than every spec being deleted at
   // once: keep everything this pass (fix round 1 ruling). A non-empty scan deletes gone files as usual.

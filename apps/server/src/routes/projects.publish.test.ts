@@ -31,6 +31,7 @@ const LINKS = [
 const projectMachines = {
   listByProjects: vi.fn(async (ids: string[]) => LINKS.filter((l) => ids.includes(l.project_id))),
   listByProject: vi.fn(async (id: string) => LINKS.filter((l) => l.project_id === id)),
+  listAllWithOwner: vi.fn(async () => []),
 };
 
 /** `ownerId: null` mirrors an admin "view as all" scope: the only scope under which `scoped(...)`
@@ -231,5 +232,32 @@ describe('machine links of a published project', () => {
     const res = await buildLinkApp().inject({ method: 'POST', url: '/projects/p1/machines', payload: { machine_id: 'm2', cwd: 'C:\\w' } });
     expect(res.statusCode).toBe(201);
     expect(publish).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /projects/:id ai_memory_lessons (TER-1021)', () => {
+  beforeEach(() => {
+    update.mockReset().mockImplementation(async (id: string, p: Record<string, unknown>) => ({ ...(PROJECTS[id] as object), ...p }));
+    projectMachines.listAllWithOwner.mockClear();
+  });
+
+  it('saves the option and imports the project’s ai-memory pages right away when it is turned on', async () => {
+    const res = await patch(owner, 'p1', { ai_memory_lessons: true });
+    expect(res.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith('p1', { ai_memory_lessons: true });
+    await vi.waitFor(() => expect(projectMachines.listAllWithOwner).toHaveBeenCalledTimes(1));
+  });
+
+  it('turning it off imports nothing', async () => {
+    const res = await patch(owner, 'p1', { ai_memory_lessons: false });
+    expect(res.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith('p1', { ai_memory_lessons: false });
+    expect(projectMachines.listAllWithOwner).not.toHaveBeenCalled();
+  });
+
+  it('refuses a non-boolean value', async () => {
+    const res = await patch(owner, 'p1', { ai_memory_lessons: 'yes' });
+    expect(res.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
   });
 });

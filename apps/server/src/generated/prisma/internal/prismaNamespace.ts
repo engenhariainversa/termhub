@@ -5402,6 +5402,7 @@ export const ProjectScalarFieldEnum = {
   agentColumnId: 'agentColumnId',
   lastTerminalAt: 'lastTerminalAt',
   automationPausedAt: 'automationPausedAt',
+  aiMemoryLessons: 'aiMemoryLessons',
   createdAt: 'createdAt'
 } as const
 

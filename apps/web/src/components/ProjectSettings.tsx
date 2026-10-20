@@ -81,6 +81,8 @@ export function ProjectSettings({ project }: { project: Project }) {
         </div>
       </form>
 
+      <AiMemoryLessonsSetting project={project} />
+
       <ProjectMachines project={project} />
 
       <BoardColumnsSettings project={project} />
@@ -120,6 +122,44 @@ export function ProjectSettings({ project }: { project: Project }) {
           }
         }}
       />
+    </div>
+  );
+}
+
+/** TER-1021: opt-in, per project, to bring the deliberate ai-memory pages of its checkouts in as
+ *  unverified lessons. Saved on change; off by default. */
+function AiMemoryLessonsSetting({ project }: { project: Project }) {
+  const { t } = useTranslation();
+  const { updateProject } = useData();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const on = project.ai_memory_lessons ?? false;
+
+  const toggle = async (next: boolean) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await updateProject(project.id, { ai_memory_lessons: next });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t('Erro ao salvar'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-8 space-y-2 rounded-lg border border-line bg-bg-2 p-4">
+      <h3 className="text-sm font-semibold">{t('Lições do ai-memory')}</h3>
+      <label className="flex items-center gap-2 text-sm text-fg-muted">
+        <input type="checkbox" className="accent-accent" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
+        {t('Importar as páginas deliberadas do ai-memory como lições não verificadas')}
+      </label>
+      <p className="text-xs text-fg-dim">
+        {t(
+          'Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.',
+        )}
+      </p>
+      {error && <p className="text-sm text-danger">{error}</p>}
     </div>
   );
 }

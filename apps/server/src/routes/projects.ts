@@ -13,6 +13,8 @@ import { removeTabMcp } from '../terminal/tab-mcp.js';
 import type { SimulatorSessionManager } from '../simulator/session-manager.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabsRemoved } from '../monitor/tab-events.js';
+import { importAiMemoryForProject } from '../memory/ai-memory.js';
+import { defaultEmbedder } from '../chat/embeddings.js';
 import { announceLinked, PROJECT_CWD, removeProjectMachineLink, resolveLinkCwd } from '../control/project-links.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -44,6 +46,8 @@ const patchBody = z
     description: z.string().trim().max(2000).optional().nullable(),
     /** published: readable by anyone with the /city/@nickname link (owner only, see PATCH) */
     is_public: z.boolean().optional(),
+    /** TER-1021: import deliberate ai-memory pages as unverified lessons (off by default) */
+    ai_memory_lessons: z.boolean().optional(),
   })
   .strict();
 
@@ -140,6 +144,10 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
     // cities must be dropped at once, as they are for a publish.
     if (patch.status !== undefined && patch.status !== 'archived' && current.status === 'archived') {
       publicBus.publish({ project_id: id, is_public: patch.is_public ?? current.is_public });
+    }
+    // TER-1021: turning the ai-memory import on brings the pages in now, not at the next docs pass.
+    if (patch.ai_memory_lessons === true && !current.ai_memory_lessons) {
+      void importAiMemoryForProject(repos, id, { embedder: defaultEmbedder(), log: request.log });
     }
     return { project: project ? (await withLinks([project]))[0] : undefined };
   });

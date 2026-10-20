@@ -511,5 +511,6 @@
   "Projetos: {{names}}": "Proyectos: {{names}}",
   "Política do trabalho automático": "Política del trabajo automático",
   "Aguardando a confirmação no chat": "Esperando la confirmación en el chat",
-  "Cada projeto pede a sua confirmação no chat.": "Cada proyecto pide tu confirmación en el chat."
+  "Cada projeto pede a sua confirmação no chat.": "Cada proyecto pide tu confirmación en el chat.",
+  "ai-memory de {{machine}}: {{path}}": "ai-memory de {{machine}}: {{path}}"
 }

@@ -208,6 +208,22 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     });
   });
 
+  it('deleteDocsNotInLinks (TER-1021): deletes ai-memory lessons of gone links, keeps those of live links', async () => {
+    const aiMeta = (path: string): LessonMeta => ({ evidence: 'observed', card: null, pr: null, tags: ['rule'], agent: null, tab_id: null, origin: 'ai-memory', path, machine_id: 'm1', machine_name: 'hulk', ai_memory_kind: 'rule' });
+    const live = newId();
+    const gone = newId();
+    await repo.upsertMany([
+      item({ kind: 'lesson', source_id: `${live}:ai-memory/p/_rules/a.md`, title: 'a', text: 'a', meta: aiMeta('p/_rules/a.md') }),
+      item({ kind: 'lesson', source_id: `${gone}:ai-memory/p/_rules/b.md`, title: 'b', text: 'b', meta: aiMeta('p/_rules/b.md') }),
+    ]);
+    await inRolledBackTx(async (r) => {
+      const txDb = (r as unknown as { db: PrismaClient }).db;
+      await r.deleteDocsNotInLinks([live]);
+      expect(await txDb.memoryItem.count({ where: { kind: 'lesson', sourceId: `${live}:ai-memory/p/_rules/a.md` } })).toBe(1);
+      expect(await txDb.memoryItem.count({ where: { kind: 'lesson', sourceId: `${gone}:ai-memory/p/_rules/b.md` } })).toBe(0);
+    });
+  });
+
   it('listSourceHashes: source_id → source_hash of chunk 0, only under the given prefix, only rows with a hash', async () => {
     await repo.upsertMany([
       item({ kind: 'doc', source_id: 'pm1:docs/a.md', chunk_index: 0, title: 'a', text: 'a', source_hash: 'hash-a' }),
