@@ -59,6 +59,10 @@ import type {
   TFileRecentResponse,
   TTabFileResponse,
   TTabScreenResponse,
+  TInstallHooksResponse,
+  TStartTabAgentBody,
+  TStartTabAgentResponse,
+  TTabAgentOptions,
   TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
@@ -283,6 +287,13 @@ export interface MobileApi {
   uploadTabFile(auth: Auth, tabId: string, fileUri: string, name: string, mime: string): Promise<TTabFileResponse>;
   /** The last `lines` lines of the tab's pane, as plain text. */
   tabScreen(auth: Auth, tabId: string, lines?: number): Promise<TTabScreenResponse>;
+  /** "Instalar hooks" on the machine (TER-1091), offered by a conversation empty because it never had them. Needs `machines:update`. */
+  installMachineHooks(auth: Auth, machineId: string): Promise<TInstallHooksResponse>;
+  /** The accounts "Iniciar sessão" can start the tab's agent with, and the one picked without asking (TER-1094). */
+  tabAgentOptions(auth: Auth, tabId: string): Promise<TTabAgentOptions>;
+  /** Starts the agent in the tab, or in a new tab when its shell is busy. 409 `ACCOUNT_CHOICE_REQUIRED` without
+   *  `account_id` when no account is picked without asking, `ACCOUNT_REQUIRED` when the machine has none. */
+  startTabAgent(auth: Auth, tabId: string, body: TStartTabAgentBody): Promise<TStartTabAgentResponse>;
   /** The tab's live socket (`/ws/m/tabs/:id`), opened from `after()` on every (re)connect. `onClose`'s
    * `final` is true for 4400, 4401, 4403 and 4404. A refused upgrade renews a stale token before the next
    * attempt, as `events` does. Returns the socket's `close`. */

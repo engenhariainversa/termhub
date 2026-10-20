@@ -547,5 +547,7 @@
   "em {{machine}} · sem prazo": "on {{machine}} · no expiry",
   "O chat mostra arquivos destas pastas sem pedir confirmação, até você revogar. Chaves, credenciais e arquivos .env nunca saem da máquina.": "The chat shows files from these folders without asking, until you revoke it. Keys, credentials and .env files never leave the machine.",
   "Pastas liberadas para mostrar arquivos": "Folders allowed for showing files",
-  "Mostrou um arquivo da máquina no chat": "Showed a machine's file in the chat"
+  "Mostrou um arquivo da máquina no chat": "Showed a machine's file in the chat",
+  "Consultou dados de suporte de um usuário": "Queried a user's support data",
+  "Suporte": "Support"
 }

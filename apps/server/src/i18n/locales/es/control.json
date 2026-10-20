@@ -120,5 +120,14 @@
   "Este agente é antigo demais para se atualizar sozinho; rode na máquina: npm i -g @termhub/agent@latest": "Este agente es demasiado antiguo para actualizarse solo; ejecuta en la máquina: npm i -g @termhub/agent@latest",
   "Este chat roda nesta máquina: a atualização fica para quando a resposta terminar e a máquina estiver ociosa (alguns minutos).": "Este chat se ejecuta en esta máquina: la actualización espera a que termine la respuesta y la máquina esté inactiva (unos minutos).",
   "Instalado; reinicie o agente na máquina (termhub-agent run ou o serviço).": "Instalado; reinicia el agente en la máquina (termhub-agent run o el servicio).",
-  "Passe machine_id ou all: true (um dos dois).": "Pasa machine_id o all: true (uno de los dos)."
+  "Passe machine_id ou all: true (um dos dois).": "Pasa machine_id o all: true (uno de los dos).",
+  "Só administradores podem consultar dados de suporte": "Solo los administradores pueden consultar datos de soporte",
+  "Janela inválida: o início precisa vir antes do fim": "Ventana inválida: el inicio debe ser anterior al fin",
+  "Janela longa demais: no máximo {{days}} dias": "Ventana demasiado larga: como máximo {{days}} días",
+  "Informe o nome ou e-mail a procurar": "Indica el nombre o el e-mail a buscar",
+  "Informe o usuário (user_id); procure-o com search": "Indica el usuario (user_id); búscalo con search",
+  "Só abas de terminal podem iniciar um agente": "Solo las pestañas de terminal pueden iniciar un agente",
+  "Nenhuma conta de IA em {{machine}} pode iniciar um agente neste projeto: cadastre uma em Contas de IA": "Ninguna cuenta de IA en {{machine}} puede iniciar un agente en este proyecto: registra una en Cuentas de IA",
+  "Escolha a conta para iniciar a sessão": "Elige la cuenta para iniciar la sesión",
+  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "Esta cuenta no puede iniciar un agente en {{machine}} en este proyecto"
 }

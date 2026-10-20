@@ -26,8 +26,9 @@ jest.mock('@/features/chat/view/attachment-menu', () => {
 
 let mockTabId = 't-api';
 const mockBack = jest.fn();
+const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: jest.fn(), back: mockBack, replace: jest.fn(), canGoBack: () => true }),
+  useRouter: () => ({ push: jest.fn(), back: mockBack, replace: mockReplace, canGoBack: () => true }),
   useLocalSearchParams: () => ({ tabId: mockTabId }),
 }));
 
@@ -71,6 +72,90 @@ async function renderSession(tabId = 't-api') {
   await waitFor(() => expect(current().getState().status).not.toBe('loading'), LOAD);
   return view;
 }
+
+describe('an empty conversation says why (TER-1091)', () => {
+  const empty = (emptyReason: string, availability = 'no_session') => act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason, availability }));
+
+  it('a machine without the hooks says so and offers to install them', async () => {
+    await renderSession();
+    const installHooks = jest.fn(async () => undefined);
+    await act(() => current().setState({ installHooks }));
+    await empty('no_hooks');
+    expect(screen.getByText('Sem histórico: a máquina não tem os hooks do termhub')).toBeTruthy();
+    expect(screen.getByText(/Instale os hooks em jarvis/)).toBeTruthy();
+    expect(screen.queryByText('Nenhuma mensagem ainda')).toBeNull();
+    fireEvent.press(screen.getByText('Instalar hooks'));
+    expect(installHooks).toHaveBeenCalledTimes(1);
+  });
+
+  it('once installed, it says what comes next instead of the button', async () => {
+    await renderSession();
+    await empty('not_reported');
+    await act(() => current().setState({ hooksInstalled: true }));
+    expect(screen.getByText(/Hooks instalados. Reinicie o Claude nesta aba/)).toBeTruthy();
+    expect(screen.queryByText('Reinstalar hooks')).toBeNull();
+  });
+
+  it('a new session says that only the current session shows, with no button', async () => {
+    await renderSession();
+    await empty('new_session', 'ready');
+    expect(screen.getByText('Nenhuma mensagem nesta sessão ainda')).toBeTruthy();
+    expect(screen.queryByTestId('session-install-hooks')).toBeNull();
+  });
+});
+
+describe('a plain shell offers to start the agent (TER-1094)', () => {
+  const claude = { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null };
+  const codex = { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null };
+  async function shell(agentOptions: { choices: (typeof claude)[]; suggested: string | null }) {
+    await renderSession();
+    const startAgent = jest.fn(async (_id?: string) => null as string | null);
+    await act(() => current().setState({ startAgent, items: [], questions: [], suggestions: [], emptyReason: 'no_agent', availability: 'no_session', agentOptions }));
+    return startAgent;
+  }
+
+  it('with a suggested account, one button starts it and names it; the others wait behind "Escolher outra conta"', async () => {
+    const startAgent = await shell({ choices: [claude, codex], suggested: 'acc-claude' });
+    expect(screen.getByText('Esta aba é um terminal sem agente')).toBeTruthy();
+    expect(screen.getByText('Com Pessoal (Claude Code)')).toBeTruthy();
+    expect(screen.queryByTestId('session-start-agent-acc-codex')).toBeNull();
+    await fireEvent.press(screen.getByTestId('session-start-agent'));
+    expect(startAgent).toHaveBeenCalledWith(undefined);
+    await fireEvent.press(screen.getByText('Escolher outra conta'));
+    await fireEvent.press(screen.getByText('Iniciar com Trabalho (Codex)'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
+  });
+
+  it('without one, each account is its own button', async () => {
+    const startAgent = await shell({ choices: [claude, codex], suggested: null });
+    expect(screen.queryByTestId('session-start-agent')).toBeNull();
+    await fireEvent.press(screen.getByTestId('session-start-agent-acc-claude'));
+    expect(startAgent).toHaveBeenCalledWith('acc-claude');
+    expect(screen.getByText('Iniciar com Trabalho (Codex)')).toBeTruthy();
+  });
+
+  it('without any account it says where to add one, with no button', async () => {
+    await shell({ choices: [], suggested: null });
+    expect(screen.getByText(/Nenhuma conta de IA nesta máquina pode iniciar um agente/)).toBeTruthy();
+    expect(screen.queryByTestId('session-start-agent')).toBeNull();
+  });
+
+  it('an agent started in another tab takes the screen there; a refusal shows under the button', async () => {
+    const startAgent = await shell({ choices: [claude], suggested: 'acc-claude' });
+    startAgent.mockResolvedValueOnce('t-new');
+    await fireEvent.press(screen.getByTestId('session-start-agent'));
+    expect(mockReplace).toHaveBeenCalledWith('/session/t-new');
+    await act(() => current().setState({ startAgentError: 'A máquina está offline' }));
+    expect(screen.getByText('A máquina está offline')).toBeTruthy();
+  });
+
+  it('once started here, it says the conversation comes when the agent answers', async () => {
+    await shell({ choices: [claude], suggested: 'acc-claude' });
+    await act(() => current().setState({ agentStarted: true }));
+    expect(screen.getByText('Sessão iniciada. A conversa aparece aqui assim que o agente responder.')).toBeTruthy();
+    expect(screen.queryByTestId('session-start-agent')).toBeNull();
+  });
+});
 
 describe('the conversation', () => {
   it('shows the messages, the tools folded in one row, and the header with state and mode', async () => {

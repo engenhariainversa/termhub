@@ -37,6 +37,7 @@ export const SECURITY_EVENT_ACTIONS = [
   'audit.export',
   'feature_flag.update',
   'feature_flag.override',
+  'support.troubleshoot',
 ] as const;
 
 export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];

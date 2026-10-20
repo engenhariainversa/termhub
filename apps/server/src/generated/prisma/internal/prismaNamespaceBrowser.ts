@@ -1109,7 +1109,10 @@ export const AccessLogScalarFieldEnum = {
   kind: 'kind',
   method: 'method',
   route: 'route',
-  status: 'status'
+  status: 'status',
+  client: 'client',
+  os: 'os',
+  durationMs: 'durationMs'
 } as const
 
 export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]

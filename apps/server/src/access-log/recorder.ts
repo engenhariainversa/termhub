@@ -1,6 +1,8 @@
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { parseAppHeader } from '@termhub/mobile-api';
 import type { AccessLogInput } from '../db/repositories/index.js';
+import { deviceFromUserAgent } from '../chat/client-origin.js';
 
 /** How often the buffered records are written. */
 export const ACCESS_LOG_FLUSH_MS = 5_000;
@@ -82,6 +84,24 @@ export function createAccessLogRecorder(deps: {
   };
 }
 
+const WEB_CLIENT = /^web\/(\d+\.\d+\.\d+)$/;
+
+/**
+ * Which client made a call and on which system (TER-1092), for an admin's troubleshooting: the web's
+ * `X-Termhub-Client`, the phone app's `X-Termhub-App`, or `mcp` for a token on /mcp. Only values of the
+ * known shapes are kept, never a raw header, and the system is the coarse name read from the User-Agent.
+ */
+export function clientOf(request: FastifyRequest): Pick<AccessLogInput, 'client' | 'os'> {
+  const app = parseAppHeader(typeof request.headers['x-termhub-app'] === 'string' ? request.headers['x-termhub-app'] : undefined);
+  if (app) return { client: `${app.platform}/${app.version}+${app.build}`, os: app.platform === 'android' ? 'Android' : 'iOS' };
+  const { os } = deviceFromUserAgent(request.headers['user-agent']);
+  const web = request.headers['x-termhub-client'];
+  const version = typeof web === 'string' ? WEB_CLIENT.exec(web.trim())?.[1] : undefined;
+  if (version) return { client: `web/${version}`, os };
+  if (request.mcp) return { client: 'mcp', os: null };
+  return { client: null, os };
+}
+
 /**
  * The access record of one HTTP response, or null when there is nothing to keep: static files and the
  * SPA fallback (no route of their own), and the healthcheck probes. The route is Fastify's pattern
@@ -99,6 +119,8 @@ export function httpAccessEntry(request: FastifyRequest, reply: FastifyReply): A
     method: request.method,
     route,
     status: reply.statusCode,
+    ...clientOf(request),
+    duration_ms: Math.round(reply.elapsedTime),
   };
 }
 

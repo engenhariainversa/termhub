@@ -57,6 +57,7 @@ import { TabUsageRepository } from './tab-usage.js';
 import { LegalRepository } from './legal.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
+import { SupportRepository } from './support.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
 
 export interface Repositories {
@@ -118,6 +119,7 @@ export interface Repositories {
   aiAccountExhaustions: AiAccountExhaustionsRepository;
   legal: LegalRepository;
   securityEvents: SecurityEventsRepository;
+  support: SupportRepository;
   featureFlags: FeatureFlagsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
@@ -183,6 +185,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     legal: new LegalRepository(db),
     securityEvents: new SecurityEventsRepository(db),
+    support: new SupportRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };

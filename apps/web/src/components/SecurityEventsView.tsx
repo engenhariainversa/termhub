@@ -36,6 +36,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'audit.export': tk('Exportou a auditoria'),
   'feature_flag.update': tk('Ligou ou desligou um recurso em teste'),
   'feature_flag.override': tk('Mudou um recurso em teste para uma pessoa'),
+  'support.troubleshoot': tk('Consultou dados de suporte de um usuário'),
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -48,6 +49,7 @@ const GROUP_LABELS: Record<string, string> = {
   terminal: tk('Terminais'),
   audit: tk('Auditoria'),
   feature_flag: tk('Recursos em teste'),
+  support: tk('Suporte'),
 };
 
 /** A local calendar day (`2026-10-07`) as the instant it starts; `plusDays` 1 gives the exclusive end of the day. */

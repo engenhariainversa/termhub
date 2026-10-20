@@ -179,6 +179,13 @@ export function actionClass(tool: string, args: unknown): ActionClass {
     return (args as { confirm?: unknown } | undefined)?.confirm === true ? 'irreversible' : 'write';
   }
 
+  // TER-1092: support data of one user, for an admin. Finding the user is a read; a query about them is
+  // asked the first time in a conversation, and the gate runtime lets the later ones about the same user
+  // through (`classOf` in gate-runtime.ts). Never covered by a grant or a default.
+  if (tool === 'admin_user_troubleshoot') {
+    return (args as { endpoint?: unknown } | undefined)?.endpoint === 'search' ? 'read' : 'write';
+  }
+
   // Unknown tools default to irreversible: a tool added later must not silently
   // become auto-allowed without explicit review of this decision
   return 'irreversible';
