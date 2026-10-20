@@ -543,5 +543,7 @@
   "Já entrei pelo navegador da máquina": "I signed in from the machine's browser",
   "Saída da CLI": "CLI output",
   "Encerrou sessões": "Ended sessions",
-  "Trocou a senha": "Changed the password"
+  "Trocou a senha": "Changed the password",
+  "Consultou dados de suporte de um usuário": "Queried a user's support data",
+  "Suporte": "Support"
 }

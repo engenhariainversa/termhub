@@ -76,8 +76,25 @@ describe('registerAccessLog', () => {
       headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1', 'x-user': 'u1' },
       payload: { code: '654321' },
     });
-    expect(rows).toEqual([{ at: expect.any(Date), ip: '203.0.113.9', user_id: 'u1', kind: 'http', method: 'POST', route: '/api/auth/verify/:code', status: 200 }]);
+    expect(rows).toEqual([
+      { at: expect.any(Date), ip: '203.0.113.9', user_id: 'u1', kind: 'http', method: 'POST', route: '/api/auth/verify/:code', status: 200, client: null, os: null, duration_ms: expect.any(Number) },
+    ]);
     expect(JSON.stringify(rows)).not.toMatch(/123456|654321|secret/);
+    await fastify.close();
+  });
+
+  it('keeps the client version and the coarse system (TER-1092), never the raw headers', async () => {
+    const { fastify, rows } = await app();
+    const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15';
+    await fastify.inject({ method: 'POST', url: '/api/auth/verify/1', headers: { 'x-termhub-client': 'web/1.4.0', 'user-agent': ua } });
+    await fastify.inject({ method: 'POST', url: '/api/auth/verify/1', headers: { 'x-termhub-app': 'ios/0.3.2+34' } });
+    await fastify.inject({ method: 'POST', url: '/api/auth/verify/1', headers: { 'x-termhub-client': 'web/<script>' } });
+    expect(rows.map((r) => [r.client, r.os])).toEqual([
+      ['web/1.4.0', 'macOS'],
+      ['ios/0.3.2+34', 'iOS'],
+      [null, null],
+    ]);
+    expect(JSON.stringify(rows)).not.toMatch(/Mozilla|script/);
     await fastify.close();
   });
 

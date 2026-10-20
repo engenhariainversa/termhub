@@ -543,5 +543,7 @@
   "Trocou a senha": "Cambió la contraseña",
   "esta sessão": "esta sesión",
   "{{count}} sessões encerradas._one": "{{count}} sesión cerrada.",
-  "{{count}} sessões encerradas._other": "{{count}} sesiones cerradas."
+  "{{count}} sessões encerradas._other": "{{count}} sesiones cerradas.",
+  "Consultou dados de suporte de um usuário": "Consultó datos de soporte de un usuario",
+  "Suporte": "Soporte"
 }
