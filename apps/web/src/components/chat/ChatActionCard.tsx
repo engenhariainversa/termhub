@@ -1,6 +1,6 @@
 import { i18n, tk, useTranslation } from '../../i18n';
 import { memo, useState } from 'react';
-import type { ChatAction, ChatDecisionWord, ChatGrant, ChatProjectGrant, ChatStandingGrant, ChatStandingKind } from '../../lib/types';
+import type { ChatAction, ChatCommandRule, ChatDecisionWord, ChatGrant, ChatProjectGrant, ChatStandingGrant, ChatStandingKind } from '../../lib/types';
 import { actionAutoDecision, AutoDecisionBadge } from './AutoDecisionBadge';
 import { STANDING_KIND_LABEL, standingKindLabel } from './grant-list-text';
 import { untilLabel } from './grant-time';
@@ -78,9 +78,19 @@ const TAB_LIFECYCLE_TOOLS = new Set(['open_tab', 'close_tab', 'start_agent']);
 function grantedLabel(action: ChatAction): string {
   // TER-627: a default allowance, not a grant the person gave (`default:<kind>:<user>`).
   if (action.grant_id?.startsWith('default:')) return i18n.t('· liberado por padrão');
+  // TER-1081: a command one of the person's command rules let through.
+  if (action.tool === 'run_command') return i18n.t('· liberado por regra');
   if (isBoardGrantable(action)) return i18n.t('· quadro confiado');
   if (TAB_LIFECYCLE_TOOLS.has(action.tool)) return i18n.t('· liberado no projeto');
   return i18n.t('· aba confiada');
+}
+
+/** How a command rule (TER-1081) reads: what it allows and where. Shared with "Permissões do chat". */
+export function commandRuleLabel(rule: ChatCommandRule): string {
+  const where = rule.project_id === null ? i18n.t('em todos os projetos') : rule.project_name ? i18n.t('no projeto {{project}}', { project: rule.project_name }) : i18n.t('neste projeto');
+  return rule.match === 'prefix'
+    ? i18n.t('Comandos que começam com «{{pattern}}» liberados {{where}}', { pattern: rule.pattern, where })
+    : i18n.t('Comando «{{pattern}}» liberado {{where}}', { pattern: rule.pattern, where });
 }
 
 export interface ChatActionCardProps {
@@ -95,6 +105,10 @@ export interface ChatActionCardProps {
   projectGrant?: ChatProjectGrant;
   /** The standing grant this card created ("Liberar sem prazo"), if it has not been revoked. */
   standingGrant?: ChatStandingGrant;
+  /** The command rule this card created ("Permitir sempre este comando…", TER-1081), while in force. */
+  commandRule?: ChatCommandRule;
+  /** Revokes a command rule: takes its id, like `onRevoke`. */
+  onRevokeRule?: (ruleId: string) => void;
   revoking?: boolean;
   /** Takes the grant's id, so the panel can pass one stable callback to every card. */
   onRevoke?: (grantId: string) => void;
@@ -111,7 +125,7 @@ export interface ChatActionCardProps {
  * request, the decision call and the queued note all live in `ChatPanel`. Memoised, with callbacks
  * that take the id: a streamed delta re-renders the panel, and this card must not follow.
  */
-export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, revoking, onRevoke, onDecide, onRepropose, onReply }: ChatActionCardProps) {
+export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, commandRule, revoking, onRevoke, onRevokeRule, onDecide, onRepropose, onReply }: ChatActionCardProps) {
   const { t } = useTranslation();
   const standingKind = standingKindOf(action);
   const stale = staleLabel(action);
@@ -185,6 +199,17 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
               {t('Liberar sem prazo: {{kind}} neste projeto', { kind: STANDING_KIND_LABEL[standingKind] })}
             </button>
           )}
+          {/* TER-1081: the server sends `command_rule` only for a command a rule could cover. */}
+          {action.tool === 'run_command' && action.command_rule && (
+            <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_command')}>
+              {t('Permitir sempre este comando neste projeto')}
+            </button>
+          )}
+          {action.tool === 'run_command' && action.command_rule?.prefix && (
+            <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_command_prefix')}>
+              {t('Permitir sempre comandos que começam com «{{prefix}}»', { prefix: action.command_rule.prefix })}
+            </button>
+          )}
           {isFolderGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_folder_always')}>
               {t('Permitir sempre nesta pasta')}
@@ -232,6 +257,16 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
         <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
           <span>{t('{{kind}} liberado neste projeto, sem prazo', { kind: standingKindLabel(standingGrant.kind) })}</span>
           <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevoke?.(standingGrant.id)}>
+            {t('Revogar')}
+          </button>
+        </p>
+      )}
+      {commandRule && (
+        <p className="mt-1 flex items-center gap-2 text-xs text-fg-dim">
+          <span>
+            {commandRuleLabel(commandRule)}
+          </span>
+          <button type="button" className="underline hover:text-fg" disabled={revoking} onClick={() => onRevokeRule?.(commandRule.id)}>
             {t('Revogar')}
           </button>
         </p>

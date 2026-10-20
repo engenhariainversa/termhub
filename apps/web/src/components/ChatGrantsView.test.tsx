@@ -11,6 +11,8 @@ const setDefaultMock = vi.fn();
 const defaultsMock = vi.fn();
 const memoryMock = vi.fn();
 const setMemoryMock = vi.fn();
+const rulesMock = vi.fn();
+const revokeRuleMock = vi.fn();
 const fileGrantsMock = vi.fn(async () => ({ grants: [] as unknown[] }));
 const revokeFileMock = vi.fn(async () => ({ grant: { id: 'fg1', revoked_at: 'x' } }));
 vi.mock('../lib/api', () => {
@@ -26,6 +28,8 @@ vi.mock('../lib/api', () => {
       setChatDefault: (...a: unknown[]) => setDefaultMock(...a),
       chatMemory: (...a: unknown[]) => memoryMock(...a),
       setChatMemory: (...a: unknown[]) => setMemoryMock(...a),
+      listChatCommandRules: (...a: unknown[]) => rulesMock(...a),
+      revokeChatCommandRule: (...a: unknown[]) => revokeRuleMock(...a),
       listChatFileGrants: () => fileGrantsMock(),
       revokeChatFileGrant: (id: string) => revokeFileMock(id),
     },
@@ -50,6 +54,9 @@ beforeEach(() => {
   memoryMock.mockReset();
   setMemoryMock.mockReset();
   memoryMock.mockRejectedValue(new Error('not in this test'));
+  rulesMock.mockReset();
+  revokeRuleMock.mockReset();
+  rulesMock.mockRejectedValue(new Error('not in this test'));
 });
 afterEach(() => cleanup());
 
@@ -144,7 +151,7 @@ it('lists the default allowances (TER-627), each checked unless restricted', asy
   const section = await screen.findByRole('region', { name: 'Liberadas por padrão' });
   expect(within(section).getByRole('checkbox', { name: 'Abrir abas' })).toBeChecked();
   expect(within(section).getByRole('checkbox', { name: 'Fechar abas paradas' })).not.toBeChecked();
-  expect(within(section).getByText(/Sempre pedem confirmação: apagar card, rodar comando, responder permissões/)).toBeInTheDocument();
+  expect(within(section).getByText(/Sempre pedem confirmação: apagar card, rodar comando fora da lista de leitura e das regras, responder permissões/)).toBeInTheDocument();
 });
 
 it('unchecking a default restricts it and shows what the server answered', async () => {
@@ -267,6 +274,39 @@ describe('"Resposta automática" (TER-642)', () => {
     render(<ChatGrantsView />);
     expect(await screen.findByText('Nenhuma permissão ativa agora.')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Resposta automática' })).toBeNull();
+  });
+});
+
+describe('"Comandos liberados" (TER-1081)', () => {
+  const rule = (o: Record<string, unknown> = {}) => ({
+    id: 'cr1', pattern: 'git push', match: 'prefix', project_id: 'p1', project_name: 'termhub', machine_ids: [], machine_names: [], source_action_id: 'a1',
+    created_at: '2026-10-14T10:00:00.000Z', expires_at: null, revoked_at: null, state: 'active', ...o,
+  });
+
+  it('lists the rules in force with where they apply, the ended ones, and revokes', async () => {
+    serve([], [{ grants: [], next_cursor: null }]);
+    rulesMock.mockResolvedValue({
+      active: [rule(), rule({ id: 'cr2', pattern: 'npm test', match: 'exact', project_id: null, project_name: null, machine_ids: ['m1'], machine_names: ['jarvis'] })],
+      ended: [rule({ id: 'cr0', pattern: 'ls', match: 'exact', state: 'revoked', revoked_at: '2026-10-14T11:00:00.000Z' })],
+    });
+    revokeRuleMock.mockResolvedValue({ rule: rule({ state: 'revoked' }) });
+    render(<ChatGrantsView />);
+    const section = await screen.findByRole('region', { name: 'Comandos liberados' });
+    expect(within(section).getByText('Comandos que começam com «git push» liberados no projeto termhub')).toBeInTheDocument();
+    expect(within(section).getByText('Comando «npm test» liberado em todos os projetos')).toBeInTheDocument();
+    expect(within(section).getByText('só em jarvis · sem prazo')).toBeInTheDocument();
+    expect(within(section).getByText(/revogada em/)).toBeInTheDocument();
+    fireEvent.click(within(section).getAllByRole('button', { name: 'Revogar' })[0]!);
+    await waitFor(() => expect(revokeRuleMock).toHaveBeenCalledWith('cr1'));
+    await waitFor(() => expect(rulesMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('says when there is no rule', async () => {
+    serve([], [{ grants: [], next_cursor: null }]);
+    rulesMock.mockResolvedValue({ active: [], ended: [] });
+    render(<ChatGrantsView />);
+    const section = await screen.findByRole('region', { name: 'Comandos liberados' });
+    expect(within(section).getByText('Nenhuma regra de comando ativa.')).toBeInTheDocument();
   });
 });
 

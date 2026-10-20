@@ -262,6 +262,7 @@ function build(opts: { gated: boolean; conversationId?: string }) {
     chatGrants: grants,
     chatProjectGrants: { findActive: vi.fn(async () => undefined) },
     chatStandingGrants: { findActive: vi.fn(async () => undefined) },
+    chatCommandRules: { listActiveFor: vi.fn(async () => []) },
     // Every default allowance (TER-627) restricted: these tests drive the confirmation card itself.
     chatDefaultRestrictions: { listForUser: vi.fn(async () => new Set(DEFAULT_ALLOW_KINDS)) },
     chatSubagents: { listByIds: vi.fn(async (ids: string[]) => [SUBAGENT, OTHER_CONVERSATION_SUBAGENT].filter((s) => ids.includes(s.id))) },

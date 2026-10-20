@@ -36,6 +36,7 @@ import {
   listGrants,
   revokeGrant,
 } from '../chat/grants.js';
+import { activeCommandRules, assertCommandRuleAction, grantCommandRule, listCommandRules, revokeCommandRule } from '../chat/command-rule-grants.js';
 import { decideMany } from '../chat/decisions.js';
 import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL } from '../chat/gate.js';
@@ -68,7 +69,7 @@ const messageBody = z
 const scopeQuery = z.object({ project: z.string().min(1).max(64).optional() });
 const resetBody = z.object({ project_id: z.string().min(1).max(64).nullish() });
 const actionIdParam = z.object({ id: z.string().min(1).max(64) });
-const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab', 'approve_project', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always', 'approve_folder_always']) });
+const decisionBody = z.object({ decision: z.enum(['approve', 'deny', 'approve_tab', 'approve_project', 'approve_tab_terminal', 'approve_project_all', 'approve_project_always', 'approve_command', 'approve_command_prefix', 'approve_folder_always']) });
 const batchBody = z.object({
   decisions: z
     .array(z.object({ id: z.string().min(1).max(64), decision: z.enum(['approve', 'deny']) }))
@@ -110,7 +111,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, command_rules, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -123,6 +124,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // Standing grants (spec 2026-09-28 TER-386): the conversation's own project, or — for the
       // general chat (`project_id: null`) — every standing grant this user has.
       activeStandingGrants(repos, request.scope.user.id, conversation.project_id),
+      // Command rules (TER-1081) a card of this chat may have created: the project's and the global ones.
+      activeCommandRules(repos, request.scope.user.id, conversation.project_id),
       repos.tabQuestions.listByConversation(conversation.id),
       // The subagents panel (spec 2026-09-26 §4): every one still open, plus any that ended recently.
       deps.service.subagentsFor(conversation.id),
@@ -144,6 +147,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       grants,
       project_grants,
       standing_grants,
+      command_rules,
       tab_questions,
       tab_suggestions,
       tab_limits: await describeTabLimits(repos, limitRows, request.scope.user.id),
@@ -260,6 +264,9 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // "Liberar sem prazo" (spec 2026-09-28 TER-386) likewise, resolved the same way with the gate's own
     // resolver — kind and project.
     const standingCheck = decision === 'approve_project_always' ? await assertStandingGrantableAction(repos, user.id, id) : undefined;
+    // "Permitir sempre este comando / comandos que começam com «…»" (TER-1081) likewise: the rule the gate
+    // will honour, judged with its own functions, on a tab of this user's.
+    const commandCheck = decision === 'approve_command' || decision === 'approve_command_prefix' ? await assertCommandRuleAction(repos, user.id, id, decision) : undefined;
     // "Permitir sempre nesta pasta" (TER-1086) likewise: a share_file card, from a machine of this user.
     const folderCheck = decision === 'approve_folder_always' ? await assertFileGrantableAction(repos, user.id, id) : undefined;
 
@@ -315,7 +322,14 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
         request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat standing grant failed after approval');
       }
     }
-
+    let command_rule: Awaited<ReturnType<typeof grantCommandRule>> | undefined;
+    if (commandCheck) {
+      try {
+        command_rule = await grantCommandRule(repos, user.id, action, commandCheck);
+      } catch (err) {
+        request.log.warn({ code: failureLabel(err), actionId: action.id }, 'chat command rule failed after approval');
+      }
+    }
     let file_grant: Awaited<ReturnType<typeof grantFolder>> | undefined;
     if (folderCheck) {
       try {
@@ -329,12 +343,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // Awaits the start of the injected run, never its end: an answer longer than the edge allows
       // used to cut this request and show an error for a decision that was recorded.
       await deps.service.startAfterDecision(user, action);
-      return { action, grant, project_grant, standing_grant, file_grant };
+      return { action, grant, project_grant, standing_grant, command_rule, file_grant };
     } catch (err) {
       // The decision above already happened and was already published — a busy run must not turn a
       // successful decision into a 409. The row stays approved/denied with no injection yet; the run
       // holding the lock will pick it up and inject it through `drainNextDecision` once it finishes.
-      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant, project_grant, standing_grant, file_grant };
+      if (err instanceof HttpError && err.code === 'CHAT_BUSY') return { action, queued: true, note: QUEUED_NOTE, grant, project_grant, standing_grant, command_rule, file_grant };
       throw err;
     }
   });
@@ -390,6 +404,15 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const { allowed } = defaultAllowedBody.parse(request.body);
     await repos.chatDefaultRestrictions.setAllowed(request.scope.user.id, kind, allowed);
     return { defaults: await chatDefaultsOf(repos, request.scope.user.id) };
+  });
+
+  /** "Comandos liberados" (TER-1081): the command rules of run_command in force, and the revoked or expired ones. */
+  app.get('/command-rules', async (request) => listCommandRules(repos, request.scope.user.id));
+
+  /** Revokes one command rule. `create`, like revoking any other grant. */
+  app.delete('/command-rules/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    return { rule: await revokeCommandRule(repos, request.scope.user.id, id) };
   });
 
   /** "Revogar". Declared as `create`, the permission deciding a card needs: whoever can grant can revoke. */
