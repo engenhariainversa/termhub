@@ -88,8 +88,27 @@ export const tabChatPage = z.object({
   degraded: z.boolean(),
   questions: z.array(tabQuestionSchema),
   suggestions: z.array(tabSuggestionSchema),
+  /** Why the conversation shows no history (TER-1091), one of `TAB_CHAT_EMPTY_REASONS`, read as a plain
+   *  string like `availability`; null when there is history, or when `availability` already says why.
+   *  Absent from an older server. */
+  empty_reason: z.string().nullable().default(null),
 });
 export type TTabChatPage = z.infer<typeof tabChatPage>;
+
+/**
+ * Why a tab's conversation is empty (TER-1091). The history is the Claude Code transcript of the tab's
+ * current session, found through the session id its hooks report: `no_hooks` (the machine never had the
+ * termhub hooks installed, so no session is ever reported), `not_reported` (hooks installed, but no
+ * session reported yet: Claude not started in the tab, or started before the hooks were), `transcript_missing`
+ * (the session's file is no longer on the machine), `new_session` (the current session has nothing yet:
+ * a new tab, or a `/clear` or a restart of Claude, which starts a new session).
+ */
+export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session'] as const;
+export type TTabChatEmptyReason = (typeof TAB_CHAT_EMPTY_REASONS)[number];
+
+/** `POST machines/:id/hooks` (TER-1091): when the hooks were installed. */
+export const installHooksResponse = z.object({ installed_at: z.string() });
+export type TInstallHooksResponse = z.infer<typeof installHooksResponse>;
 
 export const tabMessageBody = z.object({ text: z.string().min(1).max(TAB_MESSAGE_MAX_CHARS) });
 export type TTabMessageBody = z.infer<typeof tabMessageBody>;

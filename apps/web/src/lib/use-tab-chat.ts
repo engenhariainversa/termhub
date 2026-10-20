@@ -80,6 +80,16 @@ export function applyFrame(s: TabChatData, f: Exclude<TabChatFrame, { type: 'res
   }
 }
 
+/**
+ * The tab became readable while the page had no transcript to follow (TER-1091): its first session was
+ * reported, or a missing transcript came back. The socket follows from the end of the file, so what the
+ * session already holds only comes with the page, read again.
+ */
+export function becameReadable(s: TabChatData, f: Exclude<TabChatFrame, { type: 'reset' }>): boolean {
+  const next = f.type === 'state' ? f.tab.availability : f.type === 'hello' ? f.availability : null;
+  return next === 'ready' && s.availability !== 'ready' && s.live === null && s.status === 'ready';
+}
+
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError && e.code && !e.code.startsWith('HTTP_') ? e.message : fallback);
 
 export interface TabChat extends TabChatData {
@@ -152,7 +162,12 @@ export function useTabChat(tabId: string, enabled: boolean): TabChat {
         return;
       }
       const previous = latest.current.tab;
+      const reread = becameReadable(latest.current, f);
       set((s) => applyFrame(s, f));
+      if (reread) {
+        void reload();
+        return;
+      }
       // A tab that starts or stops needing the person is when a card appeared or went.
       if (f.type === 'state' && previous && (previous.needs_you !== f.tab.needs_you || previous.state !== f.tab.state)) void refreshCards();
     };

@@ -17,4 +17,6 @@ export const TAB_CHAT_MSG = {
   get emptyList() { return t('Nenhuma aba aberta nos seus projetos.'); },
   get startFailed() { return t('Não foi possível iniciar a sessão. Tente de novo.'); },
   get updateApp() { return t('Atualize o app para continuar.'); },
+  get installFailed() { return t('Não foi possível instalar os hooks. Tente de novo.'); },
+  get hooksInstalled() { return t('Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.'); },
 };

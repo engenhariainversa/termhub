@@ -59,6 +59,7 @@ import type {
   TFileRecentResponse,
   TTabFileResponse,
   TTabScreenResponse,
+  TInstallHooksResponse,
   TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
@@ -283,6 +284,8 @@ export interface MobileApi {
   uploadTabFile(auth: Auth, tabId: string, fileUri: string, name: string, mime: string): Promise<TTabFileResponse>;
   /** The last `lines` lines of the tab's pane, as plain text. */
   tabScreen(auth: Auth, tabId: string, lines?: number): Promise<TTabScreenResponse>;
+  /** "Instalar hooks" on the machine (TER-1091), offered by a conversation empty because it never had them. Needs `machines:update`. */
+  installMachineHooks(auth: Auth, machineId: string): Promise<TInstallHooksResponse>;
   /** The tab's live socket (`/ws/m/tabs/:id`), opened from `after()` on every (re)connect. `onClose`'s
    * `final` is true for 4400, 4401, 4403 and 4404. A refused upgrade renews a stale token before the next
    * attempt, as `events` does. Returns the socket's `close`. */
