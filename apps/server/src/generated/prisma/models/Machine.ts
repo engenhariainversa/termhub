@@ -57,6 +57,7 @@ export type MachineMinAggregateOutputType = {
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
   automationAllowed: boolean | null
+  permissionHint: boolean | null
   isLocal: boolean | null
   ownerId: string | null
   createdAt: Date | null
@@ -85,6 +86,7 @@ export type MachineMaxAggregateOutputType = {
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
   automationAllowed: boolean | null
+  permissionHint: boolean | null
   isLocal: boolean | null
   ownerId: string | null
   createdAt: Date | null
@@ -115,6 +117,7 @@ export type MachineCountAggregateOutputType = {
   claudeAutoSwap: number
   aiUsageQuery: number
   automationAllowed: number
+  permissionHint: number
   isLocal: number
   ownerId: number
   createdAt: number
@@ -153,6 +156,7 @@ export type MachineMinAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  permissionHint?: true
   isLocal?: true
   ownerId?: true
   createdAt?: true
@@ -181,6 +185,7 @@ export type MachineMaxAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  permissionHint?: true
   isLocal?: true
   ownerId?: true
   createdAt?: true
@@ -211,6 +216,7 @@ export type MachineCountAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  permissionHint?: true
   isLocal?: true
   ownerId?: true
   createdAt?: true
@@ -328,6 +334,7 @@ export type MachineGroupByOutputType = {
   claudeAutoSwap: boolean
   aiUsageQuery: boolean
   automationAllowed: boolean
+  permissionHint: boolean
   isLocal: boolean
   ownerId: string | null
   createdAt: Date
@@ -381,6 +388,7 @@ export type MachineWhereInput = {
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Machine"> | Date | string
@@ -419,6 +427,7 @@ export type MachineOrderByWithRelationInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  permissionHint?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -460,6 +469,7 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Machine"> | Date | string
@@ -498,6 +508,7 @@ export type MachineOrderByWithAggregationInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  permissionHint?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -536,6 +547,7 @@ export type MachineScalarWhereWithAggregatesInput = {
   claudeAutoSwap?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
+  permissionHint?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Machine"> | Date | string
@@ -566,6 +578,7 @@ export type MachineCreateInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -603,6 +616,7 @@ export type MachineUncheckedCreateInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -640,6 +654,7 @@ export type MachineUpdateInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -677,6 +692,7 @@ export type MachineUncheckedUpdateInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -714,6 +730,7 @@ export type MachineCreateManyInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -744,6 +761,7 @@ export type MachineUpdateManyMutationInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -773,6 +791,7 @@ export type MachineUncheckedUpdateManyInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -813,6 +832,7 @@ export type MachineCountOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  permissionHint?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -845,6 +865,7 @@ export type MachineMaxOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  permissionHint?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -873,6 +894,7 @@ export type MachineMinOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  permissionHint?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -1063,6 +1085,7 @@ export type MachineCreateWithoutOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
@@ -1099,6 +1122,7 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
@@ -1164,6 +1188,7 @@ export type MachineScalarWhereInput = {
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Machine"> | Date | string
@@ -1194,6 +1219,7 @@ export type MachineCreateWithoutProjectLinksInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -1230,6 +1256,7 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -1282,6 +1309,7 @@ export type MachineUpdateWithoutProjectLinksInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -1318,6 +1346,7 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1354,6 +1383,7 @@ export type MachineCreateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -1390,6 +1420,7 @@ export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -1442,6 +1473,7 @@ export type MachineUpdateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -1478,6 +1510,7 @@ export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1514,6 +1547,7 @@ export type MachineCreateWithoutTabsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -1550,6 +1584,7 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -1602,6 +1637,7 @@ export type MachineUpdateWithoutTabsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -1638,6 +1674,7 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1674,6 +1711,7 @@ export type MachineCreateWithoutHookInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -1710,6 +1748,7 @@ export type MachineUncheckedCreateWithoutHookInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -1762,6 +1801,7 @@ export type MachineUpdateWithoutHookInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -1798,6 +1838,7 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1834,6 +1875,7 @@ export type MachineCreateWithoutAiAccountsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -1870,6 +1912,7 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -1922,6 +1965,7 @@ export type MachineUpdateWithoutAiAccountsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -1958,6 +2002,7 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1994,6 +2039,7 @@ export type MachineCreateWithoutUploadsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -2030,6 +2076,7 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -2082,6 +2129,7 @@ export type MachineUpdateWithoutUploadsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -2118,6 +2166,7 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2154,6 +2203,7 @@ export type MachineCreateWithoutChatConversationsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
@@ -2190,6 +2240,7 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
@@ -2242,6 +2293,7 @@ export type MachineUpdateWithoutChatConversationsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
@@ -2278,6 +2330,7 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -2314,6 +2367,7 @@ export type MachineCreateManyOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   createdAt?: Date | string
 }
@@ -2343,6 +2397,7 @@ export type MachineUpdateWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
@@ -2379,6 +2434,7 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
@@ -2415,6 +2471,7 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
@@ -2520,6 +2577,7 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
@@ -2559,6 +2617,7 @@ export type MachineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
@@ -2590,6 +2649,7 @@ export type MachineSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
@@ -2621,12 +2681,13 @@ export type MachineSelectScalar = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  permissionHint?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
 }
 
-export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
+export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "permissionHint" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
 export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
@@ -2720,6 +2781,12 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
      */
     automationAllowed: boolean
+    /**
+     * TER-614: the machine's hook script lets a Claude permission prompt of a command or file tool travel
+     * whole, and the card shows a filtered excerpt of it. Opt-in (off by default); mirrored on the machine
+     * by ~/.termhub/permission-hint, which only the switch writes.
+     */
+    permissionHint: boolean
     /**
      * The user's own computer (an agent machine): browsers other than the one that added it hide it
      */
@@ -3185,6 +3252,7 @@ export interface MachineFieldRefs {
   readonly claudeAutoSwap: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly aiUsageQuery: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly automationAllowed: Prisma.FieldRef<"Machine", 'Boolean'>
+  readonly permissionHint: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly isLocal: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly ownerId: Prisma.FieldRef<"Machine", 'String'>
   readonly createdAt: Prisma.FieldRef<"Machine", 'DateTime'>

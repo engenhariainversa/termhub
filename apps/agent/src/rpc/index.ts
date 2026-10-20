@@ -56,6 +56,7 @@ export const handlers: Handlers = {
   'file.list': fileList.list,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
+  'hooks.hint': hooks.hint,
   'hooks.status': hooks.status,
   'agent.update': update.update,
   'agent.uninstall': uninstall.uninstall,
