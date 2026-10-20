@@ -1,7 +1,7 @@
 // A copy of the contract's table (`packages/mobile-api/src/attachments.ts`, spec §5.2 and §5.6): the web
 // depends on no workspace package, so it keeps its own. The server is the judge; a drift here only
 // moves a refusal from the box to the server's 4xx.
-import { i18n, tk } from '../i18n';
+import { currentLocale, i18n, tk } from '../i18n';
 import { formatNumber } from './format';
 import type { ChatAttachment, ChatMessage } from './types';
 
@@ -91,8 +91,14 @@ const TRANSCRIPTION_REASON: Record<string, string> = {
   error: tk('o serviço de transcrição deu erro'),
 };
 
+/** TRANSCRIPTION_FAILED by `meta.reason` (TER-1096): whisper heard nothing in the voice note. */
+const TRANSCRIPTION_FAILED_REASON: Record<string, string> = {
+  no_speech: tk('nenhuma fala reconhecida no áudio'),
+};
+
 function failureReason(a: ChatAttachment): string {
-  const reason = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof a.meta?.reason === 'string' ? TRANSCRIPTION_REASON[a.meta.reason] : undefined;
+  const table = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' ? TRANSCRIPTION_REASON : a.error_code === 'TRANSCRIPTION_FAILED' ? TRANSCRIPTION_FAILED_REASON : null;
+  const reason = table && typeof a.meta?.reason === 'string' ? table[a.meta.reason] : undefined;
   return reason ?? ((a.error_code && FAILURE_REASON[a.error_code]) || tk('erro'));
 }
 
@@ -101,6 +107,19 @@ export function attachmentStatusText(a: ChatAttachment): string | null {
   if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? i18n.t('transcrevendo…') : i18n.t('processando…');
   if (a.status === 'failed') return i18n.t('falhou: {{reason}}', { reason: i18n.t(failureReason(a)) });
   return null;
+}
+
+const LANGUAGE_NAME: Record<string, string> = { pt: tk('português'), en: tk('inglês'), es: tk('espanhol') };
+const UI_LANGUAGE: Record<string, string> = { 'pt-BR': 'pt', en: 'en', es: 'es' };
+
+/**
+ * The language a clip was transcribed in (`meta.language`, whisper's detection, TER-1096), named for the
+ * bubble only when it is not the language on screen: a Portuguese note in a Portuguese UI says nothing.
+ */
+export function transcriptLanguage(a: Pick<ChatAttachment, 'meta'>): string | null {
+  const code = a.meta?.language;
+  if (typeof code !== 'string' || !/^[a-z]{2,3}$/.test(code) || code === UI_LANGUAGE[currentLocale()]) return null;
+  return LANGUAGE_NAME[code] ? i18n.t(LANGUAGE_NAME[code]) : code.toUpperCase();
 }
 
 /** A transcription whisper could not do can be asked again (`POST …/retry`); a file it could not decode cannot. */

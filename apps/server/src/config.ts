@@ -145,8 +145,8 @@ const envSchema = z.object({
 
   // Speech-to-text service (docker/whisper) for voice input in the terminals. Unset = feature off.
   WHISPER_URL: z.string().url().optional(),
-  /** language hint passed to whisper ("auto" = detect) */
-  WHISPER_LANGUAGE: z.string().default('pt'),
+  /** "auto" (default) = whisper detects the spoken language (TER-1096); a code (pt, en...) forces it for every clip */
+  WHISPER_LANGUAGE: z.string().default('auto'),
   /** bearer secret shared with the whisper service; empty = transcription off (the service refuses every request) */
   WHISPER_SECRET: z.string().optional(),
 

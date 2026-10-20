@@ -90,6 +90,14 @@ describe('extraction queue', () => {
     expect(repo.setFailed).toHaveBeenCalledWith('a', 'TRANSCRIPTION_UNAVAILABLE', 'refused');
   });
 
+  it('hands whisper the language hints stored on the row at upload (TER-1096)', async () => {
+    const extractImpl = vi.fn(async () => ({ text: 'hello', meta: { language: 'en' } })) as unknown as typeof extract;
+    const { queue } = build([row({ id: 'a', kind: 'audio', meta: { language_hints: ['en', 'pt'] } })], extractImpl);
+    queue.enqueue('a');
+    await queue.idle();
+    expect(extractImpl).toHaveBeenCalledWith('audio', expect.any(Buffer), 'application/pdf', { whisperUrl: 'http://w', language: 'pt', hints: ['en', 'pt'] });
+  });
+
   it('a file that is gone fails the row as ATTACHMENT_INVALID; a row that is gone or already done is skipped', async () => {
     const extractImpl = vi.fn(async () => ({ text: 'x', meta: {} })) as unknown as typeof extract;
     const { queue, onDone, repo } = build([row({ id: 'gone' }), row({ id: 'done', status: 'ready' })], extractImpl);

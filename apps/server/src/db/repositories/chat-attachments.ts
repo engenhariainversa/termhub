@@ -75,8 +75,8 @@ export const mapAttachment = (a: PrismaAttachment): AttachmentRow => ({
   created_at: a.createdAt.toISOString(),
 });
 
-/** What a client sees: never the owner, the hash, the extracted text of a document or the queue's attempt
- * counter (`markAttempt`). An audio clip carries its `transcript` once it is ready, so the bubble can show
+/** What a client sees: never the owner, the hash, the extracted text of a document, the queue's attempt
+ * counter (`markAttempt`) or the transcription's language hints. An audio clip carries its `transcript` once it is ready, so the bubble can show
  * what was heard under the player; the other kinds go without the field. */
 export function toPublicAttachment(row: AttachmentRow): ChatAttachment {
   const base = { id: row.id, name: row.name, mime: row.mime, kind: row.kind, bytes: row.bytes, status: row.status, error_code: row.error_code, meta: publicMeta(row.meta), created_at: row.created_at };
@@ -84,8 +84,8 @@ export function toPublicAttachment(row: AttachmentRow): ChatAttachment {
 }
 
 function publicMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
-  if (meta === null || !('attempts' in meta)) return meta;
-  const { attempts: _attempts, ...rest } = meta;
+  if (meta === null || !('attempts' in meta || 'language_hints' in meta)) return meta;
+  const { attempts: _attempts, language_hints: _hints, ...rest } = meta;
   return rest;
 }
 

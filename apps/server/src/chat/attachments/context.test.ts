@@ -77,6 +77,13 @@ describe('attachmentContext with transcripts (TER-1085)', () => {
     expect(attachmentContext([audio({ status: 'failed', error_code: 'TRANSCRIPTION_FAILED', extracted_text: null })])).toContain('áudio (falhou: a transcrição do áudio falhou)');
   });
 
+  it('names the language a transcript was heard in, and why a voice note with no speech failed (TER-1096)', () => {
+    expect(attachmentContext([audio({ extracted_text: 'hello there', meta: { language: 'en' } })])).toContain('Transcrição do áudio (idioma falado: en):');
+    expect(attachmentContext([audio({ meta: { language: 'x<y' } })])).toContain('Transcrição do áudio:');
+    const silent = attachmentContext([audio({ status: 'failed', error_code: 'TRANSCRIPTION_FAILED', extracted_text: null, meta: { reason: 'no_speech' } })]);
+    expect(silent).toContain('não reconheceu nenhuma fala no áudio');
+  });
+
   it('a late transcript goes under its own header', () => {
     expect(attachmentContext([audio()], { late: true })).toMatch(/^Um áudio que a pessoa enviou antes terminou de ser transcrito agora/);
   });

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { HttpError, badRequest, unauthorized } from '../lib/errors.js';
 import { SlidingWindow } from '../mobile/rate-limit.js';
 import { TRANSCRIPTION_MAX_BYTES, isTranscriptionEnabled, type TranscriptionService } from '../terminal/transcription.js';
+import { languageHints } from '../lib/whisper.js';
 
 const idParam = z.object({ id: z.string().uuid() });
 
@@ -40,7 +41,7 @@ export async function mobileTranscriptionRoutes(app: FastifyInstance, deps: { tr
     if (!Buffer.isBuffer(request.body) || request.body.length === 0) throw badRequest('Áudio vazio');
     const { seconds } = createQuery.parse(request.query);
     if (!uploadLimiter.take(request.mobile.device.id)) throw tooManyUploads();
-    const job = deps.transcriptions.start(request.user.id, request.body, mime, seconds, { maxSeconds: MOBILE_TOO_LONG_SECONDS });
+    const job = deps.transcriptions.start(request.user.id, request.body, mime, seconds, { maxSeconds: MOBILE_TOO_LONG_SECONDS, hints: languageHints(request.headers['accept-language'], request.user.locale) });
     return reply.code(202).send({ transcription: deps.transcriptions.view(job) });
   });
 

@@ -103,7 +103,7 @@ export async function chatAttachmentRoutes(app: FastifyInstance, repos: Reposito
 
   app.post('/', { bodyLimit: UPLOAD_BODY_LIMIT, config: { action: 'create' } }, async (request, reply) => {
     const { name, project_id } = uploadQuery.parse(request.query);
-    const attachment = await storeUpload(uploadDeps, request.scope.user, { name, projectId: project_id ?? null, body: request.body, log: request.log });
+    const attachment = await storeUpload(uploadDeps, request.scope.user, { name, projectId: project_id ?? null, body: request.body, log: request.log, acceptLanguage: request.headers['accept-language'] });
     return reply.code(201).send({ attachment });
   });
 

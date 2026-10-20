@@ -6,11 +6,11 @@ import { TranscriptionService } from '../terminal/transcription.js';
 import { transcriptionRoutes } from './transcriptions.js';
 
 vi.mock('../config.js', () => ({
-  config: { transcription: { url: 'http://whisper:8000', language: 'pt', secret: 'whisper-secret' } },
+  config: { transcription: { url: 'http://whisper:8000', language: 'auto', secret: 'whisper-secret' } },
 }));
 
 const alice = { id: 'u-alice', name: 'Alice' } as User;
-const bob = { id: 'u-bob', name: 'Bob' } as User;
+const bob = { id: 'u-bob', name: 'Bob', locale: 'es' } as User;
 
 /** Routes with the real service, the auth hook replaced by a fixed user (header x-user picks who). */
 function buildApp(service: TranscriptionService) {
@@ -37,6 +37,14 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('POST /api/transcriptions', () => {
+  it('hints whisper with the language the client shows, then the account one (TER-1096)', async () => {
+    whisperAnswers(200, { text: 'hello', language: 'en', duration: 1 });
+    const app = buildApp(new TranscriptionService({ log: () => {} }));
+    const res = await app.inject({ method: 'POST', url: '/api/transcriptions', headers: { 'content-type': 'audio/webm', 'accept-language': 'en', 'x-user': 'bob' }, payload: Buffer.from('a') });
+    expect(res.statusCode).toBe(202);
+    await settle();
+    expect(String(fetchMock.mock.calls[0][0])).toBe('http://whisper:8000/transcribe?language=auto&hints=en%2Ces');
+  });
   it('accepts an audio body, answers 202 with a pending job and forwards the clip to whisper', async () => {
     whisperAnswers(200, { text: '  ola mundo ', language: 'pt', duration: 1.5 });
     const service = new TranscriptionService({ log: () => {} });
@@ -50,7 +58,7 @@ describe('POST /api/transcriptions', () => {
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [url, init] = fetchMock.mock.calls[0];
-    expect(String(url)).toBe('http://whisper:8000/transcribe?language=pt');
+    expect(String(url)).toBe('http://whisper:8000/transcribe?language=auto');
     expect((init?.headers as Record<string, string>)['content-type']).toBe('audio/webm');
     expect((init?.headers as Record<string, string>).authorization).toBe('Bearer whisper-secret');
     expect(Buffer.from(init?.body as Uint8Array).toString()).toBe('audio-bytes');

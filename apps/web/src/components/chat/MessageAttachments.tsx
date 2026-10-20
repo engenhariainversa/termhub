@@ -2,7 +2,7 @@ import { useTranslation } from '../../i18n';
 import { memo, useEffect, useRef, useState } from 'react';
 import { Download, Pause, Play } from 'lucide-react';
 import { api } from '../../lib/api';
-import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../../lib/attachments';
+import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize, transcriptLanguage } from '../../lib/attachments';
 import type { ChatAttachment } from '../../lib/types';
 import { Dot, KindIcon } from './AttachmentChip';
 import { ImageViewer } from './ImageViewer';
@@ -135,6 +135,7 @@ function AudioAttachment({ attachment: a }: { attachment: ChatAttachment }) {
   const duration = metaDuration(a.meta) ?? loaded;
   const status = attachmentStatusText(a);
   const transcript = typeof a.transcript === 'string' && a.transcript.trim() ? a.transcript.trim() : null;
+  const language = transcriptLanguage(a);
 
   // Leaving the thread mid-play stops the sound with the row.
   useEffect(() => () => audio.current?.pause(), []);
@@ -185,7 +186,13 @@ function AudioAttachment({ attachment: a }: { attachment: ChatAttachment }) {
       {transcript ? (
         <>
           <button type="button" className="self-start rounded px-1 text-fg-dim hover:text-fg" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-            {open ? t('Ocultar transcrição') : t('Ver transcrição')}
+            {language
+              ? open
+                ? t('Ocultar transcrição ({{language}})', { language })
+                : t('Ver transcrição ({{language}})', { language })
+              : open
+                ? t('Ocultar transcrição')
+                : t('Ver transcrição')}
           </button>
           {open && <p className="whitespace-pre-wrap px-1 text-fg">{transcript}</p>}
         </>

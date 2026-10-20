@@ -145,6 +145,20 @@ describe('MessageAttachments images', () => {
 describe('MessageAttachments audio (TER-1036)', () => {
   const clip: TChatAttachment = { id: 'au1', name: 'audio-2026-10-07.m4a', mime: 'audio/mp4', kind: 'audio', bytes: 4000, status: 'pending', error_code: null, meta: null, created_at: '2026-10-07T00:00:00.000Z' };
 
+  it('names the language a clip was heard in when it is not the one on screen, and says when no speech was heard (TER-1096)', async () => {
+    await render(
+      <MessageAttachments
+        attachments={[
+          { ...clip, status: 'ready', meta: { language: 'en' }, transcript: 'run the tests' },
+          { ...clip, id: 'au2', status: 'failed', error_code: 'TRANSCRIPTION_FAILED', meta: { reason: 'no_speech' } },
+        ]}
+      />,
+    );
+    expect(screen.getByText('Ver transcrição (inglês)')).toBeTruthy();
+    expect(screen.getByText('falhou: nenhuma fala reconhecida no áudio')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tentar de novo' })).toBeNull();
+  });
+
   it('is a player: nothing downloaded until played, then play/pause with where it is and how long it lasts', async () => {
     await render(<MessageAttachments attachments={[{ ...clip, status: 'ready', meta: { duration_s: 12 } }]} />);
     expect(screen.getByText('0:12')).toBeTruthy();

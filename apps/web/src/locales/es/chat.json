@@ -540,5 +540,11 @@
   "Política do trabalho automático": "Política del trabajo automático",
   "Aguardando a confirmação no chat": "Esperando la confirmación en el chat",
   "Cada projeto pede a sua confirmação no chat.": "Cada proyecto pide tu confirmación en el chat.",
-  "ai-memory de {{machine}}: {{path}}": "ai-memory de {{machine}}: {{path}}"
+  "ai-memory de {{machine}}: {{path}}": "ai-memory de {{machine}}: {{path}}",
+  "nenhuma fala reconhecida no áudio": "no se reconoció ninguna voz en el audio",
+  "português": "portugués",
+  "inglês": "inglés",
+  "espanhol": "español",
+  "Ver transcrição ({{language}})": "Ver transcripción ({{language}})",
+  "Ocultar transcrição ({{language}})": "Ocultar transcripción ({{language}})"
 }

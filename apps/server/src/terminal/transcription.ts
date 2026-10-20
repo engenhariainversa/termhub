@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from '../config.js';
 import { HttpError, conflict, notFound } from '../lib/errors.js';
 import { msg, tk } from '../i18n/index.js';
-import { whisperHeaders } from '../lib/whisper.js';
+import { transcribeUrl, whisperHeaders } from '../lib/whisper.js';
 
 /** Recorded clips are capped at 5 minutes client-side; opus at 48 kbps is ~2 MB, mp4/aac a few more. */
 export const TRANSCRIPTION_MAX_BYTES = 32 * 1024 * 1024;
@@ -54,6 +54,8 @@ export interface TranscriptionView {
 export interface StartOptions {
   /** whisper's measured duration past this many seconds ends the job as TOO_LONG, regardless of the client's own estimate */
   maxSeconds?: number;
+  /** likely languages of the clip, best first (TER-1096): whisper detects and only falls back to these */
+  hints?: string[];
 }
 
 export const isTranscriptionEnabled = () => config.transcription !== null;
@@ -116,7 +118,7 @@ export class TranscriptionService {
   private async run(job: TranscriptionJob, audio: Buffer, mime: string, opts: StartOptions): Promise<void> {
     const t0 = Date.now();
     try {
-      const result = await transcribeWithWhisper(audio, mime);
+      const result = await transcribeWithWhisper(audio, mime, opts.hints ?? []);
       if (opts.maxSeconds !== undefined && result.duration > opts.maxSeconds) {
         job.status = 'error';
         job.error = 'Áudio longo demais';
@@ -160,12 +162,12 @@ interface WhisperResult {
 }
 
 /** POSTs the clip to docker/whisper and returns its JSON. The audio never touches disk here. */
-async function transcribeWithWhisper(audio: Buffer, mime: string): Promise<WhisperResult> {
+async function transcribeWithWhisper(audio: Buffer, mime: string, hints: string[]): Promise<WhisperResult> {
   const t = config.transcription;
   if (!t) throw new HttpError(503, 'Transcrição de voz não está configurada', 'TRANSCRIPTION_OFF');
   let res: Response;
   try {
-    res = await fetch(`${t.url}/transcribe?language=${encodeURIComponent(t.language)}`, {
+    res = await fetch(transcribeUrl(t.url, t.language, hints), {
       method: 'POST',
       headers: whisperHeaders(mime, t.secret),
       body: new Uint8Array(audio),
@@ -180,5 +182,5 @@ async function transcribeWithWhisper(audio: Buffer, mime: string): Promise<Whisp
   if (!res.ok) throw new HttpError(502, msg('Serviço de transcrição respondeu {{status}}', { status: res.status }), 'TRANSCRIPTION_UNAVAILABLE');
   const body = (await res.json()) as Partial<WhisperResult>;
   if (typeof body.text !== 'string') throw new HttpError(502, 'Resposta inválida do serviço de transcrição', 'TRANSCRIPTION_UNAVAILABLE');
-  return { text: body.text.trim(), language: body.language ?? t.language, duration: typeof body.duration === 'number' ? body.duration : 0 };
+  return { text: body.text.trim(), language: body.language ?? '', duration: typeof body.duration === 'number' ? body.duration : 0 };
 }

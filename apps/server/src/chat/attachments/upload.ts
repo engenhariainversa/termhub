@@ -6,6 +6,7 @@ import type { ChatConversation } from '../../db/repositories/chat.js';
 import type { User } from '../../db/repositories/types.js';
 import { HttpError, badRequest } from '../../lib/errors.js';
 import { newId } from '../../lib/ids.js';
+import { languageHints } from '../../lib/whisper.js';
 import type { ExtractionQueue } from './queue.js';
 import { sniff } from './sniff.js';
 import type { AttachmentStore } from './store.js';
@@ -28,6 +29,8 @@ export interface UploadInput {
   projectId: string | null;
   body: unknown;
   log: Pick<FastifyBaseLogger, 'info'>;
+  /** The request's `Accept-Language`: the language the client shows, the first hint for a clip's transcription (TER-1096). */
+  acceptLanguage?: string | string[];
 }
 
 const KIND_LABEL: Record<AttachmentKind, string> = {
@@ -72,11 +75,13 @@ export async function storeUpload(deps: UploadDeps, user: User, input: UploadInp
   if (used + body.length > deps.quotaBytes) throw new HttpError(413, msg('Espaço de anexos esgotado (limite de {{size}})', { size: mb(deps.quotaBytes) }), 'ATTACHMENT_QUOTA');
 
   const id = newId();
+  // Kept until the transcription replaces the meta: the queue (and a retry) reads them off the row.
+  const hints = sniffed.kind === 'audio' || sniffed.kind === 'video' ? languageHints(input.acceptLanguage, user.locale) : [];
   const sha256 = createHash('sha256').update(body).digest('hex');
   await deps.store.write(user.id, id, body);
   let row;
   try {
-    row = await deps.repo.create({ id, user_id: user.id, conversation_id: conversation.id, name, mime: sniffed.mime, kind: sniffed.kind, bytes: body.length, sha256, meta: null });
+    row = await deps.repo.create({ id, user_id: user.id, conversation_id: conversation.id, name, mime: sniffed.mime, kind: sniffed.kind, bytes: body.length, sha256, meta: hints.length > 0 ? { language_hints: hints } : null });
   } catch (err) {
     // No row, no file: a file nobody can reach must not sit on the volume until the sweep finds it.
     await deps.store.remove(user.id, id).catch(() => undefined);
