@@ -20,6 +20,7 @@ import { Composer } from './composer';
 import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
+import { MessageMenu } from './message-menu';
 import { PendingBar } from './pending-bar';
 import { SwipeToReply } from './swipe-to-reply';
 import { TabLimitCard } from './tab-limit-card';
@@ -104,9 +105,13 @@ const MessageRow = memo(function MessageRow({
   const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
   // Only a row the server has, with something in it, can be answered (TER-447). The wrapper stays either
   // way: a sent row becoming the server's, or an answer getting its text, is not remounted (TER-1001).
+  // A touch held on it opens its menu (TER-1090).
+  const replyable = isReplyable(message);
   return (
-    <SwipeToReply onReply={reply} enabled={isReplyable(message)}>
-      {bubble}
+    <SwipeToReply onReply={reply} enabled={replyable}>
+      <MessageMenu message={message} onReply={replyable ? reply : undefined}>
+        {bubble}
+      </MessageMenu>
     </SwipeToReply>
   );
 });

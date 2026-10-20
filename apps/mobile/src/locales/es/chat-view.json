@@ -268,5 +268,13 @@
   "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similitud {{score}} · umbrales {{high}} / {{low}}",
   "Permitir sempre nesta pasta": "Permitir siempre en esta carpeta",
   "Não foi possível baixar o arquivo": "No se pudo descargar el archivo",
-  "Baixar {{name}}": "Descargar {{name}}"
+  "Baixar {{name}}": "Descargar {{name}}",
+  "Copiado": "Copiado",
+  "Não foi possível copiar": "No se pudo copiar",
+  "Copiar": "Copiar",
+  "Compartilhar": "Compartir",
+  "Copiar link": "Copiar enlace",
+  "Compartilhar link": "Compartir enlace",
+  "Abrir link": "Abrir enlace",
+  "Respondendo a {{author}}": "Respondiendo a {{author}}"
 }

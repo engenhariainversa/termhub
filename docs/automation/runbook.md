@@ -475,7 +475,7 @@ attachment of an assistant message, stored with the person's own uploads (same v
 quota), and shows on the web and in the app with a preview (images open full size) and "Baixar" on every
 kind: a download on the web, the share sheet on iOS (photo library, Files) and the folder picker on Android.
 
-- **Needs agent 0.31.0** (capability `file_share`) on the machine; SSH and local machines are refused. The
+- **Needs agent 0.32.0** (capability `file_share`) on the machine; SSH and local machines are refused. The
   server reads the file in 512 KiB chunks (the agent's frames stop at 1 MiB) and refuses one that changed
   between two chunks.
 - **What can be shared.** The kinds the chat already shows: png, jpg, gif, webp, PDF, .docx, .xlsx, audio,

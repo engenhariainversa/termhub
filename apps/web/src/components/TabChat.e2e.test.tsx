@@ -305,3 +305,25 @@ describe('a Claude tab as a conversation (TER-1003)', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(editorTabsKey('p1'))!).open).toEqual(['t1']));
   });
 });
+
+describe('a Codex tab as a conversation (TER-1095)', () => {
+  it('offers the switch and shows the Codex session', async () => {
+    state.tabs = [{ ...terminal('t1', 'Ana', 0), state_tool: 'codex' }];
+    const view = await openConversation();
+    expect(await within(view).findByText('liste os arquivos')).toBeInTheDocument();
+  });
+
+  it('a Codex that does not trust the hooks yet says how to trust them', async () => {
+    state.tabs = [{ ...terminal('t1', 'Ana', 0), state_tool: 'codex' }];
+    state.page = { ...state.page, tab: summary({ availability: 'no_session' }), session_id: null, items: [], live: null, empty_reason: 'codex_untrusted' };
+    const view = await openConversation();
+    expect(await within(view).findByText(/escolha "Trust all" em "Hooks need review"/)).toBeInTheDocument();
+  });
+
+  it('a Cursor tab has no conversation', async () => {
+    state.tabs = [{ ...terminal('t1', 'Ana', 0), state_tool: 'cursor' }];
+    renderView();
+    expect(await screen.findByTestId('terminal-t1')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mostrar Ana como conversa' })).not.toBeInTheDocument();
+  });
+});

@@ -166,7 +166,7 @@ it('names the file read capability once', () => {
 
 it('names the file share capability once, with the agent version that ships it', () => {
   expect(CAPABILITY_FILE_SHARE).toBe('file_share');
-  expect(FILE_SHARE_MIN_AGENT_VERSION).toBe('0.31.0');
+  expect(FILE_SHARE_MIN_AGENT_VERSION).toBe('0.32.0');
 });
 
 it('names the file list capability once', () => {

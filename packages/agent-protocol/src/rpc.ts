@@ -255,7 +255,8 @@ export const RPC = {
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
    * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
-   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   * transcript, here or in the account's other project dirs (since agent 0.15.0). A Codex session's
+   * `rollout-*.jsonl` is read the same way, at its own path only (capability `transcript.codex`).
    */
   /**
    * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute
@@ -387,7 +388,7 @@ export const RPC = {
     60_000,
   ),
   /**
-   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.31.0, capability
+   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.32.0, capability
    * `file_share`). `path` is absolute or `~/…`. The allowed folders are `roots` and, unless `only_roots`,
    * the agent's own (home, the temp dirs, `file-read-roots`). Checked on every chunk, on the path as asked
    * and on the resolved file: under a folder, no dot segment below it, not a secret, one of

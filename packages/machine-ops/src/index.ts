@@ -9,6 +9,7 @@ export * from './ai-credentials.js';
 export * from './pty.js';
 export * from './hooks.js';
 export * from './claude-session.js';
+export * from './codex-session.js';
 export * from './discover.js';
 export * from './simulator.js';
 export * from './scroll-script.js';

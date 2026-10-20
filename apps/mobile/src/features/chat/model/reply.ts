@@ -4,7 +4,14 @@ import type { ChatAction, ChatMessage, TabQuestion } from './types';
 
 /** What the next send answers, while it is being written and on the optimistic row (TER-447): a
  * message, or a card of the thread (TER-849), whose id `id` then is. */
-export type ReplyRef = { id: string; role: 'user' | 'assistant'; excerpt: string; card?: ReplyCardKind };
+export type ReplyRef = {
+  id: string;
+  role: 'user' | 'assistant';
+  excerpt: string;
+  card?: ReplyCardKind;
+  /** Who answered, where it is not the concierge: a session's Claude (TER-1090). Shown, never sent. */
+  author?: string;
+};
 
 /** A quote as a message carries it (the server's snapshot). */
 export type ReplyOnRow = NonNullable<ChatMessage['reply_to']>;
