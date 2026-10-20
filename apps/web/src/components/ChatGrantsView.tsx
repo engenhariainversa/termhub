@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import type { ChatDefault, ChatGrantListItem } from '../lib/types';
+import type { ChatDefault, ChatFileGrant, ChatGrantListItem } from '../lib/types';
 import { ChatAutoThresholds } from './ChatAutoThresholds';
 import { untilLabel } from './chat/grant-time';
 import { endedAtLabel, GRANT_STATE_LABEL, grantOriginLabel, grantTitleLabel } from './chat/grant-list-text';
@@ -30,6 +30,9 @@ export function ChatGrantsView() {
   // Loaded apart from the grants: a failure here hides the section, never the grants below it.
   const [defaults, setDefaults] = useState<ChatDefault[] | null>(null);
   const [savingKind, setSavingKind] = useState<ChatDefault['kind'] | null>(null);
+  // "Permitir sempre nesta pasta" (TER-1086), loaded apart too: an older server answers 404 and the section stays hidden.
+  const [folders, setFolders] = useState<ChatFileGrant[] | null>(null);
+  const loadFolders = useCallback(() => api.listChatFileGrants().then((r) => setFolders(r.grants), () => setFolders(null)), []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -47,6 +50,10 @@ export function ChatGrantsView() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void loadFolders();
+  }, [loadFolders]);
 
   useEffect(() => {
     api.listChatDefaults().then((r) => setDefaults(r.defaults), () => setDefaults(null));
@@ -94,6 +101,19 @@ export function ChatGrantsView() {
     }
     setRevokingId(null);
     await load();
+  };
+
+  const revokeFolder = async (id: string) => {
+    setRevokingId(id);
+    setError(null);
+    try {
+      await api.revokeChatFileGrant(id);
+    } catch (e) {
+      // 404: already revoked on another screen — the list is stale, not wrong.
+      if (!(e instanceof ApiError && e.status === 404)) setError(e instanceof ApiError ? e.message : t('Não foi possível revogar a permissão.'));
+    }
+    setRevokingId(null);
+    await loadFolders();
   };
 
   if (loadFailed)
@@ -154,6 +174,29 @@ export function ChatGrantsView() {
           </ul>
         )}
       </section>
+      {folders && folders.length > 0 && (
+        <section aria-labelledby="chat-file-grants" className="space-y-2">
+          <h2 id="chat-file-grants" className="text-sm font-semibold text-fg">
+            {t('Pastas liberadas para mostrar arquivos')}
+          </h2>
+          <p className="text-xs text-fg-dim">{t('O chat mostra arquivos destas pastas sem pedir confirmação, até você revogar. Chaves, credenciais e arquivos .env nunca saem da máquina.')}</p>
+          <ul className="space-y-2">
+            {folders.map((g) => (
+              <li key={g.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg-2 px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm text-fg" title={g.folder}>
+                    {g.folder}
+                  </p>
+                  <p className="text-xs text-fg-dim">{t('em {{machine}} · sem prazo', { machine: g.machine_name })}</p>
+                </div>
+                <button type="button" className="btn-ghost shrink-0" disabled={revokingId === g.id} onClick={() => void revokeFolder(g.id)}>
+                  {t('Revogar')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section aria-labelledby="chat-grants-history" className="space-y-2">
         <h2 id="chat-grants-history" className="text-sm font-semibold text-fg">
           {t('Histórico')}

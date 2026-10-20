@@ -467,6 +467,38 @@ Code classifier, on purpose.
 - **History.** The client version, system and response time are recorded on access records only from this
   release on; older rows answer them as null.
 
+## 9d. Showing a machine's file in the chat (TER-1086)
+
+The concierge and the agent tabs can post a file of one of the person's machines in the chat with the MCP
+tool `share_file` (`machine_id`, an absolute or `~/` `path`, an optional `caption`). The file becomes an
+attachment of an assistant message, stored with the person's own uploads (same volume, kinds, sniffing and
+quota), and shows on the web and in the app with a preview (images open full size) and "Baixar" on every
+kind: a download on the web, the share sheet on iOS (photo library, Files) and the folder picker on Android.
+
+- **Needs agent 0.34.0** (capability `file_share`) on the machine; SSH and local machines are refused. The
+  server reads the file in 512 KiB chunks (the agent's frames stop at 1 MiB) and refuses one that changed
+  between two chunks.
+- **What can be shared.** The kinds the chat already shows: png, jpg, gif, webp, PDF, .docx, .xlsx, audio,
+  video and text (.txt .md .csv .json .log .yaml). The bytes decide the kind, as for an upload: an
+  executable renamed `.png` is refused. 25 MB at most (images 10 MB, text 1 MB, as uploads), 100 files or
+  500 MB per person per 24 h. SVG is not shared (no preview path that is both safe and on every screen).
+- **Never shared, whoever asks:** keys and certificates (`id_*`, `.pem`, `.key`, `.p12`…), `.env` files,
+  credentials and secrets files, keychains, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config`, `~/.termhub`
+  (except its worktrees) and the AI CLIs' config dirs (`.claude*`, `.codex`, `.gemini`, `.cursor`). The
+  rule lives in `@termhub/machine-ops` (`isSecretPath`): the server refuses the path before any card is
+  shown, the agent checks it again on the path and on the file a link resolves to. Dot folders and anything
+  outside home, the temp dirs and `~/.termhub/file-read-roots` are refused too.
+- **Confirmation.** On the concierge's token every file is a card. "Permitir sempre nesta pasta" (web and
+  app, PIN on the phone) trusts that folder of that machine and its subfolders until revoked, 30 files an
+  hour; the folders are listed with Revogar in Configurações › Permissões do chat (web). An agent tab shares
+  without a card, but only files inside its own folder on its own machine, into the project's chat.
+- **Audit.** Each file writes a `machine.file_share` row in the security trail (who, machine, resolved
+  path, size, kind, concierge/tab/mcp) and an `api_token_events` row for the call; nothing of its content
+  is logged.
+- **Stuck:** `AGENT_OUTDATED` → update the agent (section 9b); `FILE_BLOCKED` / `FILE_TYPE` are the rules
+  above and are not overridden; `FILE_SHARE_LIMIT` lifts as the 24 h window moves; `ATTACHMENT_QUOTA` means
+  the person's attachment space is full.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
@@ -542,3 +574,7 @@ TER-1056 (section 9b) changes every machine, automation or not: agents now updat
 default (the switch was off by default before, and the migration turned it on once for every agent
 machine). Anyone who does not want it turns the switch off per machine; an agent below the minimum version
 is updated anyway.
+
+TER-1086 (section 9c) gives every user the `share_file` tool: the concierge can show them their machines'
+files in the chat. Nothing leaves a machine without a card the person approves, a folder they trusted
+themselves, or an agent tab sharing from its own project folder.

@@ -5,6 +5,7 @@ import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
 import * as fileRead from './file-read.js';
+import * as fileShare from './file-share.js';
 import * as fs from './fs.js';
 import * as hooks from './hooks.js';
 import * as hw from './hw.js';
@@ -54,6 +55,7 @@ export const handlers: Handlers = {
   'file.paste': paste.pasteFile,
   'file.read': fileRead.read,
   'file.list': fileList.list,
+  'file.share': fileShare.share,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
   'hooks.hint': hooks.hint,

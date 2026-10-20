@@ -10,7 +10,7 @@ const tab = { id: 'tab1', project_id: 'p1' };
 
 describe('constants', () => {
   it('pins the allowlist, scopes, excluded kinds and TTL of the spec (D2, D3, D6)', () => {
-    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card']);
+    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'share_file']);
     expect(TAB_TOKEN_SCOPES).toEqual(['read', 'memory']);
     expect(TAB_EXCLUDED_KINDS).toEqual(['message', 'action']);
     expect(TAB_TOKEN_TTL_MS).toBe(30 * 24 * 60 * 60 * 1000);
@@ -90,7 +90,7 @@ describe('tabRefusalMessage', () => {
 
   it('names the run-only tools as such, and says a run-only tool needs a tab with automatic work (F-8)', () => {
     expect(tabRefusalMessage('list_tabs')).toBe(
-      'O token desta aba só usa as ferramentas permitidas (search_memory, record_lesson, get_automation_policy, e report_card e get_card numa aba com trabalho automático); list_tabs não está disponível aqui',
+      'O token desta aba só usa as ferramentas permitidas (search_memory, record_lesson, get_automation_policy, share_file, e report_card e get_card numa aba com trabalho automático); list_tabs não está disponível aqui',
     );
     expect(tabRefusalMessage('report_card')).toBe('report_card só está disponível numa aba com trabalho automático em andamento');
     expect(tabRefusalMessage('get_card', 'en')).toBe('get_card is only available in a tab running automatic work');

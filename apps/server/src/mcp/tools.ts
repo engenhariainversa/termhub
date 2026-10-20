@@ -36,6 +36,7 @@ import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.j
 import { TROUBLESHOOT_ENDPOINTS, TROUBLESHOOT_REQUESTS_MAX, troubleshootReason, troubleshootRoutePrefix, troubleshootTool } from '../control/user-troubleshoot.js';
 import { isAdmin } from '../auth/permissions.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
+import { pathRefusal, SHARE_CAPTION_MAX, shareFile, type ShareArgs } from '../chat/attachments/share.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
@@ -506,6 +507,23 @@ export const TOOLS: ToolDef[] = [
     scope: 'read', resource: 'chat', action: 'read',
     input: { id: z.string().regex(/^[a-z0-9]{1,64}$/), offset: z.number().int().min(0).optional() },
     run: (ctx, a) => readAttachment(ctx, a as { id: string; offset?: number }),
+  },
+  {
+    name: 'share_file',
+    description:
+      "Publish a file of one of the person's machines in this chat, so they see it on the web and on the phone without being at the machine: an image shows as a preview that opens full size, any other kind as a card with name, size and type, and every one has a download button. path is absolute or ~/…; caption (optional) is the text above the file, in the person's language. Only the kinds the chat shows: images (png, jpg, gif, webp), PDF, Word (.docx), Excel (.xlsx), audio, video and text (.txt, .md, .csv, .json, .log, .yaml); 25 MB at most, 100 files or 500 MB per day. Keys, credentials, .env files, keychains, dot folders and the AI CLIs' config dirs are refused, whoever asks. The machine must run the termhub agent 0.34.0 or newer. In the chat the person confirms each file, or allows a folder of a machine for good. From an agent tab: only files inside the tab's own folder, and the file goes to the project's chat (machine_id may be left out). The answer carries the attachment id: do not send the same file twice, and do not paste its content in your answer.",
+    scope: 'read', resource: 'chat', action: 'create',
+    allowedIf: async (ctx) => (await ctx.can('chat', 'create')) && (await ctx.can('machines', 'read')),
+    grantText: 'de usar o chat e ler máquinas',
+    input: {
+      machine_id: id.optional(),
+      path: z.string().trim().min(1).max(4096).superRefine((p, c) => {
+        const refusal = pathRefusal(p);
+        if (refusal) c.addIssue({ code: z.ZodIssueCode.custom, message: refusal });
+      }),
+      caption: z.string().trim().min(1).max(SHARE_CAPTION_MAX).optional(),
+    },
+    run: (ctx, a) => shareFile(ctx, ctx.chatFiles, a as unknown as ShareArgs),
   },
   {
     name: 'search_memory',

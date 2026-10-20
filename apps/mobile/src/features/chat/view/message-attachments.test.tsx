@@ -17,6 +17,9 @@ jest.mock('../viewmodel/useChatStore', () => ({
 // The clip is downloaded into the cache on the first play; under jest that is a fixed path.
 const mockCachedAudio = jest.fn(async (_a: { id: string }, _sign: unknown) => 'file:///cache/chat-audio-au1.m4a');
 jest.mock('../viewmodel/audio-cache', () => ({ cachedAudio: (a: { id: string }, sign: unknown) => mockCachedAudio(a, sign) }));
+// Saving a file on the phone (TER-1086): the share sheet or the folder picker, swapped here.
+const mockSaveAttachment = jest.fn(async (_a: { id: string }, _sign: unknown): Promise<boolean> => true);
+jest.mock('../viewmodel/attachment-save', () => ({ saveAttachment: (a: { id: string }, sign: unknown) => mockSaveAttachment(a, sign) }));
 // The fake of test/fakes/expo-audio.js, with its test hooks.
 const audioFake = require('expo-audio') as { __player: Record<string, jest.Mock>; __setStatus(s: object): void; __reset(): void };
 
@@ -30,6 +33,28 @@ beforeEach(() => {
   audioFake.__reset();
   mockRetryAttachment.mockReset();
   mockRetryAttachment.mockResolvedValue(undefined);
+  mockSaveAttachment.mockReset();
+  mockSaveAttachment.mockResolvedValue(true);
+});
+
+describe('MessageAttachments: Baixar (TER-1086)', () => {
+  const pdf: TChatAttachment = { ...image, id: 'p1', name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf' };
+
+  it('every attachment saves under its own name, with the store\'s signer', async () => {
+    await render(<MessageAttachments attachments={[image, pdf]} tone="surface" />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Baixar foto.jpg' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Baixar relatorio.pdf' }));
+    await waitFor(() => expect(mockSaveAttachment).toHaveBeenCalledTimes(2));
+    expect(mockSaveAttachment.mock.calls[0]![0]).toMatchObject({ id: 'img1', name: 'foto.jpg' });
+    expect(mockSaveAttachment.mock.calls[0]![1]).toBe(mockAttachmentSource);
+  });
+
+  it('says so under the file when it could not be saved', async () => {
+    mockSaveAttachment.mockRejectedValueOnce(new Error('disk'));
+    await render(<MessageAttachments attachments={[pdf]} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Baixar relatorio.pdf' }));
+    expect(await screen.findByText('Não foi possível baixar o arquivo')).toBeTruthy();
+  });
 });
 
 describe('MessageAttachments: a clip whose transcription was unavailable (TER-1035)', () => {

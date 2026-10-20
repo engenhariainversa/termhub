@@ -23,6 +23,16 @@ afterEach(() => {
 });
 
 describe('MessageAttachments', () => {
+  it('an image has a download button with its own name, next to the thumbnail (TER-1086)', () => {
+    render(<MessageAttachments attachments={[att({ id: 'i1', name: 'post-1.png', mime: 'image/png', kind: 'image' })]} />);
+    const link = screen.getByRole('link', { name: 'Baixar post-1.png' }) as HTMLAnchorElement;
+    expect(link.getAttribute('href')).toBe('/api/chat/attachments/i1');
+    expect(link.getAttribute('download')).toBe('post-1.png');
+    fireEvent.click(screen.getByRole('button', { name: 'Abrir imagem post-1.png' }));
+    // The viewer has its own.
+    expect(screen.getAllByRole('link', { name: 'Baixar post-1.png' })).toHaveLength(2);
+  });
+
   it('shows a file as a download chip with its size and status', () => {
     render(<MessageAttachments attachments={[att({ id: 'a1' }), att({ id: 'a2', name: 'clip.mp4', kind: 'video', status: 'pending' }), att({ id: 'a3', name: 'x.xlsx', kind: 'xlsx', status: 'failed', error_code: 'ATTACHMENT_INVALID' })]} />);
 
@@ -89,7 +99,10 @@ describe('MessageAttachments', () => {
     fireEvent.click(thumb);
     const close = screen.getByRole('button', { name: 'Fechar' });
     expect(document.activeElement).toBe(close);
+    // Tab goes round the viewer's two controls, "Baixar" and "Fechar", and never leaves it.
     fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab' });
+    expect(document.activeElement).toBe(screen.getAllByRole('link', { name: 'Baixar foto.jpg' }).at(-1));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Tab', shiftKey: true });
     expect(document.activeElement).toBe(close);
     fireEvent.click(close);
     expect(document.activeElement).toBe(thumb);

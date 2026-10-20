@@ -76,6 +76,9 @@ export const mobileDecisionBody = z
     /** Approve *and* trust this kind of routine action in the card's project with no expiry ("Liberar
      * sem prazo", spec 2026-09-28 TER-386), until revoked. Always PIN-proven. */
     z.object({ decision: z.literal('approve_project_always'), ...proof }),
+    /** Approve *and* trust share_file from the card's folder of that machine with no expiry ("Permitir
+     * sempre nesta pasta", TER-1086), until revoked. Always PIN-proven. */
+    z.object({ decision: z.literal('approve_folder_always'), ...proof }),
   ])
   .refine((b) => b.decision !== 'approve' || (b.challenge === undefined) === (b.pin_proof === undefined), { message: 'challenge e pin_proof vão juntos' });
 
@@ -126,6 +129,16 @@ export function isTabGrantable(action: { tool: string; args: unknown; tab_id: st
 export function isTerminalGrantable(action: { tool: string; args: unknown; tab_id: string | null }): boolean {
   const args = (action.args ?? {}) as Record<string, unknown>;
   return (action.tool === 'send_input' || action.tool === 'send_key') && args.answering_permission !== true && Boolean(action.tab_id);
+}
+
+/** Mirrors the server's `fileGrantable` and `assertFileGrantableAction` (TER-1086), which are the judge: a
+ * `share_file` card naming a machine, for a file inside a folder (never straight in `~` or `/`). Decides
+ * whether the card offers "Permitir sempre nesta pasta". */
+export function isFolderGrantable(action: { tool: string; args: unknown }): boolean {
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  if (action.tool !== 'share_file' || typeof args.machine_id !== 'string' || typeof args.path !== 'string') return false;
+  const folder = args.path.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
+  return folder !== '' && folder !== '~' && folder !== '.';
 }
 
 /** Mirrors the server's `BOARD_GRANT_TOOLS` (apps/server/src/chat/gate.ts); the server is the judge

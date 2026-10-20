@@ -40,6 +40,15 @@ export function isTabGrantable(action: ChatAction): boolean {
   return action.tool === 'send_input' && args.answering_permission !== true && Boolean(action.tab_id);
 }
 
+/** Mirrors the server's `fileGrantable` and `assertFileGrantableAction` (TER-1086): a `share_file` card
+ *  naming a machine, for a file inside a folder (never straight in `~` or `/`). The server is the judge. */
+export function isFolderGrantable(action: ChatAction): boolean {
+  const args = (action.args ?? {}) as Record<string, unknown>;
+  if (action.tool !== 'share_file' || typeof args.machine_id !== 'string' || typeof args.path !== 'string') return false;
+  const folder = args.path.replace(/\/+$/, '').split('/').slice(0, -1).join('/');
+  return folder !== '' && folder !== '~' && folder !== '.';
+}
+
 /** The tools "Permitir sempre neste projeto" can trust: every write that only ever touches the board. */
 const BOARD_GRANT_TOOLS = new Set(['create_task', 'add_subtasks', 'update_task', 'move_task']);
 /** Mirrors the server's `BOARD_GRANT_TOOLS`; the server still refuses a card whose project does not resolve. */
@@ -174,6 +183,11 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
           {standingKind && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project_always')}>
               {t('Liberar sem prazo: {{kind}} neste projeto', { kind: STANDING_KIND_LABEL[standingKind] })}
+            </button>
+          )}
+          {isFolderGrantable(action) && (
+            <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_folder_always')}>
+              {t('Permitir sempre nesta pasta')}
             </button>
           )}
           <button type="button" className="btn-danger" disabled={deciding} onClick={() => onDecide(action.id, 'deny')}>
