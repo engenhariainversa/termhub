@@ -69,6 +69,12 @@ export function useToast(): Pick<ToastState, 'show' | 'dismiss'> {
   return ctx;
 }
 
+/** The toasts where the page has them, else null: for a component that also renders outside the app's
+ *  layout (a test, a preview) and can do without the toast there. */
+export function useOptionalToast(): Pick<ToastState, 'show' | 'dismiss'> | null {
+  return useContext(ToastContext);
+}
+
 /** Top-right stack of toasts, newest first. */
 export function Toaster() {
   const ctx = useContext(ToastContext);
