@@ -1291,7 +1291,7 @@ export interface ChatFileGrant {
  * expiry, until revoked (spec 2026-09-28 TER-386). `approve_folder_always` is "Permitir sempre nesta pasta":
  * share_file from the card's folder of that machine, until revoked (TER-1086).
  */
-export type ChatDecisionWord = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always' | 'approve_folder_always';
+export type ChatDecisionWord = 'approve' | 'deny' | 'approve_tab' | 'approve_project' | 'approve_tab_terminal' | 'approve_project_all' | 'approve_project_always' | 'approve_command' | 'approve_command_prefix' | 'approve_folder_always';
 
 /**
  * A write the concierge proposed on a gated token, as the server enriches it: `summary` is the
@@ -1322,6 +1322,30 @@ export interface ChatAction {
   /** A send the concierge made on a precedent from memory (TER-641); null when it cited none, absent
    * from an older server. Shown as "Decisão automática" only when the call ran without a click. */
   auto_decision?: AutoDecision | null;
+  /** TER-1081: what a pending run_command card offers to allow for good — the command and its prefix as
+   * text; absent when no rule could cover it (or from an older server). */
+  command_rule?: { exact: string; prefix: string | null };
+}
+
+/**
+ * A command run_command may type without a card (TER-1081): `GET /api/chat/command-rules`, the
+ * `command_rules` of `GET /api/chat` and the `command_rule` of a decision. `pattern` is the command (or
+ * its first words, for a prefix) as it reads in a shell; `project_id` null = every project, empty
+ * `machine_ids` = every machine.
+ */
+export interface ChatCommandRule {
+  id: string;
+  pattern: string;
+  match: 'exact' | 'prefix';
+  project_id: string | null;
+  project_name: string | null;
+  machine_ids: string[];
+  machine_names: string[];
+  source_action_id: string | null;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  state: 'active' | 'revoked' | 'expired';
 }
 
 /** Mirrors the server's `AutoDecisionView` (auto-decision-view.ts, TER-641): what the concierge sent a
@@ -1412,7 +1436,7 @@ export type ChatGrantState = 'active' | 'expired' | 'revoked' | 'ended';
 /** A default allowance of the chat (TER-627): something it does without asking unless restricted. The
  *  label is server-worded. */
 export interface ChatDefault {
-  kind: 'open_tab' | 'start_agent' | 'link_tab_task' | 'board' | 'terminal' | 'close_tab';
+  kind: 'open_tab' | 'start_agent' | 'link_tab_task' | 'board' | 'terminal' | 'close_tab' | 'read_commands';
   label: string;
   allowed: boolean;
 }

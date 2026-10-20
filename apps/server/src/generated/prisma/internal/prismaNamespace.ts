@@ -441,6 +441,7 @@ export const ModelName = {
   ChatStandingGrant: 'ChatStandingGrant',
   ChatFileGrant: 'ChatFileGrant',
   ChatDefaultRestriction: 'ChatDefaultRestriction',
+  ChatCommandRule: 'ChatCommandRule',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -481,7 +482,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -3741,6 +3742,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ChatCommandRule: {
+      payload: Prisma.$ChatCommandRulePayload<ExtArgs>
+      fields: Prisma.ChatCommandRuleFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ChatCommandRuleFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ChatCommandRuleFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        findFirst: {
+          args: Prisma.ChatCommandRuleFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ChatCommandRuleFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        findMany: {
+          args: Prisma.ChatCommandRuleFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>[]
+        }
+        create: {
+          args: Prisma.ChatCommandRuleCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        createMany: {
+          args: Prisma.ChatCommandRuleCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ChatCommandRuleCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>[]
+        }
+        delete: {
+          args: Prisma.ChatCommandRuleDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        update: {
+          args: Prisma.ChatCommandRuleUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        deleteMany: {
+          args: Prisma.ChatCommandRuleDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ChatCommandRuleUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ChatCommandRuleUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>[]
+        }
+        upsert: {
+          args: Prisma.ChatCommandRuleUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatCommandRulePayload>
+        }
+        aggregate: {
+          args: Prisma.ChatCommandRuleAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateChatCommandRule>
+        }
+        groupBy: {
+          args: Prisma.ChatCommandRuleGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatCommandRuleGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ChatCommandRuleCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatCommandRuleCountAggregateOutputType> | number
+        }
+      }
+    }
     TabLimitNotice: {
       payload: Prisma.$TabLimitNoticePayload<ExtArgs>
       fields: Prisma.TabLimitNoticeFieldRefs
@@ -6370,6 +6445,24 @@ export const ChatDefaultRestrictionScalarFieldEnum = {
 export type ChatDefaultRestrictionScalarFieldEnum = (typeof ChatDefaultRestrictionScalarFieldEnum)[keyof typeof ChatDefaultRestrictionScalarFieldEnum]
 
 
+export const ChatCommandRuleScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  projectId: 'projectId',
+  words: 'words',
+  match: 'match',
+  machineIds: 'machineIds',
+  conversationId: 'conversationId',
+  sourceActionId: 'sourceActionId',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  revokedAt: 'revokedAt',
+  revokedBy: 'revokedBy'
+} as const
+
+export type ChatCommandRuleScalarFieldEnum = (typeof ChatCommandRuleScalarFieldEnum)[keyof typeof ChatCommandRuleScalarFieldEnum]
+
+
 export const TabLimitNoticeScalarFieldEnum = {
   id: 'id',
   tabId: 'tabId',
@@ -7253,6 +7346,7 @@ export type GlobalOmitConfig = {
   chatStandingGrant?: Prisma.ChatStandingGrantOmit
   chatFileGrant?: Prisma.ChatFileGrantOmit
   chatDefaultRestriction?: Prisma.ChatDefaultRestrictionOmit
+  chatCommandRule?: Prisma.ChatCommandRuleOmit
   tabLimitNotice?: Prisma.TabLimitNoticeOmit
   tabQuestion?: Prisma.TabQuestionOmit
   chatAutoSample?: Prisma.ChatAutoSampleOmit
