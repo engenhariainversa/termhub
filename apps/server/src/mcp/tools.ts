@@ -30,6 +30,7 @@ import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } 
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
+import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
 import { getClientContext } from '../control/client-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
@@ -234,10 +235,32 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'run_command',
-    description: `Type a command in a terminal tab, press Enter, wait for the tab to settle (default 30 s, max ${RUN_MAX_SECONDS}) and return the screen. There is no exit code: it is an interactive session. A aba não pode estar esperando uma permissão (waiting_permission) — responda com send_input ou send_key antes de rodar um comando.`,
+    description: `Type a command in a terminal tab, press Enter, wait for the tab to settle (default 30 s, max ${RUN_MAX_SECONDS}) and return the screen. There is no exit code: it is an interactive session. A aba não pode estar esperando uma permissão (waiting_permission) — responda com send_input ou send_key antes de rodar um comando. No chat, um comando simples coberto por uma regra do usuário ou pela lista padrão de leitura (git status, gh pr checks, ls, df…) roda sem confirmação numa aba de shell; os demais pedem. Veja o que está liberado com list_command_rules; para liberar outro, proponha a regra com propose_command_rule.`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: { tab_id: id, command: z.string().min(1).max(INPUT_MAX_CHARS), timeout_seconds: z.number().int().min(1).max(RUN_MAX_SECONDS).optional(), lines: z.number().int().min(1).max(SCREEN_MAX_LINES).optional() },
     run: (ctx, a, signal) => runCommand(ctx, a as { tab_id: string; command: string; timeout_seconds?: number; lines?: number }, signal),
+  },
+  {
+    name: 'list_command_rules',
+    description:
+      'List what run_command may run without a confirmation in the chat: the person\'s command rules in force (pattern, exact or prefix, project or every project, machines, expiry), whether the read-only default list is on, the budgets and what always asks whatever the rules say. With project_id, only the rules that apply to that project. Read it before a run_command so you know whether the person will be asked.',
+    scope: 'read', resource: 'chat', action: 'read',
+    input: { project_id: id.optional() },
+    run: (ctx, a) => listCommandRulesTool(ctx, a as { project_id?: string }),
+  },
+  {
+    name: 'propose_command_rule',
+    description:
+      'Propose a command rule so later run_command calls it covers run without a confirmation — when the person asks for it ("libera git push neste projeto"), never on your own. The person confirms the rule once, on a card. pattern: the command or its first words as typed in a shell (e.g. "git push", "gh pr checks"); match: "prefix" covers every command that starts with these words, "exact" only this exact command. project_id: the project (omit for every project of the person); machine_ids: only these machines (omit for all); expires_at: ISO date (omit for no expiry). Chained commands, redirections, substitutions, sudo, rm, kill, git push --force, git reset --hard, git clean, "!" and secrets are never covered, and a prefix of ssh or a shell is refused.',
+    scope: 'terminals', resource: 'chat', action: 'create',
+    input: {
+      pattern: z.string().trim().min(1).max(200),
+      match: z.enum(['exact', 'prefix']),
+      project_id: id.optional(),
+      machine_ids: z.array(id).max(20).optional(),
+      expires_at: z.string().datetime({ offset: true }).optional(),
+    },
+    run: (ctx, a) => proposeCommandRule(ctx, a as { pattern: string; match: 'exact' | 'prefix'; project_id?: string; machine_ids?: string[]; expires_at?: string }),
   },
   {
     name: 'close_tab',

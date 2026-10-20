@@ -452,6 +452,7 @@ export type UserWhereInput = {
   verifiedMemoryItems?: Prisma.MemoryItemListRelationFilter
   memoryRules?: Prisma.MemoryRuleListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
+  chatCommandRules?: Prisma.ChatCommandRuleListRelationFilter
   fileGrants?: Prisma.ChatFileGrantListRelationFilter
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionListRelationFilter
   automationSummaries?: Prisma.AutomationSummaryListRelationFilter
@@ -512,6 +513,7 @@ export type UserOrderByWithRelationInput = {
   verifiedMemoryItems?: Prisma.MemoryItemOrderByRelationAggregateInput
   memoryRules?: Prisma.MemoryRuleOrderByRelationAggregateInput
   standingGrants?: Prisma.ChatStandingGrantOrderByRelationAggregateInput
+  chatCommandRules?: Prisma.ChatCommandRuleOrderByRelationAggregateInput
   fileGrants?: Prisma.ChatFileGrantOrderByRelationAggregateInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionOrderByRelationAggregateInput
   automationSummaries?: Prisma.AutomationSummaryOrderByRelationAggregateInput
@@ -575,6 +577,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   verifiedMemoryItems?: Prisma.MemoryItemListRelationFilter
   memoryRules?: Prisma.MemoryRuleListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
+  chatCommandRules?: Prisma.ChatCommandRuleListRelationFilter
   fileGrants?: Prisma.ChatFileGrantListRelationFilter
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionListRelationFilter
   automationSummaries?: Prisma.AutomationSummaryListRelationFilter
@@ -710,6 +713,7 @@ export type UserCreateInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -769,6 +773,7 @@ export type UserUncheckedCreateInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -828,6 +833,7 @@ export type UserUpdateInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -887,6 +893,7 @@ export type UserUncheckedUpdateInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -1374,6 +1381,20 @@ export type UserUpdateOneRequiredWithoutChatDefaultRestrictionsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutChatDefaultRestrictionsInput, Prisma.UserUpdateWithoutChatDefaultRestrictionsInput>, Prisma.UserUncheckedUpdateWithoutChatDefaultRestrictionsInput>
 }
 
+export type UserCreateNestedOneWithoutChatCommandRulesInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatCommandRulesInput, Prisma.UserUncheckedCreateWithoutChatCommandRulesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatCommandRulesInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutChatCommandRulesNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutChatCommandRulesInput, Prisma.UserUncheckedCreateWithoutChatCommandRulesInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatCommandRulesInput
+  upsert?: Prisma.UserUpsertWithoutChatCommandRulesInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutChatCommandRulesInput, Prisma.UserUpdateWithoutChatCommandRulesInput>, Prisma.UserUncheckedUpdateWithoutChatCommandRulesInput>
+}
+
 export type UserCreateNestedOneWithoutChatAutoSamplesInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutChatAutoSamplesInput, Prisma.UserUncheckedCreateWithoutChatAutoSamplesInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatAutoSamplesInput
@@ -1624,6 +1645,7 @@ export type UserCreateWithoutRoleRefInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -1682,6 +1704,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -1803,6 +1826,7 @@ export type UserCreateWithoutSessionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -1861,6 +1885,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -1935,6 +1960,7 @@ export type UserUpdateWithoutSessionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -1993,6 +2019,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -2051,6 +2078,7 @@ export type UserCreateWithoutMachinesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -2109,6 +2137,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -2183,6 +2212,7 @@ export type UserUpdateWithoutMachinesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -2241,6 +2271,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -2299,6 +2330,7 @@ export type UserCreateWithoutProjectsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -2357,6 +2389,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -2431,6 +2464,7 @@ export type UserUpdateWithoutProjectsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -2489,6 +2523,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -2547,6 +2582,7 @@ export type UserCreateWithoutIntegrationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -2605,6 +2641,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -2679,6 +2716,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -2737,6 +2775,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -2795,6 +2834,7 @@ export type UserCreateWithoutUploadsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -2853,6 +2893,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -2927,6 +2968,7 @@ export type UserUpdateWithoutUploadsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -2985,6 +3027,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -3043,6 +3086,7 @@ export type UserCreateWithoutApiTokensInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -3101,6 +3145,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -3175,6 +3220,7 @@ export type UserUpdateWithoutApiTokensInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -3233,6 +3279,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -3291,6 +3338,7 @@ export type UserCreateWithoutChatConversationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -3349,6 +3397,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -3423,6 +3472,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -3481,6 +3531,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -3539,6 +3590,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -3597,6 +3649,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -3671,6 +3724,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -3729,6 +3783,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -3787,6 +3842,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -3845,6 +3901,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -3919,6 +3976,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -3977,6 +4035,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -4036,6 +4095,7 @@ export type UserCreateWithoutFileGrantsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
@@ -4094,6 +4154,7 @@ export type UserUncheckedCreateWithoutFileGrantsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
@@ -4168,6 +4229,7 @@ export type UserUpdateWithoutFileGrantsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
@@ -4226,6 +4288,7 @@ export type UserUncheckedUpdateWithoutFileGrantsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
@@ -4284,6 +4347,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
@@ -4342,6 +4406,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
@@ -4416,6 +4481,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
@@ -4474,7 +4540,260 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutChatCommandRulesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  chatClientContext?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  aiLoginWarnDays?: number | null
+  locale?: string | null
+  roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
+  memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutChatCommandRulesInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  roleId?: string | null
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  chatClientContext?: boolean
+  pushTabFinished?: boolean
+  chatContextLimit?: number | null
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  aiLoginWarnDays?: number | null
+  locale?: string | null
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
+  memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutChatCommandRulesInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatCommandRulesInput, Prisma.UserUncheckedCreateWithoutChatCommandRulesInput>
+}
+
+export type UserUpsertWithoutChatCommandRulesInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutChatCommandRulesInput, Prisma.UserUncheckedUpdateWithoutChatCommandRulesInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutChatCommandRulesInput, Prisma.UserUncheckedCreateWithoutChatCommandRulesInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutChatCommandRulesInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutChatCommandRulesInput, Prisma.UserUncheckedUpdateWithoutChatCommandRulesInput>
+}
+
+export type UserUpdateWithoutChatCommandRulesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
+  memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutChatCommandRulesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  roleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
+  memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
   dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
@@ -4531,6 +4850,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -4589,6 +4909,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -4663,6 +4984,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -4721,6 +5043,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -4779,6 +5102,7 @@ export type UserCreateWithoutChatFocusInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -4837,6 +5161,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -4911,6 +5236,7 @@ export type UserUpdateWithoutChatFocusInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -4969,6 +5295,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -5027,6 +5354,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -5085,6 +5413,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -5159,6 +5488,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -5217,6 +5547,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -5275,6 +5606,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -5333,6 +5665,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -5396,6 +5729,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -5454,6 +5788,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -5528,6 +5863,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -5586,6 +5922,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -5655,6 +5992,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -5713,6 +6051,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -5771,6 +6110,7 @@ export type UserCreateWithoutMemoryRulesInput = {
   memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -5829,6 +6169,7 @@ export type UserUncheckedCreateWithoutMemoryRulesInput = {
   memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -5903,6 +6244,7 @@ export type UserUpdateWithoutMemoryRulesInput = {
   memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -5961,6 +6303,7 @@ export type UserUncheckedUpdateWithoutMemoryRulesInput = {
   memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -6019,6 +6362,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -6077,6 +6421,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -6151,6 +6496,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -6209,6 +6555,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -6267,6 +6614,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -6325,6 +6673,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -6399,6 +6748,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -6457,6 +6807,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -6515,6 +6866,7 @@ export type UserCreateWithoutDevicesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -6573,6 +6925,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -6647,6 +7000,7 @@ export type UserUpdateWithoutDevicesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -6705,6 +7059,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -6763,6 +7118,7 @@ export type UserCreateWithoutNotificationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -6821,6 +7177,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -6895,6 +7252,7 @@ export type UserUpdateWithoutNotificationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -6953,6 +7311,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -7012,6 +7371,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
@@ -7070,6 +7430,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
@@ -7144,6 +7505,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
@@ -7202,6 +7564,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
@@ -7260,6 +7623,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -7318,6 +7682,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -7392,6 +7757,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -7450,6 +7816,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -7508,6 +7875,7 @@ export type UserCreateWithoutDataExportsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -7566,6 +7934,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -7640,6 +8009,7 @@ export type UserUpdateWithoutDataExportsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -7698,6 +8068,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -7756,6 +8127,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
@@ -7814,6 +8186,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
   memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
   fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
@@ -7888,6 +8261,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -7946,6 +8320,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -8036,6 +8411,7 @@ export type UserUpdateWithoutRoleRefInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
@@ -8094,6 +8470,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
   memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
   fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
   chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
   automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
@@ -8160,6 +8537,7 @@ export type UserCountOutputType = {
   verifiedMemoryItems: number
   memoryRules: number
   standingGrants: number
+  chatCommandRules: number
   fileGrants: number
   chatDefaultRestrictions: number
   automationSummaries: number
@@ -8188,6 +8566,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   verifiedMemoryItems?: boolean | UserCountOutputTypeCountVerifiedMemoryItemsArgs
   memoryRules?: boolean | UserCountOutputTypeCountMemoryRulesArgs
   standingGrants?: boolean | UserCountOutputTypeCountStandingGrantsArgs
+  chatCommandRules?: boolean | UserCountOutputTypeCountChatCommandRulesArgs
   fileGrants?: boolean | UserCountOutputTypeCountFileGrantsArgs
   chatDefaultRestrictions?: boolean | UserCountOutputTypeCountChatDefaultRestrictionsArgs
   automationSummaries?: boolean | UserCountOutputTypeCountAutomationSummariesArgs
@@ -8342,6 +8721,13 @@ export type UserCountOutputTypeCountStandingGrantsArgs<ExtArgs extends runtime.T
 /**
  * UserCountOutputType without action
  */
+export type UserCountOutputTypeCountChatCommandRulesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ChatCommandRuleWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
 export type UserCountOutputTypeCountFileGrantsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.ChatFileGrantWhereInput
 }
@@ -8434,6 +8820,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   verifiedMemoryItems?: boolean | Prisma.User$verifiedMemoryItemsArgs<ExtArgs>
   memoryRules?: boolean | Prisma.User$memoryRulesArgs<ExtArgs>
   standingGrants?: boolean | Prisma.User$standingGrantsArgs<ExtArgs>
+  chatCommandRules?: boolean | Prisma.User$chatCommandRulesArgs<ExtArgs>
   fileGrants?: boolean | Prisma.User$fileGrantsArgs<ExtArgs>
   chatDefaultRestrictions?: boolean | Prisma.User$chatDefaultRestrictionsArgs<ExtArgs>
   automationSummaries?: boolean | Prisma.User$automationSummariesArgs<ExtArgs>
@@ -8569,6 +8956,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   verifiedMemoryItems?: boolean | Prisma.User$verifiedMemoryItemsArgs<ExtArgs>
   memoryRules?: boolean | Prisma.User$memoryRulesArgs<ExtArgs>
   standingGrants?: boolean | Prisma.User$standingGrantsArgs<ExtArgs>
+  chatCommandRules?: boolean | Prisma.User$chatCommandRulesArgs<ExtArgs>
   fileGrants?: boolean | Prisma.User$fileGrantsArgs<ExtArgs>
   chatDefaultRestrictions?: boolean | Prisma.User$chatDefaultRestrictionsArgs<ExtArgs>
   automationSummaries?: boolean | Prisma.User$automationSummariesArgs<ExtArgs>
@@ -8607,6 +8995,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     verifiedMemoryItems: Prisma.$MemoryItemPayload<ExtArgs>[]
     memoryRules: Prisma.$MemoryRulePayload<ExtArgs>[]
     standingGrants: Prisma.$ChatStandingGrantPayload<ExtArgs>[]
+    chatCommandRules: Prisma.$ChatCommandRulePayload<ExtArgs>[]
     fileGrants: Prisma.$ChatFileGrantPayload<ExtArgs>[]
     chatDefaultRestrictions: Prisma.$ChatDefaultRestrictionPayload<ExtArgs>[]
     automationSummaries: Prisma.$AutomationSummaryPayload<ExtArgs>[]
@@ -9128,6 +9517,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   verifiedMemoryItems<T extends Prisma.User$verifiedMemoryItemsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$verifiedMemoryItemsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MemoryItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   memoryRules<T extends Prisma.User$memoryRulesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$memoryRulesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$MemoryRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   standingGrants<T extends Prisma.User$standingGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$standingGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatStandingGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  chatCommandRules<T extends Prisma.User$chatCommandRulesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatCommandRulesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatCommandRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   fileGrants<T extends Prisma.User$fileGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$fileGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatFileGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatDefaultRestrictions<T extends Prisma.User$chatDefaultRestrictionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatDefaultRestrictionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatDefaultRestrictionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationSummaries<T extends Prisma.User$automationSummariesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$automationSummariesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationSummaryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -10067,6 +10457,30 @@ export type User$standingGrantsArgs<ExtArgs extends runtime.Types.Extensions.Int
   take?: number
   skip?: number
   distinct?: Prisma.ChatStandingGrantScalarFieldEnum | Prisma.ChatStandingGrantScalarFieldEnum[]
+}
+
+/**
+ * User.chatCommandRules
+ */
+export type User$chatCommandRulesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ChatCommandRule
+   */
+  select?: Prisma.ChatCommandRuleSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ChatCommandRule
+   */
+  omit?: Prisma.ChatCommandRuleOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ChatCommandRuleInclude<ExtArgs> | null
+  where?: Prisma.ChatCommandRuleWhereInput
+  orderBy?: Prisma.ChatCommandRuleOrderByWithRelationInput | Prisma.ChatCommandRuleOrderByWithRelationInput[]
+  cursor?: Prisma.ChatCommandRuleWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ChatCommandRuleScalarFieldEnum | Prisma.ChatCommandRuleScalarFieldEnum[]
 }
 
 /**

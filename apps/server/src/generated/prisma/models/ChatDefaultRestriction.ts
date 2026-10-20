@@ -436,7 +436,7 @@ export type $ChatDefaultRestrictionPayload<ExtArgs extends runtime.Types.Extensi
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     userId: string
     /**
-     * open_tab | start_agent | link_tab_task | board | terminal | close_tab
+     * open_tab | start_agent | link_tab_task | board | terminal | close_tab | read_commands
      */
     kind: string
     createdAt: Date

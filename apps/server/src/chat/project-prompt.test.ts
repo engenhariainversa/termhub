@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountSystemPrompt, fit, projectSystemPrompt } from './project-prompt.js';
+import { accountSystemPrompt, commandRulesLine, fit, projectSystemPrompt } from './project-prompt.js';
 
 it('names the project, its machines and paths, and asks for focus and brevity', () => {
   const text = projectSystemPrompt({ name: 'Popingo monorepo', key: 'POP' }, [
@@ -72,7 +72,7 @@ it('says nothing about standing grants when none are active', () => {
 it('names the active standing grants, in STANDING_GRANT_KINDS order, regardless of input order', () => {
   const text = projectSystemPrompt({ name: 'X', key: 'X' }, [], ['terminal', 'open_tab', 'board']);
   expect(text).toContain(
-    'Liberado sem confirmação neste projeto (o usuário liberou sem prazo): abrir abas, mexer no quadro, teclas e texto nas abas. As exceções de sempre continuam pedindo: delete_task, run_command, responder permissões, texto com "!" ou caracteres de controle.',
+    'Liberado sem confirmação neste projeto (o usuário liberou sem prazo): abrir abas, mexer no quadro, teclas e texto nas abas. As exceções de sempre continuam pedindo: delete_task, run_command fora das regras de comando, responder permissões, texto com "!" ou caracteres de controle.',
   );
   expect(text).not.toContain('fechar abas trabalhando');
 });
@@ -80,7 +80,7 @@ it('names the active standing grants, in STANDING_GRANT_KINDS order, regardless 
 it('adds the working-tab exception only when close_tab is granted', () => {
   const text = projectSystemPrompt({ name: 'X', key: 'X' }, [], ['close_tab']);
   expect(text).toContain(
-    'Liberado sem confirmação neste projeto (o usuário liberou sem prazo): fechar abas paradas. As exceções de sempre continuam pedindo: delete_task, run_command, responder permissões, texto com "!" ou caracteres de controle, fechar abas trabalhando.',
+    'Liberado sem confirmação neste projeto (o usuário liberou sem prazo): fechar abas paradas. As exceções de sempre continuam pedindo: delete_task, run_command fora das regras de comando, responder permissões, texto com "!" ou caracteres de controle, fechar abas trabalhando.',
   );
 });
 
@@ -296,8 +296,24 @@ describe('default allowances line (TER-627)', () => {
 
 it("TER-1011: the project's current rules are told after the allowances, and the prompt stays within its cap", () => {
   const rules = 'Regras vigentes do projeto (…):\n- [note:n2] «Modo de permissão»: «modo auto»';
-  const text = projectSystemPrompt({ name: 'X', key: 'X' }, [{ machine: 'm', cwd: '/w'.repeat(3000) }], [], [], [], rules);
+  const text = projectSystemPrompt({ name: 'X', key: 'X' }, [{ machine: 'm', cwd: '/w'.repeat(3000) }], [], [], [], [], rules);
   expect(text).toContain(rules);
   expect(text.length).toBeLessThanOrEqual(4000);
   expect(projectSystemPrompt({ name: 'X', key: 'X' }, [])).not.toContain('Regras vigentes');
+});
+
+describe('commandRulesLine (TER-1081)', () => {
+  it('lists the rules, a prefix with an ellipsis, and nothing when there are none', () => {
+    expect(commandRulesLine([])).toBe('');
+    const line = commandRulesLine([{ pattern: 'npm test', match: 'exact' }, { pattern: 'gh pr checks', match: 'prefix' }]);
+    expect(line).toContain('«npm test», «gh pr checks…»');
+    expect(projectSystemPrompt({ name: 'App', key: 'APP' }, [], [], [], [], [{ pattern: 'npm test', match: 'exact' }])).toContain('«npm test»');
+  });
+
+  it('keeps the prompt within its budget with many rules', () => {
+    const rules = Array.from({ length: 200 }, (_, i) => ({ pattern: `make target-${i}`, match: 'exact' as const }));
+    const line = commandRulesLine(rules);
+    expect(line).toContain('…');
+    expect(projectSystemPrompt({ name: 'App', key: 'APP' }, [], [], [], [], rules).length).toBeLessThanOrEqual(4000);
+  });
 });

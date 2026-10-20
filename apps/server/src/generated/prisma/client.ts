@@ -327,6 +327,13 @@ export type ChatFileGrant = Prisma.ChatFileGrantModel
  */
 export type ChatDefaultRestriction = Prisma.ChatDefaultRestrictionModel
 /**
+ * Model ChatCommandRule
+ * A command the chat's run_command may type without a card (TER-1081, chat/command-rules.ts): the
+ * command's words, matched exactly or as a prefix, in one project (or every project of the user when
+ * null), on every machine or only the listed ones, until revoked or until it expires.
+ */
+export type ChatCommandRule = Prisma.ChatCommandRuleModel
+/**
  * Model TabLimitNotice
  * A project tab stuck on a usage limit whose machine does not swap accounts by itself (TER-589): a card in
  * the project's chat saying so and offering the manual swap to the project's other accounts. One per

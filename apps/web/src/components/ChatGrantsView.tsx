@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiError } from '../lib/api';
-import type { ChatDefault, ChatFileGrant, ChatGrantListItem } from '../lib/types';
+import type { ChatCommandRule, ChatDefault, ChatFileGrant, ChatGrantListItem } from '../lib/types';
+import { commandRuleLabel } from './chat/ChatActionCard';
 import { ChatAutoThresholds } from './ChatAutoThresholds';
 import { untilLabel } from './chat/grant-time';
 import { endedAtLabel, GRANT_STATE_LABEL, grantOriginLabel, grantTitleLabel } from './chat/grant-list-text';
@@ -58,6 +59,38 @@ export function ChatGrantsView() {
   useEffect(() => {
     api.listChatDefaults().then((r) => setDefaults(r.defaults), () => setDefaults(null));
   }, []);
+
+  // TER-1081: the run_command rules, loaded apart like the defaults — a failure hides only this section.
+  const [rules, setRules] = useState<{ active: ChatCommandRule[]; ended: ChatCommandRule[] } | null>(null);
+  const loadRules = useCallback(() => api.listChatCommandRules().then(setRules, () => setRules(null)), []);
+  useEffect(() => {
+    void loadRules();
+  }, [loadRules]);
+
+  const revokeRule = async (id: string) => {
+    setRevokingId(id);
+    setError(null);
+    try {
+      await api.revokeChatCommandRule(id);
+    } catch (e) {
+      if (!(e instanceof ApiError && e.status === 409)) setError(e instanceof ApiError ? e.message : t('Não foi possível revogar a permissão.'));
+    }
+    setRevokingId(null);
+    await loadRules();
+  };
+
+  /** Where a rule applies and until when, under its label. */
+  const ruleDetails = (r: ChatCommandRule) =>
+    [
+      r.machine_ids.length ? t('só em {{machines}}', { machines: r.machine_names.length ? r.machine_names.join(', ') : t('máquinas que não existem mais') }) : t('todas as máquinas'),
+      r.state === 'revoked' && r.revoked_at
+        ? t('revogada em {{date}}', { date: endedAtLabel(r.revoked_at) })
+        : r.expires_at
+          ? r.state === 'expired'
+            ? t('venceu em {{date}}', { date: endedAtLabel(r.expires_at) })
+            : t('até {{date}}', { date: endedAtLabel(r.expires_at) })
+          : t('sem prazo'),
+    ].join(' · ');
 
   const toggleDefault = async (d: ChatDefault) => {
     setSavingKind(d.kind);
@@ -137,7 +170,7 @@ export function ChatGrantsView() {
             {t('Liberadas por padrão')}
           </h2>
           <p className="text-xs text-fg-dim">
-            {t('O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.')}
+            {t('O chat faz estas ações sem pedir confirmação; leituras nunca pedem. Desmarque para voltar a pedir. Sempre pedem confirmação: apagar card, rodar comando fora da lista de leitura e das regras, responder permissões, texto com “!”, as teclas Ctrl+C e Esc, fechar aba trabalhando, integrações e status de ticket.')}
           </p>
           <ul className="space-y-1">
             {defaults.map((d) => (
@@ -149,6 +182,43 @@ export function ChatGrantsView() {
               </li>
             ))}
           </ul>
+        </section>
+      )}
+      {rules && (
+        <section aria-labelledby="chat-command-rules" className="space-y-2">
+          <h2 id="chat-command-rules" className="text-sm font-semibold text-fg">
+            {t('Comandos liberados')}
+          </h2>
+          <p className="text-xs text-fg-dim">
+            {t('Comandos que o chat roda sem pedir confirmação numa aba de shell. Crie uma regra pelo card de confirmação de um comando ou pedindo ao chat. Sempre pedem confirmação, com ou sem regra: comandos encadeados (;, &&, |), redirecionamentos, substituições, sudo, rm, kill, git push --force, git reset --hard, git clean, “!” e o que tocar segredos.')}
+          </p>
+          {rules.active.length === 0 ? (
+            <p className="text-sm text-fg-dim">{t('Nenhuma regra de comando ativa.')}</p>
+          ) : (
+            <ul className="space-y-2">
+              {rules.active.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg-2 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-fg">{commandRuleLabel(r)}</p>
+                    <p className="text-xs text-fg-dim">{ruleDetails(r)}</p>
+                  </div>
+                  <button type="button" className="btn-ghost shrink-0" disabled={revokingId === r.id} onClick={() => void revokeRule(r.id)}>
+                    {t('Revogar')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {rules.ended.length > 0 && (
+            <ul className="space-y-2">
+              {rules.ended.map((r) => (
+                <li key={r.id} className="rounded-lg border border-line px-3 py-2">
+                  <p className="truncate text-sm text-fg-muted">{commandRuleLabel(r)}</p>
+                  <p className="text-xs text-fg-dim">{ruleDetails(r)}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
       <ChatAutoThresholds onError={setError} />

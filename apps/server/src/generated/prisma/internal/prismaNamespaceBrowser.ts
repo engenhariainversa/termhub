@@ -96,6 +96,7 @@ export const ModelName = {
   ChatStandingGrant: 'ChatStandingGrant',
   ChatFileGrant: 'ChatFileGrant',
   ChatDefaultRestriction: 'ChatDefaultRestriction',
+  ChatCommandRule: 'ChatCommandRule',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -893,6 +894,24 @@ export const ChatDefaultRestrictionScalarFieldEnum = {
 } as const
 
 export type ChatDefaultRestrictionScalarFieldEnum = (typeof ChatDefaultRestrictionScalarFieldEnum)[keyof typeof ChatDefaultRestrictionScalarFieldEnum]
+
+
+export const ChatCommandRuleScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  projectId: 'projectId',
+  words: 'words',
+  match: 'match',
+  machineIds: 'machineIds',
+  conversationId: 'conversationId',
+  sourceActionId: 'sourceActionId',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  revokedAt: 'revokedAt',
+  revokedBy: 'revokedBy'
+} as const
+
+export type ChatCommandRuleScalarFieldEnum = (typeof ChatCommandRuleScalarFieldEnum)[keyof typeof ChatCommandRuleScalarFieldEnum]
 
 
 export const TabLimitNoticeScalarFieldEnum = {
