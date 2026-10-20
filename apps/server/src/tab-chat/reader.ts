@@ -1,15 +1,16 @@
-import { CAPABILITY_TRANSCRIPT, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
-import { CLAUDE_SESSION_ID_RE } from '@termhub/machine-ops';
+import { CAPABILITY_TRANSCRIPT, CAPABILITY_TRANSCRIPT_CODEX, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
+import { CLAUDE_SESSION_ID_RE, isCodexTranscriptPath } from '@termhub/machine-ops';
 import type { TTabChatEmptyReason } from '@termhub/mobile-api';
 import { agentRpc } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
-import { isDegraded, parseLines, TRANSCRIPT_TYPES, type TabChatItem } from './transcript.js';
+import { CODEX_TRANSCRIPT_TYPES, parseCodexLines } from './codex-transcript.js';
+import { isDegraded, parseLines, TRANSCRIPT_TYPES, type Parsed, type TabChatItem } from './transcript.js';
 
 /**
- * A tab's Claude Code transcript read through the agent's `transcript.read` (spec 2026-10-01 tab chat
- * §5.2): whether it can be read at all, a page of history read backward, and the new lines read
- * forward. Nothing here keeps or logs a line.
+ * A tab's Claude Code or Codex (TER-1095) transcript read through the agent's `transcript.read` (spec
+ * 2026-10-01 tab chat §5.2): whether it can be read at all, a page of history read backward, and the new
+ * lines read forward. Nothing here keeps or logs a line.
  */
 
 export type TabChatAvailability = 'ready' | 'no_session' | 'unsupported_tool' | 'unsupported_machine' | 'agent_outdated' | 'offline';
@@ -25,30 +26,51 @@ export const READ_MAX_BYTES = 256 * 1024;
 /** Strings over this are cut by the agent (a whole file read, a long tool output). */
 export const READ_MAX_STRING = 4000;
 
+/** The agents whose transcript is read: Claude Code, and Codex since TER-1095. */
+export type TranscriptTool = 'claude' | 'codex';
+
+/** Whose transcript the tab's conversation is: the tool its hooks last reported (no report yet reads as Claude), or null for another agent (Cursor). */
+export function transcriptToolOf(tab: Pick<Tab, 'state_tool'>): TranscriptTool | null {
+  if (!tab.state_tool || tab.state_tool === 'claude') return 'claude';
+  return tab.state_tool === 'codex' ? 'codex' : null;
+}
+
 /** In the order of the spec's table: the first reason that applies wins. */
 export function availabilityOf(tab: Tab, machine: Pick<Machine, 'id' | 'type'>, agent: AgentView = agents): TabChatAvailability {
   if (machine.type !== 'agent') return 'unsupported_machine';
   if (!agent.isOnline(machine.id)) return 'offline';
-  if (!(agent.capabilities(machine.id) ?? []).includes(CAPABILITY_TRANSCRIPT)) return 'agent_outdated';
-  if (tab.state_tool && tab.state_tool !== 'claude') return 'unsupported_tool';
+  const capabilities = agent.capabilities(machine.id) ?? [];
+  if (!capabilities.includes(CAPABILITY_TRANSCRIPT)) return 'agent_outdated';
+  const tool = transcriptToolOf(tab);
+  if (!tool) return 'unsupported_tool';
+  if (tool === 'codex' && !capabilities.includes(CAPABILITY_TRANSCRIPT_CODEX)) return 'agent_outdated';
   if (!hasReportedSession(tab)) return 'no_session';
   return 'ready';
 }
 
-/** Whether the tab has reported a session `availabilityOf` can read. */
-export function hasReportedSession(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>): boolean {
-  return !!tab.agent_transcript_path && !!tab.agent_session_id && CLAUDE_SESSION_ID_RE.test(tab.agent_session_id);
+/** Whether the tab has reported a session `availabilityOf` can read: one of the agent it runs now (a Claude session left in a tab that now runs Codex is not). */
+export function hasReportedSession(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path' | 'state_tool'>): boolean {
+  const sid = tab.agent_session_id;
+  if (!tab.agent_transcript_path || !sid || !CLAUDE_SESSION_ID_RE.test(sid)) return false;
+  const tool = transcriptToolOf(tab);
+  if (tool === 'codex') return isCodexTranscriptPath(tab.agent_transcript_path, sid);
+  return tool === 'claude' && !isCodexTranscriptPath(tab.agent_transcript_path, sid);
 }
+
+/** What the tab's machine has of the termhub hooks, as far as an empty conversation needs to know:
+ *  never installed, installed, or installed while Codex has not been told to trust them (TER-1095). */
+export type HooksOnMachine = 'missing' | 'installed' | 'codex_untrusted';
 
 /**
  * Why a page has no history (TER-1091, `TAB_CHAT_EMPTY_REASONS` in the contract), or null when it has
  * some or another availability already says why. `firstPage`: the read started at the end of the session
  * (no `before`), so an empty page means the session itself is empty.
  */
-export function emptyReasonOf(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>, availability: TabChatAvailability, page: Pick<Page, 'items' | 'before'>, firstPage: boolean, hooksInstalled: boolean): TTabChatEmptyReason | null {
+export function emptyReasonOf(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path' | 'state_tool'>, availability: TabChatAvailability, page: Pick<Page, 'items' | 'before'>, firstPage: boolean, hooks: HooksOnMachine): TTabChatEmptyReason | null {
   if (availability === 'no_session') {
     if (hasReportedSession(tab)) return 'transcript_missing';
-    return hooksInstalled ? 'not_reported' : 'no_hooks';
+    if (hooks === 'missing') return 'no_hooks';
+    return hooks === 'codex_untrusted' && transcriptToolOf(tab) === 'codex' ? 'codex_untrusted' : 'not_reported';
   }
   if (availability === 'ready' && firstPage && page.items.length === 0 && page.before === null) return 'new_session';
   return null;
@@ -105,12 +127,19 @@ function sessionOf(tab: Tab): { transcript_path: string; session_id: string } {
   return { transcript_path: tab.agent_transcript_path ?? '', session_id: tab.agent_session_id ?? '' };
 }
 
+/** The line types to ask for and how to read them, by the transcript's own shape. */
+function formatOf(transcriptPath: string, sessionId: string): { types: string[]; parse: (lines: string[]) => Parsed } {
+  if (isCodexTranscriptPath(transcriptPath, sessionId)) return { types: [...CODEX_TRANSCRIPT_TYPES], parse: parseCodexLines };
+  return { types: [...TRANSCRIPT_TYPES], parse: parseLines };
+}
+
 /**
  * A page of history, read backward from `before` (or from the end of the file). A `before` of another
  * session (a `/clear` since) or a malformed one reads the end of the current session.
  */
 export async function readPage(machine: Machine, tab: Tab, before: string | null, rpc: Rpc = defaultRpc): Promise<Page> {
   const { transcript_path, session_id } = sessionOf(tab);
+  const format = formatOf(transcript_path, session_id);
   const cursor = decodeCursor(before);
   const offset = cursor && cursor.session === session_id ? cursor.offset : null;
   const res = await rpc(machine, {
@@ -119,11 +148,11 @@ export async function readPage(machine: Machine, tab: Tab, before: string | null
     direction: 'backward',
     offset,
     max_bytes: READ_MAX_BYTES,
-    types: [...TRANSCRIPT_TYPES],
+    types: format.types,
     max_string: READ_MAX_STRING,
   });
   if (res.status === 'missing') return { items: [], before: null, live: null, mode: null, degraded: false, missing: true };
-  const parsed = parseLines(res.lines);
+  const parsed = format.parse(res.lines);
   return {
     items: parsed.items,
     before: res.start > 0 ? encodeCursor({ session: session_id, offset: res.start }) : null,
@@ -137,17 +166,18 @@ export async function readPage(machine: Machine, tab: Tab, before: string | null
 /** The lines written after `after` (a cursor of the tab's current session; the caller checks). */
 export async function readForward(machine: Machine, tab: Tab, after: Cursor, rpc: Rpc = defaultRpc): Promise<Forward> {
   const { transcript_path, session_id } = sessionOf(tab);
+  const format = formatOf(transcript_path, session_id);
   const res = await rpc(machine, {
     transcript_path,
     session_id,
     direction: 'forward',
     offset: after.offset,
     max_bytes: READ_MAX_BYTES,
-    types: [...TRANSCRIPT_TYPES],
+    types: format.types,
     max_string: READ_MAX_STRING,
   });
   if (res.status === 'missing') return { items: [], live: encodeCursor(after), mode: null, missing: true, more: false, known: 0, unknown: 0 };
-  const parsed = parseLines(res.lines);
+  const parsed = format.parse(res.lines);
   return {
     items: parsed.items,
     live: encodeCursor({ session: session_id, offset: res.end }),

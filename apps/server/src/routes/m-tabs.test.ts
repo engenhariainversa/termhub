@@ -71,7 +71,7 @@ const question = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean } = {}) {
+function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean; codexTrusted?: boolean | null } = {}) {
   const grants = new Set(opts.grants ?? ['terminals:read', 'terminals:write']);
   const tabs = opts.tabs ?? [tabRow(), tabRow({ id: 't2', project_id: 'p2' })];
   const repos = {
@@ -90,6 +90,7 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
   };
   const readPage = vi.fn(opts.readPage ?? (async () => ({ items: [], before: null, live: `${SID}.0`, mode: null, degraded: false, missing: false })));
   const hub = { poke: vi.fn() };
+  const codexHooksTrusted = vi.fn(async () => opts.codexTrusted ?? null);
   const logged: unknown[] = [];
   const app = Fastify({ logger: { level: 'debug', stream: { write: (line: string) => logged.push(line) } } });
   applyErrorHandler(app);
@@ -106,11 +107,11 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
         const cfg = (route.config ?? {}) as { action?: string };
         route.config = { ...cfg, resource: 'terminals', action: cfg.action ?? actionForMethod(String(route.method)) } as never;
       });
-      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface });
+      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface, codexHooksTrusted });
     },
     { prefix: '/tabs' },
   );
-  return { app, repos, readPage, hub, logged };
+  return { app, repos, readPage, hub, logged, codexHooksTrusted };
 }
 
 afterEach(() => {
@@ -246,6 +247,27 @@ describe('GET /tabs/:id/chat', () => {
     const item = { kind: 'assistant', id: 'a1', at: '2026-10-01T10:00:00.000Z', text: 'oi' };
     const full = build({ readPage: async () => ({ items: [item as never], before: null, live: `${SID}.40`, mode: null, degraded: false, missing: false }) });
     expect((await full.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+  });
+
+  // TER-1095: a Codex tab whose machine never trusted the hooks says so, instead of "not reported".
+  it('a Codex tab with no session on a machine whose Codex does not trust the hooks says codex_untrusted', async () => {
+    agentState.caps = ['transcript', 'transcript.codex'];
+    const codexTab = tabRow({ agent_session_id: null, agent_transcript_path: null, state_tool: 'codex' });
+    const untrusted = build({ tabs: [codexTab], codexTrusted: false });
+    const page = tabChatPage.parse((await untrusted.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json());
+    expect(page.tab.availability).toBe('no_session');
+    expect(page.empty_reason).toBe('codex_untrusted');
+    expect(untrusted.codexHooksTrusted).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }));
+    for (const codexTrusted of [true, null]) {
+      const { app } = build({ tabs: [codexTab], codexTrusted });
+      expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+    }
+  });
+
+  it('a Claude tab never asks about Codex trust', async () => {
+    const { app, codexHooksTrusted } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null })], codexTrusted: false });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+    expect(codexHooksTrusted).not.toHaveBeenCalled();
   });
 
   it('a tab that cannot be read for another reason (offline) has no empty_reason', async () => {

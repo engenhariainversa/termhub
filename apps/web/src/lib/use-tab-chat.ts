@@ -24,6 +24,8 @@ export interface TabChatData {
   live: string | null;
   mode: string | null;
   degraded: boolean;
+  /** Why the page has no history (TER-1091), read as a plain string; null when it has some or the server is older. */
+  emptyReason: string | null;
   questions: TabQuestion[];
   suggestions: TabSuggestion[];
   loadingEarlier: boolean;
@@ -43,6 +45,7 @@ export const initialTabChat = (): TabChatData => ({
   live: null,
   mode: null,
   degraded: false,
+  emptyReason: null,
   questions: [],
   suggestions: [],
   loadingEarlier: false,
@@ -61,6 +64,7 @@ export function fromPage(page: TabChatPage): Partial<TabChatData> {
     live: page.live,
     mode: page.mode,
     degraded: page.degraded,
+    emptyReason: page.empty_reason ?? null,
     questions: page.questions,
     suggestions: page.suggestions,
   };

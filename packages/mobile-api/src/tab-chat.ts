@@ -101,9 +101,11 @@ export type TTabChatPage = z.infer<typeof tabChatPage>;
  * termhub hooks installed, so no session is ever reported), `not_reported` (hooks installed, but no
  * session reported yet: Claude not started in the tab, or started before the hooks were), `transcript_missing`
  * (the session's file is no longer on the machine), `new_session` (the current session has nothing yet:
- * a new tab, or a `/clear` or a restart of Claude, which starts a new session).
+ * a new tab, or a `/clear` or a restart of Claude, which starts a new session). A Codex tab (TER-1095) reads
+ * its Codex session the same way, and adds `codex_untrusted`: the hooks are installed, but Codex runs them
+ * only once the person trusts them in Codex itself, so it reports no session until then.
  */
-export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session'] as const;
+export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'codex_untrusted'] as const;
 export type TTabChatEmptyReason = (typeof TAB_CHAT_EMPTY_REASONS)[number];
 
 /** `POST machines/:id/hooks` (TER-1091): when the hooks were installed. */

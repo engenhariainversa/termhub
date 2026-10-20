@@ -130,17 +130,21 @@ export function modeLabel(mode: string | null): string | null {
   return Object.prototype.hasOwnProperty.call(MODE_LABEL, mode) ? i18n.t(MODE_LABEL[mode]!) : mode;
 }
 
+const CODEX_UNTRUSTED_TEXT = tk('O Codex só informa a sessão depois que você confia nos hooks do termhub: em Ver tela, escolha "Trust all" em "Hooks need review" (ou use /hooks). A conversa aparece a partir da próxima mensagem.');
+
 const AVAILABILITY_TEXT: Record<string, string> = {
   offline: tk('Máquina offline'),
   agent_outdated: tk('Atualize o agente desta máquina'),
-  no_session: tk('Sem sessão do Claude nesta aba'),
-  unsupported_tool: tk('Só Claude Code por enquanto'),
+  no_session: tk('Nenhuma sessão informada nesta aba'),
+  unsupported_tool: tk('Só Claude Code e Codex por enquanto'),
   unsupported_machine: tk('Esta máquina não usa o agente do termhub'),
 };
 
-/** Why the tab cannot be read as a conversation; `null` for `ready`. A value a newer server adds reads as the generic line. */
-export function availabilityText(availability: string): string | null {
+/** Why the tab cannot be read as a conversation; `null` for `ready`. A value a newer server adds reads as the generic line.
+ *  A Codex tab whose machine has not trusted the hooks says how to (TER-1095): without them no session is ever reported. */
+export function availabilityText(availability: string, emptyReason: string | null = null): string | null {
   if (availability === 'ready') return null;
+  if (availability === 'no_session' && emptyReason === 'codex_untrusted') return i18n.t(CODEX_UNTRUSTED_TEXT);
   return Object.prototype.hasOwnProperty.call(AVAILABILITY_TEXT, availability) ? i18n.t(AVAILABILITY_TEXT[availability]!) : i18n.t('Indisponível no momento');
 }
 

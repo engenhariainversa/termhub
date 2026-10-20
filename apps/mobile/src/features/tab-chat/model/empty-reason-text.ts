@@ -1,5 +1,5 @@
 // Why a tab's conversation has no history (TER-1091), in the language the app shows. The history is the
-// Claude Code transcript of the tab's current session, found through the session id the machine's termhub
+// Claude Code (or Codex, TER-1095) transcript of the tab's current session, found through the session id the machine's termhub
 // hooks report: without the hooks, or before Claude reports, there is nothing to read. The reason travels
 // as a plain string: one a newer server adds reads as the generic "no messages" line.
 import { t, tk } from '@/i18n';
@@ -25,6 +25,11 @@ const TEXT: Record<string, { title: string; hint: string; install: string | null
   transcript_missing: {
     title: tk('O histórico desta sessão não está mais na máquina'),
     hint: tk('O arquivo da conversa do Claude Code não foi encontrado em {{machine}}. A próxima sessão do Claude nesta aba volta a aparecer aqui.'),
+    install: null,
+  },
+  codex_untrusted: {
+    title: tk('O Codex ainda não confia nos hooks do termhub'),
+    hint: tk('O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler, mas o Codex só os roda depois que você confia neles. Abra o Codex nesta aba (Ver tela) e escolha "Trust all" em "Hooks need review", ou use /hooks em {{machine}}: a conversa aparece aqui a partir da próxima mensagem.'),
     install: null,
   },
   new_session: {

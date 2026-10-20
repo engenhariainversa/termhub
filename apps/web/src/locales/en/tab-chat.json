@@ -45,10 +45,8 @@
   "Plano": "Plan",
   "Responda a pergunta acima antes de enviar uma mensagem": "Answer the question above before sending a message",
   "Sem confirmações": "No confirmations",
-  "Sem sessão do Claude nesta aba": "No Claude session in this tab",
   "Seu acesso não inclui terminais.": "Your access does not include terminals.",
   "Subagente": "Subagent",
-  "Só Claude Code por enquanto": "Only Claude Code for now",
   "Tela do terminal": "Terminal screen",
   "Terminal": "Terminal",
   "Trabalhando": "Working",
@@ -65,5 +63,8 @@
   "{{count}} ferramentas_one": "{{count}} tool",
   "{{count}} ferramentas_other": "{{count}} tools",
   "{{count}} imagens_one": "{{count}} image",
-  "{{count}} imagens_other": "{{count}} images"
+  "{{count}} imagens_other": "{{count}} images",
+  "Nenhuma sessão informada nesta aba": "No session reported in this tab",
+  "Só Claude Code e Codex por enquanto": "Only Claude Code and Codex for now",
+  "O Codex só informa a sessão depois que você confia nos hooks do termhub: em Ver tela, escolha \"Trust all\" em \"Hooks need review\" (ou use /hooks). A conversa aparece a partir da próxima mensagem.": "Codex reports its session only after you trust the termhub hooks: in View screen, choose \"Trust all\" under \"Hooks need review\" (or use /hooks). The conversation shows up from the next message on."
 }

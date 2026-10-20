@@ -153,7 +153,7 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
     ...(onOpenTab ? [{ kind: 'item' as const, label: t('Abrir em aba própria'), onSelect: onOpenTab }] : []),
   ];
 
-  const reason = availabilityText(chat.availability);
+  const reason = availabilityText(chat.availability, chat.emptyReason);
   const mode = modeLabel(chat.mode);
 
   return (

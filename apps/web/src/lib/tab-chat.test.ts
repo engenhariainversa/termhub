@@ -75,6 +75,9 @@ describe('labels', () => {
     expect(availabilityText('ready')).toBeNull();
     expect(availabilityText('agent_outdated')).toBe('Atualize o agente desta máquina');
     expect(availabilityText('something_new')).toBe('Indisponível no momento');
+    // TER-1095: a Codex tab with untrusted hooks says how to trust them; any other reason keeps the line
+    expect(availabilityText('no_session', 'codex_untrusted')).toContain('Trust all');
+    expect(availabilityText('no_session', 'not_reported')).toBe('Nenhuma sessão informada nesta aba');
   });
 
   it('only an offline machine stops the box', () => {

@@ -53,7 +53,7 @@ Taken here:
 | D3 | How new lines arrive | One RPC, `transcript.read`, called by the server: when a viewer connects, on every hook event of the tab, and once a second while the tab is working and someone is watching. No new channel kind. | A channel per watched tab would spend the 64 channels an agent has, and needs a manager on the agent. The hooks alone are not enough: `PreToolUse` is posted only when the tool or the verb changes. One call a second per watched tab is cheap. |
 | D4 | Storage | None. Transcript content lives in memory only while it is relayed, and is never logged. | The repo's rule on terminal content, and the maintainer's answer. Storing it would mean keeping every user's code and tool output. |
 | D5 | Machines | Agent machines only. A tab on an `ssh` or `local` machine reads `unsupported_machine`. | The maintainer runs every machine through the agent and does not want the other path built. The code still accepts `ssh` and `local` (`routes/machines.ts`, `seed.ts`), so those tabs must say why they cannot be opened instead of failing. |
-| D6 | Tools | Claude Code only. A Codex or Cursor tab reads `unsupported_tool`. | Their transcripts are other formats. Out of scope (section 9). |
+| D6 | Tools | Claude Code, and Codex since TER-1095 (its `rollout-*.jsonl`, `event_msg` lines, agent capability `transcript.codex`). A Cursor tab reads `unsupported_tool`. | Their transcripts are other formats. Cursor stays out of scope (section 9). |
 | D7 | Gate for old agents | A capability, `transcript`, advertised in `hello` from agent 0.15.0. It covers `transcript.read` and the new `BTab` key. | An old agent drops an RPC it does not know, which would read as a timeout. Capabilities are the newer of the two gates the code has (`messages.ts`). |
 | D8 | Size of what travels | The agent truncates every string longer than `max_string` and replaces a line still over 64 KB by a stub. | A transcript line holds whole file contents and pasted images in base64; a frame is at most 1 MB (`frames.ts`). The rule is generic, so D2 holds. |
 | D9 | Thread shown | The main thread only. A subagent shows as its `Agent` tool call and result. | Subagent transcripts are separate files (`<session>/subagents/`). Reading them is a second feature. |
@@ -200,8 +200,8 @@ export async function readForward(machine, tab, after: Cursor): Promise<Forward>
 ```
 
 - `unsupported_machine`: the machine is not an agent machine. `offline`: its agent is not connected.
-  `agent_outdated`: no `transcript` capability. `unsupported_tool`: `state_tool` is set and is not
-  `claude`. `no_session`: no `agent_transcript_path`. Else `ready`.
+  `agent_outdated`: no `transcript` capability (a Codex tab: no `transcript.codex`). `unsupported_tool`:
+  `state_tool` is set and is neither `claude` nor `codex`. `no_session`: no `agent_transcript_path`. Else `ready`.
 - A cursor is `<session id>.<byte offset>`, opaque to the app. A cursor of another session, or an
   offset past `size`, is a reset: the caller starts again from the end.
 - `readPage` asks backward for 256 KB with `max_string` 4 000 and returns the items, the `before`
@@ -324,7 +324,7 @@ Server to phone only:
 ## 9. Out of scope
 
 - The web. It has the real terminal.
-- Codex and Cursor tabs.
+- Cursor tabs (Codex since TER-1095, see `tab-chat/codex-transcript.ts`).
 - `ssh` and `local` machines.
 - Subagent transcripts.
 - Token-by-token streaming.
