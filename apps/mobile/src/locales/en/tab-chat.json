@@ -81,5 +81,15 @@
   "Nenhuma sessão informada nesta aba": "No session reported in this tab",
   "Só Claude Code e Codex por enquanto": "Only Claude Code and Codex for now",
   "O Codex ainda não confia nos hooks do termhub": "Codex does not trust the termhub hooks yet",
-  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler, mas o Codex só os roda depois que você confia neles. Abra o Codex nesta aba (Ver tela) e escolha \"Trust all\" em \"Hooks need review\", ou use /hooks em {{machine}}: a conversa aparece aqui a partir da próxima mensagem.": "This tab's history comes from Codex, and the hooks are what tell termhub which session to read, but Codex runs them only after you trust them. Open Codex in this tab (View screen) and choose \"Trust all\" under \"Hooks need review\", or use /hooks on {{machine}}: the conversation shows up here from the next message on."
+  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler, mas o Codex só os roda depois que você confia neles. Abra o Codex nesta aba (Ver tela) e escolha \"Trust all\" em \"Hooks need review\", ou use /hooks em {{machine}}: a conversa aparece aqui a partir da próxima mensagem.": "This tab's history comes from Codex, and the hooks are what tell termhub which session to read, but Codex runs them only after you trust them. Open Codex in this tab (View screen) and choose \"Trust all\" under \"Hooks need review\", or use /hooks on {{machine}}: the conversation shows up here from the next message on.",
+  "Esta aba é um terminal sem agente": "This tab is a terminal with no agent",
+  "Inicie uma sessão para conversar por aqui. O agente começa nesta aba com a conta padrão do projeto em {{machine}}.": "Start a session to talk from here. The agent starts in this tab with the project's default account on {{machine}}.",
+  "Não foi possível carregar as contas de IA.": "Could not load the AI accounts.",
+  "Não foi possível iniciar o agente. Tente de novo.": "Could not start the agent. Try again.",
+  "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Session started. The conversation shows up here as soon as the agent answers.",
+  "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one in AI accounts.",
+  "Iniciar com {{account}} ({{cli}})": "Start with {{account}} ({{cli}})",
+  "Iniciar sessão": "Start session",
+  "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
+  "Escolher outra conta": "Choose another account"
 }

@@ -101,12 +101,50 @@ export type TTabChatPage = z.infer<typeof tabChatPage>;
  * termhub hooks installed, so no session is ever reported), `not_reported` (hooks installed, but no
  * session reported yet: Claude not started in the tab, or started before the hooks were), `transcript_missing`
  * (the session's file is no longer on the machine), `new_session` (the current session has nothing yet:
- * a new tab, or a `/clear` or a restart of Claude, which starts a new session). A Codex tab (TER-1095) reads
- * its Codex session the same way, and adds `codex_untrusted`: the hooks are installed, but Codex runs them
- * only once the person trusts them in Codex itself, so it reports no session until then.
+ * a new tab, or a `/clear` or a restart of Claude, which starts a new session), `no_agent` (TER-1094: the
+ * tab is a plain terminal, its shell at the prompt with no AI CLI in front, so there is no session to show;
+ * `tabs/:id/agent` starts one). A Codex tab (TER-1095) reads its Codex session the same way, and adds
+ * `codex_untrusted`: the hooks are installed, but Codex runs them only once the person trusts them in Codex
+ * itself, so it reports no session until then.
  */
-export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'codex_untrusted'] as const;
+export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'no_agent', 'codex_untrusted'] as const;
 export type TTabChatEmptyReason = (typeof TAB_CHAT_EMPTY_REASONS)[number];
+
+/** One account "Iniciar sessão" can start the tab's agent with (TER-1094): `provider` is `claude` (Claude Code)
+ *  or `chatgpt` (Codex), read as a plain string. */
+export const tabAgentChoice = z.object({
+  account_id: z.string(),
+  label: z.string(),
+  provider: z.string(),
+  /** the project's model for that CLI; null = the CLI's own default */
+  model: z.string().nullable(),
+});
+export type TTabAgentChoice = z.infer<typeof tabAgentChoice>;
+
+/**
+ * `GET tabs/:id/agent` (TER-1094): the accounts of the tab's machine an agent can start with, the project's
+ * own first, and the one the server picks without asking (`suggested`: the project's first account with
+ * room; without a project list, the machine's only account or its only default login). null = more than
+ * one fits and no rule decides: the person chooses.
+ */
+export const tabAgentOptions = z.object({
+  choices: z.array(tabAgentChoice),
+  suggested: z.string().nullable(),
+});
+export type TTabAgentOptions = z.infer<typeof tabAgentOptions>;
+
+/** `POST tabs/:id/agent` (TER-1094): no account = the suggested one (409 `ACCOUNT_CHOICE_REQUIRED` when there is none). */
+export const startTabAgentBody = z.object({ account_id: z.string().min(1).max(64).optional() });
+export type TStartTabAgentBody = z.infer<typeof startTabAgentBody>;
+
+/** Where the agent started: this tab (its shell was free) or a new tab of the same project and machine. */
+export const startTabAgentResponse = z.object({
+  tab_id: z.string(),
+  new_tab: z.boolean(),
+  account: z.object({ id: z.string(), label: z.string() }),
+  provider: z.string(),
+});
+export type TStartTabAgentResponse = z.infer<typeof startTabAgentResponse>;
 
 /** `POST machines/:id/hooks` (TER-1091): when the hooks were installed. */
 export const installHooksResponse = z.object({ installed_at: z.string() });

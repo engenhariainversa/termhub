@@ -1,5 +1,6 @@
 import {
   startSessionBody,
+  startTabAgentBody,
   TAB_FILE_MAX_BYTES,
   tabActionBody,
   tabChatQuery,
@@ -7,6 +8,8 @@ import {
   tabMessageBody,
   tabScreenQuery,
   type TTabActionResponse,
+  type TStartTabAgentResponse,
+  type TTabAgentOptions,
   type TTabChatPage,
   type TTabsResponse,
 } from '@termhub/mobile-api';
@@ -14,21 +17,23 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireTranscriptCapable } from '../agent/errors.js';
 import { scoped } from '../auth/scope.js';
-import { startAgent } from '../control/agents.js';
+import { startAgent, startTabAgent, tabAgentOptions } from '../control/agents.js';
 import { ControlError, controlContextFor } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import { sendInput, sendKey } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { Machine } from '../db/repositories/types.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { HttpError, badRequest } from '../lib/errors.js';
 import { readHooksStatus } from '../monitor/install.js';
 import { claudeAccountDirs } from '../monitor/machine-hooks.js';
 import { claudeFooterMode } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
-import { availabilityOf, emptyReasonOf, hasReportedSession, readPage as defaultReadPage, transcriptToolOf, type AgentView, type HooksOnMachine, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
+import { availabilityOf, emptyReasonOf, hasNoHistory, hasReportedSession, readPage as defaultReadPage, transcriptToolOf, type AgentView, type HooksOnMachine, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
+import { paneForeground } from '../terminal/session-ops.js';
+import type { Machine } from '../db/repositories/types.js';
+import type { PaneForeground } from '@termhub/machine-ops';
 import { tk } from '../i18n/index.js';
 import { audit } from '../auth/audit.js';
 
@@ -53,6 +58,8 @@ export interface MobileTabDeps {
   surface?: 'app' | 'web';
   /** Injected by tests; the machine's live hooks status otherwise (TER-1095). */
   codexHooksTrusted?: (machine: Machine) => Promise<boolean | null>;
+  /** What the tab's pane runs in front (TER-1094); injected by tests, the agent's `tmux.foreground` otherwise. */
+  foreground?: (machine: Machine, session: string) => Promise<PaneForeground>;
 }
 
 /** Whether Codex trusts every termhub hook on the machine; null when that cannot be read (offline, an old agent, no Codex). */
@@ -108,6 +115,7 @@ const emptyPage = (): Page => ({ items: [], before: null, live: null, mode: null
  */
 export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories, deps: MobileTabDeps) {
   const readPage = deps.readPage ?? defaultReadPage;
+  const foreground = deps.foreground ?? paneForeground;
   const ctxOf = (request: FastifyRequest) => controlContextFor(repos, request.scope.user);
   const availability = (tab: Parameters<typeof availabilityOf>[0], machine: Parameters<typeof availabilityOf>[1]) => availabilityOf(tab, machine, deps.agent);
 
@@ -166,7 +174,10 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       if (!(await repos.machineHooks.findByMachine(machine.id))) hooks = 'missing';
       else if (transcriptToolOf(tab) === 'codex' && (await (deps.codexHooksTrusted ?? ((m: Machine) => readCodexHooksTrusted(repos, m)))(machine)) === false) hooks = 'codex_untrusted';
     }
-    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooks);
+    // A page with no history at all is worth a look at the pane (TER-1094): a plain shell there means no
+    // agent, not a missing history. Any failure (an agent older than 0.14.0, offline) keeps the other reasons.
+    const atShell = tab.tmux_session && (avail === 'no_session' || avail === 'ready') && hasNoHistory(avail, page, !before) ? (await foreground(machine, tab.tmux_session).catch(() => null)) === 'shell' : false;
+    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooks, atShell);
     request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded, emptyReason: empty_reason }, 'tab chat: page');
     return {
       tab: tabSummaryOf(tab, project, machine, avail),
@@ -181,6 +192,25 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       suggestions: tab_suggestions as TTabChatPage['suggestions'],
       empty_reason,
     };
+  });
+
+  /** "Iniciar sessão" (TER-1094): the accounts the tab's agent can start with, and the one picked without asking. */
+  app.get('/:id/agent', async (request): Promise<TTabAgentOptions> => {
+    const { id } = idParam.parse(request.params);
+    const { project, machine } = await scoped(repos, request).tab(id);
+    return control(() => tabAgentOptions(ctxOf(request), project, machine));
+  });
+
+  /** Starts the agent in the tab (its shell is free) or in a new tab of the same project and machine. */
+  app.post('/:id/agent', { config: { action: 'write' } }, async (request): Promise<TStartTabAgentResponse> => {
+    const { id } = idParam.parse(request.params);
+    const { account_id } = startTabAgentBody.parse(request.body ?? {});
+    const { tab, project, machine } = await scoped(repos, request).tab(id);
+    const started = await control(() => startTabAgent({ ...ctxOf(request), log: request.log }, tab, project, machine, account_id));
+    // the CLI line is typed into the tab: the trail's terminal input, marked as an agent start
+    await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: started.tab_id, label: tab.name }, meta: { machine_id: machine.id, agent_start: true, provider: started.provider, account_id: started.account.id, new_tab: started.new_tab, surface: deps.surface ?? 'app' } });
+    deps.hub.poke(tab.id);
+    return started;
   });
 
   /** Text typed into the session, as in the web terminal: no confirmation card (spec D12). */

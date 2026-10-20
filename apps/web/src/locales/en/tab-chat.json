@@ -66,5 +66,17 @@
   "{{count}} imagens_other": "{{count}} images",
   "Nenhuma sessão informada nesta aba": "No session reported in this tab",
   "Só Claude Code e Codex por enquanto": "Only Claude Code and Codex for now",
-  "O Codex só informa a sessão depois que você confia nos hooks do termhub: em Ver tela, escolha \"Trust all\" em \"Hooks need review\" (ou use /hooks). A conversa aparece a partir da próxima mensagem.": "Codex reports its session only after you trust the termhub hooks: in View screen, choose \"Trust all\" under \"Hooks need review\" (or use /hooks). The conversation shows up from the next message on."
+  "O Codex só informa a sessão depois que você confia nos hooks do termhub: em Ver tela, escolha \"Trust all\" em \"Hooks need review\" (ou use /hooks). A conversa aparece a partir da próxima mensagem.": "Codex reports its session only after you trust the termhub hooks: in View screen, choose \"Trust all\" under \"Hooks need review\" (or use /hooks). The conversation shows up from the next message on.",
+  "Esta aba é um terminal sem agente": "This tab is a terminal with no agent",
+  "Inicie uma sessão para conversar por aqui.": "Start a session to chat from here.",
+  "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Session started. The conversation shows up here as soon as the agent answers.",
+  "Iniciar sessão": "Start session",
+  "Iniciando…": "Starting…",
+  "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
+  "{{account}} ({{cli}})": "{{account}} ({{cli}})",
+  "Escolher outra conta": "Choose another account",
+  "Escolha a conta para iniciar a sessão:": "Choose the account to start the session with:",
+  "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one under AI accounts.",
+  "Não foi possível ler as contas de IA.": "Could not read the AI accounts.",
+  "Não foi possível iniciar a sessão. Tente de novo.": "Could not start the session. Try again."
 }
