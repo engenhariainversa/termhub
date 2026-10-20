@@ -75,6 +75,7 @@ export const ModelName = {
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
+  AiMemoryPage: 'AiMemoryPage',
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
@@ -102,6 +103,7 @@ export const ModelName = {
   ChatFocus: 'ChatFocus',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
+  MemoryRule: 'MemoryRule',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
   ProjectGroupItem: 'ProjectGroupItem',
@@ -274,6 +276,8 @@ export const MachineScalarFieldEnum = {
   claudeAutoSwap: 'claudeAutoSwap',
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
+  aiMemoryEnabled: 'aiMemoryEnabled',
+  aiMemoryUrl: 'aiMemoryUrl',
   permissionHint: 'permissionHint',
   isLocal: 'isLocal',
   ownerId: 'ownerId',
@@ -295,6 +299,7 @@ export const ProjectScalarFieldEnum = {
   agentColumnId: 'agentColumnId',
   lastTerminalAt: 'lastTerminalAt',
   automationPausedAt: 'automationPausedAt',
+  aiMemoryLessons: 'aiMemoryLessons',
   createdAt: 'createdAt'
 } as const
 
@@ -558,6 +563,18 @@ export const TabUsageDayScalarFieldEnum = {
 } as const
 
 export type TabUsageDayScalarFieldEnum = (typeof TabUsageDayScalarFieldEnum)[keyof typeof TabUsageDayScalarFieldEnum]
+
+
+export const AiMemoryPageScalarFieldEnum = {
+  projectId: 'projectId',
+  machineId: 'machineId',
+  cwd: 'cwd',
+  path: 'path',
+  hash: 'hash',
+  publishedAt: 'publishedAt'
+} as const
+
+export type AiMemoryPageScalarFieldEnum = (typeof AiMemoryPageScalarFieldEnum)[keyof typeof AiMemoryPageScalarFieldEnum]
 
 
 export const AiAccountExhaustionScalarFieldEnum = {
@@ -981,6 +998,12 @@ export const ChatDecisionScalarFieldEnum = {
   suggestedCount: 'suggestedCount',
   acceptedCount: 'acceptedCount',
   autoCount: 'autoCount',
+  scope: 'scope',
+  expiresAt: 'expiresAt',
+  wrongAt: 'wrongAt',
+  supersededAt: 'supersededAt',
+  supersedes: 'supersedes',
+  trust: 'trust',
   createdAt: 'createdAt'
 } as const
 
@@ -1005,12 +1028,38 @@ export const MemoryItemScalarFieldEnum = {
   verifiedHash: 'verifiedHash',
   hiddenHash: 'hiddenHash',
   meta: 'meta',
+  scope: 'scope',
+  conversationId: 'conversationId',
+  expiresAt: 'expiresAt',
+  wrongAt: 'wrongAt',
+  supersededAt: 'supersededAt',
+  supersedes: 'supersedes',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type MemoryItemScalarFieldEnum = (typeof MemoryItemScalarFieldEnum)[keyof typeof MemoryItemScalarFieldEnum]
+
+
+export const MemoryRuleScalarFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  projectId: 'projectId',
+  kind: 'kind',
+  status: 'status',
+  text: 'text',
+  policy: 'policy',
+  sourceRefs: 'sourceRefs',
+  fingerprint: 'fingerprint',
+  noteId: 'noteId',
+  decidedAt: 'decidedAt',
+  decidedBy: 'decidedBy',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type MemoryRuleScalarFieldEnum = (typeof MemoryRuleScalarFieldEnum)[keyof typeof MemoryRuleScalarFieldEnum]
 
 
 export const InstanceSecretScalarFieldEnum = {

@@ -2,7 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
-import { MemoryItemsRepository, type LessonMeta, type NewMemoryItem } from './memory-items.js';
+import { MemoryItemsRepository, type LessonMeta, type MemoryFilter, type NewMemoryItem } from './memory-items.js';
 
 const DIM = 384;
 /** A unit vector with a 1 at index `i`: cosine similarity to itself is exactly 1, and to another such
@@ -208,6 +208,22 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     });
   });
 
+  it('deleteDocsNotInLinks (TER-1021): deletes ai-memory lessons of gone links, keeps those of live links', async () => {
+    const aiMeta = (path: string): LessonMeta => ({ evidence: 'observed', card: null, pr: null, tags: ['rule'], agent: null, tab_id: null, origin: 'ai-memory', path, machine_id: 'm1', machine_name: 'hulk', ai_memory_kind: 'rule' });
+    const live = newId();
+    const gone = newId();
+    await repo.upsertMany([
+      item({ kind: 'lesson', source_id: `${live}:ai-memory/p/_rules/a.md`, title: 'a', text: 'a', meta: aiMeta('p/_rules/a.md') }),
+      item({ kind: 'lesson', source_id: `${gone}:ai-memory/p/_rules/b.md`, title: 'b', text: 'b', meta: aiMeta('p/_rules/b.md') }),
+    ]);
+    await inRolledBackTx(async (r) => {
+      const txDb = (r as unknown as { db: PrismaClient }).db;
+      await r.deleteDocsNotInLinks([live]);
+      expect(await txDb.memoryItem.count({ where: { kind: 'lesson', sourceId: `${live}:ai-memory/p/_rules/a.md` } })).toBe(1);
+      expect(await txDb.memoryItem.count({ where: { kind: 'lesson', sourceId: `${gone}:ai-memory/p/_rules/b.md` } })).toBe(0);
+    });
+  });
+
   it('listSourceHashes: source_id → source_hash of chunk 0, only under the given prefix, only rows with a hash', async () => {
     await repo.upsertMany([
       item({ kind: 'doc', source_id: 'pm1:docs/a.md', chunk_index: 0, title: 'a', text: 'a', source_hash: 'hash-a' }),
@@ -247,7 +263,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     const docKind = (await repo.upsertMany([item({ project_id: projectId, kind: 'doc', source_id: newId(), title: 'D', text: 'd' })]))[0]!;
     await repo.setEmbedding(docKind.id, mix(1, 4, 0.2), 'm');
 
-    const neighbours = await repo.nearest({ ownerId: userId }, vec(1), 10);
+    const neighbours = await repo.nearest({ ownerId: userId }, vec(1), 10, 'm');
     const ids = neighbours.map((n) => n.id);
     expect(ids[0]).toBe(a.id);
     expect(neighbours[0]!.similarity).toBeCloseTo(1, 5);
@@ -257,11 +273,14 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     expect(ids).not.toContain(unembedded.id);
     expect(ids).not.toContain(otherOwnerRow.id);
 
-    const byProject = await repo.nearest({ ownerId: userId, projectId }, vec(1), 10);
+    const byProject = await repo.nearest({ ownerId: userId, projectId }, vec(1), 10, 'm');
     expect(byProject.map((n) => n.id)).not.toContain(inOtherProject.id);
 
-    const byKind = await repo.nearest({ ownerId: userId, kinds: ['doc'] }, vec(1), 10);
+    const byKind = await repo.nearest({ ownerId: userId, kinds: ['doc'] }, vec(1), 10, 'm');
     expect(byKind.map((n) => n.id)).toEqual([docKind.id]);
+
+    // A vector of another model is never compared (TER-1006).
+    expect((await repo.nearest({ ownerId: userId }, vec(1), 10, 'other-model')).map((n) => n.id)).not.toContain(a.id);
   });
 
   it('textSearch: matches case-insensitively, never another owner\'s row, similarity null, punctuation-only query returns []', async () => {
@@ -387,8 +406,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
 
     expect(await repo.hideSource(chunk0Id, userId)).toBe(true);
 
-    expect((await repo.nearest({ ownerId: userId }, vec(5), 10)).map((r) => r.id)).not.toContain(chunk0Id);
-    expect((await repo.nearest({ ownerId: userId }, vec(5), 10)).map((r) => r.id)).not.toContain(chunk1!.id);
+    expect((await repo.nearest({ ownerId: userId }, vec(5), 10, 'm')).map((r) => r.id)).not.toContain(chunk0Id);
+    expect((await repo.nearest({ ownerId: userId }, vec(5), 10, 'm')).map((r) => r.id)).not.toContain(chunk1!.id);
     expect((await repo.textSearch({ ownerId: userId }, 'hideme-marker', 10)).map((r) => r.id)).toEqual([]);
     expect((await repo.listLessons(userId, { limit: 1000 })).items.map((r) => r.id)).not.toContain(chunk0Id);
 
@@ -460,7 +479,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     // A hit on chunk 1 (not the one the person clicked) is just as verified.
     const hit1 = (await repo.textSearch({ ownerId: userId, kinds: ['lesson'] }, marker, 10)).find((h) => h.chunk_index === 1);
     expect(hit1!.verified).toBe(true);
-    expect((await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 10)).filter((h) => h.source_id === sourceId).every((h) => h.verified)).toBe(true);
+    expect((await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 10, 'm')).filter((h) => h.source_id === sourceId).every((h) => h.verified)).toBe(true);
 
     // Only the Fix section (chunk 1) changes: chunk 0's own text is identical, but the file's hash is new.
     await repo.replaceSourceChunks('lesson', sourceId, file('fix v2', 'b'.repeat(64)));
@@ -478,7 +497,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     for (const id of ids) await repo.setEmbedding(id, vec(7), 'm');
     expect(await repo.hideSource(ids[0]!, userId)).toBe(true);
     const visible = async () => ({
-      near: (await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 50)).filter((h) => h.source_id === sourceId).length,
+      near: (await repo.nearest({ ownerId: userId, kinds: ['lesson'] }, vec(7), 50, 'm')).filter((h) => h.source_id === sourceId).length,
       text: (await repo.textSearch({ ownerId: userId, kinds: ['lesson'] }, marker, 50)).length,
       list: (await repo.listLessons(userId, { q: marker, limit: 10 })).items.length,
     });
@@ -501,5 +520,86 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     // Same source_hash, different chunk text: a doc comes back on its content hash.
     await repo.upsertMany([item({ kind: 'doc', source_id: sourceId, text: `v2 ${marker}`, source_hash: 'd'.repeat(64) })]);
     expect((await repo.textSearch({ ownerId: userId }, marker, 10)).map((r) => r.id)).toEqual([doc!.id]);
+  });
+  it('note scope and expiry (TER-1014): old notes infer their scope; search keeps only notes that hold at the place and skips expired ones', async () => {
+    const userProjectId = newId();
+    await db.project.create({ data: { id: userProjectId, key: `P${userProjectId.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'proj4', ownerId: userId } });
+    try {
+      const text = 'Decisão: Nebula999';
+      const rows = await repo.upsertMany([
+        item({ title: 'legacy-project', text }),
+        item({ title: 'legacy-user', text, project_id: null }),
+        item({ title: 'conversation', text, scope: 'conversation', conversation_id: 'conv-a' }),
+        item({ title: 'expired', text, project_id: null, scope: 'user', expires_at: new Date(Date.now() - 60_000) }),
+        item({ title: 'later', text, project_id: null, scope: 'user', expires_at: new Date(Date.now() + 3_600_000) }),
+      ]);
+      const byTitle = new Map(rows.map((r) => [r.title, r]));
+      expect(byTitle.get('legacy-project')).toMatchObject({ scope: 'project', conversation_id: null, expires_at: null });
+      expect(byTitle.get('legacy-user')).toMatchObject({ scope: 'user' });
+      expect(byTitle.get('conversation')).toMatchObject({ scope: 'conversation', conversation_id: 'conv-a' });
+      for (const r of rows) await repo.setEmbedding(r.id, vec(13), 'm');
+
+      const titles = async (filter: Partial<MemoryFilter>) => (await repo.textSearch({ ownerId: userId, kinds: ['note'], ...filter }, 'Nebula999', 50)).map((r) => r.title).sort();
+      expect(await titles({})).toEqual(['later', 'legacy-project', 'legacy-user']);
+      expect(await titles({ place: { projectId, conversationId: 'conv-a' } })).toEqual(['conversation', 'later', 'legacy-project', 'legacy-user']);
+      expect(await titles({ place: { projectId: userProjectId, conversationId: 'conv-b' } })).toEqual(['later', 'legacy-user']);
+      expect(await titles({ includeExpired: true })).toEqual(['expired', 'later', 'legacy-project', 'legacy-user']);
+      // nearest ranks every embedded note of the owner, so keep only this test's rows (other tests leave user-scope notes behind).
+      const ours = new Set(rows.map((r) => r.id));
+      const near = (await repo.nearest({ ownerId: userId, kinds: ['note'], place: { projectId: userProjectId } }, vec(13), 50, 'm'))
+        .filter((r) => ours.has(r.id))
+        .map((r) => r.title)
+        .sort();
+      expect(near).toEqual(['later', 'legacy-user']);
+    } finally {
+      await db.project.deleteMany({ where: { id: userProjectId } });
+    }
+  });
+
+  it('currentNotes (TER-1011): this project and account-wide notes, newest first; never wrong, superseded, expired or conversation-only ones', async () => {
+    // The status columns come from sibling cards (TER-1013/1014/1015); here they are added inside a
+    // transaction that is rolled back, so the schema is left as the migrations made it (CI checks drift).
+    const ROLLBACK = new Error('rollback');
+    await db
+      .$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(
+            `ALTER TABLE "memory_items" ADD COLUMN IF NOT EXISTS "wrong_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "superseded_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "expires_at" TIMESTAMP(3), ADD COLUMN IF NOT EXISTS "scope" TEXT`,
+          );
+          const r = new MemoryItemsRepository(tx as unknown as PrismaClient);
+          const owner = newId();
+          const project = newId();
+          const elsewhere = newId();
+          await tx.user.create({ data: { id: owner, email: `${owner}@test.local`, name: 'rules' } });
+          await tx.project.create({ data: { id: project, key: `R${project.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'rules', ownerId: owner } });
+          await tx.project.create({ data: { id: elsewhere, key: `S${elsewhere.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'other', ownerId: owner } });
+          const note = (title: string, at: string, projectId: string | null = project) =>
+            r.upsertMany([item({ owner_id: owner, project_id: projectId, source_id: newId(), title, text: `Decisão: ${title}\nMotivo: m\nFontes: `, source_at: new Date(at) })]).then(([row]) => row!);
+          const old = await note('acceptEdits + lista', '2026-10-01T00:00:00.000Z');
+          const auto = await note('modo auto', '2026-10-02T00:00:00.000Z');
+          const account = await note('PRs em inglês', '2026-10-03T00:00:00.000Z', null);
+          const wrong = await note('errada', '2026-10-04T00:00:00.000Z');
+          const expired = await note('durante a noite', '2026-10-05T00:00:00.000Z');
+          const later = await note('até o fim do ano', '2026-10-05T00:00:00.000Z');
+          const chat = await note('só nesta conversa', '2026-10-06T00:00:00.000Z');
+          await note('outro projeto', '2026-10-06T00:00:00.000Z', elsewhere);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "superseded_at" = now() WHERE id = $1`, old.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "wrong_at" = now() WHERE id = $1`, wrong.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "expires_at" = now() - interval '1 hour' WHERE id = $1`, expired.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "expires_at" = now() + interval '30 days' WHERE id = $1`, later.id);
+          await tx.$executeRawUnsafe(`UPDATE "memory_items" SET "scope" = 'conversation' WHERE id = $1`, chat.id);
+
+          const ids = (await r.currentNotes(owner, project, 20)).map((n) => n.id);
+          expect(new Set(ids)).toEqual(new Set([auto.id, account.id, later.id]));
+          expect(ids).not.toContain(old.id);
+          expect((await r.currentNotes(owner, project, 1)).length).toBe(1);
+          expect((await r.currentNotes(otherUserId, project, 20)).length).toBe(0);
+          throw ROLLBACK;
+        },
+        { timeout: 20_000 },
+      )
+      .catch((e: unknown) => {
+        if (e !== ROLLBACK) throw e;
+      });
   });
 });

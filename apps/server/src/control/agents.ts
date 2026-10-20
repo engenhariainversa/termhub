@@ -16,6 +16,9 @@ import { boardUrl, rules, taskOut, type TaskOut } from './tasks.js';
 import { openTab } from './terminals.js';
 import { msg } from '../i18n/index.js';
 import { automationAllowList, automationDenyList } from './automation-tools.js';
+import { AI_MEMORY_MCP_SERVER, aiMemoryForRun, aiMemoryMcpConfig, withAiMemoryHint, withAiMemoryServer } from '../memory/ai-memory-runs.js';
+import { aiMemoryRunPrepLine } from '@termhub/machine-ops';
+import type { ProjectAiMemory } from '../setup/schema.js';
 
 export { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_MCP_DENIED_TOOLS, AUTOMATION_MCP_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, gitRuleForms, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
@@ -257,10 +260,24 @@ function modelFlag(provider: AiProvider, model: string | null | undefined): stri
 }
 
 /**
+ * The ai-memory MCP on the line (TER-1020): Claude's inline `--mcp-config <json>` (variadic, so the caller
+ * still ends the options with `--`), Codex's `-c mcp_servers.ai_memory.url="…"`. Empty without a URL. The URL
+ * is spliced into JSON and TOML inside a quoted argument, so it must pass `MCP_URL_RE` like the tab MCP's.
+ */
+function aiMemoryFlags(provider: AiProvider, url: string | null | undefined): string {
+  if (!url) return '';
+  if (!MCP_URL_RE.test(url)) throw new ControlError('INVALID_MCP_URL', 'URL do ai-memory inválida');
+  if (provider === 'claude') return ` --mcp-config ${shellQuote(aiMemoryMcpConfig(url))}`;
+  return ` -c ${shellQuote(`mcp_servers.${AI_MEMORY_MCP_SERVER}.url="${url}"`)}`;
+}
+
+/**
  * The exact line typed into the tab; every value goes through `shellQuote`, so nothing in it is interpreted.
  * With `mcp`, the CLI also gets the tab's memory MCP (D8 Claude, D9 Codex): the line names only the file on
- * the machine that holds the token, never the token itself. A null `prompt` starts the CLI with no first
- * message (TER-1094, "Iniciar sessão" in a tab's conversation): the person writes it.
+ * the machine that holds the token, never the token itself. `aiMemoryMcpUrl`: the machine's ai-memory MCP
+ * on the line itself (TER-1020) — left out for a Claude tab whose `mcp.json` already holds it. A null
+ * `prompt` starts the CLI with no first message (TER-1094, "Iniciar sessão" in a tab's conversation): the
+ * person writes it.
  */
 export function launchLine(
   provider: AiProvider,
@@ -270,10 +287,12 @@ export function launchLine(
   model?: string | null,
   permission?: AgentPermission | null,
   guardTabId?: string | null,
+  aiMemoryMcpUrl?: string | null,
 ): string {
   const { binary: bin, configEnv, flags } = launcher(provider);
   const binary = `${bin}${flags}${modelFlag(provider, model)}`;
   const { clear, prefix } = accountEnv(configEnv, configDir);
+  const aiMemory = aiMemoryFlags(provider, aiMemoryMcpUrl);
   const quoted = prompt === null ? '' : ` ${shellQuote(prompt)}`;
   // after variadic options: `--` ends them, so the prompt is never read as one of their values
   const afterOptions = prompt === null ? '' : ` --${quoted}`;
@@ -281,14 +300,18 @@ export function launchLine(
   if (permission && provider === 'claude') {
     if (mcp && !MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
     // `--allowedTools` is variadic: `--` always ends the options, so the prompt is never read as a tool.
-    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? null)}${afterOptions}`;
+    return `${clear}${prefix}${binary} ${permissionFlags(permission, mcp?.tabId ?? null, guardTabId ?? null)}${aiMemory}${afterOptions}`;
   }
-  if (!mcp) return `${clear}${prefix}${binary}${quoted}`;
+  if (!mcp) {
+    // Claude's `--mcp-config` is variadic too
+    if (aiMemory && provider === 'claude') return `${clear}${prefix}${binary}${aiMemory}${afterOptions}`;
+    return `${clear}${prefix}${binary}${aiMemory}${quoted}`;
+  }
   if (!MCP_URL_RE.test(mcp.url)) throw new ControlError('INVALID_MCP_URL', 'MCP_URL inválido');
-  if (provider === 'claude') return `${clear}${prefix}${binary} ${claudeMcpFlags(mcp.tabId)}${afterOptions}`;
+  if (provider === 'claude') return `${clear}${prefix}${binary} ${claudeMcpFlags(mcp.tabId)}${aiMemory}${afterOptions}`;
   const tokenEnv = `TERMHUB_MCP_TOKEN="$(cat ${tabMcpPath(mcp.tabId, 'token')})"`;
   const server = `mcp_servers.${TAB_MCP_SERVER}`;
-  return `${clear}${tokenEnv} ${prefix}${binary} -c ${shellQuote(`${server}.url="${mcp.url}"`)} -c ${shellQuote(`${server}.bearer_token_env_var="TERMHUB_MCP_TOKEN"`)}${quoted}`;
+  return `${clear}${tokenEnv} ${prefix}${binary} -c ${shellQuote(`${server}.url="${mcp.url}"`)} -c ${shellQuote(`${server}.bearer_token_env_var="TERMHUB_MCP_TOKEN"`)}${aiMemory}${quoted}`;
 }
 
 /**
@@ -388,9 +411,9 @@ async function firstWithRoom(accounts: AiAccount[], machineOf: (a: AiAccount) =>
 async function placeAgent(
   ctx: ControlContext,
   input: { project_id: string; machine_id?: string; account_id?: string },
-): Promise<{ project: Project; machine: Machine; account: AiAccount; ai: ProjectAi; note: string | null }> {
+): Promise<{ project: Project; machine: Machine; account: AiAccount; ai: ProjectAi; aiMemory: ProjectAiMemory; note: string | null }> {
   await ctx.scoped.project(input.project_id);
-  const { ai } = (await ctx.repos.projectSetup.get(input.project_id)).data;
+  const { ai, ai_memory: aiMemory } = (await ctx.repos.projectSetup.get(input.project_id)).data;
   const listed = input.account_id === undefined || input.machine_id === undefined ? await ctx.repos.aiAccounts.list(ctx.scope.ownerId) : [];
 
   let placed: { project: Project; machine: Machine };
@@ -411,7 +434,7 @@ async function placeAgent(
     const account = await accountOnMachine(ctx, input.account_id, machine);
     // TER-990: an account exclusive to another project never starts here, however it was named
     await guardAccount(ctx.repos, ctx.log, account, { project_id: project.id, path: 'start_agent', machine_id: machine.id });
-    return { project, machine, account, ai, note: null };
+    return { project, machine, account, ai, aiMemory, note: null };
   }
   const candidates = accountsOn(input.project_id, ai, listed, machine.id);
   if (candidates.length === 0) {
@@ -420,9 +443,9 @@ async function placeAgent(
     throw new ControlError('ACCOUNT_REQUIRED', msg('Escolha a conta (account_id): o projeto não tem contas configuradas em {{machine}}. Contas lá: {{list}}', { machine: machine.name, list }));
   }
   const withRoom = await firstWithRoom(candidates, () => machine);
-  if (withRoom) return { project, machine, account: withRoom, ai, note: null };
+  if (withRoom) return { project, machine, account: withRoom, ai, aiMemory, note: null };
   const first = candidates[0];
-  return { project, machine, account: first, ai, note: `Todas as contas do projeto em ${machine.name} estão no limite de uso; o agente começou em ${first.label}.` };
+  return { project, machine, account: first, ai, aiMemory, note: `Todas as contas do projeto em ${machine.name} estão no limite de uso; o agente começou em ${first.label}.` };
 }
 
 export interface StartAgentResult {
@@ -532,12 +555,15 @@ export async function startAgent(
   // the reminder is appended and re-checked (spec §8/D13): a prompt that only fits alone is refused
   // with the same too-long error, counting the reminder in what it reports.
   const reminded = internal?.promptIsFinal ? checkPrompt(input.prompt) : checkPrompt(withLessonsReminder(checkPrompt(input.prompt)));
-  const { project, machine, account, ai, note: placeNote } = await placeAgent(ctx, input);
-  const prompt = account.provider === 'claude' ? checkPrompt(withOriginReminder(reminded)) : reminded;
+  const { project, machine, account, ai, aiMemory: aiMemorySetup, note: placeNote } = await placeAgent(ctx, input);
+  // ai-memory (TER-1020): only when the project and the machine both opted in
+  const aiMemory = aiMemoryForRun(aiMemorySetup, machine, account.provider);
+  const withNotes = account.provider === 'claude' ? checkPrompt(withOriginReminder(reminded)) : reminded;
+  const prompt = aiMemory && account.provider === 'chatgpt' ? checkPrompt(withAiMemoryHint(withNotes)) : withNotes;
   const { binary } = launcher(account.provider);
   const model = input.model ?? modelFor(ai, account.provider);
   // checked before the tab exists, like every other refusal
-  withSetup(internal?.setupCommand, launchLine(account.provider, account.config_dir, prompt, null, model, permission));
+  withSetup(internal?.setupCommand, launchLine(account.provider, account.config_dir, prompt, null, model, permission, null, aiMemory?.mcpUrl));
   // an automatic run never starts without its hard-lock guard (TER-1005): refused before the tab exists
   if (permission?.worktree) requireGuard(machine);
   if (!machine.capabilities.includes(binary)) {
@@ -571,16 +597,17 @@ export async function startAgent(
   let mcp: Awaited<ReturnType<typeof tabMcp>>;
   try {
     await internal?.onTabOpened?.(tab.tab_id);
-    mcp = await tabMcp(ctx, machine, account.provider, tab);
+    mcp = await tabMcp(ctx, machine, account.provider, tab, aiMemory?.mcpUrl ?? null);
     // The hard-lock guard (TER-993): written to the machine before the line is typed; a failure here
     // is a failed start. Manual and start_agent tabs (no worktree) skip it.
     const guardTabId = await installRunGuard(machine, tab.tab_id, permission);
-    line = withSetup(
-      internal?.setupCommand,
-      mcp.installed
-        ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission, guardTabId)
-        : launchLine(account.provider, account.config_dir, prompt, null, model, permission, guardTabId),
-    );
+    // A Claude tab whose mcp.json was written already holds the ai-memory server (so a resume keeps it).
+    const aiMemoryOnLine = mcp.installed && account.provider === 'claude' ? null : aiMemory?.mcpUrl;
+    const cli = mcp.installed
+      ? launchLine(account.provider, account.config_dir, prompt, { tabId: tab.tab_id, url: mcp.url }, model, permission, guardTabId, aiMemoryOnLine)
+      : launchLine(account.provider, account.config_dir, prompt, null, model, permission, guardTabId, aiMemoryOnLine);
+    if (aiMemory) ctx.log?.info({ tabId: tab.tab_id, machineId: machine.id, provider: account.provider, inFile: aiMemoryOnLine === null }, 'start_agent: ai-memory mcp');
+    line = withSetup(internal?.setupCommand, `${await aiMemoryPrep(ctx, project.id, machine, account.provider, aiMemory, permission)}${cli}`);
   } catch (e) {
     throw tagged(e);
   }
@@ -614,7 +641,7 @@ export async function startAgent(
     ...(model !== null && account.provider === 'claude' && !isAlias(model)
       ? { warning: `O modelo ${model} não é um apelido (opus, sonnet, haiku): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.` }
       : {}),
-    note: `O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${placeNote ? ` ${placeNote}` : ''}`,
+    note: `O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
   };
 }
 
@@ -748,7 +775,7 @@ type TabMcpOutcome = { installed: true; url: string; note: string } | { installe
  * an extra, `start_agent` must not fail over it: any failure after the mint revokes what was minted and the
  * tab starts with the plain line. Logs `{ tabId, machineId, installed, reason }` only, never the token.
  */
-async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvider, tab: { tab_id: string; name: string }): Promise<TabMcpOutcome> {
+async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvider, tab: { tab_id: string; name: string }, aiMemoryMcpUrl: string | null = null): Promise<TabMcpOutcome> {
   const url = config.mcpUrl;
   let reason: keyof typeof MCP_SKIPPED | null = null;
   if (!url) reason = 'no_mcp_url';
@@ -759,7 +786,8 @@ async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvide
   else {
     try {
       const { token } = await mintTabToken(ctx.repos, ctx.scope.user.id, { id: tab.tab_id, name: tab.name });
-      const [file, body] = provider === 'claude' ? (['mcp.json', mcpConfig(url, token, TAB_MCP_SERVER)] as const) : (['token', token] as const);
+      const config = mcpConfig(url, token, TAB_MCP_SERVER);
+      const [file, body] = provider === 'claude' ? (['mcp.json', aiMemoryMcpUrl ? withAiMemoryServer(config, aiMemoryMcpUrl) : config] as const) : (['token', token] as const);
       await installTabMcp(machine, tab.tab_id, file, body);
     } catch {
       reason = 'install_failed';
@@ -770,4 +798,24 @@ async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvide
   ctx.log?.info({ tabId: tab.tab_id, machineId: machine.id, installed: reason === null, reason }, 'start_agent: tab mcp');
   if (reason === null && url) return { installed: true, url, note: 'A aba tem o MCP termhub_tab (search_memory) para consultar a memória do projeto.' };
   return { installed: false, note: `A aba abriu sem o MCP de memória: ${MCP_SKIPPED[reason ?? 'install_failed']}.` };
+}
+
+/**
+ * What an automatic Claude run types before its CLI line when ai-memory is on (TER-1020): the prep that gives
+ * the run's worktree the checkout's ai-memory marker and Claude Code's ai-memory hooks
+ * (`aiMemoryRunPrepLine`). Empty for anything else: a tab in the project's own checkout keeps whatever
+ * the person set up there, and Codex hooks need the person's interactive "Trust all", so none are installed.
+ */
+async function aiMemoryPrep(
+  ctx: ControlContext,
+  projectId: string,
+  machine: Machine,
+  provider: AiProvider,
+  aiMemory: { serverUrl: string } | null,
+  permission: AgentPermission | null,
+): Promise<string> {
+  if (!aiMemory || provider !== 'claude' || !permission?.worktree) return '';
+  const { link } = await ctx.scoped.projectMachine(projectId, machine.id);
+  if (link.cwd === permission.worktree) return '';
+  return aiMemoryRunPrepLine(link.cwd, aiMemory.serverUrl);
 }

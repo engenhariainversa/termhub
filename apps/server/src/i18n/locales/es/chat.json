@@ -94,5 +94,7 @@
   "O caminho não é um arquivo": "La ruta no es un archivo",
   "Só dá para permitir sempre uma pasta ao compartilhar um arquivo de uma máquina sua": "Solo se puede permitir siempre una carpeta al compartir un archivo de una de tus máquinas",
   "Tipo de arquivo não compartilhável: só imagens (png, jpg, gif, webp), PDF, Word, Excel, áudio, vídeo e texto": "Tipo de archivo no compartible: solo imágenes (png, jpg, gif, webp), PDF, Word, Excel, audio, video y texto",
-  "Uma aba de agente só compartilha arquivos da própria máquina": "Una pestaña de agente solo comparte archivos de su propia máquina"
+  "Uma aba de agente só compartilha arquivos da própria máquina": "Una pestaña de agente solo comparte archivos de su propia máquina",
+  "A decisão usada expirou ou não vale aqui": "La decisión usada expiró o no vale aquí",
+  "A decisão usada foi substituída": "La decisión usada fue reemplazada"
 }

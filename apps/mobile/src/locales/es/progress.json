@@ -86,5 +86,9 @@
   "{{ref}}: cancelado": "{{ref}}: cancelado",
   "bloqueado": "bloqueado",
   "login expirado": "login caducado",
-  "confiar na pasta?": "¿confiar en la carpeta?"
+  "confiar na pasta?": "¿confiar en la carpeta?",
+  "Motivo: {{why}}": "Motivo: {{why}}",
+  "Precedente: {{ref}}": "Precedente: {{ref}}",
+  "Regra: {{ref}}": "Regla: {{ref}}",
+  "Similaridade: {{score}}%": "Similitud: {{score}}%"
 }

@@ -1,9 +1,9 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { AnsweredChoiceRow, ChatDecision, NewDecision } from '../db/repositories/chat-decisions.js';
+import type { AnsweredChoiceRow, ChatDecision, DecisionNeighbour, DecisionTrust, NewDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import type { AutoSampleSource } from '../db/repositories/chat-auto.js';
-import { answerToDecision, cosine, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, mapNoteAnswer, sameAnswer, type PrecedentItem, type SuggestionItem, type TabQuestionPrecedent, type TabQuestionSuggestion } from './decision-text.js';
+import { answerToDecision, cosine, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, mapNoteAnswer, sameAnswer, type ItemAnswer, type PrecedentItem, type SuggestionItem, type TabQuestionPrecedent, type TabQuestionSuggestion } from './decision-text.js';
 import { recalibrate } from './auto-thresholds.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from './embeddings.js';
 import { checkChoiceAnswer, choiceAnswerBody, choicePayload, type ChoiceAnswer, type ChoicePayload } from './tab-question-payload.js';
@@ -51,6 +51,24 @@ function pick(candidates: Candidate[], high: number): Candidate | undefined {
 }
 
 /**
+ * The past decision a question's suggestion would come from, among its `nearest` neighbours: each one
+ * mapped onto this question's options (a decision whose labels no longer match is skipped), then the
+ * cards' own rule (`pick`, TER-642) — the newest at or above `high`, else the closest — and only when it
+ * is at or above `threshold`. Used by the memory replay (TER-1009), so the replay measures the rule the
+ * cards actually use. `high` left out is `threshold` (one band).
+ */
+export function pickPrecedent(near: DecisionNeighbour[], item: { multi_select: boolean; options: { label: string }[] }, threshold: number, high = threshold): { decision: DecisionNeighbour; mapped: ItemAnswer } | null {
+  const candidates: (Candidate & { neighbour: DecisionNeighbour })[] = [];
+  for (const c of near) {
+    const mapped = mapAnswer(c.answer, item);
+    if (mapped) candidates.push({ ref: `decision:${c.id}`, decision_id: c.id, similarity: c.similarity, at: c.created_at, answer: mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at }, neighbour: c });
+  }
+  const c = pick(candidates, high) as (Candidate & { neighbour: DecisionNeighbour }) | undefined;
+  if (!c || c.similarity < threshold) return null;
+  return { decision: c.neighbour, mapped: c.answer as ItemAnswer };
+}
+
+/**
  * What the person's own memory says about a freshly opened `choice` question (spec 2026-09-26 §4,
  * TER-642): for each question, the nearest past decisions and — when `repos.memoryItems` is given — the
  * nearest notes, each mapped onto this question's own options (a precedent whose answer is not one of
@@ -85,14 +103,16 @@ export async function recallFor(repos: Pick<Repositories, 'users' | 'chatDecisio
       // other empty question and match them at similarity 1.0 — never a real match, so it never even
       // asks `nearest`.
       if (texts[i] === '') continue;
-      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model) });
+      // TER-1014: only precedents that hold on this card — not expired, in scope for its project and conversation.
+      const place = { projectId: row.project_id, conversationId: row.conversation_id };
+      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model), place });
       for (const c of near) {
         const mapped = mapAnswer(c.answer, item);
         if (!mapped) continue; // the past labels no longer match this question's options
         candidates[i]!.push({ ref: `decision:${c.id}`, decision_id: c.id, similarity: c.similarity, at: c.created_at, answer: mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
       }
       if (!repos.memoryItems) continue;
-      for (const n of await repos.memoryItems.nearest({ ownerId: row.user_id, kinds: ['note'] }, vectors[i]!, NOTE_K)) {
+      for (const n of await repos.memoryItems.nearest({ ownerId: row.user_id, kinds: ['note'], place }, vectors[i]!, NOTE_K, model)) {
         const mapped = mapNoteAnswer(n.text, item);
         if (!mapped || embedText({ question: n.title }) === '') continue;
         notes.push({ index: i, id: n.id, title: n.title, candidate: { ref: `note:${n.id}`, decision_id: '', at: n.source_at, answer: mapped, source: { question: n.title, project_name: n.project_name, answered_at: n.source_at } } });
@@ -174,11 +194,12 @@ export async function recordAutoSamples(repos: Pick<Repositories, 'chatAuto'>, r
  * One `NewDecision` per question of an answered `choice` row (spec 2026-09-26 §4.3): `options` drop
  * `recommended` (never stored — a suggestion is only ever ranked on similarity and recency, not on
  * what Claude Code recommended when it was asked). `userId` is the caller's to give: `answered_by` for
- * a live answer, the same column read straight off `AnsweredChoiceRow` for the sweeper's backfill. An
+ * a live answer, the same column read straight off `AnsweredChoiceRow` for the sweeper's backfill.
+ * `trust` is `person` for a click and `derived` for an answer the countdown sent (TER-1006). An
  * unanswered row (`answer` still null — should not happen, the caller only calls this once claimed)
  * gives no decisions rather than throwing.
  */
-export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conversation_id' | 'payload' | 'answer'>, userId: string): NewDecision[] {
+export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conversation_id' | 'payload' | 'answer'>, userId: string, trust: DecisionTrust = 'person'): NewDecision[] {
   if (!row.answer) return [];
   const payload = row.payload as ChoicePayload;
   const answer = row.answer as ChoiceAnswer;
@@ -197,6 +218,7 @@ export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conver
       options: item.options.map((o) => ({ label: o.label, description: o.description })),
       multi_select: item.multi_select,
       answer: answerToDecision(item, { selected: a.selected, text: a.text }),
+      trust,
     });
   }
   return decisions;
@@ -274,6 +296,12 @@ export interface BackfillResult {
  * that, or whose insert itself throws, is skipped rather than aborting the batch — one bad row must
  * never stop every row behind it from being recorded. Returns the number of decisions inserted (not
  * rows visited: a multi-question row gives several) and the skipped row ids.
+ *
+ * Only a click (`answered_via` `'card'`, or null on a row from before the column) is the person's
+ * decision. An answer the countdown sent — a precedent repeated (`'auto'`) or the option a run picked
+ * as "(Recomendado)" (`'automation'`) — is recorded `derived` (TER-1006): kept for `search_memory` and
+ * the "Memória do chat" list, never a precedent for the next automatic answer (spec D2/D11), so the
+ * memory cannot feed on itself.
  */
 export async function backfillDecisions(repos: Pick<Repositories, 'chatDecisions'>, limit = 32, excludeIds: string[] = []): Promise<BackfillResult> {
   const rows: AnsweredChoiceRow[] = await repos.chatDecisions.listAnsweredChoicesWithoutDecision(limit, excludeIds);
@@ -287,7 +315,8 @@ export async function backfillDecisions(repos: Pick<Repositories, 'chatDecisions
         skipped.push(row.id);
         continue;
       }
-      const decisions = decisionsOf({ id: row.id, project_id: row.project_id, conversation_id: row.conversation_id, payload: payload.data, answer: answer.data }, row.answered_by);
+      const trust: DecisionTrust = (row.answered_via ?? 'card') === 'card' ? 'person' : 'derived';
+      const decisions = decisionsOf({ id: row.id, project_id: row.project_id, conversation_id: row.conversation_id, payload: payload.data, answer: answer.data }, row.answered_by, trust);
       if (decisions.length === 0) {
         skipped.push(row.id);
         continue;

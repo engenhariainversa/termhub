@@ -9,6 +9,7 @@ import { syncTickets } from '../control/tickets.js';
 import { setupInputSchema, sourceIdentity, withSourcesFromLegacy } from '../setup/schema.js';
 import { forgetSync } from '../setup/tickets-sync.js';
 import { recordSetupChange } from '../automation/setup-tools.js';
+import { nudgeAiMemoryRules } from '../memory/ai-memory-sync.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -53,6 +54,8 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     // The same for the per-repo overrides (spec 2026-10-07 multi-repo R1): a client that does not know them must not wipe them.
     if (stored.repos && !sent('repos')) data.repos = stored.repos;
     if (stored.repo_defaults && !sent('repo_defaults')) data.repo_defaults = stored.repo_defaults;
+    // Same for ai_memory (TER-1019): a client from before it would turn the option off by leaving it out.
+    if (stored.ai_memory && !sent('ai_memory')) data.ai_memory = stored.ai_memory;
     const kept = new Set(data.ticket_sources.map(sourceIdentity));
     const saved = await repos.projectSetup.save(id, data);
     if (stored.automation) await recordSetupChange(repos, id, stored.automation, saved.data.automation, 'web');
@@ -62,6 +65,9 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     // the sources may have changed: "Sincronizar agora" right after saving must not answer the cached result
     forgetSync(id);
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
+    // Publishes (or, turned off, removes) the rule pages in the background; `fresh` retries checkouts
+    // that had no ai-memory, since the person may just have set it up.
+    if (saved.data.ai_memory?.publish_rules || stored.ai_memory?.publish_rules) nudgeAiMemoryRules(repos, id, request.log, { fresh: true });
     return { setup: saved, effective_repos: await repos.projectRepositories.effective(id, saved.data) };
   });
 

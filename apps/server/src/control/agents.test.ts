@@ -26,6 +26,8 @@ import { ControlError, type ControlContext } from './context.js';
 import { normalizeSetup } from '../setup/schema.js';
 import { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_READ_TOOLS, branchFetchRules, branchPushRules, checkPrompt, runBranchRules, tabIdOfError, CODEX_TAB_MCP_ENABLED, continueLine, DEFAULT_AUTOMATION_TOOLS, launchLine, withSetup, LESSONS_REMINDER, linkTabTask, PROMPT_MAX_CHARS, ORIGIN_REMINDER, RESUME_PROMPT, resumeLine, startAgent, startTabAgent, tabAgentOptions, withLessonsReminder, withOriginReminder } from './agents.js';
 import { TEXT_MAX_CHARS } from '@termhub/agent-protocol';
+import { aiMemoryRunPrepLine } from '@termhub/machine-ops';
+import { AI_MEMORY_HINT, withAiMemoryHint } from '../memory/ai-memory-runs.js';
 
 /** A Claude agent's first prompt: the lessons reminder, then the origin reminder (TER-851). */
 const started = (prompt: string) => withOriginReminder(withLessonsReminder(prompt));
@@ -1274,5 +1276,100 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     await expect(startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { setupCommand: 'npm ci\nrm -rf /' })).rejects.toMatchObject({ code: 'INVALID_SETUP_COMMAND' });
     expect(openTab).not.toHaveBeenCalled();
     expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('ai-memory in the agents termhub starts (TER-1020)', () => {
+  const AIM_MCP = 'http://127.0.0.1:49374/mcp';
+  const AIM_INLINE = `--mcp-config '{"mcpServers":{"ai_memory":{"type":"http","url":"${AIM_MCP}"}}}'`;
+  const WORKTREE = '/home/u/.termhub/worktrees/P1-7';
+  const PERMISSION = { mode: 'auto' as const, allowedTools: ['Bash(npm test:*)'], branch: 'P1-7', worktree: WORKTREE };
+  const ON = { ai_memory: { use_in_runs: true } };
+  const m1 = machines[0]!;
+  const before = { ...m1 };
+  beforeEach(() => {
+    Object.assign(m1, { ai_memory_enabled: true, ai_memory_url: null, agent_version: '0.35.0' });
+  });
+  afterEach(() => {
+    Object.assign(m1, before);
+  });
+  const typed = () => sendTextToSession.mock.calls[0][2] as string;
+
+  it('launchLine: claude gets the server inline before `--`, codex by a -c override; nothing without a URL', () => {
+    expect(launchLine('claude', null, 'x', null, null, null, null, AIM_MCP)).toBe(`${CLEAR_CLAUDE}claude ${AIM_INLINE} -- 'x'`);
+    expect(launchLine('claude', null, 'x', { tabId: 'abc', url: MCP_URL }, null, null, null, AIM_MCP)).toBe(`${CLEAR_CLAUDE}claude ${MCP_FLAGS} ${AIM_INLINE} -- 'x'`);
+    expect(launchLine('chatgpt', null, 'x', null, null, null, null, AIM_MCP)).toBe(`${CLEAR_CODEX}codex --no-alt-screen -c 'mcp_servers.ai_memory.url="${AIM_MCP}"' 'x'`);
+    expect(launchLine('chatgpt', null, 'x', { tabId: 'abc', url: MCP_URL }, null, null, null, AIM_MCP)).toMatch(/TERMHUB_MCP_TOKEN"' -c 'mcp_servers\.ai_memory\.url="http:\/\/127\.0\.0\.1:49374\/mcp"' 'x'$/);
+    const auto = launchLine('claude', null, 'x', null, null, PERMISSION, 'abc', AIM_MCP);
+    expect(auto).toContain(`guard.json' ${AIM_INLINE} -- 'x'`);
+    for (const url of [null, undefined]) expect(launchLine('claude', null, 'x', null, null, null, null, url)).toBe(launchLine('claude', null, 'x'));
+  });
+
+  it('launchLine refuses an ai-memory URL that could break out of the line', () => {
+    for (const bad of ['http://127.0.0.1:1/mcp"; rm', "http://x/'", 'file:///etc']) {
+      expect(() => launchLine('claude', null, 'x', null, null, null, null, bad)).toThrow(ControlError);
+      expect(() => launchLine('chatgpt', null, 'x', null, null, null, null, bad)).toThrow(ControlError);
+    }
+  });
+
+  it('a project without the opt-in starts exactly as before, even on a machine that opted in', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(typed()).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec')));
+    expect(typed()).not.toContain('ai_memory');
+  });
+
+  it('a machine without the opt-in starts exactly as before, even in a project that opted in', async () => {
+    m1.ai_memory_enabled = false;
+    const { c } = ctx(undefined, ON);
+    await startAgent(c, { project_id: 'p1', account_id: 'a2', prompt: 'fix it' });
+    expect(typed()).toBe(launchLine('chatgpt', null, withLessonsReminder('fix it')));
+  });
+
+  it('claude without the tab MCP gets the ai-memory MCP inline, on the machine URL', async () => {
+    m1.ai_memory_url = 'http://192.168.0.9:5000/';
+    const { c } = ctx(undefined, ON);
+    const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(typed()).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec'), null, null, null, null, 'http://192.168.0.9:5000/mcp'));
+    expect(r.note).toContain('MCP ai_memory');
+  });
+
+  it("claude with the tab MCP gets the ai-memory server in the tab's mcp.json, so a resume keeps it", async () => {
+    cfg.mcpUrl = MCP_URL;
+    openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
+    const { c } = ctx(undefined, ON);
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    const [, , file, body] = installTabMcp.mock.calls[0];
+    expect(file).toBe('mcp.json');
+    const servers = JSON.parse(body).mcpServers;
+    expect(Object.keys(servers)).toEqual(['termhub_tab', 'ai_memory']);
+    expect(servers.ai_memory).toEqual({ type: 'http', url: AIM_MCP });
+    expect(typed()).toBe(launchLine('claude', '/Users/p/.claude-work', started('write a spec'), { tabId: 'abc', url: MCP_URL }));
+  });
+
+  it('codex gets the MCP override and the memory_query line in its prompt; no hooks', async () => {
+    const { c } = ctx(undefined, ON);
+    await startAgent(c, { project_id: 'p1', account_id: 'a2', prompt: 'fix it' });
+    expect(typed()).toBe(launchLine('chatgpt', null, withAiMemoryHint(withLessonsReminder('fix it')), null, null, null, null, AIM_MCP));
+    expect(typed()).toContain(AI_MEMORY_HINT.replace(/'/g, `'\\''`));
+    expect(typed()).not.toContain('install-hooks');
+  });
+
+  it("an automatic run prepares its worktree (marker and project hooks) from the project's checkout, before the CLI", async () => {
+    const { c } = ctx(undefined, ON);
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'do the card' }, { cwd: WORKTREE, permission: PERMISSION, setupCommand: 'npm ci' });
+    const cli = launchLine('claude', '/Users/p/.claude-work', started('do the card'), null, null, PERMISSION, 't9', AIM_MCP);
+    expect(typed()).toBe(`eval 'npm ci' ; ${aiMemoryRunPrepLine('/src/p1', 'http://127.0.0.1:49374')}${cli}`);
+  });
+
+  it('a manual tab in the checkout gets no prep: what the person set up there is theirs', async () => {
+    const { c } = ctx(undefined, ON);
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' });
+    expect(typed()).not.toContain('install-hooks');
+  });
+
+  it('gemini and antigravity are not wired: still refused', async () => {
+    const { c } = ctx(undefined, ON);
+    await expect(startAgent(c, { project_id: 'p1', account_id: 'a5', prompt: 'x' })).rejects.toMatchObject({ code: 'PROVIDER_UNSUPPORTED' });
   });
 });

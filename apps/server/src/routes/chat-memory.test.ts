@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { lessonForgetSchema, lessonItemSchema, lessonListSchema } from '@termhub/mobile-api';
+import { decisionStatusResponse, lessonForgetSchema, lessonItemSchema, lessonListSchema, memoryReplacementsResponse, memoryRuleDecisionResponse, memoryRulesResponse, noteStatusResponse } from '@termhub/mobile-api';
 import { config } from '../config.js';
 import { applyErrorHandler } from '../lib/errors.js';
 
@@ -17,6 +17,12 @@ function fakeRepos() {
       listForUser: vi.fn(async () => ({ items: [], next_cursor: null })),
       deleteForUser: vi.fn(async () => true),
       countForUser: vi.fn(async () => 0),
+      replayDataset: vi.fn(async () => ({ decisions: [] as unknown[], older: [] as unknown[], replay: [] as unknown[], scope: [] as unknown[], unembedded: 0 })),
+      findManyForUser: vi.fn(async () => [] as unknown[]),
+    },
+    memoryStatus: {
+      setStatus: vi.fn(async () => 'ok' as string),
+      supersedersOf: vi.fn(async () => new Map<string, { ref: string; title: string }>()),
     },
     memoryItems: {
       listNotes: vi.fn(async () => ({ items: [], next_cursor: null })),
@@ -28,6 +34,7 @@ function fakeRepos() {
       clearVerified: vi.fn(async () => true),
       hideSource: vi.fn(async () => true),
       deleteBySource: vi.fn(async () => 0),
+      findManyForOwner: vi.fn(async () => [] as unknown[]),
     },
     notes: {
       removeBlock: vi.fn(async () => ({ id: 'n1', project_id: 'p1', content: '', updated_at: '2026-09-27T00:00:00.000Z' }) as unknown),
@@ -109,6 +116,46 @@ function build(kind: 'web' | 'mobile', repos: ReturnType<typeof fakeRepos>) {
 beforeEach(() => vi.clearAllMocks());
 
 describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
+  it('GET /memory/report measures only the requester, at the server threshold unless given one', async () => {
+    const repos = fakeRepos();
+    const row = (id: string, created_at: string) => ({
+      id,
+      user_id: 'u1',
+      project_id: 'p1',
+      project_name: 'Proj',
+      conversation_id: 'c1',
+      tab_question_id: `t-${id}`,
+      question_index: 0,
+      header: 'H',
+      question: 'Fazer merge?',
+      options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }],
+      multi_select: false,
+      answer: { labels: ['Sim'] },
+      embed_model: 'm#q1',
+      suggested_count: 0,
+      accepted_count: 0,
+      created_at,
+    });
+    repos.chatDecisions.replayDataset.mockResolvedValueOnce({
+      decisions: [row('d1', '2026-09-01T00:00:00.000Z'), row('d2', '2026-09-02T00:00:00.000Z')],
+      older: [],
+      replay: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      scope: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      unembedded: 3,
+    });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatDecisions.replayDataset).toHaveBeenCalledWith('u1', '#q1', 5, 2000);
+    const body = res.json();
+    expect(body).toMatchObject({ threshold: config.autoAnswerLow, period: 'month', dataset: { decisions: 2, unembedded: 3 } });
+    expect(body.replay).toMatchObject({ total: 2, hit: 1, no_precedent: 1 });
+    expect(body.repeats).toMatchObject({ answers: 2, repeated: 1, same_answer: 1, questions: 1 });
+
+    const custom = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=0.9&period=week' });
+    expect(custom.json()).toMatchObject({ threshold: 0.9, period: 'week' });
+    expect((await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=2' })).statusCode).toBe(400);
+  });
+
   it('GET /decisions passes the user, q, cursor and the fixed page size, and never leaks embedding', async () => {
     const repos = fakeRepos();
     repos.chatDecisions.listForUser.mockResolvedValueOnce({
@@ -129,6 +176,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           embed_model: 'm',
           suggested_count: 2,
           accepted_count: 1,
+          status: 'current',
+          expires_at: null,
+          supersedes: null,
           created_at: '2026-09-26T00:00:00.000Z',
         },
       ],
@@ -153,6 +203,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       suggested_count: 2,
       accepted_count: 1,
       created_at: '2026-09-26T00:00:00.000Z',
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     });
     expect(decision).not.toHaveProperty('embedding');
     expect(decision).not.toHaveProperty('user_id');
@@ -370,6 +423,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           content_hash: 'h',
           source_hash: null,
           embed_model: null,
+          status: 'superseded',
+          expires_at: null,
+          supersedes: null,
           source_at: '2026-09-26T00:00:00.000Z',
           created_at: '2026-09-26T00:00:00.000Z',
           updated_at: '2026-09-26T00:00:00.000Z',
@@ -377,9 +433,11 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       ],
       next_cursor: 'CURSOR',
     });
+    repos.memoryStatus.supersedersOf.mockResolvedValueOnce(new Map([['note:n1', { ref: 'decision:d9', title: 'Qual gerenciador?' }]]));
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/notes?cursor=xyz' });
     expect(res.statusCode).toBe(200);
     expect(repos.memoryItems.listNotes).toHaveBeenCalledWith('u1', { cursor: 'xyz', limit: 50 });
+    expect(repos.memoryStatus.supersedersOf).toHaveBeenCalledWith('u1', ['note:n1']);
     expect(res.json()).toEqual({
       notes: [
         {
@@ -390,6 +448,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           decision: 'npm',
           reason: 'é o padrão do Node',
           created_at: '2026-09-26T00:00:00.000Z',
+          status: 'superseded',
+          expires_at: null,
+          superseded_by: { ref: 'decision:d9', title: 'Qual gerenciador?' },
         },
       ],
       next_cursor: 'CURSOR',
@@ -414,6 +475,9 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           content_hash: 'h',
           source_hash: null,
           embed_model: null,
+          status: 'current',
+          expires_at: null,
+          supersedes: null,
           source_at: '2026-09-26T00:00:00.000Z',
           created_at: '2026-09-26T00:00:00.000Z',
           updated_at: '2026-09-26T00:00:00.000Z',
@@ -431,7 +495,79 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       decision: '',
       reason: '',
       created_at: '2026-09-26T00:00:00.000Z',
+      status: 'current',
+      expires_at: null,
+      superseded_by: null,
     });
+  });
+
+  const decisionRow = (over: Record<string, unknown> = {}) => ({
+    id: 'd1', user_id: 'u1', project_id: 'p1', project_name: 'Proj', conversation_id: null, tab_question_id: null, question_index: 0,
+    header: 'H', question: 'Q?', options: [{ label: 'a', description: '' }], multi_select: false, answer: { labels: ['a'] },
+    embed_model: null, suggested_count: 0, accepted_count: 0, auto_count: 0, status: 'current', expires_at: null, supersedes: null,
+    created_at: '2026-09-26T00:00:00.000Z', ...over,
+  });
+
+  it('PUT /decisions/:id/status marks the requester\'s decision and answers it as the list shows it (TER-1013)', async () => {
+    const repos = fakeRepos();
+    repos.chatDecisions.findManyForUser.mockResolvedValueOnce([decisionRow({ status: 'wrong' })]);
+    const res = await build(kind, repos).inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'wrong' } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryStatus.setStatus).toHaveBeenCalledWith('u1', { kind: 'decision', id: 'd1' }, 'wrong', undefined);
+    expect(repos.chatDecisions.findManyForUser).toHaveBeenCalledWith(['d1'], 'u1');
+    expect(decisionStatusResponse.parse(res.json()).decision).toMatchObject({ id: 'd1', status: 'wrong', superseded_by: null });
+  });
+
+  it('PUT /notes/:id/status superseded passes the replacement and shows it', async () => {
+    const repos = fakeRepos();
+    repos.memoryStatus.supersedersOf.mockResolvedValueOnce(new Map([['note:n1', { ref: 'decision:d2', title: 'Nova?' }]]));
+    repos.memoryItems.findManyForOwner.mockResolvedValueOnce([
+      { id: 'n1', owner_id: 'u1', project_id: null, project_name: null, kind: 'note', source_id: 'n1', chunk_index: 0, title: 'T', text: 'Decisão: x', trust: 'derived', status: 'superseded', expires_at: null, supersedes: null, created_at: '2026-09-26T00:00:00.000Z' },
+    ]);
+    const res = await build(kind, repos).inject({ method: 'PUT', url: '/chat/notes/n1/status', payload: { status: 'superseded', superseded_by: 'decision:d2' } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryStatus.setStatus).toHaveBeenCalledWith('u1', { kind: 'note', id: 'n1' }, 'superseded', { kind: 'decision', id: 'd2' });
+    expect(noteStatusResponse.parse(res.json()).note).toMatchObject({ id: 'n1', status: 'superseded', superseded_by: { ref: 'decision:d2', title: 'Nova?' } });
+  });
+
+  it('PUT .../status refuses superseded without a replacement, a bad ref, and an unknown status', async () => {
+    const repos = fakeRepos();
+    const app = build(kind, repos);
+    for (const payload of [{ status: 'superseded' }, { status: 'superseded', superseded_by: 'task:x' }, { status: 'gone' }]) {
+      expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload })).statusCode).toBe(400);
+    }
+    expect(repos.memoryStatus.setStatus).not.toHaveBeenCalled();
+  });
+
+  it('PUT .../status answers 404 for someone else\'s item and maps the replacement refusals', async () => {
+    const repos = fakeRepos();
+    const app = build(kind, repos);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('not_found');
+    expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'outdated' } })).statusCode).toBe(404);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('self');
+    expect((await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'superseded', superseded_by: 'decision:d1' } })).statusCode).toBe(400);
+    repos.memoryStatus.setStatus.mockResolvedValueOnce('replacement_taken');
+    const taken = await app.inject({ method: 'PUT', url: '/chat/decisions/d1/status', payload: { status: 'superseded', superseded_by: 'note:n2' } });
+    expect(taken.statusCode).toBe(409);
+    expect(taken.json().code).toBe('REPLACEMENT_TAKEN');
+  });
+
+  it('GET /memory/replacements offers current items only, never the one being marked', async () => {
+    const repos = fakeRepos();
+    repos.chatDecisions.listForUser.mockResolvedValueOnce({
+      items: [decisionRow({ id: 'd1' }), decisionRow({ id: 'd2', status: 'wrong' }), decisionRow({ id: 'd3', created_at: '2026-09-28T00:00:00.000Z' })],
+      next_cursor: null,
+    });
+    repos.memoryItems.listNotes.mockResolvedValueOnce({
+      items: [{ id: 'n1', project_id: null, project_name: null, kind: 'note', title: 'Nota', text: 'Decisão: y', status: 'current', created_at: '2026-09-27T00:00:00.000Z' }],
+      next_cursor: null,
+    });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/replacements?q=abc&exclude=decision:d1' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatDecisions.listForUser).toHaveBeenCalledWith('u1', expect.objectContaining({ q: 'abc' }));
+    const body = memoryReplacementsResponse.parse(res.json());
+    expect(body.items.map((i) => i.ref)).toEqual(['decision:d3', 'note:n1']);
+    expect(body.items[1]).toMatchObject({ kind: 'note', title: 'Nota', detail: 'y' });
   });
 
   it('DELETE /notes/:id calls deleteNote scoped to this user and answers 204 whether or not it existed (another user\'s note, or a non-note item, survive)', async () => {
@@ -462,6 +598,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
           excerpt: 'Causa: ...\nCorreção: ...',
           origin: 'file',
           path: 'docs/lessons/2026-09-27-x.md',
+          ai_memory: null,
           tab_id: null,
           card: 'TER-57',
           pr: 'https://github.com/x/y/pull/169',
@@ -600,6 +737,28 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     }
   });
 
+  it('GET /lessons shows an ai-memory lesson (TER-1021) as file to older apps, with its machine and kind in ai_memory', async () => {
+    const repos = fakeRepos();
+    const meta = { evidence: 'observed', card: null, pr: null, tags: ['rule'], agent: null, tab_id: null, origin: 'ai-memory', path: 'termhub/_rules/a.md', machine_id: 'm1', machine_name: 'hulk', ai_memory_kind: 'rule' };
+    repos.memoryItems.listLessons.mockResolvedValueOnce({ items: [lessonItem({ meta, source_id: 'L1:ai-memory/termhub/_rules/a.md' })], next_cursor: null });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/lessons' });
+    expect(res.json().lessons[0]).toMatchObject({ origin: 'file', path: 'termhub/_rules/a.md', ai_memory: { machine_name: 'hulk', kind: 'rule' }, verified: false });
+    if (kind === 'mobile') {
+      const parsed = lessonListSchema.safeParse(res.json());
+      expect(parsed.success, JSON.stringify(!parsed.success && parsed.error.issues)).toBe(true);
+    }
+  });
+
+  it('DELETE /lessons/:id on an ai-memory lesson hides it and says the page stays on the machine', async () => {
+    const repos = fakeRepos();
+    repos.memoryItems.findLessonForOwner.mockResolvedValueOnce(lessonItem({ meta: { evidence: 'observed', card: null, pr: null, tags: [], agent: null, tab_id: null, origin: 'ai-memory', path: 'p/gotchas/a.md' } }));
+    const res = await build(kind, repos).inject({ method: 'DELETE', url: '/chat/lessons/l1' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.memoryItems.hideSource).toHaveBeenCalledWith('l1', 'u1');
+    expect(repos.memoryItems.deleteBySource).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ ok: true, note: 'A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada' });
+  });
+
   it('DELETE /lessons/:id on someone else\'s id (or a non-lesson) is a 404, never a 403', async () => {
     const repos = fakeRepos();
     repos.memoryItems.findLessonForOwner.mockResolvedValueOnce(null);
@@ -607,5 +766,67 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(404);
     expect(repos.memoryItems.hideSource).not.toHaveBeenCalled();
     expect(repos.notes.removeBlock).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(['web', 'mobile'] as const)('%s current rules routes (TER-1010)', (kind) => {
+  /** The 4-project case: the same permission noted in 4 projects, and the rules repository kept in memory. */
+  function rulesRepos() {
+    const repos = fakeRepos();
+    let rows: Record<string, unknown>[] = [];
+    const memoryRules = {
+      listForOwner: vi.fn(async () => rows),
+      // The same note in a fifth project was marked wrong (TER-1013): it is not a source.
+      listSources: vi.fn(async () =>
+        ['p1', 'p2', 'p3', 'p4', 'p5'].map((p, i) => ({ ref: `note:n${i}`, project_id: p, project_name: p, title: 'Testes?', text: 'Decisão: Pode rodar os testes de banco sem perguntar\nMotivo: x\nFontes: ', answer: null, current: p !== 'p5', created_at: `2026-10-0${i + 1}T00:00:00.000Z` })),
+      ),
+      similarPairs: vi.fn(async () => []),
+      syncProposals: vi.fn(async (_owner: string, candidates: { kind: string; project_id: string | null; text: string; policy: unknown; source_refs: string[]; fingerprint: string }[]) => {
+        rows = candidates.map((c, i) => ({ id: `r${i}`, owner_id: 'u1', project_name: null, status: 'proposed', note_id: null, decided_at: null, decided_by: null, created_at: '2026-10-07T00:00:00.000Z', ...c }));
+      }),
+      findForOwner: vi.fn(async (id: string) => rows.find((r) => r.id === id) ?? null),
+      decide: vi.fn(async (id: string, _o: string, from: string[], to: string) => {
+        const row = rows.find((r) => r.id === id);
+        if (!row || !from.includes(row.status as string)) return null;
+        row.status = to;
+        row.decided_at = '2026-10-07T01:00:00.000Z';
+        return row;
+      }),
+    };
+    const projectSetup = { get: vi.fn(async () => ({ data: { automation: { autonomy: 'pr', max_parallel: 1 } } })) };
+    projectsOwned(repos);
+    return { repos: { ...repos, memoryRules, projectSetup }, memoryRules };
+  }
+  const projectsOwned = (repos: ReturnType<typeof fakeRepos>) => repos.projects.findById.mockImplementation(async (id: string) => ({ id, owner_id: 'u1', name: id, key: 'K' }));
+
+  it('GET /rules consolidates the same permission in 4 projects into one user-level proposal', async () => {
+    const { repos } = rulesRepos();
+    const res = await build(kind, repos as never).inject({ method: 'GET', url: '/chat/rules' });
+    expect(res.statusCode).toBe(200);
+    const body = memoryRulesResponse.parse(res.json());
+    expect(body.rules).toEqual([]);
+    expect(body.proposals).toHaveLength(1);
+    expect(body.proposals[0]).toMatchObject({ kind: 'rule', project: null, text: 'Pode rodar os testes de banco sem perguntar' });
+    expect(body.proposals[0]!.sources.map((s) => s.ref)).toEqual(['note:n0', 'note:n1', 'note:n2', 'note:n3']);
+  });
+
+  it('POST /rules/:id/reject stores the rejection; a second decision is a 409', async () => {
+    const { repos, memoryRules } = rulesRepos();
+    const app = build(kind, repos as never);
+    await app.inject({ method: 'GET', url: '/chat/rules' });
+    const res = await app.inject({ method: 'POST', url: '/chat/rules/r0/reject', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(memoryRuleDecisionResponse.parse(res.json()).rule.status).toBe('rejected');
+    expect(memoryRules.decide).toHaveBeenCalledWith('r0', 'u1', ['proposed'], 'rejected', 'u1');
+    const again = await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: {} });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe('RULE_DECIDED');
+  });
+
+  it('POST /rules/:id/approve validates the body, and 404s an unknown id', async () => {
+    const { repos } = rulesRepos();
+    const app = build(kind, repos as never);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: { text: 'x'.repeat(1001) } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/nope/approve', payload: {} })).statusCode).toBe(404);
   });
 });

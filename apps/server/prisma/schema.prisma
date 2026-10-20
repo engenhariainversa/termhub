@@ -96,6 +96,7 @@ model User {
   chatContextLimit        Int?                     @map("chat_context_limit")
   memoryItems             MemoryItem[]
   verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
+  memoryRules             MemoryRule[]
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
   fileGrants              ChatFileGrant[]
@@ -247,6 +248,10 @@ model Machine {
   aiUsageQuery          Boolean            @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed     Boolean            @default(true) @map("automation_allowed")
+  /// TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
+  aiMemoryEnabled       Boolean            @default(false) @map("ai_memory_enabled")
+  /// Its local server, loopback or private network only (null = http://127.0.0.1:49374)
+  aiMemoryUrl           String?            @map("ai_memory_url")
   /// TER-614: the machine's hook script lets a Claude permission prompt of a command or file tool travel
   /// whole, and the card shows a filtered excerpt of it. Opt-in (off by default); mirrored on the machine
   /// by ~/.termhub/permission-hint, which only the switch writes.
@@ -267,6 +272,8 @@ model Machine {
   uploads               Upload[]
   /// Conversations hosted here (the chat's "terminal geral"); deleting the machine nulls the column.
   chatConversations     ChatConversation[]
+  /// Rule pages termhub wrote to ai-memory on this machine (TER-1019).
+  aiMemoryPages         AiMemoryPage[]
 
   @@index([ownerId])
   @@map("machines")
@@ -292,6 +299,9 @@ model Project {
   lastTerminalAt      DateTime?           @map("last_terminal_at")
   /// Per-project pause of the automatic work (agentic board). Null = not paused.
   automationPausedAt  DateTime?           @map("automation_paused_at") @db.Timestamptz
+  /// TER-1021: import the deliberate ai-memory pages (`_rules/`, `gotchas/`, `decisions/`) of the
+  /// project's checkouts as unverified lessons. Off by default.
+  aiMemoryLessons     Boolean             @default(false) @map("ai_memory_lessons")
   createdAt           DateTime            @default(now()) @map("created_at")
   owner               User?               @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   /// Machines this project runs on, each with its own working directory.
@@ -308,6 +318,7 @@ model Project {
   chatDecisions       ChatDecision[]
   groupItems          ProjectGroupItem[]
   memoryItems         MemoryItem[]
+  memoryRules         MemoryRule[]
   agentColumn         TaskColumn?         @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
   columns             TaskColumn[]        @relation("ProjectColumns")
@@ -319,6 +330,8 @@ model Project {
   tabUsageDays        TabUsageDay[]
   /// AI accounts only this project may run on (TER-990)
   exclusiveAiAccounts AiAccount[]
+  /// Current rules published as pinned ai-memory pages on the project's machines (TER-1019)
+  aiMemoryPages       AiMemoryPage[]
 
   @@index([ownerId])
   @@map("projects")
@@ -774,6 +787,26 @@ model TabUsageDay {
   @@index([projectId, day])
   @@index([taskId])
   @@map("tab_usage_days")
+}
+
+/// A current rule termhub published as a pinned ai-memory page in one checkout of a machine (TER-1019):
+/// what it wrote, so it knows what to delete and skips a page whose content did not change.
+model AiMemoryPage {
+  projectId   String   @map("project_id")
+  machineId   String   @map("machine_id")
+  /// the checkout the page was written in (the link's cwd then): deletes still reach it after an unlink
+  cwd         String
+  /// `_rules/termhub-<slug>-<note id>.md`
+  path        String
+  /// sha256 of the page's title and body
+  hash        String
+  publishedAt DateTime @default(now()) @map("published_at") @db.Timestamptz
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  machine     Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, machineId, cwd, path])
+  @@index([machineId])
+  @@map("ai_memory_pages")
 }
 
 /// An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
@@ -1469,6 +1502,22 @@ model ChatDecision {
   /// Times this decision backed an automatic answer sent by the countdown (spec §D11); those answers
   /// are never recorded as a new row, so this is the only trace of them on the source decision.
   autoCount      Int                         @default(0) @map("auto_count")
+  /// Where the decision holds (TER-1014): conversation | project | user. Card answers are `user`, as
+  /// they always were account-wide precedents.
+  scope          String                      @default("user")
+  /// When the decision stops holding (TER-1014, or "Desatualizada" on the Memória screen, TER-1013, which
+  /// sets it to now); null = never. A row past it is out of the default search and never a precedent.
+  /// "Errada" sets wrongAt; "Substituída por…" (or a `record_decision` note that replaced it, TER-1015)
+  /// sets supersededAt here and puts this row's ref (`decision:<id>`) in `supersedes` of the row that
+  /// replaces it.
+  expiresAt      DateTime?                   @map("expires_at")
+  wrongAt        DateTime?                   @map("wrong_at")
+  supersededAt   DateTime?                   @map("superseded_at")
+  /// The ref (`decision:<id>` / `note:<id>`) of the row this one replaces.
+  supersedes     String?
+  /// `person` (the person clicked the card) | `derived` (the countdown answered it, TER-1006): only a
+  /// `person` decision is ever a precedent for a suggestion or an automatic answer (spec D2/D11).
+  trust          String                      @default("person")
   createdAt      DateTime                    @default(now()) @map("created_at")
 
   @@index([userId, createdAt])
@@ -1479,45 +1528,94 @@ model ChatDecision {
 /// message the person typed, a gate decision, a spec/plan section or a note. Decisions answered on a
 /// card live in `chat_decisions`. `embedding` is pgvector, read and written in raw SQL.
 model MemoryItem {
-  id           String                      @id
-  ownerId      String                      @map("owner_id")
-  owner        User                        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  projectId    String?                     @map("project_id")
-  project      Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             String                      @id
+  ownerId        String                      @map("owner_id")
+  owner          User                        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  projectId      String?                     @map("project_id")
+  project        Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   /// task | message | action | doc | note | lesson | project_note
-  kind         String
-  sourceId     String                      @map("source_id")
-  chunkIndex   Int                         @default(0) @map("chunk_index")
-  title        String
-  text         String
+  kind           String
+  sourceId       String                      @map("source_id")
+  chunkIndex     Int                         @default(0) @map("chunk_index")
+  title          String
+  text           String
   /// person | derived
-  trust        String
-  contentHash  String                      @map("content_hash")
+  trust          String
+  contentHash    String                      @map("content_hash")
   /// A doc file's sha256 (docs sweeper skips unchanged files); null for other kinds.
-  sourceHash   String?                     @map("source_hash")
-  embedding    Unsupported("vector(384)")?
-  embedModel   String?                     @map("embed_model")
+  sourceHash     String?                     @map("source_hash")
+  embedding      Unsupported("vector(384)")?
+  embedModel     String?                     @map("embed_model")
   /// Set by "Verificar" on a lesson (chunk 0): who and when. `verified` = verifiedAt set and
   /// verifiedHash still matches contentHash (spec 2026-09-27 failure lessons §3, D8).
-  verifiedAt   DateTime?                   @map("verified_at")
-  verifiedBy   String?                     @map("verified_by")
-  verifier     User?                       @relation("MemoryItemVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
-  verifiedHash String?                     @map("verified_hash")
+  verifiedAt     DateTime?                   @map("verified_at")
+  verifiedBy     String?                     @map("verified_by")
+  verifier       User?                       @relation("MemoryItemVerifier", fields: [verifiedBy], references: [id], onDelete: SetNull)
+  verifiedHash   String?                     @map("verified_hash")
   /// Set by "Esquecer" on a file lesson to the item's contentHash (spec §3): search and the lessons
   /// list skip a row while hiddenHash still matches contentHash; a re-indexed file with new content
   /// (new hash) comes back as a fresh, unverified lesson.
-  hiddenHash   String?                     @map("hidden_hash")
+  hiddenHash     String?                     @map("hidden_hash")
   /// Lesson metadata (spec §3): { evidence, card, pr, tags, agent, tab_id, origin, path }. Null for
   /// every other kind.
-  meta         Json?
-  sourceAt     DateTime                    @map("source_at")
-  createdAt    DateTime                    @default(now()) @map("created_at")
-  updatedAt    DateTime                    @updatedAt @map("updated_at")
+  meta           Json?
+  /// A note's scope (TER-1014): conversation | project | user. Null = written before it, read as
+  /// `project` when the note has a project, else `user`. Null for every other kind.
+  scope          String?                     @map("scope")
+  /// The chat conversation a note was recorded in (TER-1014); null for every other kind.
+  conversationId String?                     @map("conversation_id")
+  /// When a note stops holding (TER-1014); null = never. Memory status (TER-1013), same meaning as on
+  /// `ChatDecision`; only ever set on a `note`. A newer `record_decision` note also sets supersededAt
+  /// (TER-1015): out of the default search and the conflict check.
+  expiresAt      DateTime?                   @map("expires_at")
+  wrongAt        DateTime?                   @map("wrong_at")
+  supersededAt   DateTime?                   @map("superseded_at")
+  /// The ref (`note:<id>` / `decision:<id>`) of the row this one replaces (TER-1013 / TER-1015).
+  supersedes     String?                     @map("supersedes")
+  sourceAt       DateTime                    @map("source_at")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
 
   @@unique([kind, sourceId, chunkIndex])
   @@index([ownerId, kind])
   @@index([ownerId, projectId])
   @@map("memory_items")
+}
+
+/// A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that
+/// say the same thing, consolidated per project, or per user when the same permission shows up in two or
+/// more projects. Nothing here applies itself: a `proposed` row waits for the person. Approving a `rule`
+/// makes it `approved` and supersedes its `source_refs`; approving a `policy` asks one
+/// `set_automation_policy` card per project (`awaiting_confirmation`) and only those cards change the
+/// Setup. A `rejected` row keeps the same proposal from coming back for 180 days.
+model MemoryRule {
+  id          String    @id
+  ownerId     String    @map("owner_id")
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Null = a rule at the user level (every project of the owner).
+  projectId   String?   @map("project_id")
+  project     Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// rule | policy
+  kind        String
+  /// proposed | awaiting_confirmation | approved | rejected
+  status      String
+  text        String
+  /// A `policy` row: { autonomy?, max_parallel?, project_ids[], applied[] }. Null for a `rule`.
+  policy      Json?
+  /// The memory refs (`note:<id>`, `decision:<id>`) the rule was consolidated from.
+  sourceRefs  Json      @map("source_refs")
+  /// sha256 of kind, scope, policy and the sorted refs: the same proposal is the same row.
+  fingerprint String
+  /// The `note` memory item an approved rule is indexed as, so search finds the rule instead of its sources.
+  noteId      String?   @map("note_id")
+  decidedAt   DateTime? @map("decided_at")
+  decidedBy   String?   @map("decided_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([ownerId, fingerprint])
+  @@index([ownerId, status])
+  @@map("memory_rules")
 }
 
 /// A secret this instance generates for itself, once, and keeps: no env var to configure, and blue

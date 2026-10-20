@@ -37,6 +37,7 @@ import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-atta
 import { ChatDecisionsRepository } from './chat-decisions.js';
 import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
+import { MemoryStatusRepository } from './memory-status.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
 import { DeviceRequestsRepository } from './device-requests.js';
@@ -55,11 +56,13 @@ import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
 import { TabUsageRepository } from './tab-usage.js';
+import { MemoryRulesRepository } from './memory-rules.js';
 import { LegalRepository } from './legal.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
 import { SupportRepository } from './support.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
+import { AiMemoryPagesRepository } from './ai-memory-pages.js';
 
 export interface Repositories {
   users: UsersRepository;
@@ -100,6 +103,8 @@ export interface Repositories {
   chatDecisions: ChatDecisionsRepository;
   chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
+  memoryRules: MemoryRulesRepository;
+  memoryStatus: MemoryStatusRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
   deviceRequests: DeviceRequestsRepository;
@@ -123,6 +128,7 @@ export interface Repositories {
   securityEvents: SecurityEventsRepository;
   support: SupportRepository;
   featureFlags: FeatureFlagsRepository;
+  aiMemoryPages: AiMemoryPagesRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
 }
@@ -167,6 +173,8 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatDecisions: new ChatDecisionsRepository(db),
     chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
+    memoryRules: new MemoryRulesRepository(db),
+    memoryStatus: new MemoryStatusRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
     deviceRequests: new DeviceRequestsRepository(db),
@@ -190,6 +198,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     securityEvents: new SecurityEventsRepository(db),
     support: new SupportRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
+    aiMemoryPages: new AiMemoryPagesRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
 }
@@ -226,6 +235,7 @@ export type { TaskPullRequest, PullRequestInfo, PrState, CiState, CiSummary } fr
 export { WATCH_MERGED_FOR_MS } from './task-pull-requests.js';
 export type { PurgedAccount, AccountDeletionLink } from './account-deletion.js';
 export type { PauseState } from './automation-pauses.js';
+export type { AiMemoryPageRow } from './ai-memory-pages.js';
 export type { UsageCursor, UsageTokens, UsageWrite, UsageSum } from './tab-usage.js';
 export type { AutomationEvent, AutomationEventKind, AutomationEventPayload, AutomationEventInput } from './automation-events.js';
 export { ACCESS_LOG_RETENTION_MS, type AccessLogInput } from './access-logs.js';

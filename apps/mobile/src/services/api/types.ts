@@ -32,6 +32,8 @@ import type {
   TLessonItem,
   TLessonsResponse,
   TMeResponse,
+  TMemoryRule,
+  TMemoryRulesResponse,
   TMobileBatchDecisionBody,
   TLegalStatus,
   TDecisionChallengesBody,
@@ -39,6 +41,10 @@ import type {
   TMobileDecisionBody,
   TMobileMessageBody,
   TNotesResponse,
+  TChatDecision,
+  TConciergeNote,
+  TMemoryReplacementsResponse,
+  TMemoryStatus,
   TNotificationsResponse,
   TProgressResponse,
   TAutomationSetup,
@@ -245,6 +251,12 @@ export interface MobileApi {
   /** Idempotent and silent about whether `id` ever existed, was someone else's, or was some other
    *  memory kind — always 204. */
   forgetChatNote(auth: Auth, id: string): Promise<void>;
+  /** "Desatualizada" / "Errada" / "Substituída por…" (TER-1013); `current` is "Desfazer". Answers the
+   *  item as its list shows it; 404 for another user's row, 400/409 for a replacement the server refuses. */
+  setChatDecisionStatus(auth: Auth, id: string, status: TMemoryStatus, supersededBy?: string): Promise<TChatDecision>;
+  setChatNoteStatus(auth: Auth, id: string, status: TMemoryStatus, supersededBy?: string): Promise<TConciergeNote>;
+  /** "Substituída por…"'s picker: the user's current decisions and notes matching `q`, never `exclude`. */
+  chatMemoryReplacements(auth: Auth, q: string, exclude: string): Promise<TMemoryReplacementsResponse>;
   /** "Lições" (spec 2026-09-27 failure lessons §6/§8): the twin of the web's
    *  `api.chat.lessons.list`/`verify`/`unverify`/`forget`. Newest `source_at` first, 50 per page;
    *  `q` filters title/text, `cursor` is `next_cursor`. No PIN. */
@@ -257,6 +269,16 @@ export interface MobileApi {
   /** "Esquecer": `note` is present only for a file-origin lesson, saying the file itself stays in
    *  the repository until a PR removes it. 404 for another user's row (or not a lesson at all). */
   forgetChatLesson(auth: Auth, id: string): Promise<TLessonForgetResponse>;
+  /** "Regras vigentes" (TER-1010): the twin of the web's `api.chat.rules`. The server consolidates
+   *  on this read, then answers the approved rules and the proposals waiting for the person. No PIN. */
+  chatRules(auth: Auth): Promise<TMemoryRulesResponse>;
+  /** "Aprovar": a rule is approved at once; a policy goes to `awaiting_confirmation` and asks one
+   *  card per project in the chat. 409 when the proposal was already decided. */
+  approveChatRule(auth: Auth, id: string): Promise<TMemoryRule>;
+  /** "Recusar": the same proposal stays away for 180 days. */
+  rejectChatRule(auth: Auth, id: string): Promise<TMemoryRule>;
+  /** "Remover regra": an approved rule only (404 otherwise); its sources are current again. */
+  removeChatRule(auth: Auth, id: string): Promise<void>;
 
   // notifications (P§9)
   notifications(auth: Auth, before?: string): Promise<TNotificationsResponse>;

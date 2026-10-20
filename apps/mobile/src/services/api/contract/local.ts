@@ -27,6 +27,7 @@ import {
   decisionChallengesBody,
   decisionChallengesResponse,
   decisionsResponse,
+  decisionStatusResponse,
   decisionViewSchema,
   deviceActivateBody,
   deviceActivateResponse,
@@ -40,6 +41,13 @@ import {
   lessonForgetSchema,
   lessonItemSchema,
   lessonListSchema,
+  memoryRuleDecisionResponse,
+  memoryRuleSchema,
+  memoryRulesResponse,
+  memoryReplacementsResponse,
+  memoryReplacementView,
+  memoryStatusSchema,
+  noteStatusResponse,
   mobileBatchDecisionBody,
   mobileDecisionBody,
   mobileMessageBody,
@@ -285,11 +293,23 @@ export type TChatMemory = z.infer<typeof chatMemoryResponse>;
 export type TChatMemoryPatchBody = z.infer<typeof chatMemoryPatchBody>;
 export type TConciergeNote = z.infer<typeof conciergeNoteView>;
 export type TNotesResponse = z.infer<typeof notesResponse>;
+// TER-1013: "Desatualizada" / "Errada" / "Substituída por…" on a decision or a note — mirrors the web's
+// `setDecisionStatus`/`setNoteStatus`/`memoryReplacements`.
+export type TMemoryStatus = z.infer<typeof memoryStatusSchema>;
+export type TMemoryReplacement = z.infer<typeof memoryReplacementView>;
+export type TMemoryReplacementsResponse = z.infer<typeof memoryReplacementsResponse>;
+export type TDecisionStatusResponse = z.infer<typeof decisionStatusResponse>;
+export type TNoteStatusResponse = z.infer<typeof noteStatusResponse>;
 // "Lições" (spec 2026-09-27 failure lessons §6/§8): mirrors `apps/web/src/lib/api.ts`'s
 // `api.chat.lessons.list`/`verify`/`unverify`/`forget`.
 export type TLessonItem = z.infer<typeof lessonItemSchema>;
 export type TLessonsResponse = z.infer<typeof lessonListSchema>;
 export type TLessonForgetResponse = z.infer<typeof lessonForgetSchema>;
+// "Regras vigentes" (TER-1010, spec 2026-10-07 current rules): the approved rules, the proposals and
+// one decision's answer — mirrors the web's `api.chat.rules`.
+export type TMemoryRule = z.infer<typeof memoryRuleSchema>;
+export type TMemoryRulesResponse = z.infer<typeof memoryRulesResponse>;
+export type TMemoryRuleDecisionResponse = z.infer<typeof memoryRuleDecisionResponse>;
 export type TTabSuggestion = z.infer<typeof tabSuggestionSchema>;
 export type TTabSuggestionSendBody = z.infer<typeof tabSuggestionSendBody>;
 // The project's AI accounts and models, and the usage-limit card (spec 2026-09-30 project AI accounts

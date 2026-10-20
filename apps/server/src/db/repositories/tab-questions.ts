@@ -47,7 +47,8 @@ export interface AutoAnswer {
   claimed_at?: string;
   /** TER-642, on an answer backed by memory: the similarity that decided it (the lowest of the card's
    *  questions), the person's thresholds at that moment, and the band it fell in — `high` is sent at
-   *  once, `mid` after the countdown. Absent on an `automation` answer and on rows from before. */
+   *  once, `mid` after the countdown. Absent on an `automation` answer and on rows from before. The
+   *  feed's score too (TER-1011). */
   score?: number;
   thresholds?: { high: number; low: number };
   band?: 'high' | 'mid';

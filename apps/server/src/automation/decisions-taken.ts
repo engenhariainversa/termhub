@@ -2,7 +2,7 @@ import { defaultEmbedder, type Embedder } from '../chat/embeddings.js';
 import { NOTES_PER_HOUR } from '../control/memory.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
-import { indexNote, type MemoryDeps } from '../memory/index-items.js';
+import { indexNote, noteItem, type MemoryDeps } from '../memory/index-items.js';
 import { recordEvent } from './events.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -56,14 +56,14 @@ export async function recordTakenDecisions(
       room--;
       await indexNote(
         repos,
-        {
+        noteItem({
           owner_id: ownerId,
           project_id: run.project_id,
           question: task ? `${task.ref}: ${d.question}` : d.question,
           decision: d.options ? `${d.choice} (opções: ${d.options})` : d.choice,
           reason: d.reason,
           sources: run.task_id ? [`task:${run.task_id}`] : [],
-        },
+        }),
         { embedder, log: deps.log as unknown as MemoryDeps['log'] },
       );
     }

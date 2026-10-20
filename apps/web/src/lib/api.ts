@@ -4,6 +4,7 @@ import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, Netwo
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
+import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
 import type { LegalStatus } from './types';
 import type { WebSession } from './types';
 
@@ -216,6 +217,7 @@ export const api = {
     /** TER-614: the machine's opt-in to permission hints; the server changes the machine first, then the row. */
     setPermissionHint: (id: string, enabled: boolean) => request<{ machine: Machine }>('PUT', `/machines/${id}/permission-hint`, { enabled }),
     networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
+    aiMemory: (id: string) => request<AiMemoryState>('GET', `/machines/${id}/ai-memory`),
     /** TER-1080: IPs and MACs as the agent last reported them, kept while the machine sleeps */
     network: (id: string) => request<MachineNetworkInfo>('GET', `/machines/${id}/network`),
     /** Wake-on-LAN through another online machine of the same network (`via` picks it; default: the first that fits) */
@@ -307,6 +309,14 @@ export const api = {
         /** "Esquecer": a note-origin lesson is removed outright; a file-origin one is only hidden here
          *  (the file stays in the repository until a PR removes it) — `note` carries that sentence. */
         forget: (id: string) => request<{ ok: true; note?: string }>('DELETE', `/chat/lessons/${encodeURIComponent(id)}`),
+      },
+      /** "Regras vigentes" (TER-1010): `list` consolidates first. Approving a policy only asks its
+       *  `set_automation_policy` cards; rejecting keeps the proposal away for 180 days. */
+      rules: {
+        list: () => request<{ rules: MemoryRule[]; proposals: MemoryRule[] }>('GET', '/chat/rules'),
+        approve: (id: string, text?: string) => request<{ rule: MemoryRule }>('POST', `/chat/rules/${encodeURIComponent(id)}/approve`, text ? { text } : {}),
+        reject: (id: string) => request<{ rule: MemoryRule }>('POST', `/chat/rules/${encodeURIComponent(id)}/reject`, {}),
+        remove: (id: string) => request<void>('DELETE', `/chat/rules/${encodeURIComponent(id)}`),
       },
     },
   ),
@@ -441,6 +451,18 @@ export const api = {
   },
   /** "Esquecer" a concierge note: hard delete, 204 even if it was already gone or someone else's. */
   forgetChatNote: (id: string) => request<void>('DELETE', `/chat/notes/${encodeURIComponent(id)}`),
+  /** "Desatualizada" / "Errada" / "Substituída por…" on a decision or a note (TER-1013); `current` is
+   *  "Desfazer". Answers the item as its list shows it. */
+  setDecisionStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ decision: ChatDecision }>('PUT', `/chat/decisions/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  setNoteStatus: (id: string, status: MemoryStatus, supersededBy?: string) =>
+    request<{ note: ConciergeNote }>('PUT', `/chat/notes/${encodeURIComponent(id)}/status`, { status, superseded_by: supersededBy }),
+  /** "Substituída por…"'s picker: current decisions and notes matching `q`, never `exclude` (the item being marked). */
+  memoryReplacements: (q: string, exclude: string) => {
+    const params = new URLSearchParams({ exclude });
+    if (q) params.set('q', q);
+    return request<{ items: MemoryReplacement[] }>('GET', `/chat/memory/replacements?${params.toString()}`);
+  },
   monitor: {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */

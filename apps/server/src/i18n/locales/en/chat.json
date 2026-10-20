@@ -94,5 +94,7 @@
   "O caminho não é um arquivo": "The path is not a file",
   "Só dá para permitir sempre uma pasta ao compartilhar um arquivo de uma máquina sua": "A folder can only be always allowed when sharing a file from one of your machines",
   "Tipo de arquivo não compartilhável: só imagens (png, jpg, gif, webp), PDF, Word, Excel, áudio, vídeo e texto": "File type cannot be shared: only images (png, jpg, gif, webp), PDF, Word, Excel, audio, video and text",
-  "Uma aba de agente só compartilha arquivos da própria máquina": "An agent tab only shares files from its own machine"
+  "Uma aba de agente só compartilha arquivos da própria máquina": "An agent tab only shares files from its own machine",
+  "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here",
+  "A decisão usada foi substituída": "The decision used was replaced"
 }

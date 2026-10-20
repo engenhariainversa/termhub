@@ -120,6 +120,10 @@ export interface Machine {
   ai_usage_query: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
+  /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
+  ai_memory_enabled: boolean;
+  /** its local server (loopback/private origin); null = AI_MEMORY_DEFAULT_URL */
+  ai_memory_url: string | null;
   /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
   permission_hint: boolean;
   /** the user's own computer: the web app shows it only in the browser that added it */
@@ -151,6 +155,8 @@ export interface Project {
   public_id: string;
   /** column a card moves to when an agent starts on it; null = automatic (first `doing` column) */
   agent_column_id: string | null;
+  /** TER-1021: deliberate ai-memory pages of its checkouts are imported as unverified lessons */
+  ai_memory_lessons: boolean;
   last_terminal_at: string | null;
   created_at: string;
 }
@@ -392,6 +398,8 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   claude_auto_swap: m.claudeAutoSwap,
   ai_usage_query: m.aiUsageQuery,
   automation_allowed: m.automationAllowed,
+  ai_memory_enabled: m.aiMemoryEnabled,
+  ai_memory_url: m.aiMemoryUrl ?? null,
   permission_hint: m.permissionHint,
   is_local: m.isLocal,
   owner_id: m.ownerId,
@@ -410,6 +418,7 @@ export const mapProject = (p: PrismaProject): Project => ({
   is_public: p.isPublic,
   public_id: publicId('project', p.id),
   agent_column_id: p.agentColumnId,
+  ai_memory_lessons: p.aiMemoryLessons,
   last_terminal_at: iso(p.lastTerminalAt),
   created_at: p.createdAt.toISOString(),
 });

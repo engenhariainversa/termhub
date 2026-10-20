@@ -171,6 +171,13 @@ const envSchema = z.object({
    *  (spec 2026-09-26 concierge memory D6, §6); it only counts while termhub is in focus (TER-642).
    *  Bounded so a typo can neither remove the undo window nor leave a tab waiting for ten minutes. */
   AUTO_ANSWER_DELAY_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
+  /** cosine similarity (0..1) at which two concierge notes, or two decisions with the same answer, count
+   *  as the same rule when consolidating current rules (TER-1010); word overlap groups them too. */
+  RULES_SIMILARITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.9),
+  /** the least cosine similarity (0..1) between a new `record_decision` note and a current note or card
+   *  decision of the same scope for the server to answer "conflicts with X, replace it?" instead of
+   *  recording (TER-1015). 1 turns the check off. */
+  DECISION_CONFLICT_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
   /** at most this many concierge wake turns per conversation per hour (spec 2026-09-26 concierge
    *  memory D10): each is a run on the person's own Claude account. 0 disables every wake. */
   AUTO_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(12),
@@ -308,6 +315,8 @@ export const config = {
   autoAnswerHigh: env.AUTO_ANSWER_HIGH_SIMILARITY,
   autoAnswerLow: Math.min(env.AUTO_ANSWER_LOW_SIMILARITY, env.AUTO_ANSWER_HIGH_SIMILARITY),
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
+  rulesSimilarityThreshold: env.RULES_SIMILARITY_THRESHOLD,
+  decisionConflictMinSimilarity: env.DECISION_CONFLICT_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
   securityEventRetentionDays: env.SECURITY_EVENT_RETENTION_DAYS,
   automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,

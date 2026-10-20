@@ -3,7 +3,7 @@ import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { MemoryItem, NewMemoryItem } from '../db/repositories/memory-items.js';
 import type { Task } from '../db/repositories/types.js';
 import { EmbedError } from '../chat/embeddings.js';
-import { embedPendingItems, indexActions, indexMessage, indexNote, indexTasks } from './index-items.js';
+import { embedPendingItems, indexActions, indexMessage, indexNote, indexTasks, noteItem } from './index-items.js';
 import { ITEM_TEXT_MAX } from './text.js';
 
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
@@ -332,20 +332,40 @@ describe('indexNote', () => {
   it('writes a note item whose source_id is its own id', async () => {
     const memoryItems = fakeMemoryItems();
     const note = { owner_id: 'u1', project_id: 'p1', question: 'Isolamento?', decision: 'Usar git worktree', reason: 'evita conflito', sources: ['decision:d1', 'task:t1'] };
-    const item = await indexNote({ memoryItems } as never, note, { embedder: null, log: log() });
+    const item = await indexNote({ memoryItems } as never, noteItem(note), { embedder: null, log: log() });
     expect(memoryItems.upsertMany).toHaveBeenCalledTimes(1);
     const [inserted] = memoryItems.upsertMany.mock.calls[0]![0] as NewMemoryItem[];
     expect(inserted!.id).toBeTruthy();
     expect(inserted!.source_id).toBe(inserted!.id);
     expect(inserted).toMatchObject({ owner_id: 'u1', project_id: 'p1', kind: 'note', chunk_index: 0, title: 'Isolamento?', trust: 'derived' });
     expect(inserted!.text).toBe('Decisão: Usar git worktree\nMotivo: evita conflito\nFontes: decision:d1, task:t1');
-    expect(item.id).toBe(inserted!.id);
+    expect(item!.id).toBe(inserted!.id);
+  });
+
+  it('with supersedes, writes through insertNoteSuperseding and resolves null when the target is gone (TER-1015)', async () => {
+    const insertNoteSuperseding = vi.fn(async () => null);
+    const memoryItems = fakeMemoryItems({ insertNoteSuperseding });
+    const note = noteItem({ owner_id: 'u1', project_id: null, question: 'Q', decision: 'D', reason: 'R', sources: [] });
+    const r = await indexNote({ memoryItems } as never, note, { embedder: null, log: log(), supersedes: { kind: 'note', id: 'n0' } });
+    expect(r).toBeNull();
+    expect(insertNoteSuperseding).toHaveBeenCalledWith(note, { kind: 'note', id: 'n0' });
+    expect(memoryItems.upsertMany).not.toHaveBeenCalled();
+    expect(memoryItems.setEmbedding).not.toHaveBeenCalled();
+  });
+
+  it('stores a vector the caller already computed instead of embedding again (TER-1015)', async () => {
+    const memoryItems = fakeMemoryItems();
+    const e = embedder();
+    const note = noteItem({ owner_id: 'u1', project_id: null, question: 'Q', decision: 'D', reason: 'R', sources: [] });
+    const row = await indexNote({ memoryItems } as never, note, { embedder: e, log: log(), embedding: { model: 'm', vector: [0, 1] } });
+    expect(memoryItems.setEmbedding).toHaveBeenCalledWith(row!.id, [0, 1], 'm');
+    expect(e.embed).not.toHaveBeenCalled();
   });
 
   it('throws when the repository rejects, so the caller (the tool) can report it', async () => {
     const memoryItems = fakeMemoryItems({ upsertMany: vi.fn(async () => { throw new Error('db down'); }) });
     const note = { owner_id: 'u1', project_id: null, question: 'Q', decision: 'D', reason: 'R', sources: [] as string[] };
-    await expect(indexNote({ memoryItems } as never, note, { embedder: null, log: log() })).rejects.toThrow('db down');
+    await expect(indexNote({ memoryItems } as never, noteItem(note), { embedder: null, log: log() })).rejects.toThrow('db down');
   });
 });
 

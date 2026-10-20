@@ -3,6 +3,7 @@ import type { TabState } from '../db/repositories/types.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { escalationEventText } from '../automation/escalation-text.js';
 import { t, tk, type Locale } from '../i18n/index.js';
+import { whyText } from '../automation/why.js';
 import { NEEDS_YOU, contractStateOf } from '../monitor/state.js';
 import { estimateCard } from './estimate.js';
 
@@ -208,7 +209,8 @@ export const FEED_KINDS = [
   'run_started', 'run_resumed', 'run_done', 'run_blocked', 'question_answered', 'escalated', 'pr_opened', 'merged', 'merge_needs_approval', 'deploy_ok', 'deploy_failed',
   'release_ok', 'release_failed', 'quota_hit', 'quota_reset', 'paused', 'resumed', 'budget_hit', 'budget_warning', 'ci_fix_requested', 'worktree_cleanup',
   'automation_on', 'automation_off', 'setup_changed', 'tagged', 'untagged', 'machine_opt_in', 'machine_opt_out',
-  // TER-974: a cancelled run, and the TER-993 lines both clients already write
+  // TER-974: a cancelled run, and the TER-993 lines both clients already write; TER-1011: every
+  // automatic answer is in the feed with its why, permissions included
   'run_cancelled', 'permission_auto_approved', 'guard_blocked',
   // TER-1025
   'deploy_retried', 'github_wait', 'trust_auto_accepted',
@@ -288,6 +290,10 @@ export function feedOf(rows: FeedRow[], locale: Locale, includeAgents = true): A
       reason_text: reasonTextOf(e, p, locale),
       // the tool a permission_auto_approved / guard_blocked line names (TER-993)
       tool: str(p.tool),
+      // TER-1011: why an automatic answer or an escalation happened, the rule or precedent, its similarity
+      why_text: whyText(str(p.why), locale),
+      rule_ref: str(p.rule_ref),
+      score: num(p.score),
       // the decision a decided_by_recommendation line names (TER-1043)
       summary: str(p.summary),
     };

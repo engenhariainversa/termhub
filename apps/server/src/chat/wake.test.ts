@@ -4,7 +4,7 @@ import type { AutoAnswer, TabQuestion } from '../db/repositories/tab-questions.j
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import type { ChatService } from './service.js';
-import { createWaker, wakeText } from './wake.js';
+import { createWaker, stoppedTabWakeText, wakeText } from './wake.js';
 
 const cleanPayload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
 const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
@@ -50,7 +50,7 @@ describe('wakeText', () => {
   });
 });
 
-function fakeRepos(opts: { autodecide?: boolean; markWoken?: boolean; user?: User | undefined } = {}) {
+function fakeRepos(opts: { autodecide?: boolean; markWoken?: boolean; user?: User | undefined; notes?: unknown[] } = {}) {
   return {
     users: {
       chatAutodecide: vi.fn(async () => opts.autodecide ?? true),
@@ -58,6 +58,9 @@ function fakeRepos(opts: { autodecide?: boolean; markWoken?: boolean; user?: Use
     },
     tabQuestions: {
       markWoken: vi.fn(async () => opts.markWoken ?? true),
+    },
+    memoryItems: {
+      currentNotes: vi.fn(async () => opts.notes ?? []),
     },
   };
 }
@@ -148,6 +151,24 @@ describe('createWaker', () => {
     const waker = createWaker({ repos: asRepos(repos), chat, maxPerHour: 12, log: log() });
     expect(await waker.wake(row(), 'api')).toBe(true);
     expect(chat.wake).toHaveBeenCalledWith(user, 'c1', wakeText(row(), 'api'));
+  });
+
+  it("TER-1011: the wake carries the project's current rules, read for the card's owner and project", async () => {
+    const repos = fakeRepos({ notes: [{ id: 'n2', title: 'Modo de permissão', text: 'Decisão: modo auto\nMotivo: m\nFontes: ', project_id: 'p1' }] });
+    const chat = fakeChat();
+    const waker = createWaker({ repos: asRepos(repos), chat, maxPerHour: 12, log: log() });
+    expect(await waker.wake(row(), 'api')).toBe(true);
+    expect(repos.memoryItems.currentNotes).toHaveBeenCalledWith(user.id, row().project_id, expect.any(Number));
+    const text = vi.mocked(chat.wake).mock.calls[0]![2] as string;
+    expect(text.startsWith(wakeText(row(), 'api'))).toBe(true);
+    expect(text).toContain('Regras vigentes do projeto');
+    expect(text).toContain('- [note:n2] «Modo de permissão»: «modo auto»');
+  });
+
+  it('TER-1011: the stopped-tab wake text ends with the rules when there are any', () => {
+    const i = { runId: 'r1', tabId: 't1', cardRef: 'TER-1', cardTitle: 'x', tabName: 'api' };
+    expect(stoppedTabWakeText(i, null)).toBe(stoppedTabWakeText(i));
+    expect(stoppedTabWakeText(i, 'Regras vigentes do projeto: …')).toBe(`${stoppedTabWakeText(i)}\n\nRegras vigentes do projeto: …`);
   });
 
   it('fix round 1: a run that fails after the wake started (its `done`) never becomes an unhandled rejection', async () => {

@@ -172,6 +172,10 @@ export interface Machine {
    * Absent from servers before it.
    */
   agent_credential?: 'key' | 'bearer' | null;
+  /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
+  ai_memory_enabled?: boolean;
+  /** its local server; null = the default `http://127.0.0.1:49374` */
+  ai_memory_url?: string | null;
   /** server-computed: the connected agent is older than the latest on npm (absent for offline/non-agent) */
   update_available?: boolean;
   /** TER-1056, server-computed: the agent is older than the server's minimum (it updates itself once idle, switch or not) */
@@ -241,6 +245,8 @@ export interface Project {
   public_id: string;
   /** column a card moves to when an agent starts on it; null = automatic (first "Fazendo"). The board reads it from the tasks list. */
   agent_column_id?: string | null;
+  /** TER-1021: deliberate ai-memory pages of its checkouts come in as unverified lessons (opt-in) */
+  ai_memory_lessons?: boolean;
   /** tasks em "todo" + "doing" (vem na listagem) */
   open_tasks?: number;
 }
@@ -264,6 +270,8 @@ export interface ProjectInput {
   create_dir?: boolean;
   /** edit only (a project is born private): publishes it on the owner's public city */
   is_public?: boolean;
+  /** edit only (TER-1021): import deliberate ai-memory pages as unverified lessons */
+  ai_memory_lessons?: boolean;
 }
 
 export type TaskStatus = 'backlog' | 'todo' | 'doing' | 'done';
@@ -452,6 +460,12 @@ export interface AutomationFeedEvent {
   paused: boolean | null;
   /** the tool a permission_auto_approved / guard_blocked line names (TER-993) */
   tool: string | null;
+  /** TER-1011: why an automatic answer or an escalation happened (reader's language); absent from an older server */
+  why_text?: string | null;
+  /** TER-1011: the precedent (`decision:<id>`, `note:<id>`) or allow rule it rests on */
+  rule_ref?: string | null;
+  /** TER-1011: the precedent's similarity, 0..1 */
+  score?: number | null;
   /** TER-1043: the decision a decided_by_recommendation line names; absent from an older server */
   summary?: string | null;
 }
@@ -666,6 +680,8 @@ export interface ProjectSetupData {
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
   /** absent from an older server; the form sends back what it received */
   automation?: ProjectAutomation;
+  /** TER-1019 (use_in_runs: TER-1020); absent from an older server */
+  ai_memory?: { publish_rules: boolean; use_in_runs?: boolean };
 }
 
 export interface ProjectSetup {
@@ -785,6 +801,11 @@ export interface TabEvent {
 }
 
 /** Monitor hooks on a machine (GET /machines/:id/hooks). */
+/** GET /machines/:id/ai-memory: off → not probed; on → what the machine reported. */
+export type AiMemoryState =
+  | { enabled: false; url: string }
+  | { enabled: true; url: string; checked_at: string; installed: boolean; version: string | null; server_up: boolean };
+
 export interface MachineHooks {
   installed_at: string | null;
   hooks_url: string;
@@ -1625,6 +1646,27 @@ export interface ChatDecision {
   suggested_count: number;
   accepted_count: number;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
+}
+/** Where a decision or a concierge note stands on the Memória screen (TER-1013): vigente, desatualizada,
+ * errada or substituída por outro item. Anything but `current` is out of the default memory search and
+ * never a precedent. */
+export type MemoryStatus = 'current' | 'outdated' | 'wrong' | 'superseded';
+/** The item that replaces a `superseded` one (`null` when it was forgotten since). */
+export interface MemorySuperseder {
+  ref: string;
+  title: string;
+}
+/** One candidate of the "Substituída por…" picker (`GET /chat/memory/replacements`). */
+export interface MemoryReplacement {
+  ref: string;
+  kind: 'decision' | 'note';
+  title: string;
+  detail: string;
+  project_name: string | null;
+  created_at: string;
 }
 /** `GET /chat/memory`: the suggestion switch, "Responder sozinho quando houver precedente" (spec D8),
  * whether embeddings are configured on this server at all (`available: false` hides both switches
@@ -1660,6 +1702,9 @@ export interface ConciergeNote {
   decision: string;
   reason: string;
   created_at: string;
+  status: MemoryStatus;
+  expires_at: string | null;
+  superseded_by: MemorySuperseder | null;
 }
 
 /** "Lições" (spec 2026-09-27 failure lessons §6/§8): one `lesson` item (chunk 0), as the "Lições"
@@ -1671,8 +1716,11 @@ export interface LessonItem {
   project: { id: string; name: string } | null;
   title: string;
   excerpt: string;
+  /** An ai-memory lesson answers `file` here (for older app builds); `ai_memory` tells it apart. */
   origin: 'file' | 'note';
   path: string | null;
+  /** TER-1021: a deliberate ai-memory page read from a machine (`path` is then relative to its wiki). */
+  ai_memory?: { machine_name: string | null; kind: string | null } | null;
   tab_id: string | null;
   card: string | null;
   pr: string | null;
@@ -1680,6 +1728,25 @@ export interface LessonItem {
   verified: boolean;
   verified_at: string | null;
   created_at: string;
+}
+
+/** "Regras vigentes" (TER-1010): an approved rule, or a proposal waiting for the person. `project` null =
+ * a rule at the user level. A `policy` row widens the automatic-work Setup of `policy.projects`, only
+ * through the `set_automation_policy` cards it asks once approved (`awaiting_confirmation` meanwhile). */
+export interface MemoryRule {
+  id: string;
+  kind: 'rule' | 'policy';
+  status: 'proposed' | 'awaiting_confirmation' | 'approved' | 'rejected';
+  project: { id: string; name: string } | null;
+  text: string;
+  policy: {
+    autonomy: 'pr' | 'merge' | 'deploy' | 'release' | null;
+    max_parallel: number | null;
+    projects: { id: string; name: string; applied: boolean }[];
+  } | null;
+  sources: { ref: string; title: string; statement: string; project_name: string | null }[];
+  created_at: string;
+  decided_at: string | null;
 }
 
 export type TabSuggestionStatus = TabQuestionStatus | 'dismissed';

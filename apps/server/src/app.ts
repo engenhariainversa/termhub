@@ -60,6 +60,7 @@ import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
+import { startAiMemoryRulesSweeper } from './memory/ai-memory-sync.js';
 import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
@@ -85,6 +86,8 @@ import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
 import { MERGE_TOOL } from './automation/merge.js';
+import { applyPolicyCard, POLICY_TOOL } from './memory/rules-service.js';
+import { defaultEmbedder } from './chat/embeddings.js';
 import { startSummaryTimer } from './automation/summary.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
 import { followAgentUpdate } from './agent/after-update.js';
@@ -423,6 +426,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
   const stopMemorySweeper = startMemorySweeper(repos, fastify.log);
+  const stopAiMemoryRules = startAiMemoryRulesSweeper(repos, fastify.log);
   // Live concierge runs survive a restart or a deploy (spec 2026-09-26 panel §3): this instance proves
   // its own are alive, picks up those another instance released or left stale (once shortly after
   // boot, then on a timer), and releases its own on a graceful shutdown. Each call logs its own
@@ -462,6 +466,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // merge card in the chat merges that PR once (F-19).
   const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
+  // A policy proposal of "Regras vigentes" (TER-1010) changes the Setup only through these cards; the hook
+  // leaves the concierge's own `set_automation_policy` cards alone (they have no `memory_rule:` key).
+  chat.onApproved(POLICY_TOOL, (action) => applyPolicyCard(repos, action, { embedder: defaultEmbedder(), log: fastify.log, threshold: config.rulesSimilarityThreshold }));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
   // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
@@ -490,6 +497,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopStaleWorking();
     stopDecisionSweeper();
     stopMemorySweeper();
+    stopAiMemoryRules();
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
     await automation.stop();

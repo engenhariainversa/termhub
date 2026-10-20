@@ -11,6 +11,9 @@ import { effectiveRepos } from '../setup/repos.js';
 import { normalizeSetup, SETUP_VERSION, type ProjectSetupData } from '../setup/schema.js';
 import { forgetSync } from '../setup/tickets-sync.js';
 import { setupRoutes } from './setup.js';
+import { nudgeAiMemoryRules } from '../memory/ai-memory-sync.js';
+
+vi.mock('../memory/ai-memory-sync.js', () => ({ nudgeAiMemoryRules: vi.fn() }));
 
 vi.mock('../setup/tickets-sync.js', () => ({
   syncProjectTickets: vi.fn(async () => ({ sources: [{ provider: 'github', integration_id: 'g', scope: 'a/b', error: 'Falha ao consultar github: 401' }], synced_at: 'now' })),
@@ -115,6 +118,32 @@ describe('setup PUT and the automation block', () => {
     const sent = (save.mock.calls[0][1] as { automation: { enabled: boolean; autonomy: string } }).automation;
     expect(sent.enabled).toBe(false);
     expect(sent.autonomy).toBe('pr');
+  });
+});
+
+describe('setup PUT and the ai_memory block (TER-1019)', () => {
+  it('a client that leaves the block out keeps the stored option, and the save nudges the sync', async () => {
+    const { app, save } = build([], undefined, undefined, { ai_memory: { publish_rules: true } });
+    vi.mocked(nudgeAiMemoryRules).mockClear();
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { ticket_sources: [] } });
+    expect(res.statusCode).toBe(200);
+    expect((save.mock.calls[0][1] as { ai_memory: unknown }).ai_memory).toEqual({ publish_rules: true });
+    expect(nudgeAiMemoryRules).toHaveBeenCalledWith(expect.anything(), 'p1', expect.anything(), { fresh: true });
+  });
+
+  it('turning it off is saved and still nudges (the pages are removed)', async () => {
+    const { app, save } = build([], undefined, undefined, { ai_memory: { publish_rules: true } });
+    vi.mocked(nudgeAiMemoryRules).mockClear();
+    await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { ticket_sources: [], ai_memory: { publish_rules: false } } });
+    expect((save.mock.calls[0][1] as { ai_memory: unknown }).ai_memory).toEqual({ publish_rules: false, use_in_runs: false });
+    expect(nudgeAiMemoryRules).toHaveBeenCalledOnce();
+  });
+
+  it('never nudges a project that does not use the option', async () => {
+    const { app } = build([], undefined, undefined, { ai_memory: { publish_rules: false } });
+    vi.mocked(nudgeAiMemoryRules).mockClear();
+    await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { ticket_sources: [] } });
+    expect(nudgeAiMemoryRules).not.toHaveBeenCalled();
   });
 });
 

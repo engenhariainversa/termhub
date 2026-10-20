@@ -90,5 +90,13 @@
   "Esta versão não está aguardando o seu aceite. Recarregue a página e tente de novo.": "Esta versión no está esperando tu aceptación. Recarga la página e inténtalo de nuevo.",
   "Uma nova versão que pede aceite só pode valer daqui a 30 dias ou mais, para dar tempo do aviso.": "Una nueva versión que pide aceptación solo puede entrar en vigor dentro de 30 días o más, para dar tiempo al aviso.",
   "Esse documento já tem uma versão com esse número.": "Ese documento ya tiene una versión con ese número.",
-  "Não foi possível mudar a opção na máquina": "No se pudo cambiar la opción en la máquina"
+  "Não foi possível mudar a opção na máquina": "No se pudo cambiar la opción en la máquina",
+  "O item escolhido para substituir não foi encontrado": "No se encontró el elemento elegido para reemplazar",
+  "Um item não pode substituir a si mesmo": "Un elemento no puede reemplazarse a sí mismo",
+  "O item escolhido já substitui outro; desfaça aquela substituição antes": "El elemento elegido ya reemplaza a otro; deshaz ese reemplazo antes",
+  "Este item já substitui o escolhido; desfaça aquela substituição antes": "Este elemento ya reemplaza al elegido; deshaz ese reemplazo antes",
+  "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "La dirección de ai-memory debe ser local (127.0.0.1, localhost) o de red privada",
+  "Esta proposta já foi decidida": "Esta propuesta ya fue decidida",
+  "Nenhum projeto desta proposta continua seu": "Ningún proyecto de esta propuesta sigue siendo tuyo",
+  "A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada": "La página sigue en el ai-memory de la máquina; si cambia, vuelve como lección no verificada"
 }

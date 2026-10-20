@@ -37,6 +37,11 @@ const decision = (over: Partial<ChatDecision> & { id: string }): ChatDecision =>
   suggested_count: 0,
   accepted_count: 0,
   auto_count: 0,
+  scope: 'user',
+  status: 'current',
+  expires_at: null,
+  supersedes: null,
+  trust: 'person',
   created_at: '2026-09-24T10:00:00.000Z',
   ...over,
 });
@@ -93,6 +98,12 @@ describe('precedentBacks', () => {
     const d = decision({ id: 'd1' });
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [1] }] })).toBe(false);
     expect(precedentBacks([d], two, { answers: [{ selected: [0] }, { selected: [0] }] })).toBe(true);
+  });
+
+  it('a decision marked desatualizada, errada or substituída is no precedent (TER-1013)', () => {
+    for (const status of ['outdated', 'wrong', 'superseded'] as const) {
+      expect(precedentBacks([decision({ id: 'd1', status })], payload, { answers: [{ selected: [0] }] })).toBe(false);
+    }
   });
 
   it('no decisions backs nothing', () => {
@@ -179,6 +190,20 @@ describe('maybeScheduleRepeat', () => {
     expect(publishTabQuestions).not.toHaveBeenCalled();
   });
 
+  it('never repeats from a decision that expired or is scoped to another conversation (TER-1014)', async () => {
+    for (const over of [{ expires_at: '2026-09-26T11:59:00.000Z' }, { scope: 'conversation' as const, conversation_id: 'c-other' }]) {
+      const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', ...over })]);
+      expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+      expect(setAutoAnswer).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a suggested decision the countdown made (trust derived) is no precedent: null (TER-1006)', async () => {
+    const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', trust: 'derived' })]);
+    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+    expect(setAutoAnswer).not.toHaveBeenCalled();
+  });
+
   describe('similarity bands (TER-642)', () => {
     it('between the thresholds: a 60 s countdown that only runs in focus, paused while nobody is looking', async () => {
       const { repos, setAutoAnswer } = reposFor();
@@ -234,7 +259,7 @@ describe('maybeScheduleRepeat', () => {
       expect(setAutoAnswer.mock.calls[0]![1]).toMatchObject({ band: 'mid', thresholds: { high: 0.99, low: 0.97 } });
     });
 
-    const note = (text: string) => ({ id: 'n1', kind: 'note', text });
+    const note = (text: string) => ({ id: 'n1', kind: 'note', text, status: 'current', scope: 'user', project_id: null, conversation_id: null, expires_at: null, superseded_at: null });
     const noteItem = (over: Partial<SuggestionItem> = {}) => item({ decision_id: '', sources: ['note:n1'], ...over });
 
     it('a note whose decision is one of the options backs the answer like a decision', async () => {
@@ -334,6 +359,12 @@ describe('maybeScheduleRepeat', () => {
     expect(await maybeScheduleRepeat(same.repos, row({ payload: { questions: [described('rodar os testes de novo')] }, suggestion: { items: [item()] } }), now)).not.toBeNull();
   });
 
+  it('a cited decision a newer one replaced (TER-1015) → null: never a precedent', async () => {
+    const { repos, setAutoAnswer } = reposFor(true, [decision({ id: 'd1', superseded_at: '2026-10-03T12:04:00.000Z' })]);
+    expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
+    expect(setAutoAnswer).not.toHaveBeenCalled();
+  });
+
   it('a cited decision forgotten since the suggestion (or another user\'s) → null', async () => {
     const { repos, setAutoAnswer } = reposFor(true, []);
     expect(await maybeScheduleRepeat(repos, row({ suggestion: { items: [item()] } }), now)).toBeNull();
@@ -364,7 +395,7 @@ describe('sendDueAutoAnswers', () => {
   const now = () => new Date('2026-09-26T12:01:05.000Z');
   const user = { id: 'u1', email: 'a@x', name: 'Ana', nickname: 'ana', role_id: 'r1', password_hash: 'h' };
   const log = () => ({ info: vi.fn(), warn: vi.fn() });
-  function fake(opts: { claimOnce?: boolean; user?: typeof user | undefined; autodecide?: boolean; decisions?: string[]; auto?: Partial<AutoAnswer> } = {}) {
+  function fake(opts: { claimOnce?: boolean; user?: typeof user | undefined; autodecide?: boolean; decisions?: string[]; auto?: Partial<AutoAnswer>; decisionOver?: Partial<ChatDecision> } = {}) {
     const due = row({ auto_answer: scheduled(opts.auto) });
     let claimed = false;
     const tabQuestions = {
@@ -381,7 +412,7 @@ describe('sendDueAutoAnswers', () => {
       users: { findById: vi.fn(async (id: string) => ('user' in opts ? opts.user : id === 'u1' ? user : undefined)), chatAutodecide: vi.fn(async () => opts.autodecide ?? true) },
       chatDecisions: {
         bumpAuto: vi.fn(async () => {}),
-        findManyForUser: vi.fn(async (ids: string[], userId: string) => (userId === 'u1' ? ids.filter((id) => (opts.decisions ?? ['d1', 'd2']).includes(id)).map((id) => decision({ id })) : [])),
+        findManyForUser: vi.fn(async (ids: string[], userId: string) => (userId === 'u1' ? ids.filter((id) => (opts.decisions ?? ['d1', 'd2']).includes(id)).map((id) => decision({ id, ...opts.decisionOver })) : [])),
       },
       roles: { findById: vi.fn(async () => ({ id: 'r1', name: 'x', is_admin: false })), permissionsOf: vi.fn(async () => []) },
     };
@@ -510,6 +541,34 @@ describe('sendDueAutoAnswers', () => {
     expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
   });
 
+  it('a cited decision that expired mid-countdown, or holds in another project → failed PRECEDENT_EXPIRED, nothing typed (TER-1014)', async () => {
+    for (const decisionOver of [{ expires_at: '2026-09-26T12:01:00.000Z' }, { scope: 'project' as const, project_id: 'p-other' }]) {
+      const { repos, tabQuestions } = fake({ decisionOver });
+      const answer = vi.fn();
+      expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+      expect(answer).not.toHaveBeenCalled();
+      expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_EXPIRED');
+    }
+  });
+
+  it('a cited decision replaced by a newer one mid-countdown → failed PRECEDENT_SUPERSEDED, nothing typed (TER-1015)', async () => {
+    const { repos, tabQuestions } = fake();
+    repos.chatDecisions.findManyForUser.mockImplementationOnce(async (ids: string[]) => ids.map((id) => decision({ id, superseded_at: '2026-10-03T12:04:00.000Z' })));
+    const answer = vi.fn();
+    expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+    expect(answer).not.toHaveBeenCalled();
+    expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_SUPERSEDED');
+  });
+
+  it('a cited decision downgraded to derived meanwhile is no precedent: PRECEDENT_FORGOTTEN (TER-1006)', async () => {
+    const { repos, tabQuestions } = fake();
+    repos.chatDecisions.findManyForUser.mockImplementation(async (ids: string[]) => ids.map((id) => decision({ id, trust: 'derived' })));
+    const answer = vi.fn();
+    expect(await sendDueAutoAnswers(repos as unknown as Repositories, log(), { now, answer })).toBe(0);
+    expect(answer).not.toHaveBeenCalled();
+    expect(tabQuestions.finishAutoAnswer).toHaveBeenCalledWith('q1', 'failed', 'PRECEDENT_FORGOTTEN');
+  });
+
   it("the same check applies to a concierge countdown's decision sources; its memory items are not decisions", async () => {
     const auto = { by: 'concierge' as const, sources: [{ kind: 'decision' as const, id: 'd1' }, { kind: 'decision' as const, id: 'd2' }, { kind: 'doc' as const, id: 'm1' }] };
     const gone = fake({ auto, decisions: ['d1'] });
@@ -532,7 +591,7 @@ describe('sendDueAutoAnswers', () => {
   describe('TER-642', () => {
     const withNotes = (found: string[], auto: Partial<AutoAnswer>) => {
       const f = fake({ auto });
-      const memoryItems = { findManyForOwner: vi.fn(async (ids: string[]) => ids.filter((id) => found.includes(id)).map((id) => ({ id, kind: 'note' }))) };
+      const memoryItems = { findManyForOwner: vi.fn(async (ids: string[]) => ids.filter((id) => found.includes(id)).map((id) => ({ id, kind: 'note', status: 'current', scope: 'user', project_id: null, conversation_id: null, expires_at: null, superseded_at: null }))) };
       const chatAuto = { recordSamples: vi.fn(async () => {}) };
       return { ...f, repos: { ...f.repos, memoryItems, chatAuto }, memoryItems, chatAuto };
     };

@@ -8,17 +8,52 @@ import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { config } from '../config.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
+import { SUGGEST_K } from '../chat/decision-memory.js';
+import { EMBED_TEXT_VERSION } from '../chat/decision-text.js';
+import { memoryReport } from '../chat/memory-report.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
-import { notFound } from '../lib/errors.js';
+import { HttpError, notFound } from '../lib/errors.js';
+import type { Superseder, StatusTarget } from '../db/repositories/memory-status.js';
+import { MEMORY_STATUSES } from '../memory/status.js';
 import { scoped } from '../auth/scope.js';
 import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
-import { requestLocale, t } from '../i18n/index.js';
+import { nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
+import { requestLocale, t, tk } from '../i18n/index.js';
+import type { MemoryRule, RuleSourceRow } from '../db/repositories/memory-rules.js';
+import { approveRule, refreshRules, rejectRule, removeRule, statementOf, type RulesDeps } from '../memory/rules-service.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
 const lessonsQuery = z.object({ q: z.string().trim().max(200).optional(), project_id: z.string().min(1).max(64).optional(), cursor: z.string().max(500).optional() });
+/** `GET /memory/report` (TER-1009): `threshold` defaults to the server's suggestion threshold. */
+const reportQuery = z.object({ threshold: z.coerce.number().min(0).max(1).optional(), period: z.enum(['week', 'month']).default('month') });
 const idParam = z.object({ id: z.string().min(1).max(64) });
+/** "Aprovar" a proposal (TER-1010): the person may reword a rule before approving it. */
+const approveBody = z.object({ text: z.string().trim().min(1).max(1000).optional() }).default({});
+/** A decision's or a note's ref: what "Substituída por…" picks and `supersedes` stores. */
+const STATUS_REF = /^(decision|note):[a-z0-9]{1,64}$/;
+/** `PUT /decisions/:id/status` and `PUT /notes/:id/status` (TER-1013): `current` undoes any mark;
+ *  `superseded` names the item that replaces this one. */
+const statusBody = z
+  .object({ status: z.enum(MEMORY_STATUSES), superseded_by: z.string().regex(STATUS_REF).optional() })
+  .refine((b) => b.status !== 'superseded' || b.superseded_by !== undefined, { message: 'Informe superseded_by', path: ['superseded_by'] });
+const replacementsQuery = z.object({ q: z.string().trim().max(200).optional(), exclude: z.string().regex(STATUS_REF).optional() });
+/** How many items the "Substituída por…" picker offers per kind. */
+const REPLACEMENTS_PER_KIND = 10;
+
+const toTarget = (ref: string): StatusTarget => {
+  const [kind, id] = ref.split(':') as ['decision' | 'note', string];
+  return { kind, id };
+};
+
+/** `setStatus`'s refusals, as the screen shows them. */
+const STATUS_ERRORS = {
+  replacement_not_found: [404, tk('O item escolhido para substituir não foi encontrado'), 'REPLACEMENT_NOT_FOUND'],
+  self: [400, tk('Um item não pode substituir a si mesmo'), 'SELF_REPLACEMENT'],
+  replacement_taken: [409, tk('O item escolhido já substitui outro; desfaça aquela substituição antes'), 'REPLACEMENT_TAKEN'],
+  cycle: [409, tk('Este item já substitui o escolhido; desfaça aquela substituição antes'), 'REPLACEMENT_CYCLE'],
+} as const;
 /** `PATCH /memory` (spec D8/§8): at least one of the switches, never none — an empty body is a
  *  400, not a silent no-op. */
 const memoryBody = z
@@ -38,6 +73,10 @@ const memoryBody = z
 /** `POST /focus` (TER-642): one screen's heartbeat. `client_id` is that screen's own random id. */
 const focusBody = z.object({ client_id: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
 
+/** Newest decisions the memory report measures at most (TER-1009): an exact scan per decision. */
+export const REPORT_DECISIONS = 2000;
+/** Miss cases the report lists at most, newest first. */
+export const REPORT_MISSES = 50;
 /** 50 decisions per page (spec 2026-09-26 §4.6). */
 export const DECISIONS_PAGE = 50;
 /** 50 notes per page (task-10 brief), same page size as decisions. */
@@ -48,7 +87,7 @@ export const LESSONS_PAGE = 50;
 /** The wire shape of one remembered decision: every `ChatDecision` column but `user_id`,
  * `conversation_id`, `tab_question_id`, `question_index` and `embed_model` — none of which the
  * "Memória do chat" screen shows, and the last two of which are implementation detail. */
-function toDecisionView(d: ChatDecision) {
+function toDecisionView(d: ChatDecision, supersededBy: Superseder | null = null) {
   return {
     id: d.id,
     project_id: d.project_id,
@@ -60,6 +99,10 @@ function toDecisionView(d: ChatDecision) {
     answer: d.answer,
     suggested_count: d.suggested_count,
     accepted_count: d.accepted_count,
+    // TER-1013: where the person put it, and (when replaced) the item that replaces it.
+    status: d.status,
+    expires_at: d.expires_at,
+    superseded_by: d.status === 'superseded' ? supersededBy : null,
     created_at: d.created_at,
   };
 }
@@ -77,7 +120,7 @@ function parseNoteText(text: string): { decision: string; reason: string } {
 /** The wire shape of one concierge note (spec D12/§8): `question` is the note's `title`; `decision`
  *  and `reason` are parsed back out of `text`. Never the project id's owner, `source_id`, `trust` or
  *  any other memory-item column the "Anotações do concierge" list has no use for. */
-function toNoteView(item: MemoryItem) {
+function toNoteView(item: MemoryItem, supersededBy: Superseder | null = null) {
   const { decision, reason } = parseNoteText(item.text);
   return {
     id: item.id,
@@ -86,6 +129,9 @@ function toNoteView(item: MemoryItem) {
     question: item.title,
     decision,
     reason,
+    status: item.status,
+    expires_at: item.expires_at,
+    superseded_by: item.status === 'superseded' ? supersededBy : null,
     created_at: item.created_at,
   };
 }
@@ -102,8 +148,12 @@ function toLessonView(item: MemoryItem) {
     project: item.project_id ? { id: item.project_id, name: item.project_name ?? '' } : null,
     title: item.title,
     excerpt: excerpt(item.text),
-    origin: meta?.origin ?? 'file',
+    // Older app builds only know `file` | `note` here (their contract is a closed enum), so an
+    // ai-memory lesson keeps answering `file` and carries its real origin in `ai_memory` (TER-1021).
+    origin: meta?.origin === 'note' ? 'note' : 'file',
     path: meta?.path ?? null,
+    /** TER-1021: set only for a deliberate ai-memory page — its machine (name at import time) and kind. */
+    ai_memory: meta?.origin === 'ai-memory' ? { machine_name: meta.machine_name ?? null, kind: meta.ai_memory_kind ?? null } : null,
     tab_id: meta?.tab_id ?? null,
     card: meta?.card ?? null,
     pr: meta?.pr ?? null,
@@ -111,6 +161,35 @@ function toLessonView(item: MemoryItem) {
     verified: item.verified,
     verified_at: item.verified_at,
     created_at: item.created_at,
+  };
+}
+
+/**
+ * One "Regras vigentes" row (TER-1010): an approved rule or a proposal waiting for the person, with the
+ * notes and decisions it came from (the ones still in memory). A `policy` row names its projects; the
+ * screen words the change from `autonomy`/`max_parallel` itself.
+ */
+function toRuleView(r: MemoryRule, sources: Map<string, RuleSourceRow>) {
+  const projectName = (id: string) => [...sources.values()].find((s) => s.project_id === id)?.project_name ?? null;
+  return {
+    id: r.id,
+    kind: r.kind,
+    status: r.status,
+    project: r.project_id ? { id: r.project_id, name: r.project_name ?? '' } : null,
+    text: r.text,
+    policy: r.policy
+      ? {
+          autonomy: r.policy.autonomy ?? null,
+          max_parallel: r.policy.max_parallel ?? null,
+          projects: r.policy.project_ids.map((id) => ({ id, name: projectName(id) ?? '', applied: (r.policy?.applied ?? []).includes(id) })),
+        }
+      : null,
+    sources: r.source_refs.flatMap((ref) => {
+      const s = sources.get(ref);
+      return s ? [{ ref, title: s.title, statement: excerpt(statementOf(s), 300), project_name: s.project_name }] : [];
+    }),
+    created_at: r.created_at,
+    decided_at: r.decided_at,
   };
 }
 
@@ -125,10 +204,121 @@ function toLessonView(item: MemoryItem) {
  * since their HTTP methods (`POST`/`DELETE`) would otherwise default to `create`/`delete` (see the
  * task-6 report for the check). */
 export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories) {
+  const rulesDeps = (): RulesDeps => ({ embedder: defaultEmbedder(), log: app.log, threshold: config.rulesSimilarityThreshold });
+
+  /** "Regras vigentes" (TER-1010): consolidates first, then answers the approved rules and the proposals
+   *  waiting for the person (a rejected one stays out of sight, and out of the proposals, for 180 days). */
+  app.get('/rules', async (request) => {
+    const { rules, sources } = await refreshRules(repos, request.scope.user.id, rulesDeps());
+    const view = (r: MemoryRule) => toRuleView(r, sources);
+    return {
+      rules: rules.filter((r) => r.status === 'approved').map(view),
+      proposals: rules.filter((r) => r.status === 'proposed' || r.status === 'awaiting_confirmation').map(view),
+    };
+  });
+
+  /** "Aprovar": a rule now; a policy only asks its `set_automation_policy` cards (spec: never applied
+   *  without them). `chat:update`, like verifying a lesson. */
+  app.post('/rules/:id/approve', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const body = approveBody.parse(request.body ?? {});
+    const rule = await approveRule(repos, request.scope.user.id, id, body, rulesDeps());
+    // The rule's note and its superseded sources change the current rules (TER-1019).
+    if (rule.status === 'approved') nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Recusar": the same proposal stays away for 180 days. */
+  app.post('/rules/:id/reject', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const rule = await rejectRule(repos, request.scope.user.id, id);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Remover regra": an approved rule only; its sources are current again. */
+  app.delete('/rules/:id', async (request, reply) => {
+    const { id } = idParam.parse(request.params);
+    await removeRule(repos, request.scope.user.id, id);
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return reply.code(204).send();
+  });
+
   app.get('/decisions', async (request) => {
     const { q, cursor } = listQuery.parse(request.query);
-    const { items, next_cursor } = await repos.chatDecisions.listForUser(request.scope.user.id, { q: q || undefined, cursor, limit: DECISIONS_PAGE });
-    return { decisions: items.map(toDecisionView), next_cursor };
+    const userId = request.scope.user.id;
+    const { items, next_cursor } = await repos.chatDecisions.listForUser(userId, { q: q || undefined, cursor, limit: DECISIONS_PAGE });
+    const by = await supersedersOf(userId, 'decision', items);
+    return { decisions: items.map((d) => toDecisionView(d, by.get(`decision:${d.id}`) ?? null)), next_cursor };
+  });
+
+  /** The "substituída por …" line of every superseded row of a page, in one query. */
+  const supersedersOf = (ownerId: string, kind: 'decision' | 'note', rows: { id: string; status: string }[]) =>
+    repos.memoryStatus.supersedersOf(
+      ownerId,
+      rows.filter((r) => r.status === 'superseded').map((r) => `${kind}:${r.id}`),
+    );
+
+  /** One decision or note, re-read after a status change, as its list shows it. */
+  const statusView = async (ownerId: string, target: StatusTarget) => {
+    const ref = `${target.kind}:${target.id}`;
+    const by = (await repos.memoryStatus.supersedersOf(ownerId, [ref])).get(ref) ?? null;
+    if (target.kind === 'decision') {
+      const [d] = await repos.chatDecisions.findManyForUser([target.id], ownerId);
+      if (!d) throw notFound();
+      return toDecisionView(d, by);
+    }
+    const [n] = await repos.memoryItems.findManyForOwner([target.id], ownerId);
+    if (!n || n.kind !== 'note') throw notFound();
+    return toNoteView(n, by);
+  };
+
+  /** "Desatualizada" / "Errada" / "Substituída por…" and their undo (TER-1013). Only the requester's
+   *  own rows: any other id — someone else's, a missing one — is a 404, never a 403. */
+  const setStatus = async (ownerId: string, target: StatusTarget, body: z.infer<typeof statusBody>) => {
+    const by = body.status === 'superseded' && body.superseded_by ? toTarget(body.superseded_by) : undefined;
+    const result = await repos.memoryStatus.setStatus(ownerId, target, body.status, by);
+    if (result === 'not_found') throw notFound();
+    if (result !== 'ok') {
+      const [code, message, errorCode] = STATUS_ERRORS[result];
+      throw new HttpError(code, message, errorCode);
+    }
+    // A note's mark changes the current rules (TER-1019): republish the ai-memory pages in the background.
+    if (target.kind === 'note' || by?.kind === 'note') nudgeAiMemoryRulesForOwner(repos, ownerId, app.log);
+    return statusView(ownerId, target);
+  };
+
+  app.put('/decisions/:id/status', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return { decision: await setStatus(request.scope.user.id, { kind: 'decision', id }, statusBody.parse(request.body)) };
+  });
+
+  app.put('/notes/:id/status', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return { note: await setStatus(request.scope.user.id, { kind: 'note', id }, statusBody.parse(request.body)) };
+  });
+
+  /** "Substituída por…"'s picker (TER-1013): the requester's current decisions and notes matching `q`
+   *  (newest first, at most `REPLACEMENTS_PER_KIND` of each), never `exclude` — the item being marked. */
+  app.get('/memory/replacements', async (request) => {
+    const { q, exclude } = replacementsQuery.parse(request.query);
+    const userId = request.scope.user.id;
+    const [decisions, notes] = await Promise.all([
+      repos.chatDecisions.listForUser(userId, { q: q || undefined, limit: REPLACEMENTS_PER_KIND * 2 }),
+      repos.memoryItems.listNotes(userId, { q: q || undefined, limit: REPLACEMENTS_PER_KIND * 2 }),
+    ]);
+    const items = [
+      ...decisions.items
+        .filter((d) => d.status === 'current')
+        .slice(0, REPLACEMENTS_PER_KIND)
+        .map((d) => ({ ref: `decision:${d.id}`, kind: 'decision' as const, title: d.question, detail: d.answer.text ?? d.answer.labels.join(', '), project_name: d.project_name, created_at: d.created_at })),
+      ...notes.items
+        .filter((n) => n.status === 'current')
+        .slice(0, REPLACEMENTS_PER_KIND)
+        .map((n) => ({ ref: `note:${n.id}`, kind: 'note' as const, title: n.title, detail: parseNoteText(n.text).decision, project_name: n.project_name, created_at: n.created_at })),
+    ]
+      .filter((it) => it.ref !== exclude)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return { items };
   });
 
   /** Idempotent and silent about whether the id ever existed or was someone else's: `deleteForUser`
@@ -185,6 +375,15 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     return memory(userId);
   });
 
+  /** The memory report (TER-1009, `docs/memory-report.md`): replay of the signed-in user's own
+   *  decisions against their own memory, and the "pergunta repetida" counts. Read-only, and only ever
+   *  the requester's rows — the dataset query is scoped to this user on both sides of every pair. */
+  app.get('/memory/report', async (request) => {
+    const { threshold, period } = reportQuery.parse(request.query);
+    const ds = await repos.chatDecisions.replayDataset(request.scope.user.id, '#' + EMBED_TEXT_VERSION, SUGGEST_K, REPORT_DECISIONS);
+    return memoryReport(ds, { threshold: threshold ?? config.autoAnswerLow, period, maxMisses: REPORT_MISSES });
+  });
+
   /**
    * A screen says whether termhub is in focus on it (TER-642) — web: the page visible and focused; app:
    * in the foreground. Sent on every change and every `focus_beat_seconds` while in focus. A suggested
@@ -201,8 +400,10 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `/decisions`. */
   app.get('/notes', async (request) => {
     const { cursor } = notesQuery.parse(request.query);
-    const { items, next_cursor } = await repos.memoryItems.listNotes(request.scope.user.id, { cursor, limit: NOTES_PAGE });
-    return { notes: items.map(toNoteView), next_cursor };
+    const userId = request.scope.user.id;
+    const { items, next_cursor } = await repos.memoryItems.listNotes(userId, { cursor, limit: NOTES_PAGE });
+    const by = await supersedersOf(userId, 'note', items);
+    return { notes: items.map((n) => toNoteView(n, by.get(`note:${n.id}`) ?? null)), next_cursor };
   });
 
   /** "Esquecer": idempotent and silent about whether the id ever existed, was someone else's, or was
@@ -211,6 +412,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
   app.delete('/notes/:id', async (request, reply) => {
     const { id } = idParam.parse(request.params);
     await repos.memoryItems.deleteNote(id, request.scope.user.id);
+    // A forgotten note may have been a current rule (TER-1019).
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
     return reply.code(204).send();
   });
 
@@ -256,7 +459,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
    *  answering `null` — still lets the item delete and the route succeed), then its memory items are
    *  deleted, then the note is re-indexed (best effort) so its sections reflect the removal. A
    *  file-origin lesson is only ever hidden (`hideSource`) — the file stays in the repository until a
-   *  PR removes it, which the response says in words. 404 for an id that is not this user's own
+   *  PR removes it, which the response says in words; an ai-memory lesson (TER-1021) is hidden the
+   *  same way, the page staying in that machine's ai-memory. 404 for an id that is not this user's own
    *  `lesson` (or not a lesson at all), never another user's data. */
   app.delete('/lessons/:id', async (request) => {
     const { id } = idParam.parse(request.params);
@@ -272,6 +476,9 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       return { ok: true };
     }
     await repos.memoryItems.hideSource(id, ownerId);
+    if (item.meta?.origin === 'ai-memory') {
+      return { ok: true, note: t(requestLocale(request), 'A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada') };
+    }
     return { ok: true, note: t(requestLocale(request), 'O arquivo continua no repositório; apague-o por um PR para sumir de vez') };
   });
 }

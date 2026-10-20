@@ -15,6 +15,7 @@ import { createLegalStore } from '@/features/legal/viewmodel/createLegalStore';
 import { createChatGrantsStore } from '@/features/chat-grants/viewmodel/createChatGrantsStore';
 import { createChatMemoryStore } from '@/features/chat/viewmodel/createChatMemoryStore';
 import { createChatStore } from '@/features/chat/viewmodel/createChatStore';
+import { createMemoryRulesStore } from '@/features/chat/viewmodel/createMemoryRulesStore';
 import { createNotificationsStore } from '@/features/notifications/viewmodel/createNotificationsStore';
 import { createProgressStore } from '@/features/progress/viewmodel/createProgressStore';
 import { createSettingsStore } from '@/features/settings/viewmodel/createSettingsStore';
@@ -49,6 +50,7 @@ export const stores = {
   settings: createSettingsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatGrants: createChatGrantsStore({ api: ctx.api, session: () => ctx.store.getState() }),
   chatMemory: createChatMemoryStore({ api: ctx.api, session: () => ctx.store.getState() }),
+  memoryRules: createMemoryRulesStore({ api: ctx.api, session: () => ctx.store.getState() }),
   pause: createPauseStore({ api: ctx.api, session: () => ctx.store.getState(), events: { subscribe: (fn) => chat.getState().subscribeEvents(fn) } }),
   progress: createProgressStore({ api: ctx.api, session: () => ctx.store.getState() }),
   permissions: createPermissionsStore(permissionDeps),

@@ -463,5 +463,18 @@
   "qualquer máquina da rede": "any machine on the network",
   "Rede": "Network",
   "Rede da máquina": "Machine network",
-  "Wi-Fi": "Wi-Fi"
+  "Wi-Fi": "Wi-Fi",
+  "Memória dos agentes (ai-memory)": "Agent memory (ai-memory)",
+  "Grava as regras vigentes como páginas fixadas do ai-memory nas máquinas do projeto que já usam o ai-memory neste checkout, para o Claude Code e o Codex lerem no início de cada sessão.": "Writes the current rules as pinned ai-memory pages on the project's machines that already use ai-memory in this checkout, so Claude Code and Codex read them at the start of every session.",
+  "Publicar regras vigentes no ai-memory": "Publish current rules to ai-memory",
+  "ai-memory não encontrado nesta máquina (comando ai-memory fora do PATH).": "ai-memory not found on this machine (no ai-memory command on the PATH).",
+  "ai-memory {{version}} instalado · servidor no ar em {{url}}": "ai-memory {{version}} installed · server up at {{url}}",
+  "ai-memory {{version}} instalado · servidor fora do ar em {{url}} (rode ai-memory serve)": "ai-memory {{version}} installed · server down at {{url}} (run ai-memory serve)",
+  "Usar ai-memory nesta máquina": "Use ai-memory on this machine",
+  "Detecta o ai-memory (memória local compartilhada entre Claude Code, Codex e outras CLIs) e o servidor dele nesta máquina. O que ele guarda fica na máquina: nada vai para o termhub.": "Detects ai-memory (a local memory shared by Claude Code, Codex and other CLIs) and its server on this machine. What it stores stays on the machine: nothing goes to termhub.",
+  "Servidor local": "Local server",
+  "Verificar de novo": "Check again",
+  "Só endereços locais (127.0.0.1, localhost) ou de rede privada.": "Local (127.0.0.1, localhost) or private network addresses only.",
+  "Usar o ai-memory nas execuções do termhub": "Use ai-memory in termhub runs",
+  "Os agentes que o termhub inicia nas máquinas com \"Usar ai-memory nesta máquina\" ligado recebem o MCP do ai-memory. Claude Code: o MCP e, nas execuções automáticas, os hooks no worktree (sem capturar prompts), nunca no ~/.claude. Codex: só o MCP; os hooks dele só rodam depois do \"Trust all\" no próprio Codex. Antigravity e Gemini CLI: suporte limitado (configuração só global, ou chave de API), e o termhub não mexe nela. Dica: [handoff] create_on_session_end = false no .ai-memory.toml evita handoffs de sessões triviais.": "Agents termhub starts on machines with \"Use ai-memory on this machine\" turned on get the ai-memory MCP. Claude Code: the MCP and, in automatic runs, the hooks in the worktree (without capturing prompts), never in ~/.claude. Codex: the MCP only; its hooks only run after \"Trust all\" in Codex itself. Antigravity and Gemini CLI: limited support (global-only configuration, or an API key), and termhub does not touch it. Tip: [handoff] create_on_session_end = false in .ai-memory.toml avoids handoffs from trivial sessions."
 }

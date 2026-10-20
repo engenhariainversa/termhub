@@ -157,6 +157,12 @@ export type TabUsage = Prisma.TabUsageModel
  */
 export type TabUsageDay = Prisma.TabUsageDayModel
 /**
+ * Model AiMemoryPage
+ * A current rule termhub published as a pinned ai-memory page in one checkout of a machine (TER-1019):
+ * what it wrote, so it knows what to delete and skips a page whose content did not change.
+ */
+export type AiMemoryPage = Prisma.AiMemoryPageModel
+/**
  * Model AiAccountExhaustion
  * An AI account at its usage limit until `until` (agentic board, spec D21): the dispatcher skips it.
  */
@@ -347,6 +353,16 @@ export type ChatDecision = Prisma.ChatDecisionModel
  * card live in `chat_decisions`. `embedding` is pgvector, read and written in raw SQL.
  */
 export type MemoryItem = Prisma.MemoryItemModel
+/**
+ * Model MemoryRule
+ * A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that
+ * say the same thing, consolidated per project, or per user when the same permission shows up in two or
+ * more projects. Nothing here applies itself: a `proposed` row waits for the person. Approving a `rule`
+ * makes it `approved` and supersedes its `source_refs`; approving a `policy` asks one
+ * `set_automation_policy` card per project (`awaiting_confirmation`) and only those cards change the
+ * Setup. A `rejected` row keeps the same proposal from coming back for 180 days.
+ */
+export type MemoryRule = Prisma.MemoryRuleModel
 /**
  * Model InstanceSecret
  * A secret this instance generates for itself, once, and keeps: no env var to configure, and blue

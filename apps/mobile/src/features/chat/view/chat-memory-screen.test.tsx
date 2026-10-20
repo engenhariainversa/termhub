@@ -3,6 +3,7 @@ import { Alert, Linking } from 'react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatMemoryStore', () => ({ useChatMemoryStore: require('../../../../test/helpers/ui-stores').stores.chatMemory }));
+jest.mock('@/features/chat/viewmodel/useMemoryRulesStore', () => ({ useMemoryRulesStore: require('../../../../test/helpers/ui-stores').stores.memoryRules }));
 
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), canGoBack: jest.fn(() => true) };
 jest.mock('expo-router', () => ({ useRouter: () => mockRouter }));
@@ -28,6 +29,9 @@ function dec(over: Partial<TChatDecision> & { id: string; question: string }): T
     suggested_count: 1,
     accepted_count: 1,
     created_at: new Date().toISOString(),
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -39,6 +43,9 @@ function note(over: Partial<TConciergeNote> & { id: string; question: string }):
     decision: 'Sim',
     reason: 'Você sempre isola em worktree',
     created_at: new Date().toISOString(),
+    status: 'current',
+    expires_at: null,
+    superseded_by: null,
     ...over,
   };
 }
@@ -70,6 +77,8 @@ beforeEach(() => {
   // mock backend carries no note or lesson fixtures (unlike decisions).
   jest.spyOn(stores.api, 'chatNotes').mockResolvedValue({ notes: [], next_cursor: null });
   jest.spyOn(stores.api, 'chatLessons').mockResolvedValue({ lessons: [], next_cursor: null });
+  // "Regras vigentes" has its own tests (memory-rules-section.test.tsx).
+  jest.spyOn(stores.api, 'chatRules').mockResolvedValue({ rules: [], proposals: [] });
 });
 
 afterEach(() => {
@@ -89,6 +98,7 @@ afterEach(() => {
     loadingMoreNotes: false,
     forgettingNoteId: null,
     notesError: null,
+    statusBusyRef: null,
     lessons: null,
     lessonsCursor: null,
     lessonsQ: '',
@@ -109,6 +119,13 @@ describe('Memória do chat', () => {
     // A free-text answer shows the text, not an empty label list.
     expect(screen.getByText('Qual branch a partir de main?')).toBeTruthy();
     expect(screen.getByText('→ fix/city-sound-ios')).toBeTruthy();
+  });
+
+  it('mounts "Regras vigentes", which loads on its own', async () => {
+    await render(<ChatMemoryScreen />);
+    expect(await screen.findByText('Nenhuma regra vigente nem proposta por enquanto.', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByText('Regras vigentes')).toBeTruthy();
+    expect(stores.api.chatRules).toHaveBeenCalled();
   });
 
   it('typing in "Buscar" re-queries with q, debounced', async () => {
@@ -280,6 +297,16 @@ describe('Memória do chat', () => {
       expect(screen.getByText(/termhub · arquivo docs\/lessons\/migration\.md · corrigida · .+ · verificada/)).toBeTruthy();
     });
 
+    it('shows an ai-memory lesson (TER-1021) with its machine and wiki path', async () => {
+      jest.spyOn(stores.api, 'chatLessons').mockResolvedValueOnce({
+        lessons: [lesson({ id: 'l1', title: 'Sem Redis', project: { id: 'p1', name: 'termhub' }, origin: 'file', path: 'termhub/_rules/no-redis.md', ai_memory: { machine_name: 'hulk', kind: 'rule' } })],
+        next_cursor: null,
+      });
+      await render(<ChatMemoryScreen />);
+      expect(await screen.findByText('Sem Redis', undefined, LOAD)).toBeTruthy();
+      expect(screen.getByText(/termhub · ai-memory de hulk: termhub\/_rules\/no-redis\.md · /)).toBeTruthy();
+    });
+
     it('"Verificar" calls the API and flips the label to "Desfazer verificação"', async () => {
       jest.spyOn(stores.api, 'chatLessons').mockResolvedValueOnce({ lessons: [lesson({ id: 'l1', title: 'Sintoma X' })], next_cursor: null });
       const verify = jest.spyOn(stores.api, 'verifyChatLesson').mockResolvedValue(lesson({ id: 'l1', title: 'Sintoma X', verified: true, verified_at: new Date().toISOString() }));
@@ -383,5 +410,44 @@ describe('Memória do chat in English (i18n)', () => {
       expect.objectContaining({ text: 'Cancel', style: 'cancel' }),
       expect.objectContaining({ text: 'Forget', style: 'destructive' }),
     ]);
+  });
+});
+
+describe('Desatualizada / Errada / Substituída por (TER-1013)', () => {
+  it('a decision shows "Vigente"; "Errada" marks it and "Desfazer" undoes it', async () => {
+    const d = dec({ id: 'd1', question: 'Usar a main direto?' });
+    jest.spyOn(stores.api, 'chatDecisions').mockResolvedValue({ decisions: [d], next_cursor: null });
+    const spy = jest.spyOn(stores.api, 'setChatDecisionStatus').mockResolvedValueOnce({ ...d, status: 'wrong' });
+    await render(<ChatMemoryScreen />);
+    await screen.findByText('Usar a main direto?', undefined, LOAD);
+    expect(screen.getByText('Vigente')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Errada' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(expect.anything(), 'd1', 'wrong', undefined));
+    expect(await screen.findByRole('button', { name: 'Desfazer' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Desatualizada' })).toBeNull();
+
+    spy.mockResolvedValueOnce(d);
+    await fireEvent.press(screen.getByRole('button', { name: 'Desfazer' }));
+    await waitFor(() => expect(spy).toHaveBeenLastCalledWith(expect.anything(), 'd1', 'current', undefined));
+    expect(await screen.findByText('Vigente')).toBeTruthy();
+  });
+
+  it('"Substituída por…" on a note picks the replacing item and shows it', async () => {
+    jest.spyOn(stores.api, 'chatDecisions').mockResolvedValue({ decisions: [], next_cursor: null });
+    const n = note({ id: 'n1', question: 'Qual gerenciador de pacotes?' });
+    jest.spyOn(stores.api, 'chatNotes').mockResolvedValue({ notes: [n], next_cursor: null });
+    const replacements = jest.spyOn(stores.api, 'chatMemoryReplacements').mockResolvedValue({
+      items: [{ ref: 'decision:d9', kind: 'decision', title: 'Usar pnpm?', detail: 'Sim', project_name: null, created_at: new Date().toISOString() }],
+    });
+    const spy = jest.spyOn(stores.api, 'setChatNoteStatus').mockResolvedValueOnce({ ...n, status: 'superseded', superseded_by: { ref: 'decision:d9', title: 'Usar pnpm?' } });
+    await render(<ChatMemoryScreen />);
+    await screen.findByText('Qual gerenciador de pacotes?', undefined, LOAD);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Substituída por…' }));
+    await waitFor(() => expect(replacements).toHaveBeenCalledWith(expect.anything(), '', 'note:n1'), LOAD);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Usar pnpm?' }));
+    await waitFor(() => expect(spy).toHaveBeenCalledWith(expect.anything(), 'n1', 'superseded', 'decision:d9'));
+    expect(await screen.findByText('Substituída por «Usar pnpm?»')).toBeTruthy();
   });
 });

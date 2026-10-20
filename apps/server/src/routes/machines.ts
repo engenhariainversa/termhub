@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CLOSE, PAIRING_TTL_MS } from '@termhub/agent-protocol';
+import { AI_MEMORY_DEFAULT_URL, CLOSE, normalizeAiMemoryUrl, PAIRING_TTL_MS } from '@termhub/agent-protocol';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError, badRequest, conflict, forbidden, localizedOf } from '../lib/errors.js';
 import { scoped } from '../auth/scope.js';
@@ -27,6 +27,7 @@ import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../moni
 import { msg, tk } from '../i18n/index.js';
 import { recordMachineSwitch } from '../automation/setup-tools.js';
 import { audit } from '../auth/audit.js';
+import { aiMemoryState } from '../memory/ai-memory.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 /** `?uninstall=1`: also remove the agent from the machine before deleting it (spec 2026-10-07 §3). */
@@ -63,6 +64,8 @@ const machineBody = z
     claude_auto_swap: z.boolean().optional(),
     ai_usage_query: z.boolean().optional(),
     automation_allowed: z.boolean().optional(),
+    ai_memory_enabled: z.boolean().optional(),
+    ai_memory_url: z.string().trim().max(200).nullable().optional(),
   })
   .superRefine((m, ctx) => {
     if (m.type === 'ssh' && !m.host) ctx.addIssue({ code: 'custom', path: ['host'], message: 'host é obrigatório para SSH' });
@@ -167,6 +170,12 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
       throw badRequest('tipo de transporte não pode ser alterado');
     }
     const merged = machineBody.parse({ ...current, ...(request.body as object) });
+    // ai-memory keeps everything on the machine: its URL is a loopback/private origin or nothing (TER-1018)
+    if (merged.ai_memory_url) {
+      const url = normalizeAiMemoryUrl(merged.ai_memory_url);
+      if (!url) throw badRequest('O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada');
+      merged.ai_memory_url = url === AI_MEMORY_DEFAULT_URL ? null : url;
+    } else merged.ai_memory_url = null;
     // owner transfer is an admin-only field (any admin scope, including "all")
     const { owner_id } = ownerPatch.parse(request.body ?? {});
     if (owner_id !== undefined) {
@@ -376,6 +385,16 @@ export async function machineRoutes(app: FastifyInstance, repos: Repositories) {
     await repos.machineHooks.delete(machine.id);
     request.log.info({ machineId: machine.id }, 'monitor: hooks removed');
     return { ok: true };
+  });
+
+  /**
+   * ai-memory on the machine (TER-1018): off → `{ enabled: false }` without touching the machine;
+   * on → whether the binary is there, its version and whether its local server answers.
+   */
+  app.get('/:id/ai-memory', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const machine = await scoped(repos, request).machine(id);
+    return aiMemoryState(machine);
   });
 
   /**

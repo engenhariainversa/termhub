@@ -65,14 +65,36 @@ const BUDGET = PROMPT_MAX_CHARS - ORIGIN_REMINDER.length - 2 - TAIL.length;
 
 const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1))}…`);
 
+/**
+ * The current rules block (TER-1011) cut to `room`: whole lines from the top (the newest rules), with a closing
+ * line saying the rest is in the memory; null when not even one rule fits.
+ */
+function fitRules(rules: string, room: number): string | null {
+  if (rules.length <= room) return rules;
+  const more = '- … (outras em search_memory)';
+  const [head, ...lines] = rules.split('\n');
+  let out = head!;
+  for (const line of lines) {
+    if (line === more) continue;
+    if (out.length + 1 + line.length + 1 + more.length > room) break;
+    out = `${out}\n${line}`;
+  }
+  return out === head ? null : `${out}\n${more}`;
+}
+
 /** A part kept only when it fits the budget (before the description excerpt): its rule is also elsewhere. */
 type Optional = { optional: string };
 
 /**
- * Joins the parts and fills what is left of the budget with the (optional) description excerpt. An
- * `Optional` part is dropped when the required ones leave no room for it (a custom text at its maximum).
+ * Joins the parts and fills what is left of the budget with the (optional) description excerpt. The rules
+ * part (`rules`, its index in `parts`) only takes what the required parts leave; an `Optional` part is then
+ * dropped when the required ones and the rules leave no room for it (a custom text at its maximum).
  */
-function assemble(parts: (string | Optional | null)[], description: string | null): string {
+function assemble(parts: (string | Optional | null)[], description: string | null, rules: number | null = null): string {
+  if (rules !== null && typeof parts[rules] === 'string') {
+    const fixed = parts.filter((p, i): p is string => typeof p === 'string' && i !== rules).join('\n\n');
+    parts = parts.map((p, i) => (i === rules ? fitRules(p as string, BUDGET - fixed.length - 2) : p));
+  }
   const required = parts.filter((p): p is string => typeof p === 'string');
   const extra = parts.reduce((n, p) => n + (p !== null && typeof p !== 'string' ? p.optional.length + 2 : 0), 0);
   const fits = required.join('\n\n').length + extra <= BUDGET;
@@ -93,6 +115,8 @@ export function implementerPrompt(i: {
   policy: string;
   custom: string | null;
   description?: string | null;
+  /** The project's current rules (`currentRulesBlock`, TER-1011), or null. */
+  rules?: string | null;
   /** the project's "Parar em decisões de produto" (`stop_on_decisions`): off by default */
   stopOnDecisions?: boolean;
 }): string {
@@ -102,6 +126,7 @@ export function implementerPrompt(i: {
       `Trabalhe na branch ${i.branch} (base ${i.base}). ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
       policyLine(i.policy),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       { optional: GITHUB_LINE },
@@ -109,6 +134,7 @@ export function implementerPrompt(i: {
       lastLine(i.stopOnDecisions, 'pr'),
     ],
     i.description ?? null,
+    4,
   );
 }
 
@@ -119,6 +145,7 @@ export function integratorPrompt(i: {
   prUrl: string;
   policy: string;
   custom: string | null;
+  rules?: string | null;
   stopOnDecisions?: boolean;
 }): string {
   return assemble(
@@ -127,6 +154,7 @@ export function integratorPrompt(i: {
       `A branch do épico é ${i.branch} (base ${i.base}); o PR do épico é ${i.prUrl}. ${pushLine(i.branch)}`,
       i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT(i.base),
       policyLine(i.policy),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       { optional: GITHUB_LINE },
@@ -134,6 +162,7 @@ export function integratorPrompt(i: {
       lastLine(i.stopOnDecisions, 'report'),
     ],
     null,
+    4,
   );
 }
 
@@ -144,6 +173,7 @@ export function fixerPrompt(i: {
   reason: 'conflict' | 'ci';
   detail: string;
   custom: string | null;
+  rules?: string | null;
   stopOnDecisions?: boolean;
 }): string {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
@@ -156,6 +186,7 @@ export function fixerPrompt(i: {
         (i.reason === 'conflict'
           ? DEFAULT_FIXER_CONFLICT_TEXT(i.base)
           : DEFAULT_FIXER_CI_TEXT),
+      i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
       { optional: GITHUB_LINE },
@@ -163,5 +194,6 @@ export function fixerPrompt(i: {
       lastLine(i.stopOnDecisions, 'report'),
     ],
     null,
+    3,
   );
 }

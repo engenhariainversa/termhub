@@ -142,6 +142,16 @@ export const automationSchema = z.object({
 });
 export type ProjectAutomation = z.infer<typeof automationSchema>;
 
+/** ai-memory (TER-1019). `publish_rules`: write the current rules as pinned pages on the project's machines
+ *  that already use ai-memory for the checkout. `use_in_runs` (TER-1020): the agents termhub starts get the
+ *  machine's ai-memory MCP (and, in an automatic run's worktree, its Claude Code hooks) on machines that
+ *  opted in too. Both off by default. */
+export const aiMemorySchema = z.object({
+  publish_rules: z.boolean().default(false),
+  use_in_runs: z.boolean().default(false),
+});
+export type ProjectAiMemory = z.infer<typeof aiMemorySchema>;
+
 /** Why a saved allow rule is refused (TER-968): shown to the person on the field. */
 export const UNSAFE_ALLOWED_TOOL = tk('Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).');
 
@@ -243,6 +253,7 @@ export const setupSchema = z.object({
   approvals: approvalsSchema.default({}),
   ai: aiSchema.default({}),
   automation: automationSchema.default({}),
+  ai_memory: aiMemorySchema.default({}),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;

@@ -134,4 +134,13 @@
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
   "O deploy falhou por um problema do GitHub; rodando de novo ({{attempt}} de {{max}}): {{url}}": "The deploy failed because of a GitHub problem; running it again ({{attempt}} of {{max}}): {{url}}",
-  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "The PR fix waits for the card's tab to be free; close the tab to open another"}
+  "A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra": "The PR fix waits for the card's tab to be free; close the tab to open another",
+  "respondida com uma decisão sua de antes": "answered with a decision you took before",
+  "sem precedente na memória; usada a opção recomendada pelo agente": "no precedent in memory; the agent's recommended option was used",
+  "liberada por uma regra do projeto": "allowed by a project rule",
+  "ferramenta do termhub sempre liberada no automático": "termhub tool, always allowed in automatic work",
+  "nenhuma decisão sua na memória para esta pergunta": "no decision of yours in memory for this question",
+  "a decisão mais parecida não era próxima o bastante para responder sozinho": "the closest decision was not close enough to answer alone",
+  "a resposta automática foi cancelada ou não saiu": "the automatic answer was cancelled or did not go out",
+  "nenhuma regra do projeto libera esta permissão": "no project rule allows this permission"
+}

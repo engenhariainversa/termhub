@@ -207,6 +207,29 @@ describe('startMemorySweeper', () => {
     stop();
   });
 
+  it('imports ai-memory pages only for links of opted-in projects, and clears them where the option is off (TER-1021)', async () => {
+    const repos = fakeRepos();
+    const listSourceHashes = vi.fn(async (_k: string, prefix: string) => (prefix === 'L2:ai-memory/' ? new Map([['L2:ai-memory/p/_rules/a.md', 'h']]) : new Map()));
+    const deleteBySource = vi.fn(async () => 1);
+    const built = {
+      tasks: { listChangedForOwner: repos.tasks.listChangedForOwner, findByIdsForOwner: repos.tasks.findByIdsForOwner, listOwnersWithTasks: repos.listOwnersWithTasksMock },
+      memoryItems: { ...repos.memoryItems, listSourceHashes, deleteBySource, deleteDocsNotInLinks: vi.fn(async () => 0) },
+      projectMachines: {
+        listAllWithOwner: vi.fn(async () => [
+          { id: 'L1', project_id: 'p1', owner_id: 'u1', cwd: '/a', ai_memory_lessons: true, machine: { id: 'm1', type: 'agent' } },
+          { id: 'L2', project_id: 'p2', owner_id: 'u2', cwd: '/b', ai_memory_lessons: false, machine: { id: 'm2', type: 'agent' } },
+        ]),
+      },
+    };
+    const docsExec = { scan: vi.fn(async () => ''), read: vi.fn(async () => ''), readLessons: vi.fn(async () => '') };
+    const aiExec = { pages: vi.fn(async () => '') };
+    const stop = startMemorySweeper(built as never, log(), null, 1000, docsExec, aiExec);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(aiExec.pages.mock.calls.map((c) => (c[0] as { id: string }).id)).toEqual(['m1']);
+    expect(deleteBySource).toHaveBeenCalledWith('lesson', ['L2:ai-memory/p/_rules/a.md']);
+    stop();
+  });
+
   it('deleteDocsNotInLinks count (docs + file-origin lessons, review fix round 1) flows into the "stale" figure the pass logs', async () => {
     const repos = fakeRepos();
     const built = {

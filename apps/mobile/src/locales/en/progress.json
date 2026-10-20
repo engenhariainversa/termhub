@@ -86,5 +86,9 @@
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} blocked by the guard",
   "{{ref}}: ação bloqueada pela trava": "{{ref}}: action blocked by the guard",
   "{{ref}}: cancelado — {{reason}}": "{{ref}}: cancelled — {{reason}}",
-  "{{ref}}: cancelado": "{{ref}}: cancelled"
+  "{{ref}}: cancelado": "{{ref}}: cancelled",
+  "Motivo: {{why}}": "Why: {{why}}",
+  "Precedente: {{ref}}": "Precedent: {{ref}}",
+  "Regra: {{ref}}": "Rule: {{ref}}",
+  "Similaridade: {{score}}%": "Similarity: {{score}}%"
 }

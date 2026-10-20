@@ -129,5 +129,13 @@
   "Só abas de terminal podem iniciar um agente": "Solo las pestañas de terminal pueden iniciar un agente",
   "Nenhuma conta de IA em {{machine}} pode iniciar um agente neste projeto: cadastre uma em Contas de IA": "Ninguna cuenta de IA en {{machine}} puede iniciar un agente en este proyecto: registra una en Cuentas de IA",
   "Escolha a conta para iniciar a sessão": "Elige la cuenta para iniciar la sesión",
-  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "Esta cuenta no puede iniciar un agente en {{machine}} en este proyecto"
+  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "Esta cuenta no puede iniciar un agente en {{machine}} en este proyecto",
+  "A fonte {{ref}} expirou ou não vale aqui (outro projeto ou outra conversa)": "La fuente {{ref}} expiró o no vale aquí (otro proyecto u otra conversación)",
+  "Informe expires_at ou expires_at_time, não os dois": "Indica expires_at o expires_at_time, no ambos",
+  "A validade da decisão precisa estar no futuro": "La validez de la decisión debe estar en el futuro",
+  "Uma decisão deste projeto precisa de project_id": "Una decisión de este proyecto necesita project_id",
+  "Uma decisão desta conversa só pode ser registrada no chat do termhub": "Una decisión de esta conversación solo se puede registrar en el chat de termhub",
+  "{{ref}} já foi substituído ou esquecido": "{{ref}} ya fue reemplazado u olvidado",
+  "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Solo una nota (note:) o una decisión (decision:) puede reemplazarse: {{ref}}",
+  "URL do ai-memory inválida": "URL de ai-memory no válida"
 }

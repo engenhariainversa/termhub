@@ -11,6 +11,7 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
 import type { Machine, User } from '../db/repositories/types.js';
 import { HttpError, notFound } from '../lib/errors.js';
+import { currentRulesBlock } from '../memory/current-rules.js';
 import { newId } from '../lib/ids.js';
 import { fallbackShortfall, pickFallback, type FallbackPick } from './account-fallback.js';
 import { attachmentContext, isTranscribed } from './attachments/context.js';
@@ -27,7 +28,7 @@ import { COMMAND_RULE_BUDGET, DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretA
 import { formatWords } from './command-rules.js';
 import type { ChatCommandRule } from '../db/repositories/chat-command-rules.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
-import { accountSystemPrompt, projectSystemPrompt } from './project-prompt.js';
+import { accountSystemPrompt, CONCIERGE_RULES_MAX, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
 import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { toSubagentView, type SubagentView } from './subagent-view.js';
@@ -1262,7 +1263,9 @@ export class ChatService {
     const groups = (await this.groupsFor(user, { archived: true }))
       .filter((g) => g.projects.some((m) => m.id === project.id))
       .map((g) => ({ name: g.name, siblings: g.projects.filter((m) => m.id !== project.id && m.status !== 'archived').map((m) => m.name) }));
-    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules);
+    // TER-1011: the project's current rules (no superseded, wrong or expired note), read per run like the rest.
+    const rules = await currentRulesBlock(this.deps.repos, user.id, project.id, CONCIERGE_RULES_MAX);
+    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules, rules);
   }
 
   /** The tabs' answered questions this conversation's model was not told yet, as the lines to prepend,

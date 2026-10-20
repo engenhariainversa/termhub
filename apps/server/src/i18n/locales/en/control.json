@@ -129,5 +129,13 @@
   "Só abas de terminal podem iniciar um agente": "Only terminal tabs can start an agent",
   "Nenhuma conta de IA em {{machine}} pode iniciar um agente neste projeto: cadastre uma em Contas de IA": "No AI account on {{machine}} can start an agent in this project: add one under AI accounts",
   "Escolha a conta para iniciar a sessão": "Choose the account to start the session with",
-  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "This account cannot start an agent on {{machine}} in this project"
+  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "This account cannot start an agent on {{machine}} in this project",
+  "A fonte {{ref}} expirou ou não vale aqui (outro projeto ou outra conversa)": "The source {{ref}} expired or does not apply here (another project or another conversation)",
+  "Informe expires_at ou expires_at_time, não os dois": "Provide expires_at or expires_at_time, not both",
+  "A validade da decisão precisa estar no futuro": "The decision's expiry must be in the future",
+  "Uma decisão deste projeto precisa de project_id": "A decision for this project needs project_id",
+  "Uma decisão desta conversa só pode ser registrada no chat do termhub": "A decision for this conversation can only be recorded in the termhub chat",
+  "{{ref}} já foi substituído ou esquecido": "{{ref}} was already replaced or forgotten",
+  "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Only a note (note:) or a decision (decision:) can be replaced: {{ref}}",
+  "URL do ai-memory inválida": "Invalid ai-memory URL"
 }

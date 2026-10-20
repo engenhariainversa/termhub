@@ -455,4 +455,12 @@
   "push ou PR com erro do GitHub; depois disso, chama você": "a push or PR failing on GitHub's side; past this, you are called",
   "Deploy falhou por problema do GitHub; rodando de novo": "Deploy failed because of GitHub; running it again",
   "{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar": "{{ref}}: GitHub error; termhub retries once it is back",
-  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: folder trust confirmed automatically"}
+  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: folder trust confirmed automatically",
+  "Motivo: {{why}}": "Why: {{why}}",
+  "Precedente: {{ref}}": "Precedent: {{ref}}",
+  "Regra: {{ref}}": "Rule: {{ref}}",
+  "Similaridade: {{score}}%": "Similarity: {{score}}%",
+  "Lições do ai-memory": "ai-memory lessons",
+  "Importar as páginas deliberadas do ai-memory como lições não verificadas": "Import deliberate ai-memory pages as unverified lessons",
+  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Reads only this project's _rules/, gotchas/ and decisions/ pages in the ai-memory of each linked machine; sessions, observations and handoffs never leave the machine. The lessons show up in Chat memory, for you to verify or discard."
+}

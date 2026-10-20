@@ -25,6 +25,7 @@ import { writesDegraded, type GithubHealthReader } from '../integrations/github-
 import { recordTakenDecisions, type TakenDecision } from './decisions-taken.js';
 import { DECIDE_NUDGES_MAX, DECIDE_TEXT, decisionException, questionOf } from './decision.js';
 import { MAX_RESTARTS } from './restart.js';
+import { escalationWhy } from './why.js';
 import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
@@ -204,6 +205,18 @@ async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 
   }
 }
 
+/** `escalationWhy` for the run's tab's newest card, when the reason is about a question. Never throws. */
+async function escalationWhyOf(repos: Repositories, run: AutomationRun, reason: string): Promise<AutomationEventPayload> {
+  if (reason !== QUESTION_UNANSWERED && reason !== QUESTION_EXPIRED && reason !== PERMISSION_NEEDED) return {};
+  let card;
+  try {
+    card = run.tab_id && reason !== PERMISSION_NEEDED ? await repos.tabQuestions.latestQuestionForTab(run.tab_id) : undefined;
+  } catch {
+    card = undefined;
+  }
+  return escalationWhy(reason, card ?? undefined);
+}
+
 /**
  * Escalation of a run to the person (spec §9.3, D25): the `escalated` event (the feed, and the push the
  * mobile push service sends for it, deduped per run and reason) and the line in the project chat. The
@@ -217,7 +230,9 @@ export async function escalateRun(
   log: Log = noopLog,
   opts: { detail?: string | null; extra?: AutomationEventPayload } = {},
 ): Promise<void> {
-  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'escalated', payload: { reason, tab_id: run.tab_id, ...opts.extra } }).catch((e: unknown) =>
+  // TER-1011: why — the closest precedent of the question card it is about, or that there was none
+  const why = await escalationWhyOf(repos, run, reason);
+  await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'escalated', payload: { reason, tab_id: run.tab_id, ...why, ...opts.extra } }).catch((e: unknown) =>
     // without the event there is no push, and a run parked on a question is not resumed by itself (only by
     // resume_automation_run); the chat line below still tells the person
     log.warn({ runId: run.id, code: errorCode(e) }, 'automation: escalation not recorded: no push, no automatic resume'),

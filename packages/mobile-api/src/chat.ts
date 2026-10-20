@@ -228,6 +228,39 @@ export const tabSuggestionSendBody = z.object({ text: z.string().trim().min(1).m
  * (eventually) other screens show it — never the embedding, the owning user, the conversation or the
  * tab question it came from. */
 export const decisionOptionView = z.object({ label: z.string(), description: z.string() });
+
+/** Where a decision or a concierge note stands on the Memória screen (TER-1013): `current` (vigente),
+ * `outdated` (desatualizada), `wrong` (errada) or `superseded` (substituída por outro item). Anything
+ * but `current` is out of the default memory search and never a precedent. */
+export const memoryStatusSchema = z.enum(['current', 'outdated', 'wrong', 'superseded']);
+/** The item that replaces a `superseded` one: its ref (`decision:<id>` / `note:<id>`) and title. */
+export const memorySupersederView = z.object({ ref: z.string(), title: z.string() });
+/** The status fields of a decision and of a note; the defaults read an older server's rows as current. */
+const memoryStatusFields = {
+  status: memoryStatusSchema.default('current'),
+  expires_at: z.string().nullable().default(null),
+  /** Only for `superseded`; `null` when the replacing item was forgotten since. */
+  superseded_by: memorySupersederView.nullable().default(null),
+};
+/** A decision's or a note's ref, as "Substituída por…" picks it. */
+export const memoryRefSchema = z.string().regex(/^(decision|note):[a-z0-9]{1,64}$/);
+/** `PUT chat/decisions/:id/status` and `PUT chat/notes/:id/status` (TER-1013): `current` undoes any
+ * mark ("Desfazer"); `superseded` needs `superseded_by`, the item that replaces this one. */
+export const memoryStatusBody = z
+  .object({ status: memoryStatusSchema, superseded_by: memoryRefSchema.optional() })
+  .refine((b) => b.status !== 'superseded' || b.superseded_by !== undefined, { message: 'Informe superseded_by', path: ['superseded_by'] });
+/** One candidate of the "Substituída por…" picker: a current decision (title = its question, detail =
+ * its answer) or note (title = its title, detail = its decision). */
+export const memoryReplacementView = z.object({
+  ref: z.string(),
+  kind: z.enum(['decision', 'note']),
+  title: z.string(),
+  detail: z.string(),
+  project_name: z.string().nullable(),
+  created_at: z.string(),
+});
+/** `GET chat/memory/replacements?q=&exclude=`: newest first, current items only, never `exclude`. */
+export const memoryReplacementsResponse = z.object({ items: z.array(memoryReplacementView) });
 export const decisionAnswerView = z.object({ labels: z.array(z.string()), text: z.string().optional() });
 export const decisionViewSchema = z.object({
   id: z.string(),
@@ -241,7 +274,10 @@ export const decisionViewSchema = z.object({
   suggested_count: z.number().int(),
   accepted_count: z.number().int(),
   created_at: z.string(),
+  ...memoryStatusFields,
 });
+/** `PUT chat/decisions/:id/status`: the decision as the list now shows it. */
+export const decisionStatusResponse = z.object({ decision: decisionViewSchema });
 /** `GET chat/decisions`: newest first, 50 per page, with a keyset `next_cursor` (opaque, `null` on the
  * last page). */
 export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchema), next_cursor: z.string().nullable() });
@@ -326,7 +362,10 @@ export const conciergeNoteView = z.object({
   decision: z.string(),
   reason: z.string(),
   created_at: z.string(),
+  ...memoryStatusFields,
 });
+/** `PUT chat/notes/:id/status`: the note as the list now shows it. */
+export const noteStatusResponse = z.object({ note: conciergeNoteView });
 /** `GET chat/notes`: newest first, 50 per page, with a keyset `next_cursor` (opaque, `null` on the
  * last page) — the same pagination shape as `decisionsResponse`. */
 export const notesResponse = z.object({ notes: z.array(conciergeNoteView), next_cursor: z.string().nullable() });
@@ -340,8 +379,12 @@ export const lessonItemSchema = z.object({
   project: z.object({ id: z.string(), name: z.string() }).nullable(),
   title: z.string(),
   excerpt: z.string(),
+  /** An ai-memory lesson answers `file` here, for older app builds; see `ai_memory`. */
   origin: z.enum(['file', 'note']),
   path: z.string().nullable(),
+  /** TER-1021: a deliberate ai-memory page (rule/gotcha/decision) read from a machine; `path` is then
+   *  relative to that machine's ai-memory wiki. Null otherwise, and absent from an older server. */
+  ai_memory: z.object({ machine_name: z.string().nullable(), kind: z.string().nullable() }).nullable().optional(),
   tab_id: z.string().nullable(),
   card: z.string().nullable(),
   pr: z.string().nullable(),
@@ -356,6 +399,33 @@ export const lessonListSchema = z.object({ lessons: z.array(lessonItemSchema), n
 /** `DELETE chat/lessons/:id` ("Esquecer"): `note` is present only for a file lesson, saying the file
  * itself stays in the repository until a PR removes it. */
 export const lessonForgetSchema = z.object({ ok: z.literal(true), note: z.string().optional() });
+
+/** "Regras vigentes" (TER-1010): one approved rule, or a proposal waiting for the person. `project` is
+ * `null` for a rule at the user level (every project). A `policy` row changes the automatic-work Setup —
+ * `autonomy` and/or `max_parallel` on `projects` — and only through the `set_automation_policy` cards it
+ * asks when approved (`awaiting_confirmation` until they are decided); `applied` marks the projects whose
+ * card was approved. `sources` are the notes and decisions the rule came from, still in memory. */
+export const memoryRuleSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['rule', 'policy']),
+  status: z.enum(['proposed', 'awaiting_confirmation', 'approved', 'rejected']),
+  project: z.object({ id: z.string(), name: z.string() }).nullable(),
+  text: z.string(),
+  policy: z
+    .object({
+      autonomy: z.enum(['pr', 'merge', 'deploy', 'release']).nullable(),
+      max_parallel: z.number().int().nullable(),
+      projects: z.array(z.object({ id: z.string(), name: z.string(), applied: z.boolean() })),
+    })
+    .nullable(),
+  sources: z.array(z.object({ ref: z.string(), title: z.string(), statement: z.string(), project_name: z.string().nullable() })),
+  created_at: z.string(),
+  decided_at: z.string().nullable(),
+});
+/** `GET chat/rules`: the approved rules and the proposals waiting for the person (consolidated on the call). */
+export const memoryRulesResponse = z.object({ rules: z.array(memoryRuleSchema), proposals: z.array(memoryRuleSchema) });
+/** `POST chat/rules/:id/approve` (body `{ text? }`) and `POST chat/rules/:id/reject`. */
+export const memoryRuleDecisionResponse = z.object({ rule: memoryRuleSchema });
 
 /** "Decisão automática" (TER-641) on an action card: the precedent a send cited, but only when the call
  * also ran without a click (`grant_id`, a default allowance or a grant). A pending card, or one the person
