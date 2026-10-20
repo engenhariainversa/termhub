@@ -85,6 +85,7 @@ Juntos, eles formam o "**Serviço**".
   - Telas de terminal nunca entram na memória.
 - **Anexos.** Ficam guardados no nosso servidor, com o texto extraído deles, por exemplo de PDFs. O limite é de 64 MB por arquivo e 2 GB por usuário. Anexos que não chegam a ser enviados são apagados em 24 horas.
 - **Ditado por voz.** O áudio é transcrito no nosso próprio servidor (modelo Whisper), sem envio a terceiros. O áudio não é gravado e o texto transcrito fica em memória por no máximo 10 minutos.
+- **De onde você está falando.** Para o chat não precisar perguntar, cada mensagem que você digita leva ao assistente se ela veio da web ou do app (e a versão), se o aparelho é celular, tablet ou computador (e o sistema), seu fuso horário, seu idioma e quais das suas máquinas estão na mesma rede que você. Para saber isso, comparamos o IP público de onde a mensagem chegou com o IP público de onde o agente de cada máquina sua se conecta. **O IP não vai para o assistente e não é gravado:** fica só na memória do servidor, enquanto ele estiver ligado. Não usamos geolocalização. O resto vai com a mensagem para o Claude Code na sua máquina, como o texto dela. Você pode desligar em Memória do chat → "Contar ao chat de onde estou falando".
 - **Base legal:** execução de contrato.
 
 ### 3.5 Projetos, cards e integrações
@@ -134,9 +135,10 @@ Tickets apagados na origem também são apagados no termhub, na sincronização 
 
 ### 3.9 Registros técnicos (logs) e segurança
 
-- **O que registramos.** Nossos servidores registram, para cada acesso, a data e a hora, o endereço IP, o usuário (quando conectado), o método e a rota acessada, sem os parâmetros do endereço.
+- **O que registramos.** Nossos servidores registram, para cada acesso, a data e a hora, o endereço IP, o usuário (quando conectado), o método e a rota acessada (sem os parâmetros do endereço), a resposta e o tempo que ela levou, e a versão do aplicativo ou do site e o sistema usados (por exemplo, "web 1.4.0, macOS").
 - **O que não registramos.** Os logs não guardam o conteúdo dos terminais, as senhas nem os cabeçalhos de autenticação.
 - **Por quanto tempo.** Guardamos os registros de acesso por **6 meses**, como exige o Marco Civil da Internet (art. 15).
+- **Suporte.** Para resolver um problema que você relatar, a equipe de suporte do termhub (só administradores) pode consultar dados técnicos de uso da sua conta: os acessos e erros acima, as versões do aplicativo e do agente, o estado das máquinas, das abas e dos hooks. **Nunca o conteúdo**: nem mensagens do chat, prompts e respostas, telas de terminal, anexos, e-mail, tokens ou endereços IP. Cada consulta exige um motivo, fica limitada a um período de no máximo 7 dias e é registrada numa trilha de auditoria (quem consultou, qual conta, o quê, quando e por quê).
 - **Base legal:** cumprimento de obrigação legal (II) e legítimo interesse (IX).
 
 > Nota: a retenção de 6 meses e a rotação estão implementadas desde o TER-744 (item P-6).
@@ -220,6 +222,7 @@ Essas transferências são feitas para executar o contrato com você ou a seu pe
 | Eventos de uso dos tokens de API | 30 dias |
 | Anexos não enviados | 24 horas |
 | Áudio de ditado | não é guardado. O texto fica até 10 minutos em memória |
+| IP de onde você fala com o chat, e o das suas máquinas | não é gravado. Fica só em memória no servidor, até a próxima mensagem ou até o servidor reiniciar |
 | Arquivos colados no terminal (na sua máquina) | 7 dias |
 | Histórico de estados das abas | 90 dias |
 | Registros de acesso (logs) | 6 meses (Marco Civil, art. 15) |

@@ -562,6 +562,7 @@ export function TerminalsView({ project, visible }: Props) {
                       active={active}
                       onShowTerminal={() => openTab(t.terminalId, 'pin')}
                       onOpenBeside={() => openChatBeside(t.terminalId)}
+                      onOpenOtherTab={(id) => openTab(id, 'pin')}
                     />
                   ) : t.kind === 'simulator' ? (
                     <SimulatorView
@@ -594,6 +595,7 @@ export function TerminalsView({ project, visible }: Props) {
                           onShowTerminal={() => setTabView(t.id, 'terminal')}
                           onOpenBeside={() => openChatBeside(t.id)}
                           onOpenTab={() => openChatTab(t.id)}
+                          onOpenOtherTab={(id) => openTab(id, 'pin')}
                         />
                       </div>
                     </>

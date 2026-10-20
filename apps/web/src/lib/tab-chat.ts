@@ -2,7 +2,7 @@
 // (spec 2026-10-01 tab chat §6): the items the server read from the session's transcript, merged by id,
 // then folded into the rows the view draws. Pure: no React, no DOM.
 import { i18n, tk } from '../i18n';
-import type { TabChatItem, TabChatSummary } from './types';
+import type { TabAgentChoice, TabAgentOptions, TabChatItem, TabChatSummary } from './types';
 
 export interface ToolRow {
   id: string;
@@ -172,4 +172,25 @@ export function withAttachedPaths(text: string, paths: readonly string[]): strin
   if (paths.length === 0) return body;
   const list = paths.join(' ');
   return body ? `${body}\n\n${list}` : list;
+}
+
+/** The CLI an account starts (TER-1094), as the person knows it. */
+export function cliName(provider: string): string {
+  return provider === 'chatgpt' ? 'Codex' : provider === 'claude' ? 'Claude Code' : provider;
+}
+
+/**
+ * What "Iniciar sessão" offers for a tab with no agent (TER-1094): one button for the account the server
+ * picks (the others behind "Escolher outra conta"), the list when no rule picks one, or nothing to start.
+ */
+export type StartAgentPlan =
+  | { kind: 'suggested'; choice: TabAgentChoice; others: TabAgentChoice[] }
+  | { kind: 'choose'; choices: TabAgentChoice[] }
+  | { kind: 'none' };
+
+export function startAgentPlan(options: TabAgentOptions): StartAgentPlan {
+  if (options.choices.length === 0) return { kind: 'none' };
+  const choice = options.choices.find((c) => c.account_id === options.suggested);
+  if (!choice) return { kind: 'choose', choices: options.choices };
+  return { kind: 'suggested', choice, others: options.choices.filter((c) => c !== choice) };
 }

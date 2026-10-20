@@ -269,6 +269,8 @@ export const chatMemoryResponse = z.object({
   enabled: z.boolean(),
   autodecide: z.boolean(),
   codex_replies: z.boolean().default(false),
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default; absent from an older server, read as on. */
+  client_context: z.boolean().optional(),
   context_limit: z.number().int().nullable().optional(),
   available: z.boolean(),
   count: z.number().int(),
@@ -286,11 +288,13 @@ export const chatMemoryPatchBody = z
     enabled: z.boolean().optional(),
     autodecide: z.boolean().optional(),
     codex_replies: z.boolean().optional(),
+    // TER-1088: "Contar ao chat de onde estou falando" (on by default).
+    client_context: z.boolean().optional(),
     context_limit: chatContextLimit.nullable().optional(),
     auto_thresholds: autoThresholdsBody.nullable().optional(),
   })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
-    message: 'Informe enabled, autodecide, codex_replies, context_limit ou auto_thresholds',
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit ou auto_thresholds',
   });
 /** `POST chat/focus` (TER-642): one screen says whether termhub is in focus on it — the app, in the
  *  foreground. `client_id` is that screen's own random id. Sent on every change and as a heartbeat. */

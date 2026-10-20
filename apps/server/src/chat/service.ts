@@ -17,6 +17,7 @@ import { attachmentContext, isTranscribed } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
 import { withMessageRef } from './message-ref.js';
+import { forgetOrigin, originLine, rememberOrigin, sameNetworkAs, type ClientOrigin, type ClientSignals } from './client-origin.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
@@ -139,6 +140,9 @@ export interface SendOptions {
   replyToId?: string;
   /** Or the card it answers (TER-849): a gate card or a tab's question of this conversation. */
   replyToCard?: ReplyCardRef;
+  /** What the route read of the client this came from (TER-1088): the server completes it into the
+   *  origin line the concierge reads, unless the person turned that off. */
+  client?: ClientSignals;
 }
 /** What `startIn` takes besides the text: a decision's marking hook, and the attachment ids of a typed message. */
 interface StartOptions {
@@ -148,6 +152,8 @@ interface StartOptions {
   replyToCard?: ReplyCardRef;
   /** The person typed this message (`start`): its run text carries the message's ref (TER-1037). */
   typed?: boolean;
+  /** Where a typed message came from (TER-1088): the line put right after its ref line. */
+  origin?: string | null;
   /** A held audio message (TER-1085): its question is stored already, its answer row is written now. */
   held?: HeldTurn;
   /** Transcripts of an earlier message that became ready since (`deliverLateTranscript`): told in this
@@ -160,6 +166,8 @@ interface HeldTurn {
   question: ChatMessage;
   answerId: string;
   reply: ReplyTarget | null;
+  /** Its origin line (TER-1088), read when the message came in. */
+  origin?: string | null;
 }
 /** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
 interface Attachable {
@@ -277,6 +285,8 @@ interface QueuedTurn {
   reply: ReplyTarget | null;
   /** The person typed it: a run text built later carries its ref (TER-1037). */
   typed?: boolean;
+  /** Its origin line (TER-1088), for a run text built later. */
+  origin?: string | null;
   /** An earlier message's transcripts this turn delivers (TER-1085). */
   late?: AttachmentRow[];
   question: ChatMessage;
@@ -1057,9 +1067,10 @@ export class ChatService {
     // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
     // failure keeps the old denial window, never the message.
     await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
+    const origin = await this.originFor(user, conversation.id, opts.client);
     const started =
-      (await this.holdForTranscript(user, conversation, text, opts)) ??
-      (await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true }));
+      (await this.holdForTranscript(user, conversation, text, opts, origin)) ??
+      (await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true, origin }));
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.
     void this.deps.indexMessage({ id: started.user_message_id, owner_id: user.id, project_id: conversation.project_id, text, created_at: new Date().toISOString() });
@@ -1088,7 +1099,7 @@ export class ChatService {
    * the route's answer. Whatever refuses a message (a bad attachment, no host) still refuses it here,
    * before anything is stored. Null: not such a message — `startIn` takes it like any other.
    */
-  private async holdForTranscript(user: User, conversation: ChatConversation, text: string, opts: SendOptions): Promise<StartedRun | null> {
+  private async holdForTranscript(user: User, conversation: ChatConversation, text: string, opts: SendOptions, origin: string | null): Promise<StartedRun | null> {
     if (text.trim() !== '' || !opts.attachmentIds?.length || this.suspending) return null;
     const attachable = await this.attachableRows(user, conversation.id, opts.attachmentIds);
     const waitFor = attachable.rows.filter((r) => isTranscribed(r) && r.status === 'pending').map((r) => r.id);
@@ -1098,7 +1109,7 @@ export class ChatService {
     await this.guardExclusive(user, conversation, host);
     const reply = await this.replyTargetFor(user, conversation.id, opts);
     const question = await this.storeQuestion(user, conversation.id, text, attachable, reply);
-    const held: HeldTurn = { question, answerId: newId(), reply };
+    const held: HeldTurn = { question, answerId: newId(), reply, origin };
     const d = deferred();
     // Tracked like any start: a shutdown ends the hold (`holdReleases`) and waits for the turn to land.
     void this.track(this.releaseHeld(user, conversation, text, held, waitFor, d.settle));
@@ -1110,7 +1121,7 @@ export class ChatService {
   private async releaseHeld(user: User, conversation: ChatConversation, text: string, held: HeldTurn, waitFor: string[], settle: LiveTurn['settle']): Promise<void> {
     await this.waitForTranscripts(waitFor);
     try {
-      const started = await this.startNow(user, conversation, text, { held, typed: true });
+      const started = await this.startNow(user, conversation, text, { held, typed: true, origin: held.origin });
       started.done.then(settle.resolve, settle.reject);
     } catch (err) {
       console.error('chat: a held audio message could not start', { conversation_id: conversation.id, message_id: held.question.id, error: failureLabel(err) });
@@ -1258,6 +1269,35 @@ export class ChatService {
     }
   }
 
+  /**
+   * The origin line of a message the person typed (TER-1088): what the route read of the client, the
+   * account's time zone when the client sent none, and which of the person's machines are on the same
+   * public network. Remembered for `get_client_context`. Null when the route read nothing (a test, an
+   * older caller), when the person turned it off, or when a read fails — the message never waits on it.
+   */
+  private async originFor(user: User, conversationId: string, client: ClientSignals | undefined): Promise<string | null> {
+    if (!client) return null;
+    try {
+      if (!(await this.deps.repos.users.chatClientContext(user.id))) {
+        forgetOrigin(conversationId);
+        return null;
+      }
+      const agents = this.deps.agents;
+      const machines = agents.publicIp ? await this.deps.repos.machines.list(user.id) : [];
+      const origin: ClientOrigin = {
+        ...client,
+        time_zone: client.time_zone ?? (await this.deps.repos.users.timeZone(user.id)),
+        same_network_as: sameNetworkAs(client.ip, machines.map((m) => ({ name: m.name, ip: agents.publicIp?.(m.id) ?? null }))),
+        at: new Date().toISOString(),
+      };
+      rememberOrigin(conversationId, origin);
+      return originLine(origin);
+    } catch (err) {
+      console.error('chat: client origin skipped', { conversation_id: conversationId, error: failureLabel(err) });
+      return null;
+    }
+  }
+
   /** Whether this host's agent runs a claude channel with streamed input. */
   private streams(machineId: string): boolean {
     return this.deps.agents.capabilities(machineId)?.includes(CAPABILITY_CLAUDE_STREAM_INPUT) ?? false;
@@ -1337,7 +1377,7 @@ export class ChatService {
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
     const baseText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply, late) : undefined;
     const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply, opts?.held);
-    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed);
+    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed, opts?.origin);
     let runText = baseText === undefined ? undefined : withRef(baseText);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
@@ -1349,7 +1389,7 @@ export class ChatService {
       runText ??= withRef(await this.runTextFor(user, conversation.id, text, attachable.rows, reply, late));
       if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
     }
-    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, late, question, answer, settle: d.settle });
+    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, origin: opts?.origin, late, question, answer, settle: d.settle });
     // Announced here, before the queue may run: `launchQueued` can close this turn at once.
     chatBus.publish({ type: 'run_started', user_id: user.id, conversation_id: conversation.id, message_id: answer.id });
     this.live.get(conversation.id)?.giveWay();
@@ -1529,7 +1569,7 @@ export class ChatService {
 
       const baseText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply, opts?.lateRows);
       const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply, opts?.held);
-      const runText = withMessageRef(baseText, question.id, text, opts?.typed);
+      const runText = withMessageRef(baseText, question.id, text, opts?.typed, opts?.origin);
       const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
       // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
@@ -1959,7 +1999,7 @@ export class ChatService {
         const stored = queue.map((q) => ({
           question_id: q.question.id,
           answer_id: q.answer.id,
-          text: q.runText ?? withMessageRef([attachmentContext(q.late ?? [], { late: true }), attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed),
+          text: q.runText ?? withMessageRef([attachmentContext(q.late ?? [], { late: true }), attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed, q.origin),
         }));
         const held = rows.get(conversationId);
         rows.set(conversationId, { userId: held?.userId ?? queue[0].userId, turns: [...(held?.turns ?? []), ...stored] });
@@ -2193,7 +2233,7 @@ export class ChatService {
       if (streamed) carried = await this.takeOver(user, conversation);
       taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
-      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply, q.late), q.question.id, q.text, q.typed), question: q.question, answer: q.answer, settle: q.settle });
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply, q.late), q.question.id, q.text, q.typed, q.origin), question: q.question, answer: q.answer, settle: q.settle });
       // A one-shot run takes a single queued turn, whose question row always exists.
       const oneShot = taken[0];
       // From here the run owns the lock and releases it itself, and settles the turns.

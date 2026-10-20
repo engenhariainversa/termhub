@@ -1,8 +1,9 @@
 // `react-native-markdown-display` under jest (test/ui-setup.js): the source text in a `Text`
 // tagged `markdown`, so a test can tell an assistant's markdown bubble from a plain one. Every
 // render appends its source to `renders`, so a test can check which bubbles re-rendered, and its
-// props to `props`, so a test can call `onLinkPress` or a rule the real renderer would. The parser
-// is the real markdown-it the library re-exports: plain CommonJS, and what "Copiar" reads (TER-1090).
+// props to `props`, so a test can call `onLinkPress` or a rule the real renderer would. `MarkdownIt` is
+// the real parser (plain CommonJS), so a configured instance can be checked on its own, and it is what
+// "Copiar" reads (TER-1090).
 const React = require('react');
 const { Text } = require('react-native');
 

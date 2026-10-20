@@ -32,11 +32,13 @@ export type AggregateAccessLog = {
 export type AccessLogAvgAggregateOutputType = {
   id: number | null
   status: number | null
+  durationMs: number | null
 }
 
 export type AccessLogSumAggregateOutputType = {
   id: bigint | null
   status: number | null
+  durationMs: number | null
 }
 
 export type AccessLogMinAggregateOutputType = {
@@ -48,6 +50,9 @@ export type AccessLogMinAggregateOutputType = {
   method: string | null
   route: string | null
   status: number | null
+  client: string | null
+  os: string | null
+  durationMs: number | null
 }
 
 export type AccessLogMaxAggregateOutputType = {
@@ -59,6 +64,9 @@ export type AccessLogMaxAggregateOutputType = {
   method: string | null
   route: string | null
   status: number | null
+  client: string | null
+  os: string | null
+  durationMs: number | null
 }
 
 export type AccessLogCountAggregateOutputType = {
@@ -70,6 +78,9 @@ export type AccessLogCountAggregateOutputType = {
   method: number
   route: number
   status: number
+  client: number
+  os: number
+  durationMs: number
   _all: number
 }
 
@@ -77,11 +88,13 @@ export type AccessLogCountAggregateOutputType = {
 export type AccessLogAvgAggregateInputType = {
   id?: true
   status?: true
+  durationMs?: true
 }
 
 export type AccessLogSumAggregateInputType = {
   id?: true
   status?: true
+  durationMs?: true
 }
 
 export type AccessLogMinAggregateInputType = {
@@ -93,6 +106,9 @@ export type AccessLogMinAggregateInputType = {
   method?: true
   route?: true
   status?: true
+  client?: true
+  os?: true
+  durationMs?: true
 }
 
 export type AccessLogMaxAggregateInputType = {
@@ -104,6 +120,9 @@ export type AccessLogMaxAggregateInputType = {
   method?: true
   route?: true
   status?: true
+  client?: true
+  os?: true
+  durationMs?: true
 }
 
 export type AccessLogCountAggregateInputType = {
@@ -115,6 +134,9 @@ export type AccessLogCountAggregateInputType = {
   method?: true
   route?: true
   status?: true
+  client?: true
+  os?: true
+  durationMs?: true
   _all?: true
 }
 
@@ -213,6 +235,9 @@ export type AccessLogGroupByOutputType = {
   method: string
   route: string
   status: number | null
+  client: string | null
+  os: string | null
+  durationMs: number | null
   _count: AccessLogCountAggregateOutputType | null
   _avg: AccessLogAvgAggregateOutputType | null
   _sum: AccessLogSumAggregateOutputType | null
@@ -247,6 +272,9 @@ export type AccessLogWhereInput = {
   method?: Prisma.StringFilter<"AccessLog"> | string
   route?: Prisma.StringFilter<"AccessLog"> | string
   status?: Prisma.IntNullableFilter<"AccessLog"> | number | null
+  client?: Prisma.StringNullableFilter<"AccessLog"> | string | null
+  os?: Prisma.StringNullableFilter<"AccessLog"> | string | null
+  durationMs?: Prisma.IntNullableFilter<"AccessLog"> | number | null
 }
 
 export type AccessLogOrderByWithRelationInput = {
@@ -258,6 +286,9 @@ export type AccessLogOrderByWithRelationInput = {
   method?: Prisma.SortOrder
   route?: Prisma.SortOrder
   status?: Prisma.SortOrderInput | Prisma.SortOrder
+  client?: Prisma.SortOrderInput | Prisma.SortOrder
+  os?: Prisma.SortOrderInput | Prisma.SortOrder
+  durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
 }
 
 export type AccessLogWhereUniqueInput = Prisma.AtLeast<{
@@ -272,6 +303,9 @@ export type AccessLogWhereUniqueInput = Prisma.AtLeast<{
   method?: Prisma.StringFilter<"AccessLog"> | string
   route?: Prisma.StringFilter<"AccessLog"> | string
   status?: Prisma.IntNullableFilter<"AccessLog"> | number | null
+  client?: Prisma.StringNullableFilter<"AccessLog"> | string | null
+  os?: Prisma.StringNullableFilter<"AccessLog"> | string | null
+  durationMs?: Prisma.IntNullableFilter<"AccessLog"> | number | null
 }, "id">
 
 export type AccessLogOrderByWithAggregationInput = {
@@ -283,6 +317,9 @@ export type AccessLogOrderByWithAggregationInput = {
   method?: Prisma.SortOrder
   route?: Prisma.SortOrder
   status?: Prisma.SortOrderInput | Prisma.SortOrder
+  client?: Prisma.SortOrderInput | Prisma.SortOrder
+  os?: Prisma.SortOrderInput | Prisma.SortOrder
+  durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.AccessLogCountOrderByAggregateInput
   _avg?: Prisma.AccessLogAvgOrderByAggregateInput
   _max?: Prisma.AccessLogMaxOrderByAggregateInput
@@ -302,6 +339,9 @@ export type AccessLogScalarWhereWithAggregatesInput = {
   method?: Prisma.StringWithAggregatesFilter<"AccessLog"> | string
   route?: Prisma.StringWithAggregatesFilter<"AccessLog"> | string
   status?: Prisma.IntNullableWithAggregatesFilter<"AccessLog"> | number | null
+  client?: Prisma.StringNullableWithAggregatesFilter<"AccessLog"> | string | null
+  os?: Prisma.StringNullableWithAggregatesFilter<"AccessLog"> | string | null
+  durationMs?: Prisma.IntNullableWithAggregatesFilter<"AccessLog"> | number | null
 }
 
 export type AccessLogCreateInput = {
@@ -313,6 +353,9 @@ export type AccessLogCreateInput = {
   method: string
   route: string
   status?: number | null
+  client?: string | null
+  os?: string | null
+  durationMs?: number | null
 }
 
 export type AccessLogUncheckedCreateInput = {
@@ -324,6 +367,9 @@ export type AccessLogUncheckedCreateInput = {
   method: string
   route: string
   status?: number | null
+  client?: string | null
+  os?: string | null
+  durationMs?: number | null
 }
 
 export type AccessLogUpdateInput = {
@@ -335,6 +381,9 @@ export type AccessLogUpdateInput = {
   method?: Prisma.StringFieldUpdateOperationsInput | string
   route?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  client?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type AccessLogUncheckedUpdateInput = {
@@ -346,6 +395,9 @@ export type AccessLogUncheckedUpdateInput = {
   method?: Prisma.StringFieldUpdateOperationsInput | string
   route?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  client?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type AccessLogCreateManyInput = {
@@ -357,6 +409,9 @@ export type AccessLogCreateManyInput = {
   method: string
   route: string
   status?: number | null
+  client?: string | null
+  os?: string | null
+  durationMs?: number | null
 }
 
 export type AccessLogUpdateManyMutationInput = {
@@ -368,6 +423,9 @@ export type AccessLogUpdateManyMutationInput = {
   method?: Prisma.StringFieldUpdateOperationsInput | string
   route?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  client?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type AccessLogUncheckedUpdateManyInput = {
@@ -379,6 +437,9 @@ export type AccessLogUncheckedUpdateManyInput = {
   method?: Prisma.StringFieldUpdateOperationsInput | string
   route?: Prisma.StringFieldUpdateOperationsInput | string
   status?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  client?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
 }
 
 export type AccessLogCountOrderByAggregateInput = {
@@ -390,11 +451,15 @@ export type AccessLogCountOrderByAggregateInput = {
   method?: Prisma.SortOrder
   route?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  client?: Prisma.SortOrder
+  os?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type AccessLogAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type AccessLogMaxOrderByAggregateInput = {
@@ -406,6 +471,9 @@ export type AccessLogMaxOrderByAggregateInput = {
   method?: Prisma.SortOrder
   route?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  client?: Prisma.SortOrder
+  os?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type AccessLogMinOrderByAggregateInput = {
@@ -417,11 +485,15 @@ export type AccessLogMinOrderByAggregateInput = {
   method?: Prisma.SortOrder
   route?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  client?: Prisma.SortOrder
+  os?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 export type AccessLogSumOrderByAggregateInput = {
   id?: Prisma.SortOrder
   status?: Prisma.SortOrder
+  durationMs?: Prisma.SortOrder
 }
 
 
@@ -435,6 +507,9 @@ export type AccessLogSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   method?: boolean
   route?: boolean
   status?: boolean
+  client?: boolean
+  os?: boolean
+  durationMs?: boolean
 }, ExtArgs["result"]["accessLog"]>
 
 export type AccessLogSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -446,6 +521,9 @@ export type AccessLogSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   method?: boolean
   route?: boolean
   status?: boolean
+  client?: boolean
+  os?: boolean
+  durationMs?: boolean
 }, ExtArgs["result"]["accessLog"]>
 
 export type AccessLogSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -457,6 +535,9 @@ export type AccessLogSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   method?: boolean
   route?: boolean
   status?: boolean
+  client?: boolean
+  os?: boolean
+  durationMs?: boolean
 }, ExtArgs["result"]["accessLog"]>
 
 export type AccessLogSelectScalar = {
@@ -468,9 +549,12 @@ export type AccessLogSelectScalar = {
   method?: boolean
   route?: boolean
   status?: boolean
+  client?: boolean
+  os?: boolean
+  durationMs?: boolean
 }
 
-export type AccessLogOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "createdAt" | "ip" | "userId" | "kind" | "method" | "route" | "status", ExtArgs["result"]["accessLog"]>
+export type AccessLogOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "createdAt" | "ip" | "userId" | "kind" | "method" | "route" | "status" | "client" | "os" | "durationMs", ExtArgs["result"]["accessLog"]>
 
 export type $AccessLogPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "AccessLog"
@@ -493,6 +577,18 @@ export type $AccessLogPayload<ExtArgs extends runtime.Types.Extensions.InternalA
      * The HTTP status; for a WebSocket, 101 once handed to its route or the refusal's status.
      */
     status: number | null
+    /**
+     * TER-1092: the client that made the call (`web/1.4.0`, `ios/0.3.2+34`, `mcp`); null when it did not say.
+     */
+    client: string | null
+    /**
+     * TER-1092: the system, coarse (`macOS`, `iOS`, `Android`…), from the User-Agent or the app header; never the UA itself.
+     */
+    os: string | null
+    /**
+     * TER-1092: how long the response took (HTTP only).
+     */
+    durationMs: number | null
   }, ExtArgs["result"]["accessLog"]>
   composites: {}
 }
@@ -924,6 +1020,9 @@ export interface AccessLogFieldRefs {
   readonly method: Prisma.FieldRef<"AccessLog", 'String'>
   readonly route: Prisma.FieldRef<"AccessLog", 'String'>
   readonly status: Prisma.FieldRef<"AccessLog", 'Int'>
+  readonly client: Prisma.FieldRef<"AccessLog", 'String'>
+  readonly os: Prisma.FieldRef<"AccessLog", 'String'>
+  readonly durationMs: Prisma.FieldRef<"AccessLog", 'Int'>
 }
     
 

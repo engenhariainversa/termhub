@@ -1,5 +1,6 @@
 import { CAPABILITY_TRANSCRIPT, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import { CLAUDE_SESSION_ID_RE } from '@termhub/machine-ops';
+import type { TTabChatEmptyReason } from '@termhub/mobile-api';
 import { agentRpc } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
@@ -30,8 +31,42 @@ export function availabilityOf(tab: Tab, machine: Pick<Machine, 'id' | 'type'>, 
   if (!agent.isOnline(machine.id)) return 'offline';
   if (!(agent.capabilities(machine.id) ?? []).includes(CAPABILITY_TRANSCRIPT)) return 'agent_outdated';
   if (tab.state_tool && tab.state_tool !== 'claude') return 'unsupported_tool';
-  if (!tab.agent_transcript_path || !tab.agent_session_id || !CLAUDE_SESSION_ID_RE.test(tab.agent_session_id)) return 'no_session';
+  if (!hasReportedSession(tab)) return 'no_session';
   return 'ready';
+}
+
+/** Whether the tab has reported a session `availabilityOf` can read. */
+export function hasReportedSession(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>): boolean {
+  return !!tab.agent_transcript_path && !!tab.agent_session_id && CLAUDE_SESSION_ID_RE.test(tab.agent_session_id);
+}
+
+/**
+ * Why a page has no history (TER-1091, `TAB_CHAT_EMPTY_REASONS` in the contract), or null when it has
+ * some or another availability already says why. `firstPage`: the read started at the end of the session
+ * (no `before`), so an empty page means the session itself is empty. `atShell`: the tab's pane has its
+ * shell in front, no AI CLI running (TER-1094): whatever the hooks said before, there is no agent to talk
+ * to, and that is what the screen must say (`no_agent`, with "Iniciar sessão").
+ */
+export function emptyReasonOf(
+  tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>,
+  availability: TabChatAvailability,
+  page: Pick<Page, 'items' | 'before'>,
+  firstPage: boolean,
+  hooksInstalled: boolean,
+  atShell = false,
+): TTabChatEmptyReason | null {
+  if (atShell && hasNoHistory(availability, page, firstPage)) return 'no_agent';
+  if (availability === 'no_session') {
+    if (hasReportedSession(tab)) return 'transcript_missing';
+    return hooksInstalled ? 'not_reported' : 'no_hooks';
+  }
+  if (availability === 'ready' && firstPage && page.items.length === 0 && page.before === null) return 'new_session';
+  return null;
+}
+
+/** The page shows no history at all: no session to read, or the current one is empty (TER-1094: when the pane is worth a look). */
+export function hasNoHistory(availability: TabChatAvailability, page: Pick<Page, 'items' | 'before'>, firstPage: boolean): boolean {
+  return availability === 'no_session' || (availability === 'ready' && firstPage && page.items.length === 0 && page.before === null);
 }
 
 /** A position in one session's transcript: a byte offset on a line boundary. Opaque to the app. */

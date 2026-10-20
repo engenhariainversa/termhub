@@ -717,6 +717,7 @@ function chatMemoryView(state: MockState): TChatMemory {
     enabled: state.chatMemoryEnabled,
     autodecide: state.chatAutodecideEnabled,
     codex_replies: state.chatCodexRepliesEnabled,
+    client_context: state.chatClientContextEnabled,
     context_limit: state.chatContextLimit,
     available: true,
     count: state.decisions.length,
@@ -1333,6 +1334,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     if (body.enabled !== undefined) state.chatMemoryEnabled = body.enabled;
     if (body.autodecide !== undefined) state.chatAutodecideEnabled = body.autodecide;
     if (body.codex_replies !== undefined) state.chatCodexRepliesEnabled = body.codex_replies;
+    if (body.client_context !== undefined) state.chatClientContextEnabled = body.client_context;
     if (body.context_limit !== undefined) state.chatContextLimit = body.context_limit;
     if (body.auto_thresholds !== undefined) state.chatAutoThresholds = body.auto_thresholds;
     return { status: 200, body: chatMemoryView(state) };

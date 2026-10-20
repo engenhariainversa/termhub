@@ -29,9 +29,12 @@ import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } 
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
+import { getClientContext } from '../control/client-context.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
 import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.js';
+import { TROUBLESHOOT_ENDPOINTS, TROUBLESHOOT_REQUESTS_MAX, troubleshootReason, troubleshootRoutePrefix, troubleshootTool } from '../control/user-troubleshoot.js';
+import { isAdmin } from '../auth/permissions.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
@@ -387,6 +390,27 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, a) => wakeMachineTool(ctx, a as { machine_id: string; via_machine_id?: string }),
   },
   {
+    name: 'admin_user_troubleshoot',
+    description:
+      "Admins only: technical metadata of ONE user, to diagnose a problem they reported without opening the database (TER-1092). Read only, never content: no chat messages, prompts, answers, terminal screens, attachments, e-mail, tokens or IPs. endpoint search finds the user by name or e-mail (query) and answers opaque user_id and name, never the e-mail; every other endpoint takes user_id: requests (their authenticated calls: time, method, route pattern, status, duration, client; route_prefix filters, limit up to 1000), tabs (their open tabs: agent, machine name, state, monitor events counted by kind), machines (agent version, online, last contact, hooks state per CLI read live from online agents), errors (5xx answers and failed MCP calls, no payloads), client (web/app versions and systems used, paired phones). from/to (ISO) bound the window: default the last 12 h, 7 days at most. reason is required (the card or report, e.g. \"TER-1091\") and every call is written to the security trail with it. In the chat, the first query about each user in a conversation asks the person first.",
+    scope: 'read', resource: 'users', action: 'read',
+    // Not a grant: only an admin role lists it. Fails closed: a role that cannot be read is no admin.
+    allowedIf: (ctx) => isAdmin(ctx.repos, ctx.scope?.user).catch(() => false),
+    grantText: 'de administrador',
+    strict: true,
+    input: {
+      endpoint: z.enum(TROUBLESHOOT_ENDPOINTS),
+      reason: troubleshootReason,
+      user_id: id.optional(),
+      query: z.string().trim().min(2).max(200).optional(),
+      from: z.string().datetime({ offset: true }).optional(),
+      to: z.string().datetime({ offset: true }).optional(),
+      route_prefix: troubleshootRoutePrefix.optional(),
+      limit: z.number().int().min(1).max(TROUBLESHOOT_REQUESTS_MAX).optional(),
+    },
+    run: (ctx, a) => troubleshootTool(ctx, a),
+  },
+  {
     name: 'report_card',
     description:
       "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
@@ -562,6 +586,16 @@ export const TOOLS: ToolDef[] = [
     action: 'read',
     input: {},
     run: (ctx) => getChatContext(ctx),
+  },
+  {
+    name: 'get_client_context',
+    description:
+      "Where the person's last message in this chat came from, as the server read it from the request (never typed by them): client (web, iOS or Android app) and version, device (phone, tablet or computer) and system, public IP, same_network_as (their machines whose agent connects from the same public network: same IPv4, or same IPv6 /64), time zone and language. The same data as the [termhub origin] line before each message. Use it before asking where they are or whether they are near a machine: on the same network, a machine's file can be served over the local network. Kept in memory only; enabled false when the person turned it off. Only works in the termhub chat.",
+    scope: 'read',
+    resource: 'chat',
+    action: 'read',
+    input: {},
+    run: (ctx) => getClientContext(ctx),
   },
   {
     name: 'answer_tab_question',

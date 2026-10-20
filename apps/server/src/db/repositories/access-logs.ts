@@ -12,6 +12,12 @@ export interface AccessLogInput {
   method: string;
   route: string;
   status: number | null;
+  /** TER-1092: the calling client (`web/1.4.0`, `ios/0.3.2+34`, `mcp`), when it said. */
+  client?: string | null;
+  /** TER-1092: the system, coarse (`macOS`, `iOS`…), never the User-Agent itself. */
+  os?: string | null;
+  /** TER-1092: the response time of an HTTP call. */
+  duration_ms?: number | null;
 }
 
 export class AccessLogsRepository {
@@ -28,6 +34,9 @@ export class AccessLogsRepository {
         method: r.method,
         route: r.route,
         status: r.status,
+        client: r.client ?? null,
+        os: r.os ?? null,
+        durationMs: r.duration_ms ?? null,
       })),
     });
   }

@@ -26,12 +26,14 @@ const memoryBody = z
     enabled: z.boolean().optional(),
     autodecide: z.boolean().optional(),
     codex_replies: z.boolean().optional(),
+    // TER-1088: "Contar ao chat de onde estou falando" (on by default).
+    client_context: z.boolean().optional(),
     context_limit: chatContextLimit.nullable().optional(),
     // TER-642: the automatic-answer thresholds pinned by hand; null hands them back to calibration.
     auto_thresholds: autoThresholdsBody.nullable().optional(),
   })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
-    message: 'Informe enabled, autodecide, codex_replies, context_limit ou auto_thresholds',
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit ou auto_thresholds',
   });
 /** `POST /focus` (TER-642): one screen's heartbeat. `client_id` is that screen's own random id. */
 const focusBody = z.object({ client_id: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
@@ -143,6 +145,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     autodecide: await repos.users.chatAutodecide(userId),
     // "Responder perguntas do Codex pelo chat": off by default, opt-in per user.
     codex_replies: await repos.users.chatCodexReplies(userId),
+    // "Contar ao chat de onde estou falando" (TER-1088): on by default, the person can turn it off.
+    client_context: await repos.users.chatClientContext(userId),
     // The chat's context meter limit (TER-1038): null = the model's window, the default.
     context_limit: await repos.users.chatContextLimit(userId),
     // `false` when embeddings are not configured on this server at all: the switch has nothing to do.
@@ -165,6 +169,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.enabled !== undefined) await repos.users.setChatSuggestions(userId, body.enabled);
     if (body.autodecide !== undefined) await repos.users.setChatAutodecide(userId, body.autodecide);
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
+    if (body.client_context !== undefined) await repos.users.setChatClientContext(userId, body.client_context);
     if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
     // Pinning turns calibration off for this person; null turns it back on. A countdown already
     // running keeps the thresholds it was scheduled under.
