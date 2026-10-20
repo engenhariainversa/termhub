@@ -15,6 +15,7 @@ import { decodeGroupDrag, decodeProjectDrag, encodeProjectDrag, GROUP_MIME, PROJ
 import { loadCollapsedGroups, loadCollapsedProjects, saveCollapsedGroups, saveCollapsedProjects } from '../lib/sidebar-prefs';
 import type { Project, ProjectGroup, Tab } from '../lib/types';
 import { GroupHeader } from './GroupHeader';
+import { AiLoginWarnings } from './AiLoginWarnings';
 import { MainNav } from './MainNav';
 import { ProfileButton } from './ProfileButton';
 import { ProjectForm } from './ProjectForm';
@@ -81,7 +82,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
   const { t } = useTranslation();
   const { can } = useAuth();
   const { projects, machinesOf, loading } = useData();
-  const { items: monitorItems, openTabs } = useMonitor();
+  const { items: monitorItems, openTabs, autoRuns } = useMonitor();
   const waiting = useMemo(() => needsYouByProject(monitorItems), [monitorItems]);
   // every open terminal tab, reported a state or not: "Em execução" means a tab is open
   const agents = useMemo(() => agentsByProject(openTabs), [openTabs]);
@@ -286,6 +287,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         project={p}
         section={nameOf(section)}
         agents={agents.get(p.id) ?? []}
+        autoRuns={autoRuns}
         machines={machinesOf(p)}
         waiting={waiting.get(p.id) ?? 0}
         expanded={!collapsed.has(p.id)}
@@ -422,6 +424,7 @@ export function Sidebar({ onCollapse }: { onCollapse?: () => void }) {
         {sections.map(renderSection)}
       </nav>
 
+      <AiLoginWarnings className="border-t border-line px-2 py-2" />
       <MainNav variant="list" />
       <ProfileButton variant="row" />
 

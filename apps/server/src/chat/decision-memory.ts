@@ -1,8 +1,8 @@
 import type { FastifyBaseLogger } from 'fastify';
-import type { AnsweredChoiceRow, ChatDecision, NewDecision } from '../db/repositories/chat-decisions.js';
+import type { AnsweredChoiceRow, ChatDecision, DecisionNeighbour, DecisionTrust, NewDecision } from '../db/repositories/chat-decisions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
-import { answerToDecision, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, sameAnswer, type SuggestionItem, type TabQuestionSuggestion } from './decision-text.js';
+import { answerToDecision, embedTag, embedText, EMBED_TEXT_VERSION, mapAnswer, sameAnswer, type ItemAnswer, type SuggestionItem, type TabQuestionSuggestion } from './decision-text.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from './embeddings.js';
 import { checkChoiceAnswer, choiceAnswerBody, choicePayload, type ChoiceAnswer, type ChoicePayload } from './tab-question-payload.js';
 
@@ -14,6 +14,21 @@ export interface MemoryDeps {
   threshold: number;
   timeoutMs?: number;
   log: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+}
+
+/**
+ * The past decision a question's suggestion comes from, among its `nearest` neighbours (spec 2026-09-26
+ * §4): only the ones at or above `threshold`, newest first — a fresher decision beats a stronger but
+ * stale match — and the first whose answer still maps onto this question's options. Shared by
+ * `suggestFor` and the memory replay (TER-1009), so the replay measures the rule the cards actually use.
+ */
+export function pickPrecedent(near: DecisionNeighbour[], item: { multi_select: boolean; options: { label: string }[] }, threshold: number): { decision: DecisionNeighbour; mapped: ItemAnswer } | null {
+  const candidates = near.filter((n) => n.similarity >= threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  for (const c of candidates) {
+    const mapped = mapAnswer(c.answer, item);
+    if (mapped) return { decision: c, mapped }; // otherwise the past labels no longer match this question's options — try the next
+  }
+  return null;
 }
 
 /**
@@ -44,15 +59,17 @@ export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisi
       // other empty question and match them at similarity 1.0 — never a real match, so it never even
       // asks `nearest`.
       if (texts[i] === '') continue;
-      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, { multiSelect: item.multi_select, k: SUGGEST_K, embedModel: embedTag(model) });
-      // Newest first among the ones close enough: a fresher decision beats a stronger but stale match.
-      const candidates = near.filter((n) => n.similarity >= deps.threshold).sort((a, b) => b.created_at.localeCompare(a.created_at));
-      for (const c of candidates) {
-        const mapped = mapAnswer(c.answer, item);
-        if (!mapped) continue; // the past labels no longer match this question's options — try the next
-        found.push({ question_index: i, decision_id: c.id, similarity: c.similarity, ...mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
-        break;
-      }
+      const near = await repos.chatDecisions.nearest(row.user_id, vectors[i]!, {
+        multiSelect: item.multi_select,
+        k: SUGGEST_K,
+        embedModel: embedTag(model),
+        // TER-1014: only decisions that hold on this card — not expired, in scope for its project and conversation.
+        place: { projectId: row.project_id, conversationId: row.conversation_id },
+      });
+      const picked = pickPrecedent(near, item, deps.threshold);
+      if (!picked) continue;
+      const c = picked.decision;
+      found.push({ question_index: i, decision_id: c.id, similarity: c.similarity, ...picked.mapped, source: { question: c.question, project_name: c.project_name, answered_at: c.created_at } });
     }
     if (found.length === 0 || abandoned) return null;
     await repos.chatDecisions.bumpSuggested(found.map((f) => f.decision_id));
@@ -75,11 +92,12 @@ export async function suggestFor(repos: Pick<Repositories, 'users' | 'chatDecisi
  * One `NewDecision` per question of an answered `choice` row (spec 2026-09-26 §4.3): `options` drop
  * `recommended` (never stored — a suggestion is only ever ranked on similarity and recency, not on
  * what Claude Code recommended when it was asked). `userId` is the caller's to give: `answered_by` for
- * a live answer, the same column read straight off `AnsweredChoiceRow` for the sweeper's backfill. An
+ * a live answer, the same column read straight off `AnsweredChoiceRow` for the sweeper's backfill.
+ * `trust` is `person` for a click and `derived` for an answer the countdown sent (TER-1006). An
  * unanswered row (`answer` still null — should not happen, the caller only calls this once claimed)
  * gives no decisions rather than throwing.
  */
-export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conversation_id' | 'payload' | 'answer'>, userId: string): NewDecision[] {
+export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conversation_id' | 'payload' | 'answer'>, userId: string, trust: DecisionTrust = 'person'): NewDecision[] {
   if (!row.answer) return [];
   const payload = row.payload as ChoicePayload;
   const answer = row.answer as ChoiceAnswer;
@@ -98,6 +116,7 @@ export function decisionsOf(row: Pick<TabQuestion, 'id' | 'project_id' | 'conver
       options: item.options.map((o) => ({ label: o.label, description: o.description })),
       multi_select: item.multi_select,
       answer: answerToDecision(item, { selected: a.selected, text: a.text }),
+      trust,
     });
   }
   return decisions;
@@ -175,6 +194,12 @@ export interface BackfillResult {
  * that, or whose insert itself throws, is skipped rather than aborting the batch — one bad row must
  * never stop every row behind it from being recorded. Returns the number of decisions inserted (not
  * rows visited: a multi-question row gives several) and the skipped row ids.
+ *
+ * Only a click (`answered_via` `'card'`, or null on a row from before the column) is the person's
+ * decision. An answer the countdown sent — a precedent repeated (`'auto'`) or the option a run picked
+ * as "(Recomendado)" (`'automation'`) — is recorded `derived` (TER-1006): kept for `search_memory` and
+ * the "Memória do chat" list, never a precedent for the next automatic answer (spec D2/D11), so the
+ * memory cannot feed on itself.
  */
 export async function backfillDecisions(repos: Pick<Repositories, 'chatDecisions'>, limit = 32, excludeIds: string[] = []): Promise<BackfillResult> {
   const rows: AnsweredChoiceRow[] = await repos.chatDecisions.listAnsweredChoicesWithoutDecision(limit, excludeIds);
@@ -188,7 +213,8 @@ export async function backfillDecisions(repos: Pick<Repositories, 'chatDecisions
         skipped.push(row.id);
         continue;
       }
-      const decisions = decisionsOf({ id: row.id, project_id: row.project_id, conversation_id: row.conversation_id, payload: payload.data, answer: answer.data }, row.answered_by);
+      const trust: DecisionTrust = (row.answered_via ?? 'card') === 'card' ? 'person' : 'derived';
+      const decisions = decisionsOf({ id: row.id, project_id: row.project_id, conversation_id: row.conversation_id, payload: payload.data, answer: answer.data }, row.answered_by, trust);
       if (decisions.length === 0) {
         skipped.push(row.id);
         continue;

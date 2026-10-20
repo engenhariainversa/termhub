@@ -1,10 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { chatContextLimit } from '@termhub/mobile-api';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { config } from '../config.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
+import { SUGGEST_K } from '../chat/decision-memory.js';
+import { EMBED_TEXT_VERSION } from '../chat/decision-text.js';
+import { memoryReport } from '../chat/memory-report.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import type { Superseder, StatusTarget } from '../db/repositories/memory-status.js';
@@ -12,12 +16,19 @@ import { MEMORY_STATUSES } from '../memory/status.js';
 import { scoped } from '../auth/scope.js';
 import { indexProjectNote } from '../memory/note.js';
 import { excerpt } from '../memory/text.js';
+import { nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { requestLocale, t, tk } from '../i18n/index.js';
+import type { MemoryRule, RuleSourceRow } from '../db/repositories/memory-rules.js';
+import { approveRule, refreshRules, rejectRule, removeRule, statementOf, type RulesDeps } from '../memory/rules-service.js';
 
 const listQuery = z.object({ q: z.string().trim().max(200).optional(), cursor: z.string().max(500).optional() });
 const notesQuery = z.object({ cursor: z.string().max(500).optional() });
 const lessonsQuery = z.object({ q: z.string().trim().max(200).optional(), project_id: z.string().min(1).max(64).optional(), cursor: z.string().max(500).optional() });
+/** `GET /memory/report` (TER-1009): `threshold` defaults to the server's suggestion threshold. */
+const reportQuery = z.object({ threshold: z.coerce.number().min(0).max(1).optional(), period: z.enum(['week', 'month']).default('month') });
 const idParam = z.object({ id: z.string().min(1).max(64) });
+/** "Aprovar" a proposal (TER-1010): the person may reword a rule before approving it. */
+const approveBody = z.object({ text: z.string().trim().min(1).max(1000).optional() }).default({});
 /** A decision's or a note's ref: what "Substituída por…" picks and `supersedes` stores. */
 const STATUS_REF = /^(decision|note):[a-z0-9]{1,64}$/;
 /** `PUT /decisions/:id/status` and `PUT /notes/:id/status` (TER-1013): `current` undoes any mark;
@@ -44,9 +55,13 @@ const STATUS_ERRORS = {
 /** `PATCH /memory` (spec D8/§8): at least one of the switches, never none — an empty body is a
  *  400, not a silent no-op. */
 const memoryBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
 
+/** Newest decisions the memory report measures at most (TER-1009): an exact scan per decision. */
+export const REPORT_DECISIONS = 2000;
+/** Miss cases the report lists at most, newest first. */
+export const REPORT_MISSES = 50;
 /** 50 decisions per page (spec 2026-09-26 §4.6). */
 export const DECISIONS_PAGE = 50;
 /** 50 notes per page (task-10 brief), same page size as decisions. */
@@ -134,6 +149,35 @@ function toLessonView(item: MemoryItem) {
   };
 }
 
+/**
+ * One "Regras vigentes" row (TER-1010): an approved rule or a proposal waiting for the person, with the
+ * notes and decisions it came from (the ones still in memory). A `policy` row names its projects; the
+ * screen words the change from `autonomy`/`max_parallel` itself.
+ */
+function toRuleView(r: MemoryRule, sources: Map<string, RuleSourceRow>) {
+  const projectName = (id: string) => [...sources.values()].find((s) => s.project_id === id)?.project_name ?? null;
+  return {
+    id: r.id,
+    kind: r.kind,
+    status: r.status,
+    project: r.project_id ? { id: r.project_id, name: r.project_name ?? '' } : null,
+    text: r.text,
+    policy: r.policy
+      ? {
+          autonomy: r.policy.autonomy ?? null,
+          max_parallel: r.policy.max_parallel ?? null,
+          projects: r.policy.project_ids.map((id) => ({ id, name: projectName(id) ?? '', applied: (r.policy?.applied ?? []).includes(id) })),
+        }
+      : null,
+    sources: r.source_refs.flatMap((ref) => {
+      const s = sources.get(ref);
+      return s ? [{ ref, title: s.title, statement: excerpt(statementOf(s), 300), project_name: s.project_name }] : [];
+    }),
+    created_at: r.created_at,
+    decided_at: r.decided_at,
+  };
+}
+
 /** "Memória do chat" (spec 2026-09-26 §4.6, concierge memory D8/D12/§8): the user's own decisions, the
  * suggestion and "Responder sozinho" switches, the concierge's own notes, and (spec 2026-09-27 failure
  * lessons §6/§8) the "Lições" list — verify/unverify/forget, always the signed-in user's own `lesson`
@@ -145,6 +189,45 @@ function toLessonView(item: MemoryItem) {
  * since their HTTP methods (`POST`/`DELETE`) would otherwise default to `create`/`delete` (see the
  * task-6 report for the check). */
 export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories) {
+  const rulesDeps = (): RulesDeps => ({ embedder: defaultEmbedder(), log: app.log, threshold: config.rulesSimilarityThreshold });
+
+  /** "Regras vigentes" (TER-1010): consolidates first, then answers the approved rules and the proposals
+   *  waiting for the person (a rejected one stays out of sight, and out of the proposals, for 180 days). */
+  app.get('/rules', async (request) => {
+    const { rules, sources } = await refreshRules(repos, request.scope.user.id, rulesDeps());
+    const view = (r: MemoryRule) => toRuleView(r, sources);
+    return {
+      rules: rules.filter((r) => r.status === 'approved').map(view),
+      proposals: rules.filter((r) => r.status === 'proposed' || r.status === 'awaiting_confirmation').map(view),
+    };
+  });
+
+  /** "Aprovar": a rule now; a policy only asks its `set_automation_policy` cards (spec: never applied
+   *  without them). `chat:update`, like verifying a lesson. */
+  app.post('/rules/:id/approve', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const body = approveBody.parse(request.body ?? {});
+    const rule = await approveRule(repos, request.scope.user.id, id, body, rulesDeps());
+    // The rule's note and its superseded sources change the current rules (TER-1019).
+    if (rule.status === 'approved') nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Recusar": the same proposal stays away for 180 days. */
+  app.post('/rules/:id/reject', { config: { action: 'update' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    const rule = await rejectRule(repos, request.scope.user.id, id);
+    return { rule: toRuleView(rule, new Map()) };
+  });
+
+  /** "Remover regra": an approved rule only; its sources are current again. */
+  app.delete('/rules/:id', async (request, reply) => {
+    const { id } = idParam.parse(request.params);
+    await removeRule(repos, request.scope.user.id, id);
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
+    return reply.code(204).send();
+  });
+
   app.get('/decisions', async (request) => {
     const { q, cursor } = listQuery.parse(request.query);
     const userId = request.scope.user.id;
@@ -184,6 +267,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       const [code, message, errorCode] = STATUS_ERRORS[result];
       throw new HttpError(code, message, errorCode);
     }
+    // A note's mark changes the current rules (TER-1019): republish the ai-memory pages in the background.
+    if (target.kind === 'note' || by?.kind === 'note') nudgeAiMemoryRulesForOwner(repos, ownerId, app.log);
     return statusView(ownerId, target);
   };
 
@@ -235,6 +320,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     autodecide: await repos.users.chatAutodecide(userId),
     // "Responder perguntas do Codex pelo chat": off by default, opt-in per user.
     codex_replies: await repos.users.chatCodexReplies(userId),
+    // The chat's context meter limit (TER-1038): null = the model's window, the default.
+    context_limit: await repos.users.chatContextLimit(userId),
     // `false` when embeddings are not configured on this server at all: the switch has nothing to do.
     available: config.embeddings !== null,
     count: await repos.chatDecisions.countForUser(userId),
@@ -249,6 +336,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.enabled !== undefined) await repos.users.setChatSuggestions(userId, body.enabled);
     if (body.autodecide !== undefined) await repos.users.setChatAutodecide(userId, body.autodecide);
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
+    if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
     if (body.autodecide === false) {
       // Turning "Responder sozinho" off also stops what it already started: every countdown still
       // `scheduled` becomes `cancelled` (the card keeps its proposed answer as a pre-selection), and
@@ -258,6 +346,15 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
       if (cancelled.length > 0) await publishTabQuestions(repos, 'tab_question', cancelled, { update: true });
     }
     return memory(userId);
+  });
+
+  /** The memory report (TER-1009, `docs/memory-report.md`): replay of the signed-in user's own
+   *  decisions against their own memory, and the "pergunta repetida" counts. Read-only, and only ever
+   *  the requester's rows — the dataset query is scoped to this user on both sides of every pair. */
+  app.get('/memory/report', async (request) => {
+    const { threshold, period } = reportQuery.parse(request.query);
+    const ds = await repos.chatDecisions.replayDataset(request.scope.user.id, '#' + EMBED_TEXT_VERSION, SUGGEST_K, REPORT_DECISIONS);
+    return memoryReport(ds, { threshold: threshold ?? config.decisionSuggestThreshold, period, maxMisses: REPORT_MISSES });
   });
 
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `/decisions`. */
@@ -275,6 +372,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
   app.delete('/notes/:id', async (request, reply) => {
     const { id } = idParam.parse(request.params);
     await repos.memoryItems.deleteNote(id, request.scope.user.id);
+    // A forgotten note may have been a current rule (TER-1019).
+    nudgeAiMemoryRulesForOwner(repos, request.scope.user.id, app.log);
     return reply.code(204).send();
   });
 

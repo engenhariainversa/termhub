@@ -80,15 +80,21 @@ export class MemoryStatusRepository {
   }
 
   /** For each of `refs`, the owner's decision or note whose `supersedes` names it, if any: the list's
-   *  "substituída por …" line. A decision's title is its question, a note's its title. */
+   *  "substituída por …" line. A decision's title is its question, a note's its title. A source of an
+   *  approved current rule (TER-1010) names the rule's note, with the rule's text as the title. */
   async supersedersOf(ownerId: string, refs: string[]): Promise<Map<string, Superseder>> {
     if (refs.length === 0) return new Map();
     const rows = await this.db.$queryRaw<{ supersedes: string; ref: string; title: string }[]>`
-      SELECT supersedes, 'decision:' || id AS ref, question AS title FROM "chat_decisions"
+      SELECT supersedes, 'decision:' || id AS ref, question AS title, 1 AS direct FROM "chat_decisions"
         WHERE user_id = ${ownerId} AND supersedes IN (${Prisma.join(refs)})
       UNION ALL
-      SELECT supersedes, 'note:' || id AS ref, title FROM "memory_items"
-        WHERE owner_id = ${ownerId} AND kind = 'note' AND supersedes IN (${Prisma.join(refs)})`;
+      SELECT supersedes, 'note:' || id AS ref, title, 1 FROM "memory_items"
+        WHERE owner_id = ${ownerId} AND kind = 'note' AND supersedes IN (${Prisma.join(refs)})
+      UNION ALL
+      SELECT s.ref, 'note:' || r.note_id, r.text, 0 FROM "memory_rules" r CROSS JOIN LATERAL jsonb_array_elements_text(r.source_refs) AS s(ref)
+        WHERE r.owner_id = ${ownerId} AND r.status = 'approved' AND r.note_id IS NOT NULL AND s.ref IN (${Prisma.join(refs)})
+      ORDER BY direct`;
+    // a replacement the person picked by hand comes last, so it wins over the rule's
     return new Map(rows.map((r) => [r.supersedes, { ref: r.ref, title: r.title }]));
   }
 }

@@ -8,6 +8,7 @@ const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn(), replace: jest.fn() }),
   useLocalSearchParams: () => ({}),
+  useFocusEffect: () => {},
 }));
 
 import { ApiError } from '@/services/api/errors';

@@ -418,6 +418,12 @@
   "custo {{cost}}": "cost {{cost}}",
   "Gasto do automático em 80% do orçamento diário": "Automatic work spending at 80% of the daily budget",
   "Orçamento por card (USD)": "Budget per card (USD)",
+  "Abrir no board": "Open on the board",
+  "Sem descrição.": "No description.",
+  "Ticket externo": "External ticket",
+  "Terminal": "Terminal",
+  "nenhuma aba ligada": "no linked tab",
+  "Atualizado": "Updated",
   "Liberar": "Free",
   "Tornar exclusiva": "Make exclusive",
   "Liberar a conta": "Free the account",
@@ -434,5 +440,12 @@
   "Similaridade: {{score}}%": "Similarity: {{score}}%",
   "Lições do ai-memory": "ai-memory lessons",
   "Importar as páginas deliberadas do ai-memory como lições não verificadas": "Import deliberate ai-memory pages as unverified lessons",
-  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Reads only this project's _rules/, gotchas/ and decisions/ pages in the ai-memory of each linked machine; sessions, observations and handoffs never leave the machine. The lessons show up in Chat memory, for you to verify or discard."
+  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Reads only this project's _rules/, gotchas/ and decisions/ pages in the ai-memory of each linked machine; sessions, observations and handoffs never leave the machine. The lessons show up in Chat memory, for you to verify or discard.",
+  "Novas tentativas do deploy": "Deploy retries",
+  "quando o deploy falha por problema do GitHub; 0 = pausa na hora": "when the deploy fails because of GitHub; 0 = pause at once",
+  "Retomadas após erro do GitHub": "Resumes after a GitHub error",
+  "push ou PR com erro do GitHub; depois disso, chama você": "a push or PR failing on GitHub's side; past this, you are called",
+  "Deploy falhou por problema do GitHub; rodando de novo": "Deploy failed because of GitHub; running it again",
+  "{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar": "{{ref}}: GitHub error; termhub retries once it is back",
+  "{{ref}}: confiança da pasta confirmada sozinha": "{{ref}}: folder trust confirmed automatically"
 }

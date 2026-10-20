@@ -21,6 +21,8 @@ export interface ChatAction {
   machine_id: string | null;
   project_id: string | null;
   tab_id: string | null;
+  /** The tab's name when the action was asked (TER-1024): what a closed tab's card still calls it. */
+  tab_name: string | null;
   grant_id: string | null;
   error_code: string | null;
   duration_ms: number | null;
@@ -46,6 +48,7 @@ export interface InsertPendingInput {
   machine_id?: string | null;
   project_id?: string | null;
   tab_id?: string | null;
+  tab_name?: string | null;
   tool_use_id?: string | null;
   subagent_id?: string | null;
   /** Born injected: a card the server asks itself (`automation_merge`), never a concierge proposal the
@@ -70,6 +73,7 @@ const mapAction = (a: PrismaChatAction): ChatAction => ({
   machine_id: a.machineId,
   project_id: a.projectId,
   tab_id: a.tabId,
+  tab_name: a.tabName,
   grant_id: a.grantId,
   error_code: a.errorCode,
   duration_ms: a.durationMs,
@@ -156,6 +160,7 @@ export class ChatActionsRepository {
         machineId: input.machine_id ?? null,
         projectId: input.project_id ?? null,
         tabId: input.tab_id ?? null,
+        tabName: input.tab_name ?? null,
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
         injectedAt: input.injected ? new Date() : null,
@@ -196,6 +201,7 @@ export class ChatActionsRepository {
         machineId: input.machine_id ?? null,
         projectId: input.project_id ?? null,
         tabId: input.tab_id ?? null,
+        tabName: input.tab_name ?? null,
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
         grantId: input.grant_id,
@@ -280,6 +286,21 @@ export class ChatActionsRepository {
       where: { id },
       data: { status: ok ? 'executed' : 'failed', errorCode: errorCode ?? null, durationMs: durationMs ?? null },
     });
+  }
+
+  /** Closed rows (no longer pending or approved) of these tools: the ones a secret argument can leave (TER-1047). */
+  async listClosedByTools(tools: readonly string[], limit = 500): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: { tool: { in: [...tools] }, status: { notIn: OPEN_STATUSES } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return rows.map(mapAction);
+  }
+
+  /** Overwrites a row's `args`, for redacting a secret once the row is closed; only a closed row is touched. */
+  async replaceClosedArgs(id: string, args: unknown): Promise<void> {
+    await this.db.chatAction.updateMany({ where: { id, status: { notIn: OPEN_STATUSES } }, data: { args: args as never } });
   }
 
   /**

@@ -82,6 +82,17 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
 .chat-enter { animation: chat-enter 150ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .chat-enter { animation: none; } }
 
+/* A tab's status dot (components/TabDot, TER-1044): a soft pulse while the tab works, a slow blink while it
+   needs you, and a turning ring around a tab an automatic run works in. Transform and opacity only; no
+   motion, only the colour, for whoever asked the system for none. */
+@keyframes tab-dot-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.55; } }
+.tab-dot-working { animation: tab-dot-pulse 1.5s ease-in-out infinite; }
+@keyframes tab-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.tab-dot-blink { animation: tab-dot-blink 2s ease-in-out infinite; }
+@keyframes tab-dot-ring { to { transform: rotate(360deg); } }
+.tab-dot-ring { animation: tab-dot-ring 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .tab-dot-working, .tab-dot-blink, .tab-dot-ring { animation: none; } }
+
 /* The page header's tabs/trail strip scrolls sideways on a narrow window (components/PageHeader); both
    edges fade so a cut-off tab reads as "more this way". The inline padding matches the fade, so at
    rest (scrolled to either end, or not overflowing) nothing sits under it. */

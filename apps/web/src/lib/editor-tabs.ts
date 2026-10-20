@@ -21,11 +21,25 @@ export const EMPTY_EDITOR_TABS: EditorTabs = { open: [], preview: null };
 /**
  * A file preview tab (spec 2026-10-04 file preview D14): the same list, the same preview and pin, keyed by
  * the path as the answer wrote it. Its id never collides with a terminal's (`[a-z0-9]` ids).
+ *
+ * A file read on a given machine (`?machine=`, TER-973) carries it: `file@<machineId>:<path>`, so the same
+ * `~/relatorio.md` on two machines of the project is two tabs. `file:<path>` is a file with no machine (the
+ * server looks for it on the project's machines), which is also what every id stored before TER-973 reads as.
  */
 export const FILE_TAB_PREFIX = 'file:';
-export const fileTabId = (path: string) => `${FILE_TAB_PREFIX}${path}`;
-export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX);
-export const filePathOf = (id: string) => id.slice(FILE_TAB_PREFIX.length);
+const FILE_ON_MACHINE_PREFIX = 'file@';
+export const fileTabId = (path: string, machineId?: string | null) =>
+  machineId ? `${FILE_ON_MACHINE_PREFIX}${machineId}:${path}` : `${FILE_TAB_PREFIX}${path}`;
+export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX) || id.startsWith(FILE_ON_MACHINE_PREFIX);
+/** The path and machine of a file tab id; machineId null = any machine of the project. */
+export function fileOfTab(id: string): { path: string; machineId: string | null } {
+  if (id.startsWith(FILE_ON_MACHINE_PREFIX)) {
+    const sep = id.indexOf(':', FILE_ON_MACHINE_PREFIX.length);
+    if (sep > FILE_ON_MACHINE_PREFIX.length) return { path: id.slice(sep + 1), machineId: id.slice(FILE_ON_MACHINE_PREFIX.length, sep) };
+  }
+  return { path: id.slice(FILE_TAB_PREFIX.length), machineId: null };
+}
+export const filePathOf = (id: string) => fileOfTab(id).path;
 
 /**
  * A terminal's conversation in a tab of its own (TER-1003): a Claude Code tab read from its transcript,

@@ -49,6 +49,17 @@ describe('config store', () => {
     expect(fs.statSync(path.join(home, 'config.json')).mode & 0o777).toBe(0o600);
   });
 
+  it('a key config needs its machine id and no token; a bearer config needs its token (TER-1017)', async () => {
+    const { writeConfig, readConfig } = await freshConfigModule();
+    const base = { url: 'https://app.termhub.dev', machine_name: 'mini', created_at: new Date().toISOString() };
+    writeConfig({ ...base, credential: 'key', machine_id: 'm-42' });
+    expect(readConfig()).toEqual({ ...base, credential: 'key', machine_id: 'm-42' });
+    writeConfig({ ...base, credential: 'key', machine_id: '' });
+    expect(readConfig()).toBeNull();
+    writeConfig({ ...base, credential: 'bearer', machine_id: '' });
+    expect(readConfig()).toBeNull();
+  });
+
   it('readConfig() round-trips what writeConfig() wrote', async () => {
     const { writeConfig, readConfig } = await freshConfigModule();
     const config = {
@@ -59,7 +70,8 @@ describe('config store', () => {
       created_at: new Date().toISOString(),
     };
     writeConfig(config);
-    expect(readConfig()).toEqual(config);
+    // a config written before TER-1017 has no `credential`: it reads as the bearer it is
+    expect(readConfig()).toEqual({ ...config, credential: 'bearer' });
   });
 
   it('readConfig() returns null when there is no config file', async () => {

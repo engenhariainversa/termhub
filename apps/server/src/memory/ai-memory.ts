@@ -1,4 +1,5 @@
-import { buildAiMemoryPagesScript, parseAiMemoryPages } from '@termhub/machine-ops';
+import { AI_MEMORY_DEFAULT_URL } from '@termhub/agent-protocol';
+import { REMOTE_PATH_PREFIX, buildAiMemoryPagesScript, buildAiMemoryStatusScript, parseAiMemoryPages, parseAiMemoryStatus, type AiMemoryProbe } from '@termhub/machine-ops';
 import { memoryCode } from '../chat/embeddings.js';
 import { agentRpc, requireAgentVersion } from '../agent/errors.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -13,6 +14,43 @@ import type { DocsLink } from './docs.js';
 import { embedInserted, type MemoryDeps } from './index-items.js';
 import { cleanMemoryText, ITEM_TEXT_MAX } from './text.js';
 
+/** First agent release that answers `aimemory.status` (TER-1018). */
+export const AI_MEMORY_MIN_AGENT_VERSION = '0.27.0';
+
+export type AiMemoryState =
+  | { enabled: false; url: string }
+  | ({ enabled: true; url: string; checked_at: string } & AiMemoryProbe);
+
+/** The URL the probe uses: the machine's own, or the default port of `ai-memory serve`. */
+export function aiMemoryUrlOf(machine: Pick<Machine, 'ai_memory_url'>): string {
+  return machine.ai_memory_url ?? AI_MEMORY_DEFAULT_URL;
+}
+
+/**
+ * Asks the machine whether ai-memory is there and its server answers. Agent machines go through the
+ * `aimemory.status` RPC; legacy local/ssh ones run the same script with `runOnMachine`. Either way only
+ * the three parsed facts come back — never what ai-memory stores.
+ */
+export async function probeAiMemory(machine: Machine): Promise<AiMemoryProbe> {
+  const url = aiMemoryUrlOf(machine);
+  if (machine.type === 'agent') {
+    requireAgentVersion(machine, AI_MEMORY_MIN_AGENT_VERSION);
+    return agentRpc(machine, 'aimemory.status', { url });
+  }
+  const script = buildAiMemoryStatusScript(shellQuote(url));
+  const r = await runOnMachine(machine, { file: '/bin/sh', args: ['-lc', script] }, `${REMOTE_PATH_PREFIX}${script}`, 15_000);
+  if (r.code !== 0) throw new HttpError(502, 'A máquina não respondeu', 'MACHINE_FAILED');
+  return parseAiMemoryStatus(r.stdout);
+}
+
+/** What Máquinas shows. A machine that never opted in is not contacted at all. */
+export async function aiMemoryState(machine: Machine): Promise<AiMemoryState> {
+  const url = aiMemoryUrlOf(machine);
+  if (!machine.ai_memory_enabled) return { enabled: false, url };
+  const probe = await probeAiMemory(machine);
+  return { enabled: true, url, checked_at: new Date().toISOString(), ...probe };
+}
+
 /**
  * Deliberate ai-memory pages as unverified lessons (TER-1021, spike TER-1008,
  * `docs/spikes/2026-10-07-ai-memory-spike.md`). A project that opted in (`projects.ai_memory_lessons`)
@@ -24,8 +62,8 @@ import { cleanMemoryText, ITEM_TEXT_MAX } from './text.js';
  * path, and `parseAiMemoryPage` drops a page that carries session provenance.
  */
 
-/** First agent release that answers `aimemory.pages`. */
-export const AI_MEMORY_MIN_AGENT_VERSION = '0.22.0';
+/** First agent release that answers `aimemory.pages` (TER-1021). */
+export const AI_MEMORY_PAGES_MIN_AGENT_VERSION = '0.28.0';
 
 /** The `source_id` of an ai-memory lesson: `<link id>:ai-memory/<path in the wiki>`. Under the link
  *  id like a file lesson, so `deleteDocsNotInLinks` drops it with its link. */
@@ -86,7 +124,7 @@ const PAGES_TIMEOUT_MS = 20_000;
 export const machineAiMemoryExec: AiMemoryExec = {
   async pages(machine, cwd) {
     if (machine.type === 'agent') {
-      requireAgentVersion(machine, AI_MEMORY_MIN_AGENT_VERSION);
+      requireAgentVersion(machine, AI_MEMORY_PAGES_MIN_AGENT_VERSION);
       return (await agentRpc(machine, 'aimemory.pages', { cwd })).stdout;
     }
     const script = buildAiMemoryPagesScript(shellQuote(cwd));

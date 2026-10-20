@@ -8,5 +8,7 @@
   "sem resposta": "no answer",
   "{{count}} precisam de você_one": "{{count}} needs you",
   "{{count}} precisam de você_other": "{{count}} need you",
-  "{{done}}/{{total}} tarefas": "{{done}}/{{total}} tasks"
+  "{{done}}/{{total}} tarefas": "{{done}}/{{total}} tasks",
+  "Automático — {{state}} — {{ref}}": "Automatic — {{state}} — {{ref}}",
+  "Automático — {{ref}}": "Automatic — {{ref}}"
 }

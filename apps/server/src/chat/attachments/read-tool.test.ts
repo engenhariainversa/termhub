@@ -55,12 +55,21 @@ describe('readAttachment', () => {
     expect(pending.content).toEqual([{ type: 'text', text: '«relatorio.pdf» ainda está sendo processado; tente de novo em alguns segundos.' }]);
     for (const [code, reason] of [
       ['ATTACHMENT_INVALID', 'o arquivo não pôde ser lido'],
-      ['TRANSCRIPTION_UNAVAILABLE', 'a transcrição de áudio não está configurada neste servidor, então não há transcrição'],
+      ['TRANSCRIPTION_UNAVAILABLE', 'o serviço de transcrição não respondeu, então não há transcrição'],
       ['TRANSCRIPTION_FAILED', 'a transcrição do áudio falhou'],
     ]) {
       const failed = await readAttachment(ctxFor([row({ status: 'failed', error_code: code, extracted_text: null, meta: null })]), { id: 'abc123' });
       expect(failed.content).toEqual([{ type: 'text', text: `«relatorio.pdf» não pôde ser processado: ${reason}.` }]);
     }
+  });
+
+  it('an unavailable transcription says why, from meta.reason (TER-1035)', async () => {
+    const read = async (reason: string) =>
+      ((await readAttachment(ctxFor([row({ status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', extracted_text: null, meta: { reason } })]), { id: 'abc123' })).content[0] as { text: string }).text;
+    expect(await read('not_configured')).toMatch(/não está configurada neste servidor/);
+    expect(await read('refused')).toMatch(/recusou o acesso do servidor .*Tentar de novo/);
+    expect(await read('unreachable')).toMatch(/fora do ar.*Tentar de novo/);
+    expect(await read('whatever')).toMatch(/não respondeu/);
   });
 
   it('a ready row with nothing extracted, and a file that is gone, each say so', async () => {

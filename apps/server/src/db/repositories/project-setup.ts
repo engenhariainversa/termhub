@@ -45,6 +45,12 @@ export class ProjectSetupRepository {
     return rows.map((r) => ({ project_id: r.projectId, data: normalizeSetup(r.data, r.version) })).filter((r) => r.data.automation.enabled);
   }
 
+  /** Projects that publish their current rules to ai-memory (TER-1019): what the rules sweeper walks. */
+  async listWithAiMemoryRules(): Promise<string[]> {
+    const rows = await this.db.projectSetup.findMany();
+    return rows.filter((r) => normalizeSetup(r.data, r.version).ai_memory.publish_rules).map((r) => r.projectId);
+  }
+
   /** Projects whose setup names a repository and the integration to read it with (CI panel). */
   async listWithRepo(): Promise<{ project_id: string; data: ProjectSetupData }[]> {
     const rows = await this.db.projectSetup.findMany();

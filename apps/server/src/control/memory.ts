@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
+import { holdsAt, inferScope, isExpired, type DecisionPlace, type DecisionScope } from '../db/repositories/decision-scope.js';
 import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust, NewMemoryItem } from '../db/repositories/memory-items.js';
 import { checkChoiceAnswer, choiceAnswerBody, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
 import { autoAnswerAllowed, blocklistParts, decisionBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
@@ -10,7 +11,9 @@ import { autoAnswerBlocked } from '../memory/blocklist.js';
 import { defaultEmbedder, EMBED_TIMEOUT_MS, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { sanitisePromptText } from '../chat/tab-question-context.js';
 import { indexNote, noteItem } from '../memory/index-items.js';
+import { nudgeAiMemoryRules, nudgeAiMemoryRulesForOwner } from '../memory/ai-memory-sync.js';
 import { excerpt, memoryText } from '../memory/text.js';
+import { nextLocalTime, zoneOrUtc } from '../lib/local-time.js';
 import { rrf, type Ranked } from '../memory/fusion.js';
 import { isInactive, rankByAuthority, type AuthorityHit } from '../memory/authority.js';
 import { TAB_EXCLUDED_KINDS } from '../mcp/tab-token.js';
@@ -35,6 +38,11 @@ export interface MemoryResult {
   excerpt: string;
   similarity: number | null;
   match: 'semantic' | 'text' | 'both';
+  /** Only for a `decision` or a `note` (TER-1014): where it holds, when it stops holding (null = never),
+   *  and whether it already has — set only when the search asked for expired ones too. */
+  scope?: DecisionScope;
+  expires_at?: string | null;
+  expired?: boolean;
   /** Only with `include_inactive` and only for a decision or note the person marked on the Memória
    *  screen (TER-1013): `outdated`, `wrong` or `superseded`. Absent for a current item. */
   status?: Exclude<MemoryStatus, 'current'>;
@@ -86,6 +94,13 @@ const projectOf = (id: string | null, name: string | null): MemoryResult['projec
 const matchOf = (key: string, vecKeys: Set<string>, textKeys: Set<string>): MemoryResult['match'] =>
   vecKeys.has(key) && textKeys.has(key) ? 'both' : vecKeys.has(key) ? 'semantic' : 'text';
 
+/** A decision's or note's scope and expiry for a search result (TER-1014). */
+const validityOf = (row: { scope: DecisionScope; expires_at: string | null }): Pick<MemoryResult, 'scope' | 'expires_at' | 'expired'> => ({
+  scope: row.scope,
+  expires_at: row.expires_at,
+  ...(isExpired(row.expires_at) ? { expired: true } : {}),
+});
+
 const withStatus = (r: MemoryResult, status: MemoryStatus | undefined): MemoryResult => (status && status !== 'current' ? { ...r, status } : r);
 /** The TER-1015 fields of a result, present only when they say something. */
 const supersedeFields = (r: { superseded_at: string | null; supersedes?: string | null }): Pick<MemoryResult, 'superseded_at' | 'supersedes'> => ({
@@ -95,9 +110,10 @@ const supersedeFields = (r: { superseded_at: string | null; supersedes?: string 
 
 function decisionResult(d: ChatDecision, similarity: number | null, match: MemoryResult['match']): MemoryResult {
   return withStatus({
+    ...validityOf(d),
     ref: decisionKey(d.id),
     kind: 'decision',
-    trust: 'person',
+    trust: d.trust,
     project: projectOf(d.project_id, d.project_name),
     date: d.created_at,
     title: decisionTitle(d),
@@ -121,6 +137,7 @@ function itemResult(it: MemoryHit, similarity: number | null, match: MemoryResul
     match,
     ...supersedeFields(it),
   };
+  if (it.kind === 'note') return withStatus({ ...base, ...validityOf(it) }, it.status);
   if (it.kind !== 'lesson') return withStatus(base, it.status);
   const meta = it.meta;
   return {
@@ -174,10 +191,14 @@ function mergeByRank(decisions: (ChatDecision & { rank: number })[], items: Memo
  * Under a tab token (TER-212 D3) the search is held to the tab's project — decisions included — and
  * never reads the kinds `message` and `action`. The MCP route already pinned `project_id`; the check
  * is repeated here so this function holds the rule on its own.
+ *
+ * Decisions and notes come back only where they hold (TER-1014): one scoped to a project only when no
+ * project or that project is searched, one scoped to a conversation only in that conversation (the
+ * concierge token's), and never an expired one unless `include_expired` asks for it.
  */
 export async function searchMemory(
   ctx: ControlContext,
-  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_inactive?: boolean; include_superseded?: boolean },
+  a: { query: string; project_id?: string; kinds?: MemoryRefKind[]; limit?: number; include_expired?: boolean; include_inactive?: boolean; include_superseded?: boolean },
   deps: { embedder?: Embedder | null } = {},
 ): Promise<{ note: string; results: MemoryResult[] }> {
   const tab = ctx.token?.tab;
@@ -193,24 +214,28 @@ export async function searchMemory(
   const wantDecision = a.kinds === undefined || a.kinds.includes('decision');
   const itemKinds = a.kinds === undefined ? undefined : (a.kinds.filter((k): k is MemoryKind => k !== 'decision') as MemoryKind[]);
   const skipItems = itemKinds !== undefined && itemKinds.length === 0;
+  const place: DecisionPlace = { projectId: a.project_id, conversationId: ctx.token?.chat_conversation_id ?? null };
+  const includeExpired = a.include_expired ?? false;
   const includeInactive = a.include_inactive === true;
   const includeSuperseded = a.include_superseded === true;
-  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, includeInactive, includeSuperseded };
+  const itemFilter: MemoryFilter = { ownerId, projectId: a.project_id, kinds: itemKinds, place, includeExpired, includeInactive, includeSuperseded };
 
   let vector: number[] | null = null;
+  let model = '';
   if (embedder) {
     try {
-      const { vectors } = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
-      vector = vectors[0] ?? null;
+      const out = await withTimeout(embedder.embed([a.query]), EMBED_TIMEOUT_MS, () => {});
+      vector = out.vectors[0] ?? null;
+      model = out.model;
     } catch {
       vector = null; // best effort: an unreachable or slow embed service falls back to full-text alone
     }
   }
 
   const [vecDecisions, vecItems, textDecisions, textItems] = await Promise.all([
-    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, decisionProject, { includeInactive, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
-    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K) : Promise.resolve([] as MemoryHit[]),
-    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { includeInactive, includeSuperseded }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
+    vector && wantDecision ? ctx.repos.chatDecisions.nearestAny(ownerId, vector, CANDIDATE_K, embedTag(model), decisionProject, { ...place, includeExpired, includeInactive, includeSuperseded }) : Promise.resolve([] as DecisionNeighbour[]),
+    vector && !skipItems ? ctx.repos.memoryItems.nearest(itemFilter, vector, CANDIDATE_K, model) : Promise.resolve([] as MemoryHit[]),
+    wantDecision ? ctx.repos.chatDecisions.textSearch(ownerId, a.query, CANDIDATE_K, decisionProject, { ...place, includeExpired, includeInactive, includeSuperseded }) : Promise.resolve([] as (ChatDecision & { rank: number })[]),
     skipItems ? Promise.resolve([] as MemoryHit[]) : ctx.repos.memoryItems.textSearch(itemFilter, a.query, CANDIDATE_K),
   ]);
 
@@ -305,6 +330,34 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
   return resolved;
 }
 
+/** Where a resolved source holds (TER-1014): a decision, a note; every other kind always holds. */
+function sourceHolds(s: ResolvedSource, place: DecisionPlace, now: Date): boolean {
+  if (s.kind === 'decision') return holdsAt(s.decision, place, now);
+  if (s.kind === 'note') return holdsAt(s.item, place, now);
+  return true;
+}
+
+/** Every cited source must still hold where the answer goes (TER-1014): an expired decision or note,
+ *  or one scoped to another project or conversation, is never a precedent — the call is refused. */
+function checkSourcesHold(sources: ResolvedSource[], place: DecisionPlace, now = new Date()): void {
+  const stale = sources.find((s) => !sourceHolds(s, place, now));
+  if (stale) throw new ControlError('SOURCE_NOT_VALID', msg('A fonte {{ref}} expirou ou não vale aqui (outro projeto ou outra conversa)', { ref: stale.ref }));
+}
+
+/**
+ * The moment a decision stops holding, from `record_decision`'s input (TER-1014): `expires_at` as given,
+ * or `expires_at_time` ("HH:MM") as the next time the person's clock reads it, in their time zone
+ * (UTC when they have none). Null when neither is given. Either must land in the future.
+ */
+async function expiryOf(ctx: ControlContext, a: { expires_at?: string; expires_at_time?: string }, now: Date): Promise<Date | null> {
+  if (a.expires_at !== undefined && a.expires_at_time !== undefined) throw new ControlError('EXPIRY_TWICE', 'Informe expires_at ou expires_at_time, não os dois');
+  let at: Date | null = null;
+  if (a.expires_at !== undefined) at = new Date(a.expires_at);
+  else if (a.expires_at_time !== undefined) at = nextLocalTime(a.expires_at_time, zoneOrUtc(await ctx.repos.users.timeZone(ctx.scope.user.id)), now);
+  if (at && (Number.isNaN(at.getTime()) || at.getTime() <= now.getTime())) throw new ControlError('EXPIRY_IN_PAST', 'A validade da decisão precisa estar no futuro');
+  return at;
+}
+
 /**
  * `record_decision` (spec 2026-09-26 concierge memory D12, §5.2): writes a `note` memory item, trust
  * `derived`, owned by the calling user — a decision the concierge took alone, or one the person spoke
@@ -317,6 +370,10 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
  * limit (`NOTES_PER_HOUR`) is checked right before the write, since it is the gate on the write
  * itself rather than on the input's shape.
  *
+ * `scope` (TER-1014) says where the note holds: `conversation` (the concierge token's conversation —
+ * refused without one), `project` (needs `project_id`) or `user`; left out, `project` with a project and
+ * `user` without. `expires_at` / `expires_at_time` (`expiryOf`) make it stop holding at that moment.
+ *
  * Replacement and conflicts (TER-1015): `supersedes` names the caller's own current note or card
  * decision the new note replaces — written together, in one transaction, and the old one leaves the
  * default search and can never back an automatic answer again. Before writing, the note is compared
@@ -328,17 +385,43 @@ async function verifySources(ctx: ControlContext, sources: string[] | undefined)
  */
 export async function recordDecision(
   ctx: ControlContext,
-  a: { question: string; decision: string; reason: string; project_id?: string; sources?: string[]; supersedes?: string; keep_both?: boolean },
-  deps: { embedder?: Embedder | null; log?: Pick<FastifyBaseLogger, 'info' | 'warn'>; minSimilarity?: number } = {},
+  a: {
+    question: string;
+    decision: string;
+    reason: string;
+    project_id?: string;
+    sources?: string[];
+    scope?: DecisionScope;
+    expires_at?: string;
+    expires_at_time?: string;
+    supersedes?: string;
+    keep_both?: boolean;
+  },
+  deps: { embedder?: Embedder | null; log?: Pick<FastifyBaseLogger, 'info' | 'warn'>; now?: Date; minSimilarity?: number } = {},
 ): Promise<RecordDecisionResult> {
   const projectId = a.project_id ? (await ctx.scoped.project(a.project_id)).project.id : null;
+  const conversationId = ctx.token?.chat_conversation_id ?? null;
+  const scope = a.scope ?? inferScope(projectId);
+  if (scope === 'project' && !projectId) throw new ControlError('SCOPE_NEEDS_PROJECT', 'Uma decisão deste projeto precisa de project_id');
+  if (scope === 'conversation' && !conversationId) throw new ControlError('SCOPE_NEEDS_CONVERSATION', 'Uma decisão desta conversa só pode ser registrada no chat do termhub');
+  const expiresAt = await expiryOf(ctx, a, deps.now ?? new Date());
   await verifySources(ctx, a.sources);
   const target = a.supersedes !== undefined ? await supersedeTarget(ctx, a.supersedes) : undefined;
   const ownerId = ctx.scope.user.id;
   const count = await ctx.repos.memoryItems.countNotesSince(ownerId, new Date(Date.now() - NOTES_WINDOW_MS));
   if (count >= NOTES_PER_HOUR) throw new ControlError('NOTES_RATE_LIMITED', 'Limite de 30 anotações por hora atingido; tente mais tarde');
   const { embedder = defaultEmbedder(), log = console, minSimilarity = config.decisionConflictMinSimilarity } = deps;
-  const item = noteItem({ owner_id: ownerId, project_id: projectId, question: a.question, decision: a.decision, reason: a.reason, sources: a.sources ?? [] });
+  const item = noteItem({
+    owner_id: ownerId,
+    project_id: projectId,
+    question: a.question,
+    decision: a.decision,
+    reason: a.reason,
+    sources: a.sources ?? [],
+    scope,
+    conversation_id: conversationId,
+    expires_at: expiresAt,
+  });
 
   const check = await findConflicts(ctx, item, a.question, embedder, minSimilarity);
   const others = check.conflicts.filter((c) => c.ref !== target?.ref);
@@ -349,9 +432,14 @@ export async function recordDecision(
 
   const row = await indexNote(ctx.repos, item, { embedder, log, supersedes: target, embedding: check.embedding });
   if (!row) throw new ControlError('SUPERSEDE_GONE', msg('{{ref}} já foi substituído ou esquecido', { ref: a.supersedes! }));
+  // The project's current rules changed: republish its ai-memory pages (TER-1019), in the background.
+  if (projectId) nudgeAiMemoryRules(ctx.repos, projectId, log);
+  else nudgeAiMemoryRulesForOwner(ctx.repos, ownerId, log);
   return {
     recorded: true,
     ref: `note:${row.id}`,
+    scope,
+    expires_at: expiresAt ? expiresAt.toISOString() : null,
     ...(target ? { supersedes: target.ref } : {}),
     ...(others.length > 0 ? { kept_alongside: others.map((c) => c.ref) } : {}),
     ...(check.checked ? {} : { conflict_check: 'unavailable' as const }),
@@ -369,7 +457,7 @@ export interface DecisionConflict {
 }
 
 export type RecordDecisionResult =
-  | { recorded: true; ref: string; supersedes?: string; kept_alongside?: string[]; conflict_check?: 'unavailable' }
+  | { recorded: true; ref: string; scope: DecisionScope; expires_at: string | null; supersedes?: string; kept_alongside?: string[]; conflict_check?: 'unavailable' }
   | { recorded: false; conflicts: DecisionConflict[]; message: string; note: string };
 
 /** How the concierge goes on after a conflict (TER-1015); the conflicts are data, like any memory. Both
@@ -586,6 +674,15 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
   return score;
 }
 
+/** `answer_tab_question`'s result. `other_project_sources`: the cited decisions answered in another
+ *  project than the card's (TER-1006), only when there is one. */
+export interface AnswerToolResult {
+  mode: 'auto' | 'suggest';
+  due_at?: string;
+  downgraded_because?: Downgrade;
+  other_project_sources?: string[];
+}
+
 /**
  * `answer_tab_question` (spec 2026-09-26 concierge memory D6, D7, D8, D11, §5.4): answers one of the
  * person's open `choice` cards from memory, never by typing — either a cancellable countdown
@@ -602,7 +699,7 @@ async function similarEnough(ctx: ControlContext, payload: ChoicePayload, backer
  * documents), when the person's "Responder sozinho" switch is off; when the person already cancelled a
  * countdown on this card; when any question's header, text or chosen answer (label, description or
  * free text) hits the blocklist; when
- * not every question has a cited `decision` (a person's own past answer) that maps to exactly the
+ * not every question has a cited `decision` (a person's own past answer, trust `person`) that maps to exactly the
  * proposed answer, option descriptions included (`decisionBacks`); or when those decisions are not about a similar enough question
  * (`similarEnough`, fail closed). A doc, card, message or note can never back `auto`: text an agent
  * wrote may carry an injection (D2).
@@ -616,7 +713,7 @@ export async function answerTabQuestionTool(
   ctx: ControlContext,
   a: { question_id: string; answers: ProposedAnswer[]; reason: string; sources: string[]; mode?: 'auto' | 'suggest' },
   deps: { embedder?: Embedder | null } = {},
-): Promise<{ mode: 'auto' | 'suggest'; due_at?: string; downgraded_because?: Downgrade }> {
+): Promise<AnswerToolResult> {
   const userId = ctx.scope.user.id;
   const row = await ctx.repos.tabQuestions.findByIdForUser(a.question_id, userId);
   if (!row) throw new ControlError('QUESTION_NOT_FOUND', 'Pergunta não encontrada');
@@ -628,12 +725,18 @@ export async function answerTabQuestionTool(
   const answer = toChoiceAnswer(payload, a.answers);
   const sources = await verifySources(ctx, a.sources);
   if (sources.length === 0) throw new ControlError('UNKNOWN_SOURCE', 'Cite ao menos uma fonte de search_memory');
+  checkSourcesHold(sources, { projectId: row.project_id, conversationId: row.conversation_id });
+  // The search stays account-wide (a decision from another project can be the right one), but the model
+  // is told which cited decisions were answered in another project, so it can weigh them (TER-1006).
+  const otherProject = sources.flatMap((s) => (s.kind === 'decision' && s.decision.project_id !== row.project_id ? [s.ref] : []));
+  const result = (r: AnswerToolResult): AnswerToolResult => (otherProject.length > 0 ? { ...r, other_project_sources: otherProject } : r);
 
   let downgrade: Downgrade | undefined;
   let score: number | null = null;
   if ((a.mode ?? 'auto') === 'auto') {
     // A replaced decision (TER-1015) never backs `auto`: citing only that one is `no_person_precedent`.
-    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at ? [s.decision] : []));
+    // Nor does one the countdown made: only the person's own click is a precedent (`derived`, TER-1006, D2/D11).
+    const decisions = sources.flatMap((s) => (s.kind === 'decision' && !s.decision.superseded_at && s.decision.trust === 'person' ? [s.decision] : []));
     const backers = payload.questions.map((item, i) => decisions.filter((d) => decisionBacks(d, item, answer.answers[i]!)));
     const backed = backers.filter((ds) => ds.length > 0).length;
     const parts = blocklistParts(payload, answer);
@@ -650,7 +753,7 @@ export async function answerTabQuestionTool(
       const scheduled = await scheduleAutoAnswer(ctx.repos, { row, answer, by: 'concierge', reason: a.reason, sources: sources.map((s) => ({ kind: s.kind, id: s.id })), score: roundScore(score) });
       if (scheduled?.auto_answer) {
         await noteAutomaticAnswer(ctx, scheduled);
-        return { mode: 'auto', due_at: scheduled.auto_answer.due_at };
+        return result({ mode: 'auto', due_at: scheduled.auto_answer.due_at });
       }
       // The write lost. If the person cancelled a countdown meanwhile (an overlapping call scheduled
       // one during the embed above, and the person stopped it), that is the same `cancelled_by_person`
@@ -679,5 +782,5 @@ export async function answerTabQuestionTool(
   const updated = await ctx.repos.tabQuestions.setSuggestion(row.id, { items });
   if (!updated) throw new ControlError('QUESTION_CLOSED', QUESTION_CLOSED);
   await publishTabQuestions(ctx.repos, 'tab_question', [updated], { update: true });
-  return downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' };
+  return result(downgrade ? { mode: 'suggest', downgraded_because: downgrade } : { mode: 'suggest' });
 }

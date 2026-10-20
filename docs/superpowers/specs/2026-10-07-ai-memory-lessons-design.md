@@ -21,7 +21,7 @@ Memória screen, web and app.
 | D2 | Not our own rules | `_rules/termhub-*.md` are skipped: that is where TER-1019 publishes termhub's current rules, so importing them back would loop. |
 | D3 | Where the wiki is | `data_dir` from `ai-memory status --json` when the binary is on `PATH`, else `$AI_MEMORY_DATA_DIR`, `$XDG_DATA_HOME/ai-memory` (`~/.local/share/ai-memory`) or `~/Library/Application Support/ai-memory`, the first with a `wiki/` dir. No wiki: nothing is read, nothing is deleted. |
 | D4 | Which ai-memory project | `project = "…"` in the checkout's `.ai-memory.toml`, else the main repository root's directory name (ai-memory's `repo-root` strategy, so worktrees map to the same project), else the cwd's basename. |
-| D5 | Transport | A new agent RPC `aimemory.pages` (agent 0.22.0, version-gated like `docs.scan`); the same `@termhub/machine-ops` script through `runOnMachine` on ssh/local machines, the cwd `shellQuote`d. Caps: 50 pages, 64 KiB per page, 600 KiB per call (one control frame). |
+| D5 | Transport | A new agent RPC `aimemory.pages` (agent 0.28.0, version-gated like `docs.scan`); the same `@termhub/machine-ops` script through `runOnMachine` on ssh/local machines, the cwd `shellQuote`d. Caps: 50 pages, 64 KiB per page, 600 KiB per call (one control frame). |
 | D6 | Storage | `source_id` `<link id>:ai-memory/<path>`, `source_hash` = the page's sha256, `meta.origin = 'ai-memory'` with `machine_id`, `machine_name` and `ai_memory_kind`. An unchanged page is not rewritten; a changed one drops its verification (verification is keyed on `source_hash`); a page gone from the wiki is deleted; an unlinked machine's pages go with `deleteDocsNotInLinks`. |
 | D7 | Turning it off | The next docs pass removes the project's ai-memory lessons (verified ones included). |
 | D8 | Esquecer | Hides the lesson (`hidden_hash`), like a file lesson; the page stays on the machine and comes back, unverified, only if it changes. |
@@ -37,5 +37,5 @@ Memória screen, web and app.
 
 Opt-in per project, off by default. Without it nothing is read from any machine and nothing changes on
 the Memória screen. With it, only pages someone wrote on purpose reach the server; terminal content and
-captured sessions never leave the machine. Machines need agent 0.22.0 for the import (older agents are
+captured sessions never leave the machine. Machines need agent 0.28.0 for the import (older agents are
 skipped until they update).

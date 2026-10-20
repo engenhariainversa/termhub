@@ -83,7 +83,7 @@ export function answerToDecision(item: ChoiceItem, a: ItemAnswer): DecisionAnswe
  * - answer is empty (no labels and no text)
  * A past answer with both labels and text maps to the labels only.
  */
-export function mapAnswer(past: DecisionAnswer, item: ChoiceItem): ItemAnswer | null {
+export function mapAnswer(past: DecisionAnswer, item: { multi_select: boolean; options: { label: string }[] }): ItemAnswer | null {
   // If there's free text and no labels, just return it.
   if (past.labels.length === 0 && past.text?.trim()) {
     return { selected: [], text: past.text };

@@ -51,6 +51,8 @@ export const tabSummary = z.object({
   activity_verb: z.string().nullable(),
   /** One of `tabChatAvailability`, read as a plain string (see there). */
   availability: z.string(),
+  /** the card ref ("TER-123") of the automatic run working in this tab; null = none (TER-1044, absent from an older server) */
+  auto_ref: z.string().nullable().default(null),
 });
 export type TTabSummary = z.infer<typeof tabSummary>;
 

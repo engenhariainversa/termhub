@@ -12,7 +12,7 @@ const { agentRpc, requireAgentVersion, runOnMachine } = vi.hoisted(() => ({
 vi.mock('../agent/errors.js', () => ({ agentRpc, requireAgentVersion }));
 vi.mock('../terminal/machine-exec.js', async (orig) => ({ ...(await orig<typeof import('../terminal/machine-exec.js')>()), runOnMachine }));
 
-const { AI_MEMORY_MIN_AGENT_VERSION, importAiMemoryForProject, indexAiMemoryForLink, machineAiMemoryExec, parseAiMemoryPage, removeAiMemoryLessonsForLink } = await import('./ai-memory.js');
+const { AI_MEMORY_PAGES_MIN_AGENT_VERSION, importAiMemoryForProject, indexAiMemoryForLink, machineAiMemoryExec, parseAiMemoryPage, removeAiMemoryLessonsForLink } = await import('./ai-memory.js');
 
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
 const sha = (c: string) => c.repeat(64);
@@ -148,7 +148,7 @@ describe('machineAiMemoryExec', () => {
   it('asks an agent through the version-gated RPC', async () => {
     agentRpc.mockResolvedValue({ stdout: 'out' });
     await expect(machineAiMemoryExec.pages(machine('agent'), '/srv/repo')).resolves.toBe('out');
-    expect(requireAgentVersion).toHaveBeenCalledWith(machine('agent'), AI_MEMORY_MIN_AGENT_VERSION);
+    expect(requireAgentVersion).toHaveBeenCalledWith(machine('agent'), AI_MEMORY_PAGES_MIN_AGENT_VERSION);
     expect(agentRpc).toHaveBeenCalledWith(machine('agent'), 'aimemory.pages', { cwd: '/srv/repo' });
   });
 

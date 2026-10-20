@@ -82,7 +82,7 @@ describe('setup automation block (TER-879)', () => {
     expect(s.automation).toEqual({
       enabled: false, types: ['story', 'task', 'bug'], autonomy: 'pr', release_paths: [], store_paths: [],
       release_workflows: [], required_checks: [], epic_branch_pattern: 'epic/{ref}-{slug}', worktrees_dir: '~/.termhub/worktrees',
-      allowed_tools: null, max_parallel: null, resume_max: 3, fix_attempts: 3, daily_budget_usd: null, card_budget_usd: null,
+      allowed_tools: null, max_parallel: null, resume_max: 3, fix_attempts: 3, deploy_retries: 3, github_retries: 3, daily_budget_usd: null, card_budget_usd: null,
       summary_hour: null, prompts: { implementer: null, integrator: null, fixer: null },
     });
   });
@@ -130,5 +130,19 @@ describe('automation allow rules too broad for an automatic tab (TER-968)', () =
     const data = normalizeSetup({ automation: { enabled: true, allowed_tools: ['Bash'] } }, SETUP_VERSION);
     expect(data.automation.enabled).toBe(true);
     expect(data.automation.allowed_tools).toEqual(['Bash']);
+  });
+});
+
+describe('setup ai_memory (TER-1019)', () => {
+  it('defaults publish_rules to false for a setup saved before the block existed', () => {
+    expect(normalizeSetup({ automation: { enabled: true } }, 2).ai_memory).toEqual({ publish_rules: false, use_in_runs: false });
+    expect(normalizeSetup(undefined, 2).ai_memory).toEqual({ publish_rules: false, use_in_runs: false });
+  });
+  it('keeps a saved publish_rules, and a broken block alone falls back without losing the rest', () => {
+    expect(normalizeSetup({ ai_memory: { publish_rules: true } }, 2).ai_memory.publish_rules).toBe(true);
+    expect(normalizeSetup({ ai_memory: { publish_rules: false, use_in_runs: true } }, 2).ai_memory.use_in_runs).toBe(true);
+    const broken = normalizeSetup({ ai_memory: { publish_rules: 'yes' }, automation: { enabled: true } }, 2);
+    expect(broken.ai_memory.publish_rules).toBe(false);
+    expect(broken.automation.enabled).toBe(true);
   });
 });

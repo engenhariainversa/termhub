@@ -53,6 +53,8 @@ export type MemoryItemMinAggregateOutputType = {
   verifiedBy: string | null
   verifiedHash: string | null
   hiddenHash: string | null
+  scope: string | null
+  conversationId: string | null
   expiresAt: Date | null
   wrongAt: Date | null
   supersededAt: Date | null
@@ -79,6 +81,8 @@ export type MemoryItemMaxAggregateOutputType = {
   verifiedBy: string | null
   verifiedHash: string | null
   hiddenHash: string | null
+  scope: string | null
+  conversationId: string | null
   expiresAt: Date | null
   wrongAt: Date | null
   supersededAt: Date | null
@@ -106,6 +110,8 @@ export type MemoryItemCountAggregateOutputType = {
   verifiedHash: number
   hiddenHash: number
   meta: number
+  scope: number
+  conversationId: number
   expiresAt: number
   wrongAt: number
   supersededAt: number
@@ -142,6 +148,8 @@ export type MemoryItemMinAggregateInputType = {
   verifiedBy?: true
   verifiedHash?: true
   hiddenHash?: true
+  scope?: true
+  conversationId?: true
   expiresAt?: true
   wrongAt?: true
   supersededAt?: true
@@ -168,6 +176,8 @@ export type MemoryItemMaxAggregateInputType = {
   verifiedBy?: true
   verifiedHash?: true
   hiddenHash?: true
+  scope?: true
+  conversationId?: true
   expiresAt?: true
   wrongAt?: true
   supersededAt?: true
@@ -195,6 +205,8 @@ export type MemoryItemCountAggregateInputType = {
   verifiedHash?: true
   hiddenHash?: true
   meta?: true
+  scope?: true
+  conversationId?: true
   expiresAt?: true
   wrongAt?: true
   supersededAt?: true
@@ -309,6 +321,8 @@ export type MemoryItemGroupByOutputType = {
   verifiedHash: string | null
   hiddenHash: string | null
   meta: runtime.JsonValue | null
+  scope: string | null
+  conversationId: string | null
   expiresAt: Date | null
   wrongAt: Date | null
   supersededAt: Date | null
@@ -359,6 +373,8 @@ export type MemoryItemWhereInput = {
   verifiedHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   hiddenHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   meta?: Prisma.JsonNullableFilter<"MemoryItem">
+  scope?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  conversationId?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
@@ -389,6 +405,8 @@ export type MemoryItemOrderByWithRelationInput = {
   verifiedHash?: Prisma.SortOrderInput | Prisma.SortOrder
   hiddenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   meta?: Prisma.SortOrderInput | Prisma.SortOrder
+  scope?: Prisma.SortOrderInput | Prisma.SortOrder
+  conversationId?: Prisma.SortOrderInput | Prisma.SortOrder
   expiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
   wrongAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -423,6 +441,8 @@ export type MemoryItemWhereUniqueInput = Prisma.AtLeast<{
   verifiedHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   hiddenHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   meta?: Prisma.JsonNullableFilter<"MemoryItem">
+  scope?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  conversationId?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
@@ -453,6 +473,8 @@ export type MemoryItemOrderByWithAggregationInput = {
   verifiedHash?: Prisma.SortOrderInput | Prisma.SortOrder
   hiddenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   meta?: Prisma.SortOrderInput | Prisma.SortOrder
+  scope?: Prisma.SortOrderInput | Prisma.SortOrder
+  conversationId?: Prisma.SortOrderInput | Prisma.SortOrder
   expiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
   wrongAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -488,6 +510,8 @@ export type MemoryItemScalarWhereWithAggregatesInput = {
   verifiedHash?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
   hiddenHash?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
   meta?: Prisma.JsonNullableWithAggregatesFilter<"MemoryItem">
+  scope?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
+  conversationId?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
   expiresAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MemoryItem"> | Date | string | null
   wrongAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MemoryItem"> | Date | string | null
@@ -512,6 +536,8 @@ export type MemoryItemCreateInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -542,6 +568,8 @@ export type MemoryItemUncheckedCreateInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -566,6 +594,8 @@ export type MemoryItemUpdateInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -596,6 +626,8 @@ export type MemoryItemUncheckedUpdateInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -623,6 +655,8 @@ export type MemoryItemCreateManyInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -647,6 +681,8 @@ export type MemoryItemUpdateManyMutationInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -674,6 +710,8 @@ export type MemoryItemUncheckedUpdateManyInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -717,6 +755,8 @@ export type MemoryItemCountOrderByAggregateInput = {
   verifiedHash?: Prisma.SortOrder
   hiddenHash?: Prisma.SortOrder
   meta?: Prisma.SortOrder
+  scope?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
   expiresAt?: Prisma.SortOrder
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
@@ -747,6 +787,8 @@ export type MemoryItemMaxOrderByAggregateInput = {
   verifiedBy?: Prisma.SortOrder
   verifiedHash?: Prisma.SortOrder
   hiddenHash?: Prisma.SortOrder
+  scope?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
   expiresAt?: Prisma.SortOrder
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
@@ -773,6 +815,8 @@ export type MemoryItemMinOrderByAggregateInput = {
   verifiedBy?: Prisma.SortOrder
   verifiedHash?: Prisma.SortOrder
   hiddenHash?: Prisma.SortOrder
+  scope?: Prisma.SortOrder
+  conversationId?: Prisma.SortOrder
   expiresAt?: Prisma.SortOrder
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
@@ -927,6 +971,8 @@ export type MemoryItemCreateWithoutOwnerInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -955,6 +1001,8 @@ export type MemoryItemUncheckedCreateWithoutOwnerInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -989,6 +1037,8 @@ export type MemoryItemCreateWithoutVerifierInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1017,6 +1067,8 @@ export type MemoryItemUncheckedCreateWithoutVerifierInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1073,6 +1125,8 @@ export type MemoryItemScalarWhereInput = {
   verifiedHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   hiddenHash?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   meta?: Prisma.JsonNullableFilter<"MemoryItem">
+  scope?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  conversationId?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   expiresAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
@@ -1113,6 +1167,8 @@ export type MemoryItemCreateWithoutProjectInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1141,6 +1197,8 @@ export type MemoryItemUncheckedCreateWithoutProjectInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1193,6 +1251,8 @@ export type MemoryItemCreateManyOwnerInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1219,6 +1279,8 @@ export type MemoryItemCreateManyVerifierInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1243,6 +1305,8 @@ export type MemoryItemUpdateWithoutOwnerInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1271,6 +1335,8 @@ export type MemoryItemUncheckedUpdateWithoutOwnerInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1297,6 +1363,8 @@ export type MemoryItemUncheckedUpdateManyWithoutOwnerInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1321,6 +1389,8 @@ export type MemoryItemUpdateWithoutVerifierInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1349,6 +1419,8 @@ export type MemoryItemUncheckedUpdateWithoutVerifierInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1375,6 +1447,8 @@ export type MemoryItemUncheckedUpdateManyWithoutVerifierInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1401,6 +1475,8 @@ export type MemoryItemCreateManyProjectInput = {
   verifiedHash?: string | null
   hiddenHash?: string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: string | null
+  conversationId?: string | null
   expiresAt?: Date | string | null
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
@@ -1425,6 +1501,8 @@ export type MemoryItemUpdateWithoutProjectInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1453,6 +1531,8 @@ export type MemoryItemUncheckedUpdateWithoutProjectInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1479,6 +1559,8 @@ export type MemoryItemUncheckedUpdateManyWithoutProjectInput = {
   verifiedHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   hiddenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   meta?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  scope?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  conversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1508,6 +1590,8 @@ export type MemoryItemSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   verifiedHash?: boolean
   hiddenHash?: boolean
   meta?: boolean
+  scope?: boolean
+  conversationId?: boolean
   expiresAt?: boolean
   wrongAt?: boolean
   supersededAt?: boolean
@@ -1538,6 +1622,8 @@ export type MemoryItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   verifiedHash?: boolean
   hiddenHash?: boolean
   meta?: boolean
+  scope?: boolean
+  conversationId?: boolean
   expiresAt?: boolean
   wrongAt?: boolean
   supersededAt?: boolean
@@ -1568,6 +1654,8 @@ export type MemoryItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   verifiedHash?: boolean
   hiddenHash?: boolean
   meta?: boolean
+  scope?: boolean
+  conversationId?: boolean
   expiresAt?: boolean
   wrongAt?: boolean
   supersededAt?: boolean
@@ -1598,6 +1686,8 @@ export type MemoryItemSelectScalar = {
   verifiedHash?: boolean
   hiddenHash?: boolean
   meta?: boolean
+  scope?: boolean
+  conversationId?: boolean
   expiresAt?: boolean
   wrongAt?: boolean
   supersededAt?: boolean
@@ -1607,7 +1697,7 @@ export type MemoryItemSelectScalar = {
   updatedAt?: boolean
 }
 
-export type MemoryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ownerId" | "projectId" | "kind" | "sourceId" | "chunkIndex" | "title" | "text" | "trust" | "contentHash" | "sourceHash" | "embedModel" | "verifiedAt" | "verifiedBy" | "verifiedHash" | "hiddenHash" | "meta" | "expiresAt" | "wrongAt" | "supersededAt" | "supersedes" | "sourceAt" | "createdAt" | "updatedAt", ExtArgs["result"]["memoryItem"]>
+export type MemoryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ownerId" | "projectId" | "kind" | "sourceId" | "chunkIndex" | "title" | "text" | "trust" | "contentHash" | "sourceHash" | "embedModel" | "verifiedAt" | "verifiedBy" | "verifiedHash" | "hiddenHash" | "meta" | "scope" | "conversationId" | "expiresAt" | "wrongAt" | "supersededAt" | "supersedes" | "sourceAt" | "createdAt" | "updatedAt", ExtArgs["result"]["memoryItem"]>
 export type MemoryItemInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.MemoryItem$projectArgs<ExtArgs>
@@ -1672,9 +1762,18 @@ export type $MemoryItemPayload<ExtArgs extends runtime.Types.Extensions.Internal
      */
     meta: runtime.JsonValue | null
     /**
-     * Memory status (TER-1013), same meaning as on `ChatDecision`; only ever set on a `note`. A newer
-     * `record_decision` note also sets supersededAt (TER-1015): out of the default search and the
-     * conflict check.
+     * A note's scope (TER-1014): conversation | project | user. Null = written before it, read as
+     * `project` when the note has a project, else `user`. Null for every other kind.
+     */
+    scope: string | null
+    /**
+     * The chat conversation a note was recorded in (TER-1014); null for every other kind.
+     */
+    conversationId: string | null
+    /**
+     * When a note stops holding (TER-1014); null = never. Memory status (TER-1013), same meaning as on
+     * `ChatDecision`; only ever set on a `note`. A newer `record_decision` note also sets supersededAt
+     * (TER-1015): out of the default search and the conflict check.
      */
     expiresAt: Date | null
     wrongAt: Date | null
@@ -2129,6 +2228,8 @@ export interface MemoryItemFieldRefs {
   readonly verifiedHash: Prisma.FieldRef<"MemoryItem", 'String'>
   readonly hiddenHash: Prisma.FieldRef<"MemoryItem", 'String'>
   readonly meta: Prisma.FieldRef<"MemoryItem", 'Json'>
+  readonly scope: Prisma.FieldRef<"MemoryItem", 'String'>
+  readonly conversationId: Prisma.FieldRef<"MemoryItem", 'String'>
   readonly expiresAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly wrongAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly supersededAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>

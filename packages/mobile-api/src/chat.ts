@@ -273,12 +273,28 @@ export const decisionsResponse = z.object({ decisions: z.array(decisionViewSchem
  * (spec D8), whether embeddings are configured on this server at all (`available: false` hides both
  * switches rather than offering ones that can never do anything), how many decisions are remembered,
  * and how many concierge notes (spec D12) are. */
-export const chatMemoryResponse = z.object({ enabled: z.boolean(), autodecide: z.boolean(), codex_replies: z.boolean().default(false), available: z.boolean(), count: z.number().int(), notes: z.number().int() });
+/** The chat's context meter limit (TER-1038): the meter measures against this many tokens instead of the
+ *  model's window — someone who compacts at 200k on a 1M window. Bounded so a typo is refused. */
+export const CHAT_CONTEXT_LIMIT_MIN = 10_000;
+export const CHAT_CONTEXT_LIMIT_MAX = 10_000_000;
+export const chatContextLimit = z.number().int().min(CHAT_CONTEXT_LIMIT_MIN).max(CHAT_CONTEXT_LIMIT_MAX);
+/** `context_limit`: null = the model's window (the default); absent from a server before TER-1038,
+ *  which reads the same. */
+export const chatMemoryResponse = z.object({
+  enabled: z.boolean(),
+  autodecide: z.boolean(),
+  codex_replies: z.boolean().default(false),
+  context_limit: z.number().int().nullable().optional(),
+  available: z.boolean(),
+  count: z.number().int(),
+  notes: z.number().int(),
+});
 /** At least one of the switches, never none — an empty body is refused rather than a silent no-op.
- * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default). */
+ * `codex_replies` is "Responder perguntas do Codex pelo chat" (off by default); `context_limit` null
+ * goes back to the model's window. */
 export const chatMemoryPatchBody = z
-  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional() })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined, { message: 'Informe enabled, autodecide ou codex_replies' });
+  .object({ enabled: z.boolean().optional(), autodecide: z.boolean().optional(), codex_replies: z.boolean().optional(), context_limit: chatContextLimit.nullable().optional() })
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.context_limit !== undefined, { message: 'Informe enabled, autodecide, codex_replies ou context_limit' });
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
  * `question` is the note's title; `decision`/`reason` are parsed back out of the stored text's
@@ -328,6 +344,33 @@ export const lessonListSchema = z.object({ lessons: z.array(lessonItemSchema), n
 /** `DELETE chat/lessons/:id` ("Esquecer"): `note` is present only for a file lesson, saying the file
  * itself stays in the repository until a PR removes it. */
 export const lessonForgetSchema = z.object({ ok: z.literal(true), note: z.string().optional() });
+
+/** "Regras vigentes" (TER-1010): one approved rule, or a proposal waiting for the person. `project` is
+ * `null` for a rule at the user level (every project). A `policy` row changes the automatic-work Setup —
+ * `autonomy` and/or `max_parallel` on `projects` — and only through the `set_automation_policy` cards it
+ * asks when approved (`awaiting_confirmation` until they are decided); `applied` marks the projects whose
+ * card was approved. `sources` are the notes and decisions the rule came from, still in memory. */
+export const memoryRuleSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['rule', 'policy']),
+  status: z.enum(['proposed', 'awaiting_confirmation', 'approved', 'rejected']),
+  project: z.object({ id: z.string(), name: z.string() }).nullable(),
+  text: z.string(),
+  policy: z
+    .object({
+      autonomy: z.enum(['pr', 'merge', 'deploy', 'release']).nullable(),
+      max_parallel: z.number().int().nullable(),
+      projects: z.array(z.object({ id: z.string(), name: z.string(), applied: z.boolean() })),
+    })
+    .nullable(),
+  sources: z.array(z.object({ ref: z.string(), title: z.string(), statement: z.string(), project_name: z.string().nullable() })),
+  created_at: z.string(),
+  decided_at: z.string().nullable(),
+});
+/** `GET chat/rules`: the approved rules and the proposals waiting for the person (consolidated on the call). */
+export const memoryRulesResponse = z.object({ rules: z.array(memoryRuleSchema), proposals: z.array(memoryRuleSchema) });
+/** `POST chat/rules/:id/approve` (body `{ text? }`) and `POST chat/rules/:id/reject`. */
+export const memoryRuleDecisionResponse = z.object({ rule: memoryRuleSchema });
 
 /** "Decisão automática" (TER-641) on an action card: the precedent a send cited, but only when the call
  * also ran without a click (`grant_id`, a default allowance or a grant). A pending card, or one the person

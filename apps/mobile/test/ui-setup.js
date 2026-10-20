@@ -59,3 +59,6 @@ jest.mock('react-native-markdown-display', () => require('./fakes/markdown'));
 // The pickers open native sheets; under jest they answer what a test tells them to.
 jest.mock('expo-image-picker', () => require('./fakes/image-picker'));
 jest.mock('expo-document-picker', () => require('./fakes/document-picker'));
+
+// The bubble's audio player (TER-1036): no native audio under jest.
+jest.mock('expo-audio', () => require('./fakes/expo-audio'));

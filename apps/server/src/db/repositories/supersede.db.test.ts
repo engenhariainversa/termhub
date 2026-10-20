@@ -88,7 +88,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('supersede (Postgres)', ()
     // out of the default search and of the conflict check; back with includeSuperseded
     expect((await items.similarNotes(userId, projectId, vec(10), opts)).map((n) => n.id)).toEqual([replacement!.id]);
     expect((await items.textSearch({ ownerId: userId }, marker, 10)).map((r) => r.id)).toEqual([replacement!.id]);
-    expect((await items.nearest({ ownerId: userId }, vec(10), 10)).map((r) => r.id)).not.toContain(old!.id);
+    expect((await items.nearest({ ownerId: userId }, vec(10), 10, 'm')).map((r) => r.id)).not.toContain(old!.id);
     expect((await items.textSearch({ ownerId: userId, includeSuperseded: true }, marker, 10)).map((r) => r.id).sort()).toEqual([old!.id, replacement!.id].sort());
 
     // a second replacement of the same note finds nothing to replace, and writes nothing
@@ -131,12 +131,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('supersede (Postgres)', ()
     const [after] = await decisions.findManyForUser([d!.id], userId);
     expect(after!.superseded_at).not.toBeNull(); // still readable, for "Memória do chat" and citations
     expect(await decisions.similarInScope(userId, projectId, vec(30), { ...opts, embedModel: 'm#q1' })).toEqual([]);
-    expect(await decisions.nearest(userId, vec(30), { multiSelect: false, k: 10, embedModel: 'm#q1' })).toEqual([]);
+    expect(await decisions.nearest(userId, vec(30), { multiSelect: false, k: 10, embedModel: 'm#q1', place: { projectId } })).toEqual([]);
     expect((await decisions.similarityTo([d!.id], userId, vec(30), 'm#q1')).size).toBe(0);
     expect(await decisions.textSearch(userId, marker, 10)).toEqual([]);
-    expect((await decisions.nearestAny(userId, vec(30), 10)).map((x) => x.id)).not.toContain(d!.id);
+    expect((await decisions.nearestAny(userId, vec(30), 10, 'm#q1')).map((x) => x.id)).not.toContain(d!.id);
     expect((await decisions.textSearch(userId, marker, 10, undefined, { includeSuperseded: true })).map((x) => x.id)).toEqual([d!.id]);
-    expect((await decisions.nearestAny(userId, vec(30), 10, undefined, { includeSuperseded: true })).map((x) => x.id)).toContain(d!.id);
+    expect((await decisions.nearestAny(userId, vec(30), 10, 'm#q1', undefined, { includeSuperseded: true })).map((x) => x.id)).toContain(d!.id);
 
     // already replaced: a second note cannot replace it again
     expect(await items.insertNoteSuperseding(note(), { kind: 'decision', id: d!.id })).toBeNull();

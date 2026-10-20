@@ -77,6 +77,8 @@ export interface DeskModel {
   look: number;
   /** the machine the desk runs on — office only; null on the public city, which names no machine */
   machine: DeskMachine | null;
+  /** the card ref of the automatic run working in the tab (TER-1044): a robot sits at the desk; null = a person's tab */
+  auto: string | null;
 }
 
 /** Why a building may not be telling the truth, read from across the city. */
@@ -193,7 +195,7 @@ function withLiveState(tab: ModelTab, live: Tab | undefined): ModelTab {
 }
 
 /** `machine`: where the tab runs; undefined on the public city, which reads as online and reachable. */
-function deskOf(tab: ModelTab, live: Tab | undefined, machine: ModelMachine | undefined): DeskModel {
+function deskOf(tab: ModelTab, live: Tab | undefined, machine: ModelMachine | undefined, auto: string | null): DeskModel {
   const t = withLiveState(tab, live);
   // a machine that could not be asked answers `alive: false` for every terminal tab, which is not
   // evidence that anyone left: keep the last known state (and its raised hand), faded
@@ -207,6 +209,7 @@ function deskOf(tab: ModelTab, live: Tab | undefined, machine: ModelMachine | un
     look: lookOf(t.id, LOOK_VARIANTS),
     progress: t.progress ? { done: t.progress.done, total: t.progress.total, title: t.progress.title ?? '' } : null,
     machine: machine ? { name: machine.name, subtitle: machine.subtitle, online: machine.online } : null,
+    auto,
   };
   // a simulator's `alive` comes from the simulator manager, so tmux being unreachable says nothing about it
   if (t.kind === 'simulator') return { ...base, kind: 'phone', pose: 'empty', marker: null, dimmed: down, screenOn: t.alive, state: null, activity: null, verb: null };
@@ -216,9 +219,9 @@ function deskOf(tab: ModelTab, live: Tab | undefined, machine: ModelMachine | un
   return { ...base, kind: 'person', pose: t.state ? POSE[t.state] : 'sit', marker, dimmed: !t.state || down, screenOn: t.state === 'working' || t.state === 'waiting_background', state: t.state, activity: t.state === 'working' ? t.activity : null, verb: t.state === 'working' ? t.activity_verb : null };
 }
 
-function buildingOf(b: ModelBuilding, machines: Map<string, ModelMachine>, liveTab: (tabId: string) => Tab | undefined): BuildingModel {
+function buildingOf(b: ModelBuilding, machines: Map<string, ModelMachine>, liveTab: (tabId: string) => Tab | undefined, autoRef: (tabId: string) => string | undefined): BuildingModel {
   const machineOf = (t: ModelTab) => (t.machine_id ? machines.get(t.machine_id) : undefined);
-  const desks = [...b.tabs].sort((x, y) => x.position - y.position).map((t) => deskOf(t, liveTab(t.id), machineOf(t)));
+  const desks = [...b.tabs].sort((x, y) => x.position - y.position).map((t) => deskOf(t, liveTab(t.id), machineOf(t), autoRef(t.id) ?? null));
   const needsYou = desks.filter((d) => d.marker === 'input' || d.marker === 'permission').length;
   const used = [...new Set(b.tabs.map(machineOf).filter((m): m is ModelMachine => !!m))];
   const notice: BuildingNotice = used.length > 0 && used.every((m) => !m.online) ? 'offline' : used.some((m) => m.reachable === false) ? 'silent' : null;
@@ -235,10 +238,14 @@ function buildingOf(b: ModelBuilding, machines: Map<string, ModelMachine>, liveT
   };
 }
 
-/** One building per project, in the order given (the server's: by name, like the sidebar), empty ones kept. */
-export function buildCityModel(city: ModelCity, liveTab: (tabId: string) => Tab | undefined): CityModel {
+/**
+ * One building per project, in the order given (the server's: by name, like the sidebar), empty ones kept.
+ * `autoRef`: the card ref of the automatic run working in a tab (the monitor's `autoRuns`); the public
+ * city has none, so every desk there is a person.
+ */
+export function buildCityModel(city: ModelCity, liveTab: (tabId: string) => Tab | undefined, autoRef: (tabId: string) => string | undefined = () => undefined): CityModel {
   const machines = new Map(city.machines.map((m) => [m.id, m]));
-  const buildings = city.projects.map((b) => buildingOf(b, machines, liveTab));
+  const buildings = city.projects.map((b) => buildingOf(b, machines, liveTab, autoRef));
   return { buildings, needsYou: buildings.reduce((n, b) => n + b.needsYou, 0) };
 }
 

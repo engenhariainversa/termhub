@@ -1108,3 +1108,76 @@ describe('runs that must end (final review I1, I2)', () => {
     expect(await endRunsOfMergedCard(w.repos, 'p1', 't-other', { url: 'u', number: 4 })).toBe(0);
   });
 });
+
+describe('GitHub errors and the trust question do not stop the run (TER-1025)', () => {
+  /** A world whose setup allows `retries` GitHub waits; `waits` already recorded; the last one `minutesAgo`. */
+  function github(o: { retries?: number; waits?: number; minutesAgo?: number; degraded?: string[]; run?: Partial<AutomationRun>; tab?: Partial<Tab>; paused?: boolean } = {}) {
+    const w = world({ run: o.run, tab: o.tab, paused: o.paused });
+    const now = new Date('2026-10-05T12:00:00.000Z');
+    const events = w.repos.automationEvents as unknown as Record<string, unknown>;
+    events.countForRun = vi.fn(async (_id: string, kind: string) => (kind === 'github_wait' ? (o.waits ?? 0) : 0));
+    events.lastForRun = vi.fn(async (_id: string, kind: string) =>
+      kind === 'github_wait' && o.waits ? { kind, payload: { attempt: o.waits }, created_at: new Date(now.getTime() - (o.minutesAgo ?? 6) * 60_000).toISOString() } : null,
+    );
+    (w.repos.projectSetup as unknown as { get: unknown }).get = vi.fn(async () => ({ data: { automation: { enabled: true, resume_max: 3, allowed_tools: null, daily_budget_usd: null, card_budget_usd: null, github_retries: o.retries ?? 3 } } }));
+    w.deps.githubHealth = async () => ({ degraded: o.degraded ?? [] });
+    return w;
+  }
+  const failure = 'push: HTTP 500 (commit_refs)';
+
+  it('report_card blocked with github_transient parks the run for GitHub: no escalation on the first failure', async () => {
+    const w = github();
+    await reportCard(tabCtx(w.repos), { status: 'blocked', reason: failure, code: 'github_transient' });
+    expect(w.run.status).toBe('waiting');
+    expect(w.run.waiting_reason).toBe('github_transient');
+    expect(w.kinds()).toEqual(['github_wait']);
+    expect(w.events[0]!.payload).toMatchObject({ reason: 'github_transient', attempt: 1 });
+  });
+
+  it('past github_retries it ends blocked and the person is told', async () => {
+    const w = github({ waits: 3 });
+    await reportCard(tabCtx(w.repos), { status: 'blocked', reason: failure, code: 'github_transient' });
+    expect(w.run.status).toBe('blocked');
+    expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
+    expect(w.events[1]!.payload).toMatchObject({ reason: 'github_transient' });
+  });
+
+  it('a parked run is resumed after its delay once GitHub works, with the retry message', async () => {
+    const w = github({ waits: 1, minutesAgo: 6, run: { status: 'waiting', waiting_reason: 'github_transient' } });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.type).toHaveBeenCalledTimes(1);
+    expect(w.type.mock.calls[0]![2]).toContain('O GitHub voltou a responder');
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'run_resumed', payload: expect.objectContaining({ by: 'github', reason: 'github_transient', count: 1 }) })]);
+  });
+
+  it('waits while the delay runs, while GitHub reports trouble, and while paused', async () => {
+    for (const o of [{ minutesAgo: 2 }, { degraded: ['Git Operations'] }, { paused: true }]) {
+      const w = github({ waits: 1, minutesAgo: 6, ...o, run: { status: 'waiting', waiting_reason: 'github_transient' } });
+      await followRun(w.deps, w.run.id);
+      expect(w.run.status).toBe('waiting');
+      expect(w.type).not.toHaveBeenCalled();
+    }
+  });
+
+  it('a start with no hook whose screen shows the trust question is answered, not escalated', async () => {
+    const w = world({ tab: { state_at: null, state: null }, run: { started_at: new Date('2026-10-05T11:59:00.000Z') } });
+    (w.repos.automationEvents as unknown as Record<string, unknown>).countForRun = vi.fn(async () => 0);
+    const acceptTrust = vi.fn(async () => true);
+    w.deps.acceptTrust = acceptTrust;
+    await followRun(w.deps, w.run.id);
+    expect(acceptTrust).toHaveBeenCalledTimes(1);
+    expect(w.run.status).toBe('running');
+    expect(w.kinds()).toEqual(['trust_auto_accepted']);
+  });
+
+  it('a trust question nothing could answer still goes to the person after TRUST_WAIT_MS', async () => {
+    const w = world({ tab: { state_at: null, state: null }, run: { started_at: new Date(Date.parse('2026-10-05T12:00:00.000Z') - TRUST_WAIT_MS) } });
+    (w.repos.automationEvents as unknown as Record<string, unknown>).countForRun = vi.fn(async () => 0);
+    w.deps.acceptTrust = vi.fn(async () => false);
+    w.deps.foreground = async () => 'other' as never;
+    await followRun(w.deps, w.run.id);
+    expect(w.run.waiting_reason).toBe('needs_person');
+    expect(w.events.at(-1)).toMatchObject({ kind: 'escalated', payload: expect.objectContaining({ reason: 'trust_prompt' }) });
+  });
+});

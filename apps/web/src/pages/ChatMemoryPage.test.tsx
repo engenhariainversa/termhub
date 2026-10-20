@@ -49,6 +49,7 @@ vi.mock('../lib/api', () => {
           unverify: (...a: unknown[]) => chatLessonsUnverifyMock(...a),
           forget: (...a: unknown[]) => chatLessonsForgetMock(...a),
         },
+        rules: { list: async () => ({ rules: [], proposals: [] }) },
       },
     },
   };

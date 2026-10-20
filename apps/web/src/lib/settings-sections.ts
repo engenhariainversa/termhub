@@ -5,7 +5,7 @@ import { tk } from '../i18n';
  * heading each sits under (spec 2026-09-23 app chrome §4). `resource: null` is a section every
  * signed-in user sees; Perfil is one, so `/settings` always has somewhere to land.
  */
-export type SettingsSection = 'profile' | 'city' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads';
+export type SettingsSection = 'profile' | 'city' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
 export type SettingsGroupId = 'account' | 'admin';
 
 export interface SettingsSectionInfo {
@@ -30,6 +30,8 @@ export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'roles', label: tk('Roles'), resource: 'roles', group: 'admin' },
   { key: 'permissions', label: tk('Permissões'), resource: 'roles', group: 'admin' },
   { key: 'uploads', label: tk('Arquivos'), resource: 'uploads', group: 'admin' },
+  { key: 'security', label: tk('Auditoria'), resource: 'security_events', group: 'admin' },
+  { key: 'feature-flags', label: tk('Recursos em teste'), resource: 'feature_flags', group: 'admin' },
 ];
 
 /** where `/settings` lands, and where an address this role cannot open falls back to */

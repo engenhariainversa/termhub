@@ -2,7 +2,8 @@ import type { AttachmentKind, ChatAttachment } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import { Prisma, type ChatAttachment as PrismaAttachment } from '../../generated/prisma/client.js';
 
-/** The whole row. `extracted_text` never leaves the server except through `read_attachment`. */
+/** The whole row. `extracted_text` never leaves the server except through `read_attachment` — and, for
+ * an audio attachment, as its `transcript` (TER-1036): what the person said, shown back to them. */
 export interface AttachmentRow extends ChatAttachment {
   user_id: string;
   conversation_id: string;
@@ -37,7 +38,14 @@ export interface ChatAttachmentsRepo {
   detach(messageId: string): Promise<number>;
   /** Null when the row is gone (deleted while its file was being parsed). */
   setExtracted(id: string, text: string | null, meta: Record<string, unknown> | null): Promise<AttachmentRow | null>;
-  setFailed(id: string, code: string): Promise<AttachmentRow | null>;
+  /** `reason` (a transcription's `TranscriptionReason`) lands in `meta.reason`, next to what meta already holds. */
+  setFailed(id: string, code: string, reason?: string): Promise<AttachmentRow | null>;
+  /**
+   * A failed transcription of this user's goes back to pending, its attempt count and reason cleared,
+   * for the person's "try again" (TER-1035). Null when the row is not theirs, not failed, or failed
+   * for a reason a retry cannot change (an invalid file, audio whisper could not decode).
+   */
+  retryTranscription(id: string, userId: string): Promise<AttachmentRow | null>;
   deleteUnsent(id: string, userId: string): Promise<boolean>;
   usageBytes(userId: string): Promise<number>;
   /** Bumps `meta.attempts` of a pending row and answers the new count; null when the row is gone or no longer pending. */
@@ -65,9 +73,12 @@ export const mapAttachment = (a: PrismaAttachment): AttachmentRow => ({
   created_at: a.createdAt.toISOString(),
 });
 
-/** What a client sees: never the owner, the hash, the extracted text or the queue's attempt counter (`markAttempt`). */
+/** What a client sees: never the owner, the hash, the extracted text of a document or the queue's attempt
+ * counter (`markAttempt`). An audio clip carries its `transcript` once it is ready, so the bubble can show
+ * what was heard under the player; the other kinds go without the field. */
 export function toPublicAttachment(row: AttachmentRow): ChatAttachment {
-  return { id: row.id, name: row.name, mime: row.mime, kind: row.kind, bytes: row.bytes, status: row.status, error_code: row.error_code, meta: publicMeta(row.meta), created_at: row.created_at };
+  const base = { id: row.id, name: row.name, mime: row.mime, kind: row.kind, bytes: row.bytes, status: row.status, error_code: row.error_code, meta: publicMeta(row.meta), created_at: row.created_at };
+  return row.kind === 'audio' ? { ...base, transcript: row.status === 'ready' ? row.extracted_text : null } : base;
 }
 
 function publicMeta(meta: Record<string, unknown> | null): Record<string, unknown> | null {
@@ -128,9 +139,25 @@ export class ChatAttachmentsRepository implements ChatAttachmentsRepo {
     return r.count === 0 ? null : this.findById(id);
   }
 
-  async setFailed(id: string, code: string): Promise<AttachmentRow | null> {
-    const r = await this.db.chatAttachment.updateMany({ where: { id }, data: { status: 'failed', errorCode: code } });
-    return r.count === 0 ? null : this.findById(id);
+  async setFailed(id: string, code: string, reason?: string): Promise<AttachmentRow | null> {
+    if (reason === undefined) {
+      const r = await this.db.chatAttachment.updateMany({ where: { id }, data: { status: 'failed', errorCode: code } });
+      return r.count === 0 ? null : this.findById(id);
+    }
+    const n = await this.db.$executeRaw`
+      UPDATE "chat_attachments"
+      SET status = 'failed', error_code = ${code}, meta = COALESCE(meta, '{}'::jsonb) || jsonb_build_object('reason', ${reason}::text)
+      WHERE id = ${id}`;
+    return n === 0 ? null : this.findById(id);
+  }
+
+  async retryTranscription(id: string, userId: string): Promise<AttachmentRow | null> {
+    // One statement: two taps (or two devices) re-queue it once; the queue's attempt cap starts over.
+    const n = await this.db.$executeRaw`
+      UPDATE "chat_attachments"
+      SET status = 'pending', error_code = NULL, meta = NULLIF(COALESCE(meta, '{}'::jsonb) - 'attempts' - 'reason', '{}'::jsonb)
+      WHERE id = ${id} AND user_id = ${userId} AND status = 'failed' AND error_code = 'TRANSCRIPTION_UNAVAILABLE' AND kind IN ('audio', 'video')`;
+    return n === 0 ? null : this.findById(id);
   }
 
   async deleteUnsent(id: string, userId: string): Promise<boolean> {

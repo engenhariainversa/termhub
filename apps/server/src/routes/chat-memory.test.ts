@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { decisionStatusResponse, lessonForgetSchema, lessonItemSchema, lessonListSchema, memoryReplacementsResponse, noteStatusResponse } from '@termhub/mobile-api';
+import { decisionStatusResponse, lessonForgetSchema, lessonItemSchema, lessonListSchema, memoryReplacementsResponse, memoryRuleDecisionResponse, memoryRulesResponse, noteStatusResponse } from '@termhub/mobile-api';
 import { config } from '../config.js';
 import { applyErrorHandler } from '../lib/errors.js';
 
@@ -17,6 +17,7 @@ function fakeRepos() {
       listForUser: vi.fn(async () => ({ items: [], next_cursor: null })),
       deleteForUser: vi.fn(async () => true),
       countForUser: vi.fn(async () => 0),
+      replayDataset: vi.fn(async () => ({ decisions: [] as unknown[], older: [] as unknown[], replay: [] as unknown[], scope: [] as unknown[], unembedded: 0 })),
       findManyForUser: vi.fn(async () => [] as unknown[]),
     },
     memoryStatus: {
@@ -48,6 +49,8 @@ function fakeRepos() {
       setChatAutodecide: vi.fn(async () => undefined),
       chatCodexReplies: vi.fn(async () => false),
       setChatCodexReplies: vi.fn(async () => undefined),
+      chatContextLimit: vi.fn(async (): Promise<number | null> => null),
+      setChatContextLimit: vi.fn(async () => undefined),
     },
     tabQuestions: {
       cancelScheduledForUser: vi.fn(async (_userId: string) => [] as { id: string }[]),
@@ -96,6 +99,46 @@ function build(kind: 'web' | 'mobile', repos: ReturnType<typeof fakeRepos>) {
 beforeEach(() => vi.clearAllMocks());
 
 describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
+  it('GET /memory/report measures only the requester, at the server threshold unless given one', async () => {
+    const repos = fakeRepos();
+    const row = (id: string, created_at: string) => ({
+      id,
+      user_id: 'u1',
+      project_id: 'p1',
+      project_name: 'Proj',
+      conversation_id: 'c1',
+      tab_question_id: `t-${id}`,
+      question_index: 0,
+      header: 'H',
+      question: 'Fazer merge?',
+      options: [{ label: 'Sim', description: '' }, { label: 'Não', description: '' }],
+      multi_select: false,
+      answer: { labels: ['Sim'] },
+      embed_model: 'm#q1',
+      suggested_count: 0,
+      accepted_count: 0,
+      created_at,
+    });
+    repos.chatDecisions.replayDataset.mockResolvedValueOnce({
+      decisions: [row('d1', '2026-09-01T00:00:00.000Z'), row('d2', '2026-09-02T00:00:00.000Z')],
+      older: [],
+      replay: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      scope: [{ id: 'd2', neighbour_id: 'd1', similarity: 0.995 }],
+      unembedded: 3,
+    });
+    const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report' });
+    expect(res.statusCode).toBe(200);
+    expect(repos.chatDecisions.replayDataset).toHaveBeenCalledWith('u1', '#q1', 5, 2000);
+    const body = res.json();
+    expect(body).toMatchObject({ threshold: config.decisionSuggestThreshold, period: 'month', dataset: { decisions: 2, unembedded: 3 } });
+    expect(body.replay).toMatchObject({ total: 2, hit: 1, no_precedent: 1 });
+    expect(body.repeats).toMatchObject({ answers: 2, repeated: 1, same_answer: 1, questions: 1 });
+
+    const custom = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=0.9&period=week' });
+    expect(custom.json()).toMatchObject({ threshold: 0.9, period: 'week' });
+    expect((await build(kind, repos).inject({ method: 'GET', url: '/chat/memory/report?threshold=2' })).statusCode).toBe(400);
+  });
+
   it('GET /decisions passes the user, q, cursor and the fixed page size, and never leaks embedding', async () => {
     const repos = fakeRepos();
     repos.chatDecisions.listForUser.mockResolvedValueOnce({
@@ -183,7 +226,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, available: false, count: 7, notes: 2 });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, context_limit: null, available: false, count: 7, notes: 2 });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -195,7 +238,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, available: false, count: 3, notes: 0 });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, context_limit: null, available: false, count: 3, notes: 0 });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {
@@ -217,6 +260,24 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(repos.users.setChatSuggestions).not.toHaveBeenCalled();
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
     expect(res.json()).toMatchObject({ codex_replies: true });
+  });
+
+  it('PATCH /memory sets the context meter limit, clears it with null, and refuses one out of bounds (TER-1038)', async () => {
+    const repos = fakeRepos();
+    repos.users.chatContextLimit.mockResolvedValueOnce(200_000);
+    const res = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: 200_000 } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledWith('u1', 200_000);
+    expect(repos.users.setChatCodexReplies).not.toHaveBeenCalled();
+    expect(res.json()).toMatchObject({ context_limit: 200_000 });
+    const cleared = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: null } });
+    expect(cleared.statusCode).toBe(200);
+    expect(repos.users.setChatContextLimit).toHaveBeenLastCalledWith('u1', null);
+    for (const bad of [500, 20_000_000, 150_000.5]) {
+      const r = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { context_limit: bad } });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(repos.users.setChatContextLimit).toHaveBeenCalledTimes(2);
   });
 
   it('PATCH /memory with autodecide: false cancels the user\'s running countdowns and republishes those cards', async () => {
@@ -639,5 +700,67 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(404);
     expect(repos.memoryItems.hideSource).not.toHaveBeenCalled();
     expect(repos.notes.removeBlock).not.toHaveBeenCalled();
+  });
+});
+
+describe.each(['web', 'mobile'] as const)('%s current rules routes (TER-1010)', (kind) => {
+  /** The 4-project case: the same permission noted in 4 projects, and the rules repository kept in memory. */
+  function rulesRepos() {
+    const repos = fakeRepos();
+    let rows: Record<string, unknown>[] = [];
+    const memoryRules = {
+      listForOwner: vi.fn(async () => rows),
+      // The same note in a fifth project was marked wrong (TER-1013): it is not a source.
+      listSources: vi.fn(async () =>
+        ['p1', 'p2', 'p3', 'p4', 'p5'].map((p, i) => ({ ref: `note:n${i}`, project_id: p, project_name: p, title: 'Testes?', text: 'Decisão: Pode rodar os testes de banco sem perguntar\nMotivo: x\nFontes: ', answer: null, current: p !== 'p5', created_at: `2026-10-0${i + 1}T00:00:00.000Z` })),
+      ),
+      similarPairs: vi.fn(async () => []),
+      syncProposals: vi.fn(async (_owner: string, candidates: { kind: string; project_id: string | null; text: string; policy: unknown; source_refs: string[]; fingerprint: string }[]) => {
+        rows = candidates.map((c, i) => ({ id: `r${i}`, owner_id: 'u1', project_name: null, status: 'proposed', note_id: null, decided_at: null, decided_by: null, created_at: '2026-10-07T00:00:00.000Z', ...c }));
+      }),
+      findForOwner: vi.fn(async (id: string) => rows.find((r) => r.id === id) ?? null),
+      decide: vi.fn(async (id: string, _o: string, from: string[], to: string) => {
+        const row = rows.find((r) => r.id === id);
+        if (!row || !from.includes(row.status as string)) return null;
+        row.status = to;
+        row.decided_at = '2026-10-07T01:00:00.000Z';
+        return row;
+      }),
+    };
+    const projectSetup = { get: vi.fn(async () => ({ data: { automation: { autonomy: 'pr', max_parallel: 1 } } })) };
+    projectsOwned(repos);
+    return { repos: { ...repos, memoryRules, projectSetup }, memoryRules };
+  }
+  const projectsOwned = (repos: ReturnType<typeof fakeRepos>) => repos.projects.findById.mockImplementation(async (id: string) => ({ id, owner_id: 'u1', name: id, key: 'K' }));
+
+  it('GET /rules consolidates the same permission in 4 projects into one user-level proposal', async () => {
+    const { repos } = rulesRepos();
+    const res = await build(kind, repos as never).inject({ method: 'GET', url: '/chat/rules' });
+    expect(res.statusCode).toBe(200);
+    const body = memoryRulesResponse.parse(res.json());
+    expect(body.rules).toEqual([]);
+    expect(body.proposals).toHaveLength(1);
+    expect(body.proposals[0]).toMatchObject({ kind: 'rule', project: null, text: 'Pode rodar os testes de banco sem perguntar' });
+    expect(body.proposals[0]!.sources.map((s) => s.ref)).toEqual(['note:n0', 'note:n1', 'note:n2', 'note:n3']);
+  });
+
+  it('POST /rules/:id/reject stores the rejection; a second decision is a 409', async () => {
+    const { repos, memoryRules } = rulesRepos();
+    const app = build(kind, repos as never);
+    await app.inject({ method: 'GET', url: '/chat/rules' });
+    const res = await app.inject({ method: 'POST', url: '/chat/rules/r0/reject', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(memoryRuleDecisionResponse.parse(res.json()).rule.status).toBe('rejected');
+    expect(memoryRules.decide).toHaveBeenCalledWith('r0', 'u1', ['proposed'], 'rejected', 'u1');
+    const again = await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: {} });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe('RULE_DECIDED');
+  });
+
+  it('POST /rules/:id/approve validates the body, and 404s an unknown id', async () => {
+    const { repos } = rulesRepos();
+    const app = build(kind, repos as never);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/r0/approve', payload: { text: 'x'.repeat(1001) } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/chat/rules/nope/approve', payload: {} })).statusCode).toBe(404);
   });
 });

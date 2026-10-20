@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -182,6 +182,11 @@ export type MockNote = TConciergeNote;
  * `owner_id` to keep here either. */
 export type MockLesson = TLessonItem;
 
+/** "Regras vigentes" (TER-1010): field-for-field the wire shape of one rule or proposal (contract
+ * `chat.ts`'s `memoryRuleSchema`) — the mock's single user owns every row. The mock does not
+ * consolidate: its rows are seeded (`fixtures.ts`) and only change status through the routes. */
+export type MockMemoryRule = TMemoryRule;
+
 /** A tab's question (spec 2026-09-25): the wire shape plus the conversation it was pushed into. */
 export type MockTabQuestion = TTabQuestion & { conversation_id: string };
 
@@ -275,17 +280,28 @@ export interface MockState {
   chatAutodecideEnabled: boolean;
   /** "Responder perguntas do Codex pelo chat"; defaults to `false`, like the server's column default. */
   chatCodexRepliesEnabled: boolean;
+  /** The chat's context meter limit (TER-1038); null = the model's window. */
+  chatContextLimit: number | null;
   /** "Anotações do concierge" (spec D12): the mock's one user's `record_decision` notes, any order
    * (`GET notes` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   notes: MockNote[];
   /** "Lições" (spec 2026-09-27 failure lessons §6/§8): the mock's one user's `lesson` items, any
    * order (`GET lessons` sorts newest first) — "Esquecer" (`DELETE`) removes a row from here. */
   lessons: MockLesson[];
+  /** "Regras vigentes" (TER-1010): every rule and proposal, any status, oldest first; `GET rules`
+   * splits them into approved rules and proposals waiting for the person. */
+  memoryRules: MockMemoryRule[];
   /** The mock user's pending account deletion (TER-720), milliseconds; `null` when none. While set,
    * every authenticated route but the account-deletion ones answers `403 ACCOUNT_PENDING_DELETION`. */
   accountDeletion: { requestedAt: number; scheduledAt: number } | null;
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
+  /** Feature flags `GET me` sends for the mock user (TER-1040): all off, like a fresh server. */
+  features: { subscriptions: boolean };
+  /** "Refazer login" (TER-1047): each AI account's login state (`ok` until a test sets otherwise), and
+   * the flows started, by login id. */
+  aiLoginStates: Map<string, string>;
+  aiLoginFlows: Map<string, { accountId: string; needsCode: boolean }>;
 }
 
 export function createMockState(): MockState {
@@ -324,10 +340,15 @@ export function createMockState(): MockState {
     chatMemoryEnabled: true,
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
+    chatContextLimit: null,
     notes: [],
     lessons: [],
+    memoryRules: [],
     accountDeletion: null,
     pushTabFinished: false,
+    features: { subscriptions: false },
+    aiLoginStates: new Map(),
+    aiLoginFlows: new Map(),
   };
 }
 

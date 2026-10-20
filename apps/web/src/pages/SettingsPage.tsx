@@ -17,6 +17,8 @@ import { AiAccountsView } from '../components/AiAccountsView';
 import { HardwareView } from '../components/HardwareView';
 import { WaitlistView } from '../components/WaitlistView';
 import { ChatGrantsView } from '../components/ChatGrantsView';
+import { SecurityEventsView } from '../components/SecurityEventsView';
+import { FeatureFlagsView } from '../components/FeatureFlagsView';
 import { PageFrame } from '../components/PageHeader';
 import { formatDate, formatDateTime } from '../lib/format';
 
@@ -80,6 +82,18 @@ export function SettingsPage() {
       return (
         <PageFrame title={t(current.label)}>
           <UploadsView />
+        </PageFrame>
+      );
+    case 'security':
+      return (
+        <PageFrame title={t(current.label)}>
+          <SecurityEventsView />
+        </PageFrame>
+      );
+    case 'feature-flags':
+      return (
+        <PageFrame title={t(current.label)}>
+          <FeatureFlagsView />
         </PageFrame>
       );
     case 'api-tokens':

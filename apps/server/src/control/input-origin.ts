@@ -11,21 +11,22 @@ export const ON_BEHALF_MAX_AGE_MS = 24 * 60 * 60_000;
  * concierge says it is relaying. Only the chat's gated token may pass them. Each ref must name a
  * `message` memory item of this user (only what the person typed is indexed as one, never an injected
  * wake or the assistant's answer) whose chat message is still there and at most `ON_BEHALF_MAX_AGE_MS`
- * old. Returns the chat message ids, in the order given; any bad ref fails the whole call.
+ * old. The id may be the item's (what `search_memory` returns) or the chat message's own (TER-1037: the
+ * ref the chat hands the concierge with each message the person typed); either way the item must exist.
+ * Returns the chat message ids, in the order given; any bad ref fails the whole call.
  */
 export async function verifyOnBehalfOf(ctx: ControlContext, refs: string[] | undefined): Promise<string[] | undefined> {
   if (!refs || refs.length === 0) return undefined;
   if (!ctx.token?.gated) throw new ControlError('ON_BEHALF_NOT_ALLOWED', msg('on_behalf_of só vale no chat do termhub: só ele tem as mensagens da pessoa'));
   const invalid = (ref: string, why: LocalizedText) =>
-    new ControlError('ON_BEHALF_INVALID', msg('on_behalf_of: {{ref}} {{why}}. Use a ref message:… que o search_memory devolve para uma mensagem da pessoa das últimas 24 h.', { ref, why }));
+    new ControlError('ON_BEHALF_INVALID', msg('on_behalf_of: {{ref}} {{why}}. Use a ref message:… que acompanha a mensagem da pessoa, ou a que o search_memory devolve, de uma mensagem das últimas 24 h.', { ref, why }));
   const parsed = refs.map((ref) => ({ ref, parsed: parseRef(ref) }));
   for (const p of parsed) if (p.parsed?.kind !== 'message') throw invalid(p.ref, msg('não é uma mensagem do chat'));
   const userId = ctx.scope.user.id;
-  const items = await ctx.repos.memoryItems.findManyForOwner(
-    parsed.map((p) => p.parsed!.id),
-    userId,
-  );
-  const itemById = new Map(items.map((it) => [it.id, it]));
+  const ids = parsed.map((p) => p.parsed!.id);
+  const [byItem, bySource] = await Promise.all([ctx.repos.memoryItems.findManyForOwner(ids, userId), ctx.repos.memoryItems.findMessagesBySource(ids, userId)]);
+  const itemById = new Map(byItem.map((it) => [it.id, it]));
+  for (const it of bySource) if (!itemById.has(it.source_id)) itemById.set(it.source_id, it);
   const sourceIds = parsed.map((p) => {
     const item = itemById.get(p.parsed!.id);
     if (!item || item.kind !== 'message' || item.trust !== 'person') throw invalid(p.ref, msg('não existe'));

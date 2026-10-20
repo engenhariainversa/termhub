@@ -28,7 +28,9 @@ export type IneligibleReason =
   | 'merge_no_write'
   | 'merge_conflict_cap'
   | 'merge_ci_cap'
-  | 'merge_person_card';
+  | 'merge_person_card'
+  // TER-1025: a fix ended without a push while GitHub reports trouble: it is asked again once GitHub works
+  | 'merge_github_down';
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
@@ -55,6 +57,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
   merge_ci_cap: tk('CI vermelho depois das tentativas de correção'),
   merge_person_card: tk('O PR cita um card manual que não está em Feito; uma pessoa mescla'),
+  merge_github_down: tk('GitHub instável; a correção do CI é pedida de novo quando ele voltar'),
 };
 
 export interface EligibilityInput {

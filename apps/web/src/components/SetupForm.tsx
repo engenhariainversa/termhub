@@ -384,6 +384,21 @@ export function SetupForm({ project }: Props) {
 
       {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
 
+      {data.ai_memory && (
+        <Card
+          title={t('Memória dos agentes (ai-memory)')}
+          hint={t('Grava as regras vigentes como páginas fixadas do ai-memory nas máquinas do projeto que já usam o ai-memory neste checkout, para o Claude Code e o Codex lerem no início de cada sessão.')}
+        >
+          <Check checked={data.ai_memory.publish_rules} onChange={(v) => patch('ai_memory', { ...data.ai_memory!, publish_rules: v })}>
+            {t('Publicar regras vigentes no ai-memory')}
+          </Check>
+          <Check checked={data.ai_memory.use_in_runs ?? false} onChange={(v) => patch('ai_memory', { ...data.ai_memory!, use_in_runs: v })}>
+            {t('Usar o ai-memory nas execuções do termhub')}
+          </Check>
+          <Empty>{t('Os agentes que o termhub inicia nas máquinas com "Usar ai-memory nesta máquina" ligado recebem o MCP do ai-memory. Claude Code: o MCP e, nas execuções automáticas, os hooks no worktree (sem capturar prompts), nunca no ~/.claude. Codex: só o MCP; os hooks dele só rodam depois do "Trust all" no próprio Codex. Antigravity e Gemini CLI: suporte limitado (configuração só global, ou chave de API), e o termhub não mexe nela. Dica: [handoff] create_on_session_end = false no .ai-memory.toml evita handoffs de sessões triviais.')}</Empty>
+        </Card>
+      )}
+
       <div className="sticky bottom-0 flex items-center gap-3 border-t border-line bg-bg pb-6 pt-3">
         <button type="button" className="btn-primary" onClick={() => void save()} disabled={busy || !dirty || anyDuplicate}>
           {t('Salvar setup')}

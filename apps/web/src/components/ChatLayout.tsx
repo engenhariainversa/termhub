@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { useTranslation } from '../i18n';
 import { trackAppHeight } from '../lib/viewport';
+import { ChatHeaderSlot } from './chat/chat-header-slot';
 
 /**
  * The chat's own full-screen shell: no sidebar, no menus — just a thin header with a way back
- * to the app and room for the page's own status text. It sits under `AppShell`, so the auth
+ * to the app and the slot for the page's cog (`ChatHeaderSlot`). It sits under `AppShell`, so the auth
  * guard, data/monitor/toast providers and the "precisando de você" toasts still apply here.
  *
  * The height is `--app-height` (the visual viewport, see `lib/viewport`) falling back to `100svh`,
@@ -17,6 +18,7 @@ import { trackAppHeight } from '../lib/viewport';
  */
 export function ChatLayout() {
   const { t } = useTranslation();
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   // The document itself must not scroll while the chat is open. Sizing the shell to the viewport is
   // not enough on iOS: a drag that starts on a child which cannot scroll — the message box, most of
   // all — is handed to the document, and the page pans under a conversation that is already
@@ -39,17 +41,9 @@ export function ChatLayout() {
           {t('← Voltar')}
         </Link>
         <h1 className="text-sm font-semibold text-fg">{t('Chat')}</h1>
-        {/* The suggestion memory's own screen (spec 2026-09-26 §5.2): list, search, forget, switch. */}
-        <Link to="/chat/memoria" className="text-sm text-fg-dim hover:text-fg">
-          {t('Memória')}
-        </Link>
-        {/* Which bundle this screen is running, so "it did not change on my phone" can be answered by
-            reading it instead of guessing between a stale page and a fix that does not work. The
-            version is what the person asked for; the commit is what actually tells two deploys apart,
-            since the version has not moved since 0.1.0. */}
-        <span className="ml-auto font-mono text-[10px] text-fg-dim" title="build" /* i18n-ignore: a version stamp */>
-          v{__APP_VERSION__} · {import.meta.env.VITE_BUILD_SHA || __BUILD_STAMP__}
-        </span>
+        {/* The conversation's cog (TER-1039): the panel portals it here; "Memória", the build stamp and
+            every other control of the conversation live in the settings dialog it opens. */}
+        <div ref={setSlot} className="ml-auto flex items-center" />
       </header>
       {/* `main`, like every sidebar route's own region (`Layout.tsx`): /chat is a full page too, and
        * a screen reader needs the landmark to skip the header. */}
@@ -59,7 +53,9 @@ export function ChatLayout() {
        * the thread stopped filling the screen, the box floated above a slab of empty space, and the
        * document became the thing that scrolled. */}
       <main className="flex min-h-0 flex-1 flex-col">
-        <Outlet />
+        <ChatHeaderSlot.Provider value={slot}>
+          <Outlet />
+        </ChatHeaderSlot.Provider>
       </main>
     </div>
   );

@@ -125,6 +125,12 @@ export const automationSchema = z.object({
   max_parallel: z.number().int().min(1).max(100).nullable().default(null),
   resume_max: z.number().int().min(0).max(10).default(3),
   fix_attempts: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a deploy that failed on GitHub's side (no job, no failed step, an Actions incident) is run again
+  // this many times (5, 15, 30 min apart) before the project is paused; 0 = pause at once, as before
+  deploy_retries: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a run that reported a GitHub error (push or PR) is resumed this many times, once GitHub works
+  // again, before it goes to the person
+  github_retries: z.number().int().min(0).max(10).default(3),
   daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
   // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off
   card_budget_usd: z.number().positive().max(100000).nullable().default(null),
@@ -132,6 +138,16 @@ export const automationSchema = z.object({
   prompts: z.object({ implementer: promptText, integrator: promptText, fixer: promptText }).default({}),
 });
 export type ProjectAutomation = z.infer<typeof automationSchema>;
+
+/** ai-memory (TER-1019). `publish_rules`: write the current rules as pinned pages on the project's machines
+ *  that already use ai-memory for the checkout. `use_in_runs` (TER-1020): the agents termhub starts get the
+ *  machine's ai-memory MCP (and, in an automatic run's worktree, its Claude Code hooks) on machines that
+ *  opted in too. Both off by default. */
+export const aiMemorySchema = z.object({
+  publish_rules: z.boolean().default(false),
+  use_in_runs: z.boolean().default(false),
+});
+export type ProjectAiMemory = z.infer<typeof aiMemorySchema>;
 
 /** Why a saved allow rule is refused (TER-968): shown to the person on the field. */
 export const UNSAFE_ALLOWED_TOOL = tk('Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).');
@@ -160,6 +176,7 @@ export const setupSchema = z.object({
   approvals: approvalsSchema.default({}),
   ai: aiSchema.default({}),
   automation: automationSchema.default({}),
+  ai_memory: aiMemorySchema.default({}),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;

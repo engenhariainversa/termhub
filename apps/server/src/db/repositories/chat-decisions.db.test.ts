@@ -126,7 +126,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     ]);
     await repo.setEmbedding(otherUserRow!.id, vec(1), 'm#q1');
 
-    const neighbours = await repo.nearest(userId, vec(1), { multiSelect: false, k: 5, embedModel: 'm#q1' });
+    const neighbours = await repo.nearest(userId, vec(1), { multiSelect: false, k: 5, embedModel: 'm#q1', place: { projectId, conversationId } });
     expect(neighbours[0]).toMatchObject({ id: decisionAId, project_name: 'proj' });
     expect(neighbours[0]!.similarity).toBeCloseTo(1, 5);
     expect(neighbours[1]!.id).toBe(b!.id);
@@ -166,7 +166,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     const [tagged] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'ComTag', question: 'Vetor novo?' })]);
     await repo.setEmbedding(tagged!.id, vec(7), 'm#q1');
 
-    const ids = (await repo.nearest(userId, vec(7), { multiSelect: false, k: 50, embedModel: 'm#q1' })).map((n) => n.id);
+    const ids = (await repo.nearest(userId, vec(7), { multiSelect: false, k: 50, embedModel: 'm#q1', place: { projectId, conversationId } })).map((n) => n.id);
     expect(ids).toContain(tagged!.id);
     expect(ids).not.toContain(untagged!.id);
     expect(ids).not.toContain(longer!.id);
@@ -283,7 +283,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     expect(beforeIds).not.toContain(permissionId);
     expect(beforeIds).not.toContain(openChoiceId);
     const found = before.find((r) => r.id === answeredChoiceId)!;
-    expect(found).toMatchObject({ project_id: projectId, conversation_id: conversationId, answered_by: userId });
+    expect(found).toMatchObject({ project_id: projectId, conversation_id: conversationId, answered_by: userId, answered_via: null });
 
     // excludeIds: the row is skipped while listed, back once it is not.
     const excluded = await repo.listAnsweredChoicesWithoutDecision(10_000, [answeredChoiceId]);
@@ -348,11 +348,36 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
     ]);
     await repo.setEmbedding(otherUserRow!.id, vec(1), 'm');
 
-    const neighbours = await repo.nearestAny(userId, vec(1), 10);
+    const [otherModel] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Any5', question: 'Any pergunta 5?' })]);
+    await repo.setEmbedding(otherModel!.id, vec(1), 'm#old');
+    const [derived] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Any6', question: 'Any pergunta 6?', trust: 'derived' })]);
+    await repo.setEmbedding(derived!.id, vec(1), 'm');
+
+    const neighbours = await repo.nearestAny(userId, vec(1), 10, 'm');
     const ids = neighbours.map((n) => n.id);
     expect(ids.indexOf(single!.id)).toBeLessThan(ids.indexOf(multi!.id)); // both shapes present, best first
     expect(ids).not.toContain(unembedded!.id);
     expect(ids).not.toContain(otherUserRow!.id);
+    expect(ids).not.toContain(otherModel!.id); // another model / text version is never compared (TER-1006)
+    // search_memory still finds a derived decision, and says so
+    expect(neighbours.find((n) => n.id === derived!.id)?.trust).toBe('derived');
+    expect(neighbours.find((n) => n.id === single!.id)?.trust).toBe('person');
+  });
+
+  it('a derived decision (an answer the countdown sent) is never a precedent: nearest and similarityTo skip it (TER-1006)', async () => {
+    const [person] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Trust1', question: 'Trust pergunta 1?' })]);
+    const [derived] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Trust2', question: 'Trust pergunta 2?', trust: 'derived' })]);
+    expect(person!.trust).toBe('person');
+    expect(derived!.trust).toBe('derived');
+    for (const row of [person, derived]) await repo.setEmbedding(row!.id, vec(11), 'm#q1');
+
+    const near = (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1', place: {} })).map((n) => n.id);
+    expect(near).toContain(person!.id);
+    expect(near).not.toContain(derived!.id);
+    const sims = await repo.similarityTo([person!.id, derived!.id], userId, vec(11), 'm#q1');
+    expect(sims.has(person!.id)).toBe(true);
+    expect(sims.has(derived!.id)).toBe(false);
+    expect((await repo.findManyForUser([derived!.id], userId))[0]?.trust).toBe('derived');
   });
 
   it('similarityTo: cosine similarity of the named rows to a vector, only this user\'s embedded rows', async () => {
@@ -405,12 +430,154 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatDecisionsRepository (
 
       expect((await repo.textSearch(userId, 'Quasar888', 10)).map((d) => d.id).sort()).toEqual([mine!.id, elsewhere!.id, noProject!.id].sort());
       expect((await repo.textSearch(userId, 'Quasar888', 10, projectId)).map((d) => d.id)).toEqual([mine!.id]);
-      const near = (await repo.nearestAny(userId, vec(9), 50, projectId)).map((d) => d.id);
+      const near = (await repo.nearestAny(userId, vec(9), 50, 'm', projectId)).map((d) => d.id);
       expect(near).toContain(mine!.id);
       expect(near).not.toContain(elsewhere!.id);
       expect(near).not.toContain(noProject!.id);
     } finally {
       await db.chatDecision.deleteMany({ where: { projectId: otherProjectId } });
+      await db.project.deleteMany({ where: { id: otherProjectId } });
+    }
+  });
+
+  it('replayDataset: only one user\'s rows on both sides, earlier neighbours only, never the same card (TER-1009)', async () => {
+    // A fresh user, so the rows the other tests left behind do not enter the dataset.
+    const me = newId();
+    await db.user.create({ data: { id: me, email: `${me}@test.local`, name: 'replay' } });
+    try {
+      const at = (day: number) => new Date(Date.UTC(2026, 8, day, 12));
+      const add = async (over: Partial<NewDecision>, vector: number[] | null, model: string, day: number) => {
+        const [row] = await repo.insertMany([newDecision({ user_id: me, conversation_id: null, tab_question_id: newId(), ...over })]);
+        if (vector) await repo.setEmbedding(row!.id, vector, model);
+        await db.$executeRaw`UPDATE "chat_decisions" SET "created_at" = ${at(day)} WHERE "id" = ${row!.id}`;
+        return row!;
+      };
+      const foreign = await add({ user_id: otherUserId }, vec(20), 'm#q1', 1); // another user: never seen
+      const a = await add({}, vec(20), 'm#q1', 2);
+      const b = await add({}, mix(20, 21, 0.9), 'm#q1', 3);
+      const multi = await add({ multi_select: true }, vec(20), 'm#q1', 4);
+      const loose = await add({ project_id: null }, vec(20), 'm#q1', 5);
+      const card = newId();
+      const q0 = await add({ tab_question_id: card, question_index: 0 }, vec(22), 'm#q1', 6);
+      const q1 = await add({ tab_question_id: card, question_index: 1 }, vec(22), 'm#q1', 7);
+      await add({}, vec(20), 'm', 8); // embedded under an older text version: left out, counted
+      await add({}, null, 'm#q1', 9); // not embedded yet: left out, counted
+
+      const ds = await repo.replayDataset(me, '#q1', 5, 100);
+      expect(ds.decisions.map((d) => d.id)).toEqual([a.id, b.id, multi.id, loose.id, q0.id, q1.id]);
+      expect(ds.unembedded).toBe(2);
+      expect(ds.older).toEqual([]);
+      const ids = (pairs: typeof ds.replay, id: string) => pairs.filter((p) => p.id === id).map((p) => p.neighbour_id);
+      // Replay: same shape, any project, strictly earlier, best first.
+      expect(ids(ds.replay, a.id)).toEqual([]);
+      expect(ids(ds.replay, b.id)).toEqual([a.id]);
+      expect(ds.replay.find((p) => p.id === b.id)!.similarity).toBeCloseTo(0.9 / Math.sqrt(0.82), 5);
+      expect(ids(ds.replay, multi.id)).toEqual([]);
+      expect(ids(ds.replay, loose.id).sort()).toEqual([a.id, b.id].sort());
+      expect(ids(ds.replay, q1.id)).not.toContain(q0.id);
+      // Scope: the single nearest earlier question of the same project (or both account-wide), any shape.
+      expect(ids(ds.scope, b.id)).toEqual([a.id]);
+      expect(ids(ds.scope, multi.id)).toEqual([a.id]);
+      expect(ids(ds.scope, loose.id)).toEqual([]);
+      expect(ids(ds.scope, q1.id)).not.toContain(q0.id);
+      const every = [...ds.decisions, ...ds.older].map((d) => d.id);
+      expect(every).not.toContain(foreign.id);
+      expect([...ds.replay, ...ds.scope].map((p) => p.neighbour_id)).not.toContain(foreign.id);
+
+      // A window of the newest 3: their neighbours further back come in `older`.
+      const window = await repo.replayDataset(me, '#q1', 5, 3);
+      expect(window.decisions.map((d) => d.id)).toEqual([loose.id, q0.id, q1.id]);
+      expect(window.older.map((d) => d.id)).toEqual(expect.arrayContaining([a.id, b.id]));
+
+      // The other user's dataset never holds one of this user's rows either.
+      const theirs = await repo.replayDataset(otherUserId, '#q1', 5, 100);
+      expect(theirs.decisions.map((d) => d.id)).toContain(foreign.id);
+      const mine = new Set(every);
+      expect([...theirs.decisions, ...theirs.older].filter((d) => mine.has(d.id))).toEqual([]);
+    } finally {
+      await db.user.deleteMany({ where: { id: me } });
+    }
+  });
+
+  it('replayDataset: a replay neighbour is only what `nearest` would have offered then — person, in scope, still current (TER-1009)', async () => {
+    const me = newId();
+    await db.user.create({ data: { id: me, email: `${me}@test.local`, name: 'replay2' } });
+    try {
+      const at = (day: number) => new Date(Date.UTC(2026, 8, day, 12));
+      const add = async (over: Partial<NewDecision>, day: number) => {
+        const [row] = await repo.insertMany([newDecision({ user_id: me, conversation_id: null, tab_question_id: newId(), ...over })]);
+        await repo.setEmbedding(row!.id, vec(30), 'm#q1');
+        await db.$executeRaw`UPDATE "chat_decisions" SET "created_at" = ${at(day)} WHERE "id" = ${row!.id}`;
+        return row!;
+      };
+      const derived = await add({ trust: 'derived' }, 1); // the countdown's answer: never a precedent
+      const elsewhere = await add({ project_id: null }, 2); // held to another place
+      await db.$executeRaw`UPDATE "chat_decisions" SET "scope" = 'project' WHERE "id" = ${elsewhere.id}`;
+      const wrong = await add({}, 3); // marked errada before the question was asked
+      await db.$executeRaw`UPDATE "chat_decisions" SET "wrong_at" = ${at(4)} WHERE "id" = ${wrong.id}`;
+      const replaced = await add({}, 3); // replaced only after it: still a precedent then
+      await db.$executeRaw`UPDATE "chat_decisions" SET "superseded_at" = ${at(8)} WHERE "id" = ${replaced.id}`;
+      const expired = await add({}, 3);
+      await db.$executeRaw`UPDATE "chat_decisions" SET "expires_at" = ${at(5)} WHERE "id" = ${expired.id}`;
+      const good = await add({}, 5);
+      const asked = await add({}, 6);
+
+      const ds = await repo.replayDataset(me, '#q1', 10, 100);
+      const replay = ds.replay.filter((p) => p.id === asked.id).map((p) => p.neighbour_id);
+      expect(replay.sort()).toEqual([good.id, replaced.id].sort());
+      // The repeated-question count still sees every earlier answer of the same project.
+      expect(ds.scope.filter((p) => p.id === asked.id)).toHaveLength(1);
+      expect(ds.decisions.map((d) => d.id)).toContain(derived.id);
+    } finally {
+      await db.user.deleteMany({ where: { id: me } });
+    }
+  });
+
+  it('scope and expiry (TER-1014): card answers default to user scope; nearest/nearestAny/textSearch keep only what holds at the place', async () => {
+    const otherProjectId = newId();
+    await db.project.create({ data: { id: otherProjectId, key: `F${otherProjectId.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'proj3', ownerId: userId } });
+    const otherConversationId = (await chat.getOrCreateForProject(userId, otherProjectId)).id;
+    try {
+      const insert = async (over: Partial<NewDecision>) => {
+        const [row] = await repo.insertMany([newDecision({ tab_question_id: newId(), header: 'Validade', question: 'Pode Zephyr777?', ...over })]);
+        await repo.setEmbedding(row!.id, vec(11), 'm#q1');
+        return row!;
+      };
+      const user = await insert({});
+      expect(user).toMatchObject({ scope: 'user', expires_at: null });
+      const project = await insert({});
+      await db.chatDecision.update({ where: { id: project.id }, data: { scope: 'project' } });
+      const conversation = await insert({});
+      await db.chatDecision.update({ where: { id: conversation.id }, data: { scope: 'conversation' } });
+      const expired = await insert({});
+      await db.chatDecision.update({ where: { id: expired.id }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+      const later = await insert({});
+      await db.chatDecision.update({ where: { id: later.id }, data: { expiresAt: new Date(Date.now() + 3_600_000) } });
+
+      const here = { projectId, conversationId };
+      const near = async (place: { projectId?: string | null; conversationId?: string | null }) =>
+        (await repo.nearest(userId, vec(11), { multiSelect: false, k: 50, embedModel: 'm#q1', place })).map((d) => d.id);
+
+      const atHome = await near(here);
+      expect(atHome).toEqual(expect.arrayContaining([user.id, project.id, conversation.id, later.id]));
+      expect(atHome).not.toContain(expired.id);
+
+      const elsewhere = await near({ projectId: otherProjectId, conversationId: otherConversationId });
+      expect(elsewhere).toEqual(expect.arrayContaining([user.id, later.id]));
+      expect(elsewhere).not.toContain(project.id);
+      expect(elsewhere).not.toContain(conversation.id);
+      expect(elsewhere).not.toContain(expired.id);
+
+      // A search with no project and no conversation: project ones of any project, never a conversation one.
+      const search = (await repo.textSearch(userId, 'Zephyr777', 50)).map((d) => d.id);
+      expect(search).toEqual(expect.arrayContaining([user.id, project.id, later.id]));
+      expect(search).not.toContain(conversation.id);
+      expect(search).not.toContain(expired.id);
+      const withExpired = (await repo.nearestAny(userId, vec(11), 50, 'm#q1', undefined, { includeExpired: true })).map((d) => d.id);
+      expect(withExpired).toContain(expired.id);
+      const read = (await repo.findManyForUser([expired.id], userId))[0]!;
+      expect(read.expires_at).not.toBeNull();
+    } finally {
       await db.project.deleteMany({ where: { id: otherProjectId } });
     }
   });

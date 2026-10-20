@@ -88,6 +88,12 @@ describe('chatResponse', () => {
     const { subagents: _subagents, ...withoutSubagents } = fixture;
     expect(chatResponse.parse(withoutSubagents)).toEqual(fixture);
   });
+
+  it("carries the context meter: the conversation's fill and compaction, and the person's limit (TER-1038)", () => {
+    const parsed = chatResponse.parse({ ...fixture, conversation: { ...fixture.conversation, context_tokens: 150_000, context_window: 1_000_000, context_compacted_at: '2026-10-07T12:00:00.000Z' }, context_limit: 200_000 });
+    expect(parsed.conversation).toMatchObject({ context_tokens: 150_000, context_window: 1_000_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
+    expect(parsed.context_limit).toBe(200_000);
+  });
 });
 
 describe('chatHostStateSchema', () => {
