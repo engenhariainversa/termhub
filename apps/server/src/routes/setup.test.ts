@@ -131,7 +131,7 @@ describe('setup PUT and the ai_memory block (TER-1019)', () => {
     const { app, save } = build([], undefined, undefined, { publish_rules: true });
     vi.mocked(nudgeAiMemoryRules).mockClear();
     await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { ticket_sources: [], ai_memory: { publish_rules: false } } });
-    expect((save.mock.calls[0][1] as { ai_memory: unknown }).ai_memory).toEqual({ publish_rules: false });
+    expect((save.mock.calls[0][1] as { ai_memory: unknown }).ai_memory).toEqual({ publish_rules: false, use_in_runs: false });
     expect(nudgeAiMemoryRules).toHaveBeenCalledOnce();
   });
 

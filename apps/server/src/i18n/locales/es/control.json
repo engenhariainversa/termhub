@@ -117,5 +117,6 @@
   "Esta ferramenta só funciona no chat do termhub: ela lê o contexto da própria conversa.": "Esta herramienta solo funciona en el chat de termhub: lee el contexto de la propia conversación.",
   "Só a pessoa refaz o login de uma conta de IA, nunca um agente numa aba": "Solo la persona rehace el login de una cuenta de IA, nunca un agente en una pestaña",
   "Só a dona da máquina pode refazer o login": "Solo la dueña de la máquina puede rehacer el login",
-  "Sem permissão para escrever nas abas": "Sin permiso para escribir en las pestañas"
+  "Sem permissão para escrever nas abas": "Sin permiso para escribir en las pestañas",
+  "URL do ai-memory inválida": "URL de ai-memory no válida"
 }
