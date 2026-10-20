@@ -9,9 +9,9 @@ vi.mock('../exec.js', async () => {
   return { ...actual, agentEnv: () => ({ PATH: '/usr/local/bin:/usr/bin:/bin' }) };
 });
 
-const { renderPlist, install: launchdInstall, uninstall: launchdUninstall, status: launchdStatus, stopRestartLoop, LABEL } = await import('./launchd.js');
-const { renderUnit, refreshUnit, install: systemdInstall, uninstall: systemdUninstall, status: systemdStatus, UNIT_NAME } = await import('./systemd.js');
-const { serviceFileOptions } = await import('./index.js');
+const { renderPlist, install: launchdInstall, uninstall: launchdUninstall, status: launchdStatus, stopRestartLoop, removeDefinition: launchdRemoveDefinition, stop: launchdStop, LABEL } = await import('./launchd.js');
+const { renderUnit, refreshUnit, install: systemdInstall, uninstall: systemdUninstall, status: systemdStatus, removeDefinition: systemdRemoveDefinition, stop: systemdStop, UNIT_NAME } = await import('./systemd.js');
+const { serviceFileOptions, removeDefinition, stop } = await import('./index.js');
 
 function ok(stdout = ''): RunResult {
   return { code: 0, stdout, stderr: '', timedOut: false };
@@ -74,6 +74,15 @@ describe('renderPlist', () => {
   });
 });
 
+describe('renderPlist proxy env', () => {
+  it('adds the proxy/CA variables next to PATH', () => {
+    const xml = renderPlist({ label: 'l', node: '/n', script: '/s', logPath: '/l', env: { HTTPS_PROXY: 'http://p:3128', NODE_EXTRA_CA_CERTS: '/a&b.pem' } });
+    expect(xml).toContain('<key>HTTPS_PROXY</key>\n    <string>http://p:3128</string>');
+    expect(xml).toContain('<key>NODE_EXTRA_CA_CERTS</key>\n    <string>/a&amp;b.pem</string>');
+    expect(xml).not.toContain('NO_PROXY');
+  });
+});
+
 describe('renderUnit', () => {
   it('matches the expected systemd unit', () => {
     const unit = renderUnit({ node: '/usr/local/bin/node', script: '/opt/termhub-agent/dist/cli.js', logPath: '/home/pedro/.termhub/agent.log' });
@@ -119,6 +128,18 @@ describe('renderUnit', () => {
     expect(renderUnit({ node: '/n/node', script: '/s/cli.js' })).toContain('KillMode=process');
   });
 
+  it('writes the proxy/CA variables, quoted for systemd (\\, " escaped and % doubled)', () => {
+    const unit = renderUnit({
+      node: '/n/node',
+      script: '/s/cli.js',
+      env: { HTTPS_PROXY: 'http://me:p%40ss@proxy:3128', NO_PROXY: 'localhost, .corp', NODE_EXTRA_CA_CERTS: '/etc/ssl/corp "ca".pem' },
+    });
+    expect(unit).toContain('Environment="HTTPS_PROXY=http://me:p%%40ss@proxy:3128"');
+    expect(unit).toContain('Environment="NO_PROXY=localhost, .corp"');
+    expect(unit).toContain('Environment="NODE_EXTRA_CA_CERTS=/etc/ssl/corp \\"ca\\".pem"');
+    expect(unit).not.toContain('HTTP_PROXY=');
+  });
+
   it('takes PATH from pathEnv when given, instead of the current environment', () => {
     const unit = renderUnit({ node: '/n/node', script: '/s/cli.js', pathEnv: '/only/this' });
     expect(unit).toContain('Environment=PATH=/only/this');
@@ -151,9 +172,10 @@ describe('launchd install/uninstall/status', () => {
       if (args[0] === 'bootout') return fail('nothing loaded');
       return ok();
     });
-    await launchdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log' }, { run: run as never, home });
+    await launchdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log', env: {} }, { run: run as never, home });
 
     expect(fs.readFileSync(plist, 'utf8')).toContain('<string>/s/cli.js</string>');
+    expect(fs.readFileSync(plist, 'utf8')).not.toContain('HTTPS_PROXY');
     expect(calls[0][0]).toBe('launchctl');
     expect(calls[0][1]).toBe('bootout');
     expect(calls[1][0]).toBe('launchctl');
@@ -246,6 +268,13 @@ describe('systemd install/uninstall/status', () => {
     expect(calls[1]).toEqual(['systemctl', '--user', 'enable', '--now', UNIT_NAME]);
   });
 
+  it('install() carries the proxy variables and keeps a unit holding a proxy password private', async () => {
+    const run = vi.fn(async () => ok());
+    await systemdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log', env: { HTTPS_PROXY: 'http://me:pw@proxy:3128' } }, { run: run as never, home });
+    expect(fs.readFileSync(unit, 'utf8')).toContain('Environment="HTTPS_PROXY=http://me:pw@proxy:3128"');
+    expect(fs.statSync(unit).mode & 0o777).toBe(0o600);
+  });
+
   it('install() throws when enable --now fails', async () => {
     const run = vi.fn(async (_file: string, args: string[]) => (args.includes('enable') ? fail('denied') : ok()));
     await expect(systemdInstall({ node: '/n/node', script: '/s/cli.js', logPath: '/l/agent.log' }, { run: run as never, home })).rejects.toThrow(/enable --now failed/);
@@ -304,6 +333,14 @@ describe('systemd refreshUnit', () => {
     expect(written.match(/Environment=PATH=/g)).toHaveLength(1);
   });
 
+  it('keeps the proxy/CA variables written by `service install`, whatever this process has', async () => {
+    const env = { HTTPS_PROXY: 'http://me:p%40ss@proxy:3128', NO_PROXY: 'localhost', NODE_EXTRA_CA_CERTS: '/etc/c "x".pem' };
+    fs.writeFileSync(unit, renderUnit({ ...opts, pathEnv: '/keep/me', env }).replace('KillMode=process\n', ''), 'utf8');
+    const run = vi.fn(async () => ok());
+    await expect(refreshUnit(opts, { run: run as never, home })).resolves.toBe(true);
+    expect(fs.readFileSync(unit, 'utf8')).toBe(renderUnit({ ...opts, pathEnv: '/keep/me', env }));
+  });
+
   it('does nothing when the service was never installed', async () => {
     const run = vi.fn(async () => ok());
     await expect(refreshUnit(opts, { run: run as never, home })).resolves.toBe(false);
@@ -316,6 +353,83 @@ describe('systemd refreshUnit', () => {
     const run = vi.fn(async () => ok());
     await expect(refreshUnit(opts, { run: run as never, home })).resolves.toBe(false);
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+// agent.uninstall runs inside the service it removes: the definition must go without stopping the
+// job (which would kill the process before it replies); stopping is a separate, later call.
+describe('removeDefinition/stop (agent.uninstall)', () => {
+  const uid = process.getuid ? process.getuid() : 0;
+  let home: string;
+
+  beforeEach(() => {
+    home = fs.mkdtempSync(path.join(os.tmpdir(), 'termhub-agent-remove-def-'));
+  });
+  afterEach(() => {
+    fs.rmSync(home, { recursive: true, force: true });
+  });
+
+  it('launchd: unlinks the plist without running launchctl', async () => {
+    const plist = path.join(home, 'Library', 'LaunchAgents', `${LABEL}.plist`);
+    fs.mkdirSync(path.dirname(plist), { recursive: true });
+    fs.writeFileSync(plist, '<plist/>', 'utf8');
+    const run = vi.fn(async () => ok());
+    await expect(launchdRemoveDefinition({ run: run as never, home })).resolves.toBe(true);
+    expect(fs.existsSync(plist)).toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('launchd: reports false when there is no plist', async () => {
+    await expect(launchdRemoveDefinition({ run: vi.fn() as never, home })).resolves.toBe(false);
+  });
+
+  it('launchd: stop() boots the job out by label', async () => {
+    const run = vi.fn(async () => ok());
+    await launchdStop({ run: run as never });
+    expect(run).toHaveBeenCalledWith('launchctl', ['bootout', `gui/${uid}/${LABEL}`]);
+  });
+
+  it('systemd: disables without --now, unlinks the unit, then daemon-reloads', async () => {
+    const unit = path.join(home, '.config', 'systemd', 'user', `${UNIT_NAME}.service`);
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, '[Unit]\n', 'utf8');
+    const calls: string[][] = [];
+    const run = vi.fn(async (file: string, args: string[]) => {
+      calls.push([file, ...args, fs.existsSync(unit) ? 'unit-present' : 'unit-gone']);
+      return ok();
+    });
+    await expect(systemdRemoveDefinition({ run: run as never, home })).resolves.toBe(true);
+    expect(calls).toEqual([
+      ['systemctl', '--user', 'disable', UNIT_NAME, 'unit-present'],
+      ['systemctl', '--user', 'daemon-reload', 'unit-gone'],
+    ]);
+    expect(fs.existsSync(unit)).toBe(false);
+  });
+
+  it('systemd: throws and keeps the unit when disable fails', async () => {
+    const unit = path.join(home, '.config', 'systemd', 'user', `${UNIT_NAME}.service`);
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, '[Unit]\n', 'utf8');
+    const run = vi.fn(async () => fail('denied'));
+    await expect(systemdRemoveDefinition({ run: run as never, home })).rejects.toThrow(/disable failed/);
+    expect(fs.existsSync(unit)).toBe(true);
+  });
+
+  it('systemd: reports false and runs nothing when there is no unit', async () => {
+    const run = vi.fn(async () => ok());
+    await expect(systemdRemoveDefinition({ run: run as never, home })).resolves.toBe(false);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('systemd: stop() stops the unit', async () => {
+    const run = vi.fn(async () => ok());
+    await systemdStop({ run: run as never });
+    expect(run).toHaveBeenCalledWith('systemctl', ['--user', 'stop', UNIT_NAME]);
+  });
+
+  it('index: platforms without a service layer have nothing to remove or stop', async () => {
+    await expect(removeDefinition('win32')).resolves.toBe(false);
+    await expect(stop('win32')).resolves.toBeUndefined();
   });
 });
 

@@ -147,5 +147,22 @@ export function typeOptions(task: Task): TaskType[] {
 
 export const canHaveSubtasks = (task: Task): boolean => task.type === 'story' || task.type === 'task';
 
-/** A card's own URL path (spec §7): `/project/TER-12`. */
+/** A card's own page (spec §7): `/project/TER-12` — for shared links and a new browser tab. */
 export const cardPath = (ref: string): string => `/project/${ref}`;
+
+/** The board's query parameter that holds the open card's ref (TER-976): the editor opens over the board. */
+export const CARD_PARAM = 'card';
+
+/** The project's Board with a card's editor open: `/projects/<id>/tasks?card=TER-12`. */
+export const boardCardPath = (projectId: string, ref: string): string => `/projects/${projectId}/tasks?${CARD_PARAM}=${encodeURIComponent(ref)}`;
+
+/**
+ * The top-level card a ref opens on the board: the card itself, or the parent of a subtask (subtasks
+ * live in their parent's checklist). Null when the board has no such card.
+ */
+export function cardForRef(tasks: Task[], ref: string): Task | null {
+  const found = tasks.find((t) => t.ref === ref) ?? tasks.flatMap((t) => t.subtasks ?? []).find((s) => s.ref === ref);
+  if (!found) return null;
+  if (!found.parent_id) return found;
+  return tasks.find((t) => t.id === found.parent_id) ?? null;
+}

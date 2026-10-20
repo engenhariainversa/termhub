@@ -21,6 +21,9 @@ import {
   stripCodexConfig,
   stripCodexHooks,
   stripCursorHooks,
+  hooksStatus,
+  type HookFile,
+  type HooksStatus,
 } from '@termhub/machine-ops';
 import { agentRpc, requireAgentVersion } from '../agent/errors.js';
 import { tk } from '../i18n/index.js';
@@ -41,6 +44,8 @@ import { REMOTE_PATH_PREFIX, runOnMachine, runOnMachineWithInput, shellQuote } f
 export const HOOKS_MIN_AGENT_VERSION = '0.1.4';
 /** First agent release that also hooks the accounts' own Claude config dirs (`claude_dirs`). */
 export const HOOKS_CONFIG_DIRS_MIN_AGENT_VERSION = '0.1.5';
+/** First agent release that answers `hooks.status` (TER-1023). */
+export const HOOKS_STATUS_MIN_AGENT_VERSION = '0.21.0';
 
 export interface HookInstallReport {
   home: string;
@@ -78,6 +83,9 @@ interface MachineConfigs {
   cursorHooks: string;
   cursorStatus: FileStatus;
   hasCursor: boolean;
+  /** the forwarding script and its env file, for `readHooksStatus` */
+  script: HookFile;
+  env: HookFile;
 }
 
 /**
@@ -94,6 +102,9 @@ const fileStatus = (chunk: string | undefined): FileStatus => {
   return word === 'absent' || word === 'present' ? word : 'unreadable';
 };
 
+/** A probed file as `hooksStatus` takes it: the content only when it was read. */
+const hookFileOf = (status: FileStatus, content: string | undefined): HookFile => ({ status, content: status === 'present' ? (content ?? '') : '' });
+
 /** $HOME, the settings.json of each Claude dir, the Codex config and the Cursor hooks.json (each with whether it is absent, present or unreadable), in one round trip. */
 async function readMachineConfigs(machine: Machine, claudeDirs: string[]): Promise<MachineConfigs> {
   const parts = [`printf '%s\\n' "$HOME"`];
@@ -102,6 +113,7 @@ async function readMachineConfigs(machine: Machine, claudeDirs: string[]): Promi
   }
   parts.push(`printf '${SEP}\\n'; [ -d "$HOME/.codex" ] && echo yes || echo no; ${probeFile('"$HOME/.codex/config.toml"')}; ${probeFile(`"$HOME/${CODEX_HOOKS_REL}"`)}`);
   parts.push(`printf '${SEP}\\n'; [ -d "$HOME/.cursor" ] && echo yes || echo no; ${probeFile('"$HOME/.cursor/hooks.json"')}`);
+  parts.push(`${probeFile(`"$HOME/${HOOK_SCRIPT_REL}"`)}; ${probeFile(`"$HOME/${HOOK_ENV_REL}"`)}`);
   // a missing file is part of the answer, not a failure: the last `cat` must not set the exit code
   const script = `${parts.join('; ')}; true`;
   const r = await runOnMachine(machine, { file: 'sh', args: ['-c', script] }, script);
@@ -128,6 +140,8 @@ async function readMachineConfigs(machine: Machine, claudeDirs: string[]): Promi
     hasCursor: (chunks[base + 5] ?? '').trim() === 'yes',
     cursorStatus: fileStatus(chunks[base + 6]),
     cursorHooks: chunks[base + 7] ?? '',
+    script: hookFileOf(fileStatus(chunks[base + 8]), chunks[base + 9]),
+    env: hookFileOf(fileStatus(chunks[base + 10]), chunks[base + 11]),
   };
 }
 
@@ -328,7 +342,7 @@ export async function uninstallHooks(machine: Machine, accountDirs: string[] = [
 }
 
 /** First agent release that answers `hooks.hint` (TER-614). */
-export const PERMISSION_HINT_MIN_AGENT_VERSION = '0.20.0';
+export const PERMISSION_HINT_MIN_AGENT_VERSION = '0.33.0';
 
 /**
  * Writes or removes the machine's opt-in to permission hints (TER-614), ~/.termhub/permission-hint: the
@@ -345,4 +359,28 @@ export async function setPermissionHintOnMachine(machine: Machine, enabled: bool
   const script = enabled ? ['set -e', 'mkdir -p "$HOME/.termhub"', 'umask 077', `: > ${file}`, 'echo ok'] : ['set -e', `rm -f ${file}`, 'echo ok'];
   const r = await shOnMachine(machine, script.join('\n'));
   if (r.code !== 0 || !r.stdout.includes('ok')) throw conflict(tk('Não foi possível mudar a opção na máquina'));
+}
+
+/**
+ * What the hooks look like on the machine (TER-1023), never a file's content: the agent answers
+ * `hooks.status` itself (agent 0.21.0); ssh/local machines are read in the same round trip install uses.
+ */
+export async function readHooksStatus(machine: Machine, accountDirs: string[] = []): Promise<HooksStatus> {
+  const extra = extraDirs(accountDirs);
+  if (machine.type === 'agent') {
+    requireAgentVersion(machine, HOOKS_STATUS_MIN_AGENT_VERSION);
+    return agentRpc(machine, 'hooks.status', extra.length ? { claude_dirs: extra } : {});
+  }
+  const configs = await readMachineConfigs(machine, claudeConfigDirs([...accountDirs, ...(await discoverOnMachine(machine))]));
+  const { home } = configs;
+  return hooksStatus({
+    scriptPath: `${home}/${HOOK_SCRIPT_REL}`,
+    script: configs.script,
+    env: configs.env,
+    claude: configs.claude.filter((c) => c.exists).map((c) => ({ dir: c.dir, settings: hookFileOf(c.status, c.settings) })),
+    codex: configs.hasCodex
+      ? { config: hookFileOf(configs.codexStatus, configs.codexConfig), hooks: hookFileOf(configs.codexHooksStatus, configs.codexHooks), hooksPath: `${home}/${CODEX_HOOKS_REL}` }
+      : null,
+    cursor: configs.hasCursor ? { hooks: hookFileOf(configs.cursorStatus, configs.cursorHooks) } : null,
+  });
 }

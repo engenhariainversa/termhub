@@ -12,6 +12,8 @@ const state = vi.hoisted(() => ({
   openTabs: [] as Tab[],
   /** tabs that reported a state (what the sidebar used to read): must not drive it */
   items: [] as MonitorItem[],
+  /** card ref of the automatic run working in a tab, by tab id */
+  autoRuns: new Map<string, string>(),
 }));
 
 const auth = vi.hoisted(() => ({ canChat: true, canCreateProjects: true, canDeleteTerminals: true }));
@@ -57,7 +59,7 @@ const groupsState = vi.hoisted(() => ({
   isFavorite: (id: string): boolean => groupsState.groups.some((g) => g.kind === 'favorites' && g.project_ids.includes(id)),
 }));
 vi.mock('../lib/project-groups', () => ({ useProjectGroups: () => groupsState }));
-vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ items: state.items, openTabs: state.openTabs, needsYou: [] }) }));
+vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ items: state.items, openTabs: state.openTabs, autoRuns: state.autoRuns, needsYou: [] }) }));
 vi.mock('../lib/data', () => ({
   useData: () => ({
     machines: state.machines,
@@ -135,6 +137,7 @@ afterEach(() => {
   auth.canChat = true;
   auth.canCreateProjects = true;
   auth.canDeleteTerminals = true;
+  state.autoRuns = new Map();
   chat.currentProjectId = null;
   chat.openIds = [];
   vi.clearAllMocks();
@@ -266,11 +269,21 @@ describe('Sidebar agent rows', () => {
     renderSidebar();
     const alpha = agentsOf(section('Em execução'), 'alpha')!;
     const dot = (name: RegExp) => within(alpha).getByRole('link', { name }).querySelector('[data-dot]')!;
-    expect(dot(/Ana/)).toHaveClass('bg-attention', 'animate-pulse');
-    expect(dot(/Bia/)).toHaveClass('bg-ok');
+    expect(dot(/Ana/)).toHaveClass('bg-attention', 'tab-dot-blink');
+    expect(dot(/Bia/)).toHaveClass('bg-accent', 'tab-dot-working'); // working: the pulse (TER-1044)
     expect(dot(/Bia/)).not.toHaveClass('bg-attention');
     const caio = within(agentsOf(section('Em execução'), 'beta')!).getByRole('link', { name: /Caio/ }).querySelector('[data-dot]')!;
     expect(caio).toHaveClass('bg-ok'); // no state reported: the neutral dot the tab bar shows for a live tab
+  });
+
+  it('rings the dot of a tab an automatic run works in and names its card (TER-1044)', () => {
+    state.autoRuns = new Map([['t2', 'TER-7']]);
+    renderSidebar();
+    const alpha = agentsOf(section('Em execução'), 'alpha')!;
+    const ring = (name: RegExp) => within(alpha).getByRole('link', { name }).querySelector('[data-auto-ring]');
+    expect(ring(/Bia/)).not.toBeNull();
+    expect(ring(/Ana/)).toBeNull();
+    expect(within(within(alpha).getByRole('link', { name: /Bia/ })).getByTitle(/\(automático, TER-7\)$/)).toBeInTheDocument();
   });
 
   it('reads the open tabs, not the tabs that reported a state', () => {

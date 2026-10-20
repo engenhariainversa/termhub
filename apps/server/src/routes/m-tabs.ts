@@ -1,5 +1,6 @@
 import {
   startSessionBody,
+  startTabAgentBody,
   TAB_FILE_MAX_BYTES,
   tabActionBody,
   tabChatQuery,
@@ -7,6 +8,8 @@ import {
   tabMessageBody,
   tabScreenQuery,
   type TTabActionResponse,
+  type TStartTabAgentResponse,
+  type TTabAgentOptions,
   type TTabChatPage,
   type TTabsResponse,
 } from '@termhub/mobile-api';
@@ -14,7 +17,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireTranscriptCapable } from '../agent/errors.js';
 import { scoped } from '../auth/scope.js';
-import { startAgent } from '../control/agents.js';
+import { startAgent, startTabAgent, tabAgentOptions } from '../control/agents.js';
 import { ControlError, controlContextFor } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import { sendInput, sendKey } from '../control/terminals.js';
@@ -23,10 +26,14 @@ import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-quest
 import { HttpError, badRequest } from '../lib/errors.js';
 import { claudeFooterMode } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
-import { availabilityOf, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
+import { availabilityOf, emptyReasonOf, hasNoHistory, hasReportedSession, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
+import { paneForeground } from '../terminal/session-ops.js';
+import type { Machine } from '../db/repositories/types.js';
+import type { PaneForeground } from '@termhub/machine-ops';
 import { tk } from '../i18n/index.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -47,6 +54,8 @@ export interface MobileTabDeps {
    * default) or the web's conversation view (`/api/tab-chat`, TER-1003).
    */
   surface?: 'app' | 'web';
+  /** What the tab's pane runs in front (TER-1094); injected by tests, the agent's `tmux.foreground` otherwise. */
+  foreground?: (machine: Machine, session: string) => Promise<PaneForeground>;
 }
 
 /**
@@ -92,20 +101,27 @@ const emptyPage = (): Page => ({ items: [], before: null, live: null, mode: null
  */
 export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories, deps: MobileTabDeps) {
   const readPage = deps.readPage ?? defaultReadPage;
+  const foreground = deps.foreground ?? paneForeground;
   const ctxOf = (request: FastifyRequest) => controlContextFor(repos, request.scope.user);
   const availability = (tab: Parameters<typeof availabilityOf>[0], machine: Parameters<typeof availabilityOf>[1]) => availabilityOf(tab, machine, deps.agent);
 
   /** The Sessões list: every terminal tab of the scope, with why it can or cannot be opened. */
   app.get('/', async (request): Promise<TTabsResponse> => {
     const owner = request.scope.ownerId;
-    const [tabs, projects, machines] = await Promise.all([repos.tabs.listOpenTerminals(owner), repos.projects.list({ owner }), repos.machines.list(owner)]);
+    const [tabs, projects, machines, autoRuns] = await Promise.all([
+      repos.tabs.listOpenTerminals(owner),
+      repos.projects.list({ owner }),
+      repos.machines.list(owner),
+      repos.automationRuns.activeTabRefs(owner),
+    ]);
     const projectById = new Map(projects.map((p) => [p.id, p]));
     const machineById = new Map(machines.map((m) => [m.id, m]));
+    const autoRef = new Map(autoRuns.map((r) => [r.tab_id, r.ref]));
     return {
       tabs: tabs.flatMap((tab) => {
         const project = projectById.get(tab.project_id);
         const machine = machineById.get(tab.machine_id);
-        return project && machine ? [tabSummaryOf(tab, project, machine, availability(tab, machine))] : [];
+        return project && machine ? [tabSummaryOf(tab, project, machine, availability(tab, machine), autoRef.get(tab.id) ?? null)] : [];
       }),
     };
   });
@@ -137,7 +153,13 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     }
     const rows = await repos.tabQuestions.listOpenForTab(tab.id, request.scope.user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, rows, request.scope.user.id));
-    request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded }, 'tab chat: page');
+    // Only a tab that never reported a session needs to know whether the machine has the hooks (TER-1091).
+    const hooksInstalled = avail === 'no_session' && !hasReportedSession(tab) ? !!(await repos.machineHooks.findByMachine(machine.id)) : true;
+    // A page with no history at all is worth a look at the pane (TER-1094): a plain shell there means no
+    // agent, not a missing history. Any failure (an agent older than 0.14.0, offline) keeps the other reasons.
+    const atShell = tab.tmux_session && (avail === 'no_session' || avail === 'ready') && hasNoHistory(avail, page, !before) ? (await foreground(machine, tab.tmux_session).catch(() => null)) === 'shell' : false;
+    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooksInstalled, atShell);
+    request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded, emptyReason: empty_reason }, 'tab chat: page');
     return {
       tab: tabSummaryOf(tab, project, machine, avail),
       session_id: tab.agent_session_id,
@@ -149,7 +171,27 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       // the views' fields are the contract's (events-parity.test.ts keeps them in step)
       questions: tab_questions as TTabChatPage['questions'],
       suggestions: tab_suggestions as TTabChatPage['suggestions'],
+      empty_reason,
     };
+  });
+
+  /** "Iniciar sessão" (TER-1094): the accounts the tab's agent can start with, and the one picked without asking. */
+  app.get('/:id/agent', async (request): Promise<TTabAgentOptions> => {
+    const { id } = idParam.parse(request.params);
+    const { project, machine } = await scoped(repos, request).tab(id);
+    return control(() => tabAgentOptions(ctxOf(request), project, machine));
+  });
+
+  /** Starts the agent in the tab (its shell is free) or in a new tab of the same project and machine. */
+  app.post('/:id/agent', { config: { action: 'write' } }, async (request): Promise<TStartTabAgentResponse> => {
+    const { id } = idParam.parse(request.params);
+    const { account_id } = startTabAgentBody.parse(request.body ?? {});
+    const { tab, project, machine } = await scoped(repos, request).tab(id);
+    const started = await control(() => startTabAgent({ ...ctxOf(request), log: request.log }, tab, project, machine, account_id));
+    // the CLI line is typed into the tab: the trail's terminal input, marked as an agent start
+    await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: started.tab_id, label: tab.name }, meta: { machine_id: machine.id, agent_start: true, provider: started.provider, account_id: started.account.id, new_tab: started.new_tab, surface: deps.surface ?? 'app' } });
+    deps.hub.poke(tab.id);
+    return started;
   });
 
   /** Text typed into the session, as in the web terminal: no confirmation card (spec D12). */
@@ -159,6 +201,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     const { tab } = await scoped(repos, request).tab(id);
     await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: deps.surface ?? 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
+    await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: tab.id, label: tab.name }, meta: { machine_id: tab.machine_id, chars: text.length, surface: deps.surface ?? 'app' } });
     deps.hub.poke(tab.id);
     return { sent: true as const };
   });

@@ -21,7 +21,7 @@ import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.j
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
 import { permissionDialogVisible } from './permission-dialog.js';
 import { resurfaceCards } from './resurface.js';
-import { ACTION_TTL_MS } from './service.js';
+import { ACTION_TTL_MS, scrubSecretArgs } from './service.js';
 import { standingProjectOf } from './standing-project.js';
 import { subagentOrigins } from './subagent-origin.js';
 
@@ -191,16 +191,17 @@ const targetOf = (args: Record<string, unknown>) => ({
 });
 
 /**
- * A tab card also keeps its tab's project (TER-986), read owner-scoped when the card is asked: the card
- * then still says which project it was for once the tab is closed. Only fills a project the call did
- * not name; a tab that does not resolve (gone, or another user's) adds nothing. Best-effort: a failed
- * read keeps the target as the call named it.
+ * A tab card also keeps its tab's project (TER-986) and its name (TER-1024), read owner-scoped when the
+ * card is asked: the card then still says which tab, of which project, it was for once the tab is
+ * closed. Only fills a project the call did not name; a tab that does not resolve (gone, or another
+ * user's) adds nothing. Best-effort: a failed read keeps the target as the call named it.
  */
-async function withTabProject(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<ReturnType<typeof targetOf>> {
-  if (!target.tab_id || target.project_id) return target;
+type Target = ReturnType<typeof targetOf> & { tab_name?: string | null };
+async function withTabSnapshot(ctx: ControlContext, target: ReturnType<typeof targetOf>): Promise<Target> {
+  if (!target.tab_id) return target;
   try {
     const [tab] = await ctx.repos.tabs.findByIdsForOwner([target.tab_id], ctx.scope.user.id);
-    return tab ? { ...target, project_id: tab.project_id } : target;
+    return tab ? { ...target, project_id: target.project_id ?? tab.project_id, tab_name: tab.name } : target;
   } catch {
     return target;
   }
@@ -316,6 +317,7 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
   const stale = await staleApproval(ctx, call, row);
   if (stale) {
     await ctx.repos.chatActions.markExecuted(row.id, false, stale.code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', stale.code);
     return { ok: false, ...stale };
   }
@@ -326,11 +328,13 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
     const approval = row.grant_id === null && decidedAt && Number.isFinite(decidedAt.getTime()) ? { actionId: row.id, approvedAt: decidedAt } : undefined;
     const value = await call.run(approval);
     await ctx.repos.chatActions.markExecuted(row.id, true, null, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'executed', null);
     return { ok: true, value };
   } catch (err) {
     const code = err instanceof ControlError || err instanceof HttpError ? (err.code ?? 'ERROR') : 'INTERNAL';
     await ctx.repos.chatActions.markExecuted(row.id, false, code, Date.now() - started);
+    await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'failed', code);
     throw err; // the caller turns it into the same answer any other failed tool call gets
   }
@@ -353,7 +357,7 @@ function actionNotRecorded(): never {
 
 /** Records the proposal and puts the question in the chat. */
 async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
-  const target = await withTabProject(ctx, targetOf(call.args));
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
@@ -443,9 +447,10 @@ export async function askForAutomation(
  * live, since no card was ever shown for it.
  */
 async function executeGranted(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, grantId: string): Promise<GateOutcome> {
+  const target = await withTabSnapshot(ctx, targetOf(call.args));
   let row: ChatAction;
   try {
-    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...targetOf(call.args), ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
+    row = await ctx.repos.chatActions.insertApproved({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target, ...originFor(call, conversationId), grant_id: grantId, decided_by: ctx.scope.user.id });
   } catch {
     // Either reading of a failed insert: the partial unique index refused it because an identical
     // call arrived in the same instant and its (approved) row already occupies the key — the same
@@ -498,7 +503,7 @@ const textOutsideGrant = (args: Record<string, unknown>) =>
 async function grantCoversTab(ctx: ControlContext, tabId: string): Promise<boolean> {
   const [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], ctx.scope.user.id);
   if (!tab) return true; // recorded as TAB_GONE by `execute()`
-  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'waiting_permission';
+  return tab.state === 'working' || tab.state === 'waiting_background' || tab.state === 'waiting_input' || tab.state === 'finished' || tab.state === 'blocked' || tab.state === 'waiting_permission';
 }
 
 /**
@@ -582,10 +587,11 @@ async function standingGrantCovering(ctx: ControlContext, call: GatedCall): Prom
 }
 
 /** Tab states a default close is for (TER-627): the agent is not at work — `finished` among them, an agent
- * that reported and asks nothing (TER-972). `null` (a tab that never reported, a bare shell that may be
+ * that reported and asks nothing (TER-972), and `blocked`, a run that reported itself blocked (TER-1046). A
+ * login that expired is the person's to see. `null` (a tab that never reported, a bare shell that may be
  * running anything) is not among them, nor `working` read at face value, nor `waiting_permission`, which
  * the person has to see. */
-const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'idle', 'error']);
+const STOPPED_TAB_STATES: ReadonlySet<string> = new Set(['waiting_input', 'finished', 'blocked', 'idle', 'error']);
 
 /**
  * A Claude Code `working` tab whose state is stale in the TER-615 sense — no hook event for `STALE_WORKING_MS` — and
@@ -600,7 +606,9 @@ async function idleDespiteWorking(ctx: ControlContext, tab: Tab): Promise<boolea
   if (!Number.isFinite(since) || Date.now() - since < STALE_WORKING_MS) return false;
   try {
     const { text } = await readScreen(ctx, { tab_id: tab.id, lines: SCREEN_STATE_LINES + 20 }, { plain: true });
-    return claudeScreenState(text) === 'prompt';
+    // back at the input box, also when its last answer is the login error (TER-1046)
+    const screen = claudeScreenState(text);
+    return screen === 'prompt' || screen === 'auth';
   } catch {
     return false;
   }
@@ -631,7 +639,7 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
     if (!target) return null;
     tab = target.tab;
   }
-  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished') return null;
+  if (kind === 'terminal' && tab?.state !== 'working' && tab?.state !== 'waiting_background' && tab?.state !== 'waiting_input' && tab?.state !== 'finished' && tab?.state !== 'blocked') return null;
   if (kind === 'close_tab' && !(tab && (STOPPED_TAB_STATES.has(tab.state ?? '') || (tab.state === 'working' && (await idleDespiteWorking(ctx, tab)))))) return null;
   const grantId = defaultGrantId(ctx.scope.user.id, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
@@ -649,7 +657,20 @@ async function defaultGrantCovering(ctx: ControlContext, call: GatedCall): Promi
 async function classOf(ctx: ControlContext, call: GatedCall): Promise<ActionClass> {
   const cls = actionClass(call.tool, call.args);
   if (call.token.gated && cls === 'write' && call.tool === 'set_automation_policy' && (await automationCallIsBrake(ctx, call.args))) return 'self_mediated';
+  if (call.token.gated && cls === 'write' && call.tool === 'admin_user_troubleshoot' && (await troubleshootUserApproved(ctx, call))) return 'read';
   return cls;
+}
+
+/**
+ * TER-1092: whether the person already let a query about this user run in this conversation. The first
+ * one is a card ("consultar dados de suporte de …"); once it ran, the next queries about the same user
+ * in the same conversation are not asked again — each is still written to the security trail.
+ */
+async function troubleshootUserApproved(ctx: ControlContext, call: GatedCall): Promise<boolean> {
+  const userId = call.args.user_id;
+  if (typeof userId !== 'string' || !userId) return false;
+  const conversationId = call.token.chat_conversation_id ?? (await ctx.repos.chat.getOrCreateForUser(ctx.scope.user.id)).id;
+  return ctx.repos.chatActions.executedWithArg(conversationId, call.tool, 'user_id', userId);
 }
 
 /** The gate itself: run the call, or answer why it did not run. */

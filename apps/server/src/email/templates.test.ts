@@ -111,6 +111,8 @@ describe('account deletion e-mails (TER-720, TER-728)', () => {
     const done = accountDeletedMail('a@x.dev');
     expect(done.subject).toBe('Sua conta do termhub foi excluída');
     expect(done.html).not.toContain('href=');
+    expect(done.text).not.toContain('cópias de segurança');
+    expect(accountDeletedMail('a@x.dev', { backupRetentionDays: 30 }).text).toContain('cópias de segurança do banco de dados que ainda têm esses dados são apagadas em até 30 dias');
   });
 });
 
@@ -187,13 +189,59 @@ describe('every template in English (TER-405)', () => {
     const cancelled = deletionCancelledMail('a@b.c', { appUrl }, 'en');
     expect(cancelled.subject).toBe('Your account deletion was cancelled');
     expect(cancelled.text).toContain('Open termhub: https://app.termhub.dev');
-    const done = accountDeletedMail('a@b.c', 'en');
+    const done = accountDeletedMail('a@b.c', { backupRetentionDays: 30 }, 'en');
     expect(done.subject).toBe('Your termhub account was deleted');
     expect(done.text).toContain('This is the last e-mail you get from termhub.');
+    expect(done.text).toContain('The database backups that still hold this data are deleted within 30 days.');
     const link = deletionLinkMail('a@b.c', { link: 'https://termhub.dev/excluir-conta/?token=abc', ttlMinutes: 30 }, 'en');
     expect(link.subject).toBe('Confirm the deletion of your termhub account');
     expect(link.text).toContain('within the next 30 minutes');
     expect(link.text).toContain('Confirm deletion: https://termhub.dev/excluir-conta/?token=abc');
     for (const m of [cancelled, done, link]) expect(m.text.replace(/https:\/\/\S+/g, '')).not.toMatch(PT_WORDS);
+  });
+});
+
+/** Words only Portuguese has (Spanish shares "código", "cuenta"…); none may reach a Spanish e-mail. */
+const PT_ONLY = /\b(você|sua|seu|aparelho|exclusão|ignore este e-mail|Acessar|feito em)\b/i;
+
+describe('every template in Spanish (TER-406)', () => {
+  const appUrl = 'https://app.termhub.dev';
+  const at = new Date('2026-11-01T02:00:00.000Z');
+
+  it('login code', () => {
+    const mail = loginCodeMail('a@b.c', '123456', 10, 'es');
+    expect(mail.subject).toBe('123456 — tu código de acceso a termhub');
+    expect(mail.text).toContain('Tu código de acceso a termhub es: 123456');
+    expect(mail.html).toContain('lang="es"');
+  });
+
+  it('the date reads in Spanish', () => {
+    expect(deletionDateLabel(at, 'es')).toBe('31 de octubre de 2026');
+  });
+
+  it('alpha invite from a Spanish waitlist sign-up', () => {
+    const mail = alphaInviteMail('a@b.c', { ...opts, locale: 'es' });
+    expect(mail.subject).toBe('Estás en la alpha de termhub 🚀');
+    expect(mail.html).toContain('lang="es"');
+    expect(mail.text).toContain('hecho en Goiânia');
+  });
+
+  it('no Portuguese left in any template', () => {
+    const mails = [
+      loginCodeMail('a@b.c', '123456', 10, 'es'),
+      deviceRequestMail('a@b.c', { deviceLabel: 'iPhone 15 (iOS 18.1)', code: 'K7F2QD', place: 'Madrid, ES', ip: '1.2.3.4', appUrl }, 'es'),
+      deviceRevokedMail('a@b.c', { deviceLabel: 'Ana (iPhone 15)', at }, 'es'),
+      inviteMail('a@b.c', { invitedBy: 'Pedro', appUrl, roleLabel: 'Miembro', accessAllowlisted: true }, 'es'),
+      alphaInviteMail('a@b.c', { ...opts, locale: 'es' }),
+      deletionRequestedMail('a@b.c', { scheduledAt: at, appUrl }, 'es'),
+      deletionCancelledMail('a@b.c', { appUrl }, 'es'),
+      accountDeletedMail('a@b.c', { backupRetentionDays: 30 }, 'es'),
+      deletionLinkMail('a@b.c', { link: 'https://termhub.dev/excluir-conta/?token=abc', ttlMinutes: 30 }, 'es'),
+    ];
+    for (const m of mails) {
+      expect(m.html).toContain('lang="es"');
+      expect(m.subject).not.toMatch(PT_ONLY);
+      expect(m.text.replace(/https:\/\/\S+/g, '')).not.toMatch(PT_ONLY);
+    }
   });
 });

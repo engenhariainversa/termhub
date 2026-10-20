@@ -131,10 +131,29 @@ export class AutomationRunsRepository {
     }
   }
 
+  /** The card's run of a role keyed by this trigger (a fixer's head, or a marker's), in any status. */
+  async findTriggered(taskId: string, role: RunRole, triggerSha: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId, role, triggerSha } });
+    return row ? map(row) : null;
+  }
+
   /** When the card's most recent run that ended did so (markers included); null when none ended. */
   async lastEndedAt(taskId: string): Promise<Date | null> {
     const row = await this.db.automationRun.findFirst({ where: { taskId, endedAt: { not: null } }, orderBy: { endedAt: 'desc' }, select: { endedAt: true } });
     return row?.endedAt ?? null;
+  }
+
+  /**
+   * The card's runs that ended `done` or `blocked` in a tab, newest end first (TER-1051): the tabs a fixer
+   * may find still open in the card's worktree. Markers have no tab and are not among them.
+   */
+  async endedInTabs(taskId: string): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { taskId, status: { in: ['done', 'blocked'] }, tabId: { not: null }, endedAt: { not: null } },
+      orderBy: { endedAt: 'desc' },
+      take: 20,
+    });
+    return rows.map(map);
   }
 
   /**
@@ -179,6 +198,34 @@ export class AutomationRunsRepository {
   }
 
   /**
+   * A `blocked` run to `done`, once (TER-1049: a PR from its branch showed up after the block). Whoever drives
+   * it: the run ended, so its colour may be gone. `ended_at` and `waiting_reason` stay (the run did end then,
+   * and why it was blocked stays readable). False when the run was not blocked: another colour adopted it first.
+   */
+  async finishBlockedAsDone(id: string): Promise<boolean> {
+    const { count } = await this.db.automationRun.updateMany({ where: { id, status: 'blocked' }, data: { status: 'done' } });
+    return count === 1;
+  }
+
+  /**
+   * The project's `blocked` implementer runs that ended at `since` or later, with a branch (TER-1049): the
+   * ones a PR from their branch may still adopt. Markers (`insertMarker`) are left out by their trigger.
+   */
+  async blockedSince(projectId: string, since: Date): Promise<AutomationRun[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'blocked', role: 'implementer', taskId: { not: null }, branch: { not: null }, triggerSha: null, endedAt: { gte: since } },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(map);
+  }
+
+  /** The card's newest run, in any status (markers included). */
+  async latestOfTask(taskId: string): Promise<AutomationRun | null> {
+    const row = await this.db.automationRun.findFirst({ where: { taskId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+    return row ? map(row) : null;
+  }
+
+  /**
    * Releases a claim that never started (no place for it, or the card changed after the claim): the row
    * goes away, so the card is free again and no event or history is left per tick. Only the claiming
    * instance releases, and only before the run started.
@@ -191,6 +238,18 @@ export class AutomationRunsRepository {
   async findById(id: string): Promise<AutomationRun | null> {
     const row = await this.db.automationRun.findUnique({ where: { id } });
     return row ? map(row) : null;
+  }
+
+  /**
+   * The tabs an active run works in, each with its card's ref ("TER-123"): the tab lists mark them as
+   * automatic (TER-1044). `owner` scopes them to that owner's projects; null = every project (admin "all").
+   */
+  async activeTabRefs(owner: string | null): Promise<Array<{ tab_id: string; ref: string }>> {
+    const rows = await this.db.automationRun.findMany({
+      where: { status: active, tabId: { not: null }, taskId: { not: null }, ...(owner ? { project: { ownerId: owner } } : {}) },
+      select: { tabId: true, task: { select: { number: true, project: { select: { key: true } } } } },
+    });
+    return rows.flatMap((r) => (r.tabId && r.task ? [{ tab_id: r.tabId, ref: `${r.task.project.key}-${r.task.number}` }] : []));
   }
 
   /** Increments the counter and returns its new value. */
@@ -284,7 +343,9 @@ export class AutomationRunsRepository {
     return rows.map((r) => r.status as RunStatus);
   }
 
-  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
+  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. A run has
+   *  no repository of its own yet, so these are branches of the project's repository: read them through
+   *  `runBranchOf`, which pairs them with it (spec 2026-10-07 multi-repo R14). */
   async branchesOfTask(taskId: string): Promise<string[]> {
     const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
     return rows.map((r) => r.branch!).filter((b) => b.length > 0);
@@ -365,6 +426,24 @@ export class AutomationRunsRepository {
       data: { cleanupState: 'due' },
     });
     return (await this.db.automationRun.findMany({ where: { taskId: { in: taskIds }, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
+  /**
+   * TER-974: the cards of a project with a cancelled run that left a worktree no cleanup has looked at yet
+   * (the cleanup otherwise only follows a merge or a deleted card). The caller decides whether it may go.
+   */
+  async cardsWithCancelledWorktree(projectId: string): Promise<string[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'cancelled', cleanupState: null, worktreePath: { not: null }, taskId: { not: null } },
+      distinct: ['taskId'],
+      select: { taskId: true },
+    });
+    return rows.map((r) => r.taskId!);
+  }
+
+  /** Every run of the card, in any status. */
+  async listByTask(taskId: string): Promise<AutomationRun[]> {
+    return (await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
   /** The runs of a project whose cleanup is still to do. */

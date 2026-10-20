@@ -91,6 +91,13 @@ it('pushRoute: the tab of an "aba terminou" push first, else the conversation, e
   expect(pushRoute({ tab_id: '' , conversation_id: 'c1' })).toBe('/chat/c1');
 });
 
+it('pushRoute: an expired AI login opens its "Refazer login" modal (TER-1047)', () => {
+  expect(pushRoute({ kind: 'ai_login', account_id: 'a1', notification_id: 'n1' })).toBe('/ai-login/a1');
+  expect(pushRoute({ kind: 'ai_login' })).toBeNull();
+  // Only that kind: an `account_id` elsewhere routes as before.
+  expect(pushRoute({ kind: 'reply', account_id: 'a1', conversation_id: 'c1' })).toBe('/chat/c1');
+});
+
 describe('icon badge and notification center (TER-923)', () => {
   const presented = (identifier: string, data: unknown) => ({ request: { identifier, content: { data } } });
 

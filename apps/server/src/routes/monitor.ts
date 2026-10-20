@@ -37,4 +37,12 @@ export async function monitorRoutes(app: FastifyInstance, repos: Repositories) {
     const owner = request.scope.ownerId;
     return { items: await itemsOf(owner, repos.tabs.listOpenTerminals(owner)) };
   });
+
+  /**
+   * The tabs an automatic run is working in, with the card's ref: the status dots mark them (TER-1044).
+   * Re-read by the browser on the `automation` frames of the monitor WS (a run started or ended).
+   */
+  app.get('/auto-runs', async (request) => {
+    return { items: await repos.automationRuns.activeTabRefs(request.scope.ownerId) };
+  });
 }

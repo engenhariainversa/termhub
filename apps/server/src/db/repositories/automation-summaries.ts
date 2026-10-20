@@ -16,6 +16,12 @@ export interface ParkedRun {
   reason: string;
 }
 
+/** TER-1043: a decision automatic work took alone; `summary` is the agent's own, null for the server's nudge. */
+export interface TakenDecisionRow {
+  task_id: string | null;
+  summary: string | null;
+}
+
 /** A merge card waiting for the person's decision. */
 export interface PendingMerge {
   project_id: string;
@@ -59,6 +65,30 @@ export class AutomationSummariesRepository {
       WHERE "project_id" = ANY(${projectIds}::text[]) AND "created_at" >= ${from} AND "created_at" < ${to}`;
     const r = rows[0];
     return { cards: Number(r?.cards ?? 0), merges: Number(r?.merges ?? 0), deploys: Number(r?.deploys ?? 0) };
+  }
+
+  /**
+   * TER-1043: the decisions automatic work took alone in the window (`decided_by_recommendation`), oldest
+   * first, at most `limit`: a nudge the agent then reported is counted once, by its report.
+   */
+  async decisions(projectIds: string[], from: Date, to: Date, limit = 20): Promise<TakenDecisionRow[]> {
+    if (projectIds.length === 0) return [];
+    const rows = await this.db.automationEvent.findMany({
+      where: { projectId: { in: projectIds }, kind: 'decided_by_recommendation', createdAt: { gte: from, lt: to } },
+      orderBy: { createdAt: 'asc' },
+      take: limit * 2,
+      select: { taskId: true, runId: true, payload: true },
+    });
+    const items = rows.map((r) => {
+      const summary = (r.payload as Record<string, unknown> | null)?.summary;
+      return { task_id: r.taskId, run_id: r.runId, summary: typeof summary === 'string' && summary !== '' ? summary : null };
+    });
+    // a run that reported its decisions drops its nudges: the report says what was decided
+    const reported = new Set(items.filter((i) => i.summary !== null && i.run_id).map((i) => i.run_id));
+    return items
+      .filter((i) => i.summary !== null || !i.run_id || !reported.has(i.run_id))
+      .slice(0, limit)
+      .map(({ task_id, summary }) => ({ task_id, summary }));
   }
 
   /** The estimated cost of the days `fromDay`..`toDay` (inclusive `YYYY-MM-DD`) over the projects; null when no row had a priced model. */

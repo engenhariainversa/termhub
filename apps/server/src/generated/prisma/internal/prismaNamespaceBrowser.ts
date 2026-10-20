@@ -61,6 +61,8 @@ export const ModelName = {
   Machine: 'Machine',
   Project: 'Project',
   ProjectMachine: 'ProjectMachine',
+  ProjectRepository: 'ProjectRepository',
+  ProjectRepositoryCheckout: 'ProjectRepositoryCheckout',
   Tab: 'Tab',
   TabEvent: 'TabEvent',
   TabLastAnswer: 'TabLastAnswer',
@@ -94,6 +96,8 @@ export const ModelName = {
   ChatDefaultRestriction: 'ChatDefaultRestriction',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
+  ChatAutoSample: 'ChatAutoSample',
+  ChatFocus: 'ChatFocus',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
   InstanceSecret: 'InstanceSecret',
@@ -103,10 +107,18 @@ export const ModelName = {
   Device: 'Device',
   DeviceToken: 'DeviceToken',
   DeviceChallenge: 'DeviceChallenge',
+  AccessLog: 'AccessLog',
   DeviceEvent: 'DeviceEvent',
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
-  AutomationSummary: 'AutomationSummary'
+  AutomationSummary: 'AutomationSummary',
+  LegalDocumentVersion: 'LegalDocumentVersion',
+  LegalAcceptance: 'LegalAcceptance',
+  DataExport: 'DataExport',
+  ViewAsAudit: 'ViewAsAudit',
+  SecurityEvent: 'SecurityEvent',
+  FeatureFlag: 'FeatureFlag',
+  FeatureFlagOverride: 'FeatureFlagOverride'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -144,12 +156,18 @@ export const UserScalarFieldEnum = {
   reviewEnabledBy: 'reviewEnabledBy',
   chatSuggestions: 'chatSuggestions',
   chatAutodecide: 'chatAutodecide',
+  chatAutoHigh: 'chatAutoHigh',
+  chatAutoLow: 'chatAutoLow',
+  chatAutoCalibration: 'chatAutoCalibration',
   chatCodexReplies: 'chatCodexReplies',
+  chatClientContext: 'chatClientContext',
   pushTabFinished: 'pushTabFinished',
+  chatContextLimit: 'chatContextLimit',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
   timeZone: 'timeZone',
+  aiLoginWarnDays: 'aiLoginWarnDays',
   locale: 'locale'
 } as const
 
@@ -185,7 +203,10 @@ export const SessionScalarFieldEnum = {
   userId: 'userId',
   tokenHash: 'tokenHash',
   expiresAt: 'expiresAt',
-  createdAt: 'createdAt'
+  createdAt: 'createdAt',
+  lastUsedAt: 'lastUsedAt',
+  ip: 'ip',
+  userAgent: 'userAgent'
 } as const
 
 export type SessionScalarFieldEnum = (typeof SessionScalarFieldEnum)[keyof typeof SessionScalarFieldEnum]
@@ -239,10 +260,17 @@ export const MachineScalarFieldEnum = {
   checkedAt: 'checkedAt',
   agentTokenHash: 'agentTokenHash',
   agentTokenCreatedAt: 'agentTokenCreatedAt',
+  agentPairingHash: 'agentPairingHash',
+  agentPairingExpiresAt: 'agentPairingExpiresAt',
+  agentPublicKey: 'agentPublicKey',
+  agentPairedAt: 'agentPairedAt',
   agentVersion: 'agentVersion',
   agentLastSeenAt: 'agentLastSeenAt',
+  network: 'network',
+  networkUpdatedAt: 'networkUpdatedAt',
   agentAutoUpdate: 'agentAutoUpdate',
   claudeAutoSwap: 'claudeAutoSwap',
+  aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
   permissionHint: 'permissionHint',
   isLocal: 'isLocal',
@@ -281,6 +309,33 @@ export const ProjectMachineScalarFieldEnum = {
 } as const
 
 export type ProjectMachineScalarFieldEnum = (typeof ProjectMachineScalarFieldEnum)[keyof typeof ProjectMachineScalarFieldEnum]
+
+
+export const ProjectRepositoryScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  fullName: 'fullName',
+  key: 'key',
+  description: 'description',
+  status: 'status',
+  discoveredAt: 'discoveredAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ProjectRepositoryScalarFieldEnum = (typeof ProjectRepositoryScalarFieldEnum)[keyof typeof ProjectRepositoryScalarFieldEnum]
+
+
+export const ProjectRepositoryCheckoutScalarFieldEnum = {
+  repositoryId: 'repositoryId',
+  machineId: 'machineId',
+  dir: 'dir',
+  defaultBranch: 'defaultBranch',
+  hasCommits: 'hasCommits',
+  seenAt: 'seenAt',
+  missingAt: 'missingAt'
+} as const
+
+export type ProjectRepositoryCheckoutScalarFieldEnum = (typeof ProjectRepositoryCheckoutScalarFieldEnum)[keyof typeof ProjectRepositoryCheckoutScalarFieldEnum]
 
 
 export const TabScalarFieldEnum = {
@@ -554,6 +609,8 @@ export const AiAccountScalarFieldEnum = {
   machineId: 'machineId',
   configDir: 'configDir',
   exclusiveProjectId: 'exclusiveProjectId',
+  loginExpiresAt: 'loginExpiresAt',
+  loginExpiryWarnedAt: 'loginExpiryWarnedAt',
   createdAt: 'createdAt'
 } as const
 
@@ -645,6 +702,7 @@ export const ChatConversationScalarFieldEnum = {
   reviewMode: 'reviewMode',
   contextTokens: 'contextTokens',
   contextWindow: 'contextWindow',
+  contextCompactedAt: 'contextCompactedAt',
   lastMessageAt: 'lastMessageAt',
   lastTypedAt: 'lastTypedAt',
   createdAt: 'createdAt'
@@ -704,6 +762,7 @@ export const ChatActionScalarFieldEnum = {
   machineId: 'machineId',
   projectId: 'projectId',
   tabId: 'tabId',
+  tabName: 'tabName',
   grantId: 'grantId',
   errorCode: 'errorCode',
   durationMs: 'durationMs',
@@ -841,10 +900,34 @@ export const TabQuestionScalarFieldEnum = {
   autoAnswer: 'autoAnswer',
   answeredVia: 'answeredVia',
   wokenAt: 'wokenAt',
-  surfacedAt: 'surfacedAt'
+  surfacedAt: 'surfacedAt',
+  precedent: 'precedent'
 } as const
 
 export type TabQuestionScalarFieldEnum = (typeof TabQuestionScalarFieldEnum)[keyof typeof TabQuestionScalarFieldEnum]
+
+
+export const ChatAutoSampleScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tabQuestionId: 'tabQuestionId',
+  questionIndex: 'questionIndex',
+  score: 'score',
+  matched: 'matched',
+  source: 'source',
+  createdAt: 'createdAt'
+} as const
+
+export type ChatAutoSampleScalarFieldEnum = (typeof ChatAutoSampleScalarFieldEnum)[keyof typeof ChatAutoSampleScalarFieldEnum]
+
+
+export const ChatFocusScalarFieldEnum = {
+  userId: 'userId',
+  clientId: 'clientId',
+  seenAt: 'seenAt'
+} as const
+
+export type ChatFocusScalarFieldEnum = (typeof ChatFocusScalarFieldEnum)[keyof typeof ChatFocusScalarFieldEnum]
 
 
 export const ChatDecisionScalarFieldEnum = {
@@ -1003,6 +1086,23 @@ export const DeviceChallengeScalarFieldEnum = {
 export type DeviceChallengeScalarFieldEnum = (typeof DeviceChallengeScalarFieldEnum)[keyof typeof DeviceChallengeScalarFieldEnum]
 
 
+export const AccessLogScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
+  ip: 'ip',
+  userId: 'userId',
+  kind: 'kind',
+  method: 'method',
+  route: 'route',
+  status: 'status',
+  client: 'client',
+  os: 'os',
+  durationMs: 'durationMs'
+} as const
+
+export type AccessLogScalarFieldEnum = (typeof AccessLogScalarFieldEnum)[keyof typeof AccessLogScalarFieldEnum]
+
+
 export const DeviceEventScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -1056,19 +1156,108 @@ export const AutomationSummaryScalarFieldEnum = {
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
 
 
+export const LegalDocumentVersionScalarFieldEnum = {
+  id: 'id',
+  document: 'document',
+  version: 'version',
+  effectiveAt: 'effectiveAt',
+  url: 'url',
+  requiresAcceptance: 'requiresAcceptance',
+  summary: 'summary',
+  noticeSentAt: 'noticeSentAt',
+  createdAt: 'createdAt'
+} as const
+
+export type LegalDocumentVersionScalarFieldEnum = (typeof LegalDocumentVersionScalarFieldEnum)[keyof typeof LegalDocumentVersionScalarFieldEnum]
+
+
+export const LegalAcceptanceScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  versionId: 'versionId',
+  acceptedAt: 'acceptedAt',
+  ip: 'ip',
+  userAgent: 'userAgent',
+  channel: 'channel'
+} as const
+
+export type LegalAcceptanceScalarFieldEnum = (typeof LegalAcceptanceScalarFieldEnum)[keyof typeof LegalAcceptanceScalarFieldEnum]
+
+
+export const DataExportScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  status: 'status',
+  attempts: 'attempts',
+  bytes: 'bytes',
+  errorCode: 'errorCode',
+  startedAt: 'startedAt',
+  completedAt: 'completedAt',
+  expiresAt: 'expiresAt',
+  downloadedAt: 'downloadedAt',
+  createdAt: 'createdAt'
+} as const
+
+export type DataExportScalarFieldEnum = (typeof DataExportScalarFieldEnum)[keyof typeof DataExportScalarFieldEnum]
+
+
+export const ViewAsAuditScalarFieldEnum = {
+  id: 'id',
+  adminId: 'adminId',
+  scope: 'scope',
+  targetUserId: 'targetUserId',
+  ip: 'ip',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ViewAsAuditScalarFieldEnum = (typeof ViewAsAuditScalarFieldEnum)[keyof typeof ViewAsAuditScalarFieldEnum]
+
+
+export const SecurityEventScalarFieldEnum = {
+  id: 'id',
+  actorId: 'actorId',
+  actorEmail: 'actorEmail',
+  viewAsId: 'viewAsId',
+  action: 'action',
+  targetType: 'targetType',
+  targetId: 'targetId',
+  targetLabel: 'targetLabel',
+  ip: 'ip',
+  meta: 'meta',
+  createdAt: 'createdAt'
+} as const
+
+export type SecurityEventScalarFieldEnum = (typeof SecurityEventScalarFieldEnum)[keyof typeof SecurityEventScalarFieldEnum]
+
+
+export const FeatureFlagScalarFieldEnum = {
+  key: 'key',
+  enabled: 'enabled',
+  updatedAt: 'updatedAt',
+  updatedBy: 'updatedBy'
+} as const
+
+export type FeatureFlagScalarFieldEnum = (typeof FeatureFlagScalarFieldEnum)[keyof typeof FeatureFlagScalarFieldEnum]
+
+
+export const FeatureFlagOverrideScalarFieldEnum = {
+  flag: 'flag',
+  userId: 'userId',
+  enabled: 'enabled',
+  createdAt: 'createdAt',
+  createdBy: 'createdBy'
+} as const
+
+export type FeatureFlagOverrideScalarFieldEnum = (typeof FeatureFlagOverrideScalarFieldEnum)[keyof typeof FeatureFlagOverrideScalarFieldEnum]
+
+
 export const SortOrder = {
   asc: 'asc',
   desc: 'desc'
 } as const
 
 export type SortOrder = (typeof SortOrder)[keyof typeof SortOrder]
-
-
-export const JsonNullValueInput = {
-  JsonNull: JsonNull
-} as const
-
-export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
 
 
 export const NullableJsonNullValueInput = {
@@ -1079,20 +1268,19 @@ export const NullableJsonNullValueInput = {
 export type NullableJsonNullValueInput = (typeof NullableJsonNullValueInput)[keyof typeof NullableJsonNullValueInput]
 
 
+export const JsonNullValueInput = {
+  JsonNull: JsonNull
+} as const
+
+export type JsonNullValueInput = (typeof JsonNullValueInput)[keyof typeof JsonNullValueInput]
+
+
 export const QueryMode = {
   default: 'default',
   insensitive: 'insensitive'
 } as const
 
 export type QueryMode = (typeof QueryMode)[keyof typeof QueryMode]
-
-
-export const NullsOrder = {
-  first: 'first',
-  last: 'last'
-} as const
-
-export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 
 
 export const JsonNullValueFilter = {
@@ -1102,4 +1290,12 @@ export const JsonNullValueFilter = {
 } as const
 
 export type JsonNullValueFilter = (typeof JsonNullValueFilter)[keyof typeof JsonNullValueFilter]
+
+
+export const NullsOrder = {
+  first: 'first',
+  last: 'last'
+} as const
+
+export type NullsOrder = (typeof NullsOrder)[keyof typeof NullsOrder]
 

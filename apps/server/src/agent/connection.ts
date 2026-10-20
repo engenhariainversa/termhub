@@ -9,6 +9,7 @@ import {
   encodeFrame,
   type AgentMessage,
   type ClaudeOpenParams,
+  type HandshakeMessage,
   type HelloMessage,
   type RpcError,
   type RpcMethod,
@@ -243,6 +244,11 @@ export class AgentConnection extends EventEmitter {
     });
   }
 
+  /** The hooks and MCP addresses, sent to a `probe` hello right before `probe-ok` (TER-586). */
+  sendProbeInfo(info: { hooks_url: string; mcp_url: string | null }): void {
+    this.sendControl({ type: 'probe_info', ...info });
+  }
+
   close(code: number, reason?: string): void {
     this.closing = true;
     this.socket.close(code, reason);
@@ -275,6 +281,12 @@ export class AgentConnection extends EventEmitter {
       if (!this.channels.has(ch)) return ch;
     }
     throw new ChannelLimitError('too many channels');
+  }
+
+  /** A handshake message (`challenge`, `paired`), sent before any session attaches. See `@termhub/agent-protocol` auth.ts. */
+  sendHandshake(msg: HandshakeMessage): void {
+    if (this.closing) return;
+    this.socket.send(encodeFrame(CONTROL_CHANNEL, JSON.stringify(msg)));
   }
 
   private sendControl(msg: ServerMessage): void {

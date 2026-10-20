@@ -81,3 +81,31 @@ it('runs a row a grant approved without the approval', async () => {
   await applyGate(ctx, { token: { gated: true, chat_conversation_id: 'c1' }, tool: 'create_task', args: { project_id: 'p1', title: 't' }, run });
   expect(run).toHaveBeenCalledWith(undefined);
 });
+
+/** TER-1092: the first support query about a user in a conversation is a card; later ones are not. */
+function ctxForTroubleshoot(alreadyRan: boolean) {
+  const executedWithArg = vi.fn(async () => alreadyRan);
+  const insertPending = vi.fn(async () => ({ id: 'act1', conversation_id: 'c1', status: 'pending' }));
+  const findOpenByKey = vi.fn(async () => undefined);
+  const repos = { chatActions: { executedWithArg, insertPending, findOpenByKey, findDeniedByKey: vi.fn(async () => undefined) } } as unknown as Repositories;
+  const ctx = { repos, scope: { user: { id: 'adm' } } } as unknown as ControlContext;
+  return { ctx, executedWithArg, insertPending };
+}
+
+it('admin_user_troubleshoot: a search runs at once, it names nobody', async () => {
+  const { ctx, executedWithArg, insertPending } = ctxForTroubleshoot(false);
+  const run = vi.fn(async () => ({ users: [] }));
+  const outcome = await applyGate(ctx, { token: { gated: true, chat_conversation_id: 'c1' }, tool: 'admin_user_troubleshoot', args: { endpoint: 'search', query: 'hum', reason: 'TER-1091' }, run });
+  expect(outcome).toEqual({ ok: true, value: { users: [] } });
+  expect(executedWithArg).not.toHaveBeenCalled();
+  expect(insertPending).not.toHaveBeenCalled();
+});
+
+it('admin_user_troubleshoot: a query about a user already queried in this conversation runs at once', async () => {
+  const { ctx, executedWithArg, insertPending } = ctxForTroubleshoot(true);
+  const run = vi.fn(async () => ({ requests: [] }));
+  const outcome = await applyGate(ctx, { token: { gated: true, chat_conversation_id: 'c1' }, tool: 'admin_user_troubleshoot', args: { endpoint: 'tabs', user_id: 'u9', reason: 'TER-1091' }, run });
+  expect(outcome.ok).toBe(true);
+  expect(executedWithArg).toHaveBeenCalledWith('c1', 'admin_user_troubleshoot', 'user_id', 'u9');
+  expect(insertPending).not.toHaveBeenCalled();
+});

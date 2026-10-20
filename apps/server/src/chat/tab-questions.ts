@@ -2,7 +2,6 @@ import type { FastifyBaseLogger } from 'fastify';
 import { expireTabLimits } from './tab-limits.js';
 import { automaticRunOfTab } from '../automation/pause.js';
 import { expectVerdict, settleQuestion } from '../automation/question-hold.js';
-import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { CloseScope, TabQuestion, TabQuestionCloseStatus } from '../db/repositories/tab-questions.js';
 import { describeTabQuestions, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
@@ -11,7 +10,8 @@ import { monitorBus } from '../monitor/bus.js';
 import type { Interpreted } from '../monitor/state.js';
 import { maybeScheduleRepeat } from './auto-answer.js';
 import { chatBus } from './bus.js';
-import { suggestFor } from './decision-memory.js';
+import { defaultThresholds, thresholdsFor } from './auto-thresholds.js';
+import { recallFor } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
 import { failureLabel } from './service.js';
 import type { ChoicePayload, TabQuestionInput } from './tab-question-payload.js';
@@ -147,7 +147,11 @@ export async function openTabQuestion(
   let shown = question;
   if (question?.kind === 'choice') {
     const embedder = deps?.embedder !== undefined ? deps.embedder : defaultEmbedder();
-    const suggestion = await suggestFor(repos, question, { embedder, threshold: config.decisionSuggestThreshold, log: deps?.log ?? silentLog });
+    // The person's own thresholds (TER-642): under `low` nothing is suggested at all.
+    const thresholds = embedder ? await thresholdsFor(repos, question.user_id).catch(() => defaultThresholds()) : defaultThresholds();
+    const { suggestion, precedent } = await recallFor(repos, question, { embedder, threshold: thresholds.low, high: thresholds.high, log: deps?.log ?? silentLog });
+    // Kept for calibration, shown or not: best effort, never a reason to lose the card.
+    if (precedent) await repos.tabQuestions.setPrecedent(question.id, precedent).catch(() => {});
     if (suggestion) {
       let stored: TabQuestion | undefined;
       try {

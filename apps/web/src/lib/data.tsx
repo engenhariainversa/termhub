@@ -34,7 +34,7 @@ interface DataState {
   updateMachine: (id: string, input: Partial<Machine>) => Promise<Machine>;
   /** the machine's "Mostrar o que a permissão aprova" switch (TER-614); rejects when the machine refused */
   setMachinePermissionHint: (id: string, enabled: boolean) => Promise<void>;
-  deleteMachine: (id: string) => Promise<void>;
+  deleteMachine: (id: string, opts?: { uninstall?: boolean }) => Promise<void>;
   createProject: (input: ProjectInput) => Promise<Project>;
   updateProject: (id: string, input: ProjectInput) => Promise<Project>;
   deleteProject: (id: string) => Promise<void>;
@@ -111,6 +111,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             agent_version: r.agent_version !== undefined ? r.agent_version : next.agent_version,
             agent_last_seen_at: r.last_seen_at !== undefined ? r.last_seen_at : next.agent_last_seen_at,
             update_available: r.online ? (r.update_available ?? next.update_available) : false,
+            below_min_version: r.below_min_version ?? next.below_min_version,
           };
         }),
       );
@@ -208,8 +209,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
         await api.machines.setPermissionHint(id, enabled);
         setMachines((m) => m.map((x) => (x.id === id ? { ...x, permission_hint: enabled } : x)));
       },
-      async deleteMachine(id) {
-        await api.machines.remove(id);
+      async deleteMachine(id, opts) {
+        await api.machines.remove(id, opts);
         forgetLocalMachine(id);
         setMachines((m) => m.filter((x) => x.id !== id));
         setProjects((p) => p.map((x) => ({ ...x, machines: x.machines.filter((l) => l.machine_id !== id) })));

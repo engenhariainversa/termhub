@@ -1,5 +1,6 @@
 import type { ConnectionInfo, ExternalTicket, TicketProvider, TicketSourceConfig } from './types.js';
 import { collectPages } from './paginate.js';
+import { checkPublicUrl, checkUrlShape } from './public-url.js';
 
 /** Jira Cloud: config = { baseUrl: "https://xxx.atlassian.net", email }, secret = API token. */
 function auth(config: Record<string, unknown>, token: string) {
@@ -7,19 +8,61 @@ function auth(config: Record<string, unknown>, token: string) {
   return `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
 }
 
+/** The site's root, normalized (no trailing slash). Shape only: https, a dotted name or a public IP. */
 function base(config: Record<string, unknown>): string {
-  const url = String(config.baseUrl ?? '').replace(/\/$/, '');
-  if (!url.startsWith('http')) throw new Error('Jira: baseUrl inválida (ex.: https://empresa.atlassian.net)');
-  return url;
+  const shape = checkUrlShape(String(config.baseUrl ?? ''));
+  if (!shape.ok) throw new Error(`Jira: ${shape.reason}`);
+  return rootOf(shape.url);
+}
+
+const rootOf = (url: URL) => `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+
+/** Same-site redirects followed before giving up. */
+const MAX_REDIRECTS = 3;
+
+/**
+ * One request to the Jira site (TER-578): the base URL is checked again — DNS included — before every
+ * call, redirects are followed only within the same origin, and an error carries the HTTP status alone,
+ * never a piece of the answer body.
+ */
+async function request(config: Record<string, unknown>, token: string, path: string, init?: RequestInit): Promise<Response> {
+  const check = await checkPublicUrl(String(config.baseUrl ?? ''));
+  if (!check.ok) throw new Error(`Jira: ${check.reason}`);
+  const origin = check.url.origin;
+  let url = `${rootOf(check.url)}${path}`;
+  let current: RequestInit = {
+    ...init,
+    headers: { authorization: auth(config, token), accept: 'application/json', 'content-type': 'application/json', ...(init?.headers ?? {}) },
+  };
+  for (let hop = 0; ; hop++) {
+    const res = await fetch(url, { ...current, redirect: 'manual' });
+    if (res.status < 300 || res.status >= 400 || res.status === 304) {
+      if (!res.ok) throw new Error(`Jira ${res.status}`);
+      return res;
+    }
+    const location = res.headers.get('location');
+    let next: URL | null = null;
+    try {
+      next = location ? new URL(location, url) : null;
+    } catch {
+      next = null;
+    }
+    if (!next || next.origin !== origin) throw new Error(`Jira ${res.status}: redirecionamento para fora de ${check.url.host} recusado`);
+    if (hop >= MAX_REDIRECTS) throw new Error(`Jira ${res.status}: redirecionamentos demais`);
+    // 307/308 keep the method and body; the others turn into a GET, as browsers do.
+    if (res.status !== 307 && res.status !== 308) current = { ...current, method: 'GET', body: undefined };
+    url = next.href;
+  }
 }
 
 async function jira<T>(config: Record<string, unknown>, token: string, path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${base(config)}${path}`, {
-    ...init,
-    headers: { authorization: auth(config, token), accept: 'application/json', 'content-type': 'application/json', ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) throw new Error(`Jira ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  return (await res.json()) as T;
+  const res = await request(config, token, path, init);
+  try {
+    return (await res.json()) as T;
+  } catch {
+    // The parser's message quotes the start of the body; keep it out of the error.
+    throw new Error('Jira: resposta não é JSON');
+  }
 }
 
 function mapCategory(key: string): ExternalTicket['status'] {
@@ -105,12 +148,10 @@ export const jiraProvider: TicketProvider = {
     );
     const t = transitions.find((x) => x.to.statusCategory.key === CATEGORY[status]);
     if (!t) throw new Error(`Jira: nenhuma transição disponível para a categoria ${CATEGORY[status]} (${transitions.map((x) => x.to.name).join(', ')})`);
-    const res = await fetch(`${base(config)}/rest/api/3/issue/${ticket.key}/transitions`, {
+    await request(config, secret, `/rest/api/3/issue/${ticket.key}/transitions`, {
       method: 'POST',
-      headers: { authorization: auth(config, secret), 'content-type': 'application/json' },
       body: JSON.stringify({ transition: { id: t.id } }),
     });
-    if (!res.ok) throw new Error(`Jira ${res.status}: ${(await res.text()).slice(0, 200)}`);
     return t.to.name;
   },
 };

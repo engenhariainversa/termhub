@@ -39,18 +39,23 @@ export const tabSummary = z.object({
   project: z.object({ id: z.string(), key: z.string(), name: z.string() }),
   machine: z.object({ id: z.string(), name: z.string() }),
   /**
-   * `waiting_background` travels as `working` with `background: true`, and `finished` as `idle` with
-   * `finished: true`, as in `agentOnCard` (progress.ts).
+   * `waiting_background` travels as `working` with `background: true`, `finished` as `idle` with
+   * `finished: true`, and the TER-1046 states with their own flags, as in `agentOnCard` (progress.ts).
    */
   state: progressTabState.nullable(),
   background: z.boolean().default(false),
   finished: z.boolean().default(false),
+  blocked: z.boolean().default(false),
+  auth_required: z.boolean().default(false),
+  trust_prompt: z.boolean().default(false),
   state_at: z.string().nullable(),
   needs_you: z.boolean(),
   activity: z.string().nullable(),
   activity_verb: z.string().nullable(),
   /** One of `tabChatAvailability`, read as a plain string (see there). */
   availability: z.string(),
+  /** the card ref ("TER-123") of the automatic run working in this tab; null = none (TER-1044, absent from an older server) */
+  auto_ref: z.string().nullable().default(null),
 });
 export type TTabSummary = z.infer<typeof tabSummary>;
 
@@ -83,8 +88,65 @@ export const tabChatPage = z.object({
   degraded: z.boolean(),
   questions: z.array(tabQuestionSchema),
   suggestions: z.array(tabSuggestionSchema),
+  /** Why the conversation shows no history (TER-1091), one of `TAB_CHAT_EMPTY_REASONS`, read as a plain
+   *  string like `availability`; null when there is history, or when `availability` already says why.
+   *  Absent from an older server. */
+  empty_reason: z.string().nullable().default(null),
 });
 export type TTabChatPage = z.infer<typeof tabChatPage>;
+
+/**
+ * Why a tab's conversation is empty (TER-1091). The history is the Claude Code transcript of the tab's
+ * current session, found through the session id its hooks report: `no_hooks` (the machine never had the
+ * termhub hooks installed, so no session is ever reported), `not_reported` (hooks installed, but no
+ * session reported yet: Claude not started in the tab, or started before the hooks were), `transcript_missing`
+ * (the session's file is no longer on the machine), `new_session` (the current session has nothing yet:
+ * a new tab, or a `/clear` or a restart of Claude, which starts a new session), `no_agent` (TER-1094: the
+ * tab is a plain terminal, its shell at the prompt with no AI CLI in front, so there is no session to show;
+ * `tabs/:id/agent` starts one).
+ */
+export const TAB_CHAT_EMPTY_REASONS = ['no_hooks', 'not_reported', 'transcript_missing', 'new_session', 'no_agent'] as const;
+export type TTabChatEmptyReason = (typeof TAB_CHAT_EMPTY_REASONS)[number];
+
+/** One account "Iniciar sessão" can start the tab's agent with (TER-1094): `provider` is `claude` (Claude Code)
+ *  or `chatgpt` (Codex), read as a plain string. */
+export const tabAgentChoice = z.object({
+  account_id: z.string(),
+  label: z.string(),
+  provider: z.string(),
+  /** the project's model for that CLI; null = the CLI's own default */
+  model: z.string().nullable(),
+});
+export type TTabAgentChoice = z.infer<typeof tabAgentChoice>;
+
+/**
+ * `GET tabs/:id/agent` (TER-1094): the accounts of the tab's machine an agent can start with, the project's
+ * own first, and the one the server picks without asking (`suggested`: the project's first account with
+ * room; without a project list, the machine's only account or its only default login). null = more than
+ * one fits and no rule decides: the person chooses.
+ */
+export const tabAgentOptions = z.object({
+  choices: z.array(tabAgentChoice),
+  suggested: z.string().nullable(),
+});
+export type TTabAgentOptions = z.infer<typeof tabAgentOptions>;
+
+/** `POST tabs/:id/agent` (TER-1094): no account = the suggested one (409 `ACCOUNT_CHOICE_REQUIRED` when there is none). */
+export const startTabAgentBody = z.object({ account_id: z.string().min(1).max(64).optional() });
+export type TStartTabAgentBody = z.infer<typeof startTabAgentBody>;
+
+/** Where the agent started: this tab (its shell was free) or a new tab of the same project and machine. */
+export const startTabAgentResponse = z.object({
+  tab_id: z.string(),
+  new_tab: z.boolean(),
+  account: z.object({ id: z.string(), label: z.string() }),
+  provider: z.string(),
+});
+export type TStartTabAgentResponse = z.infer<typeof startTabAgentResponse>;
+
+/** `POST machines/:id/hooks` (TER-1091): when the hooks were installed. */
+export const installHooksResponse = z.object({ installed_at: z.string() });
+export type TInstallHooksResponse = z.infer<typeof installHooksResponse>;
 
 export const tabMessageBody = z.object({ text: z.string().min(1).max(TAB_MESSAGE_MAX_CHARS) });
 export type TTabMessageBody = z.infer<typeof tabMessageBody>;

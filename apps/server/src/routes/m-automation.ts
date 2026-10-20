@@ -42,10 +42,22 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
       if (!ok) return reply;
     }
     const saved = await repos.projectSetup.save(id, { ...current.data, automation: next });
+    // the daily summary runs on the person's own clock (spec D26): the phone's zone travels with the hour (TER-974)
+    if (saved.data.automation.summary_hour !== null && body.time_zone && knownTimeZone(body.time_zone)) await repos.users.setTimeZone(request.scope.user.id, body.time_zone);
     await recordSetupChange(repos, id, current.data.automation, saved.data.automation, 'app');
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
     return { automation: saved.data.automation };
   });
+}
+
+/** An IANA zone name the runtime knows (`America/Sao_Paulo`). */
+function knownTimeZone(zone: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** `PUT /tasks/:id/auto` of the mobile API: the long-press on a card of Progresso. No PIN: tagging

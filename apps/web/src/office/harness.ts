@@ -1,12 +1,12 @@
 /** Dev tool: the office city with synthetic data, no login and no server — for screenshots and frame timing. */
-import { churned, harnessCity, jiggled } from './harness-data';
+import { churned, harnessAutoRef, harnessCity, jiggled } from './harness-data';
 import { buildCityModel, type FocusTarget } from './model';
 import { OfficeScene } from './scene/OfficeScene';
 
 const q = new URLSearchParams(location.search);
 /** `-1` when absent: `Number(null)` is 0, which would silently mean "the first one". */
 const index = (name: string) => (q.get(name) === null ? -1 : Number(q.get(name)));
-/** `?projects=`, `?desks=`, `?offline=i`, `?silent=i` (machine m<i>), `?activity=`, `?verb=` — see harness-data.ts */
+/** `?projects=`, `?desks=`, `?offline=i`, `?silent=i` (machine m<i>), `?activity=`, `?verb=`, `?auto=1` — see harness-data.ts */
 let city = harnessCity({
   projects: Number(q.get('projects')) || 6,
   desks: Number(q.get('desks')) || 8,
@@ -37,7 +37,8 @@ const scene = new OfficeScene({
     go({ kind: 'city' });
   },
 });
-const draw = () => scene.setModel(buildCityModel(city, () => undefined));
+const autoRef = q.get('auto') ? harnessAutoRef : () => undefined;
+const draw = () => scene.setModel(buildCityModel(city, () => undefined, autoRef));
 
 // `?grow=1`: the host starts narrow and widens WITHOUT a window resize — what hiding the sidebar in focus mode does
 const hostEl = document.getElementById('host')!;

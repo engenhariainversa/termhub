@@ -987,6 +987,17 @@ describe('chat decision memory', () => {
     expect(await api.setChatMemory(auth, false)).toMatchObject({ enabled: false, available: true, count: 2 });
     expect(await api.chatMemory(auth)).toMatchObject({ enabled: false });
   });
+
+  it('PATCH memory pins the automatic answer thresholds and null hands them back; POST focus answers 204 (TER-642)', async () => {
+    const clock = { value: START };
+    const { api, auth } = await enrol(clock);
+    expect(await api.chatMemory(auth)).toMatchObject({ auto_thresholds: { high: 0.95, low: 0.85, source: 'default' }, auto_delay_seconds: 60, focus_beat_seconds: 15 });
+    expect((await api.setChatMemory(auth, { auto_thresholds: { high: 0.9, low: 0.8 } })).auto_thresholds).toMatchObject({ high: 0.9, low: 0.8, source: 'manual' });
+    await expect(api.setChatMemory(auth, { auto_thresholds: { high: 0.8, low: 0.9 } })).rejects.toBeDefined();
+    expect((await api.setChatMemory(auth, { auto_thresholds: null })).auto_thresholds).toMatchObject({ high: 0.95, source: 'default' });
+    await expect(api.reportChatFocus(auth, 'client-0001', true)).resolves.toBeUndefined();
+    await expect(api.reportChatFocus(auth, 'client-0001', false)).resolves.toBeUndefined();
+  });
 });
 
 it('approve_project_always grants a standing kind on the card\'s project, with a proof for that word; GET chat, the list and Revogar follow it (TER-386)', async () => {

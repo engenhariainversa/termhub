@@ -38,6 +38,18 @@ export function guardSupported(machine: Machine): boolean {
   return !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION);
 }
 
+/** First agent release whose guard is version 2 (spec 2026-10-07 multi-repo R13, R18): its push rule takes
+ *  `git -C <workspace>/<key> push …`, which a multi-repo run needs. `MIN_AGENT_VERSION` is not raised for
+ *  it: a machine below this keeps running single-repo cards. */
+export const MULTI_REPO_GUARD_MIN_AGENT_VERSION = '0.29.0';
+
+/** Whether the machine's guard is version 2 (agent 0.29.0+), read the same way as `guardSupported`. */
+export function multiRepoGuardSupported(machine: Machine): boolean {
+  if (machine.type !== 'agent') return false;
+  const version = agents.info(machine.id)?.agent_version ?? machine.agent_version;
+  return !!version && versionAtLeast(version, MULTI_REPO_GUARD_MIN_AGENT_VERSION);
+}
+
 async function runScript(machine: Machine, script: string, input: Buffer): Promise<void> {
   // Over ssh the remote command goes to the user's login shell, which may not be POSIX (fish): `sh -c` there too.
   const r = await runOnMachineWithInput(machine, { file: 'sh', args: ['-c', script] }, `sh -c ${shellQuote(script)}`, input, SCRIPT_TIMEOUT_MS);

@@ -10,17 +10,18 @@ import type { Project, Task } from '../db/repositories/types.js';
 import { LocalizedText, msg, t } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { cleanupRuns } from './cleanup.js';
+import { cleanupRuns, markCancelledWorktreesDue } from './cleanup.js';
 import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
-import { escalateRun } from './follower.js';
+import { defaultType, escalateRun } from './follower.js';
+import { openCardTab, type CardTab } from './card-tab.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps, type TickStarts } from './placement.js';
 import { policyText } from './policy.js';
 import { startPermission } from './permission.js';
-import { implementerPrompt } from './prompts.js';
+import { implementerPrompt, serverMessage } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
@@ -28,6 +29,8 @@ import { eligibilityQueue } from './queue.js';
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
 export const TRIGGER_DEBOUNCE_MS = 1_000;
+/** How often a project's cancelled runs are looked at for a worktree to clean (TER-974). */
+export const CANCELLED_SCAN_MS = 10 * 60_000;
 /** Spec §8 step 7: heartbeats every 30 s; a run silent for 2 min is taken over by another instance. */
 export const HEARTBEAT_MS = 30_000;
 export const STALE_MS = 2 * 60_000;
@@ -61,6 +64,9 @@ export interface DispatcherDeps {
   closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
   /** Escape in a tab ("Pausar e interromper"); default: the tab's own session. */
   pressEscape?: PressEscape;
+  /** Types a fixer's prompt into the card's open tab it takes over (TER-1051), as the project's owner.
+   *  Default: the follower's `defaultType`. */
+  type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
   /** Told of each running run this instance took over from a silent one: the follower looks at its tab now
    *  (a stop that happened while nobody followed the run would otherwise wait for the next state change). */
   onTakeOver?: (run: AutomationRun) => void;
@@ -84,8 +90,9 @@ export interface TriggeredRun {
 }
 
 /** `started`; `taken`: the card has an active run, or this trigger already had its run; `waiting`: no place
- *  (or the ceiling) now, nothing written; `halted`: draining, paused, automation off, or the card is gone. */
-export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted';
+ *  (or the ceiling) now, nothing written; `halted`: draining, paused, automation off, or the card is gone;
+ *  `tab_busy`: a fixer whose card has a tab open that is busy or in use (TER-1051), nothing written. */
+export type TriggeredStart = 'started' | 'taken' | 'waiting' | 'halted' | 'tab_busy';
 
 export interface Dispatcher {
   /** One pass over every project with automatic work on. Concurrent calls share the pass in progress. */
@@ -119,14 +126,14 @@ const START_FAILURE_TEXT_MAX = 300;
 
 /**
  * Why a start failed, for the person (TER-987): the message of one of our own errors (a ControlError or an
- * HttpError says what to fix), in pt-BR (`message`) and English (`message_en`), the feed picks the reader's.
+ * HttpError says what to fix), in pt-BR (`message`), English (`message_en`) and Spanish (`message_es`); the feed picks the reader's.
  * Anything else (a bug, the database) has no message fit to show: nothing, the code says it.
  */
-function startFailureText(e: unknown): { message: string; message_en: string } | null {
+function startFailureText(e: unknown): { message: string; message_en: string; message_es: string } | null {
   const localized = (e as { localized?: unknown } | null)?.localized;
   if (!(localized instanceof LocalizedText)) return null;
   const clip = (s: string) => (s.length <= START_FAILURE_TEXT_MAX ? s : `${s.slice(0, START_FAILURE_TEXT_MAX - 1)}…`);
-  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)) };
+  return { message: clip(t('pt-BR', localized)), message_en: clip(t('en', localized)), message_es: clip(t('es', localized)) };
 }
 
 /**
@@ -312,6 +319,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           policy: policyText(automation, repo?.deploy_workflow ?? null),
           custom: automation.prompts.implementer,
           description: task.description,
+          stopOnDecisions: automation.stop_on_decisions,
         });
       // the agent's questions become cards in the owner's project chat (spec §9.1, §9.3): make sure it
       // has one, or a question would have nowhere to go (review I1)
@@ -343,12 +351,20 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     await markRunning(ctx, project, run, task, place, tabId, branch, true);
   }
 
+  /** A version of the Terms in force that the owner has not accepted (TER-742); none registered = false. */
+  async function legalPending(ownerId: string): Promise<boolean> {
+    return (await repos.legal.statusFor(ownerId)).pending.length > 0;
+  }
+
   async function dispatchProject(projectId: string, enabledSetup: ProjectSetupData): Promise<void> {
     const project = await repos.projects.findById(projectId);
     if (!project?.owner_id) return;
     if (await isPaused(repos, project.owner_id, projectId)) return;
     const owner = await repos.users.findById(project.owner_id);
     if (!owner) return;
+    // TER-742: while the owner has not accepted the Terms in force, their tokens and the MCP refuse every
+    // call, so an agent started now could not report back: no new start until they accept.
+    if (await legalPending(owner.id)) return;
     // TER-892: a day's budget reached stops the new starts (the runs going on finish their turn)
     if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
@@ -411,12 +427,21 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (!project?.owner_id || (await isPaused(repos, project.owner_id, project.id))) return 'halted';
     const [owner, setup, task] = await Promise.all([repos.users.findById(project.owner_id), repos.projectSetup.get(project.id), repos.tasks.findById(i.taskId)]);
     if (!owner || !setup.data.automation.enabled || !task || task.project_id !== project.id) return 'halted';
+    // TER-742: the trigger waits for the owner to accept the Terms, like a reached budget
+    if (await legalPending(owner.id)) return 'waiting';
     // R8: no new fixer or integrator run once the day's budget is reached; the trigger stays free for tomorrow
     if (await budgetReached(repos, project.id, setup.data.automation, deps.now(), log)) return 'waiting';
     const max = setup.data.automation.max_parallel;
     if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
     const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });
     if (!run) return 'taken';
+    // TER-1051: the worktree is per card, so a fixer goes into the card's open tab, or waits for it
+    const open = i.role === 'fixer' ? await openCardTab(repos, task.id) : null;
+    if (open) {
+      if (open.free) return takeOverTab(controlContextFor(repos, owner), project, run, task, open, i);
+      await release(run);
+      return 'tab_busy';
+    }
     const place = await placeRun(deps, project, setup.data, tickStarts);
     if ('waiting' in place) {
       // no row is kept: the next CI sync asks again (the trigger is still free)
@@ -431,6 +456,47 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     });
     inflight.add(p);
     log.info({ runId: run.id, taskId: task.id, role: i.role }, 'automation: triggered run claimed');
+    return 'started';
+  }
+
+  /**
+   * A fixer in the tab an earlier run of the card left free at its prompt (TER-1051): the run points at it
+   * (its machine, account, worktree and allow list) and the fixer's prompt is typed there, marked as the
+   * server's. A pause found right before typing, or a tab that cannot be typed into, lets the claim go: the
+   * next sync asks again.
+   */
+  async function takeOverTab(ctx: ControlContext, project: Project, run: AutomationRun, task: Task, open: CardTab, i: TriggeredRun): Promise<TriggeredStart> {
+    const { tab, run: prev } = open;
+    const account = tab.ai_account_id ?? prev.account_id;
+    const patch: AutomationRunPatch = { status: 'starting', tab_id: tab.id, machine_id: tab.machine_id, account_id: account, branch: i.branch, worktree_path: prev.worktree_path };
+    if (prev.allowed_tools) patch.allowed_tools = prev.allowed_tools;
+    if (!(await write(run, patch))) return 'taken';
+    // D24: the last check before anything is typed
+    if (halted() || (await isPaused(repos, project.owner_id, project.id))) {
+      await release(run);
+      return 'halted';
+    }
+    try {
+      await (deps.type ?? defaultType)(ctx, tab.id, serverMessage(i.prompt));
+    } catch (e) {
+      log.warn({ runId: run.id, taskId: task.id, tabId: tab.id, code: errorCode(e) }, 'automation: fixer prompt not typed into the card tab');
+      await release(run);
+      return 'waiting';
+    }
+    const at = deps.now();
+    await repos.automationRuns.noteTyped(run.id, at);
+    if (!(await write(run, { status: 'running', started_at: at }))) {
+      log.warn({ runId: run.id, taskId: task.id, tabId: tab.id }, 'automation: run taken over by another instance while it started');
+      return 'started';
+    }
+    await recordEvent(repos, {
+      project_id: project.id,
+      task_id: task.id,
+      run_id: run.id,
+      kind: 'run_started',
+      payload: { tab_id: tab.id, machine_id: tab.machine_id, account_id: account, branch: i.branch, reused_tab: true },
+    }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_started not recorded'));
+    log.info({ runId: run.id, taskId: task.id, tabId: tab.id, machineId: tab.machine_id }, 'automation: fixer took over the card tab');
     return 'started';
   }
 
@@ -466,12 +532,26 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
   }
 
+  /** When each project's cancelled runs were last looked at for a worktree to clean (TER-974). */
+  const cancelledScanAt = new Map<string, number>();
+
   /**
    * Cleanups left due after a merge (machine offline, tab busy): tried again on each tick. A pause does not
    * stop them (removing a merged card's worktree is not work); automation off does (only projects with it on
    * are read), and so does a draining instance.
    */
   async function retryCleanups(projectId: string, setup: ProjectSetupData): Promise<void> {
+    // TER-974: a cancelled run's worktree nothing will use again joins them (looked for every few minutes)
+    const now = deps.now();
+    if (now.getTime() - (cancelledScanAt.get(projectId) ?? 0) >= CANCELLED_SCAN_MS) {
+      cancelledScanAt.set(projectId, now.getTime());
+      try {
+        const marked = await markCancelledWorktreesDue(repos, projectId, now);
+        if (marked.length > 0) log.info({ projectId, runs: marked.length }, 'automation: worktrees of cancelled runs due for cleanup');
+      } catch (e) {
+        log.warn({ projectId, code: errorCode(e) }, 'automation: cancelled runs not looked at for cleanup');
+      }
+    }
     const due = await repos.automationRuns.dueCleanups(projectId);
     if (due.length === 0) return;
     const project = await repos.projects.findById(projectId);

@@ -9,6 +9,7 @@ export type ChatEntry =
   | { kind: 'message'; at: string; message: ChatMessage }
   | { kind: 'action'; at: string; action: ChatAction }
   | { kind: 'action_group'; at: string; actions: ChatAction[] }
+  | { kind: 'action_trail'; at: string; actions: ChatAction[] }
   | { kind: 'tab_question'; at: string; question: TabQuestion }
   | { kind: 'tab_suggestion'; at: string; suggestion: TabSuggestion }
   | { kind: 'tab_limit'; at: string; limit: TabLimit };
@@ -57,10 +58,12 @@ export function chatTimeline(messages: ChatMessage[], actions: ChatAction[], tab
   /**
    * TER-984: the answer's row is created empty when its turn starts and filled in as the turn runs, so
    * by time alone every card the turn made would read after its answer. A call that ran without asking
-   * (a `grant_id`: set once, when the row is made) belongs inside the turn, so it is sorted just before
-   * the answer of the turn it ran in, and the answer stays the last thing the turn shows. A card that
-   * asks for confirmation keeps its own time, and so does a call made after a user message with no
-   * answer yet (there is no answer of its turn to sit above).
+   * (a `grant_id`: set once, when the row is made) belongs inside the turn, and so does a card already
+   * decided (TER-1024): either is sorted just before the answer of the turn it was made in, so the answer
+   * stays the last thing the turn shows. Only a card still waiting on the person keeps its own time,
+   * below the answer that asked it, and so does a call made after a user message with no answer yet
+   * (there is no answer of its turn to sit above). It reads from the persisted rows alone, so a reload
+   * keeps the same order.
    */
   const byTime = [...messages].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
   const turnAnswerAt = (at: string): string | null => {
@@ -73,7 +76,7 @@ export function chatTimeline(messages: ChatMessage[], actions: ChatAction[], tab
   };
   // rank breaks a tie at the same `key`: a call anchored to an answer reads before it, any other card after it.
   const keyed = entries.map((entry) => {
-    if (entry.kind === 'action' && entry.action.grant_id && !entry.action.surfaced_at) {
+    if (entry.kind === 'action' && isSettledAction(entry.action)) {
       const answerAt = turnAnswerAt(entry.at);
       if (answerAt !== null) return { entry, key: answerAt, rank: 0 };
     }
@@ -90,6 +93,36 @@ export function chatTimeline(messages: ChatMessage[], actions: ChatAction[], tab
       return 0;
     })
     .map((k) => k.entry);
+}
+
+/** A gate card nobody has to decide any more: decided, run, refused, expired or failed (TER-1024). */
+export const isSettledAction = (action: ChatAction): boolean => action.status !== 'pending';
+
+/**
+ * Two or more settled gate cards in a row — a turn's actions, sorted just above its answer — become one
+ * accordion, closed by default (TER-1024). A pending card, a tab's question, suggestion or usage limit
+ * and every message break the run: what waits on the person is never folded away.
+ */
+export function groupSettledActions(entries: ChatEntry[]): ChatEntry[] {
+  const out: ChatEntry[] = [];
+  let run: ChatAction[] = [];
+  let runAt = '';
+  const flush = () => {
+    if (run.length >= 2) out.push({ kind: 'action_trail', at: runAt, actions: run });
+    else if (run.length === 1) out.push({ kind: 'action', at: runAt, action: run[0]! });
+    run = [];
+  };
+  for (const e of entries) {
+    if (e.kind === 'action' && isSettledAction(e.action)) {
+      if (run.length === 0) runAt = e.at;
+      run.push(e.action);
+      continue;
+    }
+    flush();
+    out.push(e);
+  }
+  flush();
+  return out;
 }
 
 /** Two or more pending gate cards become one grouped confirmation, where the oldest of them was (spec

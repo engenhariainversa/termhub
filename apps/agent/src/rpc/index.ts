@@ -1,5 +1,6 @@
 import type { RpcMethod, RpcParams, RpcResult } from '@termhub/agent-protocol';
 import * as ai from './ai.js';
+import * as aiLogin from './ai-login.js';
 import * as claude from './claude.js';
 import * as docs from './docs.js';
 import * as fileList from './file-list.js';
@@ -7,13 +8,17 @@ import * as fileRead from './file-read.js';
 import * as fs from './fs.js';
 import * as hooks from './hooks.js';
 import * as hw from './hw.js';
+import * as net from './net.js';
+import * as netInfo from './net-info.js';
 import * as paste from './paste.js';
+import * as repos from './repos.js';
 import * as secret from './secret.js';
 import * as sim from './sim.js';
 import * as tabMcp from './tab-mcp.js';
 import * as tmux from './tmux.js';
 import * as tools from './tools.js';
 import * as transcript from './transcript.js';
+import * as uninstall from './uninstall.js';
 import * as update from './update.js';
 import * as wda from './wda.js';
 import * as worktree from './worktree.js';
@@ -37,7 +42,11 @@ export const handlers: Handlers = {
   'hw.probe': hw.probe,
   'fs.list': fs.list,
   'fs.mkdir': fs.mkdir,
-  'ai.credential': ai.credential,
+  'ai.usage': ai.usage,
+  'ai.login.status': aiLogin.status,
+  'ai.login.start': aiLogin.start,
+  'ai.login.submit': aiLogin.submit,
+  'ai.login.cancel': aiLogin.cancel,
   'secret.read': secret.read,
   'claude.linkSession': claude.linkSession,
   'docs.scan': docs.scan,
@@ -48,7 +57,9 @@ export const handlers: Handlers = {
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
   'hooks.hint': hooks.hint,
+  'hooks.status': hooks.status,
   'agent.update': update.update,
+  'agent.uninstall': uninstall.uninstall,
   'sim.list': sim.list,
   'sim.boot': sim.boot,
   'wda.runner.start': wda.runnerStart,
@@ -61,4 +72,8 @@ export const handlers: Handlers = {
   'transcript.read': transcript.read,
   'git.worktree.ensure': worktree.ensure,
   'git.worktree.remove': worktree.remove,
+  'git.repos.scan': repos.scan,
+  'net.check': net.check,
+  'net.info': netInfo.info,
+  'net.wake': netInfo.wake,
 };

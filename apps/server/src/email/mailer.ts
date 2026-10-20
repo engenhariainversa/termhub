@@ -21,6 +21,8 @@ class SmtpMailer implements Mailer {
       port: smtp.port,
       secure: smtp.secure,
       auth: smtp.auth,
+      // SMTP_PROXY: nodemailer tunnels through an HTTP(S) proxy with CONNECT (fetch uses NODE_USE_ENV_PROXY instead).
+      proxy: smtp.proxy,
     });
   }
   async send(mail: Mail): Promise<void> {

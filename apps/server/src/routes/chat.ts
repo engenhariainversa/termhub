@@ -13,6 +13,7 @@ import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answe
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
+import { webSignals } from '../chat/client-origin.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { chatBus } from '../chat/bus.js';
 import { openAnswersIn } from '../chat/open-answers.js';
@@ -106,7 +107,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -125,6 +126,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       deps.service.openAnswerIds(conversation.id),
       // Usage-limit cards (TER-589): their own list, like suggestions, for the apps that parse tab_questions strictly.
       repos.tabLimitNotices.listByConversation(conversation.id),
+      // What the context meter measures against (TER-1038): null = the model's window.
+      repos.users.chatContextLimit(request.scope.user.id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
@@ -145,6 +148,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       compacting: deps.service.isCompacting(conversation.id),
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
+      context_limit,
     };
   });
 
@@ -193,7 +197,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // `wait` is read and ignored: a page loaded before this release still sends it.
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = messageBody.parse(request.body);
     // Each only when the body carried it, so a plain message calls the service exactly as before.
-    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}) };
+    // `client`: where it came from (TER-1088), read from the request, never from the body.
+    const opts = { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}), client: webSignals(request) };
     // A refusal (host problem, archived conversation, an attachment that is not this user's) rejects
     // `start` itself and keeps its status. The answer streams over `/ws/chat`; a failure after this
     // point is logged by label, and a run that could not be attempted says so on the stream.
@@ -217,6 +222,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.post('/reset', { config: { action: 'update' } }, async (request) => {
     const { project_id } = resetBody.parse(request.body ?? {});
     return { conversation: await deps.service.reset(request.scope.user, project_id ?? null) };
+  });
+
+  /** "Apagar conversa" (TER-743): deletes the scope's active conversation for good and answers the fresh one. */
+  app.post('/delete', { config: { action: 'delete' } }, async (request) => {
+    const { project_id } = resetBody.parse(request.body ?? {});
+    return { conversation: await deps.service.deleteConversation(request.scope.user, project_id ?? null) };
   });
 
   /** Per-project chat status for the sidebar's 💬: answering now, and questions waiting on the user. */

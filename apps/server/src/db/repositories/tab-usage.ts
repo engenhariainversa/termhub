@@ -58,7 +58,7 @@ export class TabUsageRepository {
     return row ? { session_id: row.sessionId, offset: Number(row.transcriptOffset) } : null;
   }
 
-  /** false: another pass moved the cursor first, and nothing was written. */
+  /** false: another pass moved the cursor first, or the tab is gone, and nothing was written. */
   async record(w: UsageWrite): Promise<boolean> {
     try {
       await this.db.$transaction(async (tx) => {
@@ -98,6 +98,8 @@ export class TabUsageRepository {
       return true;
     } catch (err) {
       if (err instanceof CursorMoved) return false;
+      // the tab was closed meanwhile: its cursor goes with it (foreign key, TER-974), so there is nothing to meter
+      if (w.from === null && !(await this.db.tab.findUnique({ where: { id: w.tab_id }, select: { id: true } }))) return false;
       throw err;
     }
   }

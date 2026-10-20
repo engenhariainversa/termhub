@@ -1,6 +1,14 @@
+import { machineNetwork, type MachineNetwork } from '@termhub/agent-protocol';
 import type { PrismaClient } from '../prisma.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapMachine, type Machine, type MachineType } from './types.js';
+
+/** A machine's network as its agent last reported it (TER-1080), and when. */
+export interface SavedNetwork {
+  network: MachineNetwork;
+  updated_at: string | null;
+}
 
 export interface MachineInput {
   name: string;
@@ -13,6 +21,7 @@ export interface MachineInput {
   owner_id?: string | null;
   agent_auto_update?: boolean;
   claude_auto_swap?: boolean;
+  ai_usage_query?: boolean;
   automation_allowed?: boolean;
 }
 
@@ -53,8 +62,46 @@ export class MachinesRepository {
     return m && m.type === 'agent' ? mapMachine(m) : undefined;
   }
 
-  async rotateAgentToken(id: string, hash: string): Promise<void> {
-    await this.db.machine.updateMany({ where: { id, type: 'agent' }, data: { agentTokenHash: hash, agentTokenCreatedAt: new Date() } });
+  /**
+   * "Pair again" (TER-1017): stores a fresh single-use pairing token and revokes whatever the agent proved
+   * itself with until now — the device key and the legacy bearer token alike.
+   */
+  async startAgentPairing(id: string, hash: string, expiresAt: Date): Promise<void> {
+    await this.db.machine.updateMany({
+      where: { id, type: 'agent' },
+      data: {
+        agentPairingHash: hash,
+        agentPairingExpiresAt: expiresAt,
+        agentTokenCreatedAt: new Date(),
+        agentTokenHash: null,
+        agentPublicKey: null,
+        agentPairedAt: null,
+      },
+    });
+  }
+
+  /** The agent machine a pairing token still opens: unused and not expired. */
+  async findByPairingHash(hash: string, now = new Date()): Promise<Machine | undefined> {
+    const m = await this.db.machine.findUnique({ where: { agentPairingHash: hash }, include: withOwner });
+    return m && m.type === 'agent' && m.agentPairingExpiresAt && m.agentPairingExpiresAt > now ? mapMachine(m) : undefined;
+  }
+
+  /**
+   * Burns the pairing token and stores the device key, in one conditional write: of two dials racing with
+   * the same token, only one finds it still there. False when the token was used, expired or rotated.
+   */
+  async completeAgentPairing(id: string, hash: string, publicKey: string, now = new Date()): Promise<boolean> {
+    const { count } = await this.db.machine.updateMany({
+      where: { id, type: 'agent', agentPairingHash: hash, agentPairingExpiresAt: { gt: now } },
+      data: { agentPairingHash: null, agentPairingExpiresAt: null, agentPublicKey: publicKey, agentPairedAt: now, agentTokenHash: null },
+    });
+    return count === 1;
+  }
+
+  /** The machine and its device key, for a `TermhubDevice` dial; undefined when it has none. */
+  async findDeviceKey(id: string): Promise<{ machine: Machine; publicKey: string } | undefined> {
+    const m = await this.db.machine.findUnique({ where: { id }, include: withOwner });
+    return m && m.type === 'agent' && m.agentPublicKey ? { machine: mapMachine(m), publicKey: m.agentPublicKey } : undefined;
   }
 
   /** Written on hello and once a minute while connected. */
@@ -68,6 +115,23 @@ export class MachinesRepository {
         ...(patch.capabilities !== undefined ? { capabilities: patch.capabilities } : {}),
       },
     });
+  }
+
+  /** TER-1080: the agent's latest `net.info`, kept as the last known value for when the machine is offline. */
+  async setNetwork(id: string, network: MachineNetwork, at: Date = new Date()): Promise<void> {
+    await this.db.machine.updateMany({ where: { id }, data: { network: network as unknown as Prisma.InputJsonValue, networkUpdatedAt: at } });
+  }
+
+  /** The saved network of each of `ids` that has one; a value that no longer parses (an older shape) is left out. */
+  async networks(ids: string[]): Promise<Map<string, SavedNetwork>> {
+    if (!ids.length) return new Map();
+    const rows = await this.db.machine.findMany({ where: { id: { in: ids } }, select: { id: true, network: true, networkUpdatedAt: true } });
+    const out = new Map<string, SavedNetwork>();
+    for (const r of rows) {
+      const parsed = machineNetwork.safeParse(r.network);
+      if (parsed.success) out.set(r.id, { network: parsed.data, updated_at: r.networkUpdatedAt?.toISOString() ?? null });
+    }
+    return out;
   }
 
   async create(input: MachineInput): Promise<Machine> {
@@ -105,6 +169,7 @@ export class MachinesRepository {
         isLocal: next.is_local,
         agentAutoUpdate: next.agent_auto_update ?? false,
         claudeAutoSwap: next.claude_auto_swap ?? false,
+        aiUsageQuery: next.ai_usage_query ?? true,
         automationAllowed: next.automation_allowed ?? true,
         ...(patch.owner_id !== undefined ? { ownerId: patch.owner_id } : {}),
       },
@@ -125,8 +190,9 @@ export class MachinesRepository {
   }
 
   /** Agent machines that opted into automatic updates (the scheduler checks online/idle itself). */
-  async listAutoUpdate(): Promise<Machine[]> {
-    const rows = await this.db.machine.findMany({ where: { type: 'agent', agentAutoUpdate: true }, include: withOwner });
+  /** Every agent machine, of every owner: the auto-update scheduler reads the switch and the minimum version itself (TER-1056). */
+  async listAgentMachines(): Promise<Machine[]> {
+    const rows = await this.db.machine.findMany({ where: { type: 'agent' }, include: withOwner });
     return rows.map(mapMachine);
   }
 
