@@ -65,6 +65,33 @@ function repos(current: Tab) {
 }
 const pre = (tool_name: string, verb?: string) => ({ machineId: 'm1', tool: 'claude' as const, session: 'th-t1', event: { hook_event_name: 'PreToolUse', tool_name, ...(verb ? { verb } : {}) } });
 
+describe('ingestHookEvent — permission hints (TER-614)', () => {
+  const whole = {
+    machineId: 'm1',
+    tool: 'claude' as const,
+    session: 'th-t1',
+    event: { session_id: 's1', cwd: '/w', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'export TOKEN=abc && npm test', description: 'd' }, permission_suggestions: [] },
+  };
+  const opened = () => (note.mock.calls.at(-1)![3] as { question?: { payload: Record<string, unknown> } }).question?.payload;
+
+  it('keeps the filtered hint from a machine whose switch is on', async () => {
+    note.mockClear();
+    const { r } = repos(tab({ state: 'working' }));
+    (r.machines.findById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'm1', owner_id: 'u1', permission_hint: true });
+    await ingestHookEvent(r, log, whole);
+    expect(opened()).toEqual({ tool_name: 'Bash', hint: 'export TOKEN=••• && npm test' });
+  });
+
+  it('drops it when the switch is off, whatever the machine sent', async () => {
+    note.mockClear();
+    const { r, recordEvent } = repos(tab({ state: 'working' }));
+    (r.machines.findById as ReturnType<typeof vi.fn>).mockResolvedValue({ id: 'm1', owner_id: 'u1', permission_hint: false });
+    await ingestHookEvent(r, log, whole);
+    expect(opened()).toEqual({ tool_name: 'Bash' });
+    expect(JSON.stringify(recordEvent.mock.calls)).not.toContain('TOKEN');
+  });
+});
+
 describe('ingestHookEvent — activity', () => {
   it('records an event when the state changes, carrying the activity', async () => {
     publish.mockClear();

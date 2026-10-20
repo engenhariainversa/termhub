@@ -390,6 +390,8 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /** The machine's opt-in to permission hints (TER-614): writes or removes ~/.termhub/permission-hint; since agent 0.33.0. */
+  'hooks.hint': def(z.object({ enabled: z.boolean() }), z.object({ enabled: z.boolean() })),
   /**
    * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
    * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.

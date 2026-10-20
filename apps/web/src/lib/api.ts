@@ -213,6 +213,8 @@ export const api = {
     hooks: (id: string) => request<MachineHooks>('GET', `/machines/${id}/hooks`),
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
+    /** TER-614: the machine's opt-in to permission hints; the server changes the machine first, then the row. */
+    setPermissionHint: (id: string, enabled: boolean) => request<{ machine: Machine }>('PUT', `/machines/${id}/permission-hint`, { enabled }),
     networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
     /** TER-1080: IPs and MACs as the agent last reported them, kept while the machine sleeps */
     network: (id: string) => request<MachineNetworkInfo>('GET', `/machines/${id}/network`),
