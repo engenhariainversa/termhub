@@ -33,7 +33,7 @@ describe('config: whisper secret', () => {
   it('turns transcription on only with both the URL and the secret', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     expect((await loadConfig({ WHISPER_URL: 'http://whisper:8000/', WHISPER_SECRET: '' })).transcription).toBeNull();
-    expect((await loadConfig({ WHISPER_URL: 'http://whisper:8000/', WHISPER_SECRET: 's' })).transcription).toEqual({ url: 'http://whisper:8000', language: 'pt', secret: 's' });
+    expect((await loadConfig({ WHISPER_URL: 'http://whisper:8000/', WHISPER_SECRET: 's' })).transcription).toEqual({ url: 'http://whisper:8000', language: 'auto', secret: 's' });
   });
 });
 

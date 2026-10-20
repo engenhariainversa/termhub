@@ -540,5 +540,11 @@
   "Anotação": "Note",
   "Não foi possível buscar os itens da memória": "Could not search the memory items",
   "Não foi possível alterar o estado do item": "Could not change the item's status",
-  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}"
+  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}",
+  "nenhuma fala reconhecida no áudio": "no speech recognized in the audio",
+  "português": "Portuguese",
+  "inglês": "English",
+  "espanhol": "Spanish",
+  "Ver transcrição ({{language}})": "Show transcript ({{language}})",
+  "Ocultar transcrição ({{language}})": "Hide transcript ({{language}})"
 }

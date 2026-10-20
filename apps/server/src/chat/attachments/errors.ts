@@ -6,9 +6,10 @@ export type ExtractErrorCode = 'ATTACHMENT_INVALID' | 'TRANSCRIPTION_UNAVAILABLE
 /**
  * Why TRANSCRIPTION_UNAVAILABLE (TER-1035), stored as `meta.reason` so the person reads the cause:
  * whisper not configured on this server, whisper refusing the shared secret, whisper out of reach,
- * or whisper answering an error.
+ * or whisper answering an error. TRANSCRIPTION_FAILED carries `no_speech` when whisper heard nothing in
+ * a voice note (TER-1096).
  */
-export type TranscriptionReason = 'not_configured' | 'refused' | 'unreachable' | 'error';
+export type TranscriptionReason = 'not_configured' | 'refused' | 'unreachable' | 'error' | 'no_speech';
 export class ExtractError extends Error {
   /** The failure is the moment's, not the file's (whisper loading its model): the queue may try again later. */
   readonly retryable: boolean;

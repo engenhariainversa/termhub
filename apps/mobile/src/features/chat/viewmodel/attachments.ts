@@ -3,7 +3,7 @@
 // under the `logic` jest project.
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, kindFromNameAndMime, type AttachmentKind } from '@termhub/mobile-api';
-import { t, tk } from '@/i18n';
+import { currentLocale, t, tk } from '@/i18n';
 import { formatNumber } from '@/i18n/format';
 import type { TChatAttachment } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
@@ -42,15 +42,34 @@ const TRANSCRIPTION_REASON: Record<string, string> = {
   error: tk('o serviço de transcrição deu erro'),
 };
 
+/** TRANSCRIPTION_FAILED by `meta.reason` (TER-1096): whisper heard nothing in the voice note. */
+const TRANSCRIPTION_FAILED_REASON: Record<string, string> = {
+  no_speech: tk('nenhuma fala reconhecida no áudio'),
+};
+
 /** The line under a chip or a bubble's attachment while the server works on it, or after it gave up. */
 export function attachmentStatusText(a: Pick<TChatAttachment, 'kind' | 'status' | 'error_code'> & { meta?: TChatAttachment['meta'] }): string | null {
   if (a.status === 'pending') return a.kind === 'audio' || a.kind === 'video' ? t('transcrevendo…') : t('processando…');
   if (a.status === 'failed') {
-    const why = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof a.meta?.reason === 'string' ? TRANSCRIPTION_REASON[a.meta.reason] : undefined;
+    const table = a.error_code === 'TRANSCRIPTION_UNAVAILABLE' ? TRANSCRIPTION_REASON : a.error_code === 'TRANSCRIPTION_FAILED' ? TRANSCRIPTION_FAILED_REASON : null;
+    const why = table && typeof a.meta?.reason === 'string' ? table[a.meta.reason] : undefined;
     const reason = why ?? (a.error_code ? ATTACHMENT_FAILURE_REASON[a.error_code] : undefined);
     return t('falhou: {{reason}}', { reason: t(reason ?? tk('erro')) });
   }
   return null;
+}
+
+const LANGUAGE_NAME: Record<string, string> = { pt: tk('português'), en: tk('inglês'), es: tk('espanhol') };
+const UI_LANGUAGE: Record<string, string> = { 'pt-BR': 'pt', en: 'en', es: 'es' };
+
+/**
+ * The language a clip was transcribed in (`meta.language`, whisper's detection, TER-1096), named for the
+ * bubble only when it is not the language on screen (the web's `transcriptLanguage`).
+ */
+export function transcriptLanguage(a: { meta?: TChatAttachment['meta'] }): string | null {
+  const code = a.meta?.language;
+  if (typeof code !== 'string' || !/^[a-z]{2,3}$/.test(code) || code === UI_LANGUAGE[currentLocale()]) return null;
+  return LANGUAGE_NAME[code] ? t(LANGUAGE_NAME[code]) : code.toUpperCase();
 }
 
 /** A transcription whisper could not do can be asked again; a file it could not decode cannot (the web's `canRetryAttachment`). */

@@ -63,7 +63,7 @@ describe('POST /api/m/v1/transcriptions', () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/m/v1/transcriptions?seconds=12',
-      headers: { 'content-type': 'audio/mp4' },
+      headers: { 'content-type': 'audio/mp4', 'accept-language': 'en' },
       payload: Buffer.from('clip-bytes'),
     });
     expect(res.statusCode).toBe(202);
@@ -74,7 +74,8 @@ describe('POST /api/m/v1/transcriptions', () => {
     expect(Buffer.from(body).toString()).toBe('clip-bytes');
     expect(mime).toBe('audio/mp4');
     expect(seconds).toBe(12);
-    expect(opts).toEqual({ maxSeconds: MOBILE_TOO_LONG_SECONDS });
+    // The app's language goes along as whisper's first hint (TER-1096).
+    expect(opts).toEqual({ maxSeconds: MOBILE_TOO_LONG_SECONDS, hints: ['en'] });
   });
 
   it('strips MIME parameters before checking the allowlist', async () => {

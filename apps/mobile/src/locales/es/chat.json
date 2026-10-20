@@ -191,5 +191,9 @@
   "Política do trabalho automático": "Política del trabajo automático",
   "Aguardando a confirmação no chat": "Esperando la confirmación en el chat",
   "Cada projeto pede a sua confirmação no chat.": "Cada proyecto pide tu confirmación en el chat.",
-  "Aprovar": "Aprobar"
+  "Aprovar": "Aprobar",
+  "nenhuma fala reconhecida no áudio": "no se reconoció ninguna voz en el audio",
+  "português": "portugués",
+  "inglês": "inglés",
+  "espanhol": "español"
 }

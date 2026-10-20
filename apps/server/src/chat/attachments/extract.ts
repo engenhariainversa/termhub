@@ -1,5 +1,5 @@
 import type { AttachmentKind } from '@termhub/mobile-api';
-import { whisperHeaders } from '../../lib/whisper.js';
+import { transcribeUrl, whisperHeaders } from '../../lib/whisper.js';
 import { ExtractError } from './errors.js';
 import { type Extracted, ZIP_EXPANDED_MAX_BYTES, capText } from './parsers.js';
 import { EXTRACT_WORKER_HEAP_MB, defaultWorkerUrl, runInWorker } from './worker-runner.js';
@@ -14,7 +14,10 @@ export const WHISPER_TIMEOUT_MS = 10 * 60 * 1000;
 
 export interface ExtractDeps {
   whisperUrl: string | null;
+  /** "auto" (detect) or the language the operator forced (`WHISPER_LANGUAGE`). */
   language: string | null;
+  /** Likely languages of this clip, best first (TER-1096): the client's, then the account's. */
+  hints?: string[];
   /** Bearer secret of the whisper service (`WHISPER_SECRET`). */
   whisperSecret?: string | null;
   fetch?: typeof fetch;
@@ -67,10 +70,10 @@ export function imageDimensions(b: Uint8Array, mime: string): { width: number; h
   return null;
 }
 
-async function transcribe(file: Buffer, mime: string, deps: ExtractDeps): Promise<Extracted> {
+async function transcribe(kind: 'audio' | 'video', file: Buffer, mime: string, deps: ExtractDeps): Promise<Extracted> {
   if (!deps.whisperUrl) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', 'whisper is not configured', { reason: 'not_configured' });
   const doFetch = deps.fetch ?? fetch;
-  const url = `${deps.whisperUrl}/transcribe${deps.language ? `?language=${encodeURIComponent(deps.language)}` : ''}`;
+  const url = transcribeUrl(deps.whisperUrl, deps.language, deps.hints ?? []);
   let res: Response;
   try {
     res = await doFetch(url, { method: 'POST', headers: whisperHeaders(mime, deps.whisperSecret), body: new Uint8Array(file), signal: AbortSignal.timeout(deps.timeoutMs ?? WHISPER_TIMEOUT_MS) });
@@ -84,10 +87,16 @@ async function transcribe(file: Buffer, mime: string, deps: ExtractDeps): Promis
   // A secret the service does not share (WHISPER_SECRET differs, or is empty on its side): retrying will not help.
   if (res.status === 401 || res.status === 403) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper refused the secret (${res.status})`, { reason: 'refused' });
   if (!res.ok) throw new ExtractError('TRANSCRIPTION_UNAVAILABLE', `whisper answered ${res.status}`, { reason: 'error' });
-  const body = (await res.json().catch(() => null)) as { text?: unknown; duration?: unknown; language?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as { text?: unknown; duration?: unknown; language?: unknown; language_probability?: unknown } | null;
   if (!body || typeof body.text !== 'string') throw new ExtractError('TRANSCRIPTION_FAILED', 'invalid whisper answer');
-  const c = capText(body.text.trim());
-  return { text: c.text, meta: { duration_s: typeof body.duration === 'number' ? body.duration : null, language: typeof body.language === 'string' ? body.language : null, truncated: c.truncated } };
+  const text = body.text.trim();
+  // A voice note with nothing heard says so (TER-1096): an empty "transcript" read as a bubble with no
+  // text and left the concierge guessing. A video may well have no speech, and stays ready.
+  if (kind === 'audio' && text === '') throw new ExtractError('TRANSCRIPTION_FAILED', 'no speech recognized', { reason: 'no_speech' });
+  const c = capText(text);
+  const language = typeof body.language === 'string' ? body.language : null;
+  const probability = typeof body.language_probability === 'number' ? body.language_probability : null;
+  return { text: c.text, meta: { duration_s: typeof body.duration === 'number' ? body.duration : null, language, language_probability: probability, truncated: c.truncated } };
 }
 
 /** The UTF-8 decode stays on this thread: linear and bounded by the upload size. A bad byte is an invalid attachment. */
@@ -117,6 +126,6 @@ export async function extract(kind: AttachmentKind, file: Buffer, mime: string, 
       return runInWorker(kind, file, zipBudget, { timeoutMs, heapMb: deps.heapMb ?? EXTRACT_WORKER_HEAP_MB, workerUrl: deps.workerUrl ?? defaultWorkerUrl() });
     case 'audio':
     case 'video':
-      return transcribe(file, mime, deps);
+      return transcribe(kind, file, mime, deps);
   }
 }

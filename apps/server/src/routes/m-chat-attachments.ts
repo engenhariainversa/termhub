@@ -23,7 +23,7 @@ export async function mobileChatAttachmentRoutes(app: FastifyInstance, repos: Re
     // Checked before the limiter, so an empty upload never spends one of the device's slots.
     if (!Buffer.isBuffer(request.body) || request.body.length === 0) throw badRequest('Arquivo vazio');
     if (!limiter.take(mobile.device.id)) throw new HttpError(429, 'Muitos envios de arquivo; tente de novo em alguns minutos', 'RATE_LIMITED');
-    const attachment = await storeUpload(uploadDeps, request.scope.user, { name, projectId: project_id ?? null, body: request.body, log: request.log });
+    const attachment = await storeUpload(uploadDeps, request.scope.user, { name, projectId: project_id ?? null, body: request.body, log: request.log, acceptLanguage: request.headers['accept-language'] });
     return reply.code(201).send({ attachment });
   });
 

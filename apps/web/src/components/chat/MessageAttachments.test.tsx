@@ -157,6 +157,25 @@ describe('MessageAttachments', () => {
     }
   });
 
+  it('names the language a voice note was heard in when it is not the one on screen (TER-1096)', () => {
+    render(
+      <MessageAttachments
+        attachments={[
+          att({ id: 'v3', name: 'a.m4a', kind: 'audio', mime: 'audio/m4a', meta: { language: 'en' }, transcript: 'run the tests' }),
+          att({ id: 'v4', name: 'b.m4a', kind: 'audio', mime: 'audio/m4a', meta: { language: 'pt' }, transcript: 'roda os testes' }),
+        ]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Ver transcrição (inglês)' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ver transcrição' })).toBeTruthy();
+  });
+
+  it('a voice note with no speech says so instead of an empty transcription (TER-1096)', () => {
+    render(<MessageAttachments attachments={[att({ id: 'v5', name: 'a.m4a', kind: 'audio', status: 'failed', error_code: 'TRANSCRIPTION_FAILED', meta: { reason: 'no_speech' } })]} />);
+    expect(screen.getByText('falhou: nenhuma fala reconhecida no áudio')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'tentar de novo' })).toBeNull();
+  });
+
   it('says a voice note is still being transcribed, with no transcription toggle yet', () => {
     render(<MessageAttachments attachments={[att({ id: 'v2', name: 'audio.m4a', kind: 'audio', status: 'pending' })]} />);
 

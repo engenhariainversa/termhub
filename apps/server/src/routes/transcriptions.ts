@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { badRequest, unauthorized } from '../lib/errors.js';
+import { languageHints } from '../lib/whisper.js';
 import { TRANSCRIPTION_MAX_BYTES, isTranscriptionEnabled, type TranscriptionService } from '../terminal/transcription.js';
 
 const idParam = z.object({ id: z.string().uuid() });
@@ -23,7 +24,7 @@ export async function transcriptionRoutes(app: FastifyInstance, deps: { transcri
     if (!Buffer.isBuffer(request.body) || !mime.startsWith('audio/')) throw badRequest('Envie o áudio como corpo binário (content-type audio/*)');
     if (request.body.length === 0) throw badRequest('Áudio vazio');
     const { seconds } = createQuery.parse(request.query);
-    const job = deps.transcriptions.start(request.user.id, request.body, mime, seconds ?? null);
+    const job = deps.transcriptions.start(request.user.id, request.body, mime, seconds ?? null, { hints: languageHints(request.headers['accept-language'], request.user.locale) });
     return reply.code(202).send({ transcription: deps.transcriptions.view(job) });
   });
 

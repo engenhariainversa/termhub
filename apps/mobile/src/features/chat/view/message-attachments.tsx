@@ -5,7 +5,7 @@ import type { TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
 import { Icon } from '@/ui';
 import { ApiError } from '@/services/api/errors';
-import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize } from '../viewmodel/attachments';
+import { attachmentStatusText, canRetryAttachment, formatBytes, thumbSize, transcriptLanguage } from '../viewmodel/attachments';
 import { cachedAudio } from '../viewmodel/audio-cache';
 import { saveAttachment } from '../viewmodel/attachment-save';
 import { useChatStore } from '../viewmodel/useChatStore';
@@ -135,6 +135,7 @@ function AudioAttachment({ attachment, retrying, retryError, onRetry, tone, save
   const duration = metaDuration(a.meta) ?? (playback.duration > 0 ? playback.duration : null);
   const status = attachmentStatusText(a);
   const transcript = typeof a.transcript === 'string' && a.transcript.trim() ? a.transcript.trim() : null;
+  const language = transcriptLanguage(a);
 
   const toggle = async () => {
     if (playback.playing) {
@@ -185,7 +186,15 @@ function AudioAttachment({ attachment, retrying, retryError, onRetry, tone, save
       {transcript ? (
         <>
           <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen((o) => !o)} hitSlop={4}>
-            <Text className={`text-xs underline ${TONE[tone].muted}`}>{open ? t('Ocultar transcrição') : t('Ver transcrição')}</Text>
+            <Text className={`text-xs underline ${TONE[tone].muted}`}>
+              {language
+                ? open
+                  ? t('Ocultar transcrição ({{language}})', { language })
+                  : t('Ver transcrição ({{language}})', { language })
+                : open
+                  ? t('Ocultar transcrição')
+                  : t('Ver transcrição')}
+            </Text>
           </Pressable>
           {open ? <Text className={`text-sm ${TONE[tone].text}`}>{transcript}</Text> : null}
         </>

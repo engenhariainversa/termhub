@@ -1,6 +1,7 @@
 import type { AttachmentRow, ChatAttachmentsRepo } from '../../db/repositories/chat-attachments.js';
 import { ExtractError, type ExtractErrorCode, type extract as extractFn } from './extract.js';
 import type { AttachmentStore } from './store.js';
+import { hintsOf } from '../../lib/whisper.js';
 
 /**
  * How many times a row is handed to a parser. Each run is marked on the row *before* the parse
@@ -69,7 +70,8 @@ export function createExtractionQueue(deps: QueueDeps): ExtractionQueue {
       } else {
         try {
           const file = await deps.store.read(row.user_id, row.id);
-          const result = await deps.extract(row.kind, file, row.mime, deps.whisper);
+          const whisper = isTranscription(row.kind) ? { ...deps.whisper, hints: hintsOf(row.meta) } : deps.whisper;
+          const result = await deps.extract(row.kind, file, row.mime, whisper);
           outcome = await deps.repo.setExtracted(row.id, result.text, result.meta);
         } catch (err) {
           if (err instanceof ExtractError && err.retryable && attempt < maxAttempts(row.kind)) {

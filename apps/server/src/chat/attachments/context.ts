@@ -41,9 +41,14 @@ const TRANSCRIPTION_REASON: Record<string, string> = {
   unreachable: 'o serviço de transcrição está fora do ar, então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo',
   error: 'o serviço de transcrição respondeu com erro, então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo',
 };
+/** TRANSCRIPTION_FAILED by `meta.reason` (TER-1096). */
+const TRANSCRIPTION_FAILED_REASON: Record<string, string> = {
+  no_speech: 'o serviço de transcrição não reconheceu nenhuma fala no áudio, então não há transcrição; diga isso à pessoa e sugira gravar de novo, mais perto do microfone',
+};
 /** Why a row failed, in words the model can repeat to the person. */
 export const failureReason = (row: AttachmentRow): string => {
-  const reason = row.error_code === 'TRANSCRIPTION_UNAVAILABLE' && typeof row.meta?.reason === 'string' ? TRANSCRIPTION_REASON[row.meta.reason] : undefined;
+  const table = row.error_code === 'TRANSCRIPTION_UNAVAILABLE' ? TRANSCRIPTION_REASON : row.error_code === 'TRANSCRIPTION_FAILED' ? TRANSCRIPTION_FAILED_REASON : null;
+  const reason = table && typeof row.meta?.reason === 'string' ? table[row.meta.reason] : undefined;
   return reason ?? FAILURE_REASON[row.error_code ?? ''] ?? 'erro desconhecido';
 };
 
@@ -89,7 +94,9 @@ function inlineTranscript(row: AttachmentRow): string | null {
   if (body.trim() === '') return '  (transcrição vazia: o áudio não tem fala reconhecível)';
   const end = pageEnd(body, 0, INLINE_TRANSCRIPT_CHARS);
   const rest = end < body.length ? `\n  (primeiros ${end} de ${body.length} caracteres; o resto com read_attachment offset=${end})` : '';
-  return `  Transcrição do áudio:\n${OPEN}\n${defuseMarkers(body.slice(0, end))}\n${CLOSE}${rest}`;
+  // The text stays in the language spoken (TER-1096); the model is told which, and answers in the person's.
+  const language = typeof row.meta?.language === 'string' && /^[a-z]{2,3}$/.test(row.meta.language) ? ` (idioma falado: ${row.meta.language})` : '';
+  return `  Transcrição do áudio${language}:\n${OPEN}\n${defuseMarkers(body.slice(0, end))}\n${CLOSE}${rest}`;
 }
 
 /**

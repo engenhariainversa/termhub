@@ -182,7 +182,7 @@ describe('extract: audio and video go to whisper', () => {
   it('posts the bytes with their MIME and keeps the transcript and duration', async () => {
     const fetch = ok({ text: ' olá ', language: 'pt', duration: 12.3 });
     const r = await extract('audio', Buffer.from('clip'), 'audio/ogg', { whisperUrl: 'http://whisper:8000', language: 'pt', fetch: fetch as unknown as typeof globalThis.fetch });
-    expect(r).toEqual({ text: 'olá', meta: { duration_s: 12.3, language: 'pt', truncated: false } });
+    expect(r).toEqual({ text: 'olá', meta: { duration_s: 12.3, language: 'pt', language_probability: null, truncated: false } });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('http://whisper:8000/transcribe?language=pt');
     expect(init.method).toBe('POST');
@@ -199,7 +199,20 @@ describe('extract: audio and video go to whisper', () => {
   it('video is sent the same way (whisper decodes the audio track)', async () => {
     const fetch = ok({ text: 'fala', duration: 1 });
     await extract('video', Buffer.from('mp4'), 'video/mp4', { whisperUrl: 'http://whisper:8000', language: null, fetch: fetch as unknown as typeof globalThis.fetch });
-    expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe('http://whisper:8000/transcribe');
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe('http://whisper:8000/transcribe?language=auto');
+  });
+  it('lets whisper detect the language, with the client and account languages as hints (TER-1096)', async () => {
+    const fetch = ok({ text: ' hello there ', language: 'en', language_probability: 0.97, duration: 2 });
+    const r = await extract('audio', Buffer.from('clip'), 'audio/ogg', { whisperUrl: 'http://whisper:8000', language: 'auto', hints: ['en', 'pt'], fetch: fetch as unknown as typeof globalThis.fetch });
+    // The text as spoken, never translated, with the language whisper heard.
+    expect(r).toEqual({ text: 'hello there', meta: { duration_s: 2, language: 'en', language_probability: 0.97, truncated: false } });
+    expect((fetch.mock.calls[0] as unknown as [string])[0]).toBe('http://whisper:8000/transcribe?language=auto&hints=en%2Cpt');
+  });
+  it('a voice note with no speech fails as TRANSCRIPTION_FAILED / no_speech; a silent video stays ready (TER-1096)', async () => {
+    const silent = { text: '', language: null, duration: 3, no_speech: true };
+    await expect(extract('audio', Buffer.from('x'), 'audio/ogg', { whisperUrl: 'http://whisper:8000', language: 'auto', fetch: ok(silent) as unknown as typeof globalThis.fetch })).rejects.toMatchObject({ code: 'TRANSCRIPTION_FAILED', reason: 'no_speech', retryable: false });
+    const v = await extract('video', Buffer.from('x'), 'video/mp4', { whisperUrl: 'http://whisper:8000', language: 'auto', fetch: ok(silent) as unknown as typeof globalThis.fetch });
+    expect(v.text).toBe('');
   });
   it('no whisper → TRANSCRIPTION_UNAVAILABLE; unreachable or 5xx → UNAVAILABLE; 422 or a bad answer → TRANSCRIPTION_FAILED', async () => {
     const w = (fetch: unknown) => ({ whisperUrl: 'http://whisper:8000', language: 'pt', fetch: fetch as typeof globalThis.fetch });
@@ -251,7 +264,7 @@ describe('extract: whisper over HTTP with the shared secret', () => {
   it('an .m4a with the right secret comes back transcribed', async () => {
     const clip = Buffer.alloc(224 * 1024, 1);
     const r = await extract('audio', clip, 'audio/mp4', { whisperUrl: url, language: 'pt', whisperSecret: SECRET });
-    expect(r).toEqual({ text: 'transcrito', meta: { duration_s: 4.2, language: 'pt', truncated: false } });
+    expect(r).toEqual({ text: 'transcrito', meta: { duration_s: 4.2, language: 'pt', language_probability: null, truncated: false } });
     expect(seen.at(-1)).toEqual({ auth: `Bearer ${SECRET}`, type: 'audio/mp4', path: '/transcribe?language=pt', bytes: clip.length });
   });
 

@@ -293,5 +293,7 @@
   "Copiar código": "Copy code",
   "Copiado ✓": "Copied ✓",
   "Código copiado": "Code copied",
-  "Não foi possível copiar o código": "Could not copy the code"
+  "Não foi possível copiar o código": "Could not copy the code",
+  "Ver transcrição ({{language}})": "Show transcript ({{language}})",
+  "Ocultar transcrição ({{language}})": "Hide transcript ({{language}})"
 }
