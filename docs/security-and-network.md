@@ -115,7 +115,7 @@ The server cannot send the agent an arbitrary shell command. It can only call a 
 - read the local AI CLI login to show usage limits (see section 5);
 - read `gh auth token`, only when you create a GitHub integration from the chat, and only after you confirm the card;
 - scan the repository's `docs/` for the chat's memory;
-- read one file you asked the chat to show you (`file.share`, agent 0.32.0+): only the chat's kinds (images, PDF, Word, Excel, audio, video, text), at most 25 MB, under your home or the temp dirs and never in a dot folder, and never a secret (keys, `.env`, credentials, keychains, `~/.ssh`, the AI CLIs' config dirs) — the agent checks the path and the file a link resolves to. From the chat it runs only after you confirm the card or trust that folder; an agent tab shares only from its own folder;
+- read one file you asked the chat to show you (`file.share`, agent 0.34.0+): only the chat's kinds (images, PDF, Word, Excel, audio, video, text), at most 25 MB, under your home or the temp dirs and never in a dot folder, and never a secret (keys, `.env`, credentials, keychains, `~/.ssh`, the AI CLIs' config dirs) — the agent checks the path and the file a link resolves to. From the chat it runs only after you confirm the card or trust that folder; an agent tab shares only from its own folder;
 - iOS Simulator actions (macOS).
 
 A terminal tab is a real shell. Whoever can type into that tab — you in the browser, or the chat once you approve it — can run anything the user can run. The controls in section 5 decide **who** can type.

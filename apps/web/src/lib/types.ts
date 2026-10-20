@@ -164,6 +164,8 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
+  permission_hint: boolean;
   /**
    * TER-1017: how the agent proves itself. `key` = device key paired through a single-use token; `bearer` =
    * the permanent token of agents paired before (valid until the machine is paired again); null = not paired.
@@ -1570,7 +1572,7 @@ interface TabQuestionBase {
   auto_decision?: AutoDecision | null;
 }
 export type TabQuestionChoice = TabQuestionBase & { kind: 'choice'; payload: { questions: TabQuestionItem[]; agent?: 'codex' }; answer: ChoiceAnswer | null };
-export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string }; answer: PermissionAnswer | null };
+export type TabQuestionPermission = TabQuestionBase & { kind: 'permission'; payload: { tool_name: string; agent?: 'codex'; question?: string; hint?: string }; answer: PermissionAnswer | null };
 /**
  * A question an agent in a tab asked (spec 2026-09-25): shown as a card in the project's chat and
  * answered from there. Plain text only — never render any of it as HTML: it is what an agent wrote.

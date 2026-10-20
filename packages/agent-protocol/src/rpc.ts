@@ -388,7 +388,7 @@ export const RPC = {
     60_000,
   ),
   /**
-   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.32.0, capability
+   * One chunk of a file the chat publishes in the conversation (TER-1086, since agent 0.34.0, capability
    * `file_share`). `path` is absolute or `~/…`. The allowed folders are `roots` and, unless `only_roots`,
    * the agent's own (home, the temp dirs, `file-read-roots`). Checked on every chunk, on the path as asked
    * and on the resolved file: under a folder, no dot segment below it, not a secret, one of
@@ -437,6 +437,8 @@ export const RPC = {
     15_000,
   ),
   'hooks.uninstall': def(z.object({ claude_dirs: z.array(machinePath).max(16).optional() }), z.object({ removed: z.boolean() }), 15_000),
+  /** The machine's opt-in to permission hints (TER-614): writes or removes ~/.termhub/permission-hint; since agent 0.33.0. */
+  'hooks.hint': def(z.object({ enabled: z.boolean() }), z.object({ enabled: z.boolean() })),
   /**
    * What the monitor hooks look like here (`hooksStatus` in @termhub/machine-ops, TER-1023): states only,
    * never a file's content or the token. `claude_dirs` as in `hooks.install`. Since agent 0.21.0.

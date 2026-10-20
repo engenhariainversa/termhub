@@ -58,6 +58,7 @@ export const handlers: Handlers = {
   'file.share': fileShare.share,
   'hooks.install': hooks.install,
   'hooks.uninstall': hooks.uninstall,
+  'hooks.hint': hooks.hint,
   'hooks.status': hooks.status,
   'agent.update': update.update,
   'agent.uninstall': uninstall.uninstall,

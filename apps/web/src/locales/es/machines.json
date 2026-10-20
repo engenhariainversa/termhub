@@ -461,5 +461,7 @@
   "qualquer máquina da rede": "cualquier máquina de la red",
   "Rede": "Red",
   "Rede da máquina": "Red de la máquina",
-  "Wi-Fi": "Wi-Fi"
+  "Wi-Fi": "Wi-Fi",
+  "Mostrar o que a permissão aprova": "Mostrar lo que aprueba el permiso",
+  "O card de permissão do Claude passa a mostrar o começo do comando ou o nome do arquivo, e só aprova o diálogo que mostra esse trecho. Para isso o pedido de permissão sai inteiro da máquina; o termhub guarda só o trecho, com tokens, senhas e chaves trocados por •••. O filtro não pega todo segredo possível: ligue só se aceitar isso.": "La tarjeta de permiso de Claude pasa a mostrar el comienzo del comando o el nombre del archivo, y solo aprueba el diálogo que muestra ese fragmento. Para eso, la solicitud de permiso sale completa de la máquina; termhub guarda solo el fragmento, con tokens, contraseñas y claves reemplazados por •••. El filtro no detecta todos los secretos posibles: actívalo solo si lo aceptas."
 }
