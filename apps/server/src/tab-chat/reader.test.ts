@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Machine, Tab } from '../db/repositories/types.js';
-import { availabilityOf, decodeCursor, encodeCursor, readForward, readPage, type Rpc } from './reader.js';
+import { CODEX_TRANSCRIPT_TYPES } from './codex-transcript.js';
+import { availabilityOf, decodeCursor, emptyReasonOf, encodeCursor, readForward, readPage, type Rpc } from './reader.js';
 import { TRANSCRIPT_TYPES } from './transcript.js';
 
 const SID = '11111111-2222-4333-8444-555555555555';
 const OTHER_SID = '99999999-2222-4333-8444-555555555555';
+const CODEX_SID = '01a15a42-e6fc-73d2-aca3-d44f5f84dd45';
+const CODEX_PATH = `/h/.codex/sessions/2026/10/20/rollout-2026-10-20T14-01-36-${CODEX_SID}.jsonl`;
+const codexTab = (o: Partial<Tab> = {}) => tab({ state_tool: 'codex', agent_session_id: CODEX_SID, agent_transcript_path: CODEX_PATH, ...o });
+const BOTH = ['transcript', 'transcript.codex'];
 const tab = (o: Partial<Tab> = {}) =>
   ({ id: 't1', kind: 'terminal', tmux_session: 's', state: 'working', state_tool: 'claude', agent_session_id: SID, agent_transcript_path: `/h/.claude/projects/-w/${SID}.jsonl`, ...o }) as Tab;
 const agentOf = (online: boolean, caps: string[] | null) => ({ isOnline: () => online, capabilities: () => caps });
@@ -18,7 +23,14 @@ describe('availabilityOf', () => {
     ['offline', tab(), { type: 'agent' }, agentOf(false, null)],
     ['agent_outdated', tab(), { type: 'agent' }, agentOf(true, ['claude'])],
     ['agent_outdated', tab(), { type: 'agent' }, agentOf(true, null)],
-    ['unsupported_tool', tab({ state_tool: 'codex' }), { type: 'agent' }, agentOf(true, ['transcript'])],
+    ['unsupported_tool', tab({ state_tool: 'cursor' }), { type: 'agent' }, agentOf(true, BOTH)],
+    // Codex (TER-1095): read by an agent that knows its sessions
+    ['agent_outdated', codexTab(), { type: 'agent' }, agentOf(true, ['transcript'])],
+    ['ready', codexTab(), { type: 'agent' }, agentOf(true, BOTH)],
+    ['no_session', codexTab({ agent_transcript_path: null }), { type: 'agent' }, agentOf(true, BOTH)],
+    // a Claude session left in a tab that now runs Codex, and the other way around, are not read
+    ['no_session', tab({ state_tool: 'codex' }), { type: 'agent' }, agentOf(true, BOTH)],
+    ['no_session', codexTab({ state_tool: 'claude' }), { type: 'agent' }, agentOf(true, BOTH)],
     ['no_session', tab({ agent_transcript_path: null }), { type: 'agent' }, agentOf(true, ['transcript'])],
     ['no_session', tab({ agent_session_id: null }), { type: 'agent' }, agentOf(true, ['transcript'])],
     ['no_session', tab({ agent_session_id: 'not-a-uuid' }), { type: 'agent' }, agentOf(true, ['transcript'])],
@@ -112,5 +124,36 @@ describe('readForward', () => {
   it('a missing transcript reads as missing, with the cursor kept', async () => {
     const f = await readForward(machine, tab(), { session: SID, offset: 10 }, async () => ({ status: 'missing', lines: [], start: 0, end: 0, size: 0 }));
     expect(f).toMatchObject({ missing: true, items: [], live: `${SID}.10`, more: false });
+  });
+});
+
+describe('a Codex session (TER-1095)', () => {
+  const item = (o: object) => JSON.stringify({ timestamp: '2026-10-20T17:00:00.000Z', type: 'event_msg', payload: { type: 'item_completed', item: o } });
+
+  it('is read with its own line types and parser', async () => {
+    const rpc = vi.fn<Rpc>(async () => ok({ lines: [item({ type: 'UserMessage', id: 'u1', content: [{ type: 'text', text: 'oi' }] }), item({ type: 'AgentMessage', id: 'a1', content: [{ type: 'Text', text: 'olá' }], phase: 'final_answer' })], start: 0, end: 300, size: 300 }));
+    const page = await readPage(machine, codexTab(), null, rpc);
+    expect(rpc).toHaveBeenCalledWith(machine, expect.objectContaining({ transcript_path: CODEX_PATH, session_id: CODEX_SID, types: [...CODEX_TRANSCRIPT_TYPES] }));
+    expect(page.items).toMatchObject([
+      { kind: 'user', id: 'u1', text: 'oi' },
+      { kind: 'assistant', id: 'a1', text: 'olá' },
+    ]);
+    expect(page).toMatchObject({ live: `${CODEX_SID}.300`, degraded: false, mode: null });
+
+    const forward = vi.fn<Rpc>(async () => ok({ lines: [item({ type: 'AgentMessage', id: 'a2', content: [{ type: 'Text', text: 'mais' }] })], start: 300, end: 400, size: 400 }));
+    const f = await readForward(machine, codexTab(), { session: CODEX_SID, offset: 300 }, forward);
+    expect(forward).toHaveBeenCalledWith(machine, expect.objectContaining({ direction: 'forward', types: [...CODEX_TRANSCRIPT_TYPES] }));
+    expect(f.items).toMatchObject([{ kind: 'assistant', id: 'a2', text: 'mais' }]);
+  });
+
+  it('says the hooks are not trusted when Codex never reported a session for that reason', () => {
+    const empty = { items: [], before: null };
+    const none = codexTab({ agent_session_id: null, agent_transcript_path: null });
+    expect(emptyReasonOf(none, 'no_session', empty, true, 'codex_untrusted')).toBe('codex_untrusted');
+    expect(emptyReasonOf(none, 'no_session', empty, true, 'installed')).toBe('not_reported');
+    expect(emptyReasonOf(none, 'no_session', empty, true, 'missing')).toBe('no_hooks');
+    // a Claude tab never reads as a Codex trust problem
+    expect(emptyReasonOf(tab({ agent_session_id: null }), 'no_session', empty, true, 'codex_untrusted')).toBe('not_reported');
+    expect(emptyReasonOf(codexTab(), 'no_session', empty, true, 'codex_untrusted')).toBe('transcript_missing');
   });
 });

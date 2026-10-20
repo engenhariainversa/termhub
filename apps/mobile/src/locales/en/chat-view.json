@@ -265,5 +265,13 @@
   "definir repositório": "set repository",
   "Ver ações": "Show actions",
   "A contagem só corre com o termhub em foco.": "The countdown only runs while termhub is in focus.",
-  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similarity {{score}} · thresholds {{high}} / {{low}}"
+  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similarity {{score}} · thresholds {{high}} / {{low}}",
+  "Copiado": "Copied",
+  "Não foi possível copiar": "Could not copy",
+  "Copiar": "Copy",
+  "Compartilhar": "Share",
+  "Copiar link": "Copy link",
+  "Compartilhar link": "Share link",
+  "Abrir link": "Open link",
+  "Respondendo a {{author}}": "Replying to {{author}}"
 }

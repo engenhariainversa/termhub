@@ -488,4 +488,11 @@
   "Contexto": "Context",
   "Nenhum subagente rodando agora.": "No subagent running right now.",
   "Atalhos": "Shortcuts",
-  "Memória": "Memory"}
+  "Memória": "Memory",
+  "Copiado": "Copied",
+  "Copiar": "Copy",
+  "Copiar link": "Copy link",
+  "Abrir link": "Open link",
+  "Mais ações da mensagem": "More message actions",
+  "Ações da mensagem": "Message actions"
+}
