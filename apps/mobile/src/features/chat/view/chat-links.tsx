@@ -19,7 +19,7 @@ export function openWebLink(url: string): void {
 }
 
 /** A long press on a link: the system's share sheet with the URL, which offers "Copiar" on iOS and
- *  Android (the app has no clipboard module, and adding one is a new store build). */
+ *  Android. */
 export function shareLink(url: string): void {
   if (isWebUrl(url)) void Share.share({ message: url }).catch(() => undefined);
 }

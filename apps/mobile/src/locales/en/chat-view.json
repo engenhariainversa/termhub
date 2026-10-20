@@ -276,5 +276,9 @@
   "Copiar link": "Copy link",
   "Compartilhar link": "Share link",
   "Abrir link": "Open link",
-  "Respondendo a {{author}}": "Replying to {{author}}"
+  "Respondendo a {{author}}": "Replying to {{author}}",
+  "Copiar código": "Copy code",
+  "Copiado ✓": "Copied ✓",
+  "Código copiado": "Code copied",
+  "Não foi possível copiar o código": "Could not copy the code"
 }
