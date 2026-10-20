@@ -266,10 +266,16 @@
   "Ver ações": "Ver acciones",
   "A contagem só corre com o termhub em foco.": "La cuenta atrás solo corre con termhub en primer plano.",
   "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similitud {{score}} · umbrales {{high}} / {{low}}",
+  "Copiado": "Copiado",
+  "Não foi possível copiar": "No se pudo copiar",
   "Copiar": "Copiar",
+  "Compartilhar": "Compartir",
+  "Copiar link": "Copiar enlace",
+  "Compartilhar link": "Compartir enlace",
+  "Abrir link": "Abrir enlace",
+  "Respondendo a {{author}}": "Respondiendo a {{author}}",
   "Copiar código": "Copiar código",
   "Copiado ✓": "Copiado ✓",
   "Código copiado": "Código copiado",
-  "Não foi possível copiar": "No se pudo copiar",
   "Não foi possível copiar o código": "No se pudo copiar el código"
 }

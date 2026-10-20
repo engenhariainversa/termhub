@@ -550,12 +550,49 @@ describe('ingestHookEvent — the tab chat is told (spec 2026-10-01 tab chat §5
     expect(onTabEvent).toHaveBeenCalledWith('t1');
   });
 
-  it('a Codex event, or a session of no tab, does not', async () => {
+  it('a Codex event calls it too (TER-1095): its conversation is read the same way', async () => {
+    const { r } = repos(tab({ state: 'waiting_input' }));
+    const onTabEvent = vi.fn();
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    expect(onTabEvent).toHaveBeenCalledWith('t1');
+  });
+
+  it('a Cursor event, or a session of no tab, does not', async () => {
     const onTabEvent = vi.fn();
     const { r } = repos(tab({ state: 'waiting_input' }));
-    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event: { hook_event_name: 'UserPromptSubmit', prompt: 'x' } }, undefined, onTabEvent);
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'cursor', session: 'th-t1', event: { hook_event_name: 'beforeSubmitPrompt' } }, undefined, onTabEvent);
     const none = { tabs: { findByTmuxSession: vi.fn(async () => undefined) } } as unknown as Repositories;
     await ingestHookEvent(none, log, { machineId: 'm1', tool: 'claude', session: 'th-x', event: { hook_event_name: 'Stop' } }, undefined, onTabEvent);
     expect(onTabEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestHookEvent — the Codex session a tab runs (TER-1095)', () => {
+  const SID = '01a15a47-61e1-79b1-90a3-ab914bf01695';
+  const PATH = `/home/p/.codex/sessions/2026/10/20/rollout-2026-10-20T14-06-29-${SID}.jsonl`;
+  // the fields codex-cli 0.159.x sends before hook_event_name (spec 2026-09-29 codex monitor hooks §2)
+  const hook = (event: object) => ({ machineId: 'm1', tool: 'codex' as const, session: 'th-t1', event: { session_id: SID, turn_id: 't1', transcript_path: PATH, cwd: '/w', ...event } });
+
+  it('keeps the session id and rollout path a prompt or a turn end reports', async () => {
+    for (const ev of [{ hook_event_name: 'UserPromptSubmit', prompt: 'x' }, { hook_event_name: 'Stop', last_assistant_message: 'ok' }]) {
+      const { r, setAgentFields } = repos(tab({ state: 'waiting_input', state_tool: 'codex' }));
+      await ingestHookEvent(r, log, hook(ev));
+      expect(setAgentFields).toHaveBeenCalledWith('t1', { agent_session_id: SID, agent_transcript_path: PATH });
+    }
+  });
+
+  it('writes nothing when the session is the same, for a notify, a subagent or a path that is not a rollout', async () => {
+    const same = repos(tab({ state: 'working', state_tool: 'codex', agent_session_id: SID, agent_transcript_path: PATH }));
+    await ingestHookEvent(same.r, log, hook({ hook_event_name: 'Stop', last_assistant_message: 'ok' }));
+    expect(same.setAgentFields).not.toHaveBeenCalled();
+    for (const event of [
+      { type: 'agent-turn-complete', 'thread-id': SID, 'last-assistant-message': 'ok' },
+      { session_id: SID, transcript_path: PATH, agent_id: 'sub', hook_event_name: 'Stop', last_assistant_message: 'ok' },
+      { session_id: SID, transcript_path: `/home/p/.claude/projects/-w/${SID}.jsonl`, hook_event_name: 'Stop', last_assistant_message: 'ok' },
+    ]) {
+      const { r, setAgentFields } = repos(tab({ state: 'working', state_tool: 'codex' }));
+      await ingestHookEvent(r, log, { machineId: 'm1', tool: 'codex', session: 'th-t1', event });
+      expect(setAgentFields).not.toHaveBeenCalled();
+    }
   });
 });

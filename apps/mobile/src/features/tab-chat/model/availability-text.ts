@@ -5,8 +5,8 @@ import { t, tk } from '@/i18n';
 const TEXT: Record<string, string> = {
   offline: tk('Máquina offline'),
   agent_outdated: tk('Atualize o agente desta máquina'),
-  no_session: tk('Sem sessão do Claude nesta aba'),
-  unsupported_tool: tk('Só Claude Code por enquanto'),
+  no_session: tk('Nenhuma sessão informada nesta aba'),
+  unsupported_tool: tk('Só Claude Code e Codex por enquanto'),
   unsupported_machine: tk('Esta máquina não usa o agente do termhub'),
 };
 

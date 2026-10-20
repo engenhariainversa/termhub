@@ -2,7 +2,7 @@ import { open, readdir, realpath, stat, type FileHandle } from 'node:fs/promises
 import os from 'node:os';
 import path from 'node:path';
 import { TRANSCRIPT_LINE_MAX_BYTES, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
-import { expandHome, isClaudeTranscriptPath } from '@termhub/machine-ops';
+import { expandHome, isClaudeTranscriptPath, isCodexTranscriptPath } from '@termhub/machine-ops';
 import { RpcFailure } from '../exec.js';
 
 /** The most of the file one call reads; a line longer than this is skipped. */
@@ -79,11 +79,29 @@ async function locate(given: string, sessionId: string): Promise<string | null> 
   return best?.real ?? null;
 }
 
-/** Lines of a Claude Code transcript by byte range. Nothing of a line is ever logged. */
+/** A Codex session (TER-1095): only the path its hooks reported, and a link only to another Codex session file. */
+async function locateCodex(given: string, sessionId: string): Promise<string | null> {
+  let real: string;
+  try {
+    real = await realpath(given);
+  } catch {
+    return null;
+  }
+  if (!isCodexTranscriptPath(real, sessionId)) throw new RpcFailure('invalid', 'not a transcript path');
+  try {
+    return (await stat(real)).isFile() ? real : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Lines of a Claude Code or Codex transcript by byte range. Nothing of a line is ever logged. */
 export async function read(params: RpcParams<'transcript.read'>): Promise<RpcResult<'transcript.read'>> {
   const given = expandHome(params.transcript_path, os.homedir());
-  if (!isClaudeTranscriptPath(given, params.session_id)) throw new RpcFailure('invalid', 'not a transcript path');
-  const file = await locate(given, params.session_id);
+  let file: string | null;
+  if (isClaudeTranscriptPath(given, params.session_id)) file = await locate(given, params.session_id);
+  else if (isCodexTranscriptPath(given, params.session_id)) file = await locateCodex(given, params.session_id);
+  else throw new RpcFailure('invalid', 'not a transcript path');
   if (!file) return { status: 'missing', lines: [], start: 0, end: 0, size: 0 };
 
   const fh = await open(file, 'r');
