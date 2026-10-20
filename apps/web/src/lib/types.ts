@@ -798,6 +798,41 @@ export interface NetworkCheck {
   error: string | null;
 }
 
+/** One interface of a machine's network (TER-1080). */
+export interface MachineNetInterface {
+  name: string;
+  mac: string | null;
+  kind: 'ethernet' | 'wifi' | 'other' | null;
+  addresses: { family: 'ipv4' | 'ipv6'; address: string; cidr: string | null }[];
+}
+
+/** Another machine of the owner and whether it could wake this one now (Wake-on-LAN). */
+export interface WakeRelay {
+  id: string;
+  name: string;
+  online: boolean;
+  capable: boolean;
+  same_network: boolean;
+}
+
+/** GET /machines/:id/network: the network as the agent last reported it (null until an agent 0.30.0+ did). */
+export interface MachineNetworkInfo {
+  network: { hostname: string; default_interface: string | null; gateway: string | null; interfaces: MachineNetInterface[] } | null;
+  updated_at: string | null;
+  online: boolean;
+  relays: WakeRelay[];
+}
+
+/** POST /machines/:id/wake */
+export interface WakeResult {
+  machine_id: string;
+  via: { id: string; name: string };
+  macs: string[];
+  broadcasts: string[];
+  sent: number;
+  warnings: ('wifi' | 'macos')[];
+}
+
 export interface MonitorItem {
   tab: Tab;
   project: Project;
@@ -1019,6 +1054,12 @@ export interface AiLoginStatusRow {
   checked_at: string | null;
   /** the login can be redone from the modal (Claude/Codex on an agent machine with the `ai_login` capability) */
   supported: boolean;
+  /** TER-1079: when the CLI's login expires, as its own notice told; null = unknown. Absent from an older server. */
+  login_expires_at?: string | null;
+  /** still logged in, and expiring within the person's warning window */
+  expires_soon?: boolean;
+  /** whole days left, rounded up */
+  expires_in_days?: number | null;
 }
 
 /** POST /ai-accounts/:id/login */
@@ -1277,8 +1318,13 @@ export interface ChatAction {
 export interface AutoDecision {
   reason: string | null;
   sources: { ref: string; question: string | null; answer: string | null }[];
-  /** `'automation'` on a question card answered by automatic board work: the reason is shown translated. */
-  by?: TabQuestionAutoAnswer['by'];
+  /** `'automation'` on a question card answered by automatic board work, `'automation_permission'` on a
+   *  permission it allowed by the project's rules (TER-974): the reason is shown translated. */
+  by?: TabQuestionAutoAnswer['by'] | 'automation_permission';
+  /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
+   *  thresholds at that moment. Absent from an older server and on an action card. */
+  score?: number;
+  thresholds?: AutoThresholdPair;
 }
 
 /** Mirrors the server's `SubagentStatus` (apps/server/src/chat/stream.ts). */
@@ -1432,7 +1478,8 @@ export type TabQuestionAnswer = ChoiceAnswer | PermissionAnswer;
  * indexes (the mapping is done server-side); `text` is set instead for a free-text past answer. */
 export interface TabQuestionSuggestionItem {
   question_index: number;
-  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2). */
+  /** `""` on a concierge suggestion that cited no decision (spec 2026-09-26 concierge memory §3.2), and
+   *  on one backed by a concierge note instead of a past decision (TER-642: `sources` is `['note:<id>']`). */
   decision_id: string;
   similarity: number;
   selected: number[];
@@ -1449,6 +1496,23 @@ export interface TabQuestionSuggestion {
   items: TabQuestionSuggestionItem[];
 }
 
+/** The similarity thresholds of an automatic answer (TER-642), cosine 0.5–1: from `high` it is sent at
+ * once, from `low` suggested and sent when its countdown runs out, below `low` nothing. */
+export interface AutoThresholdPair {
+  high: number;
+  low: number;
+}
+/** Mirrors the server's `AutoThresholdsView`: the thresholds in force for this person, where they come
+ * from (`manual`: pinned by hand; `calibrated`: from their own answers; `default`: too little history),
+ * the defaults, how many of their answers calibration has seen and how many it needs. */
+export interface AutoThresholds extends AutoThresholdPair {
+  source: 'manual' | 'calibrated' | 'default';
+  defaults: AutoThresholdPair;
+  samples: number;
+  min_samples: number;
+  calibrated_at: string | null;
+}
+
 /** A countdown that sends `answer` by itself at `due_at` unless the person cancels it (spec 2026-09-26
  * concierge memory §6). `by: 'memory'` is a near-verbatim repeat, `'concierge'` the concierge's call,
  * `'automation'` the option the agent recommended in a tab with an automatic run (agentic board D18). */
@@ -1462,6 +1526,16 @@ export interface TabQuestionAutoAnswer {
   error_code?: string;
   decided_by?: string;
   claimed_at?: string;
+  // TER-642, all absent from an older server. `score`/`thresholds`/`band` say what led to an answer
+  // backed by memory (`band` 'high': sent at once, no real countdown; 'mid': after the countdown).
+  // `focus`: the countdown only runs while termhub is in focus; `paused` with `remaining_ms` left while
+  // it is not — `due_at` then means nothing until the server republishes the card with a fresh one.
+  score?: number;
+  thresholds?: AutoThresholdPair;
+  band?: 'high' | 'mid';
+  focus?: boolean;
+  paused?: boolean;
+  remaining_ms?: number;
 }
 
 interface TabQuestionBase {
@@ -1525,11 +1599,18 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default. Absent from an older server. */
+  client_context?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
   available: boolean;
   count: number;
   notes: number;
+  /** TER-642; all three absent from an older server. `auto_delay_seconds` is the countdown of a
+   *  suggested answer, `focus_beat_seconds` how often a screen in focus says so (`POST /chat/focus`). */
+  auto_thresholds?: AutoThresholds;
+  auto_delay_seconds?: number;
+  focus_beat_seconds?: number;
 }
 
 /** "Anotações do concierge" (spec D12/§8): one `record_decision` note, as the list shows it —
@@ -1747,6 +1828,18 @@ export interface DevicesSummary {
 export type ApiTokenScope = 'read' | 'tasks' | 'terminals' | 'memory';
 
 /** Personal API token as the server lists it (never the secret). */
+/** One web session of the signed-in person (GET /auth/sessions). */
+export interface WebSession {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  expires_at: string;
+  ip: string | null;
+  user_agent: string | null;
+  /** the session of this very browser */
+  current: boolean;
+}
+
 export interface ApiToken {
   id: string;
   user_id: string;
@@ -1918,6 +2011,31 @@ export interface TabChatPage {
   degraded: boolean;
   questions: TabQuestion[];
   suggestions: TabSuggestion[];
+  /** Why there is no history (TER-1091): `no_hooks`, `not_reported`, `transcript_missing`, `new_session` or
+   *  `no_agent` (TER-1094: a plain terminal, no AI CLI in front); null otherwise. The web shows `no_agent`. */
+  empty_reason?: string | null;
+}
+
+/** One account "Iniciar sessão" can start a tab's agent with (TER-1094). `provider`: `claude` or `chatgpt` (Codex). */
+export interface TabAgentChoice {
+  account_id: string;
+  label: string;
+  provider: string;
+  model: string | null;
+}
+
+/** `GET tab-chat/:id/agent`: the choices, and the account picked without asking (null = the person chooses). */
+export interface TabAgentOptions {
+  choices: TabAgentChoice[];
+  suggested: string | null;
+}
+
+/** `POST tab-chat/:id/agent`: where the agent started (this tab, or a new one of the same project and machine). */
+export interface StartTabAgentResult {
+  tab_id: string;
+  new_tab: boolean;
+  account: { id: string; label: string };
+  provider: string;
 }
 
 export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';

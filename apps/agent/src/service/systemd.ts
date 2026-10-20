@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { agentEnv, run } from '../exec.js';
+import { PROXY_ENV_KEYS, proxyEnvFrom, writeServiceFile, type ProxyEnv } from '../proxy.js';
 
 export const UNIT_NAME = 'termhub-agent';
 
@@ -11,7 +12,27 @@ export interface UnitOptions {
   logPath?: string;
   /** PATH to write into the unit; defaults to the one the agent composes for child processes. */
   pathEnv?: string;
+  /** Proxy/CA variables to carry into the service (`HTTPS_PROXY`, `NO_PROXY`, `NODE_EXTRA_CA_CERTS`, …). */
+  env?: ServiceEnv;
 }
+
+export type ServiceEnv = ProxyEnv;
+
+/** `Environment="KEY=value"` with systemd's quoting: `\` and `"` escaped, `%` doubled (it starts a specifier). */
+function environmentLine(key: string, value: string): string {
+  return `Environment="${key}=${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%/g, '%%')}"`;
+}
+
+/** The proxy/CA variables an installed unit sets, read back from the lines `environmentLine` writes. */
+function unitServiceEnv(unit: string): ServiceEnv {
+  const env: ServiceEnv = {};
+  for (const key of PROXY_ENV_KEYS) {
+    const m = new RegExp(`^Environment="${key}=(.*)"$`, 'm').exec(unit);
+    if (m) env[key] = m[1]!.replace(/%%/g, '%').replace(/\\(["\\])/g, '$1');
+  }
+  return env;
+}
+
 
 /**
  * A systemd user unit that runs `<node> <script> run`, restarting on failure but never after a
@@ -25,7 +46,7 @@ export interface UnitOptions {
  * again. macOS needs no equivalent: launchd does not kill the tmux server tmux daemonised away
  * from the job.
  */
-export function renderUnit({ node, script, logPath, pathEnv }: UnitOptions): string {
+export function renderUnit({ node, script, logPath, pathEnv, env = {} }: UnitOptions): string {
   const lines = [
     '[Unit]',
     'Description=termhub agent',
@@ -39,6 +60,10 @@ export function renderUnit({ node, script, logPath, pathEnv }: UnitOptions): str
     'RestartPreventExitStatus=78',
     `Environment=PATH=${pathEnv ?? agentEnv().PATH ?? ''}`,
   ];
+  for (const key of PROXY_ENV_KEYS) {
+    const value = env[key];
+    if (value) lines.push(environmentLine(key, value));
+  }
   if (logPath) {
     lines.push(`StandardOutput=append:${logPath}`, `StandardError=append:${logPath}`);
   }
@@ -50,6 +75,8 @@ export interface ServiceFileOptions {
   node: string;
   script: string;
   logPath: string;
+  /** Proxy/CA variables for `install`; defaults to the ones set in this process's environment. */
+  env?: ServiceEnv;
 }
 
 export interface SystemdDeps {
@@ -65,10 +92,11 @@ function unitPath(home = os.homedir()): string {
 export async function install(opts: ServiceFileOptions, deps: SystemdDeps = {}): Promise<void> {
   const runFn = deps.run ?? run;
   const file = unitPath(deps.home);
-  const unit = renderUnit({ node: opts.node, script: opts.script, logPath: opts.logPath });
+  const env = opts.env ?? proxyEnvFrom();
+  const unit = renderUnit({ node: opts.node, script: opts.script, logPath: opts.logPath, env });
 
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, unit, 'utf8');
+  writeServiceFile(file, unit, env);
 
   const reload = await runFn('systemctl', ['--user', 'daemon-reload']);
   if (reload.code !== 0) throw new Error(`systemctl daemon-reload failed (code ${reload.code}): ${reload.stderr.trim()}`);
@@ -92,7 +120,8 @@ function unitPathEnv(unit: string): string | undefined {
  *
  * The PATH is carried over from the existing unit instead of being re-rendered: this runs inside
  * the service, where `agentEnv()` would prefix the extra dirs onto a PATH that already has them,
- * growing the line on every boot.
+ * growing the line on every boot. The proxy/CA variables are carried over the same way: they are
+ * whatever the person had when they ran `service install`, not this process's environment.
  */
 export async function refreshUnit(opts: ServiceFileOptions, deps: SystemdDeps = {}): Promise<boolean> {
   const file = unitPath(deps.home);
@@ -103,10 +132,11 @@ export async function refreshUnit(opts: ServiceFileOptions, deps: SystemdDeps = 
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false;
     throw err;
   }
-  const unit = renderUnit({ node: opts.node, script: opts.script, logPath: opts.logPath, pathEnv: unitPathEnv(current) });
+  const env = unitServiceEnv(current);
+  const unit = renderUnit({ node: opts.node, script: opts.script, logPath: opts.logPath, pathEnv: unitPathEnv(current), env });
   if (unit === current) return false;
 
-  fs.writeFileSync(file, unit, 'utf8');
+  writeServiceFile(file, unit, env);
   const runFn = deps.run ?? run;
   const reload = await runFn('systemctl', ['--user', 'daemon-reload']);
   if (reload.code !== 0) throw new Error(`systemctl daemon-reload failed (code ${reload.code}): ${reload.stderr.trim()}`);

@@ -1,4 +1,7 @@
 {
+  "Baixar": "Descargar",
+  "Baixar como arquivo": "Descargar como archivo",
+  "código": "código",
   "autorizada": "aprobada",
   "recusada": "rechazada",
   "expirada": "expirada",
@@ -85,6 +88,8 @@
   "Responder sozinho quando houver precedente": "Responder solo cuando haya un precedente",
   "Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.": "Cuando la respuesta repite una decisión tuya reciente, el concierge espera 60 segundos antes de responder por ti, para que tengas tiempo de cancelar.",
   "Responder perguntas do Codex pelo chat": "Responder preguntas de Codex en el chat",
+  "Contar ao chat de onde estou falando": "Decirle al chat desde dónde escribo",
+  "Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.": "Cada mensaje le dice al concierge si estás en la web o en la app, en el celular o en la computadora, y si estás en la misma red que alguna de tus máquinas, para que no tenga que preguntar. La IP se guarda solo en la memoria del servidor.",
   "Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.": "Cuando Codex termina su turno con una pregunta, se abre una tarjeta en el chat para que respondas sin ir a la pestaña.",
   "Buscar": "Buscar",
   "pergunta, resposta ou projeto": "pregunta, respuesta o proyecto",
@@ -258,5 +263,7 @@
   "atualizar ticket": "actualizar ticket",
   "criar integração": "crear integración",
   "definir repositório": "definir repositorio",
-  "Ver ações": "Ver acciones"
+  "Ver ações": "Ver acciones",
+  "A contagem só corre com o termhub em foco.": "La cuenta atrás solo corre con termhub en primer plano.",
+  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similitud {{score}} · umbrales {{high}} / {{low}}"
 }

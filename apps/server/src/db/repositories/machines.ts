@@ -1,6 +1,14 @@
+import { machineNetwork, type MachineNetwork } from '@termhub/agent-protocol';
 import type { PrismaClient } from '../prisma.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapMachine, type Machine, type MachineType } from './types.js';
+
+/** A machine's network as its agent last reported it (TER-1080), and when. */
+export interface SavedNetwork {
+  network: MachineNetwork;
+  updated_at: string | null;
+}
 
 export interface MachineInput {
   name: string;
@@ -107,6 +115,23 @@ export class MachinesRepository {
         ...(patch.capabilities !== undefined ? { capabilities: patch.capabilities } : {}),
       },
     });
+  }
+
+  /** TER-1080: the agent's latest `net.info`, kept as the last known value for when the machine is offline. */
+  async setNetwork(id: string, network: MachineNetwork, at: Date = new Date()): Promise<void> {
+    await this.db.machine.updateMany({ where: { id }, data: { network: network as unknown as Prisma.InputJsonValue, networkUpdatedAt: at } });
+  }
+
+  /** The saved network of each of `ids` that has one; a value that no longer parses (an older shape) is left out. */
+  async networks(ids: string[]): Promise<Map<string, SavedNetwork>> {
+    if (!ids.length) return new Map();
+    const rows = await this.db.machine.findMany({ where: { id: { in: ids } }, select: { id: true, network: true, networkUpdatedAt: true } });
+    const out = new Map<string, SavedNetwork>();
+    for (const r of rows) {
+      const parsed = machineNetwork.safeParse(r.network);
+      if (parsed.success) out.set(r.id, { network: parsed.data, updated_at: r.networkUpdatedAt?.toISOString() ?? null });
+    }
+    return out;
   }
 
   async create(input: MachineInput): Promise<Machine> {

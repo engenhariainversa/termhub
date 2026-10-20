@@ -6,6 +6,7 @@ import { LoginCodesRepository } from './login-codes.js';
 import { MachinesRepository } from './machines.js';
 import { ProjectsRepository } from './projects.js';
 import { ProjectMachinesRepository } from './project-machines.js';
+import { ProjectRepositoriesRepository } from './project-repositories.js';
 import { TabsRepository } from './tabs.js';
 import { TasksRepository } from './tasks.js';
 import { TaskColumnsRepository } from './task-columns.js';
@@ -32,6 +33,7 @@ import { TabQuestionsRepository } from './tab-questions.js';
 import { TabLimitNoticesRepository } from './tab-limit-notices.js';
 import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-attachments.js';
 import { ChatDecisionsRepository } from './chat-decisions.js';
+import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
@@ -54,6 +56,7 @@ import { TabUsageRepository } from './tab-usage.js';
 import { LegalRepository } from './legal.js';
 import { AccessLogsRepository } from './access-logs.js';
 import { SecurityEventsRepository } from './security-events.js';
+import { SupportRepository } from './support.js';
 import { FeatureFlagsRepository } from './feature-flags.js';
 
 export interface Repositories {
@@ -64,6 +67,7 @@ export interface Repositories {
   machines: MachinesRepository;
   projects: ProjectsRepository;
   projectMachines: ProjectMachinesRepository;
+  projectRepositories: ProjectRepositoriesRepository;
   tabs: TabsRepository;
   tasks: TasksRepository;
   taskColumns: TaskColumnsRepository;
@@ -90,6 +94,7 @@ export interface Repositories {
   tabLimitNotices: TabLimitNoticesRepository;
   chatAttachments: ChatAttachmentsRepo;
   chatDecisions: ChatDecisionsRepository;
+  chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
   instanceSecrets: InstanceSecretsRepository;
   projectGroups: ProjectGroupsRepository;
@@ -112,6 +117,7 @@ export interface Repositories {
   aiAccountExhaustions: AiAccountExhaustionsRepository;
   legal: LegalRepository;
   securityEvents: SecurityEventsRepository;
+  support: SupportRepository;
   featureFlags: FeatureFlagsRepository;
   /** Round-trips a trivial query: `/api/ready` asks whether the database answers. */
   ping(): Promise<void>;
@@ -126,6 +132,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     machines: new MachinesRepository(db),
     projects: new ProjectsRepository(db),
     projectMachines: new ProjectMachinesRepository(db),
+    projectRepositories: new ProjectRepositoriesRepository(db),
     tabs: new TabsRepository(db),
     tasks: new TasksRepository(db),
     taskColumns: new TaskColumnsRepository(db),
@@ -152,6 +159,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     tabLimitNotices: new TabLimitNoticesRepository(db),
     chatAttachments: new ChatAttachmentsRepository(db),
     chatDecisions: new ChatDecisionsRepository(db),
+    chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),
     projectGroups: new ProjectGroupsRepository(db),
@@ -174,6 +182,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     aiAccountExhaustions: new AiAccountExhaustionsRepository(db),
     legal: new LegalRepository(db),
     securityEvents: new SecurityEventsRepository(db),
+    support: new SupportRepository(db),
     featureFlags: new FeatureFlagsRepository(db),
     ping: () => db.$queryRaw`SELECT 1`.then(() => undefined),
   };
@@ -182,6 +191,7 @@ export function createRepositories(db: PrismaClient): Repositories {
 export * from './types.js';
 export type { Integration, IntegrationProvider } from './integrations.js';
 export type { ProjectSetup } from './project-setup.js';
+export type { DiscoveredCheckoutInput } from './project-repositories.js';
 export type { WaitlistEntry } from './waitlist.js';
 export type { Role, PermissionGrant } from './roles.js';
 export type { Upload } from './uploads.js';

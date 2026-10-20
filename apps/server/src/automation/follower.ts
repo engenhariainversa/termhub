@@ -28,6 +28,7 @@ import { MAX_RESTARTS } from './restart.js';
 import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
+import { inRunRepo, runRepoOf } from './run-pr.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
@@ -329,18 +330,19 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
 
 /** Ends the run `done` (a report, a PR from its branch, or its card's PR merged) and places its card (not
  *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
-async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: { url: string; number?: number } | null, log: Log): Promise<boolean> {
+async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: { url: string; number?: number; merged?: boolean } | null, log: Log): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
   await recordDone(repos, run, via, pr, log);
   return true;
 }
 
 /** What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and `pr_opened`. */
-async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number } | null, log: Log): Promise<void> {
+async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number; merged?: boolean } | null, log: Log): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
-  if (pr && via !== 'merged') {
+  // a PR already merged when the run ends was not opened now: the `merged` line tells it (TER-974)
+  if (pr && via !== 'merged' && !pr.merged) {
     await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { pr_url: pr.url, ...(pr.number !== undefined ? { number: pr.number } : {}), branch: run.branch } }).catch((e: unknown) =>
       log.warn({ runId: run.id, code: errorCode(e) }, 'automation: pr_opened not recorded'),
     );
@@ -417,12 +419,18 @@ async function finishBlocked(repos: Repositories, run: AutomationRun, code: stri
 /** The PR fallback of D17: a PR the CI sync linked to the card, from the run's branch — open, or merged
  *  since the run began (a person, or the executor, merged it while the run was still on: final review I2).
  *  Not for an integrator or a fixer: their PR existed before the run started (the server opened the epic PR;
- *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run. */
-async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number } | null> {
+ *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run.
+ *  The PR is matched by repository and branch (spec 2026-10-07 multi-repo R14): another repository can have
+ *  a branch of the same name, and a PR from it linked to the card is not the run's. */
+async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number; merged: boolean } | null> {
   if (!run.task_id || !run.branch || run.role === 'integrator' || run.role === 'fixer') return null;
   const ofRun = (p: { state: string; merged_at: Date | null }) => p.state === 'open' || (p.state === 'merged' && p.merged_at !== null && p.merged_at.getTime() >= run.created_at.getTime());
-  const pr = (await repos.taskPullRequests.listByTasks([run.task_id])).find((p) => p.head_ref === run.branch && ofRun(p));
-  return pr ? { url: pr.url, number: pr.number } : null;
+  const fromBranch = (await repos.taskPullRequests.listByTasks([run.task_id])).filter((p) => p.head_ref === run.branch && ofRun(p));
+  // Setup is read only once a PR from the branch exists: a look with none costs what it did
+  if (fromBranch.length === 0) return null;
+  const repo = runRepoOf((await repos.projectSetup.get(run.project_id)).data);
+  const pr = fromBranch.find((p) => inRunRepo(repo, p.repo));
+  return pr ? { url: pr.url, number: pr.number, merged: pr.state === 'merged' } : null;
 }
 
 /** `automation_runs.waiting_reason` of a run cancelled because its card lost its tag. */
@@ -433,7 +441,8 @@ export const TAB_CLOSED = 'tab_closed';
 /**
  * Ends an active run `cancelled` (its card untagged, its tab closed): nothing more is typed, the card and
  * the `max_parallel` slot are free again, and a cleanup already due is no longer held by it. Recorded as
- * `run_cancelled`. The worktree stays (the next run of the card reuses it); its branch was never touched.
+ * `run_cancelled`. The worktree stays (the next run of the card reuses it) until nothing will use it again
+ * (`markCancelledWorktreesDue`, TER-974); its branch was never touched.
  * False when the run had already ended or moved to another instance.
  */
 export async function cancelRun(repos: Repositories, run: AutomationRun, reason: string, log: Log = noopLog): Promise<boolean> {

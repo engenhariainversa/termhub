@@ -84,6 +84,8 @@ export interface ChatMemoryState {
   setAutodecide(next: boolean): Promise<void>;
   /** "Responder perguntas do Codex pelo chat": the same optimistic flip and rollback as `setAutodecide`, its own in-flight guard. */
   setCodexReplies(next: boolean): Promise<void>;
+  /** "Contar ao chat de onde estou falando" (TER-1088): the same optimistic flip and rollback, its own in-flight guard. */
+  setClientContext(next: boolean): Promise<void>;
   /** The chat's context meter limit in tokens (TER-1038); null = the model's window. True once saved. */
   setContextLimit(limit: number | null): Promise<boolean>;
   /** "Esquecer": the same hard delete as a card's "Esquecer esta decisão". */
@@ -172,6 +174,7 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
    * switch already shows the optimistic value the instant the first call sets it. */
   let settingAutodecide = false;
   let settingCodexReplies = false;
+  let settingClientContext = false;
   /** "Lições"'s own request-generation counter and debounce timer — kept apart from `gen`/`timer`
    * above (decisions' own), same reasoning as `ChatMemoryPage`'s `lessonsGenRef` next to `genRef`:
    * a slow, superseded lessons search must never clobber a newer one, and neither list's search
@@ -312,6 +315,23 @@ export function createChatMemoryStore(deps: ChatMemoryDeps) {
           if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a configuração') });
         } finally {
           settingCodexReplies = false;
+        }
+      },
+
+      async setClientContext(next) {
+        const previous = get().memory;
+        if (!previous || settingClientContext) return;
+        settingClientContext = true;
+        set({ memory: { ...previous, client_context: next }, error: null }); // optimistic
+        try {
+          const updated = await api.setChatMemory(session().auth(), { client_context: next });
+          toggles++;
+          set({ memory: updated });
+        } catch (e) {
+          set({ memory: previous }); // rollback
+          if (!session().handleApiError(e)) set({ error: isApiError(e) ? e.message : t('Não foi possível alterar a configuração') });
+        } finally {
+          settingClientContext = false;
         }
       },
 

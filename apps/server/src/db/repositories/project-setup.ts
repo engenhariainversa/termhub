@@ -1,5 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import { normalizeSetup, SETUP_VERSION, withLegacyMirror, type ProjectSetupData, type TicketSource } from '../../setup/schema.js';
+import { withRepoMirror } from '../../setup/repos.js';
+import { loadProjectRepositories } from './project-repositories.js';
 
 export interface ProjectSetup {
   project_id: string;
@@ -22,7 +24,8 @@ export class ProjectSetupRepository {
   }
 
   async save(projectId: string, data: ProjectSetupData): Promise<ProjectSetup> {
-    const withMirror = withLegacyMirror(data);
+    // spec 2026-10-07 multi-repo R19: `repo` follows the first enabled repository once the project has several
+    const withMirror = withRepoMirror(withLegacyMirror(data), await loadProjectRepositories(this.db, projectId));
     const row = await this.db.projectSetup.upsert({
       where: { projectId },
       create: { projectId, version: SETUP_VERSION, data: withMirror as object },

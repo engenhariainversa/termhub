@@ -1,4 +1,7 @@
 {
+  "Baixar": "Download",
+  "Baixar como arquivo": "Download as a file",
+  "código": "code",
   "autorizada": "approved",
   "recusada": "denied",
   "expirada": "expired",
@@ -85,6 +88,8 @@
   "Responder sozinho quando houver precedente": "Answer on its own when there is a precedent",
   "Quando a resposta repetir uma decisão sua recente, o concierge espera 60 segundos antes de responder por você, dando tempo de cancelar.": "When the answer repeats a recent decision of yours, the concierge waits 60 seconds before answering for you, so you have time to cancel.",
   "Responder perguntas do Codex pelo chat": "Answer Codex questions in the chat",
+  "Contar ao chat de onde estou falando": "Tell the chat where I am writing from",
+  "Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.": "Each message tells the concierge whether you are on the web or in the app, on a phone or a computer, and whether you are on the same network as one of your machines, so it does not have to ask. The IP is kept only in the server's memory.",
   "Quando o Codex termina o turno com uma pergunta, abre um card no chat para você responder sem ir até a aba.": "When Codex ends its turn with a question, a card opens in the chat so you can answer without going to the tab.",
   "Buscar": "Search",
   "pergunta, resposta ou projeto": "question, answer or project",
@@ -258,5 +263,7 @@
   "atualizar ticket": "update ticket",
   "criar integração": "create integration",
   "definir repositório": "set repository",
-  "Ver ações": "Show actions"
+  "Ver ações": "Show actions",
+  "A contagem só corre com o termhub em foco.": "The countdown only runs while termhub is in focus.",
+  "Semelhança {{score}} · limiares {{high}} / {{low}}": "Similarity {{score}} · thresholds {{high}} / {{low}}"
 }

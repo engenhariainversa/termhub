@@ -119,3 +119,12 @@ export function aiLoginRequiredText(provider: 'claude' | 'chatgpt' | 'gemini' | 
     body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
   };
 }
+
+/** An AI account's CLI login is about to expire (TER-1079): which CLI, in how many days, on which machine. */
+export function aiLoginExpiringText(provider: 'claude' | 'chatgpt' | 'gemini' | 'antigravity', machineName: string, days: number, locale: Locale = DEFAULT_LOCALE): PushText {
+  const name = provider === 'claude' ? 'Claude' : provider === 'chatgpt' ? 'Codex' : provider === 'gemini' ? 'Gemini' : 'Antigravity';
+  return {
+    title: t(locale, 'Login do {{provider}} expira em {{count}} dias', { provider: name, count: days }),
+    body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
+  };
+}

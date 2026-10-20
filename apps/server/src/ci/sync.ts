@@ -116,7 +116,7 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
       if (seen.has(first.number)) continue;
       seen.add(first.number);
       // a merged PR's delivery is told on the card whose run made it, not on one it only cites (TER-1004)
-      const w = first.state === 'open' || !setup.automation?.enabled ? first : await deliveryRow(repos, watched.filter((r) => r.number === first.number));
+      const w = first.state === 'open' || !setup.automation?.enabled ? first : await deliveryRow(repos, setup, watched.filter((r) => r.number === first.number));
       if (w.state === 'open') {
         const { state, summary } = ciOf(await deps.github.listRuns(token, w.repo, w.head_sha));
         await repos.taskPullRequests.updateCi(projectId, w.repo, w.number, { ci_state: state, ci_summary: summary });

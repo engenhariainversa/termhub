@@ -33,5 +33,18 @@
   "Histórico": "Historial",
   "Nada no histórico ainda.": "Todavía no hay nada en el historial.",
   "{{state}} em {{date}}": "{{state}} el {{date}}",
-  "Carregar mais": "Cargar más"
+  "Carregar mais": "Cargar más",
+  "Resposta automática": "Respuesta automática",
+  "Quando uma aba pergunta algo parecido com o que a memória já guarda, a semelhança (de 0 a 1) decide o que o chat faz. Só age com «Responder sozinho» ligado, na Memória do chat.": "Cuando una pestaña pregunta algo parecido a lo que la memoria ya guarda, la similitud (de 0 a 1) decide qué hace el chat. Solo actúa con «Responder solo» activado, en Memoria del chat.",
+  "A partir de {{high}}: envia a resposta sozinho.": "A partir de {{high}}: envía la respuesta solo.",
+  "De {{low}} até {{high}}: sugere a resposta e envia em {{seconds}} s, contando só com o termhub em foco.": "De {{low}} a {{high}}: sugiere la respuesta y la envía en {{seconds}} s, contando solo con termhub en primer plano.",
+  "Abaixo de {{low}}: não sugere nada.": "Por debajo de {{low}}: no sugiere nada.",
+  "Limiares fixados por você: o ajuste automático está desligado.": "Umbrales fijados por ti: el ajuste automático está desactivado.",
+  "Limiares ajustados pelo seu histórico ({{samples}} respostas).": "Umbrales ajustados según tu historial ({{samples}} respuestas).",
+  "Limiares padrão — o ajuste automático começa com {{min}} respostas suas ({{samples}} até agora).": "Umbrales predeterminados — el ajuste automático empieza con {{min}} respuestas tuyas ({{samples}} hasta ahora).",
+  "Limiar de envio": "Umbral de envío",
+  "Limiar de sugestão": "Umbral de sugerencia",
+  "Use números de {{min}} a {{max}}, com o limiar de sugestão igual ou abaixo do de envio.": "Usa números de {{min}} a {{max}}, con el umbral de sugerencia igual o por debajo del de envío.",
+  "Fixar limiares": "Fijar umbrales",
+  "Voltar ao ajuste automático": "Volver al ajuste automático"
 }

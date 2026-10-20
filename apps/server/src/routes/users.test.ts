@@ -154,12 +154,15 @@ describe('DELETE /api/users/:id', () => {
     const repos = {
       users: { findById: async (id: string) => (id === 'u-ana' ? user({ id: 'u-ana' }) : undefined) },
       roles: { findById: async (id: string) => (id === role.id ? role : undefined) },
+      sessions: { deleteAllForUser },
     } as unknown as Repositories;
     const access = { add: vi.fn(), remove: vi.fn(), status: vi.fn() };
     const purge = vi.fn(async () => purged);
     app.register((instance) => userRoutes(instance, repos, { mailer: { send: vi.fn() }, access: access as never, deletion: { purge }, revoke: null }), { prefix: '/api/users' });
     return { app, purge };
   }
+  const deleteAllForUser = vi.fn(async () => 2);
+  beforeEach(() => deleteAllForUser.mockClear());
 
   // The same cascade as a self-service deletion (TER-720), at once and without the e-mail: nothing
   // the account owned is left behind ownerless, and the public city, agents and Access entry are
@@ -169,6 +172,7 @@ describe('DELETE /api/users/:id', () => {
     const res = await app.inject({ method: 'DELETE', url: '/api/users/u-ana' });
     expect(res.statusCode).toBe(200);
     expect(purge).toHaveBeenCalledWith('u-ana', { actor: 'admin:admin', notify: false });
+    expect(deleteAllForUser).toHaveBeenCalledWith('u-ana');
   });
 
   it('refuses the admin themselves and an unknown id', async () => {
@@ -176,6 +180,47 @@ describe('DELETE /api/users/:id', () => {
     expect((await app.inject({ method: 'DELETE', url: '/api/users/admin' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'DELETE', url: '/api/users/nobody' })).statusCode).toBe(404);
     expect(purge).not.toHaveBeenCalled();
+    expect(deleteAllForUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/users/:id', () => {
+  const otherRole: Role = { ...role, id: 'r-beta', name: 'BETA', label: 'Beta', is_system: false };
+  const setRole = vi.fn(async (id: string, roleId: string) => user({ id, role_id: roleId }));
+  const deleteAllForUser = vi.fn(async () => 3);
+
+  function buildPatchApp() {
+    const app = Fastify();
+    applyErrorHandler(app);
+    app.addHook('preHandler', async (request) => {
+      request.user = user({ id: 'admin', role_id: adminRole.id });
+    });
+    const roles = new Map([role, otherRole, adminRole].map((r) => [r.id, r]));
+    const repos = {
+      users: { findById: async (id: string) => (id === 'u-ana' ? user({ id: 'u-ana', role_id: role.id }) : undefined), setRole, countAdmins: async () => 1 },
+      roles: { findById: async (id: string) => roles.get(id) },
+      sessions: { deleteAllForUser },
+    } as unknown as Repositories;
+    app.register((instance) => userRoutes(instance, repos, { mailer: { send: vi.fn() }, access: {} as never, deletion: { purge: vi.fn() }, revoke: null }), { prefix: '/api/users' });
+    return app;
+  }
+
+  beforeEach(() => {
+    setRole.mockClear();
+    deleteAllForUser.mockClear();
+  });
+
+  it('ends every web session of a person whose role changes', async () => {
+    const res = await buildPatchApp().inject({ method: 'PATCH', url: '/api/users/u-ana', payload: { role_id: otherRole.id } });
+    expect(res.statusCode).toBe(200);
+    expect(setRole).toHaveBeenCalledWith('u-ana', otherRole.id, 'member');
+    expect(deleteAllForUser).toHaveBeenCalledWith('u-ana');
+  });
+
+  it('keeps the sessions when the role stays the same', async () => {
+    const res = await buildPatchApp().inject({ method: 'PATCH', url: '/api/users/u-ana', payload: { role_id: role.id } });
+    expect(res.statusCode).toBe(200);
+    expect(deleteAllForUser).not.toHaveBeenCalled();
   });
 });
 

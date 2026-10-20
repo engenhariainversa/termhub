@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -106,6 +106,60 @@ const LYING_CLAUDE = `#!/bin/sh
 if [ "$1" = auth ] && [ "$2" = status ]; then echo '{"loggedIn": false}'; exit 1; fi
 echo "Opening browser to sign in…"
 echo "Login successful."
+exit 0
+`;
+
+/** A Claude Code without a status command: the login works, the status cannot say so. */
+const NO_STATUS_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+echo "Opening browser to sign in…"
+printf 'Paste code here if prompted > '
+sleep 0.3
+echo "Login successful."
+exit 0
+`;
+
+/**
+ * NO_STATUS_CLAUDE with a slow exit: it closes the pty (ignoring the SIGHUP that follows) and exits 0
+ * a moment later. In between, tmux reports the pane dead without an exit status (TER-1077).
+ */
+const SLOW_EXIT_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+trap '' HUP
+echo "Opening browser to sign in…"
+echo "Login successful."
+exec 0<&- 1>&- 2>&-
+sleep 0.4
+exit 0
+`;
+
+/**
+ * The macOS machine of TER-1078: a tmux server started over SSH has the login keychain locked, so the
+ * login run there saves to the config dir's file, while a process outside tmux (the agent, in the GUI
+ * session) reads the keychain's stale item and is told logged out. \`$TMUX\` tells the two apart here.
+ * The output is the literal one from the card, after the URL line the modal drops.
+ */
+const KEYCHAIN_CLAUDE = (defaultDir: string, showUrl: boolean) => `#!/bin/sh
+dir="\${CLAUDE_CONFIG_DIR:-${defaultDir}}"
+if [ "$1" = auth ] && [ "$2" = status ]; then
+  if [ -n "$TMUX" ] && [ -f "$dir/logged-in" ]; then echo '{"loggedIn": true}'; exit 0; fi
+  echo '{"loggedIn": false}'; exit 1
+fi
+echo "Opening browser to sign in…"
+${showUrl ? `echo "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&state=z"` : ''}
+printf 'Paste code here if prompted > '
+${showUrl ? 'while [ ! -f "$dir/approve" ]; do sleep 0.1; done' : 'sleep 0.3'}
+touch "$dir/logged-in"
+echo "Login successful."
+sleep 0.3
+exit 0
+`;
+
+/** Exits 0 without its success line, and has no status command either. */
+const SILENT_CLAUDE = `#!/bin/sh
+if [ "$1" = auth ] && [ "$2" = status ]; then echo "error: unknown command 'status'"; exit 1; fi
+echo "Opening browser to sign in…"
+sleep 0.3
 exit 0
 `;
 
@@ -251,7 +305,41 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
     expect(hasSession(session)).toBe(false);
   });
 
-  it('claude: "Login successful" that the status never confirms is still a failure', async () => {
+  it('claude: "Login successful" with exit 0 is a login when the status cannot answer (TER-1054)', async () => {
+    const noStatus = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-no-status', NO_STATUS_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-no-status';
+    expect(await noStatus.start({ provider: 'claude', config_dir: accountDir('claude-no-status'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+    expect(hasSession(session)).toBe(false);
+  }, 15_000);
+
+  it('claude: a dead pane whose exit status lands a moment later is still read as exit 0 (TER-1077)', async () => {
+    const slowExit = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-slow-exit', SLOW_EXIT_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    const session = 'termhub-login-slow-exit';
+    expect(await slowExit.start({ provider: 'claude', config_dir: accountDir('claude-slow-exit'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+    expect(hasSession(session)).toBe(false);
+  }, 15_000);
+
+  it('claude: exit 0 without the success line is not a login when the status cannot answer', async () => {
+    const silent = createAiLogin({
+      env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
+      bins: { claude: script('claude-silent', SILENT_CLAUDE), chatgpt: join(bin, 'codex') },
+      startPollMs: 100,
+      startTimeoutMs: 5_000,
+    });
+    await expect(silent.start({ provider: 'claude', config_dir: accountDir('claude-silent'), session: 'termhub-login-silent' })).rejects.toMatchObject({ code: 'failed' });
+  }, 15_000);
+
+  it('claude: "Login successful" that the status denies is still a failure', async () => {
     const lying = createAiLogin({
       env: () => ({ ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` }),
       bins: { claude: script('claude-lying', LYING_CLAUDE), chatgpt: join(bin, 'codex') },
@@ -263,6 +351,53 @@ describe.skipIf(!hasTmux)('ai.login against a real tmux and fake CLIs', () => {
       message: 'Opening browser to sign in…\nLogin successful.',
     });
   }, 15_000);
+
+  describe('a status that only the tmux server sees logged in (TER-1078)', () => {
+    // The agent's own environment, outside tmux even when the tests run inside one.
+    const outsideTmux = () => {
+      const env: NodeJS.ProcessEnv = { ...process.env, HOME: root, PATH: `${bin}:/usr/bin:/bin` };
+      delete env.TMUX;
+      return env;
+    };
+    const keychainLogin = (name: string, showUrl: boolean) =>
+      createAiLogin({
+        env: outsideTmux,
+        bins: { claude: script(name, KEYCHAIN_CLAUDE(defaultDir, showUrl)), chatgpt: join(bin, 'codex') },
+        startPollMs: 100,
+        startTimeoutMs: 5_000,
+        submitPollMs: 100,
+        submitTimeoutMs: 5_000,
+      });
+
+    it('outside tmux, the fake CLI says logged out after its login, like the agent on that machine', () => {
+      const dir = accountDir('claude-keychain-outside');
+      writeFileSync(join(dir, 'logged-in'), '');
+      const r = spawnSync(script('claude-keychain-outside', KEYCHAIN_CLAUDE(defaultDir, false)), ['auth', 'status'], { env: { ...outsideTmux(), CLAUDE_CONFIG_DIR: dir }, encoding: 'utf8' });
+      expect(r.stdout.trim()).toBe('{"loggedIn": false}');
+    });
+
+    it('after the URL, the CLI printing "Login successful." and exiting 0 is a login, and status agrees', async () => {
+      const dir = accountDir('claude-keychain');
+      const login = keychainLogin('claude-keychain', true);
+      const session = 'termhub-login-keychain';
+      expect(await login.start({ provider: 'claude', config_dir: dir, session })).toMatchObject({ needs_code: true, logged_in: false });
+      writeFileSync(join(dir, 'approve'), '');
+      // The pane ends with "Opening browser to sign in…" / "Paste code here if prompted > Login successful."
+      expect(await login.submit({ provider: 'claude', config_dir: dir, session, code: null })).toEqual({ logged_in: true, message: null });
+      expect(hasSession(session)).toBe(false);
+      expect(await login.status({ provider: 'claude', config_dir: dir })).toEqual({ supported: true, logged_in: true });
+      expect(await login.status({ provider: 'claude', config_dir: accountDir('claude-keychain-other') })).toEqual({ supported: true, logged_in: false });
+      // The hidden status sessions are gone once answered (with no session left, so is the private server).
+      expect(spawnSync(process.env.TMUX_PATH!, ['list-sessions', '-F', '#{session_name}'], { encoding: 'utf8' }).stdout ?? '').not.toContain('termhub-login-status-');
+    });
+
+    it('a CLI that finished before any URL is a login at start', async () => {
+      const login = keychainLogin('claude-keychain-start', false);
+      const session = 'termhub-login-keychain-start';
+      expect(await login.start({ provider: 'claude', config_dir: accountDir('claude-keychain-start'), session })).toEqual({ url: null, user_code: null, needs_code: false, logged_in: true });
+      expect(hasSession(session)).toBe(false);
+    });
+  });
 
   it('codex: device flow shows URL and code, a timed-out submit keeps the session, approval logs in', async () => {
     const dir = accountDir('codex');

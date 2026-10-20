@@ -165,10 +165,17 @@ export class AiLoginService {
 
     const loginId = randomBytes(12).toString('hex');
     const session = `${AI_LOGIN_SESSION_PREFIX}${loginId}`;
-    const r = await agentRpc(machine, 'ai.login.start', { provider: account.provider, config_dir: account.config_dir, session });
+    const r = await agentRpc(machine, 'ai.login.start', { provider: account.provider, config_dir: account.config_dir, session }).catch(async (err: unknown) => {
+      // The CLI ran and the agent called it a failure. An agent older than 0.27.0 says that of every CLI
+      // that exits, the one that just logged in through the machine's browser included (TER-1054): the
+      // status decides, and the failure stands only when it says logged out.
+      if (!(err instanceof HttpError && err.code === 'MACHINE_FAILED')) throw err;
+      if ((await this.checkAccountLogin(account, machine, 'force')) !== 'ok') throw err;
+      return { url: null, user_code: null, needs_code: false, logged_in: true };
+    });
     if (r.logged_in) {
       // Nothing to open: the agent already killed the session.
-      this.loggedIn(account);
+      await this.loggedIn(repos, account);
       const stuck = await this.findStuckTabs(repos, account, machine);
       return { login_id: loginId, url: null, user_code: null, needs_code: false, expires_at: new Date(this.now()).toISOString(), logged_in: true, stuck_tabs: stuck };
     }
@@ -219,14 +226,23 @@ export class AiLoginService {
       return { ok: false, message: r.message, stuck_tabs: [] };
     }
     this.flows.delete(flow.loginId);
-    this.loggedIn(account);
+    await this.loggedIn(repos, account);
     return { ok: true, message: null, stuck_tabs: await this.findStuckTabs(repos, account, machine) };
   }
 
-  /** The login is back: the warning goes now, not at the next check, and the usage is read again. */
-  private loggedIn(account: AiAccount): void {
+  /**
+   * The login is back: the warning goes now, not at the next check, and the usage is read again. The
+   * expiry date known for the old login goes too (TER-1079); a failure to clear it only leaves the
+   * "expira em N dias" badge until that date passes.
+   */
+  private async loggedIn(repos: Repositories, account: AiAccount): Promise<void> {
     this.states.set(account.id, { state: 'ok', checked_at: this.now() });
     forgetAccountUsage(account.id);
+    try {
+      await repos.aiAccounts.clearLoginExpiry(account.id);
+    } catch {
+      // the badge outlives the login by at most its own date
+    }
   }
 
   /** Ends the flow and kills its hidden session. */

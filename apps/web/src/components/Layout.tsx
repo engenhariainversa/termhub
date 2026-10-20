@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
+import { useChatFocusReporter } from '../lib/chat-focus';
 import { DataProvider } from '../lib/data';
 import { FocusProvider, useFocusMode } from '../lib/focus';
 import { MonitorProvider } from '../lib/monitor';
@@ -31,8 +32,11 @@ const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
  * still receives monitor pushes and toasts.
  */
 export function AppShell() {
-  const { user, loading, legal } = useAuth();
+  const { user, loading, legal, can } = useAuth();
   const { t } = useTranslation();
+  // TER-642: an automatic answer's countdown only runs while termhub is in focus on some screen. Not
+  // while the person is held at a gate below: they cannot see a chat card from there.
+  useChatFocusReporter(!!user && !user.deletion_scheduled_at && legal.pending.length === 0 && can('chat'));
 
   if (loading) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
   if (!user) return <Navigate to="/login" replace />;

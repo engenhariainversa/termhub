@@ -343,7 +343,9 @@ export class AutomationRunsRepository {
     return rows.map((r) => r.status as RunStatus);
   }
 
-  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. */
+  /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. A run has
+   *  no repository of its own yet, so these are branches of the project's repository: read them through
+   *  `runBranchOf`, which pairs them with it (spec 2026-10-07 multi-repo R14). */
   async branchesOfTask(taskId: string): Promise<string[]> {
     const rows = await this.db.automationRun.findMany({ where: { taskId, branch: { not: null } }, distinct: ['branch'], select: { branch: true } });
     return rows.map((r) => r.branch!).filter((b) => b.length > 0);
@@ -424,6 +426,24 @@ export class AutomationRunsRepository {
       data: { cleanupState: 'due' },
     });
     return (await this.db.automationRun.findMany({ where: { taskId: { in: taskIds }, cleanupState: 'due' }, orderBy: { createdAt: 'asc' } })).map(map);
+  }
+
+  /**
+   * TER-974: the cards of a project with a cancelled run that left a worktree no cleanup has looked at yet
+   * (the cleanup otherwise only follows a merge or a deleted card). The caller decides whether it may go.
+   */
+  async cardsWithCancelledWorktree(projectId: string): Promise<string[]> {
+    const rows = await this.db.automationRun.findMany({
+      where: { projectId, status: 'cancelled', cleanupState: null, worktreePath: { not: null }, taskId: { not: null } },
+      distinct: ['taskId'],
+      select: { taskId: true },
+    });
+    return rows.map((r) => r.taskId!);
+  }
+
+  /** Every run of the card, in any status. */
+  async listByTask(taskId: string): Promise<AutomationRun[]> {
+    return (await this.db.automationRun.findMany({ where: { taskId }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
   /** The runs of a project whose cleanup is still to do. */

@@ -91,6 +91,7 @@ export type TabQuestionCountAggregateOutputType = {
   answeredVia: number
   wokenAt: number
   surfacedAt: number
+  precedent: number
   _all: number
 }
 
@@ -158,6 +159,7 @@ export type TabQuestionCountAggregateInputType = {
   answeredVia?: true
   wokenAt?: true
   surfacedAt?: true
+  precedent?: true
   _all?: true
 }
 
@@ -256,6 +258,7 @@ export type TabQuestionGroupByOutputType = {
   answeredVia: string | null
   wokenAt: Date | null
   surfacedAt: Date | null
+  precedent: runtime.JsonValue | null
   _count: TabQuestionCountAggregateOutputType | null
   _min: TabQuestionMinAggregateOutputType | null
   _max: TabQuestionMaxAggregateOutputType | null
@@ -302,6 +305,7 @@ export type TabQuestionWhereInput = {
   answeredVia?: Prisma.StringNullableFilter<"TabQuestion"> | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
   surfacedAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
+  precedent?: Prisma.JsonNullableFilter<"TabQuestion">
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   conversation?: Prisma.XOR<Prisma.ChatConversationScalarRelationFilter, Prisma.ChatConversationWhereInput>
 }
@@ -329,6 +333,7 @@ export type TabQuestionOrderByWithRelationInput = {
   answeredVia?: Prisma.SortOrderInput | Prisma.SortOrder
   wokenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   surfacedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  precedent?: Prisma.SortOrderInput | Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   conversation?: Prisma.ChatConversationOrderByWithRelationInput
 }
@@ -359,6 +364,7 @@ export type TabQuestionWhereUniqueInput = Prisma.AtLeast<{
   answeredVia?: Prisma.StringNullableFilter<"TabQuestion"> | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
   surfacedAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
+  precedent?: Prisma.JsonNullableFilter<"TabQuestion">
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   conversation?: Prisma.XOR<Prisma.ChatConversationScalarRelationFilter, Prisma.ChatConversationWhereInput>
 }, "id">
@@ -386,6 +392,7 @@ export type TabQuestionOrderByWithAggregationInput = {
   answeredVia?: Prisma.SortOrderInput | Prisma.SortOrder
   wokenAt?: Prisma.SortOrderInput | Prisma.SortOrder
   surfacedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  precedent?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.TabQuestionCountOrderByAggregateInput
   _max?: Prisma.TabQuestionMaxOrderByAggregateInput
   _min?: Prisma.TabQuestionMinOrderByAggregateInput
@@ -417,6 +424,7 @@ export type TabQuestionScalarWhereWithAggregatesInput = {
   answeredVia?: Prisma.StringNullableWithAggregatesFilter<"TabQuestion"> | string | null
   wokenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"TabQuestion"> | Date | string | null
   surfacedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"TabQuestion"> | Date | string | null
+  precedent?: Prisma.JsonNullableWithAggregatesFilter<"TabQuestion">
 }
 
 export type TabQuestionCreateInput = {
@@ -440,6 +448,7 @@ export type TabQuestionCreateInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   project: Prisma.ProjectCreateNestedOneWithoutTabQuestionsInput
   conversation: Prisma.ChatConversationCreateNestedOneWithoutTabQuestionsInput
 }
@@ -467,6 +476,7 @@ export type TabQuestionUncheckedCreateInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUpdateInput = {
@@ -490,6 +500,7 @@ export type TabQuestionUpdateInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabQuestionsNestedInput
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutTabQuestionsNestedInput
 }
@@ -517,6 +528,7 @@ export type TabQuestionUncheckedUpdateInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionCreateManyInput = {
@@ -542,6 +554,7 @@ export type TabQuestionCreateManyInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUpdateManyMutationInput = {
@@ -565,6 +578,7 @@ export type TabQuestionUpdateManyMutationInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUncheckedUpdateManyInput = {
@@ -590,6 +604,7 @@ export type TabQuestionUncheckedUpdateManyInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionListRelationFilter = {
@@ -625,6 +640,7 @@ export type TabQuestionCountOrderByAggregateInput = {
   answeredVia?: Prisma.SortOrder
   wokenAt?: Prisma.SortOrder
   surfacedAt?: Prisma.SortOrder
+  precedent?: Prisma.SortOrder
 }
 
 export type TabQuestionMaxOrderByAggregateInput = {
@@ -781,6 +797,7 @@ export type TabQuestionCreateWithoutProjectInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   conversation: Prisma.ChatConversationCreateNestedOneWithoutTabQuestionsInput
 }
 
@@ -806,6 +823,7 @@ export type TabQuestionUncheckedCreateWithoutProjectInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionCreateOrConnectWithoutProjectInput = {
@@ -860,6 +878,7 @@ export type TabQuestionScalarWhereInput = {
   answeredVia?: Prisma.StringNullableFilter<"TabQuestion"> | string | null
   wokenAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
   surfacedAt?: Prisma.DateTimeNullableFilter<"TabQuestion"> | Date | string | null
+  precedent?: Prisma.JsonNullableFilter<"TabQuestion">
 }
 
 export type TabQuestionCreateWithoutConversationInput = {
@@ -883,6 +902,7 @@ export type TabQuestionCreateWithoutConversationInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   project: Prisma.ProjectCreateNestedOneWithoutTabQuestionsInput
 }
 
@@ -908,6 +928,7 @@ export type TabQuestionUncheckedCreateWithoutConversationInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionCreateOrConnectWithoutConversationInput = {
@@ -958,6 +979,7 @@ export type TabQuestionCreateManyProjectInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUpdateWithoutProjectInput = {
@@ -981,6 +1003,7 @@ export type TabQuestionUpdateWithoutProjectInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   conversation?: Prisma.ChatConversationUpdateOneRequiredWithoutTabQuestionsNestedInput
 }
 
@@ -1006,6 +1029,7 @@ export type TabQuestionUncheckedUpdateWithoutProjectInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUncheckedUpdateManyWithoutProjectInput = {
@@ -1030,6 +1054,7 @@ export type TabQuestionUncheckedUpdateManyWithoutProjectInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionCreateManyConversationInput = {
@@ -1054,6 +1079,7 @@ export type TabQuestionCreateManyConversationInput = {
   answeredVia?: string | null
   wokenAt?: Date | string | null
   surfacedAt?: Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUpdateWithoutConversationInput = {
@@ -1077,6 +1103,7 @@ export type TabQuestionUpdateWithoutConversationInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabQuestionsNestedInput
 }
 
@@ -1102,6 +1129,7 @@ export type TabQuestionUncheckedUpdateWithoutConversationInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 export type TabQuestionUncheckedUpdateManyWithoutConversationInput = {
@@ -1126,6 +1154,7 @@ export type TabQuestionUncheckedUpdateManyWithoutConversationInput = {
   answeredVia?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   surfacedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  precedent?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
 }
 
 
@@ -1153,6 +1182,7 @@ export type TabQuestionSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   answeredVia?: boolean
   wokenAt?: boolean
   surfacedAt?: boolean
+  precedent?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabQuestion"]>
@@ -1180,6 +1210,7 @@ export type TabQuestionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   answeredVia?: boolean
   wokenAt?: boolean
   surfacedAt?: boolean
+  precedent?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabQuestion"]>
@@ -1207,6 +1238,7 @@ export type TabQuestionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   answeredVia?: boolean
   wokenAt?: boolean
   surfacedAt?: boolean
+  precedent?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabQuestion"]>
@@ -1234,9 +1266,10 @@ export type TabQuestionSelectScalar = {
   answeredVia?: boolean
   wokenAt?: boolean
   surfacedAt?: boolean
+  precedent?: boolean
 }
 
-export type TabQuestionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tabId" | "projectId" | "conversationId" | "kind" | "payload" | "toolUseId" | "status" | "answer" | "errorCode" | "agentId" | "queueAgents" | "answeredBy" | "answeredAt" | "closedAt" | "injectedAt" | "createdAt" | "suggestion" | "autoAnswer" | "answeredVia" | "wokenAt" | "surfacedAt", ExtArgs["result"]["tabQuestion"]>
+export type TabQuestionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "tabId" | "projectId" | "conversationId" | "kind" | "payload" | "toolUseId" | "status" | "answer" | "errorCode" | "agentId" | "queueAgents" | "answeredBy" | "answeredAt" | "closedAt" | "injectedAt" | "createdAt" | "suggestion" | "autoAnswer" | "answeredVia" | "wokenAt" | "surfacedAt" | "precedent", ExtArgs["result"]["tabQuestion"]>
 export type TabQuestionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
@@ -1320,6 +1353,11 @@ export type $TabQuestionPayload<ExtArgs extends runtime.Types.Extensions.Interna
      * When the card was last brought back to the end of the chat (TER-477); the thread orders by it, else `createdAt`.
      */
     surfacedAt: Date | null
+    /**
+     * TER-642: the best precedent memory found per question when the card opened, whatever its score:
+     * `{ items: [{ question_index, ref, similarity, selected, text? }] }`. Calibration's raw material.
+     */
+    precedent: runtime.JsonValue | null
   }, ExtArgs["result"]["tabQuestion"]>
   composites: {}
 }
@@ -1767,6 +1805,7 @@ export interface TabQuestionFieldRefs {
   readonly answeredVia: Prisma.FieldRef<"TabQuestion", 'String'>
   readonly wokenAt: Prisma.FieldRef<"TabQuestion", 'DateTime'>
   readonly surfacedAt: Prisma.FieldRef<"TabQuestion", 'DateTime'>
+  readonly precedent: Prisma.FieldRef<"TabQuestion", 'Json'>
 }
     
 

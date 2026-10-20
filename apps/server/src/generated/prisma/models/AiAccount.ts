@@ -33,6 +33,8 @@ export type AiAccountMinAggregateOutputType = {
   machineId: string | null
   configDir: string | null
   exclusiveProjectId: string | null
+  loginExpiresAt: Date | null
+  loginExpiryWarnedAt: Date | null
   createdAt: Date | null
 }
 
@@ -43,6 +45,8 @@ export type AiAccountMaxAggregateOutputType = {
   machineId: string | null
   configDir: string | null
   exclusiveProjectId: string | null
+  loginExpiresAt: Date | null
+  loginExpiryWarnedAt: Date | null
   createdAt: Date | null
 }
 
@@ -53,6 +57,8 @@ export type AiAccountCountAggregateOutputType = {
   machineId: number
   configDir: number
   exclusiveProjectId: number
+  loginExpiresAt: number
+  loginExpiryWarnedAt: number
   createdAt: number
   _all: number
 }
@@ -65,6 +71,8 @@ export type AiAccountMinAggregateInputType = {
   machineId?: true
   configDir?: true
   exclusiveProjectId?: true
+  loginExpiresAt?: true
+  loginExpiryWarnedAt?: true
   createdAt?: true
 }
 
@@ -75,6 +83,8 @@ export type AiAccountMaxAggregateInputType = {
   machineId?: true
   configDir?: true
   exclusiveProjectId?: true
+  loginExpiresAt?: true
+  loginExpiryWarnedAt?: true
   createdAt?: true
 }
 
@@ -85,6 +95,8 @@ export type AiAccountCountAggregateInputType = {
   machineId?: true
   configDir?: true
   exclusiveProjectId?: true
+  loginExpiresAt?: true
+  loginExpiryWarnedAt?: true
   createdAt?: true
   _all?: true
 }
@@ -168,6 +180,8 @@ export type AiAccountGroupByOutputType = {
   machineId: string
   configDir: string | null
   exclusiveProjectId: string | null
+  loginExpiresAt: Date | null
+  loginExpiryWarnedAt: Date | null
   createdAt: Date
   _count: AiAccountCountAggregateOutputType | null
   _min: AiAccountMinAggregateOutputType | null
@@ -199,6 +213,8 @@ export type AiAccountWhereInput = {
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  loginExpiresAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
+  loginExpiryWarnedAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
   machine?: Prisma.XOR<Prisma.MachineScalarRelationFilter, Prisma.MachineWhereInput>
   exclusiveProject?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -214,6 +230,8 @@ export type AiAccountOrderByWithRelationInput = {
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrderInput | Prisma.SortOrder
   exclusiveProjectId?: Prisma.SortOrderInput | Prisma.SortOrder
+  loginExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  loginExpiryWarnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   machine?: Prisma.MachineOrderByWithRelationInput
   exclusiveProject?: Prisma.ProjectOrderByWithRelationInput
@@ -232,6 +250,8 @@ export type AiAccountWhereUniqueInput = Prisma.AtLeast<{
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  loginExpiresAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
+  loginExpiryWarnedAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
   machine?: Prisma.XOR<Prisma.MachineScalarRelationFilter, Prisma.MachineWhereInput>
   exclusiveProject?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
@@ -247,6 +267,8 @@ export type AiAccountOrderByWithAggregationInput = {
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrderInput | Prisma.SortOrder
   exclusiveProjectId?: Prisma.SortOrderInput | Prisma.SortOrder
+  loginExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  loginExpiryWarnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.AiAccountCountOrderByAggregateInput
   _max?: Prisma.AiAccountMaxOrderByAggregateInput
@@ -263,6 +285,8 @@ export type AiAccountScalarWhereWithAggregatesInput = {
   machineId?: Prisma.StringWithAggregatesFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableWithAggregatesFilter<"AiAccount"> | string | null
   exclusiveProjectId?: Prisma.StringNullableWithAggregatesFilter<"AiAccount"> | string | null
+  loginExpiresAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AiAccount"> | Date | string | null
+  loginExpiryWarnedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"AiAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"AiAccount"> | Date | string
 }
 
@@ -271,6 +295,8 @@ export type AiAccountCreateInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
   exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
@@ -286,6 +312,8 @@ export type AiAccountUncheckedCreateInput = {
   machineId: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
@@ -297,6 +325,8 @@ export type AiAccountUpdateInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
   exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
@@ -312,6 +342,8 @@ export type AiAccountUncheckedUpdateInput = {
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
@@ -325,6 +357,8 @@ export type AiAccountCreateManyInput = {
   machineId: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -333,6 +367,8 @@ export type AiAccountUpdateManyMutationInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -343,6 +379,8 @@ export type AiAccountUncheckedUpdateManyInput = {
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -373,6 +411,8 @@ export type AiAccountCountOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
   exclusiveProjectId?: Prisma.SortOrder
+  loginExpiresAt?: Prisma.SortOrder
+  loginExpiryWarnedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -383,6 +423,8 @@ export type AiAccountMaxOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
   exclusiveProjectId?: Prisma.SortOrder
+  loginExpiresAt?: Prisma.SortOrder
+  loginExpiryWarnedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -393,6 +435,8 @@ export type AiAccountMinOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   configDir?: Prisma.SortOrder
   exclusiveProjectId?: Prisma.SortOrder
+  loginExpiresAt?: Prisma.SortOrder
+  loginExpiryWarnedAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -535,6 +579,8 @@ export type AiAccountCreateWithoutMachineInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
@@ -548,6 +594,8 @@ export type AiAccountUncheckedCreateWithoutMachineInput = {
   label: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
@@ -590,6 +638,8 @@ export type AiAccountScalarWhereInput = {
   machineId?: Prisma.StringFilter<"AiAccount"> | string
   configDir?: Prisma.StringNullableFilter<"AiAccount"> | string | null
   exclusiveProjectId?: Prisma.StringNullableFilter<"AiAccount"> | string | null
+  loginExpiresAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
+  loginExpiryWarnedAt?: Prisma.DateTimeNullableFilter<"AiAccount"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"AiAccount"> | Date | string
 }
 
@@ -598,6 +648,8 @@ export type AiAccountCreateWithoutExclusiveProjectInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutAiAccountInput
@@ -611,6 +663,8 @@ export type AiAccountUncheckedCreateWithoutExclusiveProjectInput = {
   label: string
   machineId: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
@@ -648,6 +702,8 @@ export type AiAccountCreateWithoutTabsInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
   exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
@@ -662,6 +718,8 @@ export type AiAccountUncheckedCreateWithoutTabsInput = {
   machineId: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
@@ -688,6 +746,8 @@ export type AiAccountUpdateWithoutTabsInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
   exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
@@ -702,6 +762,8 @@ export type AiAccountUncheckedUpdateWithoutTabsInput = {
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
@@ -712,6 +774,8 @@ export type AiAccountCreateWithoutExhaustionInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
   exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
@@ -726,6 +790,8 @@ export type AiAccountUncheckedCreateWithoutExhaustionInput = {
   machineId: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutAiAccountInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
@@ -752,6 +818,8 @@ export type AiAccountUpdateWithoutExhaustionInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
   exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
@@ -766,6 +834,8 @@ export type AiAccountUncheckedUpdateWithoutExhaustionInput = {
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
@@ -776,6 +846,8 @@ export type AiAccountCreateWithoutChatConversationsInput = {
   provider: $Enums.AiProvider
   label: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   machine: Prisma.MachineCreateNestedOneWithoutAiAccountsInput
   exclusiveProject?: Prisma.ProjectCreateNestedOneWithoutExclusiveAiAccountsInput
@@ -790,6 +862,8 @@ export type AiAccountUncheckedCreateWithoutChatConversationsInput = {
   machineId: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutAiAccountInput
   exhaustion?: Prisma.AiAccountExhaustionUncheckedCreateNestedOneWithoutAccountInput
@@ -816,6 +890,8 @@ export type AiAccountUpdateWithoutChatConversationsInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
   exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
@@ -830,6 +906,8 @@ export type AiAccountUncheckedUpdateWithoutChatConversationsInput = {
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
   exhaustion?: Prisma.AiAccountExhaustionUncheckedUpdateOneWithoutAccountNestedInput
@@ -841,6 +919,8 @@ export type AiAccountCreateManyMachineInput = {
   label: string
   configDir?: string | null
   exclusiveProjectId?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -849,6 +929,8 @@ export type AiAccountUpdateWithoutMachineInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   exclusiveProject?: Prisma.ProjectUpdateOneWithoutExclusiveAiAccountsNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
@@ -862,6 +944,8 @@ export type AiAccountUncheckedUpdateWithoutMachineInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
@@ -874,6 +958,8 @@ export type AiAccountUncheckedUpdateManyWithoutMachineInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   exclusiveProjectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -883,6 +969,8 @@ export type AiAccountCreateManyExclusiveProjectInput = {
   label: string
   machineId: string
   configDir?: string | null
+  loginExpiresAt?: Date | string | null
+  loginExpiryWarnedAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -891,6 +979,8 @@ export type AiAccountUpdateWithoutExclusiveProjectInput = {
   provider?: Prisma.EnumAiProviderFieldUpdateOperationsInput | $Enums.AiProvider
   label?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   machine?: Prisma.MachineUpdateOneRequiredWithoutAiAccountsNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutAiAccountNestedInput
@@ -904,6 +994,8 @@ export type AiAccountUncheckedUpdateWithoutExclusiveProjectInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutAiAccountNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutAiAccountNestedInput
@@ -916,6 +1008,8 @@ export type AiAccountUncheckedUpdateManyWithoutExclusiveProjectInput = {
   label?: Prisma.StringFieldUpdateOperationsInput | string
   machineId?: Prisma.StringFieldUpdateOperationsInput | string
   configDir?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  loginExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  loginExpiryWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -966,6 +1060,8 @@ export type AiAccountSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   machineId?: boolean
   configDir?: boolean
   exclusiveProjectId?: boolean
+  loginExpiresAt?: boolean
+  loginExpiryWarnedAt?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
   exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
@@ -982,6 +1078,8 @@ export type AiAccountSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   machineId?: boolean
   configDir?: boolean
   exclusiveProjectId?: boolean
+  loginExpiresAt?: boolean
+  loginExpiryWarnedAt?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
   exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
@@ -994,6 +1092,8 @@ export type AiAccountSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   machineId?: boolean
   configDir?: boolean
   exclusiveProjectId?: boolean
+  loginExpiresAt?: boolean
+  loginExpiryWarnedAt?: boolean
   createdAt?: boolean
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
   exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
@@ -1006,10 +1106,12 @@ export type AiAccountSelectScalar = {
   machineId?: boolean
   configDir?: boolean
   exclusiveProjectId?: boolean
+  loginExpiresAt?: boolean
+  loginExpiryWarnedAt?: boolean
   createdAt?: boolean
 }
 
-export type AiAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "provider" | "label" | "machineId" | "configDir" | "exclusiveProjectId" | "createdAt", ExtArgs["result"]["aiAccount"]>
+export type AiAccountOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "provider" | "label" | "machineId" | "configDir" | "exclusiveProjectId" | "loginExpiresAt" | "loginExpiryWarnedAt" | "createdAt", ExtArgs["result"]["aiAccount"]>
 export type AiAccountInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   machine?: boolean | Prisma.MachineDefaultArgs<ExtArgs>
   exclusiveProject?: boolean | Prisma.AiAccount$exclusiveProjectArgs<ExtArgs>
@@ -1056,6 +1158,15 @@ export type $AiAccountPayload<ExtArgs extends runtime.Types.Extensions.InternalA
      * project of the owner. Deleting the project clears it.
      */
     exclusiveProjectId: string | null
+    /**
+     * TER-1079: when the CLI's login expires, as far as its own notice on a tab's screen told ("Your login
+     * expires in N days"). null = unknown. Cleared when the login is redone.
+     */
+    loginExpiresAt: Date | null
+    /**
+     * When the person was warned about `loginExpiresAt`: one warning per login. null = not yet.
+     */
+    loginExpiryWarnedAt: Date | null
     createdAt: Date
   }, ExtArgs["result"]["aiAccount"]>
   composites: {}
@@ -1491,6 +1602,8 @@ export interface AiAccountFieldRefs {
   readonly machineId: Prisma.FieldRef<"AiAccount", 'String'>
   readonly configDir: Prisma.FieldRef<"AiAccount", 'String'>
   readonly exclusiveProjectId: Prisma.FieldRef<"AiAccount", 'String'>
+  readonly loginExpiresAt: Prisma.FieldRef<"AiAccount", 'DateTime'>
+  readonly loginExpiryWarnedAt: Prisma.FieldRef<"AiAccount", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"AiAccount", 'DateTime'>
 }
     

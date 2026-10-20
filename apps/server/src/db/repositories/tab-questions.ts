@@ -2,7 +2,7 @@ import type { PrismaClient } from '../prisma.js';
 import type { Prisma, TabQuestion as PrismaTabQuestion } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { AT_PROMPT } from '../../monitor/state.js';
-import type { TabQuestionSuggestion } from '../../chat/decision-text.js';
+import type { TabQuestionPrecedent, TabQuestionSuggestion } from '../../chat/decision-text.js';
 import type { ChoiceAnswer, ChoicePayload, PermissionAnswer, PermissionPayload, SuggestionAnswer, SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
 import type { MemoryKind } from './memory-items.js';
 
@@ -45,6 +45,18 @@ export interface AutoAnswer {
   /** When the sender claimed it (`scheduled → sent`): how `failLostAutoAnswers` tells a sender that
    *  died from one still typing. */
   claimed_at?: string;
+  /** TER-642, on an answer backed by memory: the similarity that decided it (the lowest of the card's
+   *  questions), the person's thresholds at that moment, and the band it fell in — `high` is sent at
+   *  once, `mid` after the countdown. Absent on an `automation` answer and on rows from before. */
+  score?: number;
+  thresholds?: { high: number; low: number };
+  band?: 'high' | 'mid';
+  /** The countdown only runs while termhub is in focus on one of the person's screens (TER-642). */
+  focus?: boolean;
+  /** Out of focus: the countdown stands still with `remaining_ms` left, and `due_at` means nothing
+   *  until it resumes. Only ever set with `focus`. */
+  paused?: boolean;
+  remaining_ms?: number;
 }
 
 export interface TabQuestion {
@@ -76,6 +88,9 @@ export interface TabQuestion {
   woken_at: string | null;
   /** When the card was last brought back to the end of the chat (TER-477): the thread orders by it, else `created_at`. */
   surfaced_at: string | null;
+  /** The best precedent memory found per question when the card opened, whatever its score (TER-642);
+   *  never sent to clients. */
+  precedent?: TabQuestionPrecedent | null;
 }
 
 export interface OpenTabQuestionInput {
@@ -135,6 +150,7 @@ const mapQuestion = (q: Row): TabQuestion => ({
   answered_via: (q.answeredVia ?? null) as AnsweredVia | null,
   woken_at: iso(q.wokenAt),
   surfaced_at: iso(q.surfacedAt),
+  precedent: (q.precedent ?? null) as unknown as TabQuestionPrecedent | null,
 });
 
 /**
@@ -384,7 +400,46 @@ export class TabQuestionsRepository {
   async claimAutoAnswer(id: string, now = new Date()): Promise<TabQuestion | undefined> {
     const count = await this.db.$executeRaw`
       UPDATE "tab_questions" SET "auto_answer" = jsonb_set(jsonb_set("auto_answer", '{status}', '"sent"'), '{claimed_at}', to_jsonb(now()))
-      WHERE "id" = ${id} AND "status" = 'open' AND "auto_answer"->>'status' = 'scheduled' AND ("auto_answer"->>'due_at')::timestamptz <= ${now}`;
+      WHERE "id" = ${id} AND "status" = 'open' AND "auto_answer"->>'status' = 'scheduled' AND ("auto_answer"->>'due_at')::timestamptz <= ${now}
+        AND COALESCE("auto_answer"->>'paused', 'false') <> 'true'`;
+    if (count === 0) return undefined;
+    const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
+    return row ? mapQuestion(row) : undefined;
+  }
+
+  /** Every countdown that only runs in focus (TER-642) and is still `scheduled` on an open card,
+   *  running or paused — across every user, or one user's. Oldest card first. */
+  async listFocusCountdowns(userId?: string): Promise<TabQuestion[]> {
+    const rows = await this.db.tabQuestion.findMany({
+      where: { status: 'open', AND: [{ autoAnswer: { path: ['status'], equals: 'scheduled' } }, { autoAnswer: { path: ['focus'], equals: true } }], ...(userId ? { conversation: { userId } } : {}) },
+      include: withOwner,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(mapQuestion);
+  }
+
+  /**
+   * The person looked away (TER-642): a running in-focus countdown stops with `remainingMs` left.
+   * Conditional on the countdown still `scheduled`, not paused, and still due at `dueAt` (what the
+   * caller computed `remainingMs` from), so a pause racing a resume, a cancel or the sender changes
+   * nothing.
+   */
+  async pauseAutoAnswer(id: string, dueAt: string, remainingMs: number): Promise<TabQuestion | undefined> {
+    const count = await this.db.$executeRaw`
+      UPDATE "tab_questions" SET "auto_answer" = "auto_answer" || ${JSON.stringify({ paused: true, remaining_ms: remainingMs })}::jsonb
+      WHERE "id" = ${id} AND "status" = 'open' AND "auto_answer"->>'status' = 'scheduled' AND "auto_answer"->>'focus' = 'true'
+        AND COALESCE("auto_answer"->>'paused', 'false') <> 'true' AND "auto_answer"->>'due_at' = ${dueAt}`;
+    if (count === 0) return undefined;
+    const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
+    return row ? mapQuestion(row) : undefined;
+  }
+
+  /** The person is back (TER-642): a paused countdown runs again, due at `dueAt` (now plus what was
+   *  left). Conditional on it still `scheduled` and paused. */
+  async resumeAutoAnswer(id: string, dueAt: string): Promise<TabQuestion | undefined> {
+    const count = await this.db.$executeRaw`
+      UPDATE "tab_questions" SET "auto_answer" = "auto_answer" || ${JSON.stringify({ paused: false, due_at: dueAt })}::jsonb
+      WHERE "id" = ${id} AND "status" = 'open' AND "auto_answer"->>'status' = 'scheduled' AND "auto_answer"->>'paused' = 'true'`;
     if (count === 0) return undefined;
     const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
     return row ? mapQuestion(row) : undefined;
@@ -456,6 +511,7 @@ export class TabQuestionsRepository {
     const due = await this.db.$queryRaw<{ id: string }[]>`
       SELECT "id" FROM "tab_questions"
       WHERE "status" = 'open' AND "auto_answer"->>'status' = 'scheduled' AND ("auto_answer"->>'due_at')::timestamptz <= ${now}
+        AND COALESCE("auto_answer"->>'paused', 'false') <> 'true'
       ORDER BY ("auto_answer"->>'due_at')::timestamptz ASC
       LIMIT ${limit}`;
     if (due.length === 0) return [];
@@ -528,6 +584,12 @@ export class TabQuestionsRepository {
     if (count === 0) return undefined;
     const row = await this.db.tabQuestion.findUnique({ where: { id }, include: withOwner });
     return row ? mapQuestion(row) : undefined;
+  }
+
+  /** What memory found for each question when the card opened, whatever its score (TER-642): kept for
+   *  calibration, whether or not the card is still open. */
+  async setPrecedent(id: string, precedent: TabQuestionPrecedent): Promise<void> {
+    await this.db.tabQuestion.updateMany({ where: { id }, data: { precedent: precedent as never } });
   }
 
   /**

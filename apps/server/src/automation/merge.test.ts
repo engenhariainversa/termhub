@@ -243,6 +243,19 @@ describe('runMergeExecutor', () => {
     expect(w.state.actions).toHaveLength(0);
   });
 
+  it('a PR of another repository from a branch of the same name is not the card\'s: no merge, no card, no event (spec 2026-10-07 multi-repo R14)', async () => {
+    const w = world({ prs: [pr({ repo: 'acme/site', url: 'https://github.com/acme/site/pull/7' })] });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.pull).not.toHaveBeenCalled();
+    expect(w.gh.merge).not.toHaveBeenCalled();
+    expect(w.state.actions).toHaveLength(0);
+    expect(w.state.events).toEqual([]);
+    // the project's repository under another case is still the card's
+    const own = world({ prs: [pr({ repo: 'Acme/App' })] });
+    await runMergeExecutor(own.deps, 'p1');
+    expect(own.gh.merge).toHaveBeenCalledTimes(1);
+  });
+
   it('into main with a deploy workflow at level merge: an irreversible approval card, asked once per head, and never a merge', async () => {
     const w = world({ setup: setupWith({}, { deploy_workflow: 'deploy.yml' }), prs: [pr({ task_id: 'c2', base_ref: 'main' })] });
     await runMergeExecutor(w.deps, 'p1');

@@ -54,6 +54,27 @@ describe('AiLoginWarnings (TER-1047)', () => {
     expect(startMock).toHaveBeenCalledWith('b');
   });
 
+  it('TER-1079: lists the logins about to expire, with the days left, apart from the expired ones', async () => {
+    statusMock.mockResolvedValue({
+      warn_days: 3,
+      accounts: [
+        { ...row('a', 'claude', 'm1', 'hulk', 'ok'), login_expires_at: '2026-10-16T12:00:00.000Z', expires_soon: true, expires_in_days: 3 },
+        { ...row('b', 'claude', 'm2', 'jarvis', 'ok'), login_expires_at: '2026-10-14T12:00:00.000Z', expires_soon: true, expires_in_days: 1 },
+        // known, but outside the person's window
+        { ...row('c', 'claude', 'm1', 'hulk', 'ok'), login_expires_at: '2026-10-30T12:00:00.000Z', expires_soon: false, expires_in_days: 17 },
+        row('d', 'chatgpt', 'm1', 'hulk', 'login_required'),
+      ],
+    });
+    render(<AiLoginWarnings />);
+    expect(await screen.findByText('O login do Claude em hulk expira em 3 dias')).toBeInTheDocument();
+    expect(screen.getByText('O login do Claude em jarvis expira em 1 dia')).toBeInTheDocument();
+    const soon = screen.getByRole('list', { name: 'Logins de IA prestes a expirar' });
+    expect(soon.querySelectorAll('li')).toHaveLength(2);
+    expect(screen.getByRole('list', { name: 'Logins de IA expirados' }).querySelectorAll('li')).toHaveLength(1);
+    fireEvent.click(soon.querySelectorAll('button')[1]);
+    expect(startMock).toHaveBeenCalledWith('b');
+  });
+
   it('shows nothing when every login is fine', async () => {
     statusMock.mockResolvedValue({ accounts: [row('c', 'claude', 'm1', 'hulk', 'ok')] });
     const { container } = render(<AiLoginWarnings />);

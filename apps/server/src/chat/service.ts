@@ -11,11 +11,13 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions } from '../db/repositories/tab-questions-view.js';
 import type { Machine, User } from '../db/repositories/types.js';
 import { HttpError, notFound } from '../lib/errors.js';
+import { newId } from '../lib/ids.js';
 import { fallbackShortfall, pickFallback, type FallbackPick } from './account-fallback.js';
-import { attachmentContext } from './attachments/context.js';
+import { attachmentContext, isTranscribed } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
 import { withMessageRef } from './message-ref.js';
+import { forgetOrigin, originLine, rememberOrigin, sameNetworkAs, type ClientOrigin, type ClientSignals } from './client-origin.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
@@ -27,7 +29,7 @@ import { accountSystemPrompt, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
 import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { toSubagentView, type SubagentView } from './subagent-view.js';
-import { tabQuestionContext } from './tab-question-context.js';
+import { sanitisePromptText, tabQuestionContext } from './tab-question-context.js';
 import type { ChoicePayload, PermissionPayload } from './tab-question-payload.js';
 import { mintConciergeToken } from './token.js';
 import { indexMessage } from '../memory/index-items.js';
@@ -138,6 +140,9 @@ export interface SendOptions {
   replyToId?: string;
   /** Or the card it answers (TER-849): a gate card or a tab's question of this conversation. */
   replyToCard?: ReplyCardRef;
+  /** What the route read of the client this came from (TER-1088): the server completes it into the
+   *  origin line the concierge reads, unless the person turned that off. */
+  client?: ClientSignals;
 }
 /** What `startIn` takes besides the text: a decision's marking hook, and the attachment ids of a typed message. */
 interface StartOptions {
@@ -147,6 +152,22 @@ interface StartOptions {
   replyToCard?: ReplyCardRef;
   /** The person typed this message (`start`): its run text carries the message's ref (TER-1037). */
   typed?: boolean;
+  /** Where a typed message came from (TER-1088): the line put right after its ref line. */
+  origin?: string | null;
+  /** A held audio message (TER-1085): its question is stored already, its answer row is written now. */
+  held?: HeldTurn;
+  /** Transcripts of an earlier message that became ready since (`deliverLateTranscript`): told in this
+   *  run's text, never bound to this message. */
+  lateRows?: AttachmentRow[];
+}
+/** A message of audio alone waiting for its transcript (TER-1085): what `holdForTranscript` stored, and
+ *  the id it handed out for the answer row that is only written once the turn starts. */
+interface HeldTurn {
+  question: ChatMessage;
+  answerId: string;
+  reply: ReplyTarget | null;
+  /** Its origin line (TER-1088), read when the message came in. */
+  origin?: string | null;
 }
 /** The attachment rows a message checked before storing anything (`attachableRows`): the ids to bind and the rows themselves. */
 interface Attachable {
@@ -183,6 +204,11 @@ export const ACTION_TTL_MS = 24 * 60 * 60 * 1000;
  * the cancel failed. `LiveRun.rollbackStop` is idempotent, so a `subagent_status` frame that arrives
  * first (the ordinary case) makes this timer a no-op. */
 export const CANCEL_TIMEOUT_MS = 30_000;
+
+/** How long a message of audio alone waits for its transcript before the concierge is woken anyway
+ *  (TER-1085). Whisper on the CPU takes seconds for a short clip; past this, the turn runs with the
+ *  transcript marked as still being made, and the text follows in a turn of its own. */
+export const TRANSCRIPT_HOLD_MS = 2 * 60 * 1000;
 
 /**
  * The hourly timer's other half (app.ts, next to `authService.purgeExpired()`): an open row must not
@@ -259,6 +285,10 @@ interface QueuedTurn {
   reply: ReplyTarget | null;
   /** The person typed it: a run text built later carries its ref (TER-1037). */
   typed?: boolean;
+  /** Its origin line (TER-1088), for a run text built later. */
+  origin?: string | null;
+  /** An earlier message's transcripts this turn delivers (TER-1085). */
+  late?: AttachmentRow[];
   question: ChatMessage;
   answer: ChatMessage;
   settle: LiveTurn['settle'];
@@ -461,6 +491,15 @@ export class ChatService {
   private orphans = new Map<string, ChatLiveRun>();
   /** Conversations whose session is being compacted (TER-315): `compact` holds their lock meanwhile. */
   private compacting = new Set<string>();
+  /** Held audio messages (TER-1085) waiting on a transcript, by attachment id: `transcriptSettled` moves them on. */
+  private transcriptWaiters = new Map<string, Set<(id: string) => void>>();
+  /** Ends each hold now: a shutdown (`suspendAll`) does not wait on whisper. */
+  private holdReleases = new Set<() => void>();
+  /** Transcripts a run was told are still being made (TER-1085), by attachment id: once one settles, its
+   *  conversation gets it in a turn of its own. In memory: a restart in between loses the delivery, never
+   *  the transcript (the bubble and `read_attachment` still have it). */
+  private lateTranscripts = new Map<string, { user: User; conversationId: string }>();
+  private readonly holdMs: number;
 
   private deps: {
     repos: Repositories;
@@ -482,8 +521,12 @@ export class ChatService {
     agents: HostAgents;
     runnerFor: (machineId: string) => RunnerClient;
     indexMessage?: (m: { id: string; owner_id: string; project_id: string | null; text: string; created_at: string }) => Promise<void>;
+    /** `TRANSCRIPT_HOLD_MS`, shorter in a test. */
+    transcriptHoldMs?: number;
   }) {
-    this.deps = { ...deps, indexMessage: deps.indexMessage ?? ((m) => indexMessage(deps.repos, m, { embedder: defaultEmbedder(), log: console })) };
+    const { transcriptHoldMs, ...rest } = deps;
+    this.deps = { ...rest, indexMessage: deps.indexMessage ?? ((m) => indexMessage(deps.repos, m, { embedder: defaultEmbedder(), log: console })) };
+    this.holdMs = transcriptHoldMs ?? TRANSCRIPT_HOLD_MS;
   }
 
   /** The active conversation of a scope: the account-wide chat, or one of the user's own projects. A
@@ -1024,7 +1067,10 @@ export class ChatService {
     // on its own (TER-530) — the person may be asking for that very action again. Best effort: a
     // failure keeps the old denial window, never the message.
     await this.deps.repos.chat.markTyped(conversation.id).catch((err) => console.error('chat: last_typed_at not recorded', { conversation_id: conversation.id, error: failureLabel(err) }));
-    const started = await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true });
+    const origin = await this.originFor(user, conversation.id, opts.client);
+    const started =
+      (await this.holdForTranscript(user, conversation, text, opts, origin)) ??
+      (await this.startIn(user, conversation, text, { attachmentIds: opts.attachmentIds, replyToId: opts.replyToId, replyToCard: opts.replyToCard, typed: true, origin }));
     // Only a message the person typed is memory (spec D3/D4): re-injections and wakes go through
     // `startIn` directly and never reach here. Best effort, fire-and-forget: `indexMessage` never throws.
     void this.deps.indexMessage({ id: started.user_message_id, owner_id: user.id, project_id: conversation.project_id, text, created_at: new Date().toISOString() });
@@ -1039,10 +1085,129 @@ export class ChatService {
    * rejects `CHAT_ARCHIVED`, and `startIn` itself throws when the host is not ready — both left for the
    * caller (the waker) to swallow, since there is no card to explain a failure on and no click to retry.
    */
-  async wake(user: User, conversationId: string, text: string): Promise<StartedRun> {
+  async wake(user: User, conversationId: string, text: string, opts?: Pick<StartOptions, 'lateRows'>): Promise<StartedRun> {
     const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
     if (!conversation || conversation.archived_at !== null) throw new HttpError(409, 'Esta conversa foi encerrada', 'CHAT_ARCHIVED');
-    return this.startIn(user, conversation, text);
+    return this.startIn(user, conversation, text, opts);
+  }
+
+  /**
+   * A message of audio alone whose transcript is still being made (TER-1085) is held: the question is
+   * stored and shown now (its bubble says "transcrevendo…"), and its turn starts once whisper is done —
+   * at most `holdMs` later — with the transcript in the run text. Its answer row is written only when
+   * the turn starts, so no screen says "pensando…" while nothing thinks; its id is handed out now, for
+   * the route's answer. Whatever refuses a message (a bad attachment, no host) still refuses it here,
+   * before anything is stored. Null: not such a message — `startIn` takes it like any other.
+   */
+  private async holdForTranscript(user: User, conversation: ChatConversation, text: string, opts: SendOptions, origin: string | null): Promise<StartedRun | null> {
+    if (text.trim() !== '' || !opts.attachmentIds?.length || this.suspending) return null;
+    const attachable = await this.attachableRows(user, conversation.id, opts.attachmentIds);
+    const waitFor = attachable.rows.filter((r) => isTranscribed(r) && r.status === 'pending').map((r) => r.id);
+    if (waitFor.length === 0) return null;
+    const host = await this.hostForConversation(user, conversation, { wait: true });
+    if (host.kind !== 'ready') throw hostFailure(host);
+    await this.guardExclusive(user, conversation, host);
+    const reply = await this.replyTargetFor(user, conversation.id, opts);
+    const question = await this.storeQuestion(user, conversation.id, text, attachable, reply);
+    const held: HeldTurn = { question, answerId: newId(), reply, origin };
+    const d = deferred();
+    // Tracked like any start: a shutdown ends the hold (`holdReleases`) and waits for the turn to land.
+    void this.track(this.releaseHeld(user, conversation, text, held, waitFor, d.settle));
+    return { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: held.answerId, done: d.promise };
+  }
+
+  /** The held turn's second half: the wait, then the turn as `startNow` runs any other. A turn that cannot
+   *  start (the host went away, "Nova conversa") gets its answer row with the failure, never a silence. */
+  private async releaseHeld(user: User, conversation: ChatConversation, text: string, held: HeldTurn, waitFor: string[], settle: LiveTurn['settle']): Promise<void> {
+    await this.waitForTranscripts(waitFor);
+    try {
+      const started = await this.startNow(user, conversation, text, { held, typed: true, origin: held.origin });
+      started.done.then(settle.resolve, settle.reject);
+    } catch (err) {
+      console.error('chat: a held audio message could not start', { conversation_id: conversation.id, message_id: held.question.id, error: failureLabel(err) });
+      try {
+        const answer = await this.deps.repos.chat.addMessage({ id: held.answerId, conversation_id: conversation.id, role: 'assistant', text: '', error_code: 'RUNNER_FAILED' });
+        chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversation.id, message: answer });
+      } catch (e) {
+        console.error('chat: the failure of a held audio message could not be stored', { conversation_id: conversation.id, message_id: held.question.id, error: failureLabel(e) });
+      }
+      settle.reject(err);
+    }
+  }
+
+  /** Resolves once none of `ids` is pending any more, after `holdMs`, or at a shutdown — whichever comes first. */
+  private async waitForTranscripts(ids: string[]): Promise<void> {
+    const left = new Set(ids);
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        for (const id of ids) {
+          const set = this.transcriptWaiters.get(id);
+          set?.delete(notify);
+          if (set?.size === 0) this.transcriptWaiters.delete(id);
+        }
+        this.holdReleases.delete(finish);
+        resolve();
+      };
+      const notify = (id: string) => {
+        left.delete(id);
+        if (left.size === 0) finish();
+      };
+      const timer = setTimeout(finish, this.holdMs);
+      timer.unref?.();
+      this.holdReleases.add(finish);
+      for (const id of ids) {
+        const set = this.transcriptWaiters.get(id) ?? new Set();
+        set.add(notify);
+        this.transcriptWaiters.set(id, set);
+      }
+      // Read after listening: a transcript that settled before the listener was in place is seen here.
+      void Promise.all(ids.map((id) => this.deps.repos.chatAttachments.findById(id).catch(() => null))).then((rows) => {
+        for (const row of rows) if (row && row.status !== 'pending') notify(row.id);
+      });
+    });
+  }
+
+  /**
+   * The extraction queue settled a row (`onDone`, app.ts; a retry putting one back to pending is
+   * ignored). A held audio message waiting on it moves on (TER-1085), and a conversation whose run was
+   * told this transcript was still being made gets it now, in a turn of its own — the person never has
+   * to write "ok" for the concierge to read their audio.
+   */
+  transcriptSettled(row: AttachmentRow): void {
+    if (row.status === 'pending' || !isTranscribed(row)) return;
+    for (const notify of [...(this.transcriptWaiters.get(row.id) ?? [])]) notify(row.id);
+    const late = this.lateTranscripts.get(row.id);
+    if (!late) return;
+    this.lateTranscripts.delete(row.id);
+    void this.deliverLateTranscript(late.user, late.conversationId, row);
+  }
+
+  /** The late transcript's turn: a short server line in the thread, the transcript (or why it failed)
+   *  in the run text only. Never throws: logged by ids and label. */
+  private async deliverLateTranscript(user: User, conversationId: string, row: AttachmentRow): Promise<void> {
+    const what = `${row.kind === 'video' ? 'do vídeo' : 'do áudio'} «${sanitisePromptText(row.name)}»`;
+    const text = row.status === 'ready' ? `Automático: a transcrição ${what} ficou pronta.` : `Automático: a transcrição ${what} falhou.`;
+    try {
+      const started = await this.wake(user, conversationId, text, { lateRows: [row] });
+      started.done.catch(() => undefined);
+    } catch (err) {
+      console.error('chat: a late transcript could not be delivered', { conversation_id: conversationId, attachment_id: row.id, error: failureLabel(err) });
+    }
+  }
+
+  /**
+   * The attachment rows as they are now, for a run text. A transcript still being made is noted for a
+   * delivery of its own once it settles (TER-1085) — noted before the re-read, so one that settles in
+   * between is told twice rather than never.
+   */
+  private async currentAttachments(user: User, conversationId: string, rows: AttachmentRow[]): Promise<AttachmentRow[]> {
+    const pending = (r: AttachmentRow) => isTranscribed(r) && r.status === 'pending';
+    if (!rows.some(pending)) return rows;
+    for (const r of rows) if (pending(r)) this.lateTranscripts.set(r.id, { user, conversationId });
+    const fresh = await Promise.all(rows.map(async (r) => (pending(r) ? ((await this.deps.repos.chatAttachments.findById(r.id).catch(() => null)) ?? r) : r)));
+    for (const r of fresh) if (!pending(r)) this.lateTranscripts.delete(r.id);
+    return fresh;
   }
 
   /** The person's sidebar groups, for a prompt (spec 2026-09-30). The user's own scope, never "view
@@ -1104,14 +1269,52 @@ export class ChatService {
     }
   }
 
+  /**
+   * The origin line of a message the person typed (TER-1088): what the route read of the client, the
+   * account's time zone when the client sent none, and which of the person's machines are on the same
+   * public network. Remembered for `get_client_context`. Null when the route read nothing (a test, an
+   * older caller), when the person turned it off, or when a read fails — the message never waits on it.
+   */
+  private async originFor(user: User, conversationId: string, client: ClientSignals | undefined): Promise<string | null> {
+    if (!client) return null;
+    try {
+      if (!(await this.deps.repos.users.chatClientContext(user.id))) {
+        forgetOrigin(conversationId);
+        return null;
+      }
+      const agents = this.deps.agents;
+      const machines = agents.publicIp ? await this.deps.repos.machines.list(user.id) : [];
+      const origin: ClientOrigin = {
+        ...client,
+        time_zone: client.time_zone ?? (await this.deps.repos.users.timeZone(user.id)),
+        same_network_as: sameNetworkAs(client.ip, machines.map((m) => ({ name: m.name, ip: agents.publicIp?.(m.id) ?? null }))),
+        at: new Date().toISOString(),
+      };
+      rememberOrigin(conversationId, origin);
+      return originLine(origin);
+    } catch (err) {
+      console.error('chat: client origin skipped', { conversation_id: conversationId, error: failureLabel(err) });
+      return null;
+    }
+  }
+
   /** Whether this host's agent runs a claude channel with streamed input. */
   private streams(machineId: string): boolean {
     return this.deps.agents.capabilities(machineId)?.includes(CAPABILITY_CLAUDE_STREAM_INPUT) ?? false;
   }
 
   /** Stores the question (with its attachments bound to it, see `bindAttachments`) and its empty answer,
-   *  and tells every open screen. The published question carries its attachments. */
-  private async storeTurn(user: User, conversationId: string, text: string, attachable: Attachable, reply: ReplyTarget | null): Promise<{ question: ChatMessage; answer: ChatMessage }> {
+   *  and tells every open screen. The published question carries its attachments. A held audio message
+   *  (TER-1085) has its question stored already: only its answer is written, under the id handed out. */
+  private async storeTurn(user: User, conversationId: string, text: string, attachable: Attachable, reply: ReplyTarget | null, held?: HeldTurn): Promise<{ question: ChatMessage; answer: ChatMessage }> {
+    const question = held?.question ?? (await this.storeQuestion(user, conversationId, text, attachable, reply));
+    const answer = await this.deps.repos.chat.addMessage({ ...(held ? { id: held.answerId } : {}), conversation_id: conversationId, role: 'assistant', text: '' });
+    chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: answer });
+    return { question, answer };
+  }
+
+  /** The question half of `storeTurn`: stored, bound to its attachments and published. */
+  private async storeQuestion(user: User, conversationId: string, text: string, attachable: Attachable, reply: ReplyTarget | null): Promise<ChatMessage> {
     const stored = await this.deps.repos.chat.addMessage({
       conversation_id: conversationId,
       role: 'user',
@@ -1121,9 +1324,7 @@ export class ChatService {
     });
     const question = await this.bindAttachments(stored, attachable.ids, user, conversationId);
     chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: question });
-    const answer = await this.deps.repos.chat.addMessage({ conversation_id: conversationId, role: 'assistant', text: '' });
-    chatBus.publish({ type: 'message', user_id: user.id, conversation_id: conversationId, message: answer });
-    return { question, answer };
+    return question;
   }
 
   /**
@@ -1135,11 +1336,14 @@ export class ChatService {
    * stamped under the lock, before the message is written: at most once, like a decision's injection.
    * The attachment block goes next to it (spec 2026-09-26 §5.5): ids and names for `read_attachment`,
    * never the extracted text. A message of files alone has an empty `text`. A reply's quoted message
-   * (TER-447) goes last, right before the words that answer it.
+   * (TER-447) goes last, right before the words that answer it. A ready transcript is the exception to
+   * "never the text" (TER-1085): it goes inline, as data. `late`: an earlier message's transcripts that
+   * became ready since, under their own header.
    */
-  private async runTextFor(user: User, conversationId: string, text: string, attachments: AttachmentRow[], reply: ReplyTarget | null): Promise<string> {
+  private async runTextFor(user: User, conversationId: string, text: string, attachments: AttachmentRow[], reply: ReplyTarget | null, late: AttachmentRow[] = []): Promise<string> {
     const context = await this.tabQuestionContextFor(user, conversationId);
-    return [context, attachmentContext(attachments), replyContext(reply), text].filter((part): part is string => typeof part === 'string' && part.length > 0).join('\n\n');
+    const rows = await this.currentAttachments(user, conversationId, attachments);
+    return [context, attachmentContext(late, { late: true }), attachmentContext(rows), replyContext(reply), text].filter((part): part is string => typeof part === 'string' && part.length > 0).join('\n\n');
   }
 
   private enqueue(conversationId: string, turn: QueuedTurn): void {
@@ -1168,12 +1372,12 @@ export class ChatService {
     // The attachments this message names, checked with reads only (spec 2026-09-26 §5.5), as in
     // `startIn`: a bad id is a message never sent — 409, nothing stored, no decision marked, no tab
     // context stamped — whether the message is injected or queued.
-    const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
-    const reply = await this.replyTargetFor(user, conversation.id, opts);
+    const { attachable, reply } = await this.checkedInputs(user, conversation.id, opts);
+    const late = opts?.lateRows ?? [];
     if (live?.accepting && opts?.beforeRun) await opts.beforeRun();
-    const baseText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply) : undefined;
-    const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
-    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed);
+    const baseText = live?.accepting ? await this.runTextFor(user, conversation.id, text, attachable.rows, reply, late) : undefined;
+    const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply, opts?.held);
+    const withRef = (t: string) => withMessageRef(t, question.id, text, opts?.typed, opts?.origin);
     let runText = baseText === undefined ? undefined : withRef(baseText);
     const d = deferred();
     const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id, done: d.promise };
@@ -1182,16 +1386,24 @@ export class ChatService {
     // would leave the message waiting until it ends.
     const now = this.live.get(conversation.id);
     if (now?.accepting) {
-      runText ??= withRef(await this.runTextFor(user, conversation.id, text, attachable.rows, reply));
+      runText ??= withRef(await this.runTextFor(user, conversation.id, text, attachable.rows, reply, late));
       if (this.live.get(conversation.id) === now && now.add({ uuid: randomUUID(), text: runText, question, answer, settle: d.settle })) return started;
     }
-    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, question, answer, settle: d.settle });
+    this.enqueue(conversation.id, { userId: user.id, text, runText, attachments: attachable.rows, reply, typed: opts?.typed, origin: opts?.origin, late, question, answer, settle: d.settle });
     // Announced here, before the queue may run: `launchQueued` can close this turn at once.
     chatBus.publish({ type: 'run_started', user_id: user.id, conversation_id: conversation.id, message_id: answer.id });
     this.live.get(conversation.id)?.giveWay();
     // The process may already be gone, with the lock released during the awaits above.
     if (!this.running.has(conversation.id)) void this.launchQueued(user, conversation.id);
     return started;
+  }
+
+  /** The attachments and the reply a message carries, checked before anything is written. A held audio
+   *  message (TER-1085) was checked when it was stored: its rows are re-read bound to it, transcripts and all. */
+  private async checkedInputs(user: User, conversationId: string, opts: StartOptions | undefined): Promise<{ attachable: Attachable; reply: ReplyTarget | null }> {
+    if (opts?.held) return { attachable: { ids: [], rows: await this.deps.repos.chatAttachments.listForMessages([opts.held.question.id]) }, reply: opts.held.reply };
+    const attachable = await this.attachableRows(user, conversationId, opts?.attachmentIds ?? []);
+    return { attachable, reply: await this.replyTargetFor(user, conversationId, opts) };
   }
 
   /**
@@ -1332,9 +1544,8 @@ export class ChatService {
       // The attachments this message names, checked with reads only (spec 2026-09-26 §5.5): a bad id is
       // a message never sent, so this comes before the host is pinned, before a decision is marked
       // injected and before the tab context is stamped.
-      const attachable = await this.attachableRows(user, conversation.id, opts?.attachmentIds ?? []);
       // The message this one answers (TER-447), under the same rule: read before anything is written.
-      const reply = await this.replyTargetFor(user, conversation.id, opts);
+      const { attachable, reply } = await this.checkedInputs(user, conversation.id, opts);
 
       // The host this run uses is the host this conversation has, and from here on it says so: a
       // conversation whose machine was auto-picked (one candidate, nothing stored) is otherwise
@@ -1356,9 +1567,9 @@ export class ChatService {
       // mark a decision injected that it never actually sent (fix round 2).
       if (opts?.beforeRun) await opts.beforeRun();
 
-      const baseText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply);
-      const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply);
-      const runText = withMessageRef(baseText, question.id, text, opts?.typed);
+      const baseText = await this.runTextFor(user, conversation.id, text, attachable.rows, reply, opts?.lateRows);
+      const { question, answer } = await this.storeTurn(user, conversation.id, text, attachable, reply, opts?.held);
+      const runText = withMessageRef(baseText, question.id, text, opts?.typed, opts?.origin);
       const started = { conversation_id: conversation.id, user_message_id: question.id, assistant_message_id: answer.id };
 
       // Not awaited: this call resolves now, and the lock passes to the run, whose own `finally`
@@ -1775,6 +1986,8 @@ export class ChatService {
 
   private async suspendOnce(): Promise<void> {
     this.suspending = true;
+    // A held audio message (TER-1085) stops waiting on whisper: its turn lands in a process or a queue now.
+    for (const release of [...this.holdReleases]) release();
     try {
       // A message already past the `suspending` check lands in a process or a queue first.
       await Promise.all(this.starts);
@@ -1786,7 +1999,7 @@ export class ChatService {
         const stored = queue.map((q) => ({
           question_id: q.question.id,
           answer_id: q.answer.id,
-          text: q.runText ?? withMessageRef([attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed),
+          text: q.runText ?? withMessageRef([attachmentContext(q.late ?? [], { late: true }), attachmentContext(q.attachments), replyContext(q.reply), q.text].filter(Boolean).join('\n\n'), q.question.id, q.text, q.typed, q.origin),
         }));
         const held = rows.get(conversationId);
         rows.set(conversationId, { userId: held?.userId ?? queue[0].userId, turns: [...(held?.turns ?? []), ...stored] });
@@ -2020,7 +2233,7 @@ export class ChatService {
       if (streamed) carried = await this.takeOver(user, conversation);
       taken = streamed ? queue.splice(0) : queue.splice(0, 1);
       const turns: LiveTurn[] = [];
-      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply), q.question.id, q.text, q.typed), question: q.question, answer: q.answer, settle: q.settle });
+      for (const q of taken) turns.push({ uuid: randomUUID(), text: q.runText ?? withMessageRef(await this.runTextFor(user, conversationId, q.text, q.attachments, q.reply, q.late), q.question.id, q.text, q.typed, q.origin), question: q.question, answer: q.answer, settle: q.settle });
       // A one-shot run takes a single queued turn, whose question row always exists.
       const oneShot = taken[0];
       // From here the run owns the lock and releases it itself, and settles the turns.

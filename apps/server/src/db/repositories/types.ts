@@ -4,6 +4,8 @@ import type {
   Machine as PrismaMachine,
   Project as PrismaProject,
   ProjectMachine as PrismaProjectMachine,
+  ProjectRepository as PrismaProjectRepository,
+  ProjectRepositoryCheckout as PrismaProjectRepositoryCheckout,
   Tab as PrismaTab,
   TabEvent as PrismaTabEvent,
   Task as PrismaTask,
@@ -83,6 +85,9 @@ export interface Session {
   token_hash: string;
   expires_at: string;
   created_at: string;
+  last_used_at: string;
+  ip: string | null;
+  user_agent: string | null;
 }
 
 export interface Machine {
@@ -156,6 +161,36 @@ export interface ProjectMachine {
   cwd: string;
   position: number;
   created_at: string;
+}
+
+/** `unsupported`: a checkout with no GitHub origin; `no_access`: the integration does not see the repo. */
+export type RepoStatus = 'ok' | 'unsupported' | 'no_access';
+
+/** Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). */
+export interface ProjectRepositoryCheckout {
+  machine_id: string;
+  /** relative to the project's folder on that machine; `.` for the folder itself */
+  dir: string;
+  default_branch: string | null;
+  has_commits: boolean;
+  seen_at: string;
+  /** set when a scan no longer found the folder; the row is never deleted */
+  missing_at: string | null;
+}
+
+/** A git repository discovery found in a project's folder (spec 2026-10-07 multi-repo R1, R4). */
+export interface ProjectRepository {
+  id: string;
+  project_id: string;
+  /** owner/repo */
+  full_name: string;
+  /** short name for paths and chips, unique in the project and never changed */
+  key: string;
+  description: string | null;
+  status: RepoStatus;
+  discovered_at: string;
+  updated_at: string;
+  checkouts: ProjectRepositoryCheckout[];
 }
 
 export interface Tab {
@@ -332,6 +367,9 @@ export const mapSession = (s: PrismaSession): Session => ({
   token_hash: s.tokenHash,
   expires_at: s.expiresAt.toISOString(),
   created_at: s.createdAt.toISOString(),
+  last_used_at: s.lastUsedAt.toISOString(),
+  ip: s.ip,
+  user_agent: s.userAgent,
 });
 
 export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null }): Machine => ({
@@ -380,6 +418,28 @@ export const mapProjectMachine = (l: PrismaProjectMachine): ProjectMachine => ({
   cwd: l.cwd,
   position: l.position,
   created_at: l.createdAt.toISOString(),
+});
+
+const REPO_STATUSES: readonly RepoStatus[] = ['ok', 'unsupported', 'no_access'];
+
+export const mapProjectRepository = (r: PrismaProjectRepository & { checkouts: PrismaProjectRepositoryCheckout[] }): ProjectRepository => ({
+  id: r.id,
+  project_id: r.projectId,
+  full_name: r.fullName,
+  key: r.key,
+  description: r.description,
+  // a value this release does not know is not a repository it may act on
+  status: REPO_STATUSES.includes(r.status as RepoStatus) ? (r.status as RepoStatus) : 'unsupported',
+  discovered_at: r.discoveredAt.toISOString(),
+  updated_at: r.updatedAt.toISOString(),
+  checkouts: r.checkouts.map((c) => ({
+    machine_id: c.machineId,
+    dir: c.dir,
+    default_branch: c.defaultBranch,
+    has_commits: c.hasCommits,
+    seen_at: c.seenAt.toISOString(),
+    missing_at: c.missingAt?.toISOString() ?? null,
+  })),
 });
 
 export const mapTab = (t: PrismaTab): Tab => ({
@@ -495,6 +555,8 @@ export interface AiAccount {
   config_dir: string | null;
   /** TER-990: the only project this account may run in; null = any project of the owner. */
   exclusive_project: { id: string; name: string } | null;
+  /** TER-1079: when the CLI's login expires, as its own notice told; null = unknown. */
+  login_expires_at: string | null;
   created_at: string;
 }
 
@@ -504,6 +566,7 @@ export function mapAiAccount(a: {
   label: string;
   machineId: string;
   configDir: string | null;
+  loginExpiresAt?: Date | null;
   createdAt: Date;
   exclusiveProject?: { id: string; name: string } | null;
 }): AiAccount {
@@ -514,6 +577,7 @@ export function mapAiAccount(a: {
     machine_id: a.machineId,
     config_dir: a.configDir,
     exclusive_project: a.exclusiveProject ? { id: a.exclusiveProject.id, name: a.exclusiveProject.name } : null,
+    login_expires_at: a.loginExpiresAt?.toISOString() ?? null,
     created_at: a.createdAt.toISOString(),
   };
 }

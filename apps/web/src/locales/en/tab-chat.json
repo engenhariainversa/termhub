@@ -65,5 +65,17 @@
   "{{count}} ferramentas_one": "{{count}} tool",
   "{{count}} ferramentas_other": "{{count}} tools",
   "{{count}} imagens_one": "{{count}} image",
-  "{{count}} imagens_other": "{{count}} images"
+  "{{count}} imagens_other": "{{count}} images",
+  "Esta aba é um terminal sem agente": "This tab is a terminal with no agent",
+  "Inicie uma sessão para conversar por aqui.": "Start a session to chat from here.",
+  "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Session started. The conversation shows up here as soon as the agent answers.",
+  "Iniciar sessão": "Start session",
+  "Iniciando…": "Starting…",
+  "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
+  "{{account}} ({{cli}})": "{{account}} ({{cli}})",
+  "Escolher outra conta": "Choose another account",
+  "Escolha a conta para iniciar a sessão:": "Choose the account to start the session with:",
+  "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one under AI accounts.",
+  "Não foi possível ler as contas de IA.": "Could not read the AI accounts.",
+  "Não foi possível iniciar a sessão. Tente de novo.": "Could not start the session. Try again."
 }

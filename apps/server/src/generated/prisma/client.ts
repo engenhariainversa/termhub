@@ -94,6 +94,18 @@ export type Project = Prisma.ProjectModel
  */
 export type ProjectMachine = Prisma.ProjectMachineModel
 /**
+ * Model ProjectRepository
+ * A git repository found in a project's folder (spec 2026-10-07 multi-repo R1, R4). Written only by
+ * discovery; what the person changes about it lives in the setup (`repos`), keyed by `full_name`.
+ */
+export type ProjectRepository = Prisma.ProjectRepositoryModel
+/**
+ * Model ProjectRepositoryCheckout
+ * Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). A folder that is gone
+ * is marked with `missing_at`, never deleted.
+ */
+export type ProjectRepositoryCheckout = Prisma.ProjectRepositoryCheckoutModel
+/**
  * Model Tab
  * 
  */
@@ -157,8 +169,8 @@ export type AutomationRun = Prisma.AutomationRunModel
 /**
  * Model TabUsage
  * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
- * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
- * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ * read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+ * `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
  */
 export type TabUsage = Prisma.TabUsageModel
 /**
@@ -318,6 +330,20 @@ export type TabLimitNotice = Prisma.TabLimitNoticeModel
  * `closeForTab`) lives only in the migration `20260926120000_tab_questions_indexes`: Prisma cannot express it.
  */
 export type TabQuestion = Prisma.TabQuestionModel
+/**
+ * Model ChatAutoSample
+ * TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+ * thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+ * `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+ * `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+ */
+export type ChatAutoSample = Prisma.ChatAutoSampleModel
+/**
+ * Model ChatFocus
+ * TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+ * A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+ */
+export type ChatFocus = Prisma.ChatFocusModel
 /**
  * Model ChatDecision
  * A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to

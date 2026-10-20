@@ -3,11 +3,13 @@ import { z } from 'zod';
 import { aiLoginResumeBody, aiLoginStatusQuery, aiLoginSubmitBody } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError } from '../lib/errors.js';
-import { aiLoginStatus, cancelAiLogin, resumeAiLoginTabs, startAiLogin, submitAiLogin } from '../control/ai-login.js';
+import { LOGIN_EXPIRY_MAX_DAYS } from '../ai/login-expiry.js';
+import { aiLoginStatus, cancelAiLogin, resumeAiLoginTabs, setLoginWarnDays, startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ControlError, controlContextForRequest, type ControlContext } from '../control/context.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const loginParams = idParam.extend({ loginId: z.string().min(1).max(64) });
+const warnBody = z.object({ days: z.number().int().min(0).max(LOGIN_EXPIRY_MAX_DAYS) });
 
 /** Changing what the account is logged in as is an update of the account, whatever the HTTP method. */
 const UPDATE = { config: { action: 'update' } } as const;
@@ -28,6 +30,12 @@ export async function aiLoginRoutes(app: FastifyInstance, repos: Repositories): 
   app.get('/login-status', async (request) => {
     const { refresh } = aiLoginStatusQuery.parse(request.query);
     return aiLoginStatus(ctxOf(request), !!refresh);
+  });
+
+  // How many days ahead the caller is warned of a login expiring (TER-1079): their own setting.
+  app.put('/login-warning', UPDATE, async (request) => {
+    const { days } = warnBody.parse(request.body);
+    return run(setLoginWarnDays(ctxOf(request), days));
   });
 
   app.post('/:id/login', UPDATE, async (request) => {

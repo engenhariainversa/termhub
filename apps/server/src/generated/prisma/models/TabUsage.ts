@@ -15,8 +15,8 @@ import type * as Prisma from "../internal/prismaNamespace.js"
 /**
  * Model TabUsage
  * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
- * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
- * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ * read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+ * `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
  */
 export type TabUsageModel = runtime.Types.Result.DefaultSelection<Prisma.$TabUsagePayload>
 
@@ -210,6 +210,7 @@ export type TabUsageWhereInput = {
   sessionId?: Prisma.StringFilter<"TabUsage"> | string
   transcriptOffset?: Prisma.BigIntFilter<"TabUsage"> | bigint | number
   updatedAt?: Prisma.DateTimeFilter<"TabUsage"> | Date | string
+  tab?: Prisma.XOR<Prisma.TabScalarRelationFilter, Prisma.TabWhereInput>
 }
 
 export type TabUsageOrderByWithRelationInput = {
@@ -217,6 +218,7 @@ export type TabUsageOrderByWithRelationInput = {
   sessionId?: Prisma.SortOrder
   transcriptOffset?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
+  tab?: Prisma.TabOrderByWithRelationInput
 }
 
 export type TabUsageWhereUniqueInput = Prisma.AtLeast<{
@@ -227,6 +229,7 @@ export type TabUsageWhereUniqueInput = Prisma.AtLeast<{
   sessionId?: Prisma.StringFilter<"TabUsage"> | string
   transcriptOffset?: Prisma.BigIntFilter<"TabUsage"> | bigint | number
   updatedAt?: Prisma.DateTimeFilter<"TabUsage"> | Date | string
+  tab?: Prisma.XOR<Prisma.TabScalarRelationFilter, Prisma.TabWhereInput>
 }, "tabId">
 
 export type TabUsageOrderByWithAggregationInput = {
@@ -252,10 +255,10 @@ export type TabUsageScalarWhereWithAggregatesInput = {
 }
 
 export type TabUsageCreateInput = {
-  tabId: string
   sessionId: string
   transcriptOffset: bigint | number
   updatedAt?: Date | string
+  tab: Prisma.TabCreateNestedOneWithoutUsageInput
 }
 
 export type TabUsageUncheckedCreateInput = {
@@ -266,10 +269,10 @@ export type TabUsageUncheckedCreateInput = {
 }
 
 export type TabUsageUpdateInput = {
-  tabId?: Prisma.StringFieldUpdateOperationsInput | string
   sessionId?: Prisma.StringFieldUpdateOperationsInput | string
   transcriptOffset?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tab?: Prisma.TabUpdateOneRequiredWithoutUsageNestedInput
 }
 
 export type TabUsageUncheckedUpdateInput = {
@@ -287,7 +290,6 @@ export type TabUsageCreateManyInput = {
 }
 
 export type TabUsageUpdateManyMutationInput = {
-  tabId?: Prisma.StringFieldUpdateOperationsInput | string
   sessionId?: Prisma.StringFieldUpdateOperationsInput | string
   transcriptOffset?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -298,6 +300,11 @@ export type TabUsageUncheckedUpdateManyInput = {
   sessionId?: Prisma.StringFieldUpdateOperationsInput | string
   transcriptOffset?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type TabUsageNullableScalarRelationFilter = {
+  is?: Prisma.TabUsageWhereInput | null
+  isNot?: Prisma.TabUsageWhereInput | null
 }
 
 export type TabUsageCountOrderByAggregateInput = {
@@ -329,12 +336,84 @@ export type TabUsageSumOrderByAggregateInput = {
   transcriptOffset?: Prisma.SortOrder
 }
 
+export type TabUsageCreateNestedOneWithoutTabInput = {
+  create?: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+  connectOrCreate?: Prisma.TabUsageCreateOrConnectWithoutTabInput
+  connect?: Prisma.TabUsageWhereUniqueInput
+}
+
+export type TabUsageUncheckedCreateNestedOneWithoutTabInput = {
+  create?: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+  connectOrCreate?: Prisma.TabUsageCreateOrConnectWithoutTabInput
+  connect?: Prisma.TabUsageWhereUniqueInput
+}
+
+export type TabUsageUpdateOneWithoutTabNestedInput = {
+  create?: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+  connectOrCreate?: Prisma.TabUsageCreateOrConnectWithoutTabInput
+  upsert?: Prisma.TabUsageUpsertWithoutTabInput
+  disconnect?: Prisma.TabUsageWhereInput | boolean
+  delete?: Prisma.TabUsageWhereInput | boolean
+  connect?: Prisma.TabUsageWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TabUsageUpdateToOneWithWhereWithoutTabInput, Prisma.TabUsageUpdateWithoutTabInput>, Prisma.TabUsageUncheckedUpdateWithoutTabInput>
+}
+
+export type TabUsageUncheckedUpdateOneWithoutTabNestedInput = {
+  create?: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+  connectOrCreate?: Prisma.TabUsageCreateOrConnectWithoutTabInput
+  upsert?: Prisma.TabUsageUpsertWithoutTabInput
+  disconnect?: Prisma.TabUsageWhereInput | boolean
+  delete?: Prisma.TabUsageWhereInput | boolean
+  connect?: Prisma.TabUsageWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TabUsageUpdateToOneWithWhereWithoutTabInput, Prisma.TabUsageUpdateWithoutTabInput>, Prisma.TabUsageUncheckedUpdateWithoutTabInput>
+}
+
 export type BigIntFieldUpdateOperationsInput = {
   set?: bigint | number
   increment?: bigint | number
   decrement?: bigint | number
   multiply?: bigint | number
   divide?: bigint | number
+}
+
+export type TabUsageCreateWithoutTabInput = {
+  sessionId: string
+  transcriptOffset: bigint | number
+  updatedAt?: Date | string
+}
+
+export type TabUsageUncheckedCreateWithoutTabInput = {
+  sessionId: string
+  transcriptOffset: bigint | number
+  updatedAt?: Date | string
+}
+
+export type TabUsageCreateOrConnectWithoutTabInput = {
+  where: Prisma.TabUsageWhereUniqueInput
+  create: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+}
+
+export type TabUsageUpsertWithoutTabInput = {
+  update: Prisma.XOR<Prisma.TabUsageUpdateWithoutTabInput, Prisma.TabUsageUncheckedUpdateWithoutTabInput>
+  create: Prisma.XOR<Prisma.TabUsageCreateWithoutTabInput, Prisma.TabUsageUncheckedCreateWithoutTabInput>
+  where?: Prisma.TabUsageWhereInput
+}
+
+export type TabUsageUpdateToOneWithWhereWithoutTabInput = {
+  where?: Prisma.TabUsageWhereInput
+  data: Prisma.XOR<Prisma.TabUsageUpdateWithoutTabInput, Prisma.TabUsageUncheckedUpdateWithoutTabInput>
+}
+
+export type TabUsageUpdateWithoutTabInput = {
+  sessionId?: Prisma.StringFieldUpdateOperationsInput | string
+  transcriptOffset?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+}
+
+export type TabUsageUncheckedUpdateWithoutTabInput = {
+  sessionId?: Prisma.StringFieldUpdateOperationsInput | string
+  transcriptOffset?: Prisma.BigIntFieldUpdateOperationsInput | bigint | number
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 
@@ -344,6 +423,7 @@ export type TabUsageSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   sessionId?: boolean
   transcriptOffset?: boolean
   updatedAt?: boolean
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabUsage"]>
 
 export type TabUsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -351,6 +431,7 @@ export type TabUsageSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   sessionId?: boolean
   transcriptOffset?: boolean
   updatedAt?: boolean
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabUsage"]>
 
 export type TabUsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -358,6 +439,7 @@ export type TabUsageSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   sessionId?: boolean
   transcriptOffset?: boolean
   updatedAt?: boolean
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["tabUsage"]>
 
 export type TabUsageSelectScalar = {
@@ -368,10 +450,21 @@ export type TabUsageSelectScalar = {
 }
 
 export type TabUsageOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"tabId" | "sessionId" | "transcriptOffset" | "updatedAt", ExtArgs["result"]["tabUsage"]>
+export type TabUsageInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
+}
+export type TabUsageIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
+}
+export type TabUsageIncludeUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  tab?: boolean | Prisma.TabDefaultArgs<ExtArgs>
+}
 
 export type $TabUsagePayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "TabUsage"
-  objects: {}
+  objects: {
+    tab: Prisma.$TabPayload<ExtArgs>
+  }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     tabId: string
     sessionId: string
@@ -771,6 +864,7 @@ readonly fields: TabUsageFieldRefs;
  */
 export interface Prisma__TabUsageClient<T, Null = never, ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
   readonly [Symbol.toStringTag]: "PrismaPromise"
+  tab<T extends Prisma.TabDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.TabDefaultArgs<ExtArgs>>): Prisma.Prisma__TabClient<runtime.Types.Result.GetResult<Prisma.$TabPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -821,6 +915,10 @@ export type TabUsageFindUniqueArgs<ExtArgs extends runtime.Types.Extensions.Inte
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
+  /**
    * Filter, which TabUsage to fetch.
    */
   where: Prisma.TabUsageWhereUniqueInput
@@ -839,6 +937,10 @@ export type TabUsageFindUniqueOrThrowArgs<ExtArgs extends runtime.Types.Extensio
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
+  /**
    * Filter, which TabUsage to fetch.
    */
   where: Prisma.TabUsageWhereUniqueInput
@@ -856,6 +958,10 @@ export type TabUsageFindFirstArgs<ExtArgs extends runtime.Types.Extensions.Inter
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
   /**
    * Filter, which TabUsage to fetch.
    */
@@ -905,6 +1011,10 @@ export type TabUsageFindFirstOrThrowArgs<ExtArgs extends runtime.Types.Extension
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
+  /**
    * Filter, which TabUsage to fetch.
    */
   where?: Prisma.TabUsageWhereInput
@@ -952,6 +1062,10 @@ export type TabUsageFindManyArgs<ExtArgs extends runtime.Types.Extensions.Intern
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
   /**
    * Filter, which TabUsages to fetch.
    */
@@ -1001,6 +1115,10 @@ export type TabUsageCreateArgs<ExtArgs extends runtime.Types.Extensions.Internal
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
   /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
+  /**
    * The data needed to create a TabUsage.
    */
   data: Prisma.XOR<Prisma.TabUsageCreateInput, Prisma.TabUsageUncheckedCreateInput>
@@ -1034,6 +1152,10 @@ export type TabUsageCreateManyAndReturnArgs<ExtArgs extends runtime.Types.Extens
    */
   data: Prisma.TabUsageCreateManyInput | Prisma.TabUsageCreateManyInput[]
   skipDuplicates?: boolean
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageIncludeCreateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1048,6 +1170,10 @@ export type TabUsageUpdateArgs<ExtArgs extends runtime.Types.Extensions.Internal
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
   /**
    * The data needed to update a TabUsage.
    */
@@ -1100,6 +1226,10 @@ export type TabUsageUpdateManyAndReturnArgs<ExtArgs extends runtime.Types.Extens
    * Limit how many TabUsages to update.
    */
   limit?: number
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageIncludeUpdateManyAndReturn<ExtArgs> | null
 }
 
 /**
@@ -1114,6 +1244,10 @@ export type TabUsageUpsertArgs<ExtArgs extends runtime.Types.Extensions.Internal
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
   /**
    * The filter to search for the TabUsage to update in case it exists.
    */
@@ -1140,6 +1274,10 @@ export type TabUsageDeleteArgs<ExtArgs extends runtime.Types.Extensions.Internal
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
   /**
    * Filter which TabUsage to delete.
    */
@@ -1172,4 +1310,8 @@ export type TabUsageDefaultArgs<ExtArgs extends runtime.Types.Extensions.Interna
    * Omit specific fields from the TabUsage
    */
   omit?: Prisma.TabUsageOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabUsageInclude<ExtArgs> | null
 }

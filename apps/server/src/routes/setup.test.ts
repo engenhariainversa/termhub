@@ -7,6 +7,8 @@ vi.mock('../config.js', () => ({ config: { publicUrl: 'https://app.test' } }));
 
 import type { Repositories } from '../db/repositories/index.js';
 import { applyErrorHandler } from '../lib/errors.js';
+import { effectiveRepos } from '../setup/repos.js';
+import { normalizeSetup, SETUP_VERSION, type ProjectSetupData } from '../setup/schema.js';
 import { forgetSync } from '../setup/tickets-sync.js';
 import { setupRoutes } from './setup.js';
 
@@ -16,7 +18,7 @@ vi.mock('../setup/tickets-sync.js', () => ({
   forgetSync: vi.fn(),
 }));
 
-function build(saved: unknown[], ai?: unknown, automation?: unknown) {
+function build(saved: unknown[], ai?: unknown, automation?: unknown, more: Record<string, unknown> = {}) {
   const app = Fastify();
   applyErrorHandler(app);
   app.addHook('preHandler', async (request) => {
@@ -27,12 +29,14 @@ function build(saved: unknown[], ai?: unknown, automation?: unknown) {
   const save = vi.fn(async (_p: string, data: unknown) => ({ data }));
   const repos = {
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    integrations: { findById: vi.fn(async (id: string) => ({ id, owner_id: 'u1', provider: 'github', config: {} })) },
+    integrations: { findById: vi.fn(async (id: string) => ({ id, owner_id: id === 'foreign' ? 'u2' : 'u1', provider: 'github', config: {} })) },
     machines: { findById: vi.fn() },
     projectSetup: {
-      get: vi.fn(async () => ({ data: { ticket_sources: saved, ...(ai ? { ai } : {}), ...(automation ? { automation } : {}) } })),
+      get: vi.fn(async () => ({ data: { ticket_sources: saved, ...(ai ? { ai } : {}), ...(automation ? { automation } : {}), ...more } })),
       save,
     },
+    // nothing discovered: the list is what the setup alone gives
+    projectRepositories: { effective: vi.fn(async (_p: string, data: ProjectSetupData) => effectiveRepos(normalizeSetup(data, SETUP_VERSION), [])) },
     tickets: { pruneSource },
     automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev', created_at: '', ...e })) },
   } as unknown as Repositories;
@@ -111,5 +115,71 @@ describe('setup PUT and the automation block', () => {
     const sent = (save.mock.calls[0][1] as { automation: { enabled: boolean; autonomy: string } }).automation;
     expect(sent.enabled).toBe(false);
     expect(sent.autonomy).toBe('pr');
+  });
+});
+
+describe('setup and the project repositories (TER-1076)', () => {
+  const repo = { integration_id: 'g', full_name: 'acme/api', base_branch: 'develop' };
+  const override = { full_name: 'acme/web', autonomy: 'merge', merge_order: 1 };
+  const storedRepos = [{ full_name: 'acme/bff', enabled: false }];
+  const storedDefaults = { integration_id: 'g', scan_depth: 2 };
+
+  it('GET answers the effective list next to the setup', async () => {
+    const { app } = build([], undefined, { autonomy: 'merge' }, { repo });
+    const res = await app.inject({ method: 'GET', url: '/projects/p1/setup' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().effective_repos).toEqual([expect.objectContaining({ full_name: 'acme/api', key: 'main', base_branch: 'develop', autonomy: 'merge', discovered: false })]);
+    expect(res.json().setup.data.repo).toEqual(repo);
+  });
+
+  it('PUT saves the overrides and answers the list they give', async () => {
+    const { app, save } = build([]);
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { repo, automation: { autonomy: 'deploy' }, repo_defaults: { scan_depth: 3 }, repos: [override] } });
+    expect(res.statusCode).toBe(200);
+    const data = save.mock.calls[0][1] as ProjectSetupData;
+    expect(data.repos).toEqual([expect.objectContaining({ ...override, enabled: true })]);
+    expect(data.repo_defaults).toEqual({ integration_id: null, scan_depth: 3 });
+    expect(res.json().effective_repos.map((e: { full_name: string; autonomy: string; key: string | null }) => [e.full_name, e.key, e.autonomy])).toEqual([['acme/api', 'main', 'deploy'], ['acme/web', null, 'merge']]);
+  });
+
+  it('keeps the stored overrides and defaults when the body omits them (a client from before them)', async () => {
+    const { app, save } = build([], undefined, undefined, { repos: storedRepos, repo_defaults: storedDefaults });
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { repo } });
+    expect(res.statusCode).toBe(200);
+    const data = save.mock.calls[0][1] as ProjectSetupData;
+    expect(data.repos).toEqual(storedRepos);
+    expect(data.repo_defaults).toEqual(storedDefaults);
+  });
+
+  it('replaces them when the body sends them, an empty list included', async () => {
+    const { app, save } = build([], undefined, undefined, { repos: storedRepos, repo_defaults: storedDefaults });
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { repos: [], repo_defaults: {} } });
+    expect(res.statusCode).toBe(200);
+    const data = save.mock.calls[0][1] as ProjectSetupData;
+    expect(data.repos).toEqual([]);
+    expect(data.repo_defaults).toEqual({ integration_id: null, scan_depth: 1 });
+  });
+
+  it('refuses an integration outside the scope in the defaults or in an override', async () => {
+    for (const payload of [{ repo_defaults: { integration_id: 'foreign' } }, { repos: [{ full_name: 'acme/web', integration_id: 'foreign' }] }]) {
+      const { app, save } = build([]);
+      const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup', payload });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe('Integração do repositório inexistente');
+      expect(save).not.toHaveBeenCalled();
+    }
+  });
+
+  it('refuses an override above the project level, measured against the stored level when the body has no automation', async () => {
+    const above = build([]);
+    expect((await above.app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { automation: { autonomy: 'pr' }, repos: [override] } })).statusCode).toBe(400);
+    expect(above.save).not.toHaveBeenCalled();
+
+    const stored = build([], undefined, { enabled: true, autonomy: 'merge' });
+    expect((await stored.app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { repos: [override] } })).statusCode).toBe(200);
+    expect((stored.save.mock.calls[0][1] as ProjectSetupData).automation).toEqual({ enabled: true, autonomy: 'merge' });
+
+    const storedLow = build([], undefined, { enabled: true, autonomy: 'pr' });
+    expect((await storedLow.app.inject({ method: 'PUT', url: '/projects/p1/setup', payload: { repos: [override] } })).statusCode).toBe(400);
   });
 });

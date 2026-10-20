@@ -52,6 +52,10 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   the second wall after `--disallowedTools`, and it is what closes auto mode's gap: the classifier can
   no longer approve a push to another ref. Only automatic tabs get it (manual and `start_agent` tabs
   have no worktree, so no `--settings`). Each `deny` is listed in the feed as `guard_blocked`.
+  Guard version 2 (agent 0.29.0+, `MULTI_REPO_GUARD_MIN_AGENT_VERSION`; the script's second line says
+  `# termhub-guard v2`) also takes the run's own branch pushed as `git -C <worktree>/<key> push …`, in the
+  same four plain forms, where `<key>` is a direct subfolder named like a repo key (no `/`, no `..`). It is
+  for multi-repo runs, whose worktree is a workspace root with one repo per folder.
   The server writes `guard.json` before it types any line that names it — the start, the follower's
   restart of an agent that exited, the resume card and the account swap (`installRunGuard`, TER-1005).
   A run never starts or comes back without the lock: a machine whose agent is older than 0.19.0 is left
@@ -351,6 +355,27 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
 - The server checks every Claude/Codex account of an online agent machine every 10 minutes (and 30 s after
   an agent connects). An account found logged out shows a red warning (web sidebar, Contas de IA, the app's
   banner), and the machine's owner gets one push ("Login do Claude expirou"); no other until it is back.
+- **Warned ahead of the expiry (TER-1079, Claude only).** Claude Code gives the date to nobody but the
+  screen: `claude auth status` has no expiry field and no documented file holds it, and termhub does not
+  read the credential for it. What the CLI does is print a startup notice from three days before, "Your
+  login expires in 3 days · run /login to renew". So when a Claude session starts in a tab (the
+  `SessionStart` hook with `source: startup`), the server reads that tab's screen once, six seconds in; the
+  notice becomes the account's `login_expires_at` (precise to the day, like the notice). The machine's owner
+  is then warned **once per login**: one push ("Login do Claude expira em N dias", the tap opens "Refazer
+  login"), one line in the chat of the projects that list the account (the account chat when none does),
+  an amber line in the sidebar and on the machine's row, and the "Expira em N dias" badge with "Refazer
+  login" in Contas de IA. `list_ai_accounts` answers `login_expires_at` and `expires_soon`, so the concierge
+  can offer `start_ai_login`. How far ahead is the person's own setting in Contas de IA ("Avisar antes de o
+  login expirar": 3 days by default, 2, 1 or never; `users.ai_login_warn_days`); more than 3 is not offered
+  because the CLI says nothing earlier. Automatic work prefers the project's accounts with slack over one
+  expiring within three days (a preference: alone or with the others full, it is still used).
+  Limits to know: an account is only read when one of its Claude sessions starts in a termhub tab during
+  those three days, so a login nobody starts a session on is not warned about; a login redone by hand in a
+  terminal (`/login`) keeps its badge until the old date passes, while "Refazer login" clears it at once;
+  Codex, Gemini and Antigravity print no such notice and are never warned ahead. Nothing of the screen is
+  stored or logged: only ids and the number of days (`ai login expiry read from the screen`, `ai login
+  expires soon`). If Claude Code rewords the notice, the reader is `parseLoginExpiryNotice` in
+  `apps/server/src/ai/login-expiry.ts`.
 - "Refazer login" (web, app, or the chat's `start_ai_login` / `submit_ai_login_code`) needs the machine's
   agent at **0.25.0 or newer** (capability `ai_login`); an older one answers 409 `AGENT_OUTDATED`. SSH and
   local machines, and Gemini/Antigravity accounts, are redone by hand on the machine. Only the machine's
@@ -365,6 +390,11 @@ lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-1
   entrei pelo navegador da máquina" once the link showed), confirmed by `claude auth status`. Closing the
   modal also re-checks the account, so the warning goes either way. The CLI's output only shows as a
   detail ("Saída da CLI") under an error.
+- An error with "Login successful." in "Saída da CLI" means the machine's agent is older than 0.27.0
+  (Máquinas shows the version). The server now asks that machine's `claude auth status` when a start
+  fails and reads a logged-in answer as "Login refeito"; updating the agent is still the fix. Since agent
+  0.28.1, exit 0 with "Login successful." also counts when the status command cannot answer at all (a
+  timeout, or a Claude Code without `auth status`); a status that says logged out still wins.
 - A flow lives **15 minutes**, in the memory of the server colour that started it: then (or after a deploy)
   it is gone and the person starts again. The server kills its session when it expires; if one is left
   behind (the server died mid-flow), remove it on the machine: `tmux ls | grep termhub-login-`, then
@@ -407,6 +437,35 @@ A machine on an old agent misses whatever needs a newer one (the screen login ne
   not run as a service, so someone restarts it on the machine; `not_back` means it did not reconnect within
   2 minutes (check `termhub-agent doctor` there). The fallback is always `npm i -g @termhub/agent@latest` on
   the machine.
+
+## 9c. Diagnosing a user's report (TER-1092)
+
+When a person reports a problem and the diagnosis needs their technical data (which routes failed, which
+client version they use, whether their agent is behind), use the admin troubleshooting views, never the
+production database: automatic tabs are refused it by the termhub hooks, and manual sessions by the Claude
+Code classifier, on purpose.
+
+- **Who.** Admins only (an admin role; no permission grant opens it). Anyone else gets 403.
+- **Always a reason.** Every call takes `reason` (the card or the report, e.g. `TER-1091`; 400 without one)
+  and is written to the security trail as `support.troubleshoot` with the endpoint, the user, the window
+  and the reason before anything is read; if the trail cannot be written, nothing is answered. The queries
+  show in Configurações → Auditoria, group "Suporte".
+- **What it answers.** Metadata of ONE user in a window of 12 h by default, 7 days at most (`from`/`to`):
+  `requests` (time, method, route pattern, status, duration, client; `route_prefix` filters), `tabs` (agent,
+  machine name, state, monitor events counted by kind), `machines` (agent version, online, last contact,
+  hooks state per CLI read live from online agents), `errors` (5xx answers and failed MCP calls),
+  `client` (web/app versions and systems, paired phones). Never chat messages, prompts, answers, terminal
+  screens, attachments, e-mail, tokens or IPs.
+- **Finding the user.** `search` (name or e-mail) answers an opaque `user_id` and the name, never the
+  e-mail; the trail keeps the ids found, not the text searched.
+- **From the chat.** `admin_user_troubleshoot` (listed to admins only) takes the same arguments. The first
+  query about each user in a conversation is a confirmation card; the later ones about the same user run
+  without asking (each still on the trail). A search never asks. Automatic tabs never call it.
+- **Over HTTP.** `GET /api/admin/troubleshoot/users?q=<name or e-mail>&reason=…` and
+  `GET /api/admin/troubleshoot/users/<user_id>/<requests|tabs|machines|errors|client>?reason=…[&from=&to=&route_prefix=&limit=]`
+  with the admin's own session.
+- **History.** The client version, system and response time are recorded on access records only from this
+  release on; older rows answer them as null.
 
 ## 10. After a failed deploy or release
 

@@ -76,8 +76,19 @@ model User {
   /// "Responder sozinho quando houver precedente" (spec 2026-09-26 concierge memory D8): off, the
   /// concierge can only suggest, never schedule an automatic answer.
   chatAutodecide          Boolean                  @default(false) @map("chat_autodecide")
+  /// TER-642: the similarity thresholds this person pinned by hand for automatic answers (send at once
+  /// from `high`, suggest and send after the countdown from `low`). Null = calibrated, else the defaults.
+  chatAutoHigh            Float?                   @map("chat_auto_high")
+  chatAutoLow             Float?                   @map("chat_auto_low")
+  /// The last calibration from this person's own answers: `{ high, low, samples, computed_at }`.
+  chatAutoCalibration     Json?                    @map("chat_auto_calibration")
+  chatAutoSamples         ChatAutoSample[]
+  chatFocus               ChatFocus[]
   /// "Responder perguntas do Codex pelo chat": off by default, the Codex reply card opens only for users who opt in.
   chatCodexReplies        Boolean                  @default(false) @map("chat_codex_replies")
+  /// "Contar ao chat de onde estou falando" (TER-1088): client, device and same-network-as-a-machine go
+  /// with each typed message. On by default; the person can turn it off in Memória do chat.
+  chatClientContext       Boolean                  @default(true) @map("chat_client_context")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
   /// The chat's context meter measures against this many tokens instead of the model's window
@@ -95,6 +106,9 @@ model User {
   automationPausedAt      DateTime?                @map("automation_paused_at") @db.Timestamptz
   /// IANA time zone (e.g. America/Sao_Paulo) for the automation's daily summary hour. Null = the server's.
   timeZone                String?                  @map("time_zone")
+  /// TER-1079: how many days before an AI account's login expires this person is warned (0 = never).
+  /// Null = the default (3).
+  aiLoginWarnDays         Int?                     @map("ai_login_warn_days")
   /// The language this person chose (TER-405): "pt-BR" or "en"; null = automatic. E-mails and push use it.
   locale                  String?
   automationSummaries     AutomationSummary[]
@@ -141,6 +155,11 @@ model Session {
   tokenHash String   @unique @map("token_hash")
   expiresAt DateTime @map("expires_at")
   createdAt DateTime @default(now()) @map("created_at")
+  /// Last authenticated request (written at most once a minute); the idle timeout counts from here.
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  /// Where the session was opened, shown in Settings → Segurança.
+  ip         String?
+  userAgent  String?  @map("user_agent")
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -214,6 +233,10 @@ model Machine {
   agentPairedAt         DateTime?          @map("agent_paired_at")
   agentVersion          String?            @map("agent_version")
   agentLastSeenAt       DateTime?          @map("agent_last_seen_at")
+  /// TER-1080: the agent's last `net.info` (OS hostname, interfaces with MAC and IPs, default route), kept
+  /// while the machine is offline so another machine of its network can wake it. Never in `mapMachine`.
+  network               Json?
+  networkUpdatedAt      DateTime?          @map("network_updated_at") @db.Timestamptz
   /// Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
   agentAutoUpdate       Boolean            @default(true) @map("agent_auto_update")
   /// Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
@@ -230,6 +253,7 @@ model Machine {
   owner                 User?              @relation("MachineOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   createdAt             DateTime           @default(now()) @map("created_at")
   projectLinks          ProjectMachine[]
+  repositoryCheckouts   ProjectRepositoryCheckout[]
   tabs                  Tab[]
   aiAccounts            AiAccount[]
   hook                  MachineHook?
@@ -269,6 +293,7 @@ model Project {
   tasks               Task[]
   note                Note?
   setup               ProjectSetup?
+  repositories        ProjectRepository[]
   tickets             Ticket[]
   chatConversations   ChatConversation[]
   tabQuestions        TabQuestion[]
@@ -306,6 +331,48 @@ model ProjectMachine {
   @@unique([projectId, machineId])
   @@index([machineId])
   @@map("project_machines")
+}
+
+/// A git repository found in a project's folder (spec 2026-10-07 multi-repo R1, R4). Written only by
+/// discovery; what the person changes about it lives in the setup (`repos`), keyed by `full_name`.
+model ProjectRepository {
+  id           String                      @id
+  projectId    String                      @map("project_id")
+  /// owner/repo, parsed from the checkout's origin
+  fullName     String                      @map("full_name")
+  /// Short name for paths and chips: the folder's base name, slugged, or `main` for the project folder itself. Never changed once given.
+  key          String
+  /// One line read from package.json or the README (≤ 200 chars)
+  description  String?
+  /// ok | unsupported (no GitHub origin) | no_access (the integration does not see it)
+  status       String                      @default("ok")
+  discoveredAt DateTime                    @default(now()) @map("discovered_at")
+  updatedAt    DateTime                    @default(now()) @updatedAt @map("updated_at")
+  project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  checkouts    ProjectRepositoryCheckout[]
+
+  @@unique([projectId, fullName])
+  @@unique([projectId, key])
+  @@map("project_repositories")
+}
+
+/// Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). A folder that is gone
+/// is marked with `missing_at`, never deleted.
+model ProjectRepositoryCheckout {
+  repositoryId  String            @map("repository_id")
+  machineId     String            @map("machine_id")
+  /// relative to the project's folder on that machine; `.` for the folder itself
+  dir           String
+  defaultBranch String?           @map("default_branch")
+  hasCommits    Boolean           @default(false) @map("has_commits")
+  seenAt        DateTime          @default(now()) @map("seen_at")
+  missingAt     DateTime?         @map("missing_at")
+  repository    ProjectRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  machine       Machine           @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@id([repositoryId, machineId])
+  @@index([machineId])
+  @@map("project_repository_checkouts")
 }
 
 model Tab {
@@ -350,6 +417,7 @@ model Tab {
   tasks               Task[]
   events              TabEvent[]
   lastAnswer          TabLastAnswer?
+  usage               TabUsage?
 
   @@index([projectId])
   @@index([machineId])
@@ -662,13 +730,14 @@ model AutomationRun {
 }
 
 /// Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
-/// read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
-/// tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+/// read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+/// `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
 model TabUsage {
   tabId            String   @id @map("tab_id")
   sessionId        String   @map("session_id")
   transcriptOffset BigInt   @map("transcript_offset")
   updatedAt        DateTime @default(now()) @map("updated_at") @db.Timestamptz
+  tab              Tab      @relation(fields: [tabId], references: [id], onDelete: Cascade)
 
   @@map("tab_usage")
 }
@@ -776,6 +845,11 @@ model AiAccount {
   /// TER-990: the only project this account may run in (a client's or a company's account). null = any
   /// project of the owner. Deleting the project clears it.
   exclusiveProjectId String?              @map("exclusive_project_id")
+  /// TER-1079: when the CLI's login expires, as far as its own notice on a tab's screen told ("Your login
+  /// expires in N days"). null = unknown. Cleared when the login is redone.
+  loginExpiresAt     DateTime?            @map("login_expires_at") @db.Timestamptz
+  /// When the person was warned about `loginExpiresAt`: one warning per login. null = not yet.
+  loginExpiryWarnedAt DateTime?           @map("login_expiry_warned_at") @db.Timestamptz
   createdAt          DateTime             @default(now()) @map("created_at")
   machine            Machine              @relation(fields: [machineId], references: [id], onDelete: Cascade)
   exclusiveProject   Project?             @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)
@@ -1270,11 +1344,46 @@ model TabQuestion {
   wokenAt        DateTime?        @map("woken_at")
   /// When the card was last brought back to the end of the chat (TER-477); the thread orders by it, else `createdAt`.
   surfacedAt     DateTime?        @map("surfaced_at")
+  /// TER-642: the best precedent memory found per question when the card opened, whatever its score:
+  /// `{ items: [{ question_index, ref, similarity, selected, text? }] }`. Calibration's raw material.
+  precedent      Json?
 
   @@index([tabId, status])
   @@index([conversationId, createdAt])
   @@index([tabId, createdAt])
   @@map("tab_questions")
+}
+
+/// TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+/// thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+/// `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+/// `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+model ChatAutoSample {
+  id            String   @id
+  userId        String   @map("user_id")
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tabQuestionId String   @map("tab_question_id")
+  questionIndex Int      @map("question_index")
+  score         Float
+  matched       Boolean
+  source        String
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@unique([tabQuestionId, questionIndex])
+  @@index([userId, createdAt])
+  @@map("chat_auto_samples")
+}
+
+/// TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+/// A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+model ChatFocus {
+  userId   String   @map("user_id")
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId String   @map("client_id")
+  seenAt   DateTime @default(now()) @map("seen_at")
+
+  @@id([userId, clientId])
+  @@map("chat_focus")
 }
 
 /// A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
@@ -1494,17 +1603,23 @@ model DeviceChallenge {
 /// terminal or a chat carried. `user_id` has no foreign key on purpose: the record outlives an account
 /// deletion until its 6 months are over. Purged hourly past `ACCESS_LOG_RETENTION_MS`.
 model AccessLog {
-  id        BigInt   @id @default(autoincrement())
-  createdAt DateTime @default(now()) @map("created_at")
-  ip        String?
-  userId    String?  @map("user_id")
+  id         BigInt   @id @default(autoincrement())
+  createdAt  DateTime @default(now()) @map("created_at")
+  ip         String?
+  userId     String?  @map("user_id")
   /// http | ws
-  kind      String
-  method    String
+  kind       String
+  method     String
   /// The route pattern (`/api/tabs/:id`) for HTTP, the path for a WebSocket; never the query string.
-  route     String
+  route      String
   /// The HTTP status; for a WebSocket, 101 once handed to its route or the refusal's status.
-  status    Int?
+  status     Int?
+  /// TER-1092: the client that made the call (`web/1.4.0`, `ios/0.3.2+34`, `mcp`); null when it did not say.
+  client     String?
+  /// TER-1092: the system, coarse (`macOS`, `iOS`, `Android`…), from the User-Agent or the app header; never the UA itself.
+  os         String?
+  /// TER-1092: how long the response took (HTTP only).
+  durationMs Int?     @map("duration_ms")
 
   @@index([createdAt])
   @@index([userId, createdAt])

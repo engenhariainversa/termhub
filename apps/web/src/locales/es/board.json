@@ -439,6 +439,8 @@
   "{{ref}}: permissão liberada sozinha": "{{ref}}: permiso concedido automáticamente",
   "{{ref}}: {{tool}} bloqueado pela trava": "{{ref}}: {{tool}} bloqueado por la protección",
   "{{ref}}: ação bloqueada pela trava": "{{ref}}: acción bloqueada por la protección",
+  "{{ref}}: cancelado — {{reason}}": "{{ref}}: cancelado — {{reason}}",
+  "{{ref}}: cancelado": "{{ref}}: cancelado",
   "Novas tentativas do deploy": "Reintentos del deploy",
   "quando o deploy falha por problema do GitHub; 0 = pausa na hora": "cuando el deploy falla por un problema de GitHub; 0 = pausa de inmediato",
   "Retomadas após erro do GitHub": "Reanudaciones tras un error de GitHub",

@@ -8,6 +8,7 @@ import type { Machine } from '../db/repositories/types.js';
 import { AGENT_TOKEN_RE, checkDeviceProof, hashAgentToken, newChallengeNonce, normalizeDevicePublicKey } from './token.js';
 import { AgentConnection } from './connection.js';
 import { agents, type AgentRegistry } from './registry.js';
+import { NETWORK_REFRESH_MS, refreshNetwork } from './network.js';
 
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const TOUCH_INTERVAL_MS = 60_000;
@@ -86,7 +87,7 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
             if (deps.probeInfo) conn.sendProbeInfo(deps.probeInfo);
             return conn.close(1000, 'probe-ok');
           }
-          registry.attach(machine.id, conn);
+          registry.attach(machine.id, conn, clientIp(req) || null);
 
           // Register the close listener before the first `await`: if the agent disconnects
           // while `touch()` below is in flight, `closed` catches it so the intervals are never
@@ -95,6 +96,7 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
           let closed = false;
           let seen: ReturnType<typeof setInterval> | undefined;
           let beat: ReturnType<typeof setInterval> | undefined;
+          let net: ReturnType<typeof setInterval> | undefined;
           const attachedAt = Date.now();
           const touch = (extra: { version?: string; os?: string; capabilities?: string[] } = {}) =>
             deps.repos.machines
@@ -105,6 +107,7 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
             closed = true;
             if (seen) clearInterval(seen);
             if (beat) clearInterval(beat);
+            if (net) clearInterval(net);
             // 1006 with no reason = the TCP path died (or our heartbeat gave up on it); a code the
             // agent chose (1000/1001…) means it hung up on purpose. Together with `connectedMs`
             // this tells a crash-loop apart from an idle path that silently rotted.
@@ -121,6 +124,13 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
           seen.unref();
           beat = setInterval(() => conn.heartbeat(), HEARTBEAT_INTERVAL_MS);
           beat.unref();
+          // TER-1080: the machine's IPs and MACs, kept for when it sleeps (an agent without `net_wake` is skipped).
+          const refresh = () => {
+            if (registry.isOnline(machine.id)) void refreshNetwork(deps.repos, machine.id, log, registry);
+          };
+          refresh();
+          net = setInterval(refresh, NETWORK_REFRESH_MS);
+          net.unref();
 
           log.info({ machineId: machine.id, agentVersion: hello.agent_version, os: hello.os, credential: dial.kind }, 'agent connected');
         },
@@ -168,7 +178,8 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
 /** Machine ids are `newId()` strings; anything else is refused before touching the database. */
 const MACHINE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** Client address for log lines: the real IP forwarded by nginx/Cloudflare, else the socket peer. */
+/** Client address for log lines and the chat's same-network check (TER-1088): the real IP forwarded by
+ *  nginx/Cloudflare, else the socket peer. */
 function clientIp(req: IncomingMessage): string {
   const forwarded = req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'];
   const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;

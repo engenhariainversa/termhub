@@ -1,7 +1,10 @@
-import { homedir } from 'node:os';
+import { randomBytes } from 'node:crypto';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { RpcParams, RpcResult } from '@termhub/agent-protocol';
 import { resolveConfigDir } from '@termhub/claude-cli';
-import { RpcFailure, agentEnv, run, tmuxPath } from '../exec.js';
+import { RpcFailure, agentEnv, run, tmuxPath, type RunResult } from '../exec.js';
 import { ENTER_PAUSE_MS, processFailure } from './tmux.js';
 
 /**
@@ -14,7 +17,16 @@ import { ENTER_PAUSE_MS, processFailure } from './tmux.js';
  * `claude auth login` opens the machine's browser (`BROWSER=true` did not stop it on macOS), and a person sitting there
  * signs in and the CLI takes the callback itself, prints "Login successful." and exits 0 (TER-1054).
  * `start` and `submit` read that as a login, confirmed by the status command: `start` answers
- * `logged_in: true` with no URL, `submit` answers logged in.
+ * `logged_in: true` with no URL, `submit` answers logged in. When the status cannot answer at all, exit 0
+ * together with the success line is enough (since agent 0.28.1).
+ *
+ * The status command runs inside the tmux server too, never as the agent's own child (since agent 0.29.2,
+ * TER-1078). The login and every terminal tab run in that server, and on macOS where a process runs
+ * decides which credential store the CLI sees: Claude Code reads the login keychain first and the
+ * config dir's `.credentials.json` second, and writes the file only when the keychain refuses. A tmux
+ * server started over SSH has the keychain locked ("User interaction is not allowed"), so the login
+ * there lands in the file, while the agent (a launchd agent in the GUI session) reads the keychain and
+ * its stale item. Asked from the agent, the status contradicted the login the tabs actually use.
  *
  * Nothing here is ever logged: the URL carries an OAuth state, the code is a credential, and the pane
  * text may hold either. The only text that goes back to the server is `failureMessage`, which drops
@@ -58,6 +70,16 @@ const DEFAULT_DEPS: AiLoginDeps = {
 
 /** `claude auth status` / `codex login status` answer locally; a slow one is a stuck CLI. */
 const STATUS_TIMEOUT_MS = 15_000;
+const STATUS_POLL_MS = 100;
+/** The hidden sessions the status runs in; the server hides every `termhub-login-*` session. */
+const STATUS_SESSION_PREFIX = 'termhub-login-status-';
+/**
+ * Runs the status command (`"$@"`, so no argument is ever parsed by the shell) and leaves its stdout,
+ * stderr and exit code in files next to `$TERMHUB_STATUS_OUT`; the code file appears last, in one rename.
+ */
+const STATUS_SCRIPT = 'o="$TERMHUB_STATUS_OUT"; "$@" >"$o.out" 2>"$o.err"; echo $? >"$o.tmp" && mv "$o.tmp" "$o.code"';
+/** What a shell (or `env`) exits with when the command is not found. */
+const EXIT_NOT_FOUND = 127;
 /** Codex prints the URL a moment before the code: a couple more reads before giving up on the code. */
 const CODE_EXTRA_POLLS = 3;
 const MESSAGE_MAX_CHARS = 300;
@@ -72,6 +94,9 @@ const CLI_SUCCESS_RE = /\bLogin successful\b/i;
 /** A CLI that just said it logged in may still be writing the credentials: the status gets a few more looks. */
 const CONFIRM_POLLS = 3;
 const CONFIRM_POLL_MS = 1_000;
+/** A dead pane's exit status can lag the pty closing (see paneState): up to about 1 s of reads for it. */
+const DEAD_STATUS_POLLS = 20;
+const DEAD_STATUS_POLL_MS = 50;
 
 function spec(provider: RpcParams<'ai.login.status'>['provider'], deps: AiLoginDeps): CliSpec | null {
   if (provider === 'claude') return { bin: deps.bins.claude, envVar: 'CLAUDE_CONFIG_DIR', status: ['auth', 'status'], login: ['auth', 'login'], needsCode: true };
@@ -110,6 +135,11 @@ export function parseClaudeStatus(stdout: string): boolean {
     /* not JSON: fall through to the text check */
   }
   return /"loggedIn"\s*:\s*true/.test(stdout);
+}
+
+/** Whether `claude auth status` said anything about the login: a CLI without the command prints an error instead. */
+export function claudeStatusAnswered(stdout: string): boolean {
+  return /"loggedIn"\s*:/.test(stdout);
 }
 
 /** `codex login status` exits 0 and says "Logged in using …" when logged in. Case matters: "Not logged in". */
@@ -157,6 +187,8 @@ export function failureMessage(text: string, secret: string | null = null, maxCh
 
 // ---------- tmux helpers ----------
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 const pane = (session: string) => `=${session}:`;
 
 async function tmux(args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
@@ -183,7 +215,7 @@ interface PaneState {
   exitCode: number | null;
 }
 
-async function paneState(session: string): Promise<PaneState> {
+async function readPaneState(session: string): Promise<PaneState> {
   const r = await tmux(['display-message', '-p', '-t', pane(session), '#{pane_dead} #{pane_dead_status}']);
   if (r.code !== 0) return { state: 'gone', exitCode: null };
   const [dead, status] = r.stdout.trim().split(/\s+/);
@@ -191,38 +223,115 @@ async function paneState(session: string): Promise<PaneState> {
   return { state: 'dead', exitCode: status && /^\d+$/.test(status) ? Number(status) : null };
 }
 
+/**
+ * tmux marks a pane dead when its pty closes, but fills in the exit status only once it reaps the
+ * process on SIGCHLD. Before 3.6, a tmux built with utempter can lose that SIGCHLD (libutempter resets
+ * the handler while its helper runs), and the status then waits for some other child of the server to
+ * exit. A dead pane without a status gets more reads, each after `run-shell true`: its child exiting
+ * makes tmux reap every exited process, the pane's included. So a CLI that exited 0 is not read as one
+ * that said nothing (TER-1077). A CLI killed by a signal never gets a status.
+ */
+async function paneState(session: string): Promise<PaneState> {
+  let current = await readPaneState(session);
+  for (let i = 0; current.state === 'dead' && current.exitCode === null && i < DEAD_STATUS_POLLS; i++) {
+    if (i > 0) await sleep(DEAD_STATUS_POLL_MS);
+    await tmux(['run-shell', 'true']);
+    const next = await readPaneState(session);
+    if (next.state === 'gone') break;
+    current = next;
+  }
+  return current;
+}
+
 /** The CLI ended its login itself: exit 0, or its success line on the pane. */
 export function cliReportedSuccess(exitCode: number | null, text: string): boolean {
   return exitCode === 0 || CLI_SUCCESS_RE.test(text);
 }
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 // ---------- handlers ----------
 
-async function checkStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean> {
-  const r = await run(cli.bin, cli.status, { env: cliEnv(cli, dir, deps), timeoutMs: STATUS_TIMEOUT_MS });
-  if (r.error === 'enoent') throw new RpcFailure('notfound', `${cli.bin} not found on this machine`);
+/**
+ * Runs the status command in a hidden session of the tmux server, where the login and the tabs run (see
+ * the top of this file), with the same environment the login gets. Null when tmux cannot start the
+ * session: the caller then runs the command itself.
+ */
+async function runStatusInTmux(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<RunResult | null> {
+  const env = deps.env();
+  const resolved = configDir(dir, env);
+  const session = `${STATUS_SESSION_PREFIX}${randomBytes(8).toString('hex')}`;
+  const work = await mkdtemp(join(tmpdir(), 'termhub-login-status-'));
+  const out = join(work, 'status');
+  const command = resolved === null ? ['env', '-u', cli.envVar, cli.bin, ...cli.status] : [cli.bin, ...cli.status];
+  const result = async (): Promise<RunResult | null> => {
+    const code = await readFile(`${out}.code`, 'utf8').catch(() => null);
+    if (code === null) return null;
+    const [stdout, stderr] = await Promise.all([readFile(`${out}.out`, 'utf8').catch(() => ''), readFile(`${out}.err`, 'utf8').catch(() => '')]);
+    const n = Number(code.trim());
+    return { code: Number.isInteger(n) ? n : null, stdout, stderr, timedOut: false };
+  };
+  try {
+    let created: Awaited<ReturnType<typeof tmux>>;
+    try {
+      created = await tmux([
+        'new-session', '-d', '-s', session, '-c', env.HOME || homedir(),
+        '-e', `PATH=${env.PATH ?? ''}`,
+        ...(resolved === null ? [] : ['-e', `${cli.envVar}=${resolved}`]),
+        '-e', `TERMHUB_STATUS_OUT=${out}`,
+        '--', 'sh', '-c', STATUS_SCRIPT, 'sh', ...command,
+      ]);
+    } catch {
+      return null;
+    }
+    if (created.code !== 0) return null;
+    const deadline = Date.now() + STATUS_TIMEOUT_MS;
+    for (;;) {
+      const done = await result();
+      if (done) return done;
+      // A session that is gone without leaving its code (killed from outside) has nothing more to say.
+      if ((await paneState(session)).state === 'gone') return (await result()) ?? { code: null, stdout: '', stderr: '', timedOut: false };
+      if (Date.now() >= deadline) return { code: null, stdout: '', stderr: '', timedOut: true };
+      await sleep(STATUS_POLL_MS);
+    }
+  } finally {
+    await killSession(session).catch(() => false);
+    await rm(work, { recursive: true, force: true });
+  }
+}
+
+/** The status command's answer; null when it said nothing about the login (a Claude Code without `auth status`). */
+async function askStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean | null> {
+  const r = (await runStatusInTmux(cli, dir, deps)) ?? (await run(cli.bin, cli.status, { env: cliEnv(cli, dir, deps), timeoutMs: STATUS_TIMEOUT_MS }));
+  if (r.error === 'enoent' || r.code === EXIT_NOT_FOUND) throw new RpcFailure('notfound', `${cli.bin} not found on this machine`);
   if (r.timedOut) throw new RpcFailure('timeout', `${cli.bin} did not answer in time`);
-  return cli.envVar === 'CLAUDE_CONFIG_DIR' ? parseClaudeStatus(r.stdout) : parseCodexStatus(r.code, `${r.stdout}\n${r.stderr}`);
+  if (cli.envVar !== 'CLAUDE_CONFIG_DIR') return parseCodexStatus(r.code, `${r.stdout}\n${r.stderr}`);
+  return claudeStatusAnswered(r.stdout) ? parseClaudeStatus(r.stdout) : null;
+}
+
+async function checkStatus(cli: CliSpec, dir: string | null, deps: AiLoginDeps): Promise<boolean> {
+  return (await askStatus(cli, dir, deps)) === true;
 }
 
 /**
  * Whether the account is logged in after its CLI exited. A CLI that reported success gets a few more
- * looks at the status (the credentials may land a moment after); a status that cannot answer reads as
- * not logged in. `notfound` still throws.
+ * looks at the status (the credentials may land a moment after). The status decides whenever it answers.
+ * When it never does (it times out, or this Claude Code has no status command), a CLI that both exited 0
+ * and printed its success line is taken at its word; anything less reads as not logged in. `notfound`
+ * still throws.
  */
-async function confirmAfterExit(cli: CliSpec, dir: string | null, deps: AiLoginDeps, reportedSuccess: boolean): Promise<boolean> {
-  const polls = reportedSuccess ? CONFIRM_POLLS : 1;
+async function confirmAfterExit(cli: CliSpec, dir: string | null, deps: AiLoginDeps, exitCode: number | null, text: string): Promise<boolean> {
+  const polls = cliReportedSuccess(exitCode, text) ? CONFIRM_POLLS : 1;
+  let denied = false;
   for (let i = 0; i < polls; i++) {
     if (i > 0) await sleep(CONFIRM_POLL_MS);
     try {
-      if (await checkStatus(cli, dir, deps)) return true;
+      const answer = await askStatus(cli, dir, deps);
+      if (answer) return true;
+      if (answer === false) denied = true;
     } catch (err) {
       if (!(err instanceof RpcFailure && err.code === 'timeout')) throw err;
     }
   }
-  return false;
+  return !denied && exitCode === 0 && CLI_SUCCESS_RE.test(text);
 }
 
 export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
@@ -267,7 +376,7 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
         // The CLI already exited: either it finished the login on its own (the machine's browser), or it
         // failed. A URL on the pane is no use any more, so the status decides, not the screen.
         await killSession(params.session);
-        if (await confirmAfterExit(cli, params.config_dir, deps, cliReportedSuccess(exitCode, text))) return { url: null, user_code: null, needs_code: false, logged_in: true };
+        if (await confirmAfterExit(cli, params.config_dir, deps, exitCode, text)) return { url: null, user_code: null, needs_code: false, logged_in: true };
         throw new RpcFailure('failed', failureMessage(text) ?? SESSION_GONE_MESSAGE);
       }
       if (cli.needsCode) {
@@ -318,7 +427,7 @@ export function createAiLogin(overrides: Partial<AiLoginDeps> = {}) {
         await killSession(params.session);
         // A CLI that said "Login successful" (or exited 0) gets a few more looks at the status before
         // its own word is taken as a failure.
-        if (state === 'dead' && cliReportedSuccess(exitCode, text ?? '') && (await confirmAfterExit(cli, params.config_dir, deps, true))) {
+        if (state === 'dead' && cliReportedSuccess(exitCode, text ?? '') && (await confirmAfterExit(cli, params.config_dir, deps, exitCode, text ?? ''))) {
           return { logged_in: true, message: null };
         }
         return { logged_in: false, message: (text && failureMessage(text, params.code)) || SESSION_GONE_MESSAGE };

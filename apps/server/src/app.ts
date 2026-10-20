@@ -57,6 +57,7 @@ import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.j
 import { HEARTBEAT_MS, SWEEP_MS } from './chat/resume.js';
 import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
+import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
 import { agentRunner } from './chat/agent-runner.js';
@@ -71,6 +72,7 @@ import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
+import { adminTroubleshootRoutes } from './routes/admin-troubleshoot.js';
 import { featureFlagRoutes, publicFeatureRoutes } from './routes/feature-flags.js';
 import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
@@ -241,7 +243,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       language: config.transcription?.language ?? null,
       whisperSecret: config.transcription?.secret ?? null,
     },
-    onDone: (row) => publishAttachment(row),
+    // TER-1085: a held audio message runs now, and a run told "still transcribing" gets the text.
+    onDone: (row) => {
+      publishAttachment(row);
+      chat.transcriptSettled(row);
+    },
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes, onRetry: (row) => publishAttachment(row) };
@@ -339,6 +345,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
       await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
+      // Support troubleshooting of one user (TER-1092): admins only, checked by the plugin itself, never a grant.
+      await api.register((a) => adminTroubleshootRoutes(a, repos), { prefix: '/admin/troubleshoot' });
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {
@@ -443,7 +451,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     await within(chat.suspendAll().catch((err: unknown) => fastify.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'preClose: suspend failed')), PRE_CLOSE_SUSPEND_MS, () => fastify.log.warn({}, 'preClose: suspend budget exceeded'));
   });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
-  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log);
+  // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
+  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
   // Agentic board (spec §8): the dispatcher starts agents on eligible cards of projects with automation on,
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
@@ -456,8 +465,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
   // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
-  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep.
-  const stopAiLoginChecks = startAiLoginChecks({ repos, log: fastify.log, push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined });
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep. A login about to
+  // expire (TER-1079, read off a starting session's screen) warns once too, ahead of it.
+  const stopAiLoginChecks = startAiLoginChecks({
+    repos,
+    log: fastify.log,
+    push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined,
+    pushExpiring: mobile ? (...a) => mobile.push.aiLoginExpiring(...a) : undefined,
+  });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);

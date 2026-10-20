@@ -35,7 +35,9 @@ function world(o: {
   openQuestion?: boolean;
   /** the tab's newest question row (`latestQuestionForTab`) */
   question?: TabQuestion;
-  prs?: Array<{ state: string; head_ref: string; url: string; number: number; merged_at?: Date | null }>;
+  prs?: Array<{ state: string; head_ref: string; url: string; number: number; merged_at?: Date | null; repo?: string }>;
+  /** the project's repository in Setup (`repo.full_name`); none by default */
+  projectRepo?: string;
   /** when the run's newest `escalated` event was recorded (`lastForRun`) */
   escalatedAt?: string;
   /** the owner's active project conversation; null = none */
@@ -85,7 +87,7 @@ function world(o: {
     tabQuestions: { hasOpenQuestion: vi.fn(async () => o.openQuestion ?? o.question?.status === 'open'), latestQuestionForTab: vi.fn(async () => o.question) },
     taskPullRequests: { listByTasks: vi.fn(async () => o.prs ?? []) },
     projects: { findById: vi.fn(async () => ({ id: 'p1', owner_id: 'u1' })) },
-    projectSetup: { get: vi.fn(async () => ({ data: { automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null, stop_on_decisions: o.stopOnDecisions ?? false } } })) },
+    projectSetup: { get: vi.fn(async () => ({ data: { ...(o.projectRepo ? { repo: { full_name: o.projectRepo } } : {}), automation: { enabled: o.enabled ?? true, resume_max: o.resumeMax ?? 3, allowed_tools: null, daily_budget_usd: o.dailyBudget ?? null, card_budget_usd: o.cardBudget ?? null, stop_on_decisions: o.stopOnDecisions ?? false } } })) },
     automationPauses: { state: vi.fn(async () => ({ user: o.paused ? new Date() : null, project: null })) },
     users: { findById: vi.fn(async () => ({ id: 'u1' })) },
     tabUsage: {
@@ -202,6 +204,22 @@ describe('following a run (spec D15, F-13)', () => {
     await followRun(w.deps, w.run.id);
     expect(w.run.status).toBe('running');
     expect(w.type).toHaveBeenCalledTimes(1);
+  });
+
+  it('a PR from the same branch name in another repository does not end the run (spec 2026-10-07 multi-repo R14)', async () => {
+    const w = world({ projectRepo: 'acme/app', prs: [{ state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/site/pull/3', number: 3, repo: 'acme/site' }] });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.kinds()).not.toContain('run_done');
+    // the project's own repository, whatever the case Setup holds its name in
+    w.setPrs([
+      { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/site/pull/3', number: 3, repo: 'acme/site' },
+      { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/app/pull/9', number: 9, repo: 'Acme/App' },
+    ]);
+    w.setNow(new Date('2026-10-05T13:00:00.000Z'));
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('done');
+    expect(w.events.find((e) => e.kind === 'run_done')!.payload).toMatchObject({ via: 'pull_request', pr_url: 'https://github.com/acme/app/pull/9' });
   });
 
   it('past resume_max the run waits and is escalated (the wake/escalate hook), with nothing typed', async () => {
@@ -1240,6 +1258,8 @@ describe('runs that must end (final review I1, I2)', () => {
       await followRun(w.deps, w.run.id);
       expect(w.run.status).toBe('done');
       expect(w.type).not.toHaveBeenCalled();
+      // already merged: no "PR aberto" line (TER-974)
+      expect(w.kinds()).toEqual(['run_done']);
     }
   });
 
@@ -1383,6 +1403,21 @@ describe('adopting the PR of a blocked run (TER-1049, spike TER-1031 §5.1–5.3
     expect(await adoptBlockedRuns(blocked({ prs: [{ ...PR, state: 'merged', merged_at: new Date('2026-10-01T00:00:00.000Z') }] }).repos, 'p1', undefined, NOW)).toBe(0);
     expect(await adoptBlockedRuns(blocked({ prs: [{ ...PR, head_ref: 'other' }] }).repos, 'p1', undefined, NOW)).toBe(0);
     expect(await adoptBlockedRuns(blocked({ prs: [] }).repos, 'p1', undefined, NOW)).toBe(0);
+  });
+
+  it('two PRs from the same branch name in two repositories: only the one in the project repository adopts the run (spec 2026-10-07 multi-repo R14)', async () => {
+    const other = { ...PR, repo: 'acme/site', url: 'https://github.com/acme/site/pull/3', number: 3 };
+    const own = { ...PR, repo: 'acme/app' };
+    const w = blocked({ projectRepo: 'acme/app', prs: [other, own] });
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW)).toBe(1);
+    expect(w.events).toEqual([
+      expect.objectContaining({ kind: 'run_done', payload: expect.objectContaining({ pr_url: own.url }) }),
+      expect.objectContaining({ kind: 'pr_opened', payload: expect.objectContaining({ pr_url: own.url, number: 9 }) }),
+    ]);
+    // the other repository's PR alone adopts nothing
+    const alone = blocked({ projectRepo: 'acme/app', prs: [other] });
+    expect(await adoptBlockedRuns(alone.repos, 'p1', undefined, NOW)).toBe(0);
+    expect(alone.run.status).toBe('blocked');
   });
 
   it.each([
