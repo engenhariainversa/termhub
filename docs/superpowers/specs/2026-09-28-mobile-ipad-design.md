@@ -52,6 +52,8 @@ Details:
 
 ### 2.5 Hardware keyboard: out of this card, follow-up
 
+> Done in TER-368 (app 0.7.0): a local Expo module, `apps/mobile/modules/key-commands`, claims Return and ⌘Return with a `UIKeyCommand` while the composer has the focus. See the mobile README, "iPad".
+
 The card asks for "Enter envia, Shift+Enter quebra linha" on a hardware keyboard. RN 0.86's `TextInput` cannot tell them apart: `onKeyPress` carries only `key` (no modifiers), and `submitBehavior="submit"` turns *every* Return into a send, Shift+Return and the on-screen keyboard's Return included, so a multi-line message would become impossible on the iPad. Doing it right needs a native `UIKeyCommand` (a local Expo module, or a library such as `react-native-key-command`), which cannot be built or tested from jarvis (no Mac, no Xcode) and would ride blind into the TestFlight build TER-104 is waiting on. Decision: the composer keeps Return = new line and ↑ = send on every device; the hardware-keyboard shortcut becomes a follow-up recorded on the card, to be done on the Mac where it can be built and tried. Typing, arrows, Cmd+A/C/V/Z and dictation already work on a hardware keyboard through the stock `TextInput`.
 
 ### 2.6 Pointer / trackpad
