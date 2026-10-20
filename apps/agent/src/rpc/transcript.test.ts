@@ -160,4 +160,36 @@ describe('transcript.read', () => {
     await symlink(path.join(other, `${SID}.jsonl`), file);
     expect(JSON.parse((await read(req())).lines[0]).uuid).toBe('linked');
   });
+
+  describe('a Codex session (TER-1095)', () => {
+    const CSID = '01a15a42-e6fc-73d2-aca3-d44f5f84dd45';
+    let rollout: string;
+    beforeEach(async () => {
+      await mkdir(path.join(tmp, '.codex/sessions/2026/10/20'), { recursive: true });
+      rollout = path.join(tmp, '.codex/sessions/2026/10/20', `rollout-2026-10-20T14-01-36-${CSID}.jsonl`);
+    });
+    const codexReq = (over: Partial<RpcParams<'transcript.read'>> = {}) => req({ transcript_path: rollout, session_id: CSID, types: ['event_msg'], ...over });
+
+    it('reads the lines of the asked types from the rollout file', async () => {
+      await writeFile(rollout, line({ type: 'session_meta', payload: {} }) + line({ type: 'event_msg', payload: { type: 'task_started' } }) + line({ type: 'response_item', payload: {} }));
+      const r = await read(codexReq());
+      expect(r.status).toBe('ok');
+      expect(r.lines.map((l) => JSON.parse(l).type)).toEqual(['event_msg']);
+      expect(r.end).toBe(r.size);
+    });
+
+    it('answers missing when the rollout is not there', async () => {
+      expect(await read(codexReq())).toEqual({ status: 'missing', lines: [], start: 0, end: 0, size: 0 });
+    });
+
+    it('refuses a link whose target is not a session file', async () => {
+      await writeFile(path.join(tmp, 'secret.txt'), 'x\n');
+      await symlink(path.join(tmp, 'secret.txt'), rollout);
+      await expect(read(codexReq())).rejects.toMatchObject({ code: 'invalid' });
+    });
+
+    it('refuses a rollout of another session', async () => {
+      await expect(read(codexReq({ session_id: SID }))).rejects.toMatchObject({ code: 'invalid' });
+    });
+  });
 });

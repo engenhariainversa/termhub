@@ -24,9 +24,11 @@ import { sendInput, sendKey } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { HttpError, badRequest } from '../lib/errors.js';
+import { readHooksStatus } from '../monitor/install.js';
+import { claudeAccountDirs } from '../monitor/machine-hooks.js';
 import { claudeFooterMode } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
-import { availabilityOf, emptyReasonOf, hasNoHistory, hasReportedSession, readPage as defaultReadPage, type AgentView, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
+import { availabilityOf, emptyReasonOf, hasNoHistory, hasReportedSession, readPage as defaultReadPage, transcriptToolOf, type AgentView, type HooksOnMachine, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
 import { saveFileOnMachine } from '../terminal/paste-file.js';
 import { paneForeground } from '../terminal/session-ops.js';
@@ -54,8 +56,20 @@ export interface MobileTabDeps {
    * default) or the web's conversation view (`/api/tab-chat`, TER-1003).
    */
   surface?: 'app' | 'web';
+  /** Injected by tests; the machine's live hooks status otherwise (TER-1095). */
+  codexHooksTrusted?: (machine: Machine) => Promise<boolean | null>;
   /** What the tab's pane runs in front (TER-1094); injected by tests, the agent's `tmux.foreground` otherwise. */
   foreground?: (machine: Machine, session: string) => Promise<PaneForeground>;
+}
+
+/** Whether Codex trusts every termhub hook on the machine; null when that cannot be read (offline, an old agent, no Codex). */
+async function readCodexHooksTrusted(repos: Repositories, machine: Machine): Promise<boolean | null> {
+  try {
+    const status = await readHooksStatus(machine, await claudeAccountDirs(repos, machine.id));
+    return status.codex.present && status.codex.trusted !== null ? status.codex.trusted === 'all' : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -153,12 +167,17 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     }
     const rows = await repos.tabQuestions.listOpenForTab(tab.id, request.scope.user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, rows, request.scope.user.id));
-    // Only a tab that never reported a session needs to know whether the machine has the hooks (TER-1091).
-    const hooksInstalled = avail === 'no_session' && !hasReportedSession(tab) ? !!(await repos.machineHooks.findByMachine(machine.id)) : true;
+    // Only a tab that never reported a session needs to know whether the machine has the hooks (TER-1091),
+    // and a Codex one whether Codex was told to trust them (TER-1095).
+    let hooks: HooksOnMachine = 'installed';
+    if (avail === 'no_session' && !hasReportedSession(tab)) {
+      if (!(await repos.machineHooks.findByMachine(machine.id))) hooks = 'missing';
+      else if (transcriptToolOf(tab) === 'codex' && (await (deps.codexHooksTrusted ?? ((m: Machine) => readCodexHooksTrusted(repos, m)))(machine)) === false) hooks = 'codex_untrusted';
+    }
     // A page with no history at all is worth a look at the pane (TER-1094): a plain shell there means no
     // agent, not a missing history. Any failure (an agent older than 0.14.0, offline) keeps the other reasons.
     const atShell = tab.tmux_session && (avail === 'no_session' || avail === 'ready') && hasNoHistory(avail, page, !before) ? (await foreground(machine, tab.tmux_session).catch(() => null)) === 'shell' : false;
-    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooksInstalled, atShell);
+    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooks, atShell);
     request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded, emptyReason: empty_reason }, 'tab chat: page');
     return {
       tab: tabSummaryOf(tab, project, machine, avail),

@@ -60,6 +60,10 @@ export const CAPABILITY_CLAUDE_STREAM_INPUT = 'claude.stream_input';
  *  requires it before either: an older agent drops the RPC and refuses the key. */
 export const CAPABILITY_TRANSCRIPT = 'transcript';
 
+/** `transcript.read` also reads a Codex session (`<codex home>/sessions/YYYY/MM/DD/rollout-*-<id>.jsonl`,
+ *  TER-1095). An older agent refuses that path as `invalid`, so the server asks for it only with this. */
+export const CAPABILITY_TRANSCRIPT_CODEX = 'transcript.codex';
+
 /** The agent answers `file.read` (spec 2026-10-04 file preview, TER-941). The server requires it before
  *  the call: an older agent drops an unknown RPC, which would read as a timeout. */
 export const CAPABILITY_FILE_READ = 'file_read';

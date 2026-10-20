@@ -238,7 +238,8 @@ export const RPC = {
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a
    * stub. `forward` reads from `offset`; `backward` reads what ends at `offset` (null: the end of
    * the file). `start`/`end` are the byte range covered, on line boundaries. `missing`: no such
-   * transcript, here or in the account's other project dirs (since agent 0.15.0).
+   * transcript, here or in the account's other project dirs (since agent 0.15.0). A Codex session's
+   * `rollout-*.jsonl` is read the same way, at its own path only (capability `transcript.codex`).
    */
   /**
    * One text file the person asked to preview (spec 2026-10-04 file preview, TER-941). `path` is absolute

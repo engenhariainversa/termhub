@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isClaudeSessionId, isClaudeTranscriptPath } from '@termhub/machine-ops';
+import { isClaudeSessionId, isClaudeTranscriptPath, isCodexTranscriptPath } from '@termhub/machine-ops';
 import { QUESTION_MAX, parseAskUserQuestion, parseCodexUserInput, parsePermissionTool, sliceUnits, toolUseIdOf, type TabQuestionInput } from '../chat/tab-question-payload.js';
 import type { Tab, TabActivity, TabState } from '../db/repositories/types.js';
 import { activityOf } from './activity.js';
@@ -125,6 +125,17 @@ export function claudeSessionOf(ev: unknown): { session_id: string; transcript_p
   if (!isObj(ev) || !isClaudeSessionId(ev.session_id)) return null;
   const sid = ev.session_id;
   return isClaudeTranscriptPath(ev.transcript_path, sid) ? { session_id: sid, transcript_path: ev.transcript_path } : null;
+}
+
+/**
+ * The Codex session a hook payload of the main thread belongs to (TER-1095): Codex's hooks send the same
+ * `session_id` / `transcript_path` pair as Claude's, the path being the session's `rollout-*.jsonl`. A
+ * subagent's event (an `agent_id`) is its own thread, not the tab's conversation. `notify` carries no path.
+ */
+export function codexSessionOf(ev: unknown): { session_id: string; transcript_path: string } | null {
+  if (!isObj(ev) || !isClaudeSessionId(ev.session_id) || 'agent_id' in ev || ev.subagent === true) return null;
+  const sid = ev.session_id;
+  return isCodexTranscriptPath(ev.transcript_path, sid) ? { session_id: sid, transcript_path: ev.transcript_path } : null;
 }
 
 /**
