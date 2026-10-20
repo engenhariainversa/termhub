@@ -125,5 +125,9 @@
   "Janela inválida: o início precisa vir antes do fim": "Invalid window: the start must come before the end",
   "Janela longa demais: no máximo {{days}} dias": "Window too long: at most {{days}} days",
   "Informe o nome ou e-mail a procurar": "Provide the name or e-mail to search for",
-  "Informe o usuário (user_id); procure-o com search": "Provide the user (user_id); find it with search"
+  "Informe o usuário (user_id); procure-o com search": "Provide the user (user_id); find it with search",
+  "Só abas de terminal podem iniciar um agente": "Only terminal tabs can start an agent",
+  "Nenhuma conta de IA em {{machine}} pode iniciar um agente neste projeto: cadastre uma em Contas de IA": "No AI account on {{machine}} can start an agent in this project: add one under AI accounts",
+  "Escolha a conta para iniciar a sessão": "Choose the account to start the session with",
+  "Esta conta não pode iniciar um agente em {{machine}} neste projeto": "This account cannot start an agent on {{machine}} in this project"
 }

@@ -58,6 +58,8 @@ import {
   tabFileResponse,
   tabScreenResponse,
   installHooksResponse,
+  startTabAgentResponse,
+  tabAgentOptions,
   tabsResponse,
   tokenResponse,
   transcriptionConfigResponse,
@@ -75,6 +77,7 @@ import {
   type TProjectAi,
   type TSetHostBody,
   type TStartSessionBody,
+  type TStartTabAgentBody,
   type TTabChatAction,
   type TFilePreviewQuery,
   type TTabQuestionAnswerBody,
@@ -453,6 +456,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/screen${lines ? `?lines=${lines}` : ''}`, tabScreenResponse, { token: a.accessToken }),
     installMachineHooks: (a: Auth, machineId: string) =>
       call('POST', `/api/m/v1/machines/${encodeURIComponent(machineId)}/hooks`, installHooksResponse, { token: a.accessToken, body: {} }),
+    tabAgentOptions: (a: Auth, tabId: string) => call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/agent`, tabAgentOptions, { token: a.accessToken }),
+    startTabAgent: (a: Auth, tabId: string, body: TStartTabAgentBody) =>
+      call('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/agent`, startTabAgentResponse, { token: a.accessToken, body }),
 
     tabEvents: (auth, tabId, handlers) => {
       // The same renewal rule as `events` below: a refused upgrade or a 1008 renews only a stale token.

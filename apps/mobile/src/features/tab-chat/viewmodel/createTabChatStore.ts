@@ -13,6 +13,7 @@ import { sessionEnded } from '@/features/shared/signals';
 import {
   TAB_MESSAGE_MAX_CHARS,
   type TChatEvent,
+  type TTabAgentOptions,
   type TTabChatAction,
   type TTabChatFrame,
   type TTabChatItem,
@@ -68,10 +69,20 @@ export interface TabChatState {
   installingHooks: boolean;
   /** "Instalar hooks" succeeded on this screen: it says what happens next. */
   hooksInstalled: boolean;
+  /** The accounts "Iniciar sessão" can start with (TER-1094), loaded once the page says `no_agent`; null until then. */
+  agentOptions: TTabAgentOptions | null;
+  agentOptionsError: string | null;
+  startingAgent: boolean;
+  startAgentError: string | null;
+  /** "Iniciar sessão" started the agent in this tab: the screen says the conversation comes once it answers. */
+  agentStarted: boolean;
 
   open(): Promise<void>;
   /** "Instalar hooks" on the tab's machine, then the page again. A refusal is the screen's `error`. */
   installHooks(): Promise<void>;
+  /** "Iniciar sessão" (TER-1094) with `accountId`, or the suggested account when none. Resolves the new tab's id when
+   *  the agent started in another tab (the screen goes there), null otherwise; a refusal is `startAgentError`. */
+  startAgent(accountId?: string): Promise<string | null>;
   close(): void;
   loadEarlier(): Promise<void>;
   /** Resolves `true` once the server typed it into the tab; `false` leaves the text with the composer. */
@@ -115,10 +126,17 @@ const initialData = (): Data => ({
   emptyReason: null,
   installingHooks: false,
   hooksInstalled: false,
+  agentOptions: null,
+  agentOptionsError: null,
+  startingAgent: false,
+  startAgentError: null,
+  agentStarted: false,
 });
 
 const isApiError = (e: unknown, code?: string): e is ApiError => e instanceof ApiError && (code === undefined || e.code === code);
 const isLocked = (e: unknown) => e instanceof Error && e.message === 'LOCKED';
+/** The server explains its refusals (offline, an old agent, what the machine reported) in the person's language. */
+const refusalOf = (e: unknown, fallback: string): string => (isApiError(e) && !e.code.startsWith('HTTP_') && e.code !== 'BAD_RESPONSE' ? e.message : fallback);
 const without = (record: Record<string, string>, id: string): Record<string, string> => {
   const { [id]: _dropped, ...rest } = record;
   return rest;
@@ -150,6 +168,28 @@ export function createTabChatStore(deps: TabChatDeps) {
       emptyReason: page.empty_reason,
     });
 
+    /** Applies a page; one that says the tab is a plain shell (TER-1094) brings the accounts an agent can start with. */
+    const applyPage = (page: TTabChatPage, extra: Partial<Data> = {}): void => {
+      set({ ...fromPage(page), ...extra });
+      if (page.empty_reason === 'no_agent' && get().agentOptions === null) void loadAgentOptions();
+    };
+
+    let loadingOptions = false;
+    const loadAgentOptions = async (): Promise<void> => {
+      if (loadingOptions) return;
+      loadingOptions = true;
+      const gen = generation;
+      try {
+        const options = await api.tabAgentOptions(session().auth(), tabId);
+        if (gen === generation) set({ agentOptions: options, agentOptionsError: null });
+      } catch (e) {
+        if (handled(gen, e)) return;
+        set({ agentOptionsError: refusalOf(e, TAB_CHAT_MSG.agentOptionsFailed) });
+      } finally {
+        loadingOptions = false;
+      }
+    };
+
     /**
      * The tab became readable while this screen had no transcript to follow (TER-1091): its first session
      * was reported, or a missing transcript came back. The socket follows from the end of the file, so
@@ -179,7 +219,7 @@ export function createTabChatStore(deps: TabChatDeps) {
       try {
         const page = await api.tabChat(session().auth(), tabId);
         if (gen !== generation) return;
-        set(fromPage(page));
+        applyPage(page);
       } catch (e) {
         if (handled(gen, e)) return;
         set({ error: TAB_CHAT_MSG.loadFailed });
@@ -278,7 +318,7 @@ export function createTabChatStore(deps: TabChatDeps) {
         try {
           const page = await api.tabChat(session().auth(), tabId);
           if (gen !== generation) return;
-          set({ ...fromPage(page), status: 'ready' });
+          applyPage(page, { status: 'ready' });
           openSocket();
         } catch (e) {
           if (gen !== generation) return;
@@ -310,10 +350,32 @@ export function createTabChatStore(deps: TabChatDeps) {
           await reload();
         } catch (e) {
           if (handled(gen, e)) return;
-          // The server explains its refusals (offline, an old agent, what the machine reported) in pt-BR.
-          set({ error: isApiError(e) && !e.code.startsWith('HTTP_') && e.code !== 'BAD_RESPONSE' ? e.message : TAB_CHAT_MSG.installFailed });
+          set({ error: refusalOf(e, TAB_CHAT_MSG.installFailed) });
         } finally {
           if (gen === generation) set({ installingHooks: false });
+        }
+      },
+
+      async startAgent(accountId) {
+        if (get().startingAgent) return null;
+        const gen = generation;
+        set({ startingAgent: true, startAgentError: null });
+        try {
+          const started = await api.startTabAgent(session().auth(), tabId, accountId ? { account_id: accountId } : {});
+          if (gen !== generation) return null;
+          if (started.new_tab) return started.tab_id;
+          // Started here: the hooks report its session, and the tab turning readable reads the page again.
+          set({ agentStarted: true });
+          await reload();
+          return null;
+        } catch (e) {
+          if (handled(gen, e)) return null;
+          set({ startAgentError: refusalOf(e, TAB_CHAT_MSG.agentStartFailed) });
+          // Someone else changed the machine's accounts meanwhile: the choices on screen are stale.
+          if (isApiError(e, 'ACCOUNT_CHOICE_REQUIRED') || isApiError(e, 'ACCOUNT_REQUIRED')) void loadAgentOptions();
+          return null;
+        } finally {
+          if (gen === generation) set({ startingAgent: false });
         }
       },
 

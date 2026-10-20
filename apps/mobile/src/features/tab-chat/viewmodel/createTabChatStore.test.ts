@@ -255,6 +255,80 @@ describe('an empty conversation (TER-1091)', () => {
   });
 });
 
+describe('a plain shell (TER-1094)', () => {
+  const options = { choices: [{ account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null }, { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null }], suggested: 'acc-claude' };
+
+  it('loads the accounts an agent can start with only when the page says no_agent', async () => {
+    const ctx = await setup();
+    const read = jest.spyOn(ctx.api, 'tabAgentOptions');
+    await ctx.chat.getState().open();
+    expect(read).not.toHaveBeenCalled();
+    expect(ctx.chat.getState().agentOptions).toBeNull();
+
+    const other = await setup();
+    const empty = await noSessionPage(other, 'no_agent');
+    jest.spyOn(other.api, 'tabChat').mockResolvedValueOnce(empty);
+    const readOther = jest.spyOn(other.api, 'tabAgentOptions').mockResolvedValueOnce(options);
+    await other.chat.getState().open();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(readOther).toHaveBeenCalledWith(expect.anything(), 't-api');
+    expect(other.chat.getState()).toMatchObject({ agentOptions: options, agentOptionsError: null });
+  });
+
+  it('accounts that cannot be read say so', async () => {
+    const ctx = await setup();
+    jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(await noSessionPage(ctx, 'no_agent'));
+    jest.spyOn(ctx.api, 'tabAgentOptions').mockRejectedValueOnce(new Error('network'));
+    await ctx.chat.getState().open();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(ctx.chat.getState()).toMatchObject({ agentOptions: null, agentOptionsError: 'Não foi possível carregar as contas de IA.' });
+  });
+
+  it('"Iniciar sessão" with the suggested account sends none, then reads the page again and says what comes next', async () => {
+    const ctx = await setup();
+    jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(await noSessionPage(ctx, 'no_agent'));
+    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude' });
+    await openAndConnect(ctx.chat);
+    const read = jest.spyOn(ctx.api, 'tabChat');
+    read.mockClear(); // the same spy as above: only the reads from here on
+    await expect(ctx.chat.getState().startAgent()).resolves.toBeNull();
+    expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', {});
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(ctx.chat.getState()).toMatchObject({ agentStarted: true, startingAgent: false, startAgentError: null });
+  });
+
+  it('a chosen account goes with the call', async () => {
+    const ctx = await setup();
+    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-codex', label: 'Trabalho' }, provider: 'chatgpt' });
+    await ctx.chat.getState().open();
+    await ctx.chat.getState().startAgent('acc-codex');
+    expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', { account_id: 'acc-codex' });
+  });
+
+  it('an agent started in a new tab answers its id, and this screen reads nothing again', async () => {
+    const ctx = await setup();
+    jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-new', new_tab: true, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude' });
+    await ctx.chat.getState().open();
+    const read = jest.spyOn(ctx.api, 'tabChat');
+    await expect(ctx.chat.getState().startAgent()).resolves.toBe('t-new');
+    expect(read).not.toHaveBeenCalled();
+    expect(ctx.chat.getState().agentStarted).toBe(false);
+  });
+
+  it('a refused start keeps the server\'s message; a network failure the generic one', async () => {
+    const ctx = await setup();
+    await ctx.chat.getState().open();
+    jest.spyOn(ctx.api, 'startTabAgent').mockRejectedValueOnce(new ApiError(409, 'ACCOUNT_CHOICE_REQUIRED', 'Escolha a conta'));
+    const reread = jest.spyOn(ctx.api, 'tabAgentOptions').mockResolvedValueOnce(options);
+    await expect(ctx.chat.getState().startAgent()).resolves.toBeNull();
+    expect(ctx.chat.getState()).toMatchObject({ startAgentError: 'Escolha a conta', startingAgent: false, agentStarted: false });
+    expect(reread).toHaveBeenCalledTimes(1);
+    jest.spyOn(ctx.api, 'startTabAgent').mockRejectedValueOnce(new Error('network'));
+    await ctx.chat.getState().startAgent();
+    expect(ctx.chat.getState().startAgentError).toBe('Não foi possível iniciar o agente. Tente de novo.');
+  });
+});
+
 describe('loadEarlier', () => {
   it('prepends the page before, once per page', async () => {
     const { chat, api } = await setup();

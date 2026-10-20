@@ -18,6 +18,7 @@ import { useTabChatStore } from '../viewmodel/useTabChatStore';
 import { RawScreenSheet } from './raw-screen-sheet';
 import { SessionHeader } from './session-header';
 import { SessionMenu, type SessionMenuChoice } from './session-menu';
+import { StartAgentPanel } from './start-agent-panel';
 import { ToolsRow } from './tools-row';
 
 const READABLE_COLUMN = readableColumn(MAX_READABLE_WIDTH);
@@ -82,7 +83,12 @@ export function SessionView({ tabId }: { tabId: string }) {
   const emptyReason = store((s) => s.emptyReason);
   const installingHooks = store((s) => s.installingHooks);
   const hooksInstalled = store((s) => s.hooksInstalled);
-  const { send, act, installHooks, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
+  const agentOptions = store((s) => s.agentOptions);
+  const agentOptionsError = store((s) => s.agentOptionsError);
+  const startingAgent = store((s) => s.startingAgent);
+  const startAgentError = store((s) => s.startAgentError);
+  const agentStarted = store((s) => s.agentStarted);
+  const { send, act, installHooks, startAgent, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
@@ -166,6 +172,17 @@ export function SessionView({ tabId }: { tabId: string }) {
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/chats' as Href));
   const why = availabilityText(availability);
   const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '');
+  // An agent started in another tab (this one's shell was busy): the screen follows it there.
+  const onStartAgent = async (accountId?: string) => {
+    const newTab = await startAgent(accountId);
+    if (newTab) router.replace(`/session/${newTab}` as Href);
+  };
+  const emptyAction =
+    emptyReason === 'no_agent' && !agentStarted && !BLOCKED.has(availability) ? (
+      <StartAgentPanel options={agentOptions} optionsError={agentOptionsError} starting={startingAgent} error={startAgentError} onStart={(id) => void onStartAgent(id)} />
+    ) : empty.install && !hooksInstalled && !BLOCKED.has(availability) ? (
+      <Button testID="session-install-hooks" label={empty.install} onPress={() => void installHooks()} loading={installingHooks} />
+    ) : undefined;
 
   return (
     <Screen padded={false} width="full">
@@ -188,12 +205,8 @@ export function SessionView({ tabId }: { tabId: string }) {
               <View testID="session-empty" className="flex-1">
                 <EmptyState
                   title={empty.title}
-                  hint={hooksInstalled ? TAB_CHAT_MSG.hooksInstalled : empty.hint}
-                  action={
-                    empty.install && !hooksInstalled && !BLOCKED.has(availability) ? (
-                      <Button testID="session-install-hooks" label={empty.install} onPress={() => void installHooks()} loading={installingHooks} />
-                    ) : undefined
-                  }
+                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? TAB_CHAT_MSG.hooksInstalled : empty.hint}
+                  action={emptyAction}
                 />
               </View>
             ) : null}

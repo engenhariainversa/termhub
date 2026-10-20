@@ -43,15 +43,30 @@ export function hasReportedSession(tab: Pick<Tab, 'agent_session_id' | 'agent_tr
 /**
  * Why a page has no history (TER-1091, `TAB_CHAT_EMPTY_REASONS` in the contract), or null when it has
  * some or another availability already says why. `firstPage`: the read started at the end of the session
- * (no `before`), so an empty page means the session itself is empty.
+ * (no `before`), so an empty page means the session itself is empty. `atShell`: the tab's pane has its
+ * shell in front, no AI CLI running (TER-1094): whatever the hooks said before, there is no agent to talk
+ * to, and that is what the screen must say (`no_agent`, with "Iniciar sessão").
  */
-export function emptyReasonOf(tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>, availability: TabChatAvailability, page: Pick<Page, 'items' | 'before'>, firstPage: boolean, hooksInstalled: boolean): TTabChatEmptyReason | null {
+export function emptyReasonOf(
+  tab: Pick<Tab, 'agent_session_id' | 'agent_transcript_path'>,
+  availability: TabChatAvailability,
+  page: Pick<Page, 'items' | 'before'>,
+  firstPage: boolean,
+  hooksInstalled: boolean,
+  atShell = false,
+): TTabChatEmptyReason | null {
+  if (atShell && hasNoHistory(availability, page, firstPage)) return 'no_agent';
   if (availability === 'no_session') {
     if (hasReportedSession(tab)) return 'transcript_missing';
     return hooksInstalled ? 'not_reported' : 'no_hooks';
   }
   if (availability === 'ready' && firstPage && page.items.length === 0 && page.before === null) return 'new_session';
   return null;
+}
+
+/** The page shows no history at all: no session to read, or the current one is empty (TER-1094: when the pane is worth a look). */
+export function hasNoHistory(availability: TabChatAvailability, page: Pick<Page, 'items' | 'before'>, firstPage: boolean): boolean {
+  return availability === 'no_session' || (availability === 'ready' && firstPage && page.items.length === 0 && page.before === null);
 }
 
 /** A position in one session's transcript: a byte offset on a line boundary. Opaque to the app. */
