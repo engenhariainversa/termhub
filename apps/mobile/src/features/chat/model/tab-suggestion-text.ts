@@ -65,6 +65,11 @@ export const isReplyCard = (s: TabSuggestion): boolean => s.payload.agent === 'c
 /** The label over the editable line. */
 export const suggestionFieldLabel = (s: TabSuggestion): string => (s.payload.exited ? t('Comando para retomar (edite ou dispense)') : t('Sugestão do Claude Code (opcional — edite ou dispense)'));
 
+/** The editable line's length cap, the server's: a resume line (an automatic tab's runs to about 3 KB) is
+ *  sourced from a file on the machine and takes up to 16 000 characters (TER-988); any other text, 2000.
+ *  On Android `maxLength` also cuts a value set by code, so a longer resume line would arrive cut. */
+export const suggestionFieldMax = (s: TabSuggestion): number => (s.payload.exited ? 16_000 : 2000);
+
 /** How much of the agent's message a collapsed card shows. */
 export const CONTEXT_PREVIEW_MAX = 400;
 

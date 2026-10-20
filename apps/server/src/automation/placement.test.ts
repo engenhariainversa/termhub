@@ -8,11 +8,11 @@ import { placeDetailText } from './waiting-text.js';
 const reg = vi.hoisted(() => ({ online: new Map<string, string[]>() }));
 vi.mock('../agent/registry.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../agent/registry.js')>();
-  return { ...real, agents: { isOnline: (id: string) => reg.online.has(id), capabilities: (id: string) => reg.online.get(id) ?? null } };
+  return { ...real, agents: { isOnline: (id: string) => reg.online.has(id), capabilities: (id: string) => reg.online.get(id) ?? null, info: () => undefined } };
 });
 
 const project = { id: 'p1', owner_id: 'u1' } as Project;
-const machine = (id: string, allowed = true): Machine => ({ id, name: `name-${id}`, type: 'agent', owner_id: 'u1', capabilities: ['claude'], agent_version: '0.18.0', automation_allowed: allowed }) as Machine;
+const machine = (id: string, allowed = true): Machine => ({ id, name: `name-${id}`, type: 'agent', owner_id: 'u1', capabilities: ['claude'], agent_version: '0.19.0', automation_allowed: allowed }) as Machine;
 const account = (id: string, machineId: string, provider: AiAccount['provider'] = 'claude'): AiAccount => ({ id, provider, label: `label-${id}`, machine_id: machineId, config_dir: null, created_at: '' });
 
 function fakeRepos(i: { machines: Machine[]; accounts: AiAccount[]; exhausted?: string[] }) {
@@ -37,6 +37,24 @@ describe('placeRun', () => {
     const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
     const p = await placeRun({ repos, now: () => new Date(), usage: async () => 10 }, project, setup(['a2', 'a1']));
     expect(p).toMatchObject({ machine: { id: 'm2' }, account: { id: 'a2' }, link: { cwd: '/code/m2' } });
+  });
+
+  it('TER-1079: an account whose login expires within three days goes after the ones with slack, and is still used when alone', async () => {
+    reg.online.set('m1', ['worktree']);
+    const now = new Date('2026-10-13T12:00:00Z');
+    const inDays = (d: number) => new Date(now.getTime() + d * 86_400_000).toISOString();
+    const soon = { ...account('a1', 'm1'), login_expires_at: inDays(2) };
+    const later = { ...account('a2', 'm1'), login_expires_at: inDays(20) };
+    const unknown = { ...account('a3', 'm1'), login_expires_at: null };
+    const place = (accounts: AiAccount[], listed: string[], usage: (id: string) => Promise<number | null> = async () => 10) =>
+      placeRun({ repos: fakeRepos({ machines: [machine('m1')], accounts }), now: () => now, usage }, project, setup(listed));
+    expect(await place([soon, later, unknown], ['a1', 'a2', 'a3'])).toMatchObject({ account: { id: 'a2' } });
+    expect(await place([soon, unknown], ['a1', 'a3'])).toMatchObject({ account: { id: 'a3' } });
+    // only a preference: with the others full, or alone, it is the one
+    expect(await place([soon, later], ['a1', 'a2'], async (id) => (id === 'a2' ? 95 : 10))).toMatchObject({ account: { id: 'a1' } });
+    expect(await place([soon], ['a1'])).toMatchObject({ account: { id: 'a1' } });
+    // a date already past says nothing about the login now
+    expect(await place([{ ...soon, login_expires_at: inDays(-1) }, later], ['a1', 'a2'])).toMatchObject({ account: { id: 'a1' } });
   });
 
   it('skips exhausted accounts and those at or above the swap threshold; unknown usage is room', async () => {
@@ -123,6 +141,18 @@ describe('placeRun', () => {
     expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, setup(['a1']))).toMatchObject({ waiting: 'no_machine' });
     const current = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });
     expect(await placeRun({ repos: current, now: () => new Date(), usage: async () => 0 }, project, setup(['a1']))).toMatchObject({ waiting: 'machine_offline' });
+  });
+
+  it('an agent with worktrees but without the hard-lock guard (0.18) is never chosen: "atualize o agente" (TER-1005)', async () => {
+    reg.online.set('hulk', ['worktree']);
+    const repos = fakeRepos({ machines: [{ ...machine('hulk'), agent_version: '0.18.0' }], accounts: [account('a1', 'hulk')] });
+    const p = await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, setup(['a1']));
+    expect(p).toEqual({ waiting: 'no_machine', detail: { listed: 1, machines: [{ id: 'hulk', name: 'name-hulk', why: 'no_guard' }], accounts: [] } });
+    expect(placeDetailText('pt-BR', (p as { detail: Parameters<typeof placeDetailText>[1] }).detail)).toBe('máquina name-hulk: agente sem a trava; atualize o agente (0.19)');
+    expect(placeDetailText('en', (p as { detail: Parameters<typeof placeDetailText>[1] }).detail)).toBe('machine name-hulk: agent without the hard lock; update the agent (0.19)');
+    // offline at 0.18: it waits for an update, not for the machine
+    reg.online.clear();
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, setup(['a1']))).toMatchObject({ waiting: 'no_machine' });
   });
 
   it('ssh/local machines, machines of someone else and machines without Claude are never chosen', async () => {

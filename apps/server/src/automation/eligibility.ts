@@ -27,7 +27,12 @@ export type IneligibleReason =
   | 'merge_updating'
   | 'merge_no_write'
   | 'merge_conflict_cap'
-  | 'merge_ci_cap';
+  | 'merge_ci_cap'
+  | 'merge_person_card'
+  // TER-1025: a fix ended without a push while GitHub reports trouble: it is asked again once GitHub works
+  | 'merge_github_down'
+  // TER-1051: a fixer waits for the card's open tab, busy or in use by a person (it shares the card's worktree)
+  | 'merge_fix_waits_for_tab';
 
 /** What the card shows when it is tagged but does not run (spec §5). `not_in_todo` is not shown: backlog, doing and done are not "waiting". */
 export const REASON_TEXT: Record<IneligibleReason, string> = {
@@ -37,7 +42,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   not_in_todo: tk('Fora da coluna A fazer'),
   no_description: tk('Sem descrição'),
   has_agent: tk('Já tem um agente'),
-  no_capable_machine: tk('Nenhuma máquina com agente 0.18 ligada ao projeto'),
+  no_capable_machine: tk('Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente'),
   repo_missing: tk('Repositório não configurado no Setup'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
@@ -53,6 +58,9 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   merge_no_write: tk('Integração do GitHub sem permissão de escrita'),
   merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
   merge_ci_cap: tk('CI vermelho depois das tentativas de correção'),
+  merge_person_card: tk('O PR cita um card manual que não está em Feito; uma pessoa mescla'),
+  merge_github_down: tk('GitHub instável; a correção do CI é pedida de novo quando ele voltar'),
+  merge_fix_waits_for_tab: tk('A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra'),
 };
 
 export interface EligibilityInput {

@@ -52,6 +52,17 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   the second wall after `--disallowedTools`, and it is what closes auto mode's gap: the classifier can
   no longer approve a push to another ref. Only automatic tabs get it (manual and `start_agent` tabs
   have no worktree, so no `--settings`). Each `deny` is listed in the feed as `guard_blocked`.
+  Guard version 2 (agent 0.29.0+, `MULTI_REPO_GUARD_MIN_AGENT_VERSION`; the script's second line says
+  `# termhub-guard v2`) also takes the run's own branch pushed as `git -C <worktree>/<key> push …`, in the
+  same four plain forms, where `<key>` is a direct subfolder named like a repo key (no `/`, no `..`). It is
+  for multi-repo runs, whose worktree is a workspace root with one repo per folder.
+  The server writes `guard.json` before it types any line that names it — the start, the follower's
+  restart of an agent that exited, the resume card and the account swap (`installRunGuard`, TER-1005).
+  A run never starts or comes back without the lock: a machine whose agent is older than 0.19.0 is left
+  out by the dispatcher (the card says "agente sem a trava; atualize o agente (0.19)"), a start there is
+  refused with "Atualize o agente de <máquina>…", and an exited run there ends blocked as
+  `agent_outdated`. A run whose tab is back at its shell with no hook after 3 minutes escalates as
+  `agent_not_started` (the launch line failed; the error is on screen), not as `trust_prompt`.
 - Permissions of automatic tabs: the mode above plus an allow list; no bypass flag. A fixed deny list
   (force/delete/mirror pushes, `.env` reads, `git -c`, release commands, ...) sits in
   `apps/server/src/control/automation-tools.ts` (`AUTOMATION_DENIED_TOOLS`) and beats any project allow
@@ -71,11 +82,15 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
 
 1. Agent `>= 0.18.0` (the first with the worktree RPC) on the machines linked to termhub. Check the version
    in Máquinas; update there or let `agent_auto_update` do it.
-2. Claude folder trust for the worktrees directory. A new folder makes Claude Code ask "trust this
-   folder?", which parks the run (`trust_prompt`). Accept it once: open the first parked run's tab, answer
-   the question with "Yes, I trust this folder" and the run continues. If trust is stored per parent
-   directory in your Claude version, one answer covers the worktrees of every later card; otherwise expect
-   it once per worktree and accept each (this is not confirmed in code, see the end of this file).
+2. Claude folder trust for the worktrees directory (TER-1025: nothing to do by hand). A new folder makes
+   Claude Code ask "Is this a project you created or one you trust?". Checked in Claude Code 2.1.292: trust
+   lives in `projects[<folder>].hasTrustDialogAccepted` of the account's `.claude.json` (`~/.claude.json`,
+   or `$CLAUDE_CONFIG_DIR/.claude.json`), and inside a git repository Claude only looks at the repository's
+   root, so a trusted parent folder does not cover a worktree. Agent `>= 0.24.0` therefore marks each new
+   worktree trusted in every Claude account of the machine when it creates it. When the question still shows
+   (an older agent, an account added later), the server reads the tab after 30 s and, if the screen shows
+   the question with "1. Yes, I trust this folder" selected, presses Enter (event `trust_auto_accepted`, at
+   most 3 times a run, never while paused). Only when that fails is the run parked as `trust_prompt`.
 3. Machine switch. In Máquinas, "Aceita trabalho automático" must be unchecked for jarvis: it is the
    production host, and the automation must never start cards there. Check it on every machine that
    should not run cards, and on the others make sure it is checked. The chat can flip it too
@@ -105,7 +120,7 @@ Project Setup, "Trabalho automático" section. Fields not listed keep their defa
 | Até onde os agentes vão sozinhos (`autonomy`) | `release` (Publicação). Consider `deploy` for the first week; the spike leaves that to the maintainer |
 | Caminhos de release (`release_paths`) | `apps/agent/package.json`, `apps/mobile/**`, `packages/mobile-api/**` |
 | Caminhos das lojas (`store_paths`) | `apps/mobile/app.json`, `apps/mobile/app.config.js`, `apps/mobile/package.json`, `apps/mobile/plugins/**` |
-| Workflows de release (`release_workflows`) | `Publish @termhub/agent`, `Publish mobile OTA` |
+| Workflows de release (`release_workflows`) | `Publish @termhub/agent`, `Publish mobile OTA`, `Mobile TestFlight (hulk)` (add it once the hulk runner exists: section 4b) |
 | Checks obrigatórios (`required_checks`) | `CI e Deploy` |
 | Pasta dos worktrees (`worktrees_dir`) | default `~/.termhub/worktrees`, or a folder outside every checkout; the trust prompt above applies to it |
 | Hora do resumo diário (`summary_hour`) | an hour of the day, 0 to 23 (e.g. 18); empty = no summary |
@@ -155,6 +170,45 @@ Every change, from the chat, an MCP client, the web or the app, is an automation
 `fields`), `tagged` / `untagged` (with how many `cards`), `machine_opt_in` / `machine_opt_out` (on every
 project linked to the machine). They show in the feed and in `list_automation_events`.
 
+## 4b. TestFlight on hulk (TER-1055)
+
+A native change to the app (a store path) still waits for a person to merge it. After that merge, the iOS build
+goes to TestFlight by itself: the "Mobile TestFlight (hulk)" workflow (`.github/workflows/mobile-testflight.yml`)
+runs on a self-hosted runner on hulk, the Mac with Xcode and the Apple credentials, and calls
+`apps/mobile/scripts/testflight.sh` (the local flow of `apps/mobile/README.md`, "Releasing to TestFlight", no
+EAS). It never submits for App Store review and builds no Android.
+
+- **Trigger:** a push to `main` that changes `apps/mobile/app.json`, `app.config.js`, `package.json` or
+  `plugins/**`, or Actions → Run workflow (with `force` to re-upload the same version under a new build number).
+- **Once per version:** hulk records each accepted upload in `~/.termhub/testflight/ios-<version>`. A version
+  already there is skipped and the run cancels itself; termhub reads a cancelled run as nothing delivered, so no
+  `release_ok` and no push. A native change without an `expo.version` bump therefore ships nothing: bump the
+  version.
+- **Build number:** the UTC date and time (`YYYYMMDDHHMM`), written into the generated `Info.plist` only.
+- **Credentials stay on hulk:** the Apple ID signed in to Xcode, or an App Store Connect API key named by
+  `ASC_KEY_ID` / `ASC_ISSUER_ID` (and `ASC_KEY_PATH`) in `~/.termhub/testflight/env` on hulk. No Apple, Expo or
+  EAS secret goes to GitHub.
+- **In termhub:** with the workflow in `release_workflows`, an automatic card whose PR changed the app gets
+  `release_ok` with the app's `expo.version` (read from the `app.json` the PR changed), a chat line, and a push:
+  "termhub: versão 0.6.0 publicada" / "Mobile TestFlight (hulk) publicou a versão 0.6.0." A failed build is
+  `release_failed` and escalates (section 10). The build number is in the run's summary, not in the push.
+
+One-time setup on hulk (the maintainer, not an agent: it registers a runner on the repository):
+
+1. Repository → Settings → Actions → Runners → New self-hosted runner → macOS. Install it in a folder of its own
+   (e.g. `/Volumes/Extra/actions-runner`), outside the termhub checkout, and register it with the extra label
+   `macos-hulk`. Never give it the `termhub` label: that one sends CI and deploy jobs to jarvis.
+2. Install it as a service of the user that is signed in to Xcode (`./svc.sh install && ./svc.sh start`; on
+   macOS that is a LaunchAgent, so the user's keychain is available). The user must stay logged in.
+3. The runner needs `node` 22, `npm`, CocoaPods and Xcode in its `PATH`: put them in the runner's `.path` (or
+   `.env`) and restart it.
+4. Optional: `~/.termhub/testflight/env` with `export ASC_KEY_ID=… ASC_ISSUER_ID=…` to sign and upload with the
+   API key instead of the Xcode account. The `.p8` stays in `~/.appstoreconnect/private_keys/`.
+5. A self-hosted runner runs whatever a workflow sends it. Keep "Require approval for all outside
+   collaborators" (Settings → Actions → General) on, so a fork's pull request never reaches hulk.
+6. First upload: Actions → "Mobile TestFlight (hulk)" → Run workflow on `main`. Then add the workflow to
+   `release_workflows` (section 4).
+
 ## 5. First card, end to end
 
 1. Pick a small, low-risk card (docs or a one-file fix, no `release_paths`/`store_paths`) and tag it as
@@ -191,6 +245,40 @@ escalations. The daily summary is posted at `summary_hour` and lists what merged
 budgets are set, what it cost. With no review column, this plus the PRs is the review: read the summary,
 open any PR you want a second look at.
 
+A PR belongs to the automatic card whose run worked on its head branch. Other cards it cites in its title
+or body are only references (TER-1004): the merge does not move them to done, and deploys and releases are
+reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
+(`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
+
+## 7a. Decisions automatic work takes alone (TER-1043)
+
+"Era pra ir no automático, então as decisões deveriam já ter sido tomadas." A run does not stop to ask the
+person which of two options to take.
+
+- **The prompt** of the implementer, the fixer and the integrator (`apps/server/src/automation/prompts.ts`,
+  `decideLine`) says: on a product or technical decision, follow the person's precedent from
+  `search_memory` (decisions and notes) or else the agent's own recommendation; record it (the implementer
+  in the PR body, section "Decisões tomadas", with options, choice and reason) and in `report_card`
+  (`decisions`); never end the turn on a question.
+- **Exceptions that still stop** (the agent calls `report_card` blocked): credentials or `.env`, deploy,
+  merge or publish by hand, the stores and EAS, `rm` outside the worktree, docker or ssh, irreversible acts
+  on production data, and a change of scope beyond the card. The guard's fixed locks still refuse those
+  commands whatever the agent decides.
+- **Safety net** (`apps/server/src/automation/decision.ts`, `onQuestionStop` in `follower.ts`): when a run's
+  tab stops and its last answer asks something (a `?` outside code, or "Decisão sua", "você decide"…), the
+  server types `[termhub automático]` + `DECIDE_TEXT` (look for the person's precedent, else follow the
+  recommendation, record it, go on) and records `decided_by_recommendation` (`via: nudge`) instead of a plain
+  resume. At most `DECIDE_NUDGES_MAX` (3) per run; after that the stop takes the ordinary resumes and wake.
+  A question that names an exception escalates as `decision_exception` with nothing typed.
+- **Visibility**: each decision reported in `report_card` becomes a `decided_by_recommendation` event
+  (`via: agent`, with "question → choice") shown in the feed ("TER-12 decidiu sozinho: …"), a line
+  "Decidido sozinho: …" in the daily summary, and a memory note (trust `derived`, citing the card) that the
+  next run finds as a precedent. To overturn a decision, say so on the PR or in the chat; the person's own
+  answer then outranks the note.
+- **Opt out**: Setup → Trabalho automático → "Parar em decisões de produto" (`stop_on_decisions`, off by
+  default). On, the prompt keeps the old "pare e pergunte" line and a stop on a question escalates as
+  `decision_needed`.
+
 ## 8. Approving a merge above the level
 
 When a PR needs more than the project's level (for example a `release_paths` change at `deploy`, or any PR
@@ -205,7 +293,8 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 
 | Reason | What it means | What to do |
 | --- | --- | --- |
-| `trust_prompt` | Stopped at the folder-trust question | Accept it in the tab (section 3) |
+| `trust_prompt` | Stopped at the folder-trust question and the server could not answer it (section 3) | Accept it in the tab; the run goes on by itself once the agent reports again |
+| `github_transient` | The agent hit GitHub errors on a push or PR and termhub already resumed it `github_retries` times | Check githubstatus.com and the tab; resume the run when GitHub is back |
 | `question_unanswered` | A question nothing automatic could answer | Answer it on the card |
 | `question_expired` | The question card closed unanswered while the tab still asks | Answer in the tab |
 | `answer_cap` | Too many automatically answered questions in an hour | Look at the tab, answer on the card |
@@ -215,8 +304,11 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `agent_exited` | The agent exited again after its restart | Open the tab, see why |
 | `card_budget` | The card passed `card_budget_usd` | Check the tab, resume if worth it |
 | `reported_blocked` | The agent said it is stuck | Read its report, unblock or take over |
+| `decision_exception` | Stopped on a question that names an exception (credentials, deploy, stores, production data, scope) | Answer in the tab; the run is followed again once the tab moves |
+| `decision_needed` | Stopped on a question and the project has "Parar em decisões de produto" on | Answer in the tab |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
+| `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
@@ -230,9 +322,158 @@ from the runs table, so both colours keep it.
 
 `ci_cap` and `conflict_cap` also come before the cap when a fix ended without a push (the PR head did not
 move after its fixer, or after the fix typed into the card's own run): the escalation then carries
-`cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped.
+`cause: fixer_no_push`, once per PR head. Read the fixer's tab to see why it stopped. For a red CI, a fix
+that ended without a push while githubstatus.com reports trouble with Git, the API or pull requests is not
+escalated: the card waits (`merge_github_down`) and gets one more fixer once GitHub works again (TER-1025).
+
+A fixer never opens a second tab next to one the card left open (TER-1051): the worktree is per card, so
+both would share it. When the tab of the card's last `done` or `blocked` run is still open, at its prompt
+(`waiting_input` or `finished`), with no open question and no prompt submitted in it since that run
+ended, the fixer takes it over: the run points at that tab and the fixer's prompt is typed there
+(`run_started` with `reused_tab: true`). A tab that is busy, or that someone typed into, makes the fix
+wait (`merge_fix_waits_for_tab`, "A correção do PR espera a aba do card ficar livre"); the next CI sync
+asks again. Closing that tab lets the next sync start the fixer in a new tab, as before.
+
+GitHub errors do not reach you on the first failure (TER-1025). An agent whose `git push` or `gh pr create`
+fails on GitHub's side (5xx, "commit_refs", "Something went wrong") calls `report_card` blocked with
+`code: github_transient`: the run waits (event `github_wait`, card and tab kept) and is resumed with a
+"try again" message after 5, 10 and 15 minutes, each time only when githubstatus.com shows Git, the API and
+pull requests working. Past `github_retries` (Setup, default 3) it escalates as `github_transient`.
+
+A `conflict_cap` escalation is about one PR head and holds nothing by itself: the executor reads the PR on
+every pass, so a push (a new head) or a head GitHub no longer finds in conflict merges once CI is green.
+The queue says which head still waits ("Escalado por conflito em a058efd; aguardando um push que
+resolva") and so does the feed line. When a run of the card ends after the escalation and the head did not
+move (it reported done but pushed nothing), the person is told once more for that head, with
+`cause: run_done_no_push` (TER-1016): check that the run really pushed its merge with the base.
+
+## 9a. Refazer login de uma CLI de IA (an expired Claude Code or Codex login)
+
+An agent tab or an automatic run that stops on "Please run /login" / "Login expired" / "Not logged in" has
+lost its CLI login on the machine (TER-1047, spec `docs/superpowers/specs/2026-10-08-ai-cli-login-modal-design.md`).
+
+- The server checks every Claude/Codex account of an online agent machine every 10 minutes (and 30 s after
+  an agent connects). An account found logged out shows a red warning (web sidebar, Contas de IA, the app's
+  banner), and the machine's owner gets one push ("Login do Claude expirou"); no other until it is back.
+- **Warned ahead of the expiry (TER-1079, Claude only).** Claude Code gives the date to nobody but the
+  screen: `claude auth status` has no expiry field and no documented file holds it, and termhub does not
+  read the credential for it. What the CLI does is print a startup notice from three days before, "Your
+  login expires in 3 days · run /login to renew". So when a Claude session starts in a tab (the
+  `SessionStart` hook with `source: startup`), the server reads that tab's screen once, six seconds in; the
+  notice becomes the account's `login_expires_at` (precise to the day, like the notice). The machine's owner
+  is then warned **once per login**: one push ("Login do Claude expira em N dias", the tap opens "Refazer
+  login"), one line in the chat of the projects that list the account (the account chat when none does),
+  an amber line in the sidebar and on the machine's row, and the "Expira em N dias" badge with "Refazer
+  login" in Contas de IA. `list_ai_accounts` answers `login_expires_at` and `expires_soon`, so the concierge
+  can offer `start_ai_login`. How far ahead is the person's own setting in Contas de IA ("Avisar antes de o
+  login expirar": 3 days by default, 2, 1 or never; `users.ai_login_warn_days`); more than 3 is not offered
+  because the CLI says nothing earlier. Automatic work prefers the project's accounts with slack over one
+  expiring within three days (a preference: alone or with the others full, it is still used).
+  Limits to know: an account is only read when one of its Claude sessions starts in a termhub tab during
+  those three days, so a login nobody starts a session on is not warned about; a login redone by hand in a
+  terminal (`/login`) keeps its badge until the old date passes, while "Refazer login" clears it at once;
+  Codex, Gemini and Antigravity print no such notice and are never warned ahead. Nothing of the screen is
+  stored or logged: only ids and the number of days (`ai login expiry read from the screen`, `ai login
+  expires soon`). If Claude Code rewords the notice, the reader is `parseLoginExpiryNotice` in
+  `apps/server/src/ai/login-expiry.ts`.
+- "Refazer login" (web, app, or the chat's `start_ai_login` / `submit_ai_login_code`) needs the machine's
+  agent at **0.25.0 or newer** (capability `ai_login`); an older one answers 409 `AGENT_OUTDATED`. SSH and
+  local machines, and Gemini/Antigravity accounts, are redone by hand on the machine. Only the machine's
+  owner can do it (not an admin viewing as them, not an agent tab).
+- The agent runs `claude auth login` / `codex login --device-auth` with the account's config dir in a
+  hidden tmux session named `termhub-login-<loginId>`, never a work tab (the tab lists ignore these
+  sessions). Claude: open the link, sign in, paste the code back. Codex: open the link, type the device code
+  shown, then "Já autorizei". The pasted code is never logged.
+- On a machine with a desktop (macOS), `claude auth login` also opens the machine's own browser
+  (`BROWSER=true` does not stop it there). Signing in on that browser finishes the login without a code:
+  since agent 0.27.0 (TER-1054) the modal reads that as "Login refeito" (straight away, or through "Já
+  entrei pelo navegador da máquina" once the link showed), confirmed by `claude auth status`. Closing the
+  modal also re-checks the account, so the warning goes either way. The CLI's output only shows as a
+  detail ("Saída da CLI") under an error.
+- An error with "Login successful." in "Saída da CLI" means the machine's agent is older than 0.27.0
+  (Máquinas shows the version). The server now asks that machine's `claude auth status` when a start
+  fails and reads a logged-in answer as "Login refeito"; updating the agent is still the fix. Since agent
+  0.28.1, exit 0 with "Login successful." also counts when the status command cannot answer at all (a
+  timeout, or a Claude Code without `auth status`); a status that says logged out still wins.
+- A flow lives **15 minutes**, in the memory of the server colour that started it: then (or after a deploy)
+  it is gone and the person starts again. The server kills its session when it expires; if one is left
+  behind (the server died mid-flow), remove it on the machine: `tmux ls | grep termhub-login-`, then
+  `tmux kill-session -t termhub-login-<id>`.
+- After a successful login the modal offers to resume the account's tabs still showing the login error: it
+  types `continue` into each. Automatic runs escalated because of the login are not resumed by this; unblock
+  them as in section 9.
+
+## 9b. Keeping the machines' agents up to date (TER-1056)
+
+A machine on an old agent misses whatever needs a newer one (the screen login needs 0.26.0, the hooks read
+0.21.0, the worktree RPC 0.18.0). The server keeps them current:
+
+- **Auto-update is on by default.** New machines start with "Atualizar automaticamente quando ociosa" on, and
+  the migration `20261016090000_agent_auto_update_default_on` turned it on once for every agent machine.
+  The server, not the agent, watches npm: it reads the latest `@termhub/agent` hourly (and right after boot),
+  verifies its provenance (TER-584, `docs/security-and-network.md`), and every 10 minutes, plus 30 s after an
+  agent connects, updates each machine that wants it. Only while the machine is idle: no channel open (a
+  terminal attached or a chat answering there) and no tab with a tool working or waiting. The agent
+  restarts as a service; the tmux sessions survive and open terminals reconnect.
+- **Minimum version.** `MIN_AGENT_VERSION` in `apps/server/src/agent/min-version.ts` (0.27.0 today). An agent
+  below it is updated on its next idle turn even with the switch off, and Máquinas shows it in red
+  ("vX.Y.Z !", "desatualizado" on the Agente tab, a notice in the agent card) until it reconnects on a newer
+  version. To force a critical fix out: in the PR that bumps `apps/agent/package.json`, raise
+  `MIN_AGENT_VERSION` to that version. CI publishes the agent and deploys the server from the same merge; the
+  server installs only a verified release, so the red notice stays until npm has finished processing it.
+- **From the chat.** `list_machines` answers `agent_version`, `update_available` and `below_min_version` per
+  agent machine (plus `latest_agent_version` and `min_agent_version`). `update_machine_agent` with
+  `machine_id`, or `all: true`, runs the Atualizar button behind a confirmation card, waits up to 2 minutes
+  for the agent to come back, and answers each machine's status and the versions before and after. The
+  machine the chat itself runs on answers `scheduled`: updating it on the spot would cut the conversation,
+  so the scheduler updates it once the answer is over and it is idle, switch or not. Automatic tabs never
+  call it.
+- **After an update** (button, chat or auto-update): once the agent is back on the new version, the monitor
+  hooks are installed again if termhub had installed them there and the forwarding script or our entries
+  changed (`hooks: reinstalled`); hooks termhub never installed are left alone. A machine still dialing
+  with the legacy permanent token answers `repair_suggested: true`: offer "Parear de novo" on its agent tab
+  (TER-1017) to trade it for a device key.
+- Stuck: an agent older than 0.2.1 cannot update itself (`too_old`); `restart_needed` means the agent does
+  not run as a service, so someone restarts it on the machine; `not_back` means it did not reconnect within
+  2 minutes (check `termhub-agent doctor` there). The fallback is always `npm i -g @termhub/agent@latest` on
+  the machine.
+
+## 9c. Diagnosing a user's report (TER-1092)
+
+When a person reports a problem and the diagnosis needs their technical data (which routes failed, which
+client version they use, whether their agent is behind), use the admin troubleshooting views, never the
+production database: automatic tabs are refused it by the termhub hooks, and manual sessions by the Claude
+Code classifier, on purpose.
+
+- **Who.** Admins only (an admin role; no permission grant opens it). Anyone else gets 403.
+- **Always a reason.** Every call takes `reason` (the card or the report, e.g. `TER-1091`; 400 without one)
+  and is written to the security trail as `support.troubleshoot` with the endpoint, the user, the window
+  and the reason before anything is read; if the trail cannot be written, nothing is answered. The queries
+  show in Configurações → Auditoria, group "Suporte".
+- **What it answers.** Metadata of ONE user in a window of 12 h by default, 7 days at most (`from`/`to`):
+  `requests` (time, method, route pattern, status, duration, client; `route_prefix` filters), `tabs` (agent,
+  machine name, state, monitor events counted by kind), `machines` (agent version, online, last contact,
+  hooks state per CLI read live from online agents), `errors` (5xx answers and failed MCP calls),
+  `client` (web/app versions and systems, paired phones). Never chat messages, prompts, answers, terminal
+  screens, attachments, e-mail, tokens or IPs.
+- **Finding the user.** `search` (name or e-mail) answers an opaque `user_id` and the name, never the
+  e-mail; the trail keeps the ids found, not the text searched.
+- **From the chat.** `admin_user_troubleshoot` (listed to admins only) takes the same arguments. The first
+  query about each user in a conversation is a confirmation card; the later ones about the same user run
+  without asking (each still on the trail). A search never asks. Automatic tabs never call it.
+- **Over HTTP.** `GET /api/admin/troubleshoot/users?q=<name or e-mail>&reason=…` and
+  `GET /api/admin/troubleshoot/users/<user_id>/<requests|tabs|machines|errors|client>?reason=…[&from=&to=&route_prefix=&limit=]`
+  with the admin's own session.
+- **History.** The client version, system and response time are recorded on access records only from this
+  release on; older rows answer them as null.
 
 ## 10. After a failed deploy or release
+
+A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
+failed step, ended `startup_failure`, or during an Actions incident on githubstatus.com is run again (the
+same run, the same SHA) after 5, 15 and 30 minutes, up to `deploy_retries` (Setup, default 3; 0 = pause at
+once), with a `deploy_retried` event and a chat line per try. Only a failed step, or the last try, pauses.
+See `docs/lessons/2026-10-07-deploy-job-missing-github-incident.md`.
 
 - Deploy: `deploy/post-deploy.sh` runs the smoke test and rolls back to the previous colour on its own. The
   run summary of "CI e Deploy" says `revertido para <cor> (<sha>)` or `sem rollback automático: <motivo>`;
@@ -245,6 +486,10 @@ move after its fixer, or after the fix typed into the card's own run): the escal
 - Mobile OTA (xprem): with the xprem MCP, `get_updates` and `get_update_health` to see the reach,
   `republish_update` to put an earlier update back on branch `production`, or `rollback_branch` to fall back
   to the bundle in the binary. Devices that ran the bad bundle take the fix on their next update check.
+- Mobile TestFlight (hulk): a build reaches testers only once it is in their group (by hand, or by a group set
+  to distribute builds automatically). Expire a bad one in
+  App Store Connect → TestFlight if it is bad, fix on `main`, bump `expo.version` and merge again. A run that
+  failed before the upload can simply be run again (Actions → Run workflow): the version was not recorded.
 - Automation never undoes a release by itself.
 
 ## 11. Removing a stuck worktree
@@ -288,3 +533,12 @@ branch. A cleanup that was waiting on the stuck run (after a merge) goes on by i
 
 None by default: automation is off until a project turns it on, the default level for anyone who does is
 `pr`, and `release` is set only in termhub's own Setup. This runbook changes no product code.
+
+TER-1043 (section 7a) raises autonomy for everyone who has automation on: their runs now decide product
+and technical questions alone and record them, instead of waiting. The project setting "Parar em decisões
+de produto" (off by default) brings the old behaviour back per project.
+
+TER-1056 (section 9b) changes every machine, automation or not: agents now update themselves while idle by
+default (the switch was off by default before, and the migration turned it on once for every agent
+machine). Anyone who does not want it turns the switch off per machine; an agent below the minimum version
+is updated anyway.

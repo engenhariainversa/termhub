@@ -1,9 +1,12 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
+import { belowMinimum, isOutdated, latestAgentVersion } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
 import type { Machine, MachineType, Tab, TabKind, TabState } from '../db/repositories/types.js';
 import { listTmuxSessions } from '../terminal/machine-exec.js';
 import { parseRef } from '../db/repositories/task-rules.js';
 import { HttpError } from '../lib/errors.js';
+import { loginExpiryOf, loginWarnDays } from './ai-login.js';
 import { ControlError, type ControlContext } from './context.js';
 import { groupsOf, type GroupView } from './groups.js';
 import { cardsOf, resolveTickets } from './tickets.js';
@@ -18,6 +21,12 @@ export interface MachineSummary {
   /** agent: connected now; local: always; ssh: null = not checked (probing is slow) */
   online: boolean | null;
   capabilities: string[];
+  /** TER-1056, agent machines only: the connected agent's version (the last one seen when offline) */
+  agent_version?: string | null;
+  /** a newer verified release can be installed now (online agents only) */
+  update_available?: boolean;
+  /** older than the server's minimum: it is updated once idle, switch or not */
+  below_min_version?: boolean;
 }
 
 function online(m: Machine): boolean | null {
@@ -26,13 +35,19 @@ function online(m: Machine): boolean | null {
   return null;
 }
 
-const summary = (m: Machine): MachineSummary => ({ id: m.id, name: m.name, subtitle: m.subtitle, type: m.type, os: m.os, online: online(m), capabilities: m.capabilities });
+function summary(m: Machine): MachineSummary {
+  const base = { id: m.id, name: m.name, subtitle: m.subtitle, type: m.type, os: m.os, online: online(m), capabilities: m.capabilities };
+  if (m.type !== 'agent') return base;
+  const live = agents.info(m.id)?.agent_version;
+  const agent_version = live ?? m.agent_version;
+  return { ...base, agent_version, update_available: !!live && isOutdated(live, latestAgentVersion()), below_min_version: belowMinimum(agent_version) };
+}
 
-export async function listMachines(ctx: ControlContext): Promise<{ machines: MachineSummary[] }> {
+export async function listMachines(ctx: ControlContext): Promise<{ machines: MachineSummary[]; latest_agent_version: string | null; min_agent_version: string }> {
   const machines = await ctx.repos.machines.list(ctx.scope.ownerId);
   // A colour that just started has not met its agents yet (a deploy): the ones on their way get the time to attach.
   await Promise.all(machines.map((m) => agents.awaitHandover(m)));
-  return { machines: machines.map(summary) };
+  return { machines: machines.map(summary), latest_agent_version: latestAgentVersion(), min_agent_version: MIN_AGENT_VERSION };
 }
 
 async function machineNames(ctx: ControlContext): Promise<Map<string, string>> {
@@ -149,13 +164,19 @@ export async function listTabs(ctx: ControlContext, input: { project_id?: string
 
 export async function listAiAccounts(ctx: ControlContext, input: { machine_id?: string }) {
   if (input.machine_id) await ctx.scoped.machine(input.machine_id);
-  const [accounts, names] = await Promise.all([ctx.repos.aiAccounts.list(ctx.scope.ownerId), machineNames(ctx)]);
+  const [accounts, names, warnDays] = await Promise.all([ctx.repos.aiAccounts.list(ctx.scope.ownerId), machineNames(ctx), loginWarnDays(ctx)]);
+  const now = new Date();
+  // TER-1079: `login_expires_at` and `expires_soon`, so the concierge can warn and offer start_ai_login
+  const expiry = (a: (typeof accounts)[number]) => {
+    const e = loginExpiryOf(a, now, warnDays);
+    return { login_expires_at: e.login_expires_at, expires_soon: e.expires_soon };
+  };
   return {
     // never config_dir: it is a path on the user's machine and not needed to pick an account. `default`
     // is: the account without one is the machine's own login for that CLI (spec 2026-09-30 TER-499 D3).
     accounts: accounts
       .filter((a) => !input.machine_id || a.machine_id === input.machine_id)
-      .map((a) => ({ id: a.id, provider: a.provider, label: a.label, machine_id: a.machine_id, machine_name: names.get(a.machine_id) ?? null, default: a.config_dir === null, exclusive_project: a.exclusive_project })),
+      .map((a) => ({ id: a.id, provider: a.provider, label: a.label, machine_id: a.machine_id, machine_name: names.get(a.machine_id) ?? null, default: a.config_dir === null, exclusive_project: a.exclusive_project, ...expiry(a) })),
   };
 }
 

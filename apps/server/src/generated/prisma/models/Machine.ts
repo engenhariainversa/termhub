@@ -46,10 +46,16 @@ export type MachineMinAggregateOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean | null
   claudeAutoSwap: boolean | null
+  aiUsageQuery: boolean | null
   automationAllowed: boolean | null
   isLocal: boolean | null
   ownerId: string | null
@@ -68,10 +74,16 @@ export type MachineMaxAggregateOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean | null
   claudeAutoSwap: boolean | null
+  aiUsageQuery: boolean | null
   automationAllowed: boolean | null
   isLocal: boolean | null
   ownerId: string | null
@@ -91,10 +103,17 @@ export type MachineCountAggregateOutputType = {
   checkedAt: number
   agentTokenHash: number
   agentTokenCreatedAt: number
+  agentPairingHash: number
+  agentPairingExpiresAt: number
+  agentPublicKey: number
+  agentPairedAt: number
   agentVersion: number
   agentLastSeenAt: number
+  network: number
+  networkUpdatedAt: number
   agentAutoUpdate: number
   claudeAutoSwap: number
+  aiUsageQuery: number
   automationAllowed: number
   isLocal: number
   ownerId: number
@@ -123,10 +142,16 @@ export type MachineMinAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
+  aiUsageQuery?: true
   automationAllowed?: true
   isLocal?: true
   ownerId?: true
@@ -145,10 +170,16 @@ export type MachineMaxAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
+  aiUsageQuery?: true
   automationAllowed?: true
   isLocal?: true
   ownerId?: true
@@ -168,10 +199,17 @@ export type MachineCountAggregateInputType = {
   checkedAt?: true
   agentTokenHash?: true
   agentTokenCreatedAt?: true
+  agentPairingHash?: true
+  agentPairingExpiresAt?: true
+  agentPublicKey?: true
+  agentPairedAt?: true
   agentVersion?: true
   agentLastSeenAt?: true
+  network?: true
+  networkUpdatedAt?: true
   agentAutoUpdate?: true
   claudeAutoSwap?: true
+  aiUsageQuery?: true
   automationAllowed?: true
   isLocal?: true
   ownerId?: true
@@ -278,10 +316,17 @@ export type MachineGroupByOutputType = {
   checkedAt: Date | null
   agentTokenHash: string | null
   agentTokenCreatedAt: Date | null
+  agentPairingHash: string | null
+  agentPairingExpiresAt: Date | null
+  agentPublicKey: string | null
+  agentPairedAt: Date | null
   agentVersion: string | null
   agentLastSeenAt: Date | null
+  network: runtime.JsonValue | null
+  networkUpdatedAt: Date | null
   agentAutoUpdate: boolean
   claudeAutoSwap: boolean
+  aiUsageQuery: boolean
   automationAllowed: boolean
   isLocal: boolean
   ownerId: string | null
@@ -324,16 +369,24 @@ export type MachineWhereInput = {
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
+  aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Machine"> | Date | string
   owner?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   projectLinks?: Prisma.ProjectMachineListRelationFilter
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutListRelationFilter
   tabs?: Prisma.TabListRelationFilter
   aiAccounts?: Prisma.AiAccountListRelationFilter
   hook?: Prisma.XOR<Prisma.MachineHookNullableScalarRelationFilter, Prisma.MachineHookWhereInput> | null
@@ -354,16 +407,24 @@ export type MachineOrderByWithRelationInput = {
   checkedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  network?: Prisma.SortOrderInput | Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
+  aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   owner?: Prisma.UserOrderByWithRelationInput
   projectLinks?: Prisma.ProjectMachineOrderByRelationAggregateInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutOrderByRelationAggregateInput
   tabs?: Prisma.TabOrderByRelationAggregateInput
   aiAccounts?: Prisma.AiAccountOrderByRelationAggregateInput
   hook?: Prisma.MachineHookOrderByWithRelationInput
@@ -374,6 +435,7 @@ export type MachineOrderByWithRelationInput = {
 export type MachineWhereUniqueInput = Prisma.AtLeast<{
   id?: string
   agentTokenHash?: string
+  agentPairingHash?: string
   AND?: Prisma.MachineWhereInput | Prisma.MachineWhereInput[]
   OR?: Prisma.MachineWhereInput[]
   NOT?: Prisma.MachineWhereInput | Prisma.MachineWhereInput[]
@@ -387,22 +449,29 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   capabilities?: Prisma.JsonFilter<"Machine">
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
+  aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
   createdAt?: Prisma.DateTimeFilter<"Machine"> | Date | string
   owner?: Prisma.XOR<Prisma.UserNullableScalarRelationFilter, Prisma.UserWhereInput> | null
   projectLinks?: Prisma.ProjectMachineListRelationFilter
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutListRelationFilter
   tabs?: Prisma.TabListRelationFilter
   aiAccounts?: Prisma.AiAccountListRelationFilter
   hook?: Prisma.XOR<Prisma.MachineHookNullableScalarRelationFilter, Prisma.MachineHookWhereInput> | null
   uploads?: Prisma.UploadListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
-}, "id" | "agentTokenHash">
+}, "id" | "agentTokenHash" | "agentPairingHash">
 
 export type MachineOrderByWithAggregationInput = {
   id?: Prisma.SortOrder
@@ -417,10 +486,17 @@ export type MachineOrderByWithAggregationInput = {
   checkedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrderInput | Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrderInput | Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentVersion?: Prisma.SortOrderInput | Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  network?: Prisma.SortOrderInput | Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
+  aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -448,10 +524,17 @@ export type MachineScalarWhereWithAggregatesInput = {
   checkedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableWithAggregatesFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
+  aiUsageQuery?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
@@ -471,15 +554,23 @@ export type MachineCreateInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
@@ -500,15 +591,23 @@ export type MachineUncheckedCreateInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
@@ -529,15 +628,23 @@ export type MachineUpdateInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
@@ -558,15 +665,23 @@ export type MachineUncheckedUpdateInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
@@ -587,10 +702,17 @@ export type MachineCreateManyInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
@@ -610,10 +732,17 @@ export type MachineUpdateManyMutationInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -632,10 +761,17 @@ export type MachineUncheckedUpdateManyInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -665,10 +801,17 @@ export type MachineCountOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  network?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
+  aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
@@ -691,10 +834,16 @@ export type MachineMaxOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
+  aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
@@ -713,10 +862,16 @@ export type MachineMinOrderByAggregateInput = {
   checkedAt?: Prisma.SortOrder
   agentTokenHash?: Prisma.SortOrder
   agentTokenCreatedAt?: Prisma.SortOrder
+  agentPairingHash?: Prisma.SortOrder
+  agentPairingExpiresAt?: Prisma.SortOrder
+  agentPublicKey?: Prisma.SortOrder
+  agentPairedAt?: Prisma.SortOrder
   agentVersion?: Prisma.SortOrder
   agentLastSeenAt?: Prisma.SortOrder
+  networkUpdatedAt?: Prisma.SortOrder
   agentAutoUpdate?: Prisma.SortOrder
   claudeAutoSwap?: Prisma.SortOrder
+  aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
   isLocal?: Prisma.SortOrder
   ownerId?: Prisma.SortOrder
@@ -795,6 +950,20 @@ export type MachineUpdateOneRequiredWithoutProjectLinksNestedInput = {
   upsert?: Prisma.MachineUpsertWithoutProjectLinksInput
   connect?: Prisma.MachineWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.MachineUpdateToOneWithWhereWithoutProjectLinksInput, Prisma.MachineUpdateWithoutProjectLinksInput>, Prisma.MachineUncheckedUpdateWithoutProjectLinksInput>
+}
+
+export type MachineCreateNestedOneWithoutRepositoryCheckoutsInput = {
+  create?: Prisma.XOR<Prisma.MachineCreateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedCreateWithoutRepositoryCheckoutsInput>
+  connectOrCreate?: Prisma.MachineCreateOrConnectWithoutRepositoryCheckoutsInput
+  connect?: Prisma.MachineWhereUniqueInput
+}
+
+export type MachineUpdateOneRequiredWithoutRepositoryCheckoutsNestedInput = {
+  create?: Prisma.XOR<Prisma.MachineCreateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedCreateWithoutRepositoryCheckoutsInput>
+  connectOrCreate?: Prisma.MachineCreateOrConnectWithoutRepositoryCheckoutsInput
+  upsert?: Prisma.MachineUpsertWithoutRepositoryCheckoutsInput
+  connect?: Prisma.MachineWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.MachineUpdateToOneWithWhereWithoutRepositoryCheckoutsInput, Prisma.MachineUpdateWithoutRepositoryCheckoutsInput>, Prisma.MachineUncheckedUpdateWithoutRepositoryCheckoutsInput>
 }
 
 export type MachineCreateNestedOneWithoutTabsInput = {
@@ -882,14 +1051,22 @@ export type MachineCreateWithoutOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
@@ -910,14 +1087,22 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
@@ -967,10 +1152,17 @@ export type MachineScalarWhereInput = {
   checkedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentTokenHash?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentTokenCreatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPairingHash?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairingExpiresAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  agentPublicKey?: Prisma.StringNullableFilter<"Machine"> | string | null
+  agentPairedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentVersion?: Prisma.StringNullableFilter<"Machine"> | string | null
   agentLastSeenAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
+  network?: Prisma.JsonNullableFilter<"Machine">
+  networkUpdatedAt?: Prisma.DateTimeNullableFilter<"Machine"> | Date | string | null
   agentAutoUpdate?: Prisma.BoolFilter<"Machine"> | boolean
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
+  aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
   isLocal?: Prisma.BoolFilter<"Machine"> | boolean
   ownerId?: Prisma.StringNullableFilter<"Machine"> | string | null
@@ -990,14 +1182,22 @@ export type MachineCreateWithoutProjectLinksInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
@@ -1018,14 +1218,22 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
@@ -1062,14 +1270,22 @@ export type MachineUpdateWithoutProjectLinksInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
@@ -1090,14 +1306,182 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
+  aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
+  hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
+}
+
+export type MachineCreateWithoutRepositoryCheckoutsInput = {
+  id: string
+  name: string
+  subtitle?: string | null
+  host?: string | null
+  sshUser?: string | null
+  sshPort?: number
+  type: $Enums.MachineType
+  os?: string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Date | string | null
+  agentTokenHash?: string | null
+  agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
+  agentVersion?: string | null
+  agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
+  agentAutoUpdate?: boolean
+  claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
+  automationAllowed?: boolean
+  isLocal?: boolean
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
+  projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
+  aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
+  hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
+}
+
+export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
+  id: string
+  name: string
+  subtitle?: string | null
+  host?: string | null
+  sshUser?: string | null
+  sshPort?: number
+  type: $Enums.MachineType
+  os?: string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Date | string | null
+  agentTokenHash?: string | null
+  agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
+  agentVersion?: string | null
+  agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
+  agentAutoUpdate?: boolean
+  claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
+  automationAllowed?: boolean
+  isLocal?: boolean
+  ownerId?: string | null
+  createdAt?: Date | string
+  projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
+  aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
+  hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
+}
+
+export type MachineCreateOrConnectWithoutRepositoryCheckoutsInput = {
+  where: Prisma.MachineWhereUniqueInput
+  create: Prisma.XOR<Prisma.MachineCreateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedCreateWithoutRepositoryCheckoutsInput>
+}
+
+export type MachineUpsertWithoutRepositoryCheckoutsInput = {
+  update: Prisma.XOR<Prisma.MachineUpdateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedUpdateWithoutRepositoryCheckoutsInput>
+  create: Prisma.XOR<Prisma.MachineCreateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedCreateWithoutRepositoryCheckoutsInput>
+  where?: Prisma.MachineWhereInput
+}
+
+export type MachineUpdateToOneWithWhereWithoutRepositoryCheckoutsInput = {
+  where?: Prisma.MachineWhereInput
+  data: Prisma.XOR<Prisma.MachineUpdateWithoutRepositoryCheckoutsInput, Prisma.MachineUncheckedUpdateWithoutRepositoryCheckoutsInput>
+}
+
+export type MachineUpdateWithoutRepositoryCheckoutsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  host?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshUser?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshPort?: Prisma.IntFieldUpdateOperationsInput | number
+  type?: Prisma.EnumMachineTypeFieldUpdateOperationsInput | $Enums.MachineType
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
+  projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
+  aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
+  hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
+}
+
+export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  host?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshUser?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshPort?: Prisma.IntFieldUpdateOperationsInput | number
+  type?: Prisma.EnumMachineTypeFieldUpdateOperationsInput | $Enums.MachineType
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
@@ -1118,15 +1502,23 @@ export type MachineCreateWithoutTabsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
@@ -1146,15 +1538,23 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
@@ -1190,15 +1590,23 @@ export type MachineUpdateWithoutTabsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
@@ -1218,15 +1626,23 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
@@ -1246,15 +1662,23 @@ export type MachineCreateWithoutHookInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
@@ -1274,15 +1698,23 @@ export type MachineUncheckedCreateWithoutHookInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
@@ -1318,15 +1750,23 @@ export type MachineUpdateWithoutHookInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
@@ -1346,15 +1786,23 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
@@ -1374,15 +1822,23 @@ export type MachineCreateWithoutAiAccountsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
@@ -1402,15 +1858,23 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
@@ -1446,15 +1910,23 @@ export type MachineUpdateWithoutAiAccountsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
@@ -1474,15 +1946,23 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
@@ -1502,15 +1982,23 @@ export type MachineCreateWithoutUploadsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
@@ -1530,15 +2018,23 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
@@ -1574,15 +2070,23 @@ export type MachineUpdateWithoutUploadsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
@@ -1602,15 +2106,23 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
@@ -1630,15 +2142,23 @@ export type MachineCreateWithoutChatConversationsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
   owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
   projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
@@ -1658,15 +2178,23 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: string | null
   createdAt?: Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
   aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
@@ -1702,15 +2230,23 @@ export type MachineUpdateWithoutChatConversationsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
@@ -1730,15 +2266,23 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
@@ -1758,10 +2302,17 @@ export type MachineCreateManyOwnerInput = {
   checkedAt?: Date | string | null
   agentTokenHash?: string | null
   agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
   agentVersion?: string | null
   agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   createdAt?: Date | string
@@ -1780,14 +2331,22 @@ export type MachineUpdateWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
@@ -1808,14 +2367,22 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
@@ -1836,10 +2403,17 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
   checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
   isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1852,6 +2426,7 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
 
 export type MachineCountOutputType = {
   projectLinks: number
+  repositoryCheckouts: number
   tabs: number
   aiAccounts: number
   uploads: number
@@ -1860,6 +2435,7 @@ export type MachineCountOutputType = {
 
 export type MachineCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   projectLinks?: boolean | MachineCountOutputTypeCountProjectLinksArgs
+  repositoryCheckouts?: boolean | MachineCountOutputTypeCountRepositoryCheckoutsArgs
   tabs?: boolean | MachineCountOutputTypeCountTabsArgs
   aiAccounts?: boolean | MachineCountOutputTypeCountAiAccountsArgs
   uploads?: boolean | MachineCountOutputTypeCountUploadsArgs
@@ -1881,6 +2457,13 @@ export type MachineCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Exte
  */
 export type MachineCountOutputTypeCountProjectLinksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.ProjectMachineWhereInput
+}
+
+/**
+ * MachineCountOutputType without action
+ */
+export type MachineCountOutputTypeCountRepositoryCheckoutsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ProjectRepositoryCheckoutWhereInput
 }
 
 /**
@@ -1925,16 +2508,24 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
+  repositoryCheckouts?: boolean | Prisma.Machine$repositoryCheckoutsArgs<ExtArgs>
   tabs?: boolean | Prisma.Machine$tabsArgs<ExtArgs>
   aiAccounts?: boolean | Prisma.Machine$aiAccountsArgs<ExtArgs>
   hook?: boolean | Prisma.Machine$hookArgs<ExtArgs>
@@ -1956,10 +2547,17 @@ export type MachineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: boolean
@@ -1980,10 +2578,17 @@ export type MachineSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: boolean
@@ -2004,20 +2609,28 @@ export type MachineSelectScalar = {
   checkedAt?: boolean
   agentTokenHash?: boolean
   agentTokenCreatedAt?: boolean
+  agentPairingHash?: boolean
+  agentPairingExpiresAt?: boolean
+  agentPublicKey?: boolean
+  agentPairedAt?: boolean
   agentVersion?: boolean
   agentLastSeenAt?: boolean
+  network?: boolean
+  networkUpdatedAt?: boolean
   agentAutoUpdate?: boolean
   claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
   automationAllowed?: boolean
   isLocal?: boolean
   ownerId?: boolean
   createdAt?: boolean
 }
 
-export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentVersion" | "agentLastSeenAt" | "agentAutoUpdate" | "claudeAutoSwap" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
+export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
 export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
+  repositoryCheckouts?: boolean | Prisma.Machine$repositoryCheckoutsArgs<ExtArgs>
   tabs?: boolean | Prisma.Machine$tabsArgs<ExtArgs>
   aiAccounts?: boolean | Prisma.Machine$aiAccountsArgs<ExtArgs>
   hook?: boolean | Prisma.Machine$hookArgs<ExtArgs>
@@ -2037,6 +2650,7 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
   objects: {
     owner: Prisma.$UserPayload<ExtArgs> | null
     projectLinks: Prisma.$ProjectMachinePayload<ExtArgs>[]
+    repositoryCheckouts: Prisma.$ProjectRepositoryCheckoutPayload<ExtArgs>[]
     tabs: Prisma.$TabPayload<ExtArgs>[]
     aiAccounts: Prisma.$AiAccountPayload<ExtArgs>[]
     hook: Prisma.$MachineHookPayload<ExtArgs> | null
@@ -2064,20 +2678,44 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     capabilities: runtime.JsonValue
     checkedAt: Date | null
     /**
-     * agent transport: sha256 of the enrollment token (null for local/ssh); the token itself is never stored
+     * agent transport, legacy bearer: sha256 of the permanent token agents paired before TER-1017 dial with
+     * (null once the machine is paired again); the token itself is never stored
      */
     agentTokenHash: string | null
+    /**
+     * when the app last minted a token for this machine (legacy bearer or pairing)
+     */
     agentTokenCreatedAt: Date | null
+    /**
+     * TER-1017: sha256 of the single-use pairing token the app showed, and when it stops being accepted
+     */
+    agentPairingHash: string | null
+    agentPairingExpiresAt: Date | null
+    /**
+     * TER-1017: the agent's Ed25519 device key (base64 SPKI DER); every dial signs the server's nonce with its pair
+     */
+    agentPublicKey: string | null
+    agentPairedAt: Date | null
     agentVersion: string | null
     agentLastSeenAt: Date | null
     /**
-     * Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts)
+     * TER-1080: the agent's last `net.info` (OS hostname, interfaces with MAC and IPs, default route), kept
+     * while the machine is offline so another machine of its network can wake it. Never in `mapMachine`.
+     */
+    network: runtime.JsonValue | null
+    networkUpdatedAt: Date | null
+    /**
+     * Install newer agent versions on their own while no terminal is open on the machine (see agent/latest-version.ts); on by default (TER-1056)
      */
     agentAutoUpdate: boolean
     /**
      * Swap a tab's Claude to another account of this machine by itself when it hits a usage limit (on by default, TER-587).
      */
     claudeAutoSwap: boolean
+    /**
+     * TER-735: show the AI accounts' usage of this machine; when false, termhub never reads the AI CLI credential on it.
+     */
+    aiUsageQuery: boolean
     /**
      * R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
      */
@@ -2488,6 +3126,7 @@ export interface Prisma__MachineClient<T, Null = never, ExtArgs extends runtime.
   readonly [Symbol.toStringTag]: "PrismaPromise"
   owner<T extends Prisma.Machine$ownerArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$ownerArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   projectLinks<T extends Prisma.Machine$projectLinksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$projectLinksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProjectMachinePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  repositoryCheckouts<T extends Prisma.Machine$repositoryCheckoutsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$repositoryCheckoutsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProjectRepositoryCheckoutPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabs<T extends Prisma.Machine$tabsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$tabsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   aiAccounts<T extends Prisma.Machine$aiAccountsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$aiAccountsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiAccountPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   hook<T extends Prisma.Machine$hookArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$hookArgs<ExtArgs>>): Prisma.Prisma__MachineHookClient<runtime.Types.Result.GetResult<Prisma.$MachineHookPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
@@ -2534,10 +3173,17 @@ export interface MachineFieldRefs {
   readonly checkedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentTokenHash: Prisma.FieldRef<"Machine", 'String'>
   readonly agentTokenCreatedAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly agentPairingHash: Prisma.FieldRef<"Machine", 'String'>
+  readonly agentPairingExpiresAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly agentPublicKey: Prisma.FieldRef<"Machine", 'String'>
+  readonly agentPairedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentVersion: Prisma.FieldRef<"Machine", 'String'>
   readonly agentLastSeenAt: Prisma.FieldRef<"Machine", 'DateTime'>
+  readonly network: Prisma.FieldRef<"Machine", 'Json'>
+  readonly networkUpdatedAt: Prisma.FieldRef<"Machine", 'DateTime'>
   readonly agentAutoUpdate: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly claudeAutoSwap: Prisma.FieldRef<"Machine", 'Boolean'>
+  readonly aiUsageQuery: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly automationAllowed: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly isLocal: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly ownerId: Prisma.FieldRef<"Machine", 'String'>
@@ -2983,6 +3629,30 @@ export type Machine$projectLinksArgs<ExtArgs extends runtime.Types.Extensions.In
   take?: number
   skip?: number
   distinct?: Prisma.ProjectMachineScalarFieldEnum | Prisma.ProjectMachineScalarFieldEnum[]
+}
+
+/**
+ * Machine.repositoryCheckouts
+ */
+export type Machine$repositoryCheckoutsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ProjectRepositoryCheckout
+   */
+  select?: Prisma.ProjectRepositoryCheckoutSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ProjectRepositoryCheckout
+   */
+  omit?: Prisma.ProjectRepositoryCheckoutOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ProjectRepositoryCheckoutInclude<ExtArgs> | null
+  where?: Prisma.ProjectRepositoryCheckoutWhereInput
+  orderBy?: Prisma.ProjectRepositoryCheckoutOrderByWithRelationInput | Prisma.ProjectRepositoryCheckoutOrderByWithRelationInput[]
+  cursor?: Prisma.ProjectRepositoryCheckoutWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ProjectRepositoryCheckoutScalarFieldEnum | Prisma.ProjectRepositoryCheckoutScalarFieldEnum[]
 }
 
 /**

@@ -4,13 +4,13 @@ import { agents } from '../agent/registry.js';
 import { captureScreen } from '../agent/screen.js';
 import type { ControlContext } from '../control/context.js';
 import { assertTerminal, offline } from '../control/screen.js';
-import { sendInput } from '../control/terminals.js';
+import { sendInput, typeCommandInTab } from '../control/terminals.js';
 import { describeTabQuestions, toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { paneForeground } from '../terminal/session-ops.js';
 import { lastNonBlankLines, permissionDialogVisible } from './permission-dialog.js';
 import { asHttp, codeOf, scopedTabOfRow } from './tab-question-answer.js';
-import { typedText, type SuggestionPayload } from './tab-question-payload.js';
+import { CONTROL_CHARS_RE, typedText, type SuggestionPayload } from './tab-question-payload.js';
 import { publishTabQuestions } from './tab-questions.js';
 import { readSuggestion, SUGGESTION_CAPTURE_LINES } from './tab-suggestions.js';
 
@@ -23,6 +23,20 @@ export const suggestionChanged = () => new HttpError(409, 'A sugestão mudou na 
  * (C0, DEL, C1), ≤ 2000, no leading "!" nor "/" (it lands at Claude Code's prompt).
  */
 export const suggestionSendBody = z.object({ text: typedText });
+
+/** The longest resume line a resume card sends (TER-988): an automatic tab's line, with its allow and deny
+ *  lists, runs to about 3 KB, past `typedText`'s cap. It is sourced from a file, so the RPC cap does not apply. */
+export const RESUME_LINE_MAX = 16_000;
+
+/** What "Enviar" runs on a resume card (TER-643): one shell line, no control characters. */
+export const resumeSendBody = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1)
+    .max(RESUME_LINE_MAX)
+    .refine((t) => !CONTROL_CHARS_RE.test(t), 'sem caracteres de controle nem quebras de linha'),
+});
 
 /**
  * The live check of a Codex reply card (there is no dimmed suggestion to compare): the tab still waits and
@@ -64,10 +78,10 @@ export async function sendTabSuggestion(ctx: ControlContext, id: string, raw: un
   if (!(await ctx.can('terminals', 'write'))) throw forbidden('Enviar para a aba precisa da permissão terminals:write na sua role');
   const userId = ctx.scope.user.id;
   const row = await suggestionRow(ctx, id);
-  const { text } = suggestionSendBody.parse(raw);
+  const exited = (row.payload as SuggestionPayload).exited === true;
+  const { text } = (exited ? resumeSendBody : suggestionSendBody).parse(raw);
   const suggested = (row.payload as SuggestionPayload).text;
   const isCodex = (row.payload as SuggestionPayload).agent === 'codex';
-  const exited = (row.payload as SuggestionPayload).exited === true;
   const { tab, machine } = await scopedTabOfRow(ctx, row, deps.log);
   if (row.status !== 'open') throw suggestionChanged();
   const latest = await ctx.repos.tabQuestions.findOpenForTab(tab.id);
@@ -103,8 +117,10 @@ export async function sendTabSuggestion(ctx: ControlContext, id: string, raw: un
   const claimed = await ctx.repos.tabQuestions.claimSuggestion(row.id, userId, { text });
   if (!claimed) throw suggestionChanged();
   try {
+    // A resume line runs in the shell: a long one is sourced from a file, never typed whole (TER-988).
+    if (exited) await typeCommandInTab(ctx, tab.id, text);
     // The person clicked "Enviar" on this text (they may have edited it): their approval, word for word.
-    await sendInput(ctx, { tab_id: tab.id, text, enter: true }, { level: 'person_approved', userId, actionId: null, approvedAt: new Date() });
+    else await sendInput(ctx, { tab_id: tab.id, text, enter: true }, { level: 'person_approved', userId, actionId: null, approvedAt: new Date() });
   } catch (err) {
     const code = codeOf(err);
     deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: 'suggestion', code }, 'tab suggestion send failed');

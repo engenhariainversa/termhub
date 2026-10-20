@@ -3,7 +3,9 @@ import { memo, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { appNavigate } from '../../lib/app-navigate';
 import { copyText } from '../../lib/clipboard';
-import { decorateCodeBlocks } from '../../lib/code-blocks';
+import { codeLanguage, decorateCodeBlocks } from '../../lib/code-blocks';
+import { codeFileName, downloadText } from '../../lib/code-download';
+import { openLinksInNewTab } from '../../lib/links';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
@@ -12,6 +14,7 @@ import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
 import { ChatReplyButton } from './ChatReplyButton';
 import { ChatReplyQuote } from './ChatReplyQuote';
+import { LinkedText } from './LinkedText';
 import { MessageAttachments } from './MessageAttachments';
 
 const COPY_FEEDBACK_MS = 2000;
@@ -120,14 +123,46 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
 const copyTimers = new WeakMap<HTMLElement, number>();
 
 /** Markdown to sanitised HTML, with the copy buttons on any fence and preview links on Markdown paths
- *  (spec 2026-10-04 file preview): the one path both halves go through. */
-function toHtml(markdown: string, projectId: string | null): string {
+ *  (spec 2026-10-04 file preview): the one path both halves go through, and the tab conversation's
+ *  (TER-1003) too. */
+export function toHtml(markdown: string, projectId: string | null): string {
   if (!markdown) return '';
   const rendered = renderMarkdown(markdown, { markdownOnly: true });
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
   // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
   const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
-  return linkifyMdPaths(decorated, (path) => filePreviewHref(projectId, path));
+  // A URL in the answer (a Markdown link or a bare one `marked` autolinked) opens in a new tab (TER-1089).
+  return linkifyMdPaths(openLinksInNewTab(decorated), (path) => filePreviewHref(projectId, path));
+}
+
+/**
+ * The delegated handler for a block's "Baixar" (TER-1084): saves the fenced code as a file named after
+ * its first line and the time, with the language's extension (`codeFileName`). Unlike the copy, the
+ * fence's own trailing newline is kept: it is the block's last line break, and a text file ends with one.
+ * Returns whether the click was on a download button.
+ */
+export function handleDownloadClick(event: MouseEvent<HTMLDivElement>): boolean {
+  const button = (event.target as HTMLElement).closest('[data-download]');
+  if (!button) return false;
+  const code = button.closest('figure')?.querySelector('pre > code');
+  if (!code) return true;
+  const content = code.textContent ?? '';
+  downloadText(codeFileName(content, codeLanguage(code.getAttribute('class'))), content);
+  return true;
+}
+
+/** A click in rendered Markdown: a Markdown path opens its preview in the app (a double click pins it; a
+ *  modified click keeps the browser's own), a fence's buttons copy or download it. */
+export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
+  const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
+  if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    const href = link.getAttribute('href') ?? '';
+    appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
+    return;
+  }
+  if (handleDownloadClick(event)) return;
+  handleCopyClick(event);
 }
 
 export interface ChatTurnProps {
@@ -176,18 +211,6 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
   const settledHtml = useMemo(() => toHtml(settled, projectId), [settled, projectId]);
   const tailHtml = useMemo(() => toHtml(tail, projectId), [tail, projectId]);
 
-  /** A Markdown path: open its preview in the app (a double click pins it); a modified click keeps the browser's own. */
-  const onBodyClick = (event: MouseEvent<HTMLDivElement>) => {
-    const link = (event.target as HTMLElement).closest(`a[${MD_PATH_ATTR}]`);
-    if (link instanceof HTMLAnchorElement && event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) {
-      event.preventDefault();
-      const href = link.getAttribute('href') ?? '';
-      appNavigate(event.detail >= 2 ? `${href}&pin=1` : href);
-      return;
-    }
-    handleCopyClick(event);
-  };
-
   const reply = onReply && isReplyable(message) ? <ChatReplyButton onClick={() => onReply(message)} /> : null;
   // The ring is always there, transparent until a quote scrolls here: showing it must not move the row.
   const ring = highlighted ? 'ring-2 ring-accent/60' : 'ring-2 ring-transparent';
@@ -203,7 +226,11 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
             (spec §3): then there is no text line at all. */}
         <div className={`max-w-[85%] [overflow-wrap:anywhere] rounded-2xl bg-accent/10 px-4 py-2.5 text-sm leading-relaxed text-fg transition-shadow ${ring}`}>
           {message.reply_to && <ChatReplyQuote reply={message.reply_to} onOpen={onOpenReply} />}
-          {message.text && <div className="whitespace-pre-wrap">{message.text}</div>}
+          {message.text && (
+            <div className="whitespace-pre-wrap">
+              <LinkedText text={message.text} />
+            </div>
+          )}
           {attachments.length > 0 && <MessageAttachments attachments={attachments} />}
         </div>
       </li>
@@ -232,7 +259,7 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           // The one delegated handler for every copy button this row's HTML may contain (there can be
           // several, one per fence) — a per-block React handler is impossible anyway, since the blocks
           // come from an HTML string, not from JSX.
-          onClick={onBodyClick}
+          onClick={handleMarkdownClick}
         >
           {settledHtml && <div dangerouslySetInnerHTML={{ __html: settledHtml }} />}
           {tailHtml && <div dangerouslySetInnerHTML={{ __html: tailHtml }} />}

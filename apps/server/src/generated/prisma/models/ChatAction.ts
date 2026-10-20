@@ -47,6 +47,7 @@ export type ChatActionMinAggregateOutputType = {
   machineId: string | null
   projectId: string | null
   tabId: string | null
+  tabName: string | null
   grantId: string | null
   errorCode: string | null
   durationMs: number | null
@@ -70,6 +71,7 @@ export type ChatActionMaxAggregateOutputType = {
   machineId: string | null
   projectId: string | null
   tabId: string | null
+  tabName: string | null
   grantId: string | null
   errorCode: string | null
   durationMs: number | null
@@ -94,6 +96,7 @@ export type ChatActionCountAggregateOutputType = {
   machineId: number
   projectId: number
   tabId: number
+  tabName: number
   grantId: number
   errorCode: number
   durationMs: number
@@ -127,6 +130,7 @@ export type ChatActionMinAggregateInputType = {
   machineId?: true
   projectId?: true
   tabId?: true
+  tabName?: true
   grantId?: true
   errorCode?: true
   durationMs?: true
@@ -150,6 +154,7 @@ export type ChatActionMaxAggregateInputType = {
   machineId?: true
   projectId?: true
   tabId?: true
+  tabName?: true
   grantId?: true
   errorCode?: true
   durationMs?: true
@@ -174,6 +179,7 @@ export type ChatActionCountAggregateInputType = {
   machineId?: true
   projectId?: true
   tabId?: true
+  tabName?: true
   grantId?: true
   errorCode?: true
   durationMs?: true
@@ -285,6 +291,7 @@ export type ChatActionGroupByOutputType = {
   machineId: string | null
   projectId: string | null
   tabId: string | null
+  tabName: string | null
   grantId: string | null
   errorCode: string | null
   durationMs: number | null
@@ -332,6 +339,7 @@ export type ChatActionWhereInput = {
   machineId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   tabId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
+  tabName?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   grantId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   errorCode?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   durationMs?: Prisma.IntNullableFilter<"ChatAction"> | number | null
@@ -357,6 +365,7 @@ export type ChatActionOrderByWithRelationInput = {
   machineId?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
   tabId?: Prisma.SortOrderInput | Prisma.SortOrder
+  tabName?: Prisma.SortOrderInput | Prisma.SortOrder
   grantId?: Prisma.SortOrderInput | Prisma.SortOrder
   errorCode?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -385,6 +394,7 @@ export type ChatActionWhereUniqueInput = Prisma.AtLeast<{
   machineId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   tabId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
+  tabName?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   grantId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   errorCode?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   durationMs?: Prisma.IntNullableFilter<"ChatAction"> | number | null
@@ -410,6 +420,7 @@ export type ChatActionOrderByWithAggregationInput = {
   machineId?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
   tabId?: Prisma.SortOrderInput | Prisma.SortOrder
+  tabName?: Prisma.SortOrderInput | Prisma.SortOrder
   grantId?: Prisma.SortOrderInput | Prisma.SortOrder
   errorCode?: Prisma.SortOrderInput | Prisma.SortOrder
   durationMs?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -442,6 +453,7 @@ export type ChatActionScalarWhereWithAggregatesInput = {
   machineId?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
   projectId?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
   tabId?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
+  tabName?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
   grantId?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
   errorCode?: Prisma.StringNullableWithAggregatesFilter<"ChatAction"> | string | null
   durationMs?: Prisma.IntNullableWithAggregatesFilter<"ChatAction"> | number | null
@@ -465,6 +477,7 @@ export type ChatActionCreateInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -490,6 +503,7 @@ export type ChatActionUncheckedCreateInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -513,6 +527,7 @@ export type ChatActionUpdateInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -538,6 +553,7 @@ export type ChatActionUncheckedUpdateInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -562,6 +578,7 @@ export type ChatActionCreateManyInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -585,6 +602,7 @@ export type ChatActionUpdateManyMutationInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -609,6 +627,7 @@ export type ChatActionUncheckedUpdateManyInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -643,6 +662,7 @@ export type ChatActionCountOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
+  tabName?: Prisma.SortOrder
   grantId?: Prisma.SortOrder
   errorCode?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
@@ -670,6 +690,7 @@ export type ChatActionMaxOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
+  tabName?: Prisma.SortOrder
   grantId?: Prisma.SortOrder
   errorCode?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
@@ -693,6 +714,7 @@ export type ChatActionMinOrderByAggregateInput = {
   machineId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
   tabId?: Prisma.SortOrder
+  tabName?: Prisma.SortOrder
   grantId?: Prisma.SortOrder
   errorCode?: Prisma.SortOrder
   durationMs?: Prisma.SortOrder
@@ -762,6 +784,7 @@ export type ChatActionCreateWithoutConversationInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -785,6 +808,7 @@ export type ChatActionUncheckedCreateWithoutConversationInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -838,6 +862,7 @@ export type ChatActionScalarWhereInput = {
   machineId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   tabId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
+  tabName?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   grantId?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   errorCode?: Prisma.StringNullableFilter<"ChatAction"> | string | null
   durationMs?: Prisma.IntNullableFilter<"ChatAction"> | number | null
@@ -861,6 +886,7 @@ export type ChatActionCreateManyConversationInput = {
   machineId?: string | null
   projectId?: string | null
   tabId?: string | null
+  tabName?: string | null
   grantId?: string | null
   errorCode?: string | null
   durationMs?: number | null
@@ -884,6 +910,7 @@ export type ChatActionUpdateWithoutConversationInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -907,6 +934,7 @@ export type ChatActionUncheckedUpdateWithoutConversationInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -930,6 +958,7 @@ export type ChatActionUncheckedUpdateManyWithoutConversationInput = {
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   grantId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   errorCode?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   durationMs?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -956,6 +985,7 @@ export type ChatActionSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   machineId?: boolean
   projectId?: boolean
   tabId?: boolean
+  tabName?: boolean
   grantId?: boolean
   errorCode?: boolean
   durationMs?: boolean
@@ -981,6 +1011,7 @@ export type ChatActionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   machineId?: boolean
   projectId?: boolean
   tabId?: boolean
+  tabName?: boolean
   grantId?: boolean
   errorCode?: boolean
   durationMs?: boolean
@@ -1006,6 +1037,7 @@ export type ChatActionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   machineId?: boolean
   projectId?: boolean
   tabId?: boolean
+  tabName?: boolean
   grantId?: boolean
   errorCode?: boolean
   durationMs?: boolean
@@ -1031,6 +1063,7 @@ export type ChatActionSelectScalar = {
   machineId?: boolean
   projectId?: boolean
   tabId?: boolean
+  tabName?: boolean
   grantId?: boolean
   errorCode?: boolean
   durationMs?: boolean
@@ -1043,7 +1076,7 @@ export type ChatActionSelectScalar = {
   surfacedAt?: boolean
 }
 
-export type ChatActionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "conversationId" | "messageId" | "tool" | "args" | "class" | "status" | "idempotencyKey" | "machineId" | "projectId" | "tabId" | "grantId" | "errorCode" | "durationMs" | "decidedBy" | "decidedAt" | "injectedAt" | "toolUseId" | "subagentId" | "createdAt" | "surfacedAt", ExtArgs["result"]["chatAction"]>
+export type ChatActionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "conversationId" | "messageId" | "tool" | "args" | "class" | "status" | "idempotencyKey" | "machineId" | "projectId" | "tabId" | "tabName" | "grantId" | "errorCode" | "durationMs" | "decidedBy" | "decidedAt" | "injectedAt" | "toolUseId" | "subagentId" | "createdAt" | "surfacedAt", ExtArgs["result"]["chatAction"]>
 export type ChatActionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   conversation?: boolean | Prisma.ChatConversationDefaultArgs<ExtArgs>
 }
@@ -1077,6 +1110,10 @@ export type $ChatActionPayload<ExtArgs extends runtime.Types.Extensions.Internal
     machineId: string | null
     projectId: string | null
     tabId: string | null
+    /**
+     * The tab's name when the action was asked (TER-1024): a closed tab's card still names it.
+     */
+    tabName: string | null
     /**
      * The grant this action ran under (`chat_grants`), when it was not asked but allowed by one.
      */
@@ -1542,6 +1579,7 @@ export interface ChatActionFieldRefs {
   readonly machineId: Prisma.FieldRef<"ChatAction", 'String'>
   readonly projectId: Prisma.FieldRef<"ChatAction", 'String'>
   readonly tabId: Prisma.FieldRef<"ChatAction", 'String'>
+  readonly tabName: Prisma.FieldRef<"ChatAction", 'String'>
   readonly grantId: Prisma.FieldRef<"ChatAction", 'String'>
   readonly errorCode: Prisma.FieldRef<"ChatAction", 'String'>
   readonly durationMs: Prisma.FieldRef<"ChatAction", 'Int'>

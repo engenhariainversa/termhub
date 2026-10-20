@@ -11,7 +11,13 @@ const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }, _origin
 const sendKey = vi.fn(async (_ctx: unknown, input: { tab_id: string; key: string }) => ({ tab_id: input.tab_id, key: input.key, sent: true }));
 vi.mock('../control/terminals.js', () => ({ sendInput: (...a: unknown[]) => sendInput(...(a as [never, never, never])), sendKey: (...a: unknown[]) => sendKey(...(a as [never, never])) }));
 const startAgent = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't9' }));
-vi.mock('../control/agents.js', () => ({ startAgent: (...a: unknown[]) => startAgent(...a) }));
+const startTabAgent = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't1', new_tab: false, account: { id: 'acc1', label: 'Pessoal' }, provider: 'claude' }));
+const tabAgentOptions = vi.fn(async (..._a: unknown[]) => ({ choices: [{ account_id: 'acc1', label: 'Pessoal', provider: 'claude', model: 'opus' }], suggested: 'acc1' as string | null }));
+vi.mock('../control/agents.js', () => ({
+  startAgent: (...a: unknown[]) => startAgent(...a),
+  startTabAgent: (...a: unknown[]) => startTabAgent(...a),
+  tabAgentOptions: (...a: unknown[]) => tabAgentOptions(...a),
+}));
 const readScreen = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't1', lines: 30, text: '', styled: false }));
 vi.mock('../control/screen.js', () => ({ readScreen: (...a: unknown[]) => readScreen(...a) }));
 const saveFileOnMachine = vi.fn(async (_m: unknown, data: Buffer, name: string) => ({ path: `/home/u/.cache/termhub/paste/${name}`, name, bytes: data.length, mime: 'application/octet-stream' }));
@@ -71,7 +77,7 @@ const question = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[] } = {}) {
+function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean; pane?: 'shell' | 'busy' | 'dead' | Error } = {}) {
   const grants = new Set(opts.grants ?? ['terminals:read', 'terminals:write']);
   const tabs = opts.tabs ?? [tabRow(), tabRow({ id: 't2', project_id: 'p2' })];
   const repos = {
@@ -83,11 +89,17 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
     projects: { findById: vi.fn(async (id: string) => [project, foreignProject].find((p) => p.id === id)), list: vi.fn(async () => [project]) },
     machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? machine : undefined)), list: vi.fn(async () => [machine]) },
     projectMachines: { find: vi.fn(async (p: string, m: string) => ({ id: 'pm', project_id: p, machine_id: m, cwd: '/w' })) },
+    automationRuns: { activeTabRefs: vi.fn(async (_owner: string | null) => [{ tab_id: 't1', ref: 'TH-12' }]) },
     tabQuestions: { listOpenForTab: vi.fn(async (_tab: string, _user: string) => opts.questions ?? []) },
     chatDecisions: {},
+    machineHooks: { findByMachine: vi.fn(async (id: string) => (opts.hooksInstalled === false ? undefined : { machine_id: id, installed_at: '2026-10-01T09:00:00.000Z' })) },
   };
   const readPage = vi.fn(opts.readPage ?? (async () => ({ items: [], before: null, live: `${SID}.0`, mode: null, degraded: false, missing: false })));
   const hub = { poke: vi.fn() };
+  const foreground = vi.fn(async (_m: unknown, _session: string) => {
+    if (opts.pane instanceof Error) throw opts.pane;
+    return opts.pane ?? 'busy';
+  });
   const logged: unknown[] = [];
   const app = Fastify({ logger: { level: 'debug', stream: { write: (line: string) => logged.push(line) } } });
   applyErrorHandler(app);
@@ -104,11 +116,11 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
         const cfg = (route.config ?? {}) as { action?: string };
         route.config = { ...cfg, resource: 'terminals', action: cfg.action ?? actionForMethod(String(route.method)) } as never;
       });
-      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0 });
+      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface, foreground: foreground as never });
     },
     { prefix: '/tabs' },
   );
-  return { app, repos, readPage, hub, logged };
+  return { app, repos, readPage, hub, logged, foreground };
 }
 
 afterEach(() => {
@@ -125,6 +137,9 @@ describe('GET /tabs', () => {
     const body = tabsResponse.parse(res.json());
     // t2's project is not in the scope's list: it is left out
     expect(body.tabs.map((t) => [t.id, t.availability, t.project.key, t.machine.name])).toEqual([['t1', 'ready', 'TH', 'box']]);
+    // the card of the automatic run working in the tab (TER-1044)
+    expect(body.tabs[0].auto_ref).toBe('TH-12');
+    expect(repos.automationRuns.activeTabRefs).toHaveBeenCalledWith('u1');
     expect(repos.tabs.listOpenTerminals).toHaveBeenCalledWith('u1');
     expect(repos.projects.list).toHaveBeenCalledWith({ owner: 'u1' });
     expect(repos.machines.list).toHaveBeenCalledWith('u1');
@@ -215,6 +230,112 @@ describe('GET /tabs/:id/chat', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().tab.availability).toBe('offline');
   });
+
+  // TER-1091: an empty conversation says why, so the screen never stays blank without a reason.
+  it('a tab whose machine never had the hooks installed says no_hooks', async () => {
+    const { app, repos } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null })], hooksInstalled: false });
+    const page = tabChatPage.parse((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json());
+    expect(page.tab.availability).toBe('no_session');
+    expect(page.empty_reason).toBe('no_hooks');
+    expect(repos.machineHooks.findByMachine).toHaveBeenCalledWith('m1');
+  });
+
+  it('hooks installed but no session reported yet says not_reported', async () => {
+    const { app } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null, state_tool: null })] });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+  });
+
+  it('a session whose transcript is gone from the machine says transcript_missing', async () => {
+    const { app } = build({ readPage: async () => ({ items: [], before: null, live: null, mode: null, degraded: false, missing: true }) });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('transcript_missing');
+  });
+
+  it('a readable session with nothing in it yet says new_session; one with history says nothing', async () => {
+    const empty = build();
+    expect((await empty.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('new_session');
+    const item = { kind: 'assistant', id: 'a1', at: '2026-10-01T10:00:00.000Z', text: 'oi' };
+    const full = build({ readPage: async () => ({ items: [item as never], before: null, live: `${SID}.40`, mode: null, degraded: false, missing: false }) });
+    expect((await full.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+  });
+
+  // TER-1094: a plain terminal (its shell in front, no AI CLI) has no session at all, whatever the hooks say.
+  it('a shell at the prompt that never ran an agent says no_agent', async () => {
+    const { app, foreground } = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null, state: null, state_tool: null })], hooksInstalled: false, pane: 'shell' });
+    const page = tabChatPage.parse((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json());
+    expect(page.empty_reason).toBe('no_agent');
+    expect(foreground).toHaveBeenCalledWith(machine, 'th-t1');
+  });
+
+  it('a CLI that exited (session reported, shell in front) says no_agent, whether its transcript is empty or gone', async () => {
+    const empty = build({ pane: 'shell' });
+    expect((await empty.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('no_agent');
+    const gone = build({ pane: 'shell', readPage: async () => ({ items: [], before: null, live: null, mode: null, degraded: false, missing: true }) });
+    expect((await gone.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('no_agent');
+  });
+
+  it('a CLI running in front keeps the hooks reasons; a pane that cannot be read too', async () => {
+    const running = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null, state_tool: null })], pane: 'busy' });
+    expect((await running.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+    const outdated = build({ tabs: [tabRow({ agent_session_id: null, agent_transcript_path: null, state_tool: null })], pane: new HttpError(409, 'Atualize', 'AGENT_OUTDATED') });
+    expect((await outdated.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+  });
+
+  it('a page with history never looks at the pane', async () => {
+    const item = { kind: 'assistant', id: 'a1', at: '2026-10-01T10:00:00.000Z', text: 'oi' };
+    const { app, foreground } = build({ pane: 'shell', readPage: async () => ({ items: [item as never], before: null, live: `${SID}.40`, mode: null, degraded: false, missing: false }) });
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+    expect(foreground).not.toHaveBeenCalled();
+  });
+
+  it('a tab that cannot be read for another reason (offline) has no empty_reason', async () => {
+    agentState.online = false;
+    const { app } = build();
+    expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+  });
+});
+
+describe('GET /tabs/:id/agent', () => {
+  it("answers the accounts the tab's agent can start with and the suggested one", async () => {
+    const { app } = build();
+    const res = await app.inject({ method: 'GET', url: '/tabs/t1/agent' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ choices: [{ account_id: 'acc1', label: 'Pessoal', provider: 'claude', model: 'opus' }], suggested: 'acc1' });
+    expect(tabAgentOptions).toHaveBeenCalledWith(expect.anything(), project, machine);
+  });
+
+  it('a tab outside the scope answers 404', async () => {
+    const { app } = build();
+    expect((await app.inject({ method: 'GET', url: '/tabs/t2/agent' })).statusCode).toBe(404);
+    expect(tabAgentOptions).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /tabs/:id/agent', () => {
+  it('starts the agent with the chosen account and answers where it runs', async () => {
+    const { app, hub } = build();
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/agent', payload: { account_id: 'acc1' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tab_id: 't1', new_tab: false, account: { id: 'acc1', label: 'Pessoal' }, provider: 'claude' });
+    expect(startTabAgent).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), expect.objectContaining({ id: 't1' }), project, machine, 'acc1');
+    expect(hub.poke).toHaveBeenCalledWith('t1');
+  });
+
+  it('without an account leaves the choice to the server; a refusal answers 409 with its code', async () => {
+    startTabAgent.mockRejectedValueOnce(new ControlError('ACCOUNT_CHOICE_REQUIRED', 'Escolha a conta para iniciar a sessão'));
+    const { app } = build();
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/agent' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({ error: 'Escolha a conta para iniciar a sessão', code: 'ACCOUNT_CHOICE_REQUIRED' });
+    expect(startTabAgent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 't1' }), project, machine, undefined);
+  });
+
+  it('needs terminals:write and the scope', async () => {
+    const reader = build({ grants: ['terminals:read'] });
+    expect((await reader.app.inject({ method: 'POST', url: '/tabs/t1/agent', payload: {} })).statusCode).toBe(403);
+    const { app } = build();
+    expect((await app.inject({ method: 'POST', url: '/tabs/t2/agent', payload: {} })).statusCode).toBe(404);
+    expect(startTabAgent).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /tabs/:id/chat/messages', () => {
@@ -227,6 +348,13 @@ describe('POST /tabs/:id/chat/messages', () => {
     expect(hub.poke).toHaveBeenCalledWith('t1');
     expect(logged.join('')).toContain('"textLen":17');
     expect(logged.join('')).not.toContain('segredo');
+  });
+
+  it("mounted for the web (TER-1003), the text is typed as the person's from the web", async () => {
+    const { app } = build({ surface: 'web' });
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'oi' } });
+    expect(res.statusCode).toBe(200);
+    expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'oi' }, expect.objectContaining({ level: 'person_typed', surface: 'web' }));
   });
 
   it('a tab waiting on a permission answers 409 WAITING_PERMISSION, pointing at the card', async () => {

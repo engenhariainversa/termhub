@@ -6,13 +6,14 @@ import { controlContextFor, type ControlContext } from '../control/context.js';
 import { askForAutomation } from '../chat/gate-runtime.js';
 import { FAILED, latestPerWorkflow, matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
 import { setCiError } from '../ci/status.js';
-import type { Repositories } from '../db/repositories/index.js';
+import type { AutomationEvent, Repositories } from '../db/repositories/index.js';
 import { ACTIVE_RUN_STATUSES } from '../db/repositories/automation-runs.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { TaskPullRequest } from '../db/repositories/task-pull-requests.js';
 import type { Project, Tab, Task } from '../db/repositories/types.js';
 import { t } from '../i18n/index.js';
 import { GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
+import { writesDegraded, type GithubHealthReader } from '../integrations/github-status.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
@@ -20,7 +21,7 @@ import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
-import { CI_CAP, CONFLICT_CAP } from './escalation-text.js';
+import { CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_PERSON_CARD, RUN_DONE_NO_PUSH } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
@@ -28,6 +29,7 @@ import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
+import { runBranchOf } from './release.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
 export const MERGE_TOOL = 'automation_merge';
@@ -42,6 +44,9 @@ export interface MergeDeps {
   lifecycle: { readonly draining: boolean };
   /** This process's instance id: the cap marker run is written under it. */
   instance: string;
+  /** githubstatus.com (TER-1025): a red-CI fix that ended without a push while GitHub reports trouble is
+   *  held, then asked once more when GitHub works again. Left out: escalated at once, as before. */
+  githubHealth?: GithubHealthReader;
   /** Starts a fixer (a conflict or a red CI): the dispatcher's `startTriggered`. */
   startFixer(i: TriggeredRun): Promise<TriggeredStart>;
   /** Types a line into the tab of the run that owns a red PR, as the project's owner. Default: the follower's `defaultType`. */
@@ -103,8 +108,9 @@ interface PullCtx {
   setup: ProjectSetupData;
   token: string;
   repo: string;
-  /** the PR's rows (one per card it names), all of automatic cards */
+  /** the PR's rows (one per card it cites) */
   rows: TaskPullRequest[];
+  /** the cards the merge acts on: the primary alone (TER-1004: a card the PR only cites is not part of it) */
   tasks: Task[];
   /** the card whose automatic run worked on the PR's head branch */
   primary: Task;
@@ -114,30 +120,37 @@ interface PullCtx {
 }
 
 const now = (deps: MergeDeps) => deps.now?.() ?? new Date();
-const waitOn = (c: PullCtx, wait: MergeWait) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps));
+const waitOn = (c: PullCtx, wait: MergeWait, sha: string | null = null) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps), sha);
+
+/** A PR of an automatic card that termhub leaves to a person (TER-1004): it also cites a person's card that is not done. */
+interface HeldPull {
+  held: { primary: Task; people: Task[]; row: TaskPullRequest };
+}
 
 /**
- * Whether termhub may merge this PR at all, from its rows: every card it names is automatic, its head branch
- * is the branch an automatic run of one of them worked on (that card is the primary), and its base is that
- * card's epic branch or the project's base branch. A PR anyone else opened that only mentions a card, or one
- * into another branch, is ignored: no merge and no card. The epic PR, linked to its automatic epic alone, is
- * the one PR whose head may be an epic branch (`epicCandidate`). Null when it is not a candidate.
+ * Whether termhub may merge this PR at all, from its rows (one per card it cites). The PR is the automatic
+ * card whose run worked on its head branch (the primary); its base is that card's epic branch or the
+ * project's base branch. A PR anyone else opened that only cites a card, or one into another branch, is
+ * ignored: no merge and no card. The epic PR, linked to its automatic epic alone, is the one PR whose head
+ * may be an epic branch (`epicCandidate`). Null when it is not a candidate.
+ *
+ * The other cards the PR cites are references, not part of it (TER-1004): they are not moved to done or
+ * told of the merge. A person's card that is not done yet still holds the merge for a person (`held`); one
+ * already done, or a card that no longer exists, does not.
  */
 async function candidateOf(
   deps: MergeDeps,
   base: Omit<PullCtx, 'rows' | 'tasks' | 'primary' | 'epicBranch' | 'baseBranch'>,
   rows: TaskPullRequest[],
-): Promise<PullCtx | null> {
+): Promise<PullCtx | HeldPull | null> {
   const { repos } = deps;
   const row = rows[0];
   if (!row?.base_ref) return null;
-  const found = await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)));
-  // a PR that names a card a person works on is merged by a person
-  if (found.some((task) => !task || !task.auto)) return null;
-  const tasks = found as Task[];
+  const tasks = (await Promise.all(rows.map((r) => repos.tasks.findById(r.task_id)))).filter((t): t is Task => !!t);
   let primary: Task | undefined;
   for (const task of tasks) {
-    if ((await repos.automationRuns.branchesOfTask(task.id)).includes(row.head_ref)) {
+    // by repository and branch (spec 2026-10-07 multi-repo R14)
+    if (task.auto && (await runBranchOf(repos, base.setup, task.id, row))) {
       primary = task;
       break;
     }
@@ -150,8 +163,26 @@ async function candidateOf(
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
   // a head named like the base or the epic branch is never a card's own branch
   if (row.head_ref === baseBranch || row.head_ref === epicBranch) return null;
-  return { ...base, rows, tasks, primary, epicBranch, baseBranch };
+  // a PR that cites a card a person still works on is merged by a person
+  const people = tasks.filter((t) => !t.auto && t.status !== 'done');
+  if (people.length > 0) return { held: { primary, people, row } };
+  return { ...base, rows, tasks: [primary], primary, epicBranch, baseBranch };
 }
+
+/**
+ * Tells why an automatic card's PR is not merged (TER-1004): the queue shows it on every pass, and once the
+ * PR is green the feed (with a push and a chat line) says it once per PR head.
+ */
+async function onHeld(deps: MergeDeps, projectId: string, { primary, people, row }: HeldPull['held']): Promise<void> {
+  const { repos } = deps;
+  noteMergeWait([primary.id], 'merge_person_card', now(deps));
+  if (row.ci_state !== 'passed') return;
+  if (await repos.automationEvents.findOnce(primary.id, 'escalated', { reason: MERGE_PERSON_CARD, pr: row.number, sha: row.head_sha })) return;
+  const cards = people.map((t) => t.ref).join(', ');
+  await escalateDelivery(repos, { project_id: projectId, task_id: primary.id }, MERGE_PERSON_CARD, deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, cards });
+}
+
+const isHeld = (c: PullCtx | HeldPull | null): c is HeldPull => !!c && 'held' in c;
 
 /**
  * The epic PR (spec §10.2, D20): the epic's own branch, which its integrator run worked on, into the project's
@@ -216,6 +247,10 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
     if (deps.lifecycle.draining) return;
     const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
     if (!c) continue;
+    if (isHeld(c)) {
+      await onHeld(deps, projectId, c.held).catch((e: unknown) => log.warn({ projectId, pr: rows[0]!.number, code: codeOf(e) }, 'automation: held PR not reported'));
+      continue;
+    }
     try {
       await handlePull(c);
     } catch (e) {
@@ -377,32 +412,57 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer });
+  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
+  // TER-1051: the card's open tab is busy or in use; the next sync asks again
+  if (started === 'tab_busy') return waitOn(c, 'merge_fix_waits_for_tab');
   if (started !== 'taken') return;
   // taken: a run of the card is still on (it may be the fixer itself), or this head's fixer already ended
   if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
   await conflictEscalation(c, row, { attempts: used, cause: FIXER_NO_PUSH });
 }
 
-/** Why a PR head was escalated before the cap: its fix ended and the head did not move (no push). */
-export const FIXER_NO_PUSH = 'fixer_no_push';
-
 /** The conflict marker's trigger: apart from the fixer's own (the head SHA), so both can exist for one head. */
 const conflictMarker = (sha: string) => `${CONFLICT_CAP}:${sha}`;
+/** TER-1016: the second marker of a head, for the one "a run ended and the conflict is still there" notice. */
+const runDoneMarker = (sha: string) => `${CONFLICT_CAP}:${sha}:${RUN_DONE_NO_PUSH}`;
 
 /**
  * Tells the person a conflict stays on this head (the cap, or a fixer that ended without pushing): once per
  * head, on whichever colour — a marker run (`blocked`, never active, so a card with a run still on gets it
- * too) holds the head's marker trigger. The board says why the PR waits on every pass.
+ * too) holds the head's marker trigger. The board says why the PR waits on every pass, naming the head.
+ *
+ * The escalation is about this head only: a push makes a new head, which the executor reads afresh (a clean
+ * one merges once its CI is green). A run of the card that ends after the escalation while the head stays
+ * the same (it said it was done, but pushed nothing) leaves a PR that looks finished in the feed and is
+ * still in conflict, so the person is told once more for that head (TER-1016).
  */
 async function conflictEscalation(c: PullCtx, row: TaskPullRequest, extra: { attempts: number; cause?: string }): Promise<void> {
   const { repos } = c.deps;
-  waitOn(c, 'merge_conflict_cap');
-  const marker = await repos.automationRuns.insertMarker({ project_id: c.project.id, task_id: c.primary.id, role: 'fixer', instance: c.deps.instance, trigger_sha: conflictMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
-  if (!marker) return;
-  await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, CONFLICT_CAP, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, ...extra });
+  const log = c.deps.log ?? noopLog;
+  const about = { project_id: c.project.id, task_id: c.primary.id };
+  const payload = { pr: row.number, url: row.url, sha: row.head_sha };
+  waitOn(c, 'merge_conflict_cap', row.head_sha);
+  const marker = await repos.automationRuns.insertMarker({ ...about, role: 'fixer', instance: c.deps.instance, trigger_sha: conflictMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
+  if (marker) return void (await escalateDelivery(repos, about, CONFLICT_CAP, log, { ...payload, ...extra }));
+  if (!(await runEndedSinceEscalation(c, row.head_sha))) return;
+  const again = await repos.automationRuns.insertMarker({ ...about, role: 'fixer', instance: c.deps.instance, trigger_sha: runDoneMarker(row.head_sha), waiting_reason: CONFLICT_CAP });
+  if (!again) return;
+  await escalateDelivery(repos, about, CONFLICT_CAP, log, { ...payload, attempts: extra.attempts, cause: RUN_DONE_NO_PUSH });
+}
+
+/** A run of the card ended after this head's conflict escalation, none is on now, and the end is past the
+ *  grace in which a push made right before it would have been synced. */
+async function runEndedSinceEscalation(c: PullCtx, sha: string): Promise<boolean> {
+  const { repos } = c.deps;
+  const task = c.primary.id;
+  const escalated = await repos.automationRuns.findTriggered(task, 'fixer', conflictMarker(sha));
+  if (!escalated?.ended_at) return false;
+  const ended = await repos.automationRuns.lastEndedAt(task);
+  if (!ended || ended.getTime() <= escalated.ended_at.getTime()) return false;
+  if (now(c.deps).getTime() - ended.getTime() < NO_PUSH_GRACE_MS) return false;
+  return !(await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task);
 }
 
 /**
@@ -489,11 +549,11 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
       return;
     }
 
-    const base = row.base_ref ?? c.baseBranch;
-    const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${jobs}`, custom: c.setup.automation.prompts.fixer });
-    const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: sha, branch: row.head_ref, base, prompt });
-    // waiting for a place or halted: the next sync asks again. Taken: a fixer already holds this head's trigger.
-    if (started === 'waiting' || started === 'halted') return void (await giveBack());
+    const started = await startCiFixer(c, row, sha);
+    // waiting for a place or for the card's open tab (TER-1051), or halted: the next sync asks again. Taken: a
+    // fixer already holds this head's trigger.
+    if (started === 'tab_busy') waitOn(c, 'merge_fix_waits_for_tab');
+    if (started === 'waiting' || started === 'halted' || started === 'tab_busy') return void (await giveBack());
     acted = true;
     await settle('fixer');
     if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a red CI');
@@ -502,6 +562,13 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
     if (!acted) await giveBack().catch(() => {});
     throw e;
   }
+}
+
+/** A fixer for the red CI of the PR's head, keyed by `trigger` (the head SHA; its retry after GitHub came back has its own). */
+function startCiFixer(c: PullCtx, row: TaskPullRequest, trigger: string): Promise<TriggeredStart> {
+  const base = row.base_ref ?? c.baseBranch;
+  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions });
+  return c.deps.startFixer({ projectId: c.project.id, taskId: c.primary.id, role: 'fixer', triggerSha: trigger, branch: row.head_ref, base, prompt });
 }
 
 /** How long after the card's last run ended a red head that did not move counts as "ended without a push":
@@ -525,11 +592,39 @@ async function onFixedHeadStillRed(c: PullCtx, row: TaskPullRequest): Promise<vo
   if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
   const ended = await repos.automationRuns.lastEndedAt(task.id);
   if (!ended || now(c.deps).getTime() - ended.getTime() < NO_PUSH_GRACE_MS) return;
+  if (await retryAfterGithub(c, row, claim, via)) return;
   waitOn(c, 'merge_ci_cap');
   const won = await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, via: 'escalated', cause: FIXER_NO_PUSH });
   if (!won) return;
   await publishEvent(repos, won);
   await escalateDelivery(repos, { project_id: c.project.id, task_id: task.id }, CI_CAP, c.deps.log ?? noopLog, { ...key, url: row.url, cause: FIXER_NO_PUSH });
+}
+
+/**
+ * A fix that ended without a push (TER-1025): when GitHub reports trouble with pushes, the API or pull
+ * requests, the head is held (`github_hold` on its claim) instead of escalated; once GitHub works again, a
+ * held head gets one more fixer (`<sha>:github`, so it is not the first fixer's trigger) — once, marked
+ * `github_retry`. True while the head is held or retried: the caller escalates otherwise.
+ */
+async function retryAfterGithub(c: PullCtx, row: TaskPullRequest, claim: AutomationEvent, via: string): Promise<boolean> {
+  const { repos } = c.deps;
+  if (!c.deps.githubHealth || claim.payload.github_retry === true) return false;
+  const health = await c.deps.githubHealth().catch(() => null);
+  if (health && writesDegraded(health)) {
+    waitOn(c, 'merge_github_down');
+    if (claim.payload.github_hold !== true) await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, github_hold: true });
+    return true;
+  }
+  if (claim.payload.github_hold !== true) return false;
+  if (await stopped(c)) return true;
+  const won = await repos.automationEvents.replacePayloadIf(claim.id, { via }, { ...claim.payload, via: 'fixer', github_retry: true });
+  if (!won) return true;
+  const started = await startCiFixer(c, row, `${row.head_sha}:github`);
+  // no place for it now (or the card's open tab is busy): the hold stays, the next sync asks again
+  if (started === 'waiting' || started === 'halted' || started === 'tab_busy') await repos.automationEvents.replacePayloadIf(claim.id, { via: 'fixer' }, { ...claim.payload, github_hold: true });
+  else (c.deps.log ?? noopLog).info({ projectId: c.project.id, taskId: c.primary.id, pr: row.number, started }, 'automation: red CI asked again after GitHub came back');
+  waitOn(c, started === 'tab_busy' ? 'merge_fix_waits_for_tab' : 'merge_github_down');
+  return true;
 }
 
 /** Whether a line typed into the tab reaches the agent now: it is on, and not on a limit, a swap or an exit. */
@@ -669,7 +764,7 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   const row = rows[0];
   if (!row || row.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
   const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
-  if (!c) return void (await close('NOT_CANDIDATE'));
+  if (!c || isHeld(c)) return void (await close('NOT_CANDIDATE'));
   // the approval was for this base: a PR retargeted since (say from the epic branch to the deploying base) is a new question
   if (row.base_ref !== args.base) return void (await close('BASE_CHANGED'));
 

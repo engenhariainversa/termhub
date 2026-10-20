@@ -26,6 +26,8 @@ vi.mock('../agent/registry.js', async (importOriginal) => {
     ...real,
     agents: {
       isOnline: (id: string) => reg.online.has(id),
+      // agent 0.19.0: worktrees and the hard-lock guard (TER-1005)
+      info: (id: string) => (reg.online.has(id) ? { agent_version: '0.19.0' } : null),
       capabilities: (id: string) => (reg.online.has(id) ? (reg.caps.get(id) ?? ['worktree']) : null),
     },
   };
@@ -77,7 +79,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     resetWaiting();
     await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'owner' } });
     await db.project.create({ data: { id: projectId, ownerId, key: keyOf(projectId), name: 'p' } });
-    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.18.0' } });
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
     await repos.projectMachines.link({ project_id: projectId, machine_id: machineId, cwd: '/home/u/app' });
     accountId = (await repos.aiAccounts.create({ provider: 'claude', label: 'main', machine_id: machineId })).id;
     reg.online.add(machineId);
@@ -316,7 +318,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
 
   it('one start per account per tick: two machines, one account each, starts only on the first card of a shared account', async () => {
     const other = newId();
-    await db.machine.create({ data: { id: other, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.18.0' } });
+    await db.machine.create({ data: { id: other, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
     await repos.projectMachines.link({ project_id: projectId, machine_id: other, cwd: '/home/u/app2' });
     const second = (await repos.aiAccounts.create({ provider: 'claude', label: 'two', machine_id: other })).id;
     reg.online.add(other);

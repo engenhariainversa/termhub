@@ -124,7 +124,16 @@ export const automationSchema = z.object({
   allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),
   max_parallel: z.number().int().min(1).max(100).nullable().default(null),
   resume_max: z.number().int().min(0).max(10).default(3),
+  // TER-1043: off = the agent decides by itself (its recommendation, or the person's precedent) and records
+  // it; on = a run that stops on a decision waits for the person ("Parar em decisões de produto")
+  stop_on_decisions: z.boolean().default(false),
   fix_attempts: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a deploy that failed on GitHub's side (no job, no failed step, an Actions incident) is run again
+  // this many times (5, 15, 30 min apart) before the project is paused; 0 = pause at once, as before
+  deploy_retries: z.number().int().min(0).max(10).default(3),
+  // TER-1025: a run that reported a GitHub error (push or PR) is resumed this many times, once GitHub works
+  // again, before it goes to the person
+  github_retries: z.number().int().min(0).max(10).default(3),
   daily_budget_usd: z.number().positive().max(100000).nullable().default(null),
   // spike R8 (TER-971): a card whose estimate passes this is escalated and not resumed; null = off
   card_budget_usd: z.number().positive().max(100000).nullable().default(null),
@@ -150,8 +159,82 @@ function checkAllowedTools(tools: string[] | null, ctx: z.RefinementCtx, path: (
 /** The automation section as the person saves it (the mobile route): `automationSchema` plus the allow-rule check. */
 export const automationInputSchema = automationSchema.superRefine((a, ctx) => checkAllowedTools(a.allowed_tools, ctx, ['allowed_tools']));
 
+/** Most per-repo overrides a setup holds (spec 2026-10-07 multi-repo §4). */
+export const REPOS_MAX = 50;
+
+/** `owner/repo` is compared without case, as GitHub does. */
+export const sameRepo = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/** What a repository found by discovery starts with (spec 2026-10-07 multi-repo R2, R6). */
+export const repoDefaultsSchema = z.object({
+  /** the GitHub integration discovered repos use */
+  integration_id: z.string().min(1).nullable().default(null),
+  /** how deep discovery looks under the project folder */
+  scan_depth: z.number().int().min(1).max(3).default(1),
+});
+export type RepoDefaults = z.infer<typeof repoDefaultsSchema>;
+
+/**
+ * The person's override of one repository, keyed by `owner/repo` (spec 2026-10-07 multi-repo R1, R7). The
+ * repository itself comes from discovery (`project_repositories`); an override may also name one that
+ * discovery has not seen yet.
+ */
+export const repoOverrideSchema = z.object({
+  full_name: z.string().trim().regex(/^[\w.-]+\/[\w.-]+$/, 'use owner/repo'),
+  /** false takes the repo out of the project's automatic work; it stays listed */
+  enabled: z.boolean().default(true),
+  /** null = repo_defaults.integration_id */
+  integration_id: z.string().min(1).nullable().default(null),
+  /** null = what discovery read */
+  description: z.string().trim().min(1).max(200).nullable().default(null),
+  /** null = the checkout's default branch */
+  base_branch: z.string().trim().min(1).max(100).nullable().default(null),
+  /** null = the project's */
+  branch_pattern: z.string().trim().min(1).max(100).nullable().default(null),
+  deploy_workflow: z.string().trim().min(1).max(200).nullable().default(null),
+  /** never above automation.autonomy, which is the ceiling */
+  autonomy: z.enum(AUTONOMY_LEVELS).default('pr'),
+  required_checks: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
+  /** globs relative to the repo's root */
+  release_paths: z.array(glob).max(50).default([]),
+  store_paths: z.array(glob).max(50).default([]),
+  /** a card's PRs merge lowest first */
+  merge_order: z.number().int().min(0).max(999).default(0),
+});
+export type RepoOverride = z.infer<typeof repoOverrideSchema>;
+
+export const DUPLICATE_REPO = tk('Repositório repetido');
+export const REPO_AUTONOMY_ABOVE_PROJECT = tk('A autonomia do repositório não pode passar a do projeto');
+export const INVALID_REPO_GLOB = tk('Caminho inválido: use um caminho relativo à raiz do repositório');
+
+const repoRelativeGlob = (g: string) => !g.startsWith('/') && !g.includes('\\') && !g.split('/').includes('..');
+
+/**
+ * The checks on per-repo overrides when the person saves: no repo twice, no level above the project's and
+ * globs inside the repo. Like the allow rules, they are not applied to a stored setup, so a value that
+ * fails a later rule never resets the block when read (the effective list clamps the level instead).
+ */
+function checkRepos(d: { repos: RepoOverride[]; automation: { autonomy: AutonomyLevel } }, ctx: z.RefinementCtx): void {
+  const ceiling = AUTONOMY_LEVELS.indexOf(d.automation.autonomy);
+  const seen = new Set<string>();
+  d.repos.forEach((r, i) => {
+    const name = r.full_name.toLowerCase();
+    if (seen.has(name)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['repos', i, 'full_name'], message: DUPLICATE_REPO });
+    seen.add(name);
+    if (AUTONOMY_LEVELS.indexOf(r.autonomy) > ceiling) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['repos', i, 'autonomy'], message: REPO_AUTONOMY_ABOVE_PROJECT });
+    for (const field of ['release_paths', 'store_paths'] as const) {
+      r[field].forEach((g, j) => {
+        if (!repoRelativeGlob(g)) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['repos', i, field, j], message: INVALID_REPO_GLOB });
+      });
+    }
+  });
+}
+
 export const setupSchema = z.object({
   repo: repoSchema.nullable().default(null),
+  repo_defaults: repoDefaultsSchema.default({}),
+  repos: z.array(repoOverrideSchema).max(REPOS_MAX).default([]),
   tickets: ticketsSchema.nullable().default(null),
   ticket_sources: z.array(ticketSourceSchema).max(20).default([]),
   runner: runnerSchema.default({}),
@@ -164,9 +247,10 @@ export const setupSchema = z.object({
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;
 
-/** What PUT /setup accepts: the same shape, and no source twice. */
+/** What PUT /setup accepts: the same shape, no source twice, and per-repo overrides within the project's rules. */
 export const setupInputSchema = setupSchema.superRefine((d, ctx) => {
   checkAllowedTools(d.automation.allowed_tools, ctx, ['automation', 'allowed_tools']);
+  checkRepos(d, ctx);
   const seen = new Set<string>();
   d.ticket_sources.forEach((s, i) => {
     const id = sourceIdentity(s);

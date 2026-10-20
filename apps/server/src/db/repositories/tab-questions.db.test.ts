@@ -613,6 +613,72 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     expect(ids).not.toContain(noLongerOpen.id);
   });
 
+  describe('in-focus countdowns (TER-642)', () => {
+    it('a paused countdown is neither due nor claimable until it resumes with what was left', async () => {
+      const { question } = await open('tf1');
+      const dueAt = dueNow();
+      await repo.setAutoAnswer(question.id, autoAnswer({ due_at: dueAt, focus: true, band: 'mid', score: 0.9, thresholds: { high: 0.95, low: 0.85 } }));
+      const paused = await repo.pauseAutoAnswer(question.id, dueAt, 25_000);
+      expect(paused?.auto_answer).toMatchObject({ status: 'scheduled', focus: true, paused: true, remaining_ms: 25_000, score: 0.9, band: 'mid' });
+      expect((await repo.listDueAutoAnswers(new Date(), 1000)).map((r) => r.id)).not.toContain(question.id);
+      expect(await repo.claimAutoAnswer(question.id)).toBeUndefined();
+      // already paused: a second pause changes nothing
+      expect(await repo.pauseAutoAnswer(question.id, dueAt, 1)).toBeUndefined();
+
+      const resumed = await repo.resumeAutoAnswer(question.id, dueNow());
+      expect(resumed?.auto_answer).toMatchObject({ status: 'scheduled', paused: false, focus: true });
+      expect(await repo.resumeAutoAnswer(question.id, dueNow())).toBeUndefined(); // not paused any more
+      expect((await repo.listDueAutoAnswers(new Date(), 1000)).map((r) => r.id)).toContain(question.id);
+      expect((await repo.claimAutoAnswer(question.id))?.auto_answer?.status).toBe('sent');
+    });
+
+    it('a pause computed from a stale due_at, or on a countdown that does not wait for focus, changes nothing', async () => {
+      const { question: moved } = await open('tf2');
+      await repo.setAutoAnswer(moved.id, autoAnswer({ focus: true }));
+      expect(await repo.pauseAutoAnswer(moved.id, '2020-01-01T00:00:00.000Z', 10_000)).toBeUndefined();
+      const { question: plain } = await open('tf3');
+      const auto = autoAnswer();
+      await repo.setAutoAnswer(plain.id, auto);
+      expect(await repo.pauseAutoAnswer(plain.id, auto.due_at, 10_000)).toBeUndefined();
+      // a cancelled one is nobody's to pause or resume
+      const { question: cancelled } = await open('tf4');
+      const waiting = autoAnswer({ focus: true });
+      await repo.setAutoAnswer(cancelled.id, waiting);
+      await repo.cancelAutoAnswer(cancelled.id, userId);
+      expect(await repo.pauseAutoAnswer(cancelled.id, waiting.due_at, 10_000)).toBeUndefined();
+      expect(await repo.resumeAutoAnswer(cancelled.id, dueNow())).toBeUndefined();
+    });
+
+    it('listFocusCountdowns: scheduled in-focus countdowns on open cards, running or paused, for everyone or one user', async () => {
+      const { question: running } = await open('tf5');
+      await repo.setAutoAnswer(running.id, autoAnswer({ focus: true }));
+      const { question: paused } = await open('tf6');
+      const auto = autoAnswer({ focus: true });
+      await repo.setAutoAnswer(paused.id, auto);
+      await repo.pauseAutoAnswer(paused.id, auto.due_at, 30_000);
+      const { question: plain } = await open('tf7');
+      await repo.setAutoAnswer(plain.id, autoAnswer());
+      const { question: stopped } = await open('tf8');
+      await repo.setAutoAnswer(stopped.id, autoAnswer({ focus: true }));
+      await repo.cancelAutoAnswer(stopped.id, userId);
+
+      const mine = (await repo.listFocusCountdowns(userId)).map((r) => r.id);
+      expect(mine).toEqual(expect.arrayContaining([running.id, paused.id]));
+      expect(mine).not.toContain(plain.id);
+      expect(mine).not.toContain(stopped.id);
+      expect((await repo.listFocusCountdowns()).map((r) => r.id)).toEqual(expect.arrayContaining([running.id, paused.id]));
+      expect((await repo.listFocusCountdowns(otherUserId)).map((r) => r.id)).not.toContain(running.id);
+    });
+
+    it('setPrecedent keeps what memory found on the row; the row reads it back', async () => {
+      const { question } = await open('tf9');
+      expect(question.precedent).toBeNull();
+      const precedent = { items: [{ question_index: 0, ref: 'decision:d1', similarity: 0.62, selected: [1] }] };
+      await repo.setPrecedent(question.id, precedent);
+      expect((await repo.findByIdForUser(question.id, userId))?.precedent).toEqual(precedent);
+    });
+  });
+
   /** Moves a claimed countdown's `claimed_at` back by `minutes` on the database's own clock. */
   const backdateClaim = (id: string, minutes: number) =>
     db.$executeRaw`UPDATE "tab_questions" SET "auto_answer" = jsonb_set("auto_answer", '{claimed_at}', to_jsonb(now() - ${minutes} * interval '1 minute')) WHERE "id" = ${id}`;

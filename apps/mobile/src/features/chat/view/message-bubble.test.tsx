@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({ router: { push: (...a: unknown[]) => mockPush(...a) } }));
 import type { ChatMessage } from '../model/types';
-import { codeRules } from './code-block';
+import { chatMarkdownRules } from './chat-links';
 import { MessageBubble } from './message-bubble';
 
 const answer = (over: Partial<ChatMessage>): ChatMessage =>
@@ -46,12 +46,35 @@ describe('MessageBubble file paths', () => {
 
   it('renders code blocks with the copy button, in the chat and in a tab session alike (TER-994)', async () => {
     await render(<MessageBubble message={answer({ text: '```sh\nls\n```' })} streamed={undefined} started />);
-    expect(lastMarkdown()).toMatchObject({ rules: codeRules });
+    expect(lastMarkdown()).toMatchObject({ rules: chatMarkdownRules });
   });
 
   it('leaves paths as text without a context', async () => {
     await render(<MessageBubble message={answer({ text: 'Escrevi /tmp/x.md' })} streamed={undefined} started />);
     expect(lastMarkdown().children).toBe('Escrevi /tmp/x.md');
-    expect(lastMarkdown().onLinkPress).toBeUndefined();
+    expect(lastMarkdown().onLinkPress?.('termhub-file:%2Ftmp%2Fx.md')).toBe(false);
+  });
+
+  // TER-1089: only http(s) leaves the app.
+  it('opens only http(s) links in the browser', async () => {
+    await render(<MessageBubble message={answer({ text: 'oi' })} streamed={undefined} started fileContext={{ projectId: 'p1' }} />);
+    const onLinkPress = lastMarkdown().onLinkPress!;
+    expect(onLinkPress('http://192.168.68.114:8765/a.png')).toBe(true);
+    for (const url of ['mailto:a@b.dev', 'intent://x', 'file:///etc/passwd']) expect(onLinkPress(url)).toBe(false);
+  });
+});
+
+describe("MessageBubble: the person's links (TER-1089)", () => {
+  it('links the URLs of their message and of the quote', async () => {
+    await render(
+      <MessageBubble
+        message={answer({ role: 'user', text: 'abre https://termhub.dev/x.', reply_to: { id: 'm0', role: 'assistant', excerpt: 'veja http://192.168.68.114:8765/a.png' } })}
+        streamed={undefined}
+        started={false}
+      />,
+    );
+    expect(screen.getByText('https://termhub.dev/x')).toBeTruthy();
+    expect(screen.getByText('http://192.168.68.114:8765/a.png')).toBeTruthy();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
   });
 });

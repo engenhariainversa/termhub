@@ -278,6 +278,7 @@ export type ProjectWhereInput = {
   tasks?: Prisma.TaskListRelationFilter
   note?: Prisma.XOR<Prisma.NoteNullableScalarRelationFilter, Prisma.NoteWhereInput> | null
   setup?: Prisma.XOR<Prisma.ProjectSetupNullableScalarRelationFilter, Prisma.ProjectSetupWhereInput> | null
+  repositories?: Prisma.ProjectRepositoryListRelationFilter
   tickets?: Prisma.TicketListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   tabQuestions?: Prisma.TabQuestionListRelationFilter
@@ -314,6 +315,7 @@ export type ProjectOrderByWithRelationInput = {
   tasks?: Prisma.TaskOrderByRelationAggregateInput
   note?: Prisma.NoteOrderByWithRelationInput
   setup?: Prisma.ProjectSetupOrderByWithRelationInput
+  repositories?: Prisma.ProjectRepositoryOrderByRelationAggregateInput
   tickets?: Prisma.TicketOrderByRelationAggregateInput
   chatConversations?: Prisma.ChatConversationOrderByRelationAggregateInput
   tabQuestions?: Prisma.TabQuestionOrderByRelationAggregateInput
@@ -353,6 +355,7 @@ export type ProjectWhereUniqueInput = Prisma.AtLeast<{
   tasks?: Prisma.TaskListRelationFilter
   note?: Prisma.XOR<Prisma.NoteNullableScalarRelationFilter, Prisma.NoteWhereInput> | null
   setup?: Prisma.XOR<Prisma.ProjectSetupNullableScalarRelationFilter, Prisma.ProjectSetupWhereInput> | null
+  repositories?: Prisma.ProjectRepositoryListRelationFilter
   tickets?: Prisma.TicketListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   tabQuestions?: Prisma.TabQuestionListRelationFilter
@@ -425,6 +428,7 @@ export type ProjectCreateInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -460,6 +464,7 @@ export type ProjectUncheckedCreateInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -493,6 +498,7 @@ export type ProjectUpdateInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -528,6 +534,7 @@ export type ProjectUncheckedUpdateInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -718,6 +725,20 @@ export type ProjectUpdateOneRequiredWithoutMachinesNestedInput = {
   upsert?: Prisma.ProjectUpsertWithoutMachinesInput
   connect?: Prisma.ProjectWhereUniqueInput
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutMachinesInput, Prisma.ProjectUpdateWithoutMachinesInput>, Prisma.ProjectUncheckedUpdateWithoutMachinesInput>
+}
+
+export type ProjectCreateNestedOneWithoutRepositoriesInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutRepositoriesInput, Prisma.ProjectUncheckedCreateWithoutRepositoriesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutRepositoriesInput
+  connect?: Prisma.ProjectWhereUniqueInput
+}
+
+export type ProjectUpdateOneRequiredWithoutRepositoriesNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutRepositoriesInput, Prisma.ProjectUncheckedCreateWithoutRepositoriesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutRepositoriesInput
+  upsert?: Prisma.ProjectUpsertWithoutRepositoriesInput
+  connect?: Prisma.ProjectWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutRepositoriesInput, Prisma.ProjectUpdateWithoutRepositoriesInput>, Prisma.ProjectUncheckedUpdateWithoutRepositoriesInput>
 }
 
 export type ProjectCreateNestedOneWithoutTabsInput = {
@@ -1038,6 +1059,7 @@ export type ProjectCreateWithoutOwnerInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1072,6 +1094,7 @@ export type ProjectUncheckedCreateWithoutOwnerInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1148,6 +1171,7 @@ export type ProjectCreateWithoutMachinesInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1182,6 +1206,7 @@ export type ProjectUncheckedCreateWithoutMachinesInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1230,6 +1255,7 @@ export type ProjectUpdateWithoutMachinesInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -1260,6 +1286,159 @@ export type ProjectUncheckedUpdateWithoutMachinesInput = {
   lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
+  tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutProjectNestedInput
+  columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+}
+
+export type ProjectCreateWithoutRepositoriesInput = {
+  id: string
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutProjectsInput
+  machines?: Prisma.ProjectMachineCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutProjectInput
+  agentColumn?: Prisma.TaskColumnCreateNestedOneWithoutAgentForInput
+  columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+}
+
+export type ProjectUncheckedCreateWithoutRepositoriesInput = {
+  id: string
+  ownerId?: string | null
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  agentColumnId?: string | null
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  createdAt?: Date | string
+  machines?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutProjectInput
+  columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+}
+
+export type ProjectCreateOrConnectWithoutRepositoriesInput = {
+  where: Prisma.ProjectWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutRepositoriesInput, Prisma.ProjectUncheckedCreateWithoutRepositoriesInput>
+}
+
+export type ProjectUpsertWithoutRepositoriesInput = {
+  update: Prisma.XOR<Prisma.ProjectUpdateWithoutRepositoriesInput, Prisma.ProjectUncheckedUpdateWithoutRepositoriesInput>
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutRepositoriesInput, Prisma.ProjectUncheckedCreateWithoutRepositoriesInput>
+  where?: Prisma.ProjectWhereInput
+}
+
+export type ProjectUpdateToOneWithWhereWithoutRepositoriesInput = {
+  where?: Prisma.ProjectWhereInput
+  data: Prisma.XOR<Prisma.ProjectUpdateWithoutRepositoriesInput, Prisma.ProjectUncheckedUpdateWithoutRepositoriesInput>
+}
+
+export type ProjectUpdateWithoutRepositoriesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutProjectsNestedInput
+  machines?: Prisma.ProjectMachineUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutProjectNestedInput
+  agentColumn?: Prisma.TaskColumnUpdateOneWithoutAgentForNestedInput
+  columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+}
+
+export type ProjectUncheckedUpdateWithoutRepositoriesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  agentColumnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machines?: Prisma.ProjectMachineUncheckedUpdateManyWithoutProjectNestedInput
   tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
@@ -1296,6 +1475,7 @@ export type ProjectCreateWithoutTabsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1330,6 +1510,7 @@ export type ProjectUncheckedCreateWithoutTabsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1378,6 +1559,7 @@ export type ProjectUpdateWithoutTabsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -1412,6 +1594,7 @@ export type ProjectUncheckedUpdateWithoutTabsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -1445,6 +1628,7 @@ export type ProjectCreateWithoutTicketsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
@@ -1479,6 +1663,7 @@ export type ProjectUncheckedCreateWithoutTicketsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
@@ -1527,6 +1712,7 @@ export type ProjectUpdateWithoutTicketsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
@@ -1561,6 +1747,7 @@ export type ProjectUncheckedUpdateWithoutTicketsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
@@ -1593,6 +1780,7 @@ export type ProjectCreateWithoutColumnsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1627,6 +1815,7 @@ export type ProjectUncheckedCreateWithoutColumnsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1664,6 +1853,7 @@ export type ProjectCreateWithoutAgentColumnInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1697,6 +1887,7 @@ export type ProjectUncheckedCreateWithoutAgentColumnInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1751,6 +1942,7 @@ export type ProjectUpdateWithoutColumnsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -1785,6 +1977,7 @@ export type ProjectUncheckedUpdateWithoutColumnsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -1832,6 +2025,7 @@ export type ProjectCreateWithoutTasksInput = {
   tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -1866,6 +2060,7 @@ export type ProjectUncheckedCreateWithoutTasksInput = {
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -1914,6 +2109,7 @@ export type ProjectUpdateWithoutTasksInput = {
   tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -1948,6 +2144,7 @@ export type ProjectUncheckedUpdateWithoutTasksInput = {
   tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -1981,6 +2178,7 @@ export type ProjectCreateWithoutPullRequestsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2015,6 +2213,7 @@ export type ProjectUncheckedCreateWithoutPullRequestsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2063,6 +2262,7 @@ export type ProjectUpdateWithoutPullRequestsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2097,6 +2297,7 @@ export type ProjectUncheckedUpdateWithoutPullRequestsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2129,6 +2330,7 @@ export type ProjectCreateWithoutAutomationEventsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2163,6 +2365,7 @@ export type ProjectUncheckedCreateWithoutAutomationEventsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2211,6 +2414,7 @@ export type ProjectUpdateWithoutAutomationEventsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2245,6 +2449,7 @@ export type ProjectUncheckedUpdateWithoutAutomationEventsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2277,6 +2482,7 @@ export type ProjectCreateWithoutAutomationRunsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2311,6 +2517,7 @@ export type ProjectUncheckedCreateWithoutAutomationRunsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2359,6 +2566,7 @@ export type ProjectUpdateWithoutAutomationRunsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2393,6 +2601,7 @@ export type ProjectUncheckedUpdateWithoutAutomationRunsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2425,6 +2634,7 @@ export type ProjectCreateWithoutTabUsageDaysInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2459,6 +2669,7 @@ export type ProjectUncheckedCreateWithoutTabUsageDaysInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2507,6 +2718,7 @@ export type ProjectUpdateWithoutTabUsageDaysInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2541,6 +2753,7 @@ export type ProjectUncheckedUpdateWithoutTabUsageDaysInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2572,6 +2785,7 @@ export type ProjectCreateWithoutNoteInput = {
   tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2606,6 +2820,7 @@ export type ProjectUncheckedCreateWithoutNoteInput = {
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2654,6 +2869,7 @@ export type ProjectUpdateWithoutNoteInput = {
   tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2688,6 +2904,7 @@ export type ProjectUncheckedUpdateWithoutNoteInput = {
   tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2720,6 +2937,7 @@ export type ProjectCreateWithoutSetupInput = {
   tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2754,6 +2972,7 @@ export type ProjectUncheckedCreateWithoutSetupInput = {
   tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2802,6 +3021,7 @@ export type ProjectUpdateWithoutSetupInput = {
   tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2836,6 +3056,7 @@ export type ProjectUncheckedUpdateWithoutSetupInput = {
   tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -2869,6 +3090,7 @@ export type ProjectCreateWithoutExclusiveAiAccountsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -2903,6 +3125,7 @@ export type ProjectUncheckedCreateWithoutExclusiveAiAccountsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -2951,6 +3174,7 @@ export type ProjectUpdateWithoutExclusiveAiAccountsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -2985,6 +3209,7 @@ export type ProjectUncheckedUpdateWithoutExclusiveAiAccountsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -3017,6 +3242,7 @@ export type ProjectCreateWithoutChatConversationsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
@@ -3051,6 +3277,7 @@ export type ProjectUncheckedCreateWithoutChatConversationsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
@@ -3099,6 +3326,7 @@ export type ProjectUpdateWithoutChatConversationsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
@@ -3133,6 +3361,7 @@ export type ProjectUncheckedUpdateWithoutChatConversationsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
@@ -3165,6 +3394,7 @@ export type ProjectCreateWithoutStandingGrantsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -3199,6 +3429,7 @@ export type ProjectUncheckedCreateWithoutStandingGrantsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -3247,6 +3478,7 @@ export type ProjectUpdateWithoutStandingGrantsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -3281,6 +3513,7 @@ export type ProjectUncheckedUpdateWithoutStandingGrantsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -3313,6 +3546,7 @@ export type ProjectCreateWithoutTabLimitNoticesInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -3347,6 +3581,7 @@ export type ProjectUncheckedCreateWithoutTabLimitNoticesInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -3395,6 +3630,7 @@ export type ProjectUpdateWithoutTabLimitNoticesInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -3429,6 +3665,7 @@ export type ProjectUncheckedUpdateWithoutTabLimitNoticesInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -3461,6 +3698,7 @@ export type ProjectCreateWithoutTabQuestionsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
@@ -3495,6 +3733,7 @@ export type ProjectUncheckedCreateWithoutTabQuestionsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
@@ -3543,6 +3782,7 @@ export type ProjectUpdateWithoutTabQuestionsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
@@ -3577,6 +3817,7 @@ export type ProjectUncheckedUpdateWithoutTabQuestionsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
@@ -3609,6 +3850,7 @@ export type ProjectCreateWithoutChatDecisionsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -3643,6 +3885,7 @@ export type ProjectUncheckedCreateWithoutChatDecisionsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -3691,6 +3934,7 @@ export type ProjectUpdateWithoutChatDecisionsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -3725,6 +3969,7 @@ export type ProjectUncheckedUpdateWithoutChatDecisionsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -3757,6 +4002,7 @@ export type ProjectCreateWithoutMemoryItemsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -3791,6 +4037,7 @@ export type ProjectUncheckedCreateWithoutMemoryItemsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -3839,6 +4086,7 @@ export type ProjectUpdateWithoutMemoryItemsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -3873,6 +4121,7 @@ export type ProjectUncheckedUpdateWithoutMemoryItemsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -3905,6 +4154,7 @@ export type ProjectCreateWithoutGroupItemsInput = {
   tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
@@ -3939,6 +4189,7 @@ export type ProjectUncheckedCreateWithoutGroupItemsInput = {
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
   note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
   setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
   tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
   tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
@@ -3987,6 +4238,7 @@ export type ProjectUpdateWithoutGroupItemsInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -4021,6 +4273,7 @@ export type ProjectUncheckedUpdateWithoutGroupItemsInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -4066,6 +4319,7 @@ export type ProjectUpdateWithoutOwnerInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -4100,6 +4354,7 @@ export type ProjectUncheckedUpdateWithoutOwnerInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -4161,6 +4416,7 @@ export type ProjectUpdateWithoutAgentColumnInput = {
   tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
@@ -4194,6 +4450,7 @@ export type ProjectUncheckedUpdateWithoutAgentColumnInput = {
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
   note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
   setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
   tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
   tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
@@ -4233,6 +4490,7 @@ export type ProjectCountOutputType = {
   machines: number
   tabs: number
   tasks: number
+  repositories: number
   tickets: number
   chatConversations: number
   tabQuestions: number
@@ -4253,6 +4511,7 @@ export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extension
   machines?: boolean | ProjectCountOutputTypeCountMachinesArgs
   tabs?: boolean | ProjectCountOutputTypeCountTabsArgs
   tasks?: boolean | ProjectCountOutputTypeCountTasksArgs
+  repositories?: boolean | ProjectCountOutputTypeCountRepositoriesArgs
   tickets?: boolean | ProjectCountOutputTypeCountTicketsArgs
   chatConversations?: boolean | ProjectCountOutputTypeCountChatConversationsArgs
   tabQuestions?: boolean | ProjectCountOutputTypeCountTabQuestionsArgs
@@ -4298,6 +4557,13 @@ export type ProjectCountOutputTypeCountTabsArgs<ExtArgs extends runtime.Types.Ex
  */
 export type ProjectCountOutputTypeCountTasksArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.TaskWhereInput
+}
+
+/**
+ * ProjectCountOutputType without action
+ */
+export type ProjectCountOutputTypeCountRepositoriesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ProjectRepositoryWhereInput
 }
 
 /**
@@ -4418,6 +4684,7 @@ export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   tasks?: boolean | Prisma.Project$tasksArgs<ExtArgs>
   note?: boolean | Prisma.Project$noteArgs<ExtArgs>
   setup?: boolean | Prisma.Project$setupArgs<ExtArgs>
+  repositories?: boolean | Prisma.Project$repositoriesArgs<ExtArgs>
   tickets?: boolean | Prisma.Project$ticketsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.Project$chatConversationsArgs<ExtArgs>
   tabQuestions?: boolean | Prisma.Project$tabQuestionsArgs<ExtArgs>
@@ -4493,6 +4760,7 @@ export type ProjectInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   tasks?: boolean | Prisma.Project$tasksArgs<ExtArgs>
   note?: boolean | Prisma.Project$noteArgs<ExtArgs>
   setup?: boolean | Prisma.Project$setupArgs<ExtArgs>
+  repositories?: boolean | Prisma.Project$repositoriesArgs<ExtArgs>
   tickets?: boolean | Prisma.Project$ticketsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.Project$chatConversationsArgs<ExtArgs>
   tabQuestions?: boolean | Prisma.Project$tabQuestionsArgs<ExtArgs>
@@ -4531,6 +4799,7 @@ export type $ProjectPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     tasks: Prisma.$TaskPayload<ExtArgs>[]
     note: Prisma.$NotePayload<ExtArgs> | null
     setup: Prisma.$ProjectSetupPayload<ExtArgs> | null
+    repositories: Prisma.$ProjectRepositoryPayload<ExtArgs>[]
     tickets: Prisma.$TicketPayload<ExtArgs>[]
     chatConversations: Prisma.$ChatConversationPayload<ExtArgs>[]
     tabQuestions: Prisma.$TabQuestionPayload<ExtArgs>[]
@@ -4986,6 +5255,7 @@ export interface Prisma__ProjectClient<T, Null = never, ExtArgs extends runtime.
   tasks<T extends Prisma.Project$tasksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tasksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   note<T extends Prisma.Project$noteArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$noteArgs<ExtArgs>>): Prisma.Prisma__NoteClient<runtime.Types.Result.GetResult<Prisma.$NotePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   setup<T extends Prisma.Project$setupArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$setupArgs<ExtArgs>>): Prisma.Prisma__ProjectSetupClient<runtime.Types.Result.GetResult<Prisma.$ProjectSetupPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  repositories<T extends Prisma.Project$repositoriesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$repositoriesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProjectRepositoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tickets<T extends Prisma.Project$ticketsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$ticketsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TicketPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatConversations<T extends Prisma.Project$chatConversationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$chatConversationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatConversationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabQuestions<T extends Prisma.Project$tabQuestionsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tabQuestionsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabQuestionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -5569,6 +5839,30 @@ export type Project$setupArgs<ExtArgs extends runtime.Types.Extensions.InternalA
    */
   include?: Prisma.ProjectSetupInclude<ExtArgs> | null
   where?: Prisma.ProjectSetupWhereInput
+}
+
+/**
+ * Project.repositories
+ */
+export type Project$repositoriesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ProjectRepository
+   */
+  select?: Prisma.ProjectRepositorySelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ProjectRepository
+   */
+  omit?: Prisma.ProjectRepositoryOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ProjectRepositoryInclude<ExtArgs> | null
+  where?: Prisma.ProjectRepositoryWhereInput
+  orderBy?: Prisma.ProjectRepositoryOrderByWithRelationInput | Prisma.ProjectRepositoryOrderByWithRelationInput[]
+  cursor?: Prisma.ProjectRepositoryWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ProjectRepositoryScalarFieldEnum | Prisma.ProjectRepositoryScalarFieldEnum[]
 }
 
 /**

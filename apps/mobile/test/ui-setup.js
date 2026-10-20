@@ -39,7 +39,7 @@ jest.mock('react-native-mmkv', () => require('./fakes/mmkv'));
 jest.mock('expo-secure-store', () => require('./fakes/secure-store'));
 jest.mock('expo-device', () => require('./fakes/expo-device'));
 jest.mock('expo-application', () => ({ nativeApplicationVersion: '0.1.0', nativeBuildVersion: '1' }));
-jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true }));
+jest.mock('expo-updates', () => ({ updateId: null, isEmbeddedLaunch: true, createdAt: null }));
 jest.mock('expo-local-authentication', () => require('./fakes/local-auth'));
 jest.mock('expo-notifications', () => require('./fakes/expo-notifications'));
 jest.mock('expo-tracking-transparency', () => require('./fakes/expo-tracking-transparency'));
@@ -62,3 +62,6 @@ jest.mock('expo-document-picker', () => require('./fakes/document-picker'));
 
 // No native clipboard under jest; the fake keeps the copied text and can be told to fail.
 jest.mock('expo-clipboard', () => require('./fakes/expo-clipboard'));
+
+// The bubble's audio player (TER-1036): no native audio under jest.
+jest.mock('expo-audio', () => require('./fakes/expo-audio'));

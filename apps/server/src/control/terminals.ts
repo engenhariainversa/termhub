@@ -8,7 +8,7 @@ import { nextTerminalName } from '../lib/tab-names.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import { removeTabMcp } from '../terminal/tab-mcp.js';
 import { recordInputOrigin, type InputOrigin } from '../terminal/input-origin.js';
-import { ensureSession, INPUT_MAX_CHARS, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION } from '../terminal/session-ops.js';
+import { ensureSession, INPUT_MAX_CHARS, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION, typeCommandLine } from '../terminal/session-ops.js';
 import { ControlError, type ControlContext } from './context.js';
 import { deriveInputOrigin, verifyOnBehalfOf } from './input-origin.js';
 import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES, waitForState } from './screen.js';
@@ -137,6 +137,18 @@ export async function sendInput(
     await sendTextToSession(machine, session, input.text, enter);
   }
   return { tab_id: tab.id, sent: true };
+}
+
+/**
+ * Types a shell command line into a tab sitting at its shell and runs it: the line that resumes an exited
+ * agent (TER-988). It goes through `typeCommandLine`, so a line too long to type safely (an automatic
+ * tab's resume line, with its allow and deny lists, runs past 1 KB) is sourced from a file on the machine.
+ * No origin is recorded: a shell line is never the prompt Claude Code submits.
+ */
+export async function typeCommandInTab(ctx: ControlContext, tabId: string, line: string): Promise<void> {
+  const { machine, cwd, session } = await terminal(ctx, tabId);
+  await ensureSession(machine, session, cwd);
+  await typeCommandLine(machine, session, line);
 }
 
 /** Presses one key from the closed list in the tab. */

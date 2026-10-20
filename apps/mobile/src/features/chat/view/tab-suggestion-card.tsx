@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
-import { CODEX_REPLY_PLACEHOLDER, CONTEXT_PREVIEW_MAX, isReplyCard, lastParagraph, suggestionFieldLabel, suggestionHint, suggestionStatusLabel, suggestionTitle } from '../model/tab-suggestion-text';
+import { CODEX_REPLY_PLACEHOLDER, CONTEXT_PREVIEW_MAX, isReplyCard, lastParagraph, suggestionFieldLabel, suggestionFieldMax, suggestionHint, suggestionStatusLabel, suggestionTitle } from '../model/tab-suggestion-text';
 import type { TabSuggestion } from '../model/types';
 
 type Props = {
@@ -39,7 +39,7 @@ export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, b
       {open ? (
         <View className="gap-2">
           {codex ? null : <AppText variant="muted">{fieldLabel}</AppText>}
-          <TextInput accessibilityLabel={label} placeholder={codex ? t(CODEX_REPLY_PLACEHOLDER) : undefined} value={text} maxLength={2000} editable={!busy} onChangeText={setText} className={INPUT} />
+          <TextInput accessibilityLabel={label} placeholder={codex ? t(CODEX_REPLY_PLACEHOLDER) : undefined} value={text} maxLength={suggestionFieldMax(suggestion)} editable={!busy} onChangeText={setText} className={INPUT} />
           <View className="flex-row gap-2">
             <View className="flex-1">
               <Button label={t('Enviar')} onPress={() => onSend(suggestion.id, trimmed)} disabled={busy || !trimmed} />

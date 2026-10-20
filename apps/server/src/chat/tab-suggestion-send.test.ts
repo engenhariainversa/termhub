@@ -9,7 +9,12 @@ import { HttpError, notFound } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from './bus.js';
 
 const sendInput = vi.fn(async (_ctx: unknown, input: { tab_id: string }) => ({ tab_id: input.tab_id, sent: true }));
-vi.mock('../control/terminals.js', async (orig) => ({ ...(await orig<typeof import('../control/terminals.js')>()), sendInput: (...a: unknown[]) => sendInput(a[0], a[1] as never) }));
+const typeCommandInTab = vi.fn(async (_ctx: unknown, _tabId: string, _line: string) => {});
+vi.mock('../control/terminals.js', async (orig) => ({
+  ...(await orig<typeof import('../control/terminals.js')>()),
+  sendInput: (...a: unknown[]) => sendInput(a[0], a[1] as never),
+  typeCommandInTab: (...a: unknown[]) => typeCommandInTab(a[0], a[1] as string, a[2] as string),
+}));
 const captureStyledScreen = vi.fn();
 
 const captureScreen = vi.fn();
@@ -80,7 +85,20 @@ describe('sendTabSuggestion — a resume card (TER-643)', () => {
     await sendTabSuggestion(ctx, 's1', { text: LINE }, { log: log() });
     expect(paneForeground).toHaveBeenCalledWith({ id: 'm1', type: 'agent' }, 'th-t1');
     expect(captureStyledScreen).not.toHaveBeenCalled();
-    expect(sendInput).toHaveBeenCalledWith(ctx, { tab_id: 't1', text: LINE, enter: true });
+    // a shell line: typeCommandInTab, which sources a long one from a file (TER-988)
+    expect(typeCommandInTab).toHaveBeenCalledWith(ctx, 't1', LINE);
+    expect(sendInput).not.toHaveBeenCalled();
+  });
+
+  it('takes an automatic tab\'s resume line past the 2000-character cap of a typed answer (TER-988)', async () => {
+    const long = `claude --permission-mode acceptEdits --allowedTools ${"'Bash(git status:*)' ".repeat(150)}--resume x -- 'Continue'`;
+    expect(long.length).toBeGreaterThan(2000);
+    paneForeground.mockResolvedValueOnce('shell');
+    const { ctx } = ctxFor(row({ payload: { text: long, exited: true, last_at: null } }), { tab: { state: 'idle' } });
+    await sendTabSuggestion(ctx, 's1', { text: long }, { log: log() });
+    expect(typeCommandInTab).toHaveBeenCalledWith(ctx, 't1', long);
+    // a suggestion that is not a resume line keeps the cap
+    await expect(sendTabSuggestion(ctxFor(row()).ctx, 's1', { text: 'x'.repeat(2001) }, { log: log() })).rejects.toBeInstanceOf(ZodError);
   });
 
   it('409 and the card closes once something else runs in the pane, or the tab moved on', async () => {
@@ -91,7 +109,7 @@ describe('sendTabSuggestion — a resume card (TER-643)', () => {
 
     const moved = ctxFor(exited(), { tab: { state: 'working' } });
     await rejects(sendTabSuggestion(moved.ctx, 's1', { text: LINE }, { log: log() }), 409, 'TAB_PROMPT_CHANGED');
-    expect(sendInput).not.toHaveBeenCalled();
+    expect(typeCommandInTab).not.toHaveBeenCalled();
   });
 });
 

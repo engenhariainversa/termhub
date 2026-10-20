@@ -25,8 +25,8 @@ none of them fits there.
 into `git --no-pager <sub>` and `git -C <worktree> <sub>` (the path as is, with a trailing `/` and as `.`,
 with `--no-pager` on either side), only for the run's own worktree. The options that run a program or
 write a file get the same forms in `AUTOMATION_FORM_DENIED_TOOLS`. The forms go on the lines that pass
-through a launch file (start, account swap: `AgentPermission.worktree`); `resumeCommandFor` leaves them out
-until TER-988 moves it to a launch file too. The run prompt (`SHELL_LINE`) says the cwd already is the
+through a launch file (start, account swap: `AgentPermission.worktree`); since TER-988 the resume line
+(`resumeCommandFor`) goes through one too and carries them as well. The run prompt (`SHELL_LINE`) says the cwd already is the
 worktree, so `git -C` and `cd` are not needed, and not to use `sed -i` (seen on TER-976: Claude Code always
 asks for it).
 

@@ -1,7 +1,9 @@
-import { CAPABILITY_WORKTREE, WORKTREE_MIN_AGENT_VERSION } from '@termhub/agent-protocol';
+import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
+import { GUARD_MIN_AGENT_VERSION, guardSupported } from '../terminal/tab-mcp.js';
 import { usableIn } from '../ai/exclusive.js';
+import { expiresSoon } from '../ai/login-expiry.js';
 import { accountsOn } from '../ai/project-accounts.js';
 import { peakUtilization } from '../control/account-swap.js';
 import { getAccountUsage } from '../ai/index.js';
@@ -35,7 +37,7 @@ export interface TickStarts {
 }
 
 /** Why a linked machine was left out (TER-985: the waiting reason names each one). */
-export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_claude' | 'not_allowed' | 'no_room';
+export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_guard' | 'no_claude' | 'not_allowed' | 'no_room';
 /**
  * Why a Claude account of a usable machine was left out: not in the project's list ("Contas de IA e
  * modelo"), marked exhausted, at or above `AUTOMATIC_MAX_UTILIZATION`, already given a start this tick,
@@ -57,14 +59,17 @@ export type Placement =
   | { waiting: WaitingReason | 'later'; detail?: PlaceDetail };
 
 /** An agent machine of the project's owner that answers the worktree RPC right now (D10). */
-const capableNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
-/** An agent recent enough for worktrees that is not connected: the card waits for it, not for an update. */
-const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, WORKTREE_MIN_AGENT_VERSION);
+const worktreeNow = (m: Machine) => (agents.capabilities(m.id) ?? []).includes(CAPABILITY_WORKTREE);
+/** …and has the hard-lock guard script (agent 0.19.0, TER-993): a run never starts without it (TER-1005). */
+const capableNow = (m: Machine) => worktreeNow(m) && guardSupported(m);
+/** An agent recent enough for automatic work that is not connected: the card waits for it, not for an update. */
+const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, GUARD_MIN_AGENT_VERSION);
 
 function machineVerdict(m: Machine): MachineVerdict | null {
   if (m.type !== 'agent') return 'not_agent';
   if (!agents.isOnline(m.id)) return 'offline';
-  if (!capableNow(m)) return 'no_worktree';
+  if (!worktreeNow(m)) return 'no_worktree';
+  if (!guardSupported(m)) return 'no_guard';
   if (!m.capabilities.includes('claude')) return 'no_claude';
   if (!m.automation_allowed) return 'not_allowed';
   return null;
@@ -73,7 +78,8 @@ function machineVerdict(m: Machine): MachineVerdict | null {
 /**
  * Where an automatic run starts (spec §8 step 3, D10, D14, spike R6): an online agent machine linked to the
  * project that accepts automatic work (`automation_allowed`), with the worktree capability and Claude
- * installed, under the first Claude account of the project's list (in its order) that is on that machine, is
+ * installed, under the first Claude account of the project's list (in its order, the ones whose login
+ * expires within three days last, TER-1079) that is on that machine, is
  * not marked exhausted and has room (peak utilization below `AUTOMATIC_MAX_UTILIZATION`; unknown usage
  * counts as room, as for `start_agent`), on a machine with room (`deps.room`). Unlike `start_agent`, it never
  * falls back to a full account: the card waits instead, with `detail` naming each machine and account left
@@ -105,7 +111,12 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
   const nameOf = new Map(ready.map(({ machine }) => [machine.id, machine.name]));
-  const candidates = ready.flatMap(({ machine }) => accountsOn(project.id, ai, listed, machine.id, 'claude')).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  // TER-1079: a login about to expire goes after the ones with slack (a long run could outlive it); among
+  // equals the project's order decides. A preference only: when it is the one account left, it is used.
+  const soon = (a: AiAccount) => (expiresSoon(a.login_expires_at, deps.now()) ? 1 : 0);
+  const candidates = ready
+    .flatMap(({ machine }) => accountsOn(project.id, ai, listed, machine.id, 'claude'))
+    .sort((x, y) => soon(x) - soon(y) || ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
   const left = (account: AiAccount, why: AccountVerdict, peak?: number) =>
     detail.accounts.push({ id: account.id, label: account.label, machine: nameOf.get(account.machine_id) ?? account.machine_id, why, ...(peak === undefined ? {} : { peak }) });
   const inList = new Set(candidates.map((a) => a.id));

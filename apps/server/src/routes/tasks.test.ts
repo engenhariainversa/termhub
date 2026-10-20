@@ -59,8 +59,20 @@ function buildApp(tasks: Record<string, Task>, ownerId: string | null = null) {
         : [],
     ),
   };
+  const feed = vi.fn(async (_opts: { taskIds?: string[] }) => [
+    {
+      event: { id: 'v1', project_id: 'p1', task_id: 't1', run_id: 'r1', kind: 'pr_opened' as const, payload: { pr: 9, url: 'https://gh/pr/9', branch: 'b1' }, created_at: '2026-10-06T00:00:00.000Z' },
+      ref: 'P1-1',
+      epic: null,
+      machine: 'jarvis',
+      account: null,
+      tab_id: 'tab1',
+      branch: 'b1',
+    },
+  ]);
   const repos = {
     tasks: tasksRepo,
+    progress: { feed },
     tickets: { unlinkTask },
     taskColumns: { list: vi.fn(async () => [column]) },
     taskPullRequests,
@@ -71,7 +83,7 @@ function buildApp(tasks: Record<string, Task>, ownerId: string | null = null) {
   } as unknown as Repositories;
   app.register((a) => projectTaskRoutes(a, repos), { prefix: '/projects' });
   app.register((a) => taskRoutes(a, repos), { prefix: '/tasks' });
-  return { app, tasksRepo, unlinkTask };
+  return { app, tasksRepo, unlinkTask, feed };
 }
 
 let store: Record<string, Task>;
@@ -254,5 +266,26 @@ describe('task routes: pull requests', () => {
   it('is 404 outside the scope', async () => {
     const { app } = buildApp(store, 'u1');
     expect((await app.inject({ method: 'GET', url: '/tasks/x9/pull-requests' })).statusCode).toBe(404);
+  });
+});
+
+describe('task routes: activity (the card page)', () => {
+  it('reads the automatic events of the card and its subtasks', async () => {
+    const { app, feed } = buildApp(store, 'u1');
+    const r = await app.inject({ method: 'GET', url: '/tasks/t1/activity' });
+    expect(r.statusCode).toBe(200);
+    expect(feed).toHaveBeenCalledWith(expect.objectContaining({ owner: 'u1', projectId: 'p1', taskIds: ['t1', 'c1', 'c2'] }));
+    expect(r.json().events).toEqual([expect.objectContaining({ id: 'v1', kind: 'pr_opened', ref: 'P1-1', pr: 9, url: 'https://gh/pr/9' })]);
+  });
+
+  it('leaves the machine, the tab and the branch out without terminals:read', async () => {
+    const { app } = buildApp(store, 'u1');
+    expect((await app.inject({ method: 'GET', url: '/tasks/t1/activity' })).json().events[0]).toMatchObject({ machine: null, tab_id: null, branch: null });
+  });
+
+  it('is 404 outside the scope', async () => {
+    const { app, feed } = buildApp(store, 'u1');
+    expect((await app.inject({ method: 'GET', url: '/tasks/x9/activity' })).statusCode).toBe(404);
+    expect(feed).not.toHaveBeenCalled();
   });
 });

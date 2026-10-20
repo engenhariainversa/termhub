@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { replyLabel } from '../model/reply';
 import type { ChatMessage } from '../model/types';
+import { LinkedText } from './linked-text';
 
 const UNAVAILABLE_MS = 3000;
 
@@ -36,7 +37,7 @@ export function ReplyQuote({ reply, onOpen }: { reply: NonNullable<ChatMessage['
       <View className="shrink">
         <Text className="text-xs font-semibold text-white">{author}</Text>
         <Text className="text-sm text-white/80" numberOfLines={2}>
-          {reply.excerpt}
+          <LinkedText text={reply.excerpt} />
         </Text>
         {unavailable ? <Text className="pt-0.5 text-xs text-white/80">{reply.card ? t('Card original indisponível') : t('Mensagem original indisponível')}</Text> : null}
       </View>

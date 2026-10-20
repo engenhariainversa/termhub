@@ -21,11 +21,34 @@ export const EMPTY_EDITOR_TABS: EditorTabs = { open: [], preview: null };
 /**
  * A file preview tab (spec 2026-10-04 file preview D14): the same list, the same preview and pin, keyed by
  * the path as the answer wrote it. Its id never collides with a terminal's (`[a-z0-9]` ids).
+ *
+ * A file read on a given machine (`?machine=`, TER-973) carries it: `file@<machineId>:<path>`, so the same
+ * `~/relatorio.md` on two machines of the project is two tabs. `file:<path>` is a file with no machine (the
+ * server looks for it on the project's machines), which is also what every id stored before TER-973 reads as.
  */
 export const FILE_TAB_PREFIX = 'file:';
-export const fileTabId = (path: string) => `${FILE_TAB_PREFIX}${path}`;
-export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX);
-export const filePathOf = (id: string) => id.slice(FILE_TAB_PREFIX.length);
+const FILE_ON_MACHINE_PREFIX = 'file@';
+export const fileTabId = (path: string, machineId?: string | null) =>
+  machineId ? `${FILE_ON_MACHINE_PREFIX}${machineId}:${path}` : `${FILE_TAB_PREFIX}${path}`;
+export const isFileTabId = (id: string) => id.startsWith(FILE_TAB_PREFIX) || id.startsWith(FILE_ON_MACHINE_PREFIX);
+/** The path and machine of a file tab id; machineId null = any machine of the project. */
+export function fileOfTab(id: string): { path: string; machineId: string | null } {
+  if (id.startsWith(FILE_ON_MACHINE_PREFIX)) {
+    const sep = id.indexOf(':', FILE_ON_MACHINE_PREFIX.length);
+    if (sep > FILE_ON_MACHINE_PREFIX.length) return { path: id.slice(sep + 1), machineId: id.slice(FILE_ON_MACHINE_PREFIX.length, sep) };
+  }
+  return { path: id.slice(FILE_TAB_PREFIX.length), machineId: null };
+}
+export const filePathOf = (id: string) => fileOfTab(id).path;
+
+/**
+ * A terminal's conversation in a tab of its own (TER-1003): a Claude Code tab read from its transcript,
+ * so it can sit in a pane next to its terminal. Keyed by the terminal's id; it goes when the terminal goes.
+ */
+export const CHAT_TAB_PREFIX = 'chat:';
+export const chatTabId = (terminalId: string) => `${CHAT_TAB_PREFIX}${terminalId}`;
+export const isChatTabId = (id: string) => id.startsWith(CHAT_TAB_PREFIX);
+export const terminalOfChat = (id: string) => id.slice(CHAT_TAB_PREFIX.length);
 
 /** Opens `id` as the preview tab, in place of the current preview; an already open tab keeps its state. */
 export function previewTab(s: EditorTabs, id: string): EditorTabs {
@@ -46,9 +69,9 @@ export function closeEditorTab(s: EditorTabs, id: string): EditorTabs {
 }
 
 /** Drops the ids that are not terminals of the project any more (ended elsewhere, a machine unlinked).
- *  File tabs stay: a file is not a terminal of the list. */
+ *  File tabs stay: a file is not a terminal of the list. A conversation goes with its terminal. */
 export function pruneEditorTabs(s: EditorTabs, known: ReadonlySet<string>): EditorTabs {
-  const keep = (id: string) => known.has(id) || isFileTabId(id);
+  const keep = (id: string) => known.has(id) || isFileTabId(id) || (isChatTabId(id) && known.has(terminalOfChat(id)));
   if (s.open.every(keep)) return s;
   const open = s.open.filter(keep);
   return { open, preview: s.preview && keep(s.preview) ? s.preview : null };
@@ -133,7 +156,7 @@ const endedListeners = new Set<(projectId: string, tabId: string) => void>();
 
 /** The sidebar ended a terminal: its tab closes, and the project's terminal view drops it. */
 export function announceTerminalEnded(projectId: string, tabId: string) {
-  updateEditorTabs(projectId, (s) => closeEditorTab(s, tabId));
+  updateEditorTabs(projectId, (s) => closeEditorTab(closeEditorTab(s, tabId), chatTabId(tabId)));
   for (const l of endedListeners) l(projectId, tabId);
 }
 

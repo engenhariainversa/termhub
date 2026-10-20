@@ -10,7 +10,9 @@ import { failureSentence } from '../model/copy';
 import { limitSentence, swapSentence } from '../model/notice';
 import { splitSettled } from '../model/markdown-split';
 import type { ChatMessage } from '../model/types';
-import { codeRules } from './code-block';
+import { isWebUrl } from '../model/links';
+import { chatMarkdownIt, chatMarkdownRules } from './chat-links';
+import { LinkedText } from './linked-text';
 import { markdownStyle } from './markdown-style';
 import { MessageAttachments } from './message-attachments';
 import { ReplyQuote } from './reply-quote';
@@ -32,13 +34,13 @@ type Props = {
   fileContext?: { projectId?: string | null; tabId?: string | null };
 };
 
-/** A tap on a link of the answer: a Markdown path opens its preview; any other link, the system's way. */
-type OnLink = ((url: string) => boolean) | undefined;
+/** A tap on a link of the answer: a Markdown path opens its preview; an http(s) URL, the system's browser. */
+type OnLink = (url: string) => boolean;
 
 /** The part of a streaming answer that no later delta can change: parsed once per distinct text. */
 const SettledMarkdown = memo(function SettledMarkdown({ text, scheme, onLink }: { text: string; scheme: SchemeName; onLink: OnLink }) {
   return (
-    <Markdown style={markdownStyle(scheme)} rules={codeRules} onLinkPress={onLink}>
+    <Markdown style={markdownStyle(scheme)} rules={chatMarkdownRules} markdownit={chatMarkdownIt} onLinkPress={onLink}>
       {text}
     </Markdown>
   );
@@ -58,12 +60,13 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
   const linking = fileContext !== undefined;
   const onLink = useCallback(
     (url: string) => {
-      const path = filePathOfLink(url);
-      if (path === null) return true;
+      const path = linking ? filePathOfLink(url) : null;
+      // Only http(s) leaves the app (TER-1089): no `javascript:`, `file:` or another app's scheme.
+      if (path === null) return isWebUrl(url);
       router.push(filePreviewRoute(path, { projectId, tabId }));
       return false;
     },
-    [projectId, tabId],
+    [linking, projectId, tabId],
   );
 
   if (message.role === 'user') {
@@ -75,7 +78,11 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
         {/* The border is always there, transparent until a quote scrolls here: the row never changes size. */}
         <View className={`rounded-2xl border-2 bg-app-accent px-4 py-2.5 ${highlighted ? 'border-white/70' : 'border-transparent'} ${message.local === 'sending' ? 'opacity-60' : ''}`}>
           {message.reply_to ? <ReplyQuote reply={message.reply_to} onOpen={onOpenReply} /> : null}
-          {message.text ? <Text className="text-base text-white">{message.text}</Text> : null}
+          {message.text ? (
+            <Text className="text-base text-white">
+              <LinkedText text={message.text} />
+            </Text>
+          ) : null}
           {attachments.length > 0 ? <MessageAttachments attachments={attachments} /> : null}
         </View>
         {message.local === 'failed' ? (
@@ -96,9 +103,9 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
   return (
     <View className={`max-w-[92%] gap-1 self-start rounded-2xl border-2 bg-app-surface px-4 py-2.5 ${highlighted ? 'border-app-accent' : 'border-transparent'}`}>
       {message.notice?.kind === 'account_swap' ? <AppText variant="muted">{swapSentence(message.notice)}</AppText> : null}
-      {settled ? <SettledMarkdown text={settled} scheme={scheme} onLink={linking ? onLink : undefined} /> : null}
+      {settled ? <SettledMarkdown text={settled} scheme={scheme} onLink={onLink} /> : null}
       {tail ? (
-        <Markdown style={markdownStyle(scheme)} rules={codeRules} onLinkPress={linking ? onLink : undefined}>
+        <Markdown style={markdownStyle(scheme)} rules={chatMarkdownRules} markdownit={chatMarkdownIt} onLinkPress={onLink}>
           {tail}
         </Markdown>
       ) : null}

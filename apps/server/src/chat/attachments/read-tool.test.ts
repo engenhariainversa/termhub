@@ -53,14 +53,31 @@ describe('readAttachment', () => {
   it('pending and failed rows answer a sentence instead of content (Review Focus 2)', async () => {
     const pending = await readAttachment(ctxFor([row({ status: 'pending', extracted_text: null, meta: null })]), { id: 'abc123' });
     expect(pending.content).toEqual([{ type: 'text', text: '«relatorio.pdf» ainda está sendo processado; tente de novo em alguns segundos.' }]);
+    // TER-1085: a pending audio says the server delivers it, so the model never asks the person for an "ok".
+    const audio = await readAttachment(ctxFor([row({ name: 'audio.m4a', kind: 'audio', mime: 'audio/mp4', status: 'pending', extracted_text: null, meta: null })]), { id: 'abc123' });
+    expect(audio.content).toEqual([
+      {
+        type: 'text',
+        text: '«audio.m4a» ainda está sendo transcrito: transcrição ainda em andamento; o servidor entrega o texto nesta conversa assim que ficar pronto, sem a pessoa precisar escrever nada. Pode tentar ler de novo em alguns segundos, mas não peça à pessoa para mandar outra mensagem.',
+      },
+    ]);
     for (const [code, reason] of [
       ['ATTACHMENT_INVALID', 'o arquivo não pôde ser lido'],
-      ['TRANSCRIPTION_UNAVAILABLE', 'a transcrição de áudio não está configurada neste servidor, então não há transcrição'],
+      ['TRANSCRIPTION_UNAVAILABLE', 'o serviço de transcrição não respondeu, então não há transcrição'],
       ['TRANSCRIPTION_FAILED', 'a transcrição do áudio falhou'],
     ]) {
       const failed = await readAttachment(ctxFor([row({ status: 'failed', error_code: code, extracted_text: null, meta: null })]), { id: 'abc123' });
       expect(failed.content).toEqual([{ type: 'text', text: `«relatorio.pdf» não pôde ser processado: ${reason}.` }]);
     }
+  });
+
+  it('an unavailable transcription says why, from meta.reason (TER-1035)', async () => {
+    const read = async (reason: string) =>
+      ((await readAttachment(ctxFor([row({ status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', extracted_text: null, meta: { reason } })]), { id: 'abc123' })).content[0] as { text: string }).text;
+    expect(await read('not_configured')).toMatch(/não está configurada neste servidor/);
+    expect(await read('refused')).toMatch(/recusou o acesso do servidor .*Tentar de novo/);
+    expect(await read('unreachable')).toMatch(/fora do ar.*Tentar de novo/);
+    expect(await read('whatever')).toMatch(/não respondeu/);
   });
 
   it('a ready row with nothing extracted, and a file that is gone, each say so', async () => {

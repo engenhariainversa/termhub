@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
-import type { ApiToken, ApiTokenScope, CreatedApiToken } from '../lib/types';
+import type { ApiToken, ApiTokenEvent, ApiTokenScope, CreatedApiToken } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
-import { formatDate } from '../lib/format';
+import { formatDate, formatDateTime, formatNumber } from '../lib/format';
 import { tk, useTranslation } from '../i18n';
 
 const SCOPES: { key: ApiTokenScope; label: string; short: string; hint: string }[] = [
@@ -42,6 +42,7 @@ export function ApiTokensView() {
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
+  const [activity, setActivity] = useState<ApiToken | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -111,7 +112,10 @@ export function ApiTokensView() {
                     <td className="py-1.5 pr-3">
                       {status === 'revoked' ? t('revogado') : status === 'expired' ? t('expirado') : fmtDate(tok.expires_at, t('sem validade'))}
                     </td>
-                    <td className="py-1.5 text-right">
+                    <td className="whitespace-nowrap py-1.5 text-right">
+                      <button className="btn-ghost px-2 py-0.5 text-xs" aria-label={t('Atividade de {{name}}', { name: tok.name })} onClick={() => setActivity(tok)}>
+                        {t('Atividade')}
+                      </button>
                       {status !== 'revoked' && can('api_tokens', 'delete') && (
                         <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={t('Revogar {{name}}', { name: tok.name })} onClick={() => setRevoking(tok)}>
                           {t('Revogar')}
@@ -137,6 +141,7 @@ export function ApiTokensView() {
         />
       )}
       {created && <CreatedTokenModal created={created} onClose={() => setCreated(null)} />}
+      {activity && <TokenActivityModal token={activity} onClose={() => setActivity(null)} />}
       <ConfirmDialog
         open={!!revoking}
         title={t('Revogar token')}
@@ -216,6 +221,78 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </button>
         </div>
       </form>
+    </Modal>
+  );
+}
+
+/** Where a call acted, by the names the rows have now. */
+export function eventPlace(e: ApiTokenEvent): string {
+  return [e.machine_name ?? e.machine_id, e.project_name ?? e.project_id, e.tab_name ?? e.tab_id].filter(Boolean).join(' · ');
+}
+
+/** The token's MCP calls (TER-577): what it did, where, whether it worked. Metadata only. */
+function TokenActivityModal({ token, onClose }: { token: ApiToken; onClose: () => void }) {
+  const { t } = useTranslation();
+  const [events, setEvents] = useState<ApiTokenEvent[] | null>(null);
+  const [retention, setRetention] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    api.apiTokens
+      .events(token.id)
+      .then((r) => {
+        if (!live) return;
+        setEvents(r.events);
+        setRetention(r.retention_days);
+      })
+      .catch((e: unknown) => live && setError(e instanceof ApiError ? e.message : t('Erro ao carregar a atividade')));
+    return () => {
+      live = false;
+    };
+  }, [token.id]);
+
+  return (
+    <Modal title={t('Atividade de {{name}}', { name: token.name })} open onClose={onClose} width="max-w-3xl">
+      <div className="space-y-3">
+        {retention !== null && <p className="text-xs text-fg-dim">{t('Chamadas ao MCP dos últimos {{days}} dias, as mais recentes primeiro.', { days: retention })}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
+        {events === null ? (
+          !error && <p className="text-sm text-fg-dim">{t('Carregando…')}</p>
+        ) : events.length === 0 ? (
+          <p className="text-sm text-fg-dim">{t('Nenhuma chamada registrada.')}</p>
+        ) : (
+          <div className="max-h-[60vh] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-fg-dim">
+                <tr>
+                  <th className="py-1 pr-3 font-normal">{t('Quando')}</th>
+                  <th className="py-1 pr-3 font-normal">{t('Ferramenta')}</th>
+                  <th className="py-1 pr-3 font-normal">{t('Onde')}</th>
+                  <th className="py-1 pr-3 font-normal">{t('Resultado')}</th>
+                  <th className="py-1 text-right font-normal">{t('Duração')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map((e) => (
+                  <tr key={e.id} className="border-t border-line">
+                    <td className="whitespace-nowrap py-1.5 pr-3">{formatDateTime(e.created_at)}</td>
+                    <td className="py-1.5 pr-3 font-mono text-xs">{e.tool}</td>
+                    <td className="py-1.5 pr-3">{eventPlace(e) || '—'}</td>
+                    <td className={`py-1.5 pr-3 ${e.ok ? '' : 'text-danger'}`}>{e.ok ? t('ok') : (e.error_code ?? t('erro'))}</td>
+                    <td className="whitespace-nowrap py-1.5 text-right">{t('{{ms}} ms', { ms: formatNumber(e.duration_ms) })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="flex justify-end pt-2">
+          <button className="btn-primary" onClick={onClose}>
+            {t('Fechar')}
+          </button>
+        </div>
+      </div>
     </Modal>
   );
 }

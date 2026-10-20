@@ -1,15 +1,20 @@
 import { useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
+import { aiLoginRoute } from '@/features/ai-login/model/ai-login';
 import { usePermissionsStore } from '@/features/permissions/viewmodel/usePermissionsStore';
 import { relativeTime } from '@/features/shared/relative-time';
 import type { TNotificationRow } from '@/services/api/contract';
+import { pushAiLoginAccountId } from '@/services/push';
 import { useTranslation } from '@/i18n';
 import { AppText, Banner, EmptyState, Screen } from '@/ui';
 import { useNotificationsStore } from '../viewmodel/useNotificationsStore';
 
-/** `data.project_id` when it is a string, else the general chat (design spec §7, ruling). */
+/** An expired AI login's "Refazer login" modal (TER-1047: the row is a `confirmation` whose `data.kind`
+ * is `ai_login`), else `data.project_id` when it is a string, else the general chat (design spec §7, ruling). */
 function routeFor(row: TNotificationRow): Href {
+  const accountId = pushAiLoginAccountId(row.data);
+  if (accountId) return aiLoginRoute(accountId) as Href;
   const projectId = (row.data as { project_id?: unknown } | null)?.project_id;
   return (typeof projectId === 'string' ? `/chat/${projectId}` : '/chat/general') as Href;
 }

@@ -279,3 +279,27 @@ it('send_input and send_key accept optional sources and reason, and refuse a mal
     expect(parseArgs(tool, { ...base, reason: '  ' }).ok).toBe(false);
   }
 });
+
+describe('admin_user_troubleshoot (TER-1092)', () => {
+  const ctxAs = (isAdminRole: boolean) =>
+    ({
+      can: async () => true,
+      repos: { roles: { findById: async (id: string) => ({ id, is_admin: isAdminRole }), permissionsOf: async () => [] } },
+      scope: { user: { id: isAdminRole ? 'adm' : 'mem', email: 'x@x.dev', role_id: isAdminRole ? 'r-adm-1092' : 'r-mem-1092' } },
+    }) as unknown as ControlContext;
+
+  it('is listed only to an admin, whatever the grants', async () => {
+    expect((await allowedTools(ctxAs(true), ['read'])).some((t) => t.name === 'admin_user_troubleshoot')).toBe(true);
+    expect((await allowedTools(ctxAs(false), ['read'])).some((t) => t.name === 'admin_user_troubleshoot')).toBe(false);
+  });
+
+  it('requires a reason and refuses unknown arguments', () => {
+    const t = TOOLS.find((x) => x.name === 'admin_user_troubleshoot')!;
+    expect(parseArgs(t, { endpoint: 'requests', user_id: 'u1', reason: 'TER-1091' }).ok).toBe(true);
+    expect(parseArgs(t, { endpoint: 'requests', user_id: 'u1' }).ok).toBe(false);
+    expect(parseArgs(t, { endpoint: 'requests', user_id: 'u1', reason: '  ' }).ok).toBe(false);
+    expect(parseArgs(t, { endpoint: 'requests', user_id: 'u1', reason: 'TER-1091', sql: 'select 1' }).ok).toBe(false);
+    expect(parseArgs(t, { endpoint: 'dump', user_id: 'u1', reason: 'TER-1091' }).ok).toBe(false);
+    expect(parseArgs(t, { endpoint: 'requests', user_id: 'u1', reason: 'TER-1091', route_prefix: '/api/tabs?x=1' }).ok).toBe(false);
+  });
+});

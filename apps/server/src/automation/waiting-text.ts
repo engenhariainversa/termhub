@@ -5,6 +5,7 @@ const MACHINE_TEXT: Record<MachineVerdict, string> = {
   not_agent: tk('não é uma máquina com agente'),
   offline: tk('agente desligado'),
   no_worktree: tk('agente sem worktree (precisa da 0.18)'),
+  no_guard: tk('agente sem a trava; atualize o agente (0.19)'),
   no_claude: tk('sem o Claude instalado'),
   not_allowed: tk('não aceita trabalho automático'),
   no_room: tk('sem folga (memória/disco/carga)'),

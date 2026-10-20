@@ -4,8 +4,8 @@
 //
 // Keys are the pt-BR text, found as literal first arguments of `t('…')`, `i18n.t('…')` and
 // `tk('…')` (a label kept in data, translated where it is shown). It fails when:
-//   - a key has no `en` entry (a plural key — `t('…', { count })` — needs `_one` and `_other` in
-//     both `en` and `pt-BR`);
+//   - a key has no `en` or `es` entry (a plural key — `t('…', { count })` — needs `_one` and
+//     `_other` in `en`, `es` and `pt-BR`);
 //   - an entry's `{{placeholders}}` differ from its key's (a plural form may drop `{{count}}`);
 //   - a catalog entry is no longer used, or two area files give one key different texts;
 //   - in a GUARDED folder, JSX text, a string literal in a text attribute (`title`, `placeholder`,
@@ -20,6 +20,9 @@ const ts = require('typescript');
 
 const ROOT = path.resolve(__dirname, '..');
 const SOURCE_DIRS = ['app', 'src'];
+
+/** The languages translated from pt-BR, each with a full catalog under src/locales/<lang>/. */
+const TARGET_LOCALES = ['en', 'es'];
 
 /** Folders (relative to apps/mobile, `/`-separated) the untranslated-copy guard covers. */
 const GUARDED = ['app', 'src'];
@@ -200,13 +203,15 @@ function checkI18n() {
   const keys = new Map();
   for (const dir of SOURCE_DIRS) for (const file of listSources(path.join(ROOT, dir))) scanFile(file, keys, problems);
 
-  const en = loadCatalogs('en', problems);
+  // Every language but pt-BR (the keys' own language) has a full catalog.
+  const targets = TARGET_LOCALES.map((lang) => [lang, loadCatalogs(lang, problems)]);
+  const en = targets[0][1];
   const pt = loadCatalogs('pt-BR', problems);
 
   for (const [key, info] of keys) {
     const keyVars = placeholders(key);
     if (info.plural) {
-      for (const [lang, catalog] of [['en', en], ['pt-BR', pt]]) {
+      for (const [lang, catalog] of [...targets, ['pt-BR', pt]]) {
         for (const suffix of ['_one', '_other']) {
           const entry = catalog.get(key + suffix);
           if (!entry) {
@@ -221,20 +226,22 @@ function checkI18n() {
       }
       continue;
     }
-    const entry = en.get(key);
-    if (!entry) {
-      problems.push(`${info.at}: no en entry for ${JSON.stringify(key)}`);
-      continue;
-    }
-    if (!sameSet(keyVars, placeholders(entry.value))) {
-      problems.push(`${entry.file}: placeholders of "${key}" differ: key {${[...keyVars].join(', ')}} vs en {${[...placeholders(entry.value)].join(', ')}}`);
+    for (const [lang, catalog] of targets) {
+      const entry = catalog.get(key);
+      if (!entry) {
+        problems.push(`${info.at}: no ${lang} entry for ${JSON.stringify(key)}`);
+        continue;
+      }
+      if (!sameSet(keyVars, placeholders(entry.value))) {
+        problems.push(`${entry.file}: placeholders of "${key}" differ: key {${[...keyVars].join(', ')}} vs ${lang} {${[...placeholders(entry.value)].join(', ')}}`);
+      }
     }
   }
 
-  for (const [lang, catalog] of [['en', en], ['pt-BR', pt]]) {
+  for (const [lang, catalog] of [...targets, ['pt-BR', pt]]) {
     for (const [key, entry] of catalog) {
       const used = keys.get(key);
-      if (used && !used.plural && lang === 'en') continue;
+      if (used && !used.plural && lang !== 'pt-BR') continue;
       const base = baseOfPlural(key);
       if (base !== null && keys.has(base) && keys.get(base).plural) continue;
       if (used && used.plural) {

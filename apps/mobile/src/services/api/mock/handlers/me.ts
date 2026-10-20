@@ -35,6 +35,7 @@ export function registerMeRoutes(router: MockRouter, state: MockState): void {
       body: {
         user: { id: device.userId, email: device.email, name: 'Pedro' },
         permissions: PERMISSIONS,
+        features: { ...state.features },
         device: deviceSelf(device),
       },
     };

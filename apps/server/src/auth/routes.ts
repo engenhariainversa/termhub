@@ -1,15 +1,19 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { config } from '../config.js';
-import { toPublicUser, type User } from '../db/repositories/types.js';
+import { toPublicUser, type Session, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
+import { featuresFor } from '../features/flags.js';
 import { VIEW_AS_ALL, VIEW_AS_COOKIE, type Scope } from './scope.js';
-import { HttpError, badRequest, forbidden, unauthorized, sendError } from '../lib/errors.js';
+import { HttpError, badRequest, forbidden, notFound, unauthorized, sendError } from '../lib/errors.js';
 import type { AuthContext } from './middleware.js';
 import { buildAuthorizationUrl, exchangeCode, isGoogleEnabled } from './google.js';
 import { normalizeNickname } from '../public/nickname.js';
 import { CSRF_COOKIE, OAUTH_COOKIE, SESSION_COOKIE } from './tokens.js';
+import { PASSWORD_MAX, PASSWORD_MIN } from './service.js';
 import { msg, requestLocale, tk } from '../i18n/index.js';
+import { audit } from './audit.js';
+import type { LoginResult } from './service.js';
 
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -63,8 +67,34 @@ const timeZoneBodySchema = z.object({
   }, 'invalid time zone'),
 });
 
+const sessionIdParam = z.object({ id: z.string().min(1).max(64) });
+const passwordBodySchema = z.object({
+  current_password: z.string().max(PASSWORD_MAX).nullish(),
+  new_password: z.string().max(PASSWORD_MAX),
+});
+
+/** Where a sign-in came from, kept on the session for the sessions list. */
+function originOf(request: FastifyRequest) {
+  const ua = request.headers['user-agent'];
+  return { ip: request.ip, user_agent: Array.isArray(ua) ? ua[0] : ua };
+}
+
+/** A session as the sessions list shows it: never its token hash. */
+function publicSession(s: Session, currentId: string | null) {
+  return { id: s.id, created_at: s.created_at, last_used_at: s.last_used_at, expires_at: s.expires_at, ip: s.ip, user_agent: s.user_agent, current: s.id === currentId };
+}
+
 /** null = automatic (the browser's language; pt-BR for e-mails and push). */
-const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en']).nullable() });
+const localeBodySchema = z.object({ locale: z.enum(['pt-BR', 'en', 'es']).nullable() });
+
+/**
+ * Whether a failed sign-in goes to the security trail: every wrong password or code does, and the one
+ * that set a lock; the refusals while locked do not (one row per locked-out request would let anyone
+ * fill the table).
+ */
+function trailsFailure(result: Exclude<LoginResult, { ok: true }>): boolean {
+  return result.reason === 'invalid' || !!result.justLocked;
+}
 
 export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: { onNicknameClaimed?: (user: User) => void } = {}) {
   /** Public user + role summary + flat permission list: what the client needs to gate its UI. */
@@ -74,10 +104,23 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       ...toPublicUser(u),
       role_info: role ? { id: role.id, name: role.name, label: role.label, is_admin: role.is_admin } : null,
       permissions: await permissionsOf(ctx.repos, u),
+      // Feature flags resolved for this person (TER-1040): the web hides what is still off.
+      features: await featuresFor({ repos: ctx.repos, userId: u.id }),
     };
   };
 
   const { service } = ctx;
+
+  /** The session behind this request's cookie (none with Cloudflare-only or disabled auth). */
+  const currentSession = async (request: FastifyRequest) => {
+    const token = request.cookies[SESSION_COOKIE];
+    return token ? await service.findSession(token) : null;
+  };
+
+  /** Closes the admin's open "view as" period; best effort, since the cookie is cleared either way. */
+  async function endViewAsAudit(adminId: string, log: FastifyBaseLogger) {
+    await ctx.repos.viewAsAudit.end(adminId).catch((err: unknown) => log.warn({ err, adminId }, 'view-as: could not close the audit period'));
+  }
 
   app.get('/config', { config: { public: true } }, async () => ({
     modes: [...config.auth.modes],
@@ -88,11 +131,17 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     // it is the address handed to strangers. Served here, beside the rest of the instance's config,
     // because every sign-in path reads this once at boot and none of them returns it otherwise.
     public_city_url: config.publicCityUrl,
+    // Read before sign-in (the login screen links to them), so they live here too. null = not set.
+    terms_url: config.legal.termsUrl,
+    privacy_url: config.legal.privacyUrl,
   }));
 
   app.get('/me', { config: { public: true } }, async (request) => {
     if (!request.user) throw unauthorized();
-    return { user: await withRole(request.user), view_as: viewAsOf(request.scope) };
+    // The acceptance status of the Terms and the Privacy Policy (TER-742), so the web gates at start-up
+    // without another request. Always the signed-in person's own, even while viewing as someone else.
+    const legal = await ctx.repos.legal.statusFor(request.user.id);
+    return { user: await withRole(request.user), view_as: viewAsOf(request.scope), legal };
   });
 
   app.patch('/me/nickname', async (request, reply) => {
@@ -143,17 +192,26 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const { user_id } = viewAsSchema.parse(request.body);
     const base = { path: '/', sameSite: 'lax' as const, secure: config.auth.cookieSecure, httpOnly: true };
     if (!user_id || user_id === request.user.id) {
+      // Leaving another scope only narrows access: a failed audit write must not keep the admin in it.
+      await endViewAsAudit(request.user.id, request.log);
       reply.clearCookie(VIEW_AS_COOKIE, { path: '/' });
+      if (request.scope?.viewAs.kind !== 'self') await audit(ctx.repos, request, 'auth.view_as_end');
       return { view_as: null };
     }
+    // Entering one is recorded first (TER-746): no audit row, no switch.
     if (user_id === VIEW_AS_ALL) {
+      await ctx.repos.viewAsAudit.start({ admin_id: request.user.id, scope: 'all', ip: request.ip });
       reply.setCookie(VIEW_AS_COOKIE, VIEW_AS_ALL, base);
+      request.log.info({ adminId: request.user.id, viewAs: VIEW_AS_ALL }, 'view-as set');
+      await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: VIEW_AS_ALL, label: 'all' } });
       return { view_as: 'all' as const };
     }
     const target = await ctx.repos.users.findById(user_id);
     if (!target) throw badRequest('Usuário inexistente');
+    await ctx.repos.viewAsAudit.start({ admin_id: request.user.id, scope: 'user', target_user_id: target.id, ip: request.ip });
     reply.setCookie(VIEW_AS_COOKIE, target.id, base);
     request.log.info({ adminId: request.user.id, viewAs: target.id }, 'view-as set');
+    await audit(ctx.repos, request, 'auth.view_as', { target: { type: 'user', id: target.id, label: target.email } });
     return { view_as: { id: target.id, name: target.name, email: target.email, avatar_url: target.avatar_url } };
   });
 
@@ -161,6 +219,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!config.auth.modes.has('app')) throw badRequest('Login por senha desativado neste modo');
     const body = loginSchema.parse(request.body);
     const result = await service.loginWithPassword(body.email, body.password, request.ip);
+    if (!result.ok && trailsFailure(result)) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: body.email.trim().toLowerCase() }, meta: { method: 'password', reason: result.reason } });
+    }
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
@@ -168,8 +229,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       }
       throw unauthorized('E-mail ou senha inválidos');
     }
-    const { token, csrf, expiresAt } = await service.createSession(result.user.id);
+    const { token, csrf, expiresAt } = await service.createSession(result.user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: result.user, meta: { method: 'password' } });
     return { user: await withRole(result.user) };
   });
 
@@ -192,6 +254,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     if (!config.auth.modes.has('app')) throw badRequest('Login por e-mail desativado neste modo');
     const body = verifyCodeSchema.parse(request.body);
     const result = await service.verifyLoginCode(body.email, body.code, request.ip);
+    if (!result.ok && trailsFailure(result)) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: body.email.trim().toLowerCase() }, meta: { method: 'email_code', reason: result.reason } });
+    }
     if (!result.ok) {
       if (result.reason === 'locked') {
         reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
@@ -199,14 +264,70 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
       }
       throw unauthorized('Código inválido ou expirado');
     }
-    const { token, csrf, expiresAt } = await service.createSession(result.user.id);
+    const { token, csrf, expiresAt } = await service.createSession(result.user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: result.user, meta: { method: 'email_code' } });
     return { user: await withRole(result.user) };
+  });
+
+  // --- The person's own web sessions (Settings → Segurança) ---
+  app.get('/sessions', async (request) => {
+    if (!request.user) throw unauthorized();
+    const [sessions, current] = await Promise.all([service.listSessions(request.user.id), currentSession(request)]);
+    return { sessions: sessions.map((s) => publicSession(s, current?.session.id ?? null)) };
+  });
+
+  /** Ends one session; ending the current one signs this browser out too. */
+  app.delete('/sessions/:id', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    const { id } = sessionIdParam.parse(request.params);
+    const current = await currentSession(request);
+    if (!(await ctx.repos.sessions.deleteForUser(request.user.id, id))) throw notFound('Sessão não encontrada');
+    request.log.info({ userId: request.user.id, sessionId: id }, 'session: revoked');
+    await audit(ctx.repos, request, 'auth.session_revoke', { meta: { revoked: 1, current: current?.session.id === id } });
+    if (current?.session.id === id) clearSessionCookies(reply);
+    return { ok: true, current: current?.session.id === id };
+  });
+
+  /** "Sair de todos os outros aparelhos": every session but the one making the request. */
+  app.post('/sessions/revoke-others', async (request) => {
+    if (!request.user) throw unauthorized();
+    const current = await currentSession(request);
+    const revoked = await ctx.repos.sessions.deleteAllForUser(request.user.id, current?.session.id);
+    request.log.info({ userId: request.user.id, revoked }, 'session: revoked all others');
+    await audit(ctx.repos, request, 'auth.session_revoke', { meta: { revoked, others: true } });
+    return { revoked };
+  });
+
+  /** Changes (or sets the first) password; the other sessions end. See AuthService.changePassword. */
+  app.post('/me/password', async (request, reply) => {
+    if (!request.user) throw unauthorized();
+    if (!config.auth.modes.has('app')) throw badRequest('Login por senha desativado neste modo');
+    const body = passwordBodySchema.parse(request.body);
+    const current = await currentSession(request);
+    if (!current) throw unauthorized();
+    const result = await service.changePassword(request.user, current.session, { current: body.current_password ?? null, next: body.new_password }, request.ip);
+    if (!result.ok) {
+      if (result.reason === 'locked') {
+        reply.header('retry-after', Math.ceil(result.retryAfterMs / 1000));
+        throw new HttpError(429, msg('Muitas tentativas. Tente novamente em {{seconds}}s.', { seconds: Math.ceil(result.retryAfterMs / 1000) }), 'LOCKED');
+      }
+      if (result.reason === 'weak') {
+        throw new HttpError(400, msg('A senha precisa ter de {{min}} a {{max}} caracteres e não pode ser o seu e-mail', { min: PASSWORD_MIN, max: PASSWORD_MAX }), 'WEAK_PASSWORD');
+      }
+      if (result.reason === 'reauth') throw new HttpError(403, 'Para definir a primeira senha, entre de novo e volte aqui em até 10 minutos', 'REAUTH_REQUIRED');
+      throw new HttpError(403, 'Senha atual incorreta', 'WRONG_PASSWORD');
+    }
+    request.log.info({ userId: request.user.id, revoked: result.revoked }, 'password: changed');
+    await audit(ctx.repos, request, 'auth.password_change', { meta: { first: !body.current_password, revoked: result.revoked } });
+    return { ok: true, revoked: result.revoked };
   });
 
   app.post('/logout', { config: { allowPendingDeletion: true } }, async (request, reply) => {
     const token = request.cookies[SESSION_COOKIE];
+    if (request.user) await audit(ctx.repos, request, 'auth.logout');
     if (token) await service.destroySession(token);
+    if (request.user && request.cookies[VIEW_AS_COOKIE]) await endViewAsAudit(request.user.id, request.log);
     clearSessionCookies(reply);
     return { ok: true };
   });
@@ -250,10 +371,14 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     }
 
     const user = await service.loginWithGoogle(profile);
-    if (!user) return fail('email_not_allowed');
+    if (!user) {
+      await audit(ctx.repos, request, 'auth.login_failed', { actor: null, target: { type: 'email', label: profile.email.toLowerCase() }, meta: { method: 'google', reason: 'not_allowed' } });
+      return fail('email_not_allowed');
+    }
 
-    const { token, csrf, expiresAt } = await service.createSession(user.id);
+    const { token, csrf, expiresAt } = await service.createSession(user.id, originOf(request));
     setSessionCookies(reply, token, csrf, expiresAt);
+    await audit(ctx.repos, request, 'auth.login', { actor: user, meta: { method: 'google' } });
     return reply.redirect('/', 302);
   });
 }

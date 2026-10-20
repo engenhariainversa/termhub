@@ -3,4 +3,5 @@ module.exports = {
   getAnalytics: jest.fn(() => ({})),
   logScreenView: jest.fn(async () => undefined),
   setConsent: jest.fn(async () => undefined),
+  setAnalyticsCollectionEnabled: jest.fn(async () => undefined),
 };

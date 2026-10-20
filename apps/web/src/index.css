@@ -53,6 +53,9 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
 .prose-termhub .code-block pre { @apply my-0 rounded-none border-0 bg-transparent; }
 .prose-termhub .code-block__header { @apply flex items-center justify-between gap-2 border-b border-line px-3 py-1.5; }
 .prose-termhub .code-block__language { @apply font-mono text-[11px] uppercase tracking-wide text-fg-dim; }
+/* "Copiar" and "Baixar" (TER-1084) side by side; "Baixar" carries `code-block__copy` too, so it looks
+   and hides on a mouse device exactly like the copy button. */
+.prose-termhub .code-block__actions { @apply flex items-center gap-1; }
 /* No permanent dimming and no `opacity-60`: the full-strength state was reached only through `hover`
    or `focus-visible`, which a touch screen never produces, so a phone — the device this whole feature
    was asked for — got the faint state for ever, at about 2.1:1 against the background. `fg-muted`
@@ -81,6 +84,17 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
 @keyframes chat-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .chat-enter { animation: chat-enter 150ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .chat-enter { animation: none; } }
+
+/* A tab's status dot (components/TabDot, TER-1044): a soft pulse while the tab works, a slow blink while it
+   needs you, and a turning ring around a tab an automatic run works in. Transform and opacity only; no
+   motion, only the colour, for whoever asked the system for none. */
+@keyframes tab-dot-pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.4); opacity: 0.55; } }
+.tab-dot-working { animation: tab-dot-pulse 1.5s ease-in-out infinite; }
+@keyframes tab-dot-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.tab-dot-blink { animation: tab-dot-blink 2s ease-in-out infinite; }
+@keyframes tab-dot-ring { to { transform: rotate(360deg); } }
+.tab-dot-ring { animation: tab-dot-ring 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .tab-dot-working, .tab-dot-blink, .tab-dot-ring { animation: none; } }
 
 /* The page header's tabs/trail strip scrolls sideways on a narrow window (components/PageHeader); both
    edges fade so a cut-off tab reads as "more this way". The inline padding matches the fade, so at

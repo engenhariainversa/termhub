@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { ACTIONS, RESOURCES, invalidatePermissionCache, isAction, isResource, isValidGrant } from '../auth/permissions.js';
+import { audit } from '../auth/audit.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const roleBody = z.object({
@@ -24,6 +25,7 @@ export async function roleRoutes(app: FastifyInstance, repos: Repositories) {
     const body = roleBody.parse(request.body);
     if (await repos.roles.findByName(body.name)) throw conflict('Já existe uma role com esse nome');
     const role = await repos.roles.create(body);
+    await audit(repos, request, 'role.create', { target: { type: 'role', id: role.id, label: role.name }, meta: { is_admin: role.is_admin } });
     return reply.code(201).send({ role });
   });
 
@@ -33,6 +35,7 @@ export async function roleRoutes(app: FastifyInstance, repos: Repositories) {
     const role = await repos.roles.update(id, patch);
     if (!role) throw notFound('Role não encontrada');
     invalidatePermissionCache(id);
+    await audit(repos, request, 'role.update', { target: { type: 'role', id: role.id, label: role.name }, meta: { fields: Object.keys(patch), is_admin: role.is_admin } });
     return { role };
   });
 
@@ -44,6 +47,7 @@ export async function roleRoutes(app: FastifyInstance, repos: Repositories) {
     if ((await repos.users.countByRole(id)) > 0) throw badRequest('Mova os usuários desta role antes de excluí-la');
     await repos.roles.delete(id);
     invalidatePermissionCache(id);
+    await audit(repos, request, 'role.delete', { target: { type: 'role', id: role.id, label: role.name } });
     return { ok: true };
   });
 
@@ -72,6 +76,7 @@ export async function roleRoutes(app: FastifyInstance, repos: Repositories) {
     if (role.is_admin) throw badRequest('Roles de administrador têm acesso total');
     const granted = await repos.roles.toggle(id, resource, action);
     invalidatePermissionCache(id);
+    await audit(repos, request, 'role.permission_toggle', { target: { type: 'role', id: role.id, label: role.name }, meta: { permission: `${resource}:${action}`, granted } });
     return { granted };
   });
 }

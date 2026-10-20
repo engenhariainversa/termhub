@@ -1,13 +1,15 @@
 import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
+import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
-import { mergeWaitOf } from './merge-wait.js';
+import { mergeWaitEntryOf, type MergeWaitEntry } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { placeDetailText } from './waiting-text.js';
+import { GUARD_MIN_AGENT_VERSION } from '../terminal/tab-mcp.js';
 
 export interface QueueItem {
   task_id: string;
@@ -31,8 +33,8 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
   return Promise.all(
     items.map(async (item) => {
       // a card past `todo` whose PR the merge executor holds says why it is not merged yet
-      const merge = item.reason === 'not_in_todo' ? mergeWaitOf(item.task_id, now) : null;
-      if (merge) return { ...item, reason: merge, reason_text: t(locale, REASON_TEXT[merge]) };
+      const merge = item.reason === 'not_in_todo' ? mergeWaitEntryOf(item.task_id, now) : null;
+      if (merge) return { ...item, reason: merge.wait, reason_text: mergeWaitText(merge, locale) };
       if (item.eligible) {
         const retry = await startRetryOf(ctx, item.task_id, locale, now);
         if (retry) return { ...item, eligible: false, reason: 'start_backoff' as const, reason_text: retry };
@@ -46,6 +48,12 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
   );
 }
 
+/** A merge wait's text: a conflict escalation names the PR head it is about, so a new push visibly ends it (TER-1016). */
+function mergeWaitText({ wait, sha }: MergeWaitEntry, locale: Locale): string {
+  if (wait === 'merge_conflict_cap' && sha) return t(locale, 'Escalado por conflito em {{sha}}; aguardando um push que resolva', { sha: sha.slice(0, 7) });
+  return t(locale, REASON_TEXT[wait]);
+}
+
 /** The text of a card waiting for its next start after a failed one, or null when it is not waiting. */
 async function startRetryOf(ctx: ControlContext, taskId: string, locale: Locale, now: Date): Promise<string | null> {
   const failures = await ctx.repos.automationRuns.startFailures(taskId, startRetryBackoffMs);
@@ -53,7 +61,7 @@ async function startRetryOf(ctx: ControlContext, taskId: string, locale: Locale,
   const minutes = Math.max(1, Math.ceil((failures.retry_at.getTime() - now.getTime()) / 60_000));
   const head = t(locale, 'O início falhou ({{attempt}} de {{max}}); nova tentativa em {{minutes}} min', { attempt: failures.consecutive, max: MAX_START_FAILURES, minutes });
   const blocked = failures.last_run_id ? await ctx.repos.automationEvents.lastForRun(failures.last_run_id, 'run_blocked') : null;
-  const why = blocked ? (locale === 'en' ? blocked.payload.message_en : null) ?? blocked.payload.message : null;
+  const why = blocked ? (locale === 'pt-BR' ? null : blocked.payload[`message_${locale}`]) ?? blocked.payload.message : null;
   return typeof why === 'string' && why ? `${head}. ${why}` : head;
 }
 
@@ -76,7 +84,9 @@ export async function eligibilityQueue(ctx: ControlContext, projectId: string, l
 
   let capable = 0;
   for (const l of links) {
-    if ((agents.capabilities(l.machine_id) ?? []).includes(CAPABILITY_WORKTREE)) capable++;
+    // worktrees and the hard-lock guard (agent 0.19.0, TER-1005): a run never starts without the guard
+    const version = agents.info(l.machine_id)?.agent_version;
+    if ((agents.capabilities(l.machine_id) ?? []).includes(CAPABILITY_WORKTREE) && !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION)) capable++;
   }
   const project = {
     automation,

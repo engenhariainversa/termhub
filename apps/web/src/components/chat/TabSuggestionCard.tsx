@@ -1,7 +1,7 @@
 import { useTranslation } from '../../i18n';
 import { memo, useState } from 'react';
 import type { TabSuggestion } from '../../lib/types';
-import { CODEX_REPLY_PLACEHOLDER, CONTEXT_PREVIEW_MAX, isReplyCard, lastParagraph, suggestionFieldLabel, suggestionHint, suggestionStatusLabel, suggestionTitle } from './tab-suggestion-text';
+import { CODEX_REPLY_PLACEHOLDER, CONTEXT_PREVIEW_MAX, isReplyCard, lastParagraph, suggestionFieldLabel, suggestionFieldMax, suggestionHint, suggestionStatusLabel, suggestionTitle } from './tab-suggestion-text';
 
 export interface TabSuggestionCardProps {
   suggestion: TabSuggestion;
@@ -38,7 +38,7 @@ export const TabSuggestionCard = memo(function TabSuggestionCard({ suggestion, b
           ) : (
             <label className="mt-2 block text-xs text-fg-dim">
               {suggestionFieldLabel(suggestion)}
-              <input type="text" className="input mt-1" maxLength={2000} value={text} disabled={busy} onChange={(e) => setText(e.target.value)} />
+              <input type="text" className="input mt-1" maxLength={suggestionFieldMax(suggestion)} value={text} disabled={busy} onChange={(e) => setText(e.target.value)} />
             </label>
           )}
           <div className="mt-2 flex gap-2">

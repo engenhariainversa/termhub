@@ -34,6 +34,9 @@ export class AgentRegistry extends EventEmitter {
   private readonly conns = new Map<string, AgentConnection>();
   /** Machines whose agent this process has held at some point: when one of them is offline here, it left from here. */
   private readonly held = new Set<string>();
+  /** The address each live agent connected from (TER-1088), in memory only: the chat compares it with the
+   *  client's to tell the person is on the same network as the machine. */
+  private readonly ips = new Map<string, string>();
 
   constructor() {
     super();
@@ -41,20 +44,28 @@ export class AgentRegistry extends EventEmitter {
     this.setMaxListeners(0);
   }
 
-  attach(machineId: string, conn: AgentConnection): void {
+  attach(machineId: string, conn: AgentConnection, ip?: string | null): void {
     const existing = this.conns.get(machineId);
     if (existing) {
       existing.close(CLOSE.CONFLICT, 'replaced');
     }
     this.conns.set(machineId, conn);
     this.held.add(machineId);
+    if (ip) this.ips.set(machineId, ip);
+    else this.ips.delete(machineId);
     conn.on('close', () => {
       if (this.conns.get(machineId) === conn) {
         this.conns.delete(machineId);
+        this.ips.delete(machineId);
         this.emit('offline', machineId);
       }
     });
     this.emit('online', machineId, conn.hello);
+  }
+
+  /** The address the machine's live agent connected from, as the proxy chain forwarded it; null when offline. */
+  publicIp(machineId: string): string | null {
+    return this.conns.has(machineId) ? (this.ips.get(machineId) ?? null) : null;
   }
 
   isOnline(machineId: string): boolean {
@@ -70,6 +81,11 @@ export class AgentRegistry extends EventEmitter {
       tools: conn.hello.tools,
       connected_at: new Date(conn.connectedAt).toISOString(),
     };
+  }
+
+  /** How many agents are connected to this process (the npm version poll is skipped at 0). */
+  connectedCount(): number {
+    return this.conns.size;
   }
 
   openChannels(machineId: string): number {
@@ -130,6 +146,7 @@ export class AgentRegistry extends EventEmitter {
   reset(): void {
     this.conns.clear();
     this.held.clear();
+    this.ips.clear();
   }
 
   /** Resolves true once `machineId` is attached (at once if it already is), false after `timeoutMs`. */

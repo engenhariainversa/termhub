@@ -109,11 +109,13 @@ export class ProgressRepository {
    * The newest automatic events of the owner's non-archived projects, each with the card, epic, machine and
    * account its sentence names (the run's, when the payload does not carry them). Empty for someone with no
    * automatic work: the section never shows and costs no request of its own.
+   * With `taskIds` (a card's own page), only those cards' events, whatever the project's status: the
+   * caller has already checked the card is in scope.
    */
-  async feed(opts: { owner: string | null; projectId: string | null; limit: number }): Promise<FeedRow[]> {
+  async feed(opts: { owner: string | null; projectId: string | null; limit: number; taskIds?: string[] }): Promise<FeedRow[]> {
     const project = { status: { not: 'archived' as const }, ...(opts.owner ? { ownerId: opts.owner } : {}), ...(opts.projectId ? { id: opts.projectId } : {}) };
     const events = await this.db.automationEvent.findMany({
-      where: { project, kind: { in: [...FEED_KINDS] } },
+      where: { ...(opts.taskIds ? { taskId: { in: opts.taskIds } } : { project }), kind: { in: [...FEED_KINDS] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: opts.limit,
       include: { task: { select: { number: true, epic: { select: { title: true } }, project: { select: { key: true } } } } },

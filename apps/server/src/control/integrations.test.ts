@@ -12,6 +12,7 @@ import type { Integration } from '../db/repositories/integrations.js';
 import type { Machine, Project } from '../db/repositories/types.js';
 import { Scoped } from '../auth/scope.js';
 import { HttpError } from '../lib/errors.js';
+import { effectiveRepos } from '../setup/repos.js';
 import { setupSchema, type ProjectSetupData } from '../setup/schema.js';
 import { ControlError, type ControlContext } from './context.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from './integrations.js';
@@ -52,6 +53,7 @@ function ctxFor(user = 'u1'): ControlContext {
         return { project_id: pid, version: 2, data, updated_at: '2026-09-28T01:00:00.000Z' };
       }),
     },
+    projectRepositories: { effective: vi.fn(async (_pid: string, data: ProjectSetupData) => effectiveRepos(data, [])) },
   } as unknown as Repositories;
   const scope = { user: { id: user } as never, viewAs: { kind: 'self' as const }, ownerId: user, createAs: user };
   return { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
@@ -157,8 +159,19 @@ describe('getProjectSetup', () => {
   it('answers repo null when nothing is set, and 404 for a foreign project', async () => {
     const r = await getProjectSetup(ctxFor(), { project_id: 'p1' });
     expect(r.repo).toBeNull();
+    expect(r.repos).toEqual([]);
     expect(r.integration).toBeNull();
     await expect(getProjectSetup(ctxFor(), { project_id: 'px' })).rejects.toMatchObject({ statusCode: 404 });
+  });
+
+  it('lists the effective repositories: the repo block as the entry of key main, and the overrides', async () => {
+    setups.set('p1', setupSchema.parse({
+      repo: { integration_id: 'g1', full_name: 'acme/api', deploy_workflow: 'deploy.yml' },
+      automation: { autonomy: 'merge' },
+      repos: [{ full_name: 'acme/web', autonomy: 'release', merge_order: 1 }],
+    }));
+    const r = await getProjectSetup(ctxFor(), { project_id: 'p1' });
+    expect(r.repos.map((e) => [e.full_name, e.key, e.autonomy, e.deploy_workflow])).toEqual([['acme/api', 'main', 'merge', 'deploy.yml'], ['acme/web', null, 'merge', null]]);
   });
 });
 

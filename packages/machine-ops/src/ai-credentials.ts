@@ -4,7 +4,8 @@ export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
 
 /**
  * Separates the candidate credential blobs the claude script prints (see below).
- * The server splits on this and keeps the freshest candidate.
+ * The code that reads them on the machine (parseClaudeCredential in the agent or on the server's own
+ * host, the awk program of usageRequestScript over SSH) splits on this and keeps the freshest one.
  */
 export const CREDENTIAL_SEPARATOR = '---termhub-credential---';
 
@@ -14,8 +15,9 @@ export function credentialScript(provider: AiProvider): string {
     case 'claude':
       // Claude Code keeps the live OAuth token in different places depending on the OS and on
       // CLAUDE_CONFIG_DIR, and the on-disk copy under $D can go stale once the CLI starts using
-      // the macOS keychain. So every candidate is printed, separated by SEP, and the caller
-      // (apps/server/src/ai/claude.ts) picks the one with the largest claudeAiOauth.expiresAt.
+      // the macOS keychain. So every candidate is printed, separated by SEP, and the caller, still on
+      // the same machine (ai-usage-claude.ts, or the awk in ai-usage-script.ts), picks the one with
+      // the largest claudeAiOauth.expiresAt. The credential never leaves the machine.
       return [
         `SEP=${shellQuote(CREDENTIAL_SEPARATOR)}`,
         // 1. the on-disk copy (Linux, and macOS when the keychain entry is missing/disabled)
