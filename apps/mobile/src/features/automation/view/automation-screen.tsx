@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { AppText, Banner, Button, Screen, Sheet } from '@/ui';
-import { AUTOMATION_MSG, AUTONOMY_LABEL, AUTONOMY_LEVELS, toggleType, TYPE_OPTIONS } from '../model/automation';
+import { AUTOMATION_MSG, AUTONOMY_LABEL, AUTONOMY_LEVELS, hourLabel, SUMMARY_HOURS, summaryHourOf, toggleType, TYPE_OPTIONS, withSummaryHour } from '../model/automation';
 import { automationDeps } from '../viewmodel/deps';
 import { useAutomation } from '../viewmodel/use-automation';
 
@@ -23,9 +23,25 @@ function Choice({ label, selected, role, onPress }: { label: string; selected: b
   );
 }
 
+/** One hour of the daily summary (TER-974): its label is a time, not copy, so it is not translated. */
+function HourChoice({ hour, selected, onPress }: { hour: number; selected: boolean; onPress(): void }) {
+  const label = hourLabel(hour);
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected, checked: selected }}
+      onPress={onPress}
+      className={`rounded-xl border px-3 py-2 ${selected ? 'border-app-accent bg-app-surface2' : 'border-app-border'}`}
+    >
+      <Text className={`text-sm ${selected ? 'font-semibold text-app-accent' : 'text-app-text'}`}>{label}</Text>
+    </Pressable>
+  );
+}
+
 /** "Trabalho automático" of the project Setup (spec 2026-10-04), reached from a project chat's host sheet:
- * the switch, the card types and how far the agents go alone. The rest of the block (paths, limits,
- * prompts) is edited on the web and kept as it is. */
+ * the switch, the card types, how far the agents go alone and the daily summary's hour (TER-974). The rest
+ * of the block (paths, limits, prompts) is edited on the web and kept as it is. */
 export function AutomationView({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -70,6 +86,16 @@ export function AutomationView({ projectId }: { projectId: string }) {
                 ))}
               </View>
               <AppText variant="muted">{t(AUTOMATION_MSG.storesNever)}</AppText>
+            </View>
+            <View className="gap-2">
+              <AppText variant="label">{t(AUTOMATION_MSG.summary)}</AppText>
+              <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">
+                <Choice role="radio" label={AUTOMATION_MSG.summaryOff} selected={summaryHourOf(draft) === null} onPress={() => edit((d) => withSummaryHour(d, null))} />
+                {SUMMARY_HOURS.map((hour) => (
+                  <HourChoice key={hour} hour={hour} selected={summaryHourOf(draft) === hour} onPress={() => edit((d) => withSummaryHour(d, hour))} />
+                ))}
+              </View>
+              <AppText variant="muted">{t(AUTOMATION_MSG.summaryHint)}</AppText>
             </View>
             {saveError ? <Banner tone="danger" text={saveError} /> : null}
             {notice ? <AppText variant="muted">{notice}</AppText> : null}

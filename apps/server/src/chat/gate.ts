@@ -43,6 +43,12 @@ const readTools = new Set([
   'list_tab_questions',
   // TER-1023: the hooks' state on a machine; nothing on the machine is written.
   'get_machine_hooks',
+  // TER-1080: the machine's saved network (IPs, MACs); nothing on the machine is written.
+  'get_machine_network',
+  // TER-1038: the chat's own context fill; nothing is changed.
+  'get_chat_context',
+  // TER-1088: where the person's last message came from, as the server read it; nothing is changed.
+  'get_client_context',
 ]);
 
 const writeTools = new Set([
@@ -66,6 +72,10 @@ const writeTools = new Set([
   // TER-1023: rewrites the hooks' entries in the machine's config files (the person's own are kept, an
   // uninstall gives them back). Always a card: no grant or default covers it.
   'install_machine_hooks',
+  // TER-1056: installs a newer agent and restarts it (tmux sessions survive). Always a card: no grant or default covers it.
+  'update_machine_agent',
+  // TER-1080: another machine sends Wake-on-LAN packets on the local network. Always a card: no grant or default covers it.
+  'wake_machine',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated
@@ -78,10 +88,40 @@ const writeTools = new Set([
 // automation_merge is the card the merge executor asks for a PR above the project's level (agentic board
 // D7): never a concierge tool, never covered by a grant; approving it merges that PR once.
 // set_ai_account_exclusive decides where a client's account may run (TER-990): always the person's card.
-const irreversibleTools = new Set(['close_tab', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge', 'set_ai_account_exclusive']);
+// start_ai_login and submit_ai_login_code change what a machine's AI CLI is logged in as (TER-1047): always a card.
+const irreversibleTools = new Set([
+  'close_tab',
+  'delete_task',
+  'push_ticket_status',
+  'create_integration',
+  'set_project_repo',
+  'automation_merge',
+  'set_ai_account_exclusive',
+  'start_ai_login',
+  'submit_ai_login_code',
+]);
 
 // Keys that interrupt the running process and cannot be undone
 const interruptingKeys = new Set(['C-c', 'Escape']);
+
+/**
+ * Arguments that are secrets (TER-1047: the code pasted to finish an AI CLI login). The row keeps them
+ * only while it is open, because the model is told to repeat an approved call with the stored arguments;
+ * once the row is closed they are replaced by `REDACTED_ARG` (`scrubSecretArgs` in chat/service.ts).
+ */
+export const SECRET_ARGS: Readonly<Record<string, readonly string[]>> = { submit_ai_login_code: ['code'] };
+export const REDACTED_ARG = '[redacted]';
+
+/** The arguments with their secrets redacted; the same object when there is nothing to redact. */
+export function redactSecretArgs(tool: string, args: unknown): unknown {
+  const keys = SECRET_ARGS[tool];
+  if (!keys || !args || typeof args !== 'object') return args;
+  const record = args as Record<string, unknown>;
+  if (!keys.some((k) => record[k] != null && record[k] !== REDACTED_ARG)) return args;
+  const out: Record<string, unknown> = { ...record };
+  for (const k of keys) if (out[k] != null) out[k] = REDACTED_ARG;
+  return out;
+}
 
 /**
  * Classifies a proposed tool action by its reversibility.
@@ -133,6 +173,13 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   // unlinks a machine with no tabs on it, or refuses and asks the caller to confirm — both reversible
   if (tool === 'unlink_project_machine') {
     return (args as { confirm?: unknown } | undefined)?.confirm === true ? 'irreversible' : 'write';
+  }
+
+  // TER-1092: support data of one user, for an admin. Finding the user is a read; a query about them is
+  // asked the first time in a conversation, and the gate runtime lets the later ones about the same user
+  // through (`classOf` in gate-runtime.ts). Never covered by a grant or a default.
+  if (tool === 'admin_user_troubleshoot') {
+    return (args as { endpoint?: unknown } | undefined)?.endpoint === 'search' ? 'read' : 'write';
   }
 
   // Unknown tools default to irreversible: a tool added later must not silently

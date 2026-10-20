@@ -70,6 +70,18 @@ export type Project = Prisma.ProjectModel
  */
 export type ProjectMachine = Prisma.ProjectMachineModel
 /**
+ * Model ProjectRepository
+ * A git repository found in a project's folder (spec 2026-10-07 multi-repo R1, R4). Written only by
+ * discovery; what the person changes about it lives in the setup (`repos`), keyed by `full_name`.
+ */
+export type ProjectRepository = Prisma.ProjectRepositoryModel
+/**
+ * Model ProjectRepositoryCheckout
+ * Where a project's repository sits on one machine (spec 2026-10-07 multi-repo R5). A folder that is gone
+ * is marked with `missing_at`, never deleted.
+ */
+export type ProjectRepositoryCheckout = Prisma.ProjectRepositoryCheckoutModel
+/**
  * Model Tab
  * 
  */
@@ -133,8 +145,8 @@ export type AutomationRun = Prisma.AutomationRunModel
 /**
  * Model TabUsage
  * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
- * read and up to which byte. One row per tab; the counts live in `tab_usage_days`. No foreign key to
- * tabs: the per-day rows outlive a closed tab, so a card keeps its cost after its tab is gone.
+ * read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in
+ * `tab_usage_days`, which has no foreign key to tabs: it outlives a closed tab, so a card keeps its cost.
  */
 export type TabUsage = Prisma.TabUsageModel
 /**
@@ -295,6 +307,20 @@ export type TabLimitNotice = Prisma.TabLimitNoticeModel
  */
 export type TabQuestion = Prisma.TabQuestionModel
 /**
+ * Model ChatAutoSample
+ * TER-642: one observation per question of a card, for calibrating a person's automatic-answer
+ * thresholds: the precedent's similarity and whether it agreed with what the person did. `source` is
+ * `answer` (they answered on the card), `accepted` (the countdown ran out in front of them) or
+ * `cancelled` (they stopped it). `tabQuestionId` is not a foreign key: samples outlive the card.
+ */
+export type ChatAutoSample = Prisma.ChatAutoSampleModel
+/**
+ * Model ChatFocus
+ * TER-642: a screen of this person with termhub in focus (web: visible and focused; app: foreground).
+ * A row is a heartbeat; a suggested answer's countdown only runs while one is fresh.
+ */
+export type ChatFocus = Prisma.ChatFocusModel
+/**
  * Model ChatDecision
  * A question of a tab's AskUserQuestion answered from the chat, remembered to suggest the answer to
  * similar questions later (spec 2026-09-26). `embedding` is pgvector, read and written in raw SQL.
@@ -379,6 +405,24 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
 /**
+ * Model LegalDocumentVersion
+ * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
+ * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.
+ */
+export type LegalDocumentVersion = Prisma.LegalDocumentVersionModel
+/**
+ * Model LegalAcceptance
+ * One acceptance of one version by one person, with where it came from. Never updated: a new acceptance is a new row.
+ */
+export type LegalAcceptance = Prisma.LegalAcceptanceModel
+/**
+ * Model DataExport
+ * "Exportar meus dados" (TER-741, LGPD art. 18): one request for a zip of everything the account
+ * holds. The job builds it on the chat-files volume (`<CHAT_FILES_DIR>/.exports/<id>.zip`), e-mails a
+ * link to Perfil, and removes the file once `expiresAt` passes (7 days after it is ready).
+ */
+export type DataExport = Prisma.DataExportModel
+/**
  * Model ViewAsAudit
  * Audit trail of the admin "view as" switch (TER-746, P-9/L-10 of docs/legal/duvidas-advogado.md): one row
  * per period an admin spent in another scope — a user's data or "all". `ended_at` is set when the admin
@@ -397,3 +441,16 @@ export type ViewAsAudit = Prisma.ViewAsAuditModel
  * never typed text, passwords, codes or tokens.
  */
 export type SecurityEvent = Prisma.SecurityEventModel
+/**
+ * Model FeatureFlag
+ * An instance-wide feature flag (TER-1040, docs/feature-flags.md): a feature that ships dark and an
+ * admin turns on in Configurações → Recursos em teste, without a deploy. No row = the flag's default
+ * in code (`FEATURE_FLAGS`, apps/server/src/features/flags.ts), which is off.
+ */
+export type FeatureFlag = Prisma.FeatureFlagModel
+/**
+ * Model FeatureFlagOverride
+ * One person's own value for a flag (testing a feature before it is released): wins over the
+ * instance-wide value for that person only.
+ */
+export type FeatureFlagOverride = Prisma.FeatureFlagOverrideModel

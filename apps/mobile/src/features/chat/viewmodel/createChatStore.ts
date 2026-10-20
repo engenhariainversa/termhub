@@ -70,6 +70,9 @@ export interface ConversationSlot {
    * 404, a 5xx, a dropped connection) marked the same way — cleared once a fresh `subagent` event
    * for that id arrives. */
   cancelFailed: string[];
+  /** The person's own context limit (TER-1038, Memória do chat): what the header's meter measures
+   *  against instead of the model's window. Absent from a slot persisted before it. */
+  contextLimit?: number | null;
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -340,6 +343,7 @@ export function createChatStore(deps: ChatDeps) {
               tabSuggestions: res.tab_suggestions,
               tabLimits: res.tab_limits,
               subagents: res.subagents,
+              contextLimit: res.context_limit ?? null,
               host: res.host,
               loaded: true,
               error: null,
@@ -483,6 +487,14 @@ export function createChatStore(deps: ChatDeps) {
             }));
           }
           if (e.type === 'message') arrivedDuringReads(key, e.message.id);
+          // The header's context meter (TER-315/TER-1038): the fill lives on the conversation row, as
+          // `GET chat` sends it. `compacted_at` is absent from an older server: the last one stays.
+          if (e.type === 'context')
+            patchSlot(key, (slot) =>
+              slot.conversation
+                ? { conversation: { ...slot.conversation, context_tokens: e.tokens, context_window: e.window, ...(e.compacted_at !== undefined ? { context_compacted_at: e.compacted_at } : {}) } }
+                : {},
+            );
           if (e.type === 'attachment_status') set((s) => ({ attachmentStatuses: { ...s.attachmentStatuses, [e.attachment.id]: e.attachment } }));
           // The answer is complete (or failed): what streamed in is worth an MMKV write now.
           if (e.type === 'run_finished') storage.flush();

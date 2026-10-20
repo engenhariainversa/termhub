@@ -20,6 +20,7 @@ const action = (over: Partial<ChatAction>): ChatAction => ({
   machine_id: null,
   project_id: null,
   tab_id: null,
+  tab_name: null,
   grant_id: null,
   error_code: null,
   duration_ms: null,
@@ -396,6 +397,28 @@ it('a closed tab\'s card never names a foreign project the row names (TER-986)',
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', project_id: foreignProject.id })], OWNER);
   expect(card.summary).toBe('digitar `oi` numa aba que não existe mais');
+});
+
+it('a closed tab\'s card names the tab by the name the row kept when it was asked (TER-1024)', async () => {
+  const repos = fakeRepos();
+  const [send, close, bare] = await describeActions(
+    repos,
+    [
+      action({ id: 'a1', tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone', tab_name: 'Figma 849/851', project_id: project.id }),
+      action({ id: 'a2', tool: 'close_tab', args: { tab_id: 'gone' }, tab_id: 'gone', tab_name: 'Figma 849/851', project_id: project.id, status: 'executed' }),
+      action({ id: 'a3', tool: 'close_tab', args: { tab_id: 'gone' }, tab_id: 'gone', tab_name: 'Figma 849/851' }),
+    ],
+    OWNER,
+  );
+  expect(send.summary).toBe('digitar `oi` na aba «Figma 849/851», já fechada, do projeto reactivando');
+  expect(close.summary).toBe('fechar a aba «Figma 849/851» do projeto reactivando');
+  expect(bare.summary).toBe('fechar a aba «Figma 849/851»');
+});
+
+it('a live tab is named by its current name, not the one the row kept (TER-1024)', async () => {
+  const repos = fakeRepos();
+  const [card] = await describeActions(repos, [action({ tool: 'send_input', args: { tab_id: tab.id, text: 'oi' }, tab_id: tab.id, tab_name: 'Nome antigo' })], OWNER);
+  expect(card.summary).toBe('digitar `oi` na aba Terminal 2 do projeto reactivando, no macbook m3');
 });
 
 it('renders "does not exist" for a project belonging to another user, and never leaks its name', async () => {

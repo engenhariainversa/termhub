@@ -153,8 +153,8 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
           invited_at: new Date(),
         });
       }
-      // The waitlist keeps the landing's language ('pt' | 'en'); 'pt' is pt-BR.
-      const locale: Locale = entry.locale === 'en' ? 'en' : 'pt-BR';
+      // The waitlist keeps the landing's language ('pt' | 'en' | 'es'); 'pt' is pt-BR.
+      const locale: Locale = entry.locale === 'en' || entry.locale === 'es' ? entry.locale : 'pt-BR';
       const effects = await runInvite(user, role, request.user?.name ?? 'Alguém', request.log, () =>
         alphaInviteMail(user!.email, { appUrl: config.publicUrl, communityUrl: config.alphaCommunityUrl, firstName: entry.first_name, locale }),
       );
@@ -192,8 +192,12 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     }
     const updated = await repos.users.setRole(id, role.id, role.is_admin ? 'owner' : 'member');
     if (user.role_id !== role.id) {
+      // A new role ends the person's web sessions: they sign in again under it, and a browser left
+      // open with the old role's screens does not linger.
+      const revoked = await repos.sessions.deleteAllForUser(id);
+      request.log.info({ userId: id, roleId: role.id, revoked }, 'user role changed: sessions revoked');
       const from = user.role_id ? await repos.roles.findById(user.role_id) : undefined;
-      await audit(repos, request, 'user.role_change', { target: { type: 'user', id: user.id, label: user.email }, meta: { from: from?.name ?? null, to: role.name } });
+      await audit(repos, request, 'user.role_change', { target: { type: 'user', id: user.id, label: user.email }, meta: { from: from?.name ?? null, to: role.name, sessions_revoked: revoked } });
     }
     return { user: updated && withRoleInfo(updated, role) };
   });
@@ -209,7 +213,9 @@ export async function userRoutes(app: FastifyInstance, repos: Repositories, deps
     }
     // Everything the account owns goes with it (machines, projects, integrations, chat, files…),
     // and its public city, agents and Cloudflare Access entry are cleaned up after the commit.
-    // No e-mail: the admin did this, not the person.
+    // No e-mail: the admin did this, not the person. The web sessions end first (the row's cascade
+    // would take them too), so even a purge that fails halfway leaves nobody signed in as them.
+    await repos.sessions.deleteAllForUser(id);
     if (!(await deps.deletion.purge(id, { actor: `admin:${request.user!.id}`, notify: false }))) throw notFound('Usuário não encontrado');
     await audit(repos, request, 'user.delete', { target: { type: 'user', id: user.id, label: user.email } });
     return { ok: true };

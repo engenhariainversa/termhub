@@ -25,6 +25,7 @@ function world(exclusive: { id: string; name: string } | null = null, token?: Co
     machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? { id, name: 'jarvis', owner_id: 'u1' } : undefined)), list: vi.fn(async () => [{ id: 'm1', name: 'jarvis', owner_id: 'u1' }]) },
     projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) },
     automationEvents: { insert },
+    users: { aiLoginWarnDays: vi.fn(async () => null) },
   };
   const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' } as const, ownerId: 'u1', createAs: 'u1' };
   const log = { info: vi.fn(), warn: vi.fn() };

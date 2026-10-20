@@ -9,8 +9,7 @@ import type { AgentSocket } from '../client.js';
 import type { ClaudeManager } from '../dispatch.js';
 import { agentEnv } from '../exec.js';
 
-/** Same deadline the container runs with (`apps/concierge/src/run.ts`): a run that overstays it is
- *  killed, so a CLI that hangs cannot keep running on someone's laptop for the rest of the day. */
+/** A run that overstays this deadline is killed, so a CLI that hangs cannot keep running on someone's laptop for the rest of the day. */
 const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
 /** A streamed run hosts the chat's background subagents, which can take far longer than one answer. */
 const STREAM_TIMEOUT_MS = 60 * 60 * 1000;

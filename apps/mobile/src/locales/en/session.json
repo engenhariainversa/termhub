@@ -42,5 +42,6 @@
   "Excluir minha conta": "Delete my account",
   "Autorizar {{n}} ações": "Authorize {{n}} actions",
   "Autorizar esta ação": "Authorize this action",
-  "Ativar a biometria": "Turn on biometrics"
+  "Ativar a biometria": "Turn on biometrics",
+  "Usamos o seu e-mail para encontrar a sua conta e pedir a aprovação deste aparelho.": "We use your email to find your account and ask for this device to be approved."
 }

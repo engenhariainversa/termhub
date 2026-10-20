@@ -3,6 +3,7 @@ import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import { GUARD_MIN_AGENT_VERSION, guardSupported } from '../terminal/tab-mcp.js';
 import { usableIn } from '../ai/exclusive.js';
+import { expiresSoon } from '../ai/login-expiry.js';
 import { accountsOn } from '../ai/project-accounts.js';
 import { peakUtilization } from '../control/account-swap.js';
 import { getAccountUsage } from '../ai/index.js';
@@ -77,7 +78,8 @@ function machineVerdict(m: Machine): MachineVerdict | null {
 /**
  * Where an automatic run starts (spec §8 step 3, D10, D14, spike R6): an online agent machine linked to the
  * project that accepts automatic work (`automation_allowed`), with the worktree capability and Claude
- * installed, under the first Claude account of the project's list (in its order) that is on that machine, is
+ * installed, under the first Claude account of the project's list (in its order, the ones whose login
+ * expires within three days last, TER-1079) that is on that machine, is
  * not marked exhausted and has room (peak utilization below `AUTOMATIC_MAX_UTILIZATION`; unknown usage
  * counts as room, as for `start_agent`), on a machine with room (`deps.room`). Unlike `start_agent`, it never
  * falls back to a full account: the card waits instead, with `detail` naming each machine and account left
@@ -109,7 +111,12 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
   const nameOf = new Map(ready.map(({ machine }) => [machine.id, machine.name]));
-  const candidates = ready.flatMap(({ machine }) => accountsOn(project.id, ai, listed, machine.id, 'claude')).sort((x, y) => ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
+  // TER-1079: a login about to expire goes after the ones with slack (a long run could outlive it); among
+  // equals the project's order decides. A preference only: when it is the one account left, it is used.
+  const soon = (a: AiAccount) => (expiresSoon(a.login_expires_at, deps.now()) ? 1 : 0);
+  const candidates = ready
+    .flatMap(({ machine }) => accountsOn(project.id, ai, listed, machine.id, 'claude'))
+    .sort((x, y) => soon(x) - soon(y) || ai.accounts.indexOf(x.id) - ai.accounts.indexOf(y.id));
   const left = (account: AiAccount, why: AccountVerdict, peak?: number) =>
     detail.accounts.push({ id: account.id, label: account.label, machine: nameOf.get(account.machine_id) ?? account.machine_id, why, ...(peak === undefined ? {} : { peak }) });
   const inList = new Set(candidates.map((a) => a.id));

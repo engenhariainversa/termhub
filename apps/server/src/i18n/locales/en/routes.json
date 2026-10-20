@@ -35,6 +35,7 @@
   "Instalação falhou": "Installation failed",
   "Remoção falhou": "Removal failed",
   "Só máquinas com agente são atualizadas por aqui": "Only machines with the agent are updated here",
+  "Só máquinas com agente são desinstaladas por aqui": "Only machines with the agent are uninstalled here",
   "Versão mais nova do agente ainda desconhecida (npm)": "The newest agent version is not known yet (npm)",
   "O agente já está na versão {{version}}": "The agent is already on version {{version}}",
   "A anotação passou do limite de 200 000 caracteres": "The note is over the limit of 200,000 characters",
@@ -52,6 +53,9 @@
   "Roles de administrador têm acesso total": "Administrator roles have full access",
   "Fonte de tickets repetida": "Repeated ticket source",
   "Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).": "Rule too broad for an automatic tab: it would reach git push, merge, publishing or another blocked command. Use a specific rule, such as Bash(npm test:*).",
+  "Repositório repetido": "Repeated repository",
+  "A autonomia do repositório não pode passar a do projeto": "A repository's autonomy cannot be above the project's",
+  "Caminho inválido: use um caminho relativo à raiz do repositório": "Invalid path: use a path relative to the repository's root",
   "Integração de tickets inexistente": "Ticket integration does not exist",
   "Integração do repositório inexistente": "Repository integration does not exist",
   "Máquina do runner inexistente": "Runner machine does not exist",
@@ -78,5 +82,12 @@
   "Invalid profile": "Invalid profile",
   "Too many sign-ups from this address; try again later": "Too many sign-ups from this address; try again later",
   "Entry not found": "Entry not found",
-  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work."
+  "Confirme com o PIN para ligar ou ampliar o trabalho automático.": "Confirm with your PIN to turn on or widen automatic work.",
+  "Esta versão não está aguardando o seu aceite. Recarregue a página e tente de novo.": "This version is not awaiting your acceptance. Reload the page and try again.",
+  "Uma nova versão que pede aceite só pode valer daqui a 30 dias ou mais, para dar tempo do aviso.": "A new version that requires acceptance can only take effect 30 or more days from now, to leave time for the notice.",
+  "Esse documento já tem uma versão com esse número.": "This document already has a version with this number.",
+  "Flag não encontrada": "Flag not found",
+  "Login não encontrado ou expirado": "Login not found or expired",
+  "Refazer login pela tela só funciona com Claude e Codex. Faça o login na própria máquina: {{hint}}": "Redoing the login from the screen only works for Claude and Codex. Sign in on the machine itself: {{hint}}",
+  "A máquina não mostrou a página de login": "The machine did not show the login page"
 }

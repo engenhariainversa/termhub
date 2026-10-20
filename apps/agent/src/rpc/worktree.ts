@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { GIT_BRANCH_RE, RPC, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
 import { expandHome } from '@termhub/machine-ops';
+import { trustWorktree } from '../claude-trust.js';
 import { RpcFailure, agentEnv, run, type RunResult } from '../exec.js';
 
 /**
@@ -20,10 +21,10 @@ export const REMOVE_BUDGET_MS = RPC['git.worktree.remove'].timeoutMs - RPC_MARGI
  *  steps (ls-remote, fetch) only get what is left above it. */
 const WORKTREE_ADD_SHARE_MS = 60_000;
 /** Cap for a local, quick git step (rev-parse, status, prune, list). */
-const QUICK_STEP_MS = 15_000;
+export const QUICK_STEP_MS = 15_000;
 
 /** One overall deadline, split across the steps of a call. */
-class Deadline {
+export class Deadline {
   private readonly end: number;
   constructor(budgetMs: number) {
     this.end = Date.now() + budgetMs;
@@ -42,11 +43,11 @@ export function scrubCredentials(text: string): string {
 }
 
 /** git with no prompt for credentials: a fetch that would ask hangs no RPC, it fails. */
-function git(args: string[], timeoutMs: number): Promise<RunResult> {
+export function git(args: string[], timeoutMs: number): Promise<RunResult> {
   return run('git', args, { timeoutMs, env: agentEnv({ ...process.env, GIT_TERMINAL_PROMPT: '0' }) });
 }
 
-function gitFailure(what: string, r: RunResult): RpcFailure {
+export function gitFailure(what: string, r: RunResult): RpcFailure {
   if (r.error === 'enoent') return new RpcFailure('failed', 'git não encontrado nesta máquina');
   if (r.timedOut) return new RpcFailure('timeout', `${what} timed out`);
   const why = scrubCredentials(r.stderr.trim().split('\n').slice(-3).join('\n')).slice(0, 1500);
@@ -185,7 +186,17 @@ async function remoteHas(repoDir: string, branch: string, timeoutMs: number): Pr
 
 const conflict = (message: string, p: string) => new RpcFailure('worktree_conflict', message, p);
 
+/**
+ * The run's worktree, then (TER-1025) the worktree marked trusted in every Claude account here, so Claude's
+ * trust question never stops an automatic run in it. The trust step is best effort and never fails the call.
+ */
 export async function ensure(params: RpcParams<'git.worktree.ensure'>, home = os.homedir()): Promise<RpcResult<'git.worktree.ensure'>> {
+  const result = await ensureWorktree(params, home);
+  await trustWorktree(result.path, home).catch(() => 0);
+  return result;
+}
+
+async function ensureWorktree(params: RpcParams<'git.worktree.ensure'>, home: string): Promise<RpcResult<'git.worktree.ensure'>> {
   checkBranch(params.branch);
   checkBranch(params.base);
   const d = new Deadline(ENSURE_BUDGET_MS);

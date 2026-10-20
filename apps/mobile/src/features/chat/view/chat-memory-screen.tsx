@@ -4,6 +4,7 @@ import { Alert, FlatList, Linking, Switch, View } from 'react-native';
 import type { TChatDecision, TConciergeNote, TLessonItem } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { AppText, Banner, Button, EmptyState, Field, Screen } from '@/ui';
+import { ContextLimitCard } from './context-limit-card';
 import { useChatMemoryStore } from '../viewmodel/useChatMemoryStore';
 import { t, tk, useTranslation } from '@/i18n';
 import { formatDate } from '@/i18n/format';
@@ -125,6 +126,8 @@ export function ChatMemoryScreen() {
   const toggle = useChatMemoryStore((s) => s.toggle);
   const setAutodecide = useChatMemoryStore((s) => s.setAutodecide);
   const setCodexReplies = useChatMemoryStore((s) => s.setCodexReplies);
+  const setClientContext = useChatMemoryStore((s) => s.setClientContext);
+  const setContextLimit = useChatMemoryStore((s) => s.setContextLimit);
   const forget = useChatMemoryStore((s) => s.forget);
   const cancel = useChatMemoryStore((s) => s.cancel);
   const notes = useChatMemoryStore((s) => s.notes);
@@ -232,6 +235,20 @@ export function ChatMemoryScreen() {
             </AppText>
           </View>
         ) : null}
+        {/* TER-1088: where the person writes from; not tied to embeddings either. */}
+        {memory ? (
+          <View className="gap-1 rounded-xl border border-app-border bg-app-surface2 p-3">
+            <View className="flex-row items-center justify-between gap-3">
+              <AppText className="flex-1">{t('Contar ao chat de onde estou falando')}</AppText>
+              <Switch accessibilityLabel={t('Contar ao chat de onde estou falando')} value={memory.client_context ?? true} onValueChange={(v) => void setClientContext(v)} />
+            </View>
+            <AppText variant="muted" className="text-xs">
+              {t('Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.')}
+            </AppText>
+          </View>
+        ) : null}
+        {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
+        {memory ? <ContextLimitCard limit={memory.context_limit ?? null} onSave={setContextLimit} /> : null}
         <Field label={t('Buscar')} value={q} onChangeText={search} placeholder={t('pergunta, resposta ou projeto')} testID="chat-memory-search" />
         {error ? <Banner tone="danger" text={error} /> : null}
       </View>

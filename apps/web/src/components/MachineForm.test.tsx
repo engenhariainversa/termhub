@@ -14,6 +14,8 @@ vi.mock('../lib/api', () => ({
 }));
 vi.mock('./AgentEnrollment', () => ({ AgentEnrollment: () => null }));
 vi.mock('./AgentUpdateCard', () => ({ AgentUpdateCard: () => <p>agent card</p> }));
+vi.mock('./NetworkCheckCard', () => ({ NetworkCheckCard: () => <p>network card</p> }));
+vi.mock('./MachineNetworkCard', () => ({ MachineNetworkCard: () => <p>machine network card</p> }));
 vi.mock('./MonitorHooksCard', async (orig) => ({ ...(await orig<typeof import('./MonitorHooksCard')>()), MonitorHooksCard: () => <p>monitor card</p> }));
 vi.mock('./SimulatorSetupCard', () => ({ SimulatorSetupCard: () => <p>simulator card</p> }));
 vi.mock('./AutomationAllowedCard', () => ({ AutomationAllowedCard: () => null }));
@@ -67,7 +69,7 @@ describe('MachineForm tabs', () => {
   it('opens on Geral, shows Simulador iOS only on a Mac with Xcode, and keeps what was typed across tabs', async () => {
     updateMachineMock.mockResolvedValue(machine);
     render(<MachineForm open onClose={() => {}} machine={machine} />);
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Geral', 'Agente', 'Monitor']);
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Geral', 'Agente', 'Rede', 'Monitor']);
     expect(screen.getByRole('tab', { name: 'Geral' })).toHaveAttribute('aria-selected', 'true');
     fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'renomeada' } });
     fireEvent.click(screen.getByRole('tab', { name: 'Agente' }));
@@ -88,9 +90,9 @@ describe('MachineForm tabs', () => {
     expect(agent).toHaveAttribute('aria-selected', 'true');
     expect(agent).toHaveAttribute('tabindex', '0');
     fireEvent.keyDown(agent, { key: 'ArrowRight' });
-    expect(screen.getByRole('tab', { name: 'Monitor' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Monitor' })).toHaveFocus();
-    fireEvent.keyDown(screen.getByRole('tab', { name: 'Monitor' }), { key: 'Home' });
+    expect(screen.getByRole('tab', { name: 'Rede' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Rede' })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole('tab', { name: 'Rede' }), { key: 'Home' });
     expect(screen.getByRole('tab', { name: 'Geral' })).toHaveAttribute('aria-selected', 'true');
   });
 
@@ -108,5 +110,16 @@ describe('MachineForm tabs', () => {
   it('badges Monitor when the machine has tabs but none reports state', () => {
     render(<MachineForm open onClose={() => {}} machine={{ ...machine, hooks_installed_at: '2026-10-01T00:00:00Z', tabs: 3, tabs_reporting: 0 }} />);
     expect(screen.getByRole('tab', { name: /Monitor/ })).toHaveTextContent('sem reportar');
+  });
+
+  // TER-1017: the agent tab says which credential the agent uses and nudges an old token to pair again
+  it('nudges a machine still on the permanent token to pair again, and says nothing alarming for a device key', () => {
+    const { unmount } = render(<MachineForm open onClose={() => {}} machine={{ ...machine, agent_credential: 'bearer' }} initialTab="agent" />);
+    expect(screen.getByText(/Token permanente \(antigo\)/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Parear de novo' })).toBeVisible();
+    unmount();
+    render(<MachineForm open onClose={() => {}} machine={{ ...machine, agent_credential: 'key' }} initialTab="agent" />);
+    expect(screen.queryByText(/Token permanente/)).toBeNull();
+    expect(screen.getByText(/Chave do dispositivo/)).toBeVisible();
   });
 });

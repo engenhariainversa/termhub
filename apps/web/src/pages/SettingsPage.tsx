@@ -12,12 +12,14 @@ import { DevicesView } from '../components/DevicesView';
 import { ReviewAccountPanel } from '../components/ReviewAccountPanel';
 import { MyCityView } from '../components/MyCityView';
 import { ProfileView } from '../components/ProfileView';
+import { SecurityView } from '../components/SecurityView';
 import { IntegrationsView } from '../components/IntegrationsView';
 import { AiAccountsView } from '../components/AiAccountsView';
 import { HardwareView } from '../components/HardwareView';
 import { WaitlistView } from '../components/WaitlistView';
 import { ChatGrantsView } from '../components/ChatGrantsView';
 import { SecurityEventsView } from '../components/SecurityEventsView';
+import { FeatureFlagsView } from '../components/FeatureFlagsView';
 import { PageFrame } from '../components/PageHeader';
 import { formatDate, formatDateTime } from '../lib/format';
 
@@ -89,6 +91,12 @@ export function SettingsPage() {
           <SecurityEventsView />
         </PageFrame>
       );
+    case 'feature-flags':
+      return (
+        <PageFrame title={t(current.label)}>
+          <FeatureFlagsView />
+        </PageFrame>
+      );
     case 'api-tokens':
       return (
         <PageFrame title={t(current.label)}>
@@ -105,6 +113,12 @@ export function SettingsPage() {
       return (
         <PageFrame title={t(current.label)}>
           <MyCityView />
+        </PageFrame>
+      );
+    case 'account-security':
+      return (
+        <PageFrame title={t(current.label)}>
+          <SecurityView />
         </PageFrame>
       );
     case 'profile':

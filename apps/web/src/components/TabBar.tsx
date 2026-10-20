@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PRESETS, type Preset } from '../lib/layout';
 import { TAB_STATE_LABEL, type Tab } from '../lib/types';
-import { tabDotClass } from '../lib/needs-you';
+import { TabDot } from './TabDot';
 import { useMonitor } from '../lib/monitor';
 import { useTranslation } from '../i18n';
 
@@ -98,7 +98,7 @@ export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNe
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const { tabState } = useMonitor();
+  const { tabState, autoRuns } = useMonitor();
 
   useEffect(() => {
     if (editing) inputRef.current?.select();
@@ -139,12 +139,13 @@ export function TabBar({ tabs, activeId, previewId = null, onPin, onSelect, onNe
                   📄
                 </span>
               ) : tab.kind === 'chat' ? (
-                <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(true, tabState(tab.terminalId))}`} />
+                <TabDot alive tab={tabState(tab.terminalId)} autoRef={autoRuns?.get(tab.terminalId)} />
               ) : (() => {
                 const monitorTab = tabState(tab.id);
                 const st = monitorTab?.state;
                 const base = tab.kind === 'simulator' ? (tab.alive ? t('simulador conectado') : t('simulador desconectado')) : tab.alive ? t('sessão tmux ativa') : t('sessão tmux não iniciada');
-                return <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tabDotClass(tab.alive, monitorTab)}`} title={st && st !== 'working' ? `${base} · ${t(TAB_STATE_LABEL[st])}` : base} />;
+                const autoRef = autoRuns?.get(tab.id);
+                return <TabDot alive={tab.alive} tab={monitorTab} autoRef={autoRef} title={st && (st !== 'working' || autoRef) ? `${base} · ${t(TAB_STATE_LABEL[st])}` : base} />;
               })()}
               {tab.kind === 'simulator' && (
                 <span className="text-[10px]" aria-hidden>

@@ -19,7 +19,10 @@ export const RESOURCES = [
   { key: 'roles', label: 'Roles e permissões' },
   { key: 'chat', label: 'Chat' },
   { key: 'devices', label: 'Aparelhos' },
+  // Registering versions of the Terms and the Privacy Policy (TER-742). No role grants it: admins only by default.
+  { key: 'legal', label: 'Documentos legais' },
   { key: 'security_events', label: 'Auditoria de segurança' },
+  { key: 'feature_flags', label: 'Recursos em teste' },
 ] as const;
 export type Resource = (typeof RESOURCES)[number]['key'];
 // 'write' is used only by the `terminals` resource: acting inside a terminal or simulator — typing over

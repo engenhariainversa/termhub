@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { defaultDoctorPaths, formatDoctor, runDoctor, type DoctorReport } from './doctor.js';
+import { defaultDoctorPaths, formatDoctor, networkReport, runDoctor, type DoctorReport } from './doctor.js';
 
 describe('runDoctor', () => {
   let home: string;
@@ -41,6 +41,30 @@ describe('runDoctor', () => {
     expect(report.config.ok).toBe(true);
     expect(connect).toHaveBeenCalledWith(expect.objectContaining({ url: 'https://app.termhub.dev' }), expect.any(Number));
     expect(report.server).toEqual({ ok: true });
+  });
+
+  it('POSTs to the hooks and MCP addresses the probe returned, ok only on 401', async () => {
+    const { writeConfig } = await import('./config.js');
+    writeConfig({ url: 'https://app.termhub.dev', token: 'thb_ag_' + 'a'.repeat(43), machine_id: '', machine_name: '', created_at: new Date().toISOString() });
+    const connect = vi.fn().mockResolvedValue({ ok: true, endpoints: { hooks_url: 'https://termhub.dev/api/hooks/events', mcp_url: 'https://termhub.dev/mcp' } });
+    const check = vi.fn(async (url: string) => (url.endsWith('/mcp') ? { url, status: null, error: 'ECONNREFUSED' } : { url, status: 401, error: null }));
+    const report = await runDoctor([], { connect, check });
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(report.server).toEqual({ ok: true });
+    expect(report.endpoints).toEqual([
+      { name: 'hooks', url: 'https://termhub.dev/api/hooks/events', host: 'termhub.dev', ok: true, status: 401, error: null },
+      { name: 'mcp', url: 'https://termhub.dev/mcp', host: 'termhub.dev', ok: false, status: null, error: 'ECONNREFUSED' },
+    ]);
+  });
+
+  it('skips the MCP check when the server has no MCP address, and both when the server sent none', async () => {
+    const { writeConfig } = await import('./config.js');
+    writeConfig({ url: 'https://app.termhub.dev', token: 'thb_ag_' + 'a'.repeat(43), machine_id: '', machine_name: '', created_at: new Date().toISOString() });
+    const check = vi.fn(async (url: string) => ({ url, status: 401, error: null }));
+    const one = await runDoctor([], { connect: vi.fn().mockResolvedValue({ ok: true, endpoints: { hooks_url: 'https://h.example/api/hooks/events', mcp_url: null } }), check });
+    expect(one.endpoints.map((e) => e.name)).toEqual(['hooks']);
+    const none = await runDoctor([], { connect: vi.fn().mockResolvedValue({ ok: true }), check });
+    expect(none.endpoints).toEqual([]);
   });
 
   it('reports ok:false with error "eperm" for a path that throws EPERM, ok:true for one that succeeds', async () => {
@@ -82,10 +106,12 @@ describe('formatDoctor', () => {
   const baseReport: DoctorReport = {
     config: { ok: true, path: '/home/x/.termhub/config.json' },
     server: { ok: true },
+    endpoints: [],
     tmux: { ok: true, path: '/usr/bin/tmux' },
     nodePty: { ok: true },
     spawnHelper: { ok: true, path: '/g/node-pty/prebuilds/darwin-arm64/spawn-helper', repaired: false },
     paths: [],
+    network: { ok: true },
   };
 
   it('tells the user when the spawn-helper could not be made executable', () => {
@@ -97,6 +123,19 @@ describe('formatDoctor', () => {
   it('mentions when the spawn-helper was just repaired', () => {
     const text = formatDoctor({ ...baseReport, spawnHelper: { ok: true, path: '/g/spawn-helper', repaired: true } }, { platform: 'darwin' });
     expect(text).toContain('permissão de execução corrigida agora');
+  });
+
+  it('shows each address with its host, and what to open in the firewall when it fails', () => {
+    const text = formatDoctor({
+      ...baseReport,
+      endpoints: [
+        { name: 'hooks', url: 'https://termhub.dev/api/hooks/events', host: 'termhub.dev', ok: true, status: 401, error: null },
+        { name: 'mcp', url: 'https://termhub.dev/mcp', host: 'termhub.dev', ok: false, status: 403, error: null },
+      ],
+    }, { platform: 'linux' });
+    expect(text).toContain('✓ Hooks do monitor (termhub.dev)');
+    expect(text).toContain('✗ MCP das abas (termhub.dev): respondeu HTTP 403 (esperado 401)');
+    expect(text).toContain('libere https://termhub.dev/mcp no firewall/proxy');
   });
 
   it('marks every ok check with ✓ and includes the config path', () => {
@@ -129,3 +168,50 @@ describe('formatDoctor', () => {
     }
   });
 });
+
+describe('networkReport', () => {
+  it('reports a direct connection when no proxy variable is set', () => {
+    expect(networkReport('https://app.termhub.dev', {})).toEqual({ ok: true });
+    expect(formatDoctor({ ...baseFor(), network: { ok: true } }, { platform: 'linux' })).toContain('✓ Proxy: nenhum (conexão direta)');
+  });
+
+  it('shows the proxy for the server with its password hidden', () => {
+    const report = networkReport('https://app.termhub.dev', { HTTPS_PROXY: 'http://me:s3cret@proxy.corp:3128' });
+    expect(report).toEqual({ ok: true, proxy: 'http://me:***@proxy.corp:3128' });
+    expect(formatDoctor({ ...baseFor(), network: report }, { platform: 'linux' })).toContain('✓ Proxy: http://me:***@proxy.corp:3128');
+  });
+
+  it('says when NO_PROXY exempts the server', () => {
+    expect(networkReport('https://app.termhub.dev', { https_proxy: 'proxy.corp:3128', no_proxy: '.termhub.dev' })).toEqual({ ok: true, bypassed: true });
+  });
+
+  it('fails on a proxy the agent cannot use', () => {
+    const report = networkReport('https://app.termhub.dev', { HTTPS_PROXY: 'socks5://proxy.corp:1080' });
+    expect(report.ok).toBe(false);
+    expect(formatDoctor({ ...baseFor(), network: report }, { platform: 'linux' })).toContain('✗ Proxy: unsupported proxy protocol socks5:');
+  });
+
+  it('checks the extra CA file', () => {
+    const fakeFs = { readFileSync: (p: string) => {
+      if (p === '/ca.pem') return '-----BEGIN CERTIFICATE-----\nx\n-----END CERTIFICATE-----\n';
+      throw Object.assign(new Error('nope'), { code: 'ENOENT' });
+    } } as unknown as typeof fs;
+    expect(networkReport(undefined, { NODE_EXTRA_CA_CERTS: '/ca.pem' }, fakeFs)).toEqual({ ok: true, extraCa: { path: '/ca.pem', ok: true } });
+    const missing = networkReport(undefined, { NODE_EXTRA_CA_CERTS: '/missing.pem' }, fakeFs);
+    expect(missing).toEqual({ ok: false, extraCa: { path: '/missing.pem', ok: false, error: 'ENOENT' } });
+    expect(formatDoctor({ ...baseFor(), network: missing }, { platform: 'linux' })).toContain('✗ CA extra (NODE_EXTRA_CA_CERTS): /missing.pem: ENOENT');
+  });
+});
+
+function baseFor(): DoctorReport {
+  return {
+    config: { ok: true, path: '/c' },
+    server: { ok: true },
+    endpoints: [],
+    tmux: { ok: true },
+    nodePty: { ok: true },
+    spawnHelper: { ok: true, path: null, repaired: false },
+    paths: [],
+    network: { ok: true },
+  };
+}

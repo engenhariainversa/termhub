@@ -1,7 +1,11 @@
-import { currentLocale, i18n } from '../i18n';
-import type { AccessStatus, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
-import type { AutomationFeedEvent, FileRecentResponse, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import { currentLocale, i18n, type Locale } from '../i18n';
+import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatGrant, ChatGrantListItem, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
+import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
+import type { LegalStatus } from './types';
+import type { WebSession } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -23,9 +27,22 @@ function securityEventQuery(params: Record<string, string | undefined>): string 
   return new URLSearchParams(Object.entries(params).filter((e): e is [string, string] => !!e[1])).toString();
 }
 
+/** What the chat tells the concierge about this client (TER-1088): the web's version and the browser's
+ *  time zone. The server reads the rest (device, network) from the request itself. */
+function clientHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'x-termhub-client': `web/${__APP_VERSION__}` };
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) headers['x-termhub-time-zone'] = tz;
+  } catch {
+    // no Intl time zone: the server falls back to the one saved on the account
+  }
+  return headers;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   // the server answers errors (and anything it words) in the language on screen
-  const headers: Record<string, string> = { accept: 'application/json', 'accept-language': currentLocale() };
+  const headers: Record<string, string> = { accept: 'application/json', 'accept-language': currentLocale(), ...clientHeaders() };
   const raw = body instanceof Blob;
   if (raw) headers['content-type'] = body.type || 'application/octet-stream';
   else if (body !== undefined) headers['content-type'] = 'application/json';
@@ -113,19 +130,27 @@ export const api = {
   fileRecent: (projectId: string) => request<FileRecentResponse>('GET', `/file-recent?${new URLSearchParams({ project_id: projectId })}`),
   auth: {
     config: () => request<AuthConfig>('GET', '/auth/config'),
-    me: () => request<{ user: User; view_as: ViewAs }>('GET', '/auth/me'),
+    /** `legal` is absent on servers older than TER-742 */
+    me: () => request<{ user: User; view_as: ViewAs; legal?: LegalStatus }>('GET', '/auth/me'),
     /** admin only: null = self, '*' = everything, or a user id */
     viewAs: (user_id: string | null) => request<{ view_as: ViewAs }>('POST', '/auth/view-as', { user_id }),
     login: (email: string, password: string) => request<{ user: User }>('POST', '/auth/login', { email, password }),
     sendCode: (email: string) => request<{ ok: true; ttl_minutes: number }>('POST', '/auth/code/send', { email }),
     verifyCode: (email: string, code: string) => request<{ user: User }>('POST', '/auth/code/verify', { email, code }),
     logout: () => request<{ ok: true }>('POST', '/auth/logout'),
+    /** The signed-in person's live web sessions, most recently used first (Settings → Segurança). */
+    sessions: () => request<{ sessions: WebSession[] }>('GET', '/auth/sessions'),
+    /** `current: true` = it was this browser's session, now signed out. */
+    revokeSession: (id: string) => request<{ ok: true; current: boolean }>('DELETE', `/auth/sessions/${encodeURIComponent(id)}`),
+    revokeOtherSessions: () => request<{ revoked: number }>('POST', '/auth/sessions/revoke-others'),
+    /** 403 WRONG_PASSWORD, 403 REAUTH_REQUIRED (first password, sign-in too old), 400 WEAK_PASSWORD, 429 LOCKED. */
+    changePassword: (current_password: string | null, new_password: string) => request<{ ok: true; revoked: number }>('POST', '/auth/me/password', { current_password, new_password }),
     /** Claims the address of the user's public city. 400 NICKNAME_INVALID for a bad shape or a
      *  reserved word, 409 NICKNAME_TAKEN when somebody else already holds it, 409 NICKNAME_LOCKED
      *  when the account already has one (a claimed address is never changed). */
     setNickname: (nickname: string) => request<{ user: User }>('PATCH', '/auth/me/nickname', { nickname }),
     /** The language for this account (e-mails, push and the web on every browser); null = automatic. 204. */
-    setLocale: (locale: 'pt-BR' | 'en' | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
+    setLocale: (locale: Locale | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
     /** The browser's IANA zone, for the automation's daily summary hour. 204. */
     setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
@@ -134,6 +159,13 @@ export const api = {
     setCustomCityLink: (short_url: string) => request<CityLink>('PUT', '/auth/me/city-link', { short_url }),
     /** back to the partner link */
     clearCustomCityLink: () => request<CityLink>('DELETE', '/auth/me/city-link/custom'),
+  },
+  /** Acceptance of the Terms of Use and of the Privacy Policy (TER-742). */
+  legal: {
+    status: () => request<LegalStatus>('GET', '/legal/status'),
+    /** every id must be a pending or upcoming version of this user (400 otherwise); answers the new status */
+    accept: (version_ids: string[], channel?: 'web' | 'checkout') =>
+      request<LegalStatus>('POST', '/legal/accept', channel ? { version_ids, channel } : { version_ids }),
   },
   /** The person's own account (TER-720). Only `deletion` and its DELETE answer while a deletion is pending. */
   account: {
@@ -144,13 +176,20 @@ export const api = {
      *  401 REAUTH_FAILED (wrong password/code), 429 LOCKED, 409 LAST_ADMIN. */
     requestDeletion: (reauth: { password: string } | { code: string }) => request<AccountDeletionStatus>('POST', '/account/deletion', reauth),
     cancelDeletion: () => request<AccountDeletionStatus>('DELETE', '/account/deletion'),
+    /** "Exportar meus dados" (TER-741): the latest request and when another may be asked. */
+    dataExport: () => request<DataExportStatus>('GET', '/account/export'),
+    /** builds the archive in the background and e-mails when it is ready; 409 EXPORT_IN_PROGRESS, 429 RATE_LIMITED (one a day) */
+    requestDataExport: () => request<DataExportStatus>('POST', '/account/export'),
+    /** The zip, for the signed-in account only (404 EXPORT_NOT_FOUND once its 7 days are over). */
+    dataExportUrl: (id: string) => `/api/account/export/${encodeURIComponent(id)}/download`,
   },
   machines: {
     list: () => request<{ machines: Machine[]; latest_agent_version: string | null }>('GET', '/machines'),
     /** for `type: 'agent'`, the response also carries `agent_token` (the plaintext token, shown only once) */
     create: (input: Partial<Machine>) => request<{ machine: Machine; agent_token?: string }>('POST', '/machines', input),
     update: (id: string, input: Partial<Machine>) => request<{ machine: Machine }>('PATCH', `/machines/${id}`, input),
-    remove: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}`),
+    /** `uninstall`: also remove the hooks, the tabs' tmux sessions and the agent's service + token from the machine (agent 0.20.0+, online). */
+    remove: (id: string, opts?: { uninstall?: boolean }) => request<{ ok: true }>('DELETE', `/machines/${id}${opts?.uninstall ? '?uninstall=1' : ''}`),
     status: (id: string) =>
       request<{
         id: string;
@@ -162,6 +201,8 @@ export const api = {
         last_seen_at?: string | null;
         latest_agent_version?: string | null;
         update_available?: boolean;
+        min_agent_version?: string;
+        below_min_version?: boolean;
       }>('GET', `/machines/${id}/status`),
     /** installs the latest @termhub/agent through the agent; `restarting` = poll the status until the version changes */
     updateAgent: (id: string) => request<{ installed_version: string | null; restart: 'service' | 'manual'; restarting: boolean }>('POST', `/machines/${id}/agent/update`, {}),
@@ -172,6 +213,11 @@ export const api = {
     hooks: (id: string) => request<MachineHooks>('GET', `/machines/${id}/hooks`),
     installHooks: (id: string) => request<MachineHooks & { claude: 'installed' | 'skipped'; codex: 'installed' | 'skipped'; cursor?: 'installed' | 'skipped' | 'agent_outdated'; claude_dirs?: string[] }>('POST', `/machines/${id}/hooks`),
     removeHooks: (id: string) => request<{ ok: true }>('DELETE', `/machines/${id}/hooks`),
+    networkCheck: (id: string) => request<{ checks: NetworkCheck[] }>('GET', `/machines/${id}/network-check`),
+    /** TER-1080: IPs and MACs as the agent last reported them, kept while the machine sleeps */
+    network: (id: string) => request<MachineNetworkInfo>('GET', `/machines/${id}/network`),
+    /** Wake-on-LAN through another online machine of the same network (`via` picks it; default: the first that fits) */
+    wake: (id: string, via?: string) => request<WakeResult>('POST', `/machines/${id}/wake`, via ? { via_machine_id: via } : {}),
     startWdaSetup: (id: string) => request<{ ok: true }>('POST', `/machines/${id}/simulator/setup`, {}),
     /** subpastas de `path` (padrão $HOME) + discos/mounts da máquina */
     hardware: (id: string) => request<{ hardware: HardwareSnapshot }>('GET', `/machines/${id}/hardware`),
@@ -217,7 +263,7 @@ export const api = {
    * predates trusted tabs, trusted projects or standing grants has none. */
   chat: Object.assign(
     (projectId?: string | null) =>
-      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[] }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
+      request<{ conversation: ChatConversation; messages: ChatMessage[]; actions: ChatAction[]; host: ChatHostState; grants?: ChatGrant[]; project_grants?: ChatProjectGrant[]; standing_grants?: ChatStandingGrant[]; tab_questions?: TabQuestion[]; tab_suggestions?: TabSuggestion[]; tab_limits?: TabLimit[]; subagents?: SubagentView[]; compacting?: boolean; open_answer_ids?: string[]; context_limit?: number | null }>('GET', projectId ? `/chat?project=${encodeURIComponent(projectId)}` : '/chat'),
     {
       /** Files attached to a message before it is sent (spec §5.3). */
       attachments: {
@@ -363,8 +409,20 @@ export const api = {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with no key. `codex_replies` is the opt-in for the Codex reply card. */
-  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; client_context?: boolean; context_limit?: number | null; auto_thresholds?: AutoThresholdPair | null }) =>
     request<ChatMemory>('PATCH', '/chat/memory', typeof body === 'boolean' ? { enabled: body } : body),
+  /** Says whether termhub is in focus on this screen (TER-642: a suggested answer's countdown only runs
+   *  while it is). Best effort: `keepalive` lets the last one out while the page goes away, and a
+   *  failure is swallowed — it never raises the 401 event, the next beat simply tries again. */
+  reportChatFocus: (clientId: string, focused: boolean): Promise<void> => {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    const csrf = readCookie('termhub_csrf');
+    if (csrf) headers['x-csrf-token'] = csrf;
+    return fetch('/api/chat/focus', { method: 'POST', headers, body: JSON.stringify({ client_id: clientId, focused }), credentials: 'same-origin', keepalive: true }).then(
+      () => undefined,
+      () => undefined,
+    );
+  },
   /** "Anotações do concierge" (spec D12/§8): newest first, 50 per page, keyset `cursor` like `chatDecisions`. */
   chatNotes: (cursor?: string | null) => {
     const params = new URLSearchParams();
@@ -378,6 +436,8 @@ export const api = {
     tabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/tabs'),
     /** every open terminal tab of the scope, reported a state or not (the sidebar's agents) */
     openTabs: () => request<{ items: MonitorItem[] }>('GET', '/monitor/open-tabs'),
+    /** the tabs an automatic run works in, with the card's ref (TER-1044) */
+    autoRuns: () => request<{ items: Array<{ tab_id: string; ref: string }> }>('GET', '/monitor/auto-runs'),
   },
   tasks: {
     list: (projectId: string) => request<BoardData>('GET', `/projects/${projectId}/tasks`),
@@ -461,6 +521,16 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>('DELETE', `/ai-accounts/${id}`),
     usage: (refresh = false) => request<{ usage: AiAccountUsage[] }>('GET', `/ai-accounts/usage${refresh ? '?refresh=1' : ''}`),
     usageOf: (id: string, refresh = false) => request<{ usage: AiAccountUsage }>('GET', `/ai-accounts/${id}/usage${refresh ? '?refresh=1' : ''}`),
+    /** TER-1047: the login state of every account in scope; `refresh` asks the machines again. */
+    loginStatus: (refresh = false) => request<{ accounts: AiLoginStatusRow[]; warn_days?: number }>('GET', `/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`),
+    /** TER-1079: how many days before a login expires the person is warned (0 = never, at most 3). */
+    setLoginWarning: (days: number) => request<{ warn_days: number }>('PUT', '/ai-accounts/login-warning', { days }),
+    /** Starts a login flow in a hidden session on the account's machine. 400/403/409/503 carry a message to show. */
+    startLogin: (id: string) => request<AiLoginStart>('POST', `/ai-accounts/${id}/login`),
+    /** Claude: the code the page showed; Codex: null (just "already authorized"). 404 LOGIN_NOT_FOUND once expired. */
+    submitLogin: (id: string, loginId: string, code: string | null) => request<AiLoginSubmitResult>('POST', `/ai-accounts/${id}/login/${loginId}/submit`, { code }),
+    cancelLogin: (id: string, loginId: string) => request<{ cancelled: true }>('DELETE', `/ai-accounts/${id}/login/${loginId}`),
+    resumeAfterLogin: (id: string, tabIds: string[]) => request<{ resumed: string[] }>('POST', `/ai-accounts/${id}/login/resume`, { tab_ids: tabIds }),
   },
   roles: {
     list: () => request<{ roles: Role[] }>('GET', '/roles'),
@@ -504,6 +574,14 @@ export const api = {
     /** A plain link (the browser downloads it with the session cookie); the export goes on the trail. */
     exportUrl: (filter: SecurityEventFilter, format: 'csv' | 'json') => `/api/security-events/export?${securityEventQuery({ ...filter, format })}`,
   },
+  /** Settings → Recursos em teste (TER-1040): feature flags, for admins. */
+  featureFlags: {
+    list: () => request<{ flags: FeatureFlagInfo[] }>('GET', '/feature-flags'),
+    set: (key: FeatureFlagKey, enabled: boolean) => request<{ key: FeatureFlagKey; enabled: boolean }>('PUT', `/feature-flags/${key}`, { enabled }),
+    /** 404 when no account has this e-mail */
+    setOverride: (key: FeatureFlagKey, email: string, enabled: boolean) => request<{ overrides: FeatureFlagOverride[] }>('PUT', `/feature-flags/${key}/overrides`, { email, enabled }),
+    removeOverride: (key: FeatureFlagKey, userId: string) => request<null>('DELETE', `/feature-flags/${key}/overrides/${userId}`),
+  },
   waitlist: {
     list: () => request<{ entries: WaitlistEntry[] }>('GET', '/waitlist'),
     remove: (id: string) => request<{ ok: true }>('DELETE', `/waitlist/${id}`),
@@ -532,6 +610,10 @@ export const api = {
     action: (id: string, action: TabChatAction) => request<{ done: true; mode: string | null }>('POST', `/tab-chat/${id}/chat/actions`, { action }),
     /** The last lines of the pane, plain text ("Ver tela"). */
     screen: (id: string, lines = 120) => request<{ text: string }>('GET', `/tab-chat/${id}/screen?lines=${lines}`),
+    /** "Iniciar sessão" (TER-1094): the accounts the tab's agent can start with. */
+    agentOptions: (id: string) => request<TabAgentOptions>('GET', `/tab-chat/${id}/agent`),
+    /** Starts the agent in the tab, or in a new tab when its pane is busy; no account = the suggested one. */
+    startAgent: (id: string, accountId?: string) => request<StartTabAgentResult>('POST', `/tab-chat/${id}/agent`, accountId ? { account_id: accountId } : {}),
   },
   tabs: {
     rename: (id: string, name: string) => request<{ tab: Tab }>('PATCH', `/tabs/${id}`, { name }),

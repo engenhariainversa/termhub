@@ -41,6 +41,8 @@ function deferred<T>() {
 }
 
 function build(opts: {
+  /** users with the subscriptions flag on for themselves (TER-1040) */
+  testers?: string[];
   start?: ReturnType<typeof vi.fn>;
   reset?: ReturnType<typeof vi.fn>;
   startAfterDecision?: ReturnType<typeof vi.fn>;
@@ -132,6 +134,7 @@ function build(opts: {
     },
     tabQuestions: { listByConversation: vi.fn(async () => opts.tabQuestions ?? []) },
     tabLimitNotices: { listByConversation: vi.fn(async () => []) },
+    users: { chatContextLimit: vi.fn(async (): Promise<number | null> => null) },
     // The decision route reads the card's tab (TER-986): by default the fixture card's tab ('t1') is open.
     tabs: { findByIdsForOwner: vi.fn(async (ids: string[]) => (opts.tabs ?? [{ id: 't1', project_id: 'p1', name: 'Terminal 1' }]).filter((t) => ids.includes(t.id))) },
     chatGrants: {
@@ -210,6 +213,7 @@ function build(opts: {
       setFavorite: opts.setFavorite ?? vi.fn(async () => undefined),
     },
     roles: { findById: vi.fn(async () => undefined), permissionsOf: vi.fn(async () => []) },
+    featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async (_flag: string, userId: string) => (opts.testers?.includes(userId) ? true : null)) },
   };
   const app = Fastify();
   applyErrorHandler(app);
@@ -487,8 +491,16 @@ describe('POST /chat/messages', () => {
     const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', project_id: 'p1' } });
     expect(res.statusCode).toBe(202);
     expect(res.json()).toEqual({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma' });
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1' });
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1', client: expect.objectContaining({ client: 'ios' }) });
     d.resolve({ id: 'ma' });
+  });
+
+  it('tells the service where the message came from, read from the request and the device (TER-1088)', async () => {
+    const start = vi.fn(async () => ({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma', done: Promise.resolve({}) }));
+    const { app } = build({ start });
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', headers: { 'x-termhub-app': 'ios/0.6.0+40', 'x-termhub-time-zone': 'America/Sao_Paulo', 'accept-language': 'pt-BR' }, payload: { text: 'oi' } });
+    expect(res.statusCode).toBe(202);
+    expect(start).toHaveBeenCalledWith(expect.anything(), 'oi', expect.objectContaining({ client: { client: 'ios', app_version: '0.6.0', device: 'phone', os: 'iOS 18.0', ip: '127.0.0.1', time_zone: 'America/Sao_Paulo', locale: 'pt-BR' } }));
   });
 
   it('swallows a rejected done: never an unhandled rejection', async () => {
@@ -520,7 +532,7 @@ describe('POST /chat/messages', () => {
     const { app, start } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: ['a1'] } });
     expect(res.statusCode).toBe(202);
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1'] });
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1'], client: expect.objectContaining({ client: 'ios' }) });
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: [] } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { attachment_ids: [] } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', attachment_ids: ['1', '2', '3', '4', '5', '6'] } })).statusCode).toBe(400);
@@ -530,7 +542,7 @@ describe('POST /chat/messages', () => {
     const { app, start } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'faz de novo', reply_to_id: 'm7' } });
     expect(res.statusCode).toBe(202);
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7' });
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7', client: expect.objectContaining({ client: 'ios' }) });
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
   });
 
@@ -538,7 +550,7 @@ describe('POST /chat/messages', () => {
     const { app, start } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'escolhe azul', reply_to_card: { kind: 'tab_question', id: 'q7' } } });
     expect(res.statusCode).toBe(202);
-    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'escolhe azul', { projectId: null, replyToCard: { kind: 'tab_question', id: 'q7' } });
+    expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'escolhe azul', { projectId: null, replyToCard: { kind: 'tab_question', id: 'q7' }, client: expect.objectContaining({ client: 'ios' }) });
   });
 });
 
@@ -1513,12 +1525,18 @@ describe('GET /me', () => {
     expect(res.json()).toEqual({
       user: { id: 'u1', email: 'ana@example.com', name: 'Ana', nickname: 'ana' },
       permissions: [],
+      features: { subscriptions: false },
       device: { id: 'd1', name: 'iPhone de Ana', platform: 'ios', model: 'iPhone 15', created_at: '2026-09-19T00:00:00.000Z', last_seen_at: '2026-09-20T00:00:00.000Z' },
       unread_notifications: 3,
     });
     expect(res.body).not.toContain('public_key');
     expect(res.body).not.toContain('pin_secret_enc');
     expect(res.body).not.toContain('secret-hash');
+  });
+
+  it('carries the subscriptions flag on for a tester (TER-1040)', async () => {
+    const { app } = build({ testers: ['u1'] });
+    expect((await app.inject({ method: 'GET', url: '/me' })).json().features).toEqual({ subscriptions: true });
   });
 });
 

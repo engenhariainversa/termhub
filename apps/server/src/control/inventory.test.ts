@@ -3,13 +3,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../terminal/machine-exec.js', () => ({ listTmuxSessions: vi.fn() }));
 vi.mock('../agent/registry.js', () => {
   // by default nobody is on the way: the wait answers what `isOnline` says
-  const agents = { isOnline: vi.fn(), awaitHandover: vi.fn(async (m: { id: string }) => agents.isOnline(m.id) as boolean) };
+  const agents = { isOnline: vi.fn(), info: vi.fn((): { agent_version: string } | null => null), awaitHandover: vi.fn(async (m: { id: string }) => agents.isOnline(m.id) as boolean) };
   return { agents };
 });
 // inventory -> tickets.ts -> tasks.ts -> config.js (same pattern as control/tasks.test.ts)
 vi.mock('../config.js', () => ({ config: { publicUrl: 'https://app.test' } }));
 
 import { agents } from '../agent/registry.js';
+import { setLatestAgentRelease } from '../agent/latest-version.js';
+import { MIN_AGENT_VERSION } from '../agent/min-version.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ProjectGroup } from '../db/repositories/project-groups.js';
 import type { AiAccount, Machine, Project, Tab } from '../db/repositories/types.js';
@@ -56,7 +58,10 @@ const accounts = [
   account({ id: 'ax', label: 'pedrogoiania', machine_id: 'mx' }),
 ];
 
-function ctx(grants: string[] = ['machines:read', 'projects:read', 'terminals:read', 'ai_accounts:read']): ControlContext {
+/** users.ai_login_warn_days of the caller (TER-1079); null = the default. */
+let warnDays: number | null = null;
+
+function ctx(grants: string[] =['machines:read', 'projects:read', 'terminals:read', 'ai_accounts:read']): ControlContext {
   const repos = {
     machines: {
       list: vi.fn(async (owner: string | null) => machines.filter((m) => owner === null || m.owner_id === owner)),
@@ -81,6 +86,7 @@ function ctx(grants: string[] = ['machines:read', 'projects:read', 'terminals:re
     },
     projectGroups: { read: vi.fn(async (userId: string) => (userId === 'u1' ? groups : [])) },
     aiAccounts: { list: vi.fn(async (owner: string | null) => accounts.filter((a) => owner === null || machines.find((m) => m.id === a.machine_id)!.owner_id === owner)) },
+    users: { aiLoginWarnDays: vi.fn(async () => warnDays) },
     tasks: {
       listByProject: vi.fn(async (pid: string) => (pid === 'p1' ? [{ id: 'k1', title: 'XPTO', status: 'doing', tab_id: 't1', subtasks: [] }] : [])),
       findByIds: vi.fn(async (ids: string[]) => (ids.includes('k12') ? [{ id: 'k12', project_id: 'p1', ref: 'P1-12', title: 'Checkout' }] : [])),
@@ -105,7 +111,9 @@ function ctx(grants: string[] = ['machines:read', 'projects:read', 'terminals:re
 }
 
 beforeEach(() => {
+  warnDays = null;
   vi.mocked(agents.isOnline).mockImplementation((id: string) => id === 'm1');
+  vi.mocked(agents.info).mockReturnValue(null);
   vi.mocked(listTmuxSessions).mockClear().mockResolvedValue(new Set(['th-t1']));
 });
 
@@ -150,6 +158,26 @@ describe('listMachines', () => {
     vi.mocked(c.repos.machines.list).mockResolvedValue([machine({ id: 'm1' }), machine({ id: 'm3', type: 'ssh', host: 'box' })]);
     const r = await listMachines(c);
     expect(r.machines.map((m) => m.online)).toEqual([false, null]);
+  });
+
+  // TER-1056: the concierge could not tell which machines were behind.
+  it('carries the agent version, whether an update is available and whether it is below the minimum', async () => {
+    setLatestAgentRelease({ version: '9.0.0', integrity: `sha512-${'A'.repeat(86)}==` });
+    vi.mocked(agents.isOnline).mockReturnValue(true);
+    vi.mocked(agents.info).mockImplementation((id: string) => (id === 'live' ? { agent_version: '0.19.0' } : null));
+    const c = ctx();
+    vi.mocked(c.repos.machines.list).mockResolvedValue([
+      machine({ id: 'live', agent_version: '0.18.0' }),
+      machine({ id: 'gone', agent_version: '9.0.0' }),
+      machine({ id: 'm2', type: 'local' }),
+    ]);
+    const r = await listMachines(c);
+    expect(r).toMatchObject({ latest_agent_version: '9.0.0', min_agent_version: MIN_AGENT_VERSION });
+    expect(r.machines[0]).toMatchObject({ agent_version: '0.19.0', update_available: true, below_min_version: true });
+    // offline: the last version seen, and nothing to update now
+    expect(r.machines[1]).toMatchObject({ agent_version: '9.0.0', update_available: false, below_min_version: false });
+    expect(r.machines[2]).not.toHaveProperty('agent_version');
+    setLatestAgentRelease(null);
   });
 });
 
@@ -262,11 +290,29 @@ describe('listAiAccounts', () => {
   it('lists the owner\'s accounts without the config dir', async () => {
     const r = await listAiAccounts(ctx(), {});
     expect(r.accounts).toEqual([
-      { id: 'a1', provider: 'claude', label: 'pedrogoiania', machine_id: 'm1', machine_name: 'MacBook Pro M4', default: false },
-      { id: 'a2', provider: 'claude', label: 'Claude da casa', machine_id: 'm1', machine_name: 'MacBook Pro M4', default: true },
+      { id: 'a1', provider: 'claude', label: 'pedrogoiania', machine_id: 'm1', machine_name: 'MacBook Pro M4', default: false, login_expires_at: null, expires_soon: false },
+      { id: 'a2', provider: 'claude', label: 'Claude da casa', machine_id: 'm1', machine_name: 'MacBook Pro M4', default: true, login_expires_at: null, expires_soon: false },
     ]);
     expect(JSON.stringify(r)).not.toContain('claude-secret');
     expect(JSON.stringify(r)).not.toContain('config_dir');
+  });
+
+  it('TER-1079: says when the login expires and whether that is within the person\'s window', async () => {
+    const inDays = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString();
+    const [soon, later] = [inDays(2), inDays(20)];
+    const c = ctx();
+    vi.mocked(c.repos.aiAccounts.list).mockResolvedValue([
+      account({ id: 'a1', machine_id: 'm1', login_expires_at: soon }),
+      account({ id: 'a2', machine_id: 'm1', login_expires_at: later }),
+      account({ id: 'a3', machine_id: 'm1', login_expires_at: inDays(-1) }),
+    ]);
+    const pick = async () => (await listAiAccounts(c, {})).accounts.map((a) => [a.id, a.login_expires_at, a.expires_soon]);
+    expect(await pick()).toEqual([['a1', soon, true], ['a2', later, false], ['a3', null, false]]);
+    // the person's own window: 1 day ahead, then never
+    warnDays = 1;
+    expect(await pick()).toEqual([['a1', soon, false], ['a2', later, false], ['a3', null, false]]);
+    warnDays = 0;
+    expect((await pick()).some(([, , s]) => s)).toBe(false);
   });
 });
 

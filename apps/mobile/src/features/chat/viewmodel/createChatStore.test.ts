@@ -1805,3 +1805,13 @@ it('announces a message the server accepted, never a failed one (permission prom
   expect(sent).toHaveBeenCalledTimes(1);
   off();
 });
+
+it("a context event moves the header's meter, keeping the last compaction when an older server leaves it out (TER-1038)", async () => {
+  const { chat, handlers } = await setup();
+  await openAndConnect(chat, 'p-termhub');
+  expect(slot(chat, 'p-termhub').contextLimit).toBeNull();
+  handlers().onEvent({ type: 'context', user_id: 'u1', conversation_id: 'c-termhub', tokens: 1_951, window: 200_000, compacted_at: '2026-10-07T12:00:00.000Z' });
+  expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 1_951, context_window: 200_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
+  handlers().onEvent({ type: 'context', user_id: 'u1', conversation_id: 'c-termhub', tokens: 25_000, window: 200_000 });
+  expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 25_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
+});

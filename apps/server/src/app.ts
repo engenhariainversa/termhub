@@ -31,6 +31,8 @@ import { automationPauseRoutes, projectAutomationEventRoutes, projectAutomationR
 import { projectAiRoutes } from './routes/project-ai.js';
 import { projectTicketRoutes, taskTicketRoutes } from './routes/tickets.js';
 import { aiAccountRoutes } from './routes/ai-accounts.js';
+import { aiLoginRoutes } from './routes/ai-login.js';
+import { startAiLoginChecks } from './ai/login-checks.js';
 import { waitlistRoutes } from './routes/waitlist.js';
 import { publicCityRoutes } from './routes/public-city.js';
 import { cityLinkRoutes } from './routes/city-link.js';
@@ -55,9 +57,10 @@ import { ChatService, failureLabel, purgeExpiredActions } from './chat/service.j
 import { HEARTBEAT_MS, SWEEP_MS } from './chat/resume.js';
 import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
+import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startMemorySweeper } from './memory/sweeper.js';
-import { agentRunner } from './chat/runner.js';
+import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
@@ -69,6 +72,8 @@ import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
+import { adminTroubleshootRoutes } from './routes/admin-troubleshoot.js';
+import { featureFlagRoutes, publicFeatureRoutes } from './routes/feature-flags.js';
 import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
 import { createMobileServices, registerMobileApi } from './mobile/app.js';
@@ -82,6 +87,7 @@ import { startCiSyncScheduler } from './ci/scheduler.js';
 import { MERGE_TOOL } from './automation/merge.js';
 import { startSummaryTimer } from './automation/summary.js';
 import { startAgentUpdateScheduler } from './agent/latest-version.js';
+import { followAgentUpdate } from './agent/after-update.js';
 import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
@@ -97,6 +103,9 @@ import { createRealBackend } from './simulator/backend.js';
 import { seed } from './seed.js';
 import { AccountDeletionService } from './account/deletion.js';
 import { accountRoutes } from './routes/account.js';
+import { legalRoutes, legalVersionRoutes } from './routes/legal.js';
+import { sendDueLegalNotices } from './legal/notices.js';
+import { DataExportService } from './account/data-export.js';
 import { publicBus } from './public/bus.js';
 import { CLOSE } from '@termhub/agent-protocol';
 
@@ -203,7 +212,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Every WebSocket server whose clients the drain closes with 1012 (the mobile chat's joins below).
   const sockets: WebSocketServer[] = [
     registerTerminalWs(upgrades, { repos, log: fastify.log }),
-    registerAgentWs(upgrades, { repos, log: fastify.log }),
+    registerAgentWs(upgrades, { repos, log: fastify.log, probeInfo: { hooks_url: config.hooksUrl, mcp_url: config.mcpUrl } }),
     simWs.wss,
     registerMonitorWs(upgrades, { log: fastify.log }),
     registerChatWs(upgrades, { log: fastify.log }),
@@ -234,7 +243,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       language: config.transcription?.language ?? null,
       whisperSecret: config.transcription?.secret ?? null,
     },
-    onDone: (row) => publishAttachment(row),
+    // TER-1085: a held audio message runs now, and a run told "still transcribing" gets the text.
+    onDone: (row) => {
+      publishAttachment(row);
+      chat.transcriptSettled(row);
+    },
     log: fastify.log,
   });
   const attachments: ChatAttachmentDeps = { service: chat, store: attachmentStore, queue: extraction, quotaBytes: config.chatFiles.quotaBytes, onRetry: (row) => publishAttachment(row) };
@@ -251,7 +264,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     },
     appUrl: config.publicUrl,
     pageUrl: config.accountDeletionUrl,
+    backupRetentionDays: config.backupRetentionDays,
     log: fastify.log.child({ mod: 'account-deletion' }),
+  });
+  // "Exportar meus dados" (TER-741): archives on the chat-files volume, so both colors see them.
+  const dataExports = new DataExportService({
+    repos,
+    mailer,
+    dir: path.join(config.chatFiles.dir, '.exports'),
+    readAttachment: (userId, id) => attachmentStore.read(userId, id),
+    appUrl: config.publicUrl,
+    log: fastify.log.child({ mod: 'data-export' }),
   });
   const mobileDeps = { repos, agents, chat, transcriptions, mailer, log: fastify.log, upgrades, attachments, tabChat, deletion };
   const mobile = config.mobile ? createMobileServices(mobileDeps) : null;
@@ -280,7 +303,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await api.register((a) => authRoutes(a, auth, { onNicknameClaimed: (u) => shortLinks.onNicknameClaimed(u) }), { prefix: '/auth' });
       await api.register((a) => cityLinkRoutes(a, { shortLinks }), { prefix: '/auth' });
       // The person's own account: any signed-in person may delete it, no role grant needed.
-      await api.register((a) => accountRoutes(a, { auth: authService, deletion, repos }), { prefix: '/account' });
+      await api.register((a) => accountRoutes(a, { auth: authService, deletion, exports: dataExports, repos }), { prefix: '/account' });
+      // Acceptance of the Terms and the Privacy Policy (TER-742): any signed-in person; the versions are the `legal` resource's.
+      await api.register((a) => legalRoutes(a, repos), { prefix: '/legal' });
+      await guarded('legal', (a) => legalVersionRoutes(a, repos), '/legal/versions');
       await guarded('machines', (a) => machineRoutes(a, repos), '/machines');
       await guarded('projects', (a) => projectRoutes(a, repos, { simulators }), '/projects');
       await guarded('projects', (a) => projectGroupRoutes(a, repos), '/project-groups');
@@ -310,12 +336,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
       await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
+      // "Refazer login" of an account (TER-1047); the app registers the same plugin.
+      await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
       await guarded('waitlist', (a) => waitlistRoutes(a, repos), '/waitlist');
       await guarded('roles', (a) => roleRoutes(a, repos), '/roles');
       await guarded('users', (a) => userRoutes(a, repos, { mailer, access, deletion, revoke: mobile ? (id, input) => revokeDevice({ repos, sockets: mobile.sockets, mailer, log: fastify.log }, id, input) : null }), '/users');
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
+      await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
       await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
+      // Support troubleshooting of one user (TER-1092): admins only, checked by the plugin itself, never a grant.
+      await api.register((a) => adminTroubleshootRoutes(a, repos), { prefix: '/admin/troubleshoot' });
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {
@@ -326,6 +357,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
         );
       }
       await api.register((a) => publicCityRoutes(a, repos), { prefix: '/public' });
+      await api.register((a) => publicFeatureRoutes(a, repos), { prefix: '/public' });
       api.get('/health', { config: { public: true } }, async () => ({ ok: true }));
       await api.register((a) => readyRoutes(a, { ping: () => repos.ping(), lifecycle }));
       api.setNotFoundHandler((request, reply) => sendError(request, reply, 404, 'Rota não encontrada', 'NOT_FOUND'));
@@ -364,8 +396,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void expireOrphanTabActions(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
+    // Data exports: build what waits (or a deploy cut short), drop archives past their 7 days (TER-741).
+    void dataExports.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'data export: job failed'));
     // Automation events are kept 30 days (agentic board).
     void repos.automationEvents.purgeBefore(new Date(Date.now() - AUTOMATION_EVENT_RETENTION_MS)).catch(() => {});
+    // The 30-day notice of a new version of the Terms or the Privacy Policy (TER-742); the claim picks one colour, a draining one sends nothing.
+    void sendDueLegalNotices({ repos, mailer, log: fastify.log, active: () => !lifecycle.draining }).catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'legal notice: job failed'));
     // The admin "view as" trail is kept a year after each period ends (TER-746).
     void repos.viewAsAudit.purgeBefore(new Date(Date.now() - VIEW_AS_AUDIT_RETENTION_MS)).catch(() => {});
     // Privacy Policy section 8 (TER-743): tab state history after 90 days, the waitlist after 12 months.
@@ -376,11 +412,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void repos.securityEvents.purgeBefore(securityEventCutoff(config.securityEventRetentionDays)).catch(() => {});
   }, 60 * 60 * 1000);
   const stopSync = startTicketSyncScheduler(repos, fastify.log);
-  const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log);
+  // TER-1056: after an auto-update, refresh the hooks once the agent is back on the new version
+  const stopAgentUpdates = startAgentUpdateScheduler(repos, fastify.log, (m, target) => void followAgentUpdate(repos, m, target, fastify.log));
   const stopTabQuestionExpiry = startTabQuestionExpiry(repos, fastify.log);
   const stopTabGoneActionExpiry = startTabGoneActionExpiry(repos, fastify.log);
-  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615).
-  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log);
+  // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),
+  // and one left waiting on background work that never reports ends after a timeout (TER-1053).
+  const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -413,7 +451,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     await within(chat.suspendAll().catch((err: unknown) => fastify.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'preClose: suspend failed')), PRE_CLOSE_SUSPEND_MS, () => fastify.log.warn({}, 'preClose: suspend budget exceeded'));
   });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
-  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log);
+  // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
+  const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
   // Agentic board (spec §8): the dispatcher starts agents on eligible cards of projects with automation on,
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
@@ -425,6 +464,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   chat.onApproved(MERGE_TOOL, (action) => automation.mergeApproved(action.id));
   // The daily summary of the automatic work (spec D26): both colours tick, the claim row sends it once; a draining colour sends nothing.
   const stopSummaries = startSummaryTimer({ repos, lifecycle, log: fastify.log, push: mobile ? (...a) => mobile.push.automationSummary(...a) : undefined });
+  // AI CLI logins (TER-1047): every 10 min the accounts of online agent machines are checked, and an expired
+  // login pushes once to the machine's owner. Also stops the login flows' expiry sweep. A login about to
+  // expire (TER-1079, read off a starting session's screen) warns once too, ahead of it.
+  const stopAiLoginChecks = startAiLoginChecks({
+    repos,
+    log: fastify.log,
+    push: mobile ? (...a) => mobile.push.aiLoginRequired(...a) : undefined,
+    pushExpiring: mobile ? (...a) => mobile.push.aiLoginExpiring(...a) : undefined,
+  });
   fastify.addHook('onClose', async () => {
     clearInterval(purge);
     clearInterval(liveBeat);
@@ -435,6 +483,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     stopCiSync();
     stopSummaries();
+    stopAiLoginChecks();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();

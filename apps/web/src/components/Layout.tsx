@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useTranslation } from '../i18n';
 import { useAuth } from '../lib/auth';
+import { useChatFocusReporter } from '../lib/chat-focus';
 import { DataProvider } from '../lib/data';
 import { FocusProvider, useFocusMode } from '../lib/focus';
 import { MonitorProvider } from '../lib/monitor';
@@ -12,6 +13,8 @@ import { isSettingsPath, useSettingsExit } from '../lib/settings-nav';
 import { ToastProvider, Toaster } from '../lib/toast';
 import { ChatDock } from './chat/ChatDock';
 import { DeviceRequestBanner } from './DeviceRequestBanner';
+import { LegalAcceptancePage } from './LegalAcceptancePage';
+import { LegalNoticeBanner } from './LegalNoticeBanner';
 import { NeedsYouToasts } from './NeedsYouToasts';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SidebarRail } from './SidebarRail';
@@ -29,13 +32,18 @@ const SIDEBAR_KEY = 'termhub:sidebar-collapsed';
  * still receives monitor pushes and toasts.
  */
 export function AppShell() {
-  const { user, loading } = useAuth();
+  const { user, loading, legal, can } = useAuth();
   const { t } = useTranslation();
+  // TER-642: an automatic answer's countdown only runs while termhub is in focus on some screen. Not
+  // while the person is held at a gate below: they cannot see a chat card from there.
+  useChatFocusReporter(!!user && !user.deletion_scheduled_at && legal.pending.length === 0 && can('chat'));
 
   if (loading) return <FullScreenMessage>{t('Carregando…')}</FullScreenMessage>;
   if (!user) return <Navigate to="/login" replace />;
   // A deactivated account (deletion pending) gets only the page that lets it cancel.
   if (user.deletion_scheduled_at) return <PendingDeletionPage scheduledAt={user.deletion_scheduled_at} />;
+  // A version in force of the Terms or the Privacy Policy not accepted yet (TER-742): only the acceptance page.
+  if (legal.pending.length > 0) return <LegalAcceptancePage pending={legal.pending} />;
   return (
     <DataProvider>
       <MonitorProvider>
@@ -97,6 +105,7 @@ function LayoutRow({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: bo
       <Chrome collapsed={collapsed} setCollapsed={setCollapsed} onLeaveSettings={onLeaveSettings} />
       <main className={`relative min-w-0 flex-1 ${maximized ? 'hidden' : ''}`}>
         <DeviceRequestBanner />
+        <LegalNoticeBanner />
         <Outlet />
       </main>
       {can('chat') && <ChatDock />}

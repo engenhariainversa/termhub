@@ -61,7 +61,7 @@ async function startRetryOf(ctx: ControlContext, taskId: string, locale: Locale,
   const minutes = Math.max(1, Math.ceil((failures.retry_at.getTime() - now.getTime()) / 60_000));
   const head = t(locale, 'O início falhou ({{attempt}} de {{max}}); nova tentativa em {{minutes}} min', { attempt: failures.consecutive, max: MAX_START_FAILURES, minutes });
   const blocked = failures.last_run_id ? await ctx.repos.automationEvents.lastForRun(failures.last_run_id, 'run_blocked') : null;
-  const why = blocked ? (locale === 'en' ? blocked.payload.message_en : null) ?? blocked.payload.message : null;
+  const why = blocked ? (locale === 'pt-BR' ? null : blocked.payload[`message_${locale}`]) ?? blocked.payload.message : null;
   return typeof why === 'string' && why ? `${head}. ${why}` : head;
 }
 

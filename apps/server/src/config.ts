@@ -28,6 +28,8 @@ const envSchema = z.object({
   // "app" | "cloudflare" | "disabled" — pode combinar: "app,cloudflare"
   AUTH_MODE: z.string().default('app'),
   SESSION_TTL_DAYS: z.coerce.number().int().positive().default(30),
+  /** web sessions unused for this long end (idle timeout); 0 = off, only SESSION_TTL_DAYS applies */
+  SESSION_IDLE_MINUTES: z.coerce.number().int().min(0).default(0),
   COOKIE_SECURE: z
     .enum(['true', 'false', 'auto'])
     .default('auto'),
@@ -69,11 +71,22 @@ const envSchema = z.object({
    * Default: /excluir-conta/ on the public city's origin (termhub.dev in production).
    */
   ACCOUNT_DELETION_URL: z.string().url().optional(),
+  /**
+   * Days a database backup is kept (TER-745). deploy/db-backup.sh prunes by it, and the
+   * account-deleted e-mail tells when the copies in backups go. Unset = the e-mail says nothing about
+   * backups (an instance without backups).
+   */
+  BACKUP_RETENTION_DAYS: z.coerce.number().int().min(1).optional(),
 
   /**
    * Public MCP endpoint (https://termhub.dev/mcp in production), shown in the "claude mcp add"
    * command when a token is created. Unset = the command is not shown, and the chat concierge
    * counts as not configured: it has no endpoint to reach the machines through.
+   *
+   * No fallback on purpose: PUBLIC_URL is the app host (app.termhub.dev), which sits behind
+   * Cloudflare Access, so `${PUBLIC_URL}/mcp` answers an Access redirect instead of MCP and the
+   * concierge would talk about the user's machines with no data at all. `/mcp` is exposed outside
+   * Access only on the landing host (deploy/nginx/termhub.dev.conf.tmpl).
    */
   MCP_URL: z.string().url().optional(),
 
@@ -87,6 +100,15 @@ const envSchema = z.object({
   MOBILE_MIN_APP_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).optional(),
   /** Expo push service access token (optional: Expo accepts unauthenticated sends when the project allows it) */
   EXPO_PUSH_ACCESS_TOKEN: z.string().optional(),
+
+  /**
+   * Public pages with this instance's terms of use and privacy policy (https://termhub.dev/termos/
+   * and /privacidade/ for the hosted service). The login screen and Configurações → Perfil link to
+   * them. Unset = no link: a self-hosted instance is not covered by termhub.dev's documents, so it
+   * shows its own or none.
+   */
+  TERMS_URL: z.string().url().optional(),
+  PRIVACY_URL: z.string().url().optional(),
 
   /** WhatsApp group the alpha-tester invite (Waitlist tab → Convidar) links to */
   ALPHA_COMMUNITY_URL: z.string().url().default('https://77a.it/comunidadetermhub'),
@@ -115,6 +137,9 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().default('termhub <termhub@localhost>'),
   LOGIN_CODE_TTL_MINUTES: z.coerce.number().int().positive().default(10),
 
+  /** Minutes a Claude tab may wait on its own background work with no hook event before the monitor reads it as done (TER-1053); 0 = never. */
+  MONITOR_BACKGROUND_TIMEOUT_MINUTES: z.coerce.number().int().min(0).default(20),
+
   // Chave (base64, 32 bytes) para criptografar segredos das integrações. Gere com: openssl rand -base64 32
   ENCRYPTION_KEY: z.string().optional(),
 
@@ -134,18 +159,18 @@ const envSchema = z.object({
   EMBED_URL: z.string().url().optional(),
   /** bearer token for embeddings service authentication */
   EMBED_SECRET: z.string().optional(),
-  /** similarity threshold for suggesting past decisions (0..1), on the normalised question alone
-   *  (TER-204): the worst opposite-meaning pair measured scores 0.948 and a repeat with another header
-   *  or options scores 1.0; lower it to trade precision for paraphrases. */
-  DECISION_SUGGEST_THRESHOLD: z.coerce.number().min(0).max(1).default(0.98),
-  /** seconds an automatic answer stays on the card, cancellable, before the server sends it (spec
-   *  2026-09-26 concierge memory D6, §6). Bounded so a typo can neither remove the undo window nor
-   *  leave a tab waiting for ten minutes. */
+  /** TER-642: the default similarity bands of an automatic answer (cosine 0..1 between the card's
+   *  question and the precedent's, on the normalised question alone — TER-204), for a person with too
+   *  little history to calibrate and no thresholds pinned by hand. From HIGH the answer is sent at once;
+   *  from LOW it is suggested and, with "Responder sozinho" on, sent after the countdown; below LOW
+   *  nothing is suggested. The worst opposite-meaning pair measured scores 0.948 and a repeat with
+   *  another header or options 1.0. LOW above HIGH is read as HIGH. */
+  AUTO_ANSWER_HIGH_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.95),
+  AUTO_ANSWER_LOW_SIMILARITY: z.coerce.number().min(0.5).max(1).default(0.85),
+  /** seconds a suggested automatic answer stays on the card, cancellable, before the server sends it
+   *  (spec 2026-09-26 concierge memory D6, §6); it only counts while termhub is in focus (TER-642).
+   *  Bounded so a typo can neither remove the undo window nor leave a tab waiting for ten minutes. */
   AUTO_ANSWER_DELAY_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
-  /** the least cosine similarity (0..1) between a card's question and the cited decision's question for
-   *  `answer_tab_question` to schedule an automatic answer (spec 2026-09-26 concierge memory D6): the
-   *  model judges "the same question", the server checks it is at least close. Below it, a suggestion. */
-  AUTO_ANSWER_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.8),
   /** at most this many concierge wake turns per conversation per hour (spec 2026-09-26 concierge
    *  memory D10): each is a run on the person's own Claude account. 0 disables every wake. */
   AUTO_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(12),
@@ -154,14 +179,6 @@ const envSchema = z.object({
   // automatic wakes of the chat for questions in tabs with an automatic run (agentic board spec D18):
   // their own budget per conversation, so automatic work never spends the person's
   AUTOMATION_WAKE_MAX_PER_HOUR: z.coerce.number().int().min(0).max(120).default(30),
-
-  // Chat concierge (docker/concierge): the container runner. Since the chat moved onto the user's own
-  // machine (spec §6, `chat/agent-runner.ts`) these two reach that container alone, and nothing calls
-  // it — `httpRunner` has had no caller since `app.ts` switched to `agentRunner`. The chat's only
-  // requirement now is MCP_URL: with that unset every message answers 503 CONCIERGE_DISABLED, and
-  // setting these two enables nothing.
-  CONCIERGE_URL: z.string().url().optional(),
-  CONCIERGE_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -231,14 +248,19 @@ export const config = {
   publicUrl: env.PUBLIC_URL.replace(/\/$/, ''),
   trustProxy: parseTrustProxy(env.TRUST_PROXY),
   hooksUrl: env.HOOKS_URL ?? `${env.PUBLIC_URL.replace(/\/$/, '')}/api/hooks/events`,
+  monitorBackgroundTimeoutMs: env.MONITOR_BACKGROUND_TIMEOUT_MINUTES * 60_000,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
+  legal: { termsUrl: env.TERMS_URL ?? null, privacyUrl: env.PRIVACY_URL ?? null },
   accountDeletionUrl: env.ACCOUNT_DELETION_URL ?? `${new URL(resolvePublicCityUrl(env)).origin}/excluir-conta/`,
+  backupRetentionDays: env.BACKUP_RETENTION_DAYS ?? null,
   alphaCommunityUrl: env.ALPHA_COMMUNITY_URL,
   typeToAccess: env.TYPETOACCESS_API_KEY ? { apiKey: env.TYPETOACCESS_API_KEY } : null,
   auth: {
     modes: authModes,
     sessionTtlMs: env.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+    /** null = no idle timeout */
+    sessionIdleMs: env.SESSION_IDLE_MINUTES > 0 ? env.SESSION_IDLE_MINUTES * 60 * 1000 : null,
     cookieSecure:
       env.COOKIE_SECURE === 'auto' ? env.PUBLIC_URL.startsWith('https://') : env.COOKIE_SECURE === 'true',
     googleSignup: env.AUTH_GOOGLE_SIGNUP === 'true',
@@ -283,27 +305,12 @@ export const config = {
       : null,
   chatFiles: { dir: env.CHAT_FILES_DIR, quotaBytes: env.CHAT_FILES_QUOTA_BYTES },
   embeddings: env.EMBED_URL && env.EMBED_SECRET ? { url: env.EMBED_URL.replace(/\/$/, ''), secret: env.EMBED_SECRET } : null,
-  decisionSuggestThreshold: env.DECISION_SUGGEST_THRESHOLD,
+  autoAnswerHigh: env.AUTO_ANSWER_HIGH_SIMILARITY,
+  autoAnswerLow: Math.min(env.AUTO_ANSWER_LOW_SIMILARITY, env.AUTO_ANSWER_HIGH_SIMILARITY),
   autoAnswerDelayMs: env.AUTO_ANSWER_DELAY_SECONDS * 1000,
-  autoAnswerMinSimilarity: env.AUTO_ANSWER_MIN_SIMILARITY,
   autoWakeMaxPerHour: env.AUTO_WAKE_MAX_PER_HOUR,
   securityEventRetentionDays: env.SECURITY_EVENT_RETENTION_DAYS,
   automationWakeMaxPerHour: env.AUTOMATION_WAKE_MAX_PER_HOUR,
-  /**
-   * Settings for the container runner (`httpRunner`) and nothing else: the chat itself no longer reads
-   * this, and no code path builds that runner any more (spec §6). What the chat needs is `mcpUrl`
-   * above — `agentRunner` throws 503 CONCIERGE_DISABLED without it — so all three being set does not
-   * make a chat work, and these two being empty does not stop one.
-   *
-   * MCP_URL has no fallback on purpose — PUBLIC_URL is the app host (app.termhub.dev), which sits
-   * behind Cloudflare Access, so `${PUBLIC_URL}/mcp` answers an Access redirect instead of MCP and the
-   * concierge would talk about the user's machines with no data at all. `/mcp` is exposed outside
-   * Access only on the landing host (deploy/nginx/termhub.dev.conf.tmpl).
-   */
-  concierge:
-    env.CONCIERGE_URL && env.CONCIERGE_SECRET && env.MCP_URL
-      ? { url: env.CONCIERGE_URL, secret: env.CONCIERGE_SECRET, mcpUrl: env.MCP_URL }
-      : undefined,
   /**
    * The mobile app's API (/api/m/v1), or null when MOBILE_PUBLIC_URL is unset (the prefix is off).
    *

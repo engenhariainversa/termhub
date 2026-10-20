@@ -1,5 +1,6 @@
 import type { Repositories } from '../db/repositories/index.js';
 import { createGithubCiClient, GithubCiError, type GithubCiClient } from '../integrations/github-ci.js';
+import { githubHealth, type GithubHealthReader } from '../integrations/github-status.js';
 import { CI_POLL_MS } from './poll.js';
 import { syncProjectCi } from './sync.js';
 
@@ -11,7 +12,7 @@ type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) 
 export interface CiTickState { etags: Map<string, string>; pausedUntil: Map<string, number> }
 
 /** One pass: every project with a repo and work in progress (a card in doing, or a watched PR). */
-export async function ciTick(deps: { repos: Repositories; github: GithubCiClient; log: Log; now?: () => Date; merge?: (projectId: string) => Promise<void> }, state: CiTickState): Promise<void> {
+export async function ciTick(deps: { repos: Repositories; github: GithubCiClient; log: Log; now?: () => Date; merge?: (projectId: string) => Promise<void>; githubHealth?: GithubHealthReader }, state: CiTickState): Promise<void> {
   const now = deps.now?.() ?? new Date();
   const projects = await deps.repos.projectSetup.listWithRepo().catch(() => []);
   for (const { project_id: projectId, data } of projects) {
@@ -21,7 +22,7 @@ export async function ciTick(deps: { repos: Repositories; github: GithubCiClient
       const watch = { repo: data.repo?.full_name ?? '', includeMerged: !!data.repo?.deploy_workflow };
       const busy = (await deps.repos.tasks.hasDoing(projectId)) || (await deps.repos.taskPullRequests.listWatched(projectId, watch, now)).length > 0;
       if (!busy) continue;
-      await syncProjectCi({ repos: deps.repos, github: deps.github, etags: state.etags, now: () => now, merge: deps.merge }, projectId);
+      await syncProjectCi({ repos: deps.repos, github: deps.github, etags: state.etags, now: () => now, merge: deps.merge, githubHealth: deps.githubHealth, log: deps.log }, projectId);
     } catch (e) {
       if (e instanceof GithubCiError && e.kind === 'rate_limited') state.pausedUntil.set(projectId, e.resetAt?.getTime() ?? now.getTime() + DEFAULT_PAUSE_MS);
       deps.log.warn({ projectId, err: (e as Error).message }, 'ci sync failed');
@@ -42,7 +43,7 @@ export function startCiSyncScheduler(
     if (running) return; // a slow GitHub never stacks passes
     running = true;
     try {
-      await ciTick({ repos, github, log, merge: opts.merge }, state);
+      await ciTick({ repos, github, log, merge: opts.merge, githubHealth }, state);
     } finally {
       running = false;
     }

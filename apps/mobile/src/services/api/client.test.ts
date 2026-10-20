@@ -87,6 +87,12 @@ it('sends the app header, bearer and a DPoP proof bound to method, canonical url
   expect(calls[0]!.url).toBe('https://termhub.dev/api/m/v1/chat/projects');
 });
 
+it('sends the phone time zone, for the chat origin line (TER-1088)', async () => {
+  const { transport, calls } = scripted([{ status: 200, body: { projects: [] } }]);
+  await make(transport).chatProjects({ accessToken: 'tok' });
+  expect(calls[0]!.headers['X-Termhub-Time-Zone']).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+});
+
 it('sends Accept-Language with the language the app shows, read on every call (i18n spec §2)', async () => {
   const { transport, calls } = scripted([
     { status: 200, body: { projects: [] } },
@@ -172,6 +178,22 @@ it('account deletion: GET, POST and DELETE on /account/deletion, validated again
     'GET https://termhub.dev/api/m/v1/account/deletion',
   ]);
   expect(JSON.parse(calls[1]!.body!)).toEqual({ challenge: 'c1', pin_proof: 'p1' });
+});
+
+it('legal acceptance (TER-742): GET /legal and POST /legal/accept, validated against the contract', async () => {
+  const terms = { id: 'v1', document: 'terms', version: '2.0', effective_at: '2026-10-07T12:00:00.000Z', url: 'https://termhub.dev/termos', requires_acceptance: true, summary: null };
+  const { transport, calls } = scripted([{ status: 200, body: { pending: [terms], upcoming: [] } }, { status: 200, body: { pending: [], upcoming: [] } }, { status: 200, body: { pending: 'none' } }]);
+  const api = make(transport);
+  const a = { accessToken: 'tok' };
+  await expect(api.legalStatus(a)).resolves.toEqual({ pending: [terms], upcoming: [] });
+  await expect(api.acceptLegal(a, ['v1'])).resolves.toEqual({ pending: [], upcoming: [] });
+  await expect(api.legalStatus(a)).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+  expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+    'GET https://termhub.dev/api/m/v1/legal',
+    'POST https://termhub.dev/api/m/v1/legal/accept',
+    'GET https://termhub.dev/api/m/v1/legal',
+  ]);
+  expect(JSON.parse(calls[1]!.body!)).toEqual({ version_ids: ['v1'] });
 });
 
 it('refuses a body that does not match the contract', async () => {

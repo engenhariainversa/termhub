@@ -5,7 +5,7 @@ import { sendInput, sendKey } from '../control/terminals.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
 import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
-import { recordDecisions } from './decision-memory.js';
+import { recordAutoSamples, recordDecisions } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
 import { lastNonBlankLines, permissionToolOnScreen, promptVisible, rowDialogFooterVisible } from './permission-dialog.js';
 import { findPermissionOption, parsePermissionMenu, type PermissionOption } from './permission-options.js';
@@ -199,7 +199,11 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   deps.log.info({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind, steps: steps.length }, 'tab question answered');
   // Remembering the decision is best effort (spec 2026-09-26 §4.3): the keys are already in the tab. An
   // automatic answer is not the person's decision (D11): its sources are counted by the sender instead.
-  if (claimed.kind === 'choice' && via === 'card') await recordDecisions(ctx.repos, claimed, { embedder: deps.embedder !== undefined ? deps.embedder : defaultEmbedder(), log: deps.log });
+  if (claimed.kind === 'choice' && via === 'card') {
+    await recordDecisions(ctx.repos, claimed, { embedder: deps.embedder !== undefined ? deps.embedder : defaultEmbedder(), log: deps.log });
+    // What the person answered, next to what memory would have answered: calibration's sample (TER-642).
+    await recordAutoSamples(ctx.repos, claimed, 'answer', deps.log);
+  }
   // The keys are in the tab: announcing it is best effort and can no longer turn the answer into an error.
   try {
     const [view] = await publishTabQuestions(ctx.repos, 'tab_question_answered', [claimed]);

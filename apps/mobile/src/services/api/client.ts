@@ -12,6 +12,12 @@ import {
   type PushSettings,
   type PushTestBody,
   accountDeletionStatus,
+  legalStatusResponse,
+  aiLoginCancelResponse,
+  aiLoginResumeResponse,
+  aiLoginStartResponse,
+  aiLoginStatusResponse,
+  aiLoginSubmitResponse,
   automationSetupResponse,
   cardAutoResponse,
   pauseResponse,
@@ -51,12 +57,16 @@ import {
   tabChatPage,
   tabFileResponse,
   tabScreenResponse,
+  installHooksResponse,
+  startTabAgentResponse,
+  tabAgentOptions,
   tabsResponse,
   tokenResponse,
   transcriptionConfigResponse,
   transcriptionResponse,
   type AccountDeletionBody,
   type TChallengeBody,
+  type TChatMemoryPatchBody,
   type TDeviceActivateBody,
   type TDeviceRequestBody,
   type TMobileBatchDecisionBody,
@@ -67,6 +77,7 @@ import {
   type TProjectAi,
   type TSetHostBody,
   type TStartSessionBody,
+  type TStartTabAgentBody,
   type TTabChatAction,
   type TFilePreviewQuery,
   type TTabQuestionAnswerBody,
@@ -111,7 +122,7 @@ export type CreateHttpMobileApiOptions = {
   /** Called on every `403 ACCOUNT_PENDING_DELETION` (TER-720): the account is deactivated until the
    * person cancels its deletion. The singleton passes `accountPendingDeletion.emit`. */
   onAccountPendingDeletion?: () => void;
-  /** The language the app shows (`'pt-BR'` | `'en'`), sent as `Accept-Language` on every call and
+  /** The language the app shows (`'pt-BR'` | `'en'` | `'es'`), sent as `Accept-Language` on every call and
    * socket upgrade so the server answers its errors in it (i18n spec §2). Read per request: a
    * change in Ajustes applies to the next call. */
   language?: () => string;
@@ -166,6 +177,15 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
   // `/ws/m/chat?v=1` (P§6.1). `canonicalHtu` drops the query, so the DPoP proof is signed over
   // the bare path regardless of what `wsUrl` appends to it.
   const languageHeader = (): Record<string, string> => (o.language ? { 'Accept-Language': o.language() } : {});
+  // The phone's time zone, for the chat's origin line (TER-1088); the server checks it is a real IANA name.
+  const timeZoneHeader = (): Record<string, string> => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      return tz ? { 'X-Termhub-Time-Zone': tz } : {};
+    } catch {
+      return {};
+    }
+  };
   const wsUrl = (base: string) => `${base.replace(/^http/, 'ws')}/ws/m/chat?v=1`;
   const socketHeaders = async (a: Auth): Promise<Record<string, string>> => ({
     ...languageHeader(),
@@ -213,7 +233,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
   }
 
   async function call<T>(htm: string, path: string, schema: z.ZodType<T, z.ZodTypeDef, any>, opts: CallOptions = {}): Promise<T> {
-    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader() };
+    const headers: Record<string, string> = { 'X-Termhub-App': o.app, Accept: 'application/json', ...languageHeader(), ...timeZoneHeader() };
     if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
     if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
     if (opts.proof !== false) headers.DPoP = await proofFor(htm, path, opts.token ?? null, opts.chal);
@@ -294,6 +314,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     requestAccountDeletion: (a: Auth, body: AccountDeletionBody) => call('POST', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken, body }),
     cancelAccountDeletion: (a: Auth) => call('DELETE', '/api/m/v1/account/deletion', accountDeletionStatus, { token: a.accessToken }),
 
+    legalStatus: (a: Auth) => call('GET', '/api/m/v1/legal', legalStatusResponse, { token: a.accessToken }),
+    acceptLegal: (a: Auth, versionIds: string[]) =>
+      call('POST', '/api/m/v1/legal/accept', legalStatusResponse, { token: a.accessToken, body: { version_ids: versionIds } }),
+
     chatProjects: (a: Auth) => call('GET', '/api/m/v1/chat/projects', chatProjectsResponse, { token: a.accessToken }),
     setProjectFavorite: (a: Auth, projectId: string, favorite: boolean) =>
       empty('PUT', `/api/m/v1/chat/projects/${encodeURIComponent(projectId)}/favorite`, { token: a.accessToken, body: { favorite } }),
@@ -328,14 +352,27 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/ai`, projectAiResponse, { token: a.accessToken, body: { ai } }),
     getAutomationSetup: (a: Auth, projectId: string) =>
       call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken }).then((r) => r.automation),
-    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }) =>
-      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, { token: a.accessToken, body: { automation, ...proof } }).then((r) => r.automation),
+    saveAutomationSetup: (a: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string) =>
+      call('PUT', `/api/m/v1/projects/${encodeURIComponent(projectId)}/setup/automation`, automationSetupResponse, {
+        token: a.accessToken,
+        body: { automation, ...proof, ...(timeZone ? { time_zone: timeZone } : {}) },
+      }).then((r) => r.automation),
     getPauseState: (a: Auth) => call('GET', '/api/m/v1/automation/state', pauseState, { token: a.accessToken }),
     pauseAutomation: (a: Auth, scope: string, interrupt = false) =>
       call('POST', '/api/m/v1/automation/pause', pauseResponse, { token: a.accessToken, body: { scope, interrupt } }).then((r) => r.paused_at),
     resumeAutomation: (a: Auth, scope: string) => empty('POST', '/api/m/v1/automation/resume', { token: a.accessToken, body: { scope } }),
     setCardAuto: (a: Auth, taskId: string, auto: boolean) =>
       call('PUT', `/api/m/v1/tasks/${encodeURIComponent(taskId)}/auto`, cardAutoResponse, { token: a.accessToken, body: { auto } }).then((r) => r.auto),
+    aiLoginStatus: (a: Auth, refresh = false) =>
+      call('GET', `/api/m/v1/ai-accounts/login-status${refresh ? '?refresh=1' : ''}`, aiLoginStatusResponse, { token: a.accessToken }),
+    startAiLogin: (a: Auth, accountId: string) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login`, aiLoginStartResponse, { token: a.accessToken, body: {} }),
+    submitAiLogin: (a: Auth, accountId: string, loginId: string, code: string | null) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}/submit`, aiLoginSubmitResponse, { token: a.accessToken, body: { code } }),
+    cancelAiLogin: (a: Auth, accountId: string, loginId: string) =>
+      call('DELETE', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}`, aiLoginCancelResponse, { token: a.accessToken }).then(() => undefined),
+    resumeAiLoginTabs: (a: Auth, accountId: string, tabIds: string[]) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/resume`, aiLoginResumeResponse, { token: a.accessToken, body: { tab_ids: tabIds } }),
     cancelSubagent: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/subagents/${encodeURIComponent(id)}/cancel`, cancelSubagentResponse, { token: a.accessToken }).then((r) => r.subagent),
     // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof
@@ -366,8 +403,9 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     },
     forgetChatDecision: (a: Auth, id: string) => empty('DELETE', `/api/m/v1/chat/decisions/${encodeURIComponent(id)}`, { token: a.accessToken }),
     chatMemory: (a: Auth) => call('GET', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken }),
-    setChatMemory: (a: Auth, body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean }) =>
+    setChatMemory: (a: Auth, body: boolean | TChatMemoryPatchBody) =>
       call('PATCH', '/api/m/v1/chat/memory', chatMemoryResponse, { token: a.accessToken, body: typeof body === 'boolean' ? { enabled: body } : body }),
+    reportChatFocus: (a: Auth, clientId: string, focused: boolean) => empty('POST', '/api/m/v1/chat/focus', { token: a.accessToken, body: { client_id: clientId, focused } }),
     chatNotes: (a: Auth, cursor) => {
       const params = new URLSearchParams();
       if (cursor) params.set('cursor', cursor);
@@ -416,6 +454,11 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       uploadCall(`/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat/files?name=${encodeURIComponent(name)}`, fileUri, 'application/octet-stream', tabFileResponse, a.accessToken),
     tabScreen: (a: Auth, tabId: string, lines?: number) =>
       call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/screen${lines ? `?lines=${lines}` : ''}`, tabScreenResponse, { token: a.accessToken }),
+    installMachineHooks: (a: Auth, machineId: string) =>
+      call('POST', `/api/m/v1/machines/${encodeURIComponent(machineId)}/hooks`, installHooksResponse, { token: a.accessToken, body: {} }),
+    tabAgentOptions: (a: Auth, tabId: string) => call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/agent`, tabAgentOptions, { token: a.accessToken }),
+    startTabAgent: (a: Auth, tabId: string, body: TStartTabAgentBody) =>
+      call('POST', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/agent`, startTabAgentResponse, { token: a.accessToken, body }),
 
     tabEvents: (auth, tabId, handlers) => {
       // The same renewal rule as `events` below: a refused upgrade or a 1008 renews only a stale token.
