@@ -17,7 +17,7 @@ export const AUTOMATION_MCP_DENIED_TOOLS: readonly string[] = [
   'set_automation_policy', 'resume_automation', 'resume_automation_run', 'escalate_automation_run', 'set_machine_automation', 'install_machine_hooks', 'update_machine_agent', 'wake_machine',
   'start_agent', 'open_tab', 'close_tab', 'send_input', 'send_key', 'run_command', 'answer_tab_question',
   'link_project_machine', 'unlink_project_machine', 'set_project_machine_cwd', 'set_project_repo',
-  'create_integration', 'push_ticket_status', 'delete_task',
+  'create_integration', 'push_ticket_status', 'delete_task', 'admin_user_troubleshoot',
 ].map((t) => `mcp__termhub__${t}`);
 
 /**

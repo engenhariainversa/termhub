@@ -438,6 +438,35 @@ A machine on an old agent misses whatever needs a newer one (the screen login ne
   2 minutes (check `termhub-agent doctor` there). The fallback is always `npm i -g @termhub/agent@latest` on
   the machine.
 
+## 9c. Diagnosing a user's report (TER-1092)
+
+When a person reports a problem and the diagnosis needs their technical data (which routes failed, which
+client version they use, whether their agent is behind), use the admin troubleshooting views, never the
+production database: automatic tabs are refused it by the termhub hooks, and manual sessions by the Claude
+Code classifier, on purpose.
+
+- **Who.** Admins only (an admin role; no permission grant opens it). Anyone else gets 403.
+- **Always a reason.** Every call takes `reason` (the card or the report, e.g. `TER-1091`; 400 without one)
+  and is written to the security trail as `support.troubleshoot` with the endpoint, the user, the window
+  and the reason before anything is read; if the trail cannot be written, nothing is answered. The queries
+  show in Configurações → Auditoria, group "Suporte".
+- **What it answers.** Metadata of ONE user in a window of 12 h by default, 7 days at most (`from`/`to`):
+  `requests` (time, method, route pattern, status, duration, client; `route_prefix` filters), `tabs` (agent,
+  machine name, state, monitor events counted by kind), `machines` (agent version, online, last contact,
+  hooks state per CLI read live from online agents), `errors` (5xx answers and failed MCP calls),
+  `client` (web/app versions and systems, paired phones). Never chat messages, prompts, answers, terminal
+  screens, attachments, e-mail, tokens or IPs.
+- **Finding the user.** `search` (name or e-mail) answers an opaque `user_id` and the name, never the
+  e-mail; the trail keeps the ids found, not the text searched.
+- **From the chat.** `admin_user_troubleshoot` (listed to admins only) takes the same arguments. The first
+  query about each user in a conversation is a confirmation card; the later ones about the same user run
+  without asking (each still on the trail). A search never asks. Automatic tabs never call it.
+- **Over HTTP.** `GET /api/admin/troubleshoot/users?q=<name or e-mail>&reason=…` and
+  `GET /api/admin/troubleshoot/users/<user_id>/<requests|tabs|machines|errors|client>?reason=…[&from=&to=&route_prefix=&limit=]`
+  with the admin's own session.
+- **History.** The client version, system and response time are recorded on access records only from this
+  release on; older rows answer them as null.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no

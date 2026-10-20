@@ -72,6 +72,7 @@ import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
+import { adminTroubleshootRoutes } from './routes/admin-troubleshoot.js';
 import { featureFlagRoutes, publicFeatureRoutes } from './routes/feature-flags.js';
 import { securityEventCutoff } from './auth/audit.js';
 import { mcpRoutes } from './mcp/route.js';
@@ -344,6 +345,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
       await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
+      // Support troubleshooting of one user (TER-1092): admins only, checked by the plugin itself, never a grant.
+      await api.register((a) => adminTroubleshootRoutes(a, repos), { prefix: '/admin/troubleshoot' });
       await guarded('chat', (a) => chatRoutes(a, repos, { service: chat }), '/chat');
       await guarded('chat', (a) => chatAttachmentRoutes(a, repos, attachments), '/chat/attachments');
       if (mobile) {

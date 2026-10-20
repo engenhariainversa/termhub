@@ -120,5 +120,10 @@
   "Este agente é antigo demais para se atualizar sozinho; rode na máquina: npm i -g @termhub/agent@latest": "Este agente es demasiado antiguo para actualizarse solo; ejecuta en la máquina: npm i -g @termhub/agent@latest",
   "Este chat roda nesta máquina: a atualização fica para quando a resposta terminar e a máquina estiver ociosa (alguns minutos).": "Este chat se ejecuta en esta máquina: la actualización espera a que termine la respuesta y la máquina esté inactiva (unos minutos).",
   "Instalado; reinicie o agente na máquina (termhub-agent run ou o serviço).": "Instalado; reinicia el agente en la máquina (termhub-agent run o el servicio).",
-  "Passe machine_id ou all: true (um dos dois).": "Pasa machine_id o all: true (uno de los dos)."
+  "Passe machine_id ou all: true (um dos dois).": "Pasa machine_id o all: true (uno de los dos).",
+  "Só administradores podem consultar dados de suporte": "Solo los administradores pueden consultar datos de soporte",
+  "Janela inválida: o início precisa vir antes do fim": "Ventana inválida: el inicio debe ser anterior al fin",
+  "Janela longa demais: no máximo {{days}} dias": "Ventana demasiado larga: como máximo {{days}} días",
+  "Informe o nome ou e-mail a procurar": "Indica el nombre o el e-mail a buscar",
+  "Informe o usuário (user_id); procure-o com search": "Indica el usuario (user_id); búscalo con search"
 }
