@@ -289,5 +289,9 @@
   "Nenhum item vigente encontrado.": "No se encontró ningún elemento vigente.",
   "Decisão": "Decisión",
   "Anotação": "Nota",
-  "ai-memory de {{machine}}: {{path}}": "ai-memory de {{machine}}: {{path}}"
+  "ai-memory de {{machine}}: {{path}}": "ai-memory de {{machine}}: {{path}}",
+  "Copiar código": "Copiar código",
+  "Copiado ✓": "Copiado ✓",
+  "Código copiado": "Código copiado",
+  "Não foi possível copiar o código": "No se pudo copiar el código"
 }

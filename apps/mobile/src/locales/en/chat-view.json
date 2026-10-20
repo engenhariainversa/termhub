@@ -289,5 +289,9 @@
   "Nenhum item vigente encontrado.": "No current item found.",
   "Decisão": "Decision",
   "Anotação": "Note",
-  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}"
+  "ai-memory de {{machine}}: {{path}}": "ai-memory on {{machine}}: {{path}}",
+  "Copiar código": "Copy code",
+  "Copiado ✓": "Copied ✓",
+  "Código copiado": "Code copied",
+  "Não foi possível copiar o código": "Could not copy the code"
 }

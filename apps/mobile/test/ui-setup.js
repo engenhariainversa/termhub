@@ -60,6 +60,9 @@ jest.mock('react-native-markdown-display', () => require('./fakes/markdown'));
 jest.mock('expo-image-picker', () => require('./fakes/image-picker'));
 jest.mock('expo-document-picker', () => require('./fakes/document-picker'));
 
+// No native clipboard under jest; the fake keeps the copied text and can be told to fail.
+jest.mock('expo-clipboard', () => require('./fakes/expo-clipboard'));
+
 // The bubble's audio player (TER-1036): no native audio under jest.
 jest.mock('expo-audio', () => require('./fakes/expo-audio'));
 
