@@ -2,6 +2,7 @@ import { useTranslation } from '../../i18n';
 import { useEffect, useState } from 'react';
 import { replyLabel } from '../../lib/chat-reply';
 import type { ChatReplyRef } from '../../lib/types';
+import { LinkedText } from './LinkedText';
 
 const UNAVAILABLE_MS = 3000;
 
@@ -22,22 +23,27 @@ export function ChatReplyQuote({ reply, onOpen }: { reply: ChatReplyRef; onOpen?
   const author = replyLabel(reply);
   // A card's quote (TER-849) opens the card; a message's, the message.
   const target = reply.card?.id ?? reply.id;
+  // The button covers the whole quote from underneath its links (TER-1089): a link in the excerpt is
+  // its own click, and a link cannot sit inside a <button>.
   return (
-    <button
-      type="button"
-      aria-label={reply.card ? t('Ver card original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt }) : t('Ver mensagem original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt })}
-      onClick={() => {
-        if (!(target !== null && onOpen?.(target))) setUnavailable(true);
-      }}
-      className="mb-1.5 block w-full rounded-lg border-l-2 border-accent bg-bg/60 px-2.5 py-1.5 text-left text-xs hover:bg-bg focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
-    >
+    <div className="relative mb-1.5 block w-full rounded-lg border-l-2 border-accent bg-bg/60 px-2.5 py-1.5 text-left text-xs hover:bg-bg">
+      <button
+        type="button"
+        aria-label={reply.card ? t('Ver card original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt }) : t('Ver mensagem original: {{author}}, {{excerpt}}', { author, excerpt: reply.excerpt })}
+        onClick={() => {
+          if (!(target !== null && onOpen?.(target))) setUnavailable(true);
+        }}
+        className="absolute inset-0 rounded-lg focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
+      />
       <span className="block font-medium text-accent">{author}</span>
-      <span className="line-clamp-2 whitespace-normal text-fg-dim">{reply.excerpt}</span>
+      <span className="line-clamp-2 whitespace-normal text-fg-dim [&_a]:relative [&_a]:z-10">
+        <LinkedText text={reply.excerpt} />
+      </span>
       {unavailable && (
         <span role="status" className="mt-0.5 block text-fg-dim">
           {reply.card ? t('Card original indisponível') : t('Mensagem original indisponível')}
         </span>
       )}
-    </button>
+    </div>
   );
 }

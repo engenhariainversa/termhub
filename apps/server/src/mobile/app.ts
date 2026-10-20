@@ -21,6 +21,7 @@ import { filePreviewRoutes } from '../routes/file-preview.js';
 import { fileRecentRoutes } from '../routes/file-recent.js';
 import { aiLoginRoutes } from '../routes/ai-login.js';
 import { mobileTabRoutes } from '../routes/m-tabs.js';
+import { mobileMachineRoutes } from '../routes/m-machines.js';
 import { mobileTranscriptionRoutes } from '../routes/m-transcriptions.js';
 import { buildMobileAuthHook, type MobileAuthMode } from './auth.js';
 import { JtiCache } from './dpop.js';
@@ -177,6 +178,8 @@ export async function registerMobileApi(
         await m.register((a) => mobileLegalRoutes(a, deps.repos), { prefix: '/legal' });
         // A terminal tab read as a conversation (spec 2026-10-01 tab chat).
         await guarded('terminals', (a) => mobileTabRoutes(a, deps.repos, { hub: deps.tabChat }), '/tabs');
+        // "Instalar hooks" from a tab's empty conversation (TER-1091): the web's install, under `machines`.
+        await guarded('machines', (a) => mobileMachineRoutes(a, deps.repos), '/machines');
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
         await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
         await guarded('terminals', (a) => fileRecentRoutes(a, deps.repos), '/file-recent');

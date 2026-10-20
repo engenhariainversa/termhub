@@ -1623,6 +1623,8 @@ export interface ChatMemory {
   autodecide: boolean;
   /** "Responder perguntas do Codex pelo chat": off by default; independent of embeddings. */
   codex_replies: boolean;
+  /** "Contar ao chat de onde estou falando" (TER-1088): on by default. Absent from an older server. */
+  client_context?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
   available: boolean;
@@ -2033,6 +2035,31 @@ export interface TabChatPage {
   degraded: boolean;
   questions: TabQuestion[];
   suggestions: TabSuggestion[];
+  /** Why there is no history (TER-1091): `no_hooks`, `not_reported`, `transcript_missing`, `new_session` or
+   *  `no_agent` (TER-1094: a plain terminal, no AI CLI in front); null otherwise. The web shows `no_agent`. */
+  empty_reason?: string | null;
+}
+
+/** One account "Iniciar sessão" can start a tab's agent with (TER-1094). `provider`: `claude` or `chatgpt` (Codex). */
+export interface TabAgentChoice {
+  account_id: string;
+  label: string;
+  provider: string;
+  model: string | null;
+}
+
+/** `GET tab-chat/:id/agent`: the choices, and the account picked without asking (null = the person chooses). */
+export interface TabAgentOptions {
+  choices: TabAgentChoice[];
+  suggested: string | null;
+}
+
+/** `POST tab-chat/:id/agent`: where the agent started (this tab, or a new one of the same project and machine). */
+export interface StartTabAgentResult {
+  tab_id: string;
+  new_tab: boolean;
+  account: { id: string; label: string };
+  provider: string;
 }
 
 export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';

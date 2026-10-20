@@ -316,7 +316,7 @@ it('answers 202 with the three ids at once when the page says it will not wait',
   const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', project_id: 'p1', wait: false } });
   expect(res.statusCode).toBe(202);
   expect(res.json()).toEqual({ conversation_id: 'c1', user_message_id: 'mu', assistant_message_id: 'ma' });
-  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1' });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1', client: expect.objectContaining({ client: 'web' }) });
   expect(send).not.toHaveBeenCalled();
   resolve({ id: 'ma' });
 });
@@ -513,7 +513,7 @@ it('GET /?project= reads that project conversation and its host', async () => {
 it('POST /messages passes project_id through', async () => {
   const { app, start } = build();
   await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', project_id: 'p1' } });
-  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1' });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'oi', { projectId: 'p1', client: expect.objectContaining({ client: 'web' }) });
 });
 
 it('POST /reset archives the scope and answers the fresh conversation', async () => {
@@ -1069,11 +1069,20 @@ it('GET /chat/grants: 400 without a valid state, with a bad cursor or a limit ou
   expect(listForUser).not.toHaveBeenCalled();
 });
 
+it('POST /messages tells the service where the message came from, read from the request (TER-1088)', async () => {
+  const { app, start } = build();
+  const headers = { 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X)', 'x-termhub-client': 'web/1.4.0', 'x-termhub-time-zone': 'America/Sao_Paulo', 'accept-language': 'en' };
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', headers, payload: { text: 'oi', client: { client: 'ios' } } });
+  expect(res.statusCode).toBe(202);
+  // A `client` in the body is ignored: the origin is the server's reading of the request.
+  expect(start).toHaveBeenCalledWith(expect.anything(), 'oi', { projectId: null, client: { client: 'web', app_version: '1.4.0', device: 'phone', os: 'iOS', ip: '127.0.0.1', time_zone: 'America/Sao_Paulo', locale: 'en' } });
+});
+
 it('POST /messages passes attachment_ids to the service and allows an empty text with them', async () => {
   const { app, start } = build();
   const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: ['a1', 'a2'] } });
   expect(res.statusCode).toBe(202);
-  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1', 'a2'] });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), '', { projectId: null, attachmentIds: ['a1', 'a2'], client: expect.objectContaining({ client: 'web' }) });
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: [] } })).statusCode).toBe(400);
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { attachment_ids: [] } })).statusCode).toBe(400);
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', attachment_ids: ['1', '2', '3', '4', '5', '6'] } })).statusCode).toBe(400);
@@ -1083,7 +1092,7 @@ it('POST /messages passes reply_to_id to the service (TER-447)', async () => {
   const { app, start } = build();
   const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'faz de novo', reply_to_id: 'm7' } });
   expect(res.statusCode).toBe(202);
-  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7' });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'faz de novo', { projectId: null, replyToId: 'm7', client: expect.objectContaining({ client: 'web' }) });
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: '' } })).statusCode).toBe(400);
 });
 
@@ -1091,7 +1100,7 @@ it('POST /messages passes reply_to_card to the service, never together with repl
   const { app, start } = build();
   const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'por quê?', reply_to_card: { kind: 'action', id: 'a7' } } });
   expect(res.statusCode).toBe(202);
-  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'por quê?', { projectId: null, replyToCard: { kind: 'action', id: 'a7' } });
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'por quê?', { projectId: null, replyToCard: { kind: 'action', id: 'a7' }, client: expect.objectContaining({ client: 'web' }) });
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_card: { kind: 'tab_suggestion', id: 'q1' } } })).statusCode).toBe(400);
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'oi', reply_to_id: 'm7', reply_to_card: { kind: 'action', id: 'a7' } } })).statusCode).toBe(400);
 });

@@ -23,6 +23,7 @@ import { ChatService, CANCEL_TIMEOUT_MS, purgeExpiredActions, scrubSecretArgs, t
 import { RESUME_WINDOW_MS, STALE_MS } from './resume.js';
 import { ORCHESTRATOR_PROMPT, streamedSystemPrompt } from './concierge-prompt.js';
 import { messageRefLine } from './message-ref.js';
+import { recalledOrigin, type ClientSignals } from './client-origin.js';
 
 /** What the model gets for a message the person typed: its ref line (TER-1037), then the run text. */
 const typed = (id: string, body: string) => `${messageRefLine(id, 'x')}\n\n${body}`;
@@ -51,7 +52,7 @@ const action = (overrides: Partial<ChatAction> = {}): ChatAction => ({
   ...overrides,
 });
 
-function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; tabQuestions?: TabQuestion[]; attachments?: AttachmentRow[]; subagents?: ChatSubagent[]; streaming?: boolean; groups?: ProjectGroup[]; projects?: { id: string; key: string; name: string; status: string; owner_id: string }[]; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string } }; accounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label: string }[]; projectAi?: unknown } = {}) {
+function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActions?: ChatAction[]; tabQuestions?: TabQuestion[]; attachments?: AttachmentRow[]; subagents?: ChatSubagent[]; streaming?: boolean; groups?: ProjectGroup[]; projects?: { id: string; key: string; name: string; status: string; owner_id: string }[]; transcriptHoldMs?: number; host?: { machines?: unknown[]; capabilities?: string[] | null; account?: { id: string; provider: string; machine_id: string; config_dir: string | null; label?: string } }; accounts?: { id: string; provider: string; machine_id: string; config_dir: string | null; label: string }[]; projectAi?: unknown } = {}) {
   // The host pair every case but the host-specific ones takes for granted: one agent machine of this
   // user's own, online, with an agent that knows how to run a chat (see host.test.ts for the choice
   // itself). `configDirs` is gone — the account travels as the chosen `ai_account`'s config dir.
@@ -110,8 +111,8 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     pinHostMachine: vi.fn(async (_id: string, machineId: string) => {
       if (conversation.machine_id === null) conversation.machine_id = machineId;
     }),
-    addMessage: vi.fn(async (m: { role: string; text: string; reply_to?: { id: string; role: string; excerpt: string } }) => {
-      const row = { id: `m${messages.length + 1}`, role: m.role, text: m.text, error_code: null, ...(m.reply_to ? { reply_to: m.reply_to } : {}) };
+    addMessage: vi.fn(async (m: { id?: string; role: string; text: string; error_code?: string | null; reply_to?: { id: string; role: string; excerpt: string } }) => {
+      const row = { id: m.id ?? `m${messages.length + 1}`, role: m.role, text: m.text, error_code: m.error_code ?? null, ...(m.reply_to ? { reply_to: m.reply_to } : {}) };
       messages.push(row);
       return row;
     }),
@@ -176,6 +177,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   const attachmentRows: AttachmentRow[] = (opts.attachments ?? []).map((a) => ({ ...a }));
   const chatAttachments = {
     findForUser: vi.fn(async (id: string, userId: string) => attachmentRows.find((a) => a.id === id && a.user_id === userId) ?? null),
+    findById: vi.fn(async (id: string) => attachmentRows.find((a) => a.id === id) ?? null),
     attach: vi.fn(async (ids: string[], messageId: string, userId: string, conversationId: string) => {
       let count = 0;
       for (const a of attachmentRows) {
@@ -327,7 +329,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
   // that exercise indexing itself just needs `start`/`send` not to touch `repos.memoryItems`, which
   // this fixture never defines.
   const indexMessage = vi.fn(async () => {});
-  const service = new ChatService({ repos, agents, runnerFor: (machineId) => (hosted.push(machineId), runner), indexMessage });
+  const service = new ChatService({ repos, agents, runnerFor: (machineId) => (hosted.push(machineId), runner), indexMessage, ...(opts.transcriptHoldMs !== undefined ? { transcriptHoldMs: opts.transcriptHoldMs } : {}) });
   /** Every `RunnerInput` the service handed a runner, in order. */
   const inputs = () => vi.mocked(runner.run).mock.calls.map((c) => c[0]);
   return { service, chat, chatActions, projectGroups, tabQuestions, chatAttachments, chatSubagents, subagentsStore, actionsStore, chatLiveRuns, liveRunsStore, runner, hosted, messages, conversation, projectConversation, repos, host, inputs, agents, indexMessage };
@@ -2567,6 +2569,131 @@ describe('attachments on a message (spec 2026-09-26 §5.5)', () => {
   });
 });
 
+describe('audio messages wait for their transcript (TER-1085)', () => {
+  const audio = (over: Partial<AttachmentRow> = {}) => attachment({ id: 'aud1', name: 'audio.m4a', mime: 'audio/mp4', kind: 'audio', status: 'pending', extracted_text: null, meta: null, ...over });
+  /** Whisper finishing: the row changes like the queue's `setExtracted`/`setFailed`, then `onDone` tells the service. */
+  const settle = async (built: ReturnType<typeof build>, patch: Partial<AttachmentRow>) => {
+    const row = (await built.chatAttachments.findById('aud1'))!;
+    Object.assign(row, patch);
+    built.service.transcriptSettled({ ...row });
+  };
+  const ready = { status: 'ready' as const, extracted_text: 'cria um card de bug pro login', meta: { duration_s: 30 } };
+  const until = async (check: () => boolean) => {
+    for (let i = 0; i < 200 && !check(); i++) await new Promise((r) => setTimeout(r, 5));
+    expect(check()).toBe(true);
+  };
+
+  it('an audio alone is held: the question shows now, the turn starts with the transcript once whisper is done', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    const events: ChatEvent[] = [];
+    const off = chatBus.subscribe((e) => events.push(e));
+    try {
+      const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+      // Stored and shown, bound to its audio; no answer row yet, so no screen says "pensando…".
+      expect(built.messages.map((m) => m.role)).toEqual(['user']);
+      expect(events.filter((e) => e.type === 'message').map((e) => (e as Extract<ChatEvent, { type: 'message' }>).message.role)).toEqual(['user']);
+      expect(built.runner.run).not.toHaveBeenCalled();
+      await settle(built, ready);
+      const answer = await started.done;
+      expect(answer.id).toBe(started.assistant_message_id);
+      expect(built.messages.map((m) => [m.role, m.id])).toEqual([['user', started.user_message_id], ['assistant', started.assistant_message_id]]);
+      const text = built.inputs()[0]!.text;
+      expect(text).toContain('- id=aud1 «audio.m4a» áudio, 30 s\n  Transcrição do áudio:\n<<<CONTEÚDO DO ANEXO');
+      expect(text).toContain('cria um card de bug pro login');
+      expect(text).not.toContain('ainda em andamento');
+    } finally {
+      off();
+    }
+  });
+
+  it('a transcript that settled before the hold listened is seen at once', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    // Ready in the database by the time the hold re-reads it, with no `onDone` left to come.
+    built.chatAttachments.findById.mockImplementationOnce(async () => ({ ...audio(), ...ready }));
+    const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+    await started.done;
+    expect(built.runner.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('past the hold the turn runs with the transcript marked as on its way, and the text follows by itself', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()], transcriptHoldMs: 10 });
+    const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+    await started.done;
+    expect(built.inputs()[0]!.text).toContain('áudio (transcrição ainda em andamento; o servidor entrega o texto nesta conversa assim que ficar pronto, sem a pessoa precisar escrever nada)');
+    await settle(built, ready);
+    await until(() => built.inputs().length === 2);
+    // A short server line in the thread, the transcript only in the run text.
+    const wake = built.messages.filter((m) => m.role === 'user')[1]!;
+    expect(wake.text).toBe('Automático: a transcrição do áudio «audio.m4a» ficou pronta.');
+    const text = built.inputs()[1]!.text;
+    expect(text).toMatch(/^Um áudio que a pessoa enviou antes terminou de ser transcrito agora/);
+    expect(text).toContain('cria um card de bug pro login');
+    expect(text.endsWith('Automático: a transcrição do áudio «audio.m4a» ficou pronta.')).toBe(true);
+    // Delivered once: a second `onDone` (a retry) wakes nobody.
+    await settle(built, ready);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(built.inputs()).toHaveLength(2);
+  });
+
+  it('a transcription that fails during the hold runs the turn with the reason', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+    await settle(built, { status: 'failed', error_code: 'TRANSCRIPTION_UNAVAILABLE', meta: { reason: 'unreachable' } });
+    await started.done;
+    expect(built.inputs()[0]!.text).toContain('áudio (falhou: o serviço de transcrição está fora do ar, então não há transcrição; a pessoa pode tocar em "Tentar de novo" no anexo)');
+  });
+
+  it('a late failure wakes the conversation with the reason too', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()], transcriptHoldMs: 10 });
+    await (await built.service.start(user, '', { attachmentIds: ['aud1'] })).done;
+    await settle(built, { status: 'failed', error_code: 'TRANSCRIPTION_FAILED' });
+    await until(() => built.inputs().length === 2);
+    expect(built.messages.filter((m) => m.role === 'user')[1]!.text).toBe('Automático: a transcrição do áudio «audio.m4a» falhou.');
+    expect(built.inputs()[1]!.text).toContain('áudio (falhou: a transcrição do áudio falhou)');
+  });
+
+  it('an audio with words runs at once; its transcript follows as a turn of its own', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    await built.service.send(user, 'olha esse áudio', { attachmentIds: ['aud1'] });
+    expect(built.inputs()).toHaveLength(1);
+    expect(built.inputs()[0]!.text).toContain('transcrição ainda em andamento');
+    await settle(built, ready);
+    await until(() => built.inputs().length === 2);
+    expect(built.inputs()[1]!.text).toContain('cria um card de bug pro login');
+  });
+
+  it('an audio already transcribed is not held, and other pending files are never held', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio(ready), attachment({ id: 'pdf1', status: 'pending', meta: null })] });
+    await built.service.send(user, '', { attachmentIds: ['aud1'] });
+    expect(built.inputs()[0]!.text).toContain('cria um card de bug pro login');
+    await built.service.send(user, '', { attachmentIds: ['pdf1'] });
+    expect(built.inputs()[1]!.text).toContain('PDF (ainda processando)');
+  });
+
+  it('a held message whose turn cannot start gets its answer row with the failure', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+    // The host went away while whisper worked.
+    built.agents.capabilities.mockReturnValue(null as never);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await settle(built, ready);
+      await expect(started.done).rejects.toBeTruthy();
+    } finally {
+      errors.mockRestore();
+    }
+    expect(built.messages.find((m) => m.id === started.assistant_message_id)).toMatchObject({ role: 'assistant', error_code: 'RUNNER_FAILED' });
+  });
+
+  it('a shutdown ends the hold: the turn lands now instead of after whisper', async () => {
+    const built = build([delta('ok'), done()], { attachments: [audio()] });
+    const started = await built.service.start(user, '', { attachmentIds: ['aud1'] });
+    started.done.catch(() => undefined);
+    await built.service.suspendAll();
+    expect(built.runner.run).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('attachments on the always-free paths (TER-59)', () => {
   const attachment = (over: Partial<AttachmentRow> = {}): AttachmentRow => ({
     id: 'abc123', user_id: 'u1', conversation_id: 'c1', message_id: null, name: 'relatorio.pdf', mime: 'application/pdf', kind: 'pdf', bytes: 10, sha256: 'h',
@@ -4174,5 +4301,47 @@ describe('ChatService.afterDecisions', () => {
     expect(() => s.afterDecisions([row({})])).not.toThrow();
     await vi.waitFor(() => expect(errors).toHaveBeenCalledWith('chat: approval hook failed', expect.objectContaining({ action_id: 'a1', tool: 'automation_merge' })));
     errors.mockRestore();
+  });
+});
+
+describe('client origin (TER-1088)', () => {
+  const signals: ClientSignals = { client: 'ios', app_version: '0.6.0', device: 'phone', os: 'iOS 18.1', ip: '203.0.113.7', time_zone: null, locale: 'pt-BR' };
+  const withOrigin = (enabled = true) => {
+    const b = build([delta('ok'), done()], { host: { machines: [{ id: 'm1', name: 'jarvis', type: 'agent', agent_version: '0.5.0' }, { id: 'm2', name: 'hulk', type: 'agent', agent_version: '0.5.0' }, { id: 'm3', name: 'vps', type: 'agent', agent_version: '0.5.0' }] } });
+    Object.assign(b.repos.users, { chatClientContext: vi.fn(async () => enabled), timeZone: vi.fn(async () => 'America/Sao_Paulo') });
+    Object.assign(b.agents, { publicIp: vi.fn((id: string) => ({ m1: '203.0.113.7', m2: '::ffff:203.0.113.7', m3: '198.51.100.1' })[id] ?? null) });
+    return b;
+  };
+
+  it('puts the origin line after the ref line of a typed message, with the machines on the same network and no IP', async () => {
+    const { service, inputs } = withOrigin();
+    const started = await service.start(user, 'mostra a imagem', { client: signals });
+    await started.done;
+    const text = inputs()[0]!.text;
+    const [refLine, originLine, , body] = text.split('\n');
+    expect(refLine).toBe(messageRefLine(started.user_message_id, 'x'));
+    expect(originLine).toBe(
+      '[termhub origin] Where the person sent the message below from, as the server saw it: iOS app 0.6.0 · phone, iOS 18.1 · same network as: jarvis, hulk · time zone America/Sao_Paulo · language pt-BR. Use this before asking where they are or whether they are near a machine; get_client_context has the details.',
+    );
+    expect(body).toBe('mostra a imagem');
+    expect(text).not.toContain('203.0.113.7');
+    expect(recalledOrigin(started.conversation_id)).toMatchObject({ ip: '203.0.113.7', same_network_as: ['jarvis', 'hulk'], time_zone: 'America/Sao_Paulo' });
+  });
+
+  it('sends nothing, and forgets what it kept, when the person turned it off', async () => {
+    const on = withOrigin();
+    await (await on.service.start(user, 'oi', { client: signals })).done;
+    expect(recalledOrigin('c1')).not.toBeNull();
+    const { service, inputs } = withOrigin(false);
+    const started = await service.start(user, 'oi', { client: signals });
+    await started.done;
+    expect(inputs()[0]!.text).toBe(typed(started.user_message_id, 'oi'));
+    expect(recalledOrigin('c1')).toBeNull();
+  });
+
+  it('a wake never carries an origin line', async () => {
+    const { service, inputs } = withOrigin();
+    await (await service.wake(user, 'c1', 'A aba terminou.')).done;
+    expect(inputs()[0]!.text).toBe('A aba terminou.');
   });
 });

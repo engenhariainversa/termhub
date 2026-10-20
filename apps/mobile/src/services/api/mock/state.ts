@@ -97,6 +97,9 @@ export interface MockTab {
   items: TTabChatItem[];
   mode: string;
   screen: string;
+  /** With no session: why (TER-1091), `not_reported` when unset. `machines/:id/hooks` turns `no_hooks` into `not_reported`;
+   *  `no_agent` (TER-1094) is a plain shell, which `tabs/:id/agent` turns into a new, empty session. */
+  noSessionReason?: 'no_hooks' | 'not_reported' | 'transcript_missing' | 'no_agent';
 }
 
 /** `chat/projects`' rows minus the derived fields (`busy`, `pending_confirmations`,
@@ -275,6 +278,7 @@ export interface MockState {
   chatAutodecideEnabled: boolean;
   /** "Responder perguntas do Codex pelo chat"; defaults to `false`, like the server's column default. */
   chatCodexRepliesEnabled: boolean;
+  chatClientContextEnabled: boolean;
   /** The chat's context meter limit (TER-1038); null = the model's window. */
   chatContextLimit: number | null;
   /** The automatic answer's thresholds pinned by hand (TER-642); null = the defaults. */
@@ -339,6 +343,7 @@ export function createMockState(): MockState {
     chatMemoryEnabled: true,
     chatAutodecideEnabled: false,
     chatCodexRepliesEnabled: false,
+    chatClientContextEnabled: true,
     chatContextLimit: null,
     chatAutoThresholds: null,
     notes: [],

@@ -53,6 +53,9 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
 .prose-termhub .code-block pre { @apply my-0 rounded-none border-0 bg-transparent; }
 .prose-termhub .code-block__header { @apply flex items-center justify-between gap-2 border-b border-line px-3 py-1.5; }
 .prose-termhub .code-block__language { @apply font-mono text-[11px] uppercase tracking-wide text-fg-dim; }
+/* "Copiar" and "Baixar" (TER-1084) side by side; "Baixar" carries `code-block__copy` too, so it looks
+   and hides on a mouse device exactly like the copy button. */
+.prose-termhub .code-block__actions { @apply flex items-center gap-1; }
 /* No permanent dimming and no `opacity-60`: the full-strength state was reached only through `hover`
    or `focus-visible`, which a touch screen never produces, so a phone — the device this whole feature
    was asked for — got the faint state for ever, at about 2.1:1 against the background. `fg-muted`

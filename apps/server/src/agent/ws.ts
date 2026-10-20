@@ -87,7 +87,7 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
             if (deps.probeInfo) conn.sendProbeInfo(deps.probeInfo);
             return conn.close(1000, 'probe-ok');
           }
-          registry.attach(machine.id, conn);
+          registry.attach(machine.id, conn, clientIp(req) || null);
 
           // Register the close listener before the first `await`: if the agent disconnects
           // while `touch()` below is in flight, `closed` catches it so the intervals are never
@@ -178,7 +178,8 @@ export function registerAgentWs(router: ReturnType<typeof createUpgradeRouter>, 
 /** Machine ids are `newId()` strings; anything else is refused before touching the database. */
 const MACHINE_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
-/** Client address for log lines: the real IP forwarded by nginx/Cloudflare, else the socket peer. */
+/** Client address for log lines and the chat's same-network check (TER-1088): the real IP forwarded by
+ *  nginx/Cloudflare, else the socket peer. */
 function clientIp(req: IncomingMessage): string {
   const forwarded = req.headers['x-real-ip'] ?? req.headers['x-forwarded-for'];
   const first = Array.isArray(forwarded) ? forwarded[0] : forwarded;

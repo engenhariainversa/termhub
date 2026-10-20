@@ -69,6 +69,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.chatAction.create({ data: { id: newId(), conversationId, tool: 'send_input', args: {}, class: 'write', status: 'pending' } });
     await db.chatStandingGrant.create({ data: { id: newId(), userId, projectId, kind: 'board' } });
     await db.chatDefaultRestriction.create({ data: { userId, kind: 'close_tab' } });
+    // TER-1081: a command rule of run_command (cascades with the user).
+    await db.chatCommandRule.create({ data: { id: newId(), userId, projectId, words: ['git', 'status'], match: 'exact', machineIds: [], conversationId } });
     await db.chatDecision.create({
       data: { id: newId(), userId, projectId, questionIndex: 0, header: 'h', question: 'q?', options: [], multiSelect: false, answer: {} },
     });

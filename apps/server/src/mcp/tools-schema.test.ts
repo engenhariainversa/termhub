@@ -50,7 +50,9 @@ function build(opts: { token?: ApiToken | undefined; grants?: string[]; limiter?
   const tabs = { findById: vi.fn(async (id: string) => opts.tabs?.find((t) => t.id === id)) };
   // every listed tab has an active automatic run: the run-only tab tools (report_card, get_card) are listed
   const automationRuns = { activeByTab: vi.fn(async (id: string) => { const t = opts.tabs?.find((x) => x.id === id); return t ? { id: 'run1', project_id: t.project_id } : null; }) };
-  const repos = { apiTokens, tabs, automationRuns, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) }, legal: { statusFor: vi.fn(async () => ({ pending: [], upcoming: [] })) } } as unknown as Repositories;
+  // the token's owner holds an admin role, so the admin-only tools (admin_user_troubleshoot) are listed too
+  const roles = { findById: vi.fn(async (id: string) => ({ id, is_admin: true })), permissionsOf: vi.fn(async () => []) };
+  const repos = { apiTokens, tabs, automationRuns, roles, users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r' } : undefined)) }, legal: { statusFor: vi.fn(async () => ({ pending: [], upcoming: [] })) } } as unknown as Repositories;
   const grants = opts.grants ?? ['machines:read', 'projects:read', 'terminals:read'];
   vi.mocked(canAccess).mockImplementation(async (_r, _u, resource, action) => grants.includes(`${resource}:${action}`));
   app.register((a) => mcpRoutes(a, { repos, version: '0.0.0-test', limiter: opts.limiter, attachments: opts.attachments }));

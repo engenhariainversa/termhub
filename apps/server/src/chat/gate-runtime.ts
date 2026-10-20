@@ -704,7 +704,20 @@ async function commandRuleCovering(ctx: ControlContext, call: GatedCall): Promis
 async function classOf(ctx: ControlContext, call: GatedCall): Promise<ActionClass> {
   const cls = actionClass(call.tool, call.args);
   if (call.token.gated && cls === 'write' && call.tool === 'set_automation_policy' && (await automationCallIsBrake(ctx, call.args))) return 'self_mediated';
+  if (call.token.gated && cls === 'write' && call.tool === 'admin_user_troubleshoot' && (await troubleshootUserApproved(ctx, call))) return 'read';
   return cls;
+}
+
+/**
+ * TER-1092: whether the person already let a query about this user run in this conversation. The first
+ * one is a card ("consultar dados de suporte de …"); once it ran, the next queries about the same user
+ * in the same conversation are not asked again — each is still written to the security trail.
+ */
+async function troubleshootUserApproved(ctx: ControlContext, call: GatedCall): Promise<boolean> {
+  const userId = call.args.user_id;
+  if (typeof userId !== 'string' || !userId) return false;
+  const conversationId = call.token.chat_conversation_id ?? (await ctx.repos.chat.getOrCreateForUser(ctx.scope.user.id)).id;
+  return ctx.repos.chatActions.executedWithArg(conversationId, call.tool, 'user_id', userId);
 }
 
 /** The gate itself: run the call, or answer why it did not run. */
