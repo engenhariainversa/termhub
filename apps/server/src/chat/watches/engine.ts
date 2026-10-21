@@ -138,6 +138,29 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
     }
   }
 
+  /**
+   * TER-1101: a periodic summary (a reminder with `stop_with`) ends with the job it follows: once that watch
+   * is no longer open, the reminder is closed before it can wake the chat again. Answers what stays open.
+   */
+  async function stopSummaries(open: ChatWatch[]): Promise<ChatWatch[]> {
+    const openIds = new Set(open.map((w) => w.id));
+    const stopped = new Set<string>();
+    for (const w of open) {
+      const job = w.kind === 'reminder' ? w.params.stop_with : undefined;
+      if (!job || openIds.has(job)) continue;
+      try {
+        if ((await deps.repos.chatWatches.findById(job))?.status === 'open') continue;
+        if (!(await deps.repos.chatWatches.cancel(w.id, w.user_id, now()))) continue;
+        stopped.add(w.id);
+        deps.log.info({ watchId: w.id, stopWith: job }, 'chat watches: summary stopped with its job');
+        await publish(w.user_id, w.project_id);
+      } catch (err) {
+        deps.log.warn({ watchId: w.id, code: failureLabel(err) }, 'chat watches: stopping a summary failed');
+      }
+    }
+    return stopped.size ? open.filter((w) => !stopped.has(w.id)) : open;
+  }
+
   async function deliverPending(): Promise<void> {
     await deps.repos.chatWatches.dropUndeliveredBefore(new Date(now().getTime() - UNDELIVERED_MAX_MS), now());
     const pending = await deps.repos.chatWatches.listPendingFires(now());
@@ -153,7 +176,7 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
     sweep: () =>
       serial(async () => {
         if (!active()) return;
-        const open = await deps.repos.chatWatches.listAllOpen();
+        const open = await stopSummaries(await deps.repos.chatWatches.listAllOpen());
         await check(open);
         soonestReminder = soonestDue(open, now().getTime());
         await deliverPending();

@@ -51,5 +51,9 @@
   "Login do {{provider}} expirou": "{{provider}} login expired",
   "Login do {{provider}} expira em {{count}} dias_one": "{{provider}} login expires in {{count}} day",
   "Login do {{provider}} expira em {{count}} dias_other": "{{provider}} login expires in {{count}} days",
-  "{{machine}}: toque para refazer o login": "{{machine}}: tap to redo the login"
+  "{{machine}}: toque para refazer o login": "{{machine}}: tap to redo the login",
+  "{{project}}: novidade do concierge": "{{project}}: news from the concierge",
+  "Novidade do concierge": "News from the concierge",
+  "{{headline}} (+{{count}} avisos)_one": "{{headline}} (+{{count}} notice)",
+  "{{headline}} (+{{count}} avisos)_other": "{{headline}} (+{{count}} notices)"
 }

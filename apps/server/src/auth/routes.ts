@@ -1,5 +1,7 @@
 import type { FastifyBaseLogger, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { conciergePushSettings } from '@termhub/mobile-api';
+import { saveConciergePush } from '../chat/notices/settings.js';
 import { config } from '../config.js';
 import { toPublicUser, type Session, type User } from '../db/repositories/types.js';
 import { isAdmin, permissionsOf } from './permissions.js';
@@ -53,6 +55,7 @@ function viewAsOf(scope: Scope | undefined) {
   return { id: u.id, name: u.name, email: u.email, avatar_url: u.avatar_url };
 }
 
+const conciergePushBodySchema = z.object({ concierge: conciergePushSettings, time_zone: z.string().min(1).max(64).optional() });
 const viewAsSchema = z.object({ user_id: z.string().min(1).max(64).nullable() });
 const nicknameBodySchema = z.object({ nickname: z.string() });
 /** An IANA zone name the runtime knows (`America/Sao_Paulo`); the daily summary's clock. */
@@ -180,6 +183,19 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     const { time_zone } = timeZoneBodySchema.parse(request.body);
     await ctx.repos.users.setTimeZone(request.user.id, time_zone);
     return reply.code(204).send();
+  });
+
+  /** TER-1101: the person's rules for the concierge's notices outside the chat (push and browser notifications). */
+  app.get('/me/concierge-push', async (request) => {
+    if (!request.user) throw unauthorized();
+    return { concierge: await ctx.repos.users.conciergePush(request.user.id) };
+  });
+
+  app.put('/me/concierge-push', async (request) => {
+    if (!request.user) throw unauthorized();
+    const body = conciergePushBodySchema.parse(request.body);
+    await saveConciergePush(ctx.repos, request.user.id, body.concierge, body.time_zone);
+    return { concierge: await ctx.repos.users.conciergePush(request.user.id) };
   });
 
   /**

@@ -91,6 +91,9 @@ model User {
   chatClientContext       Boolean                  @default(true) @map("chat_client_context")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
+  /// TER-1101: which of the concierge's own notices become a push, the quiet hours and the grouping window
+  /// ({ needs_you, done, quiet_start, quiet_end, group_minutes }). Null = the defaults (chat/notices/rules.ts).
+  conciergePush           Json?                    @map("concierge_push")
   /// The chat's context meter measures against this many tokens instead of the model's window
   /// (TER-1038): opt-in, null = the window.
   chatContextLimit        Int?                     @map("chat_context_limit")
@@ -100,7 +103,8 @@ model User {
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
   chatWatches             ChatWatch[]
-  fileGrants              ChatFileGrant[]
+  conciergeNotices        ConciergeNotice[]
+  fileGrants             ChatFileGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
   deletionRequestedAt     DateTime?                @map("deletion_requested_at")
@@ -1069,6 +1073,7 @@ model ChatConversation {
   standingGrants     ChatStandingGrant[]
   commandRules       ChatCommandRule[]
   fileGrants         ChatFileGrant[]
+  conciergeNotices   ConciergeNotice[]
 
   @@index([userId, createdAt])
   @@index([machineId])
@@ -1429,6 +1434,39 @@ model ChatWatchFire {
   @@index([deliveredAt, droppedAt])
   @@index([userId, deliveredAt])
   @@map("chat_watch_fires")
+}
+
+/// A notice the concierge asked to send outside the chat (TER-1101, `notify`): its level, its one-line
+/// headline and the message it points at. Pending until the answer is written, then sent as a push (and a
+/// browser notification) by the person's rules — levels, quiet hours, grouping, the hourly cap — or dropped.
+/// Several pending notices of a conversation leave as one push. Kept a week for the hourly cap and tests.
+model ConciergeNotice {
+  id             String           @id
+  userId         String           @map("user_id")
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String           @map("conversation_id")
+  conversation   ChatConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  /// null = the account-wide chat
+  projectId      String?          @map("project_id")
+  /// the answer the notice points at; set when that answer is done (or the latest one, after a while)
+  messageId      String?          @map("message_id")
+  /// needs_you | done
+  level          String
+  /// the concierge's one line for the push (≤ 120 chars)
+  headline       String
+  /// done: the watch or reminder the person asked to follow
+  watchId        String?          @map("watch_id")
+  /// pending | sent | dropped
+  status         String           @default("pending")
+  /// why it was dropped (level_off) or what held it last (quiet, grouped, capped)
+  reason         String?
+  createdAt      DateTime         @default(now()) @map("created_at")
+  readyAt        DateTime?        @map("ready_at")
+  sentAt         DateTime?        @map("sent_at")
+
+  @@index([status, userId])
+  @@index([conversationId, sentAt])
+  @@map("concierge_notices")
 }
 
 /// A project tab stuck on a usage limit whose machine does not swap accounts by itself (TER-589): a card in

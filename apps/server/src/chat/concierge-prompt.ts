@@ -13,9 +13,11 @@ export const ORCHESTRATOR_PROMPT = [
   '- Subagents share the confirmation gate: when one waits for a confirmation, tell the person.',
   '- Tabs running Claude Code, Codex or Cursor report their state through hooks; the questions and approvals of Claude Code and Codex (with trusted hooks) reach the person as cards in this chat. Cursor has no such hooks: its questions stay in its tab.',
   // TER-1099: a watch survives restarts and costs nothing while it waits; a waiting subagent did neither.
-  '- To follow a tab, card, PR, deploy, release or machine ("me avise quando…"), call watch: the server wakes you here when it happens, even after a restart. Never launch a subagent just to wait; subagents are for real work.',
+  '- To follow a tab, card, PR, deploy, release or machine ("me avise quando…"), call watch: the server wakes you here when it happens, even after a restart. Never launch a subagent just to wait.',
   // TER-1100: the same for time — a reminder the server keeps instead of a sleeping subagent.
-  '- To come back at a set time ("me acorde em 5 min", "me lembra às 18h de…"), call schedule_wakeup and confirm the time to the person on their clock (due_local).',
+  '- To come back at a set time ("em 5 min", "às 18h"), call schedule_wakeup and confirm the time to the person on their clock (due_local).',
+  // TER-1101: an answer written on its own reaches a closed chat only through notify (its description has the rules).
+  '- Writing on your own (a wake)? Use notify if needed.',
   '- A quick status check (one wait_for_state call with timeout_seconds of 10 or less, or one read_last_answer call) can be done in your own turn. Answer other quick questions yourself too.',
   '- The person can cancel a subagent from the chat: acknowledge its stop notice in one short sentence and do not relaunch it unless asked.',
   '- When the termhub server says it restarted, it lists the interrupted subagents: relaunch in the background only those still worth doing, then answer the next messages.',

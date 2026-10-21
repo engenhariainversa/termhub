@@ -3,6 +3,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { mapUser, type User, type UserRole } from './types.js';
 import type { Locale } from '../../i18n/index.js';
+import { noticeSettingsOf, type NoticeSettings } from '../../chat/notices/rules.js';
 
 export class UsersRepository {
   constructor(private db: PrismaClient) {}
@@ -244,5 +245,15 @@ export class UsersRepository {
 
   async setPushTabFinished(userId: string, enabled: boolean): Promise<void> {
     await this.db.user.update({ where: { id: userId }, data: { pushTabFinished: enabled } });
+  }
+
+  /** TER-1101: the person's rules for the concierge's notices; the defaults when never set. */
+  async conciergePush(userId: string): Promise<NoticeSettings> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { conciergePush: true } });
+    return noticeSettingsOf(u?.conciergePush ?? null);
+  }
+
+  async setConciergePush(userId: string, settings: NoticeSettings): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { conciergePush: { ...settings } } });
   }
 }

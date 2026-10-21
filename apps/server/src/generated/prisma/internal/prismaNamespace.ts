@@ -445,6 +445,7 @@ export const ModelName = {
   ChatCommandRule: 'ChatCommandRule',
   ChatWatch: 'ChatWatch',
   ChatWatchFire: 'ChatWatchFire',
+  ConciergeNotice: 'ConciergeNotice',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -486,7 +487,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -4042,6 +4043,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ConciergeNotice: {
+      payload: Prisma.$ConciergeNoticePayload<ExtArgs>
+      fields: Prisma.ConciergeNoticeFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ConciergeNoticeFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ConciergeNoticeFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        findFirst: {
+          args: Prisma.ConciergeNoticeFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ConciergeNoticeFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        findMany: {
+          args: Prisma.ConciergeNoticeFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>[]
+        }
+        create: {
+          args: Prisma.ConciergeNoticeCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        createMany: {
+          args: Prisma.ConciergeNoticeCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ConciergeNoticeCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>[]
+        }
+        delete: {
+          args: Prisma.ConciergeNoticeDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        update: {
+          args: Prisma.ConciergeNoticeUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        deleteMany: {
+          args: Prisma.ConciergeNoticeDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ConciergeNoticeUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ConciergeNoticeUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>[]
+        }
+        upsert: {
+          args: Prisma.ConciergeNoticeUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ConciergeNoticePayload>
+        }
+        aggregate: {
+          args: Prisma.ConciergeNoticeAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateConciergeNotice>
+        }
+        groupBy: {
+          args: Prisma.ConciergeNoticeGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ConciergeNoticeGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ConciergeNoticeCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ConciergeNoticeCountAggregateOutputType> | number
+        }
+      }
+    }
     TabLimitNotice: {
       payload: Prisma.$TabLimitNoticePayload<ExtArgs>
       fields: Prisma.TabLimitNoticeFieldRefs
@@ -6030,6 +6105,7 @@ export const UserScalarFieldEnum = {
   chatCodexReplies: 'chatCodexReplies',
   chatClientContext: 'chatClientContext',
   pushTabFinished: 'pushTabFinished',
+  conciergePush: 'conciergePush',
   chatContextLimit: 'chatContextLimit',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
@@ -6817,6 +6893,25 @@ export const ChatWatchFireScalarFieldEnum = {
 } as const
 
 export type ChatWatchFireScalarFieldEnum = (typeof ChatWatchFireScalarFieldEnum)[keyof typeof ChatWatchFireScalarFieldEnum]
+
+
+export const ConciergeNoticeScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  conversationId: 'conversationId',
+  projectId: 'projectId',
+  messageId: 'messageId',
+  level: 'level',
+  headline: 'headline',
+  watchId: 'watchId',
+  status: 'status',
+  reason: 'reason',
+  createdAt: 'createdAt',
+  readyAt: 'readyAt',
+  sentAt: 'sentAt'
+} as const
+
+export type ConciergeNoticeScalarFieldEnum = (typeof ConciergeNoticeScalarFieldEnum)[keyof typeof ConciergeNoticeScalarFieldEnum]
 
 
 export const TabLimitNoticeScalarFieldEnum = {
@@ -7738,6 +7833,7 @@ export type GlobalOmitConfig = {
   chatCommandRule?: Prisma.ChatCommandRuleOmit
   chatWatch?: Prisma.ChatWatchOmit
   chatWatchFire?: Prisma.ChatWatchFireOmit
+  conciergeNotice?: Prisma.ConciergeNoticeOmit
   tabLimitNotice?: Prisma.TabLimitNoticeOmit
   tabQuestion?: Prisma.TabQuestionOmit
   chatAutoSample?: Prisma.ChatAutoSampleOmit

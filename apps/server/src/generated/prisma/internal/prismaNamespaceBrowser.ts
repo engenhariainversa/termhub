@@ -99,6 +99,7 @@ export const ModelName = {
   ChatCommandRule: 'ChatCommandRule',
   ChatWatch: 'ChatWatch',
   ChatWatchFire: 'ChatWatchFire',
+  ConciergeNotice: 'ConciergeNotice',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -168,6 +169,7 @@ export const UserScalarFieldEnum = {
   chatCodexReplies: 'chatCodexReplies',
   chatClientContext: 'chatClientContext',
   pushTabFinished: 'pushTabFinished',
+  conciergePush: 'conciergePush',
   chatContextLimit: 'chatContextLimit',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
@@ -955,6 +957,25 @@ export const ChatWatchFireScalarFieldEnum = {
 } as const
 
 export type ChatWatchFireScalarFieldEnum = (typeof ChatWatchFireScalarFieldEnum)[keyof typeof ChatWatchFireScalarFieldEnum]
+
+
+export const ConciergeNoticeScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  conversationId: 'conversationId',
+  projectId: 'projectId',
+  messageId: 'messageId',
+  level: 'level',
+  headline: 'headline',
+  watchId: 'watchId',
+  status: 'status',
+  reason: 'reason',
+  createdAt: 'createdAt',
+  readyAt: 'readyAt',
+  sentAt: 'sentAt'
+} as const
+
+export type ConciergeNoticeScalarFieldEnum = (typeof ConciergeNoticeScalarFieldEnum)[keyof typeof ConciergeNoticeScalarFieldEnum]
 
 
 export const TabLimitNoticeScalarFieldEnum = {

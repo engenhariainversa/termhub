@@ -195,6 +195,16 @@ describe('schedule_wakeup (TER-1100)', () => {
     expect(create.mock.calls[0][0].params.until).toBe(new Date(now.getTime() + WATCH_LIMITS.maxHours * 3600_000).toISOString());
   });
 
+  it('a periodic summary stops with an open watch of the chat (TER-1101 stop_with)', async () => {
+    listOpen.mockResolvedValue([{ id: 'job', kind: 'tab' }, { id: 'rem', kind: 'reminder' }]);
+    const out = await scheduleWakeup(ctxWith(), { in_minutes: 60, every_minutes: 60, stop_with: 'job', note: 'Resumo' }, now);
+    expect(create.mock.calls[0][0].params).toMatchObject({ every_minutes: 60, stop_with: 'job' });
+    expect(out.note).toMatch(/para sozinho quando a assinatura stop_with fechar/);
+    for (const a of [{ stop_with: 'job' }, { every_minutes: 60, stop_with: 'rem' }, { every_minutes: 60, stop_with: 'nope' }]) {
+      await expect(scheduleWakeup(ctxWith(), { in_minutes: 60, ...a, note: 'x' }, now)).rejects.toMatchObject({ code: 'INVALID_WATCH' });
+    }
+  });
+
   it('refuses an 11th open reminder, and a 31st watch of any kind', async () => {
     const reminder = { kind: 'reminder' };
     listOpen.mockResolvedValue(Array.from({ length: REMINDER_LIMITS.openPerScope }, () => reminder));

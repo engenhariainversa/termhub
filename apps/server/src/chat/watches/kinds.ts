@@ -79,6 +79,8 @@ export interface WatchParams {
   until?: string;
   /** reminder: the person's time zone when it was set, to tell the time back on their clock. */
   zone?: string;
+  /** reminder (TER-1101): a periodic summary of a long job ends when this watch (the job) closes. */
+  stop_with?: string;
 }
 
 /** Limits (card §4): open watches per chat scope, wakes per hour, validity and the recurring pace. */

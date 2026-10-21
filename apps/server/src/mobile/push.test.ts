@@ -8,6 +8,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { DeviceRequest } from '../db/repositories/device-requests.js';
 import type { User } from '../db/repositories/types.js';
+import { markWokenAnswer } from '../chat/woken-answers.js';
 import { ExpoPushSender, ExpoReceiptFetcher, MobilePushService, sweepPushReceipts, type PushMessage, type PushReceipt, type PushSender } from './push.js';
 
 const mkDevice = (id: string, token: string): Device => ({ id, user_id: 'u1', push_token: token, status: 'active' }) as unknown as Device;
@@ -953,5 +954,41 @@ describe('MobilePushService — automatic work escalated (agentic board §9.3, D
       await flush();
       expect(t.sent).toHaveLength(1);
     });
+  });
+});
+
+describe('concierge notices (TER-1101)', () => {
+  it('needs_you: the concierge\'s headline under "precisa de você", to devices without a live socket, opening the message', async () => {
+    const t = setup({ live: ['d2'] });
+    await t.service.conciergeNotice({ userId: 'u1', conversationId: 'cp', projectId: 'p1', messageId: 'm7', level: 'needs_you', headline: 'O deploy falhou: preciso da sua decisão', count: 1 });
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1',
+      kind: 'confirmation',
+      title: 'termhub precisa de você',
+      body: 'O deploy falhou: preciso da sua decisão',
+      data: { kind: 'concierge', level: 'needs_you', conversation_id: 'cp', project_id: 'p1', message_id: 'm7' },
+    });
+    expect(t.sent[0]).toEqual([
+      expect.objectContaining({ to: 'ExponentPushToken[a]', collapseId: 'concierge:cp', data: expect.objectContaining({ message_id: 'm7', notification_id: 'n1' }) }),
+    ]);
+  });
+
+  it('done, grouped, in English: its own title and how many more it carries', async () => {
+    const t = setup({ locale: 'en' });
+    await t.service.conciergeNotice({ userId: 'u1', conversationId: 'cp', projectId: 'p1', messageId: null, level: 'done', headline: 'Build ready', count: 3 });
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith(expect.objectContaining({ kind: 'reply', title: 'termhub: news from the concierge', body: 'Build ready (+2 notices)' }));
+    expect(t.sent[0][0].data).not.toHaveProperty('message_id');
+  });
+
+  it('an answer the concierge wrote on its own is not pushed as "Resposta pronta"', async () => {
+    const t = setup();
+    stop = t.service.start();
+    markWokenAnswer('msg1');
+    chatBus.publish(finished('cp'));
+    await flush();
+    expect(t.sent).toEqual([]);
+    chatBus.publish(finished('cp'));
+    await flush();
+    expect(t.sent).toHaveLength(1);
   });
 });

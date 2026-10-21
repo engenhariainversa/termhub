@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_NOTICE_SETTINGS } from '../chat/notices/rules.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Device } from '../db/repositories/devices.js';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
@@ -49,7 +50,13 @@ function buildApp(opts: { mobile?: unknown } = {}) {
     findByPushToken: vi.fn(async () => undefined as Device | undefined),
   };
   const deviceEvents = { record: vi.fn(async () => undefined) };
-  const users = { pushTabFinished: vi.fn(async () => false), setPushTabFinished: vi.fn(async () => undefined) };
+  const users = {
+    pushTabFinished: vi.fn(async () => false),
+    setPushTabFinished: vi.fn(async () => undefined),
+    conciergePush: vi.fn(async () => ({ ...DEFAULT_NOTICE_SETTINGS })),
+    setConciergePush: vi.fn(async () => undefined),
+    setTimeZone: vi.fn(async () => undefined),
+  };
   const repos = { devices, deviceEvents, users } as unknown as Repositories;
   const push = { testPush: vi.fn(async () => ({ scheduled_for: '2026-10-05T00:00:10.000Z', ticket: null })) };
 
@@ -212,12 +219,28 @@ describe('/push-settings (TER-925)', () => {
     const { app, users } = buildApp({ mobile: deviceMobile });
     const r = await app.inject({ method: 'GET', url: '/push-settings' });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ tab_finished: false });
+    expect(r.json()).toEqual({ tab_finished: false, concierge: DEFAULT_NOTICE_SETTINGS });
     expect(users.pushTabFinished).toHaveBeenCalledWith('u1');
     const w = await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: true } });
     expect(w.statusCode).toBe(200);
-    expect(w.json()).toEqual({ tab_finished: true });
+    expect(w.json()).toEqual({ tab_finished: true, concierge: DEFAULT_NOTICE_SETTINGS });
     expect(users.setPushTabFinished).toHaveBeenCalledWith('u1', true);
+    // An older app sends tab_finished alone: the concierge's rules are left as they were (TER-1101).
+    expect(users.setConciergePush).not.toHaveBeenCalled();
+  });
+
+  it('saves the concierge\'s notice rules, with the phone\'s zone for the quiet hours (TER-1101)', async () => {
+    const { app, users } = buildApp({ mobile: deviceMobile });
+    const concierge = { needs_you: true, done: false, quiet_start: '22:00', quiet_end: '07:00', group_minutes: 10 };
+    const w = await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: false, concierge, time_zone: 'America/Sao_Paulo' } });
+    expect(w.statusCode).toBe(200);
+    expect(users.setConciergePush).toHaveBeenCalledWith('u1', concierge);
+    expect(users.setTimeZone).toHaveBeenCalledWith('u1', 'America/Sao_Paulo');
+    // Quiet hours go together; a zone the runtime does not know is not kept.
+    expect((await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: false, concierge: { ...concierge, quiet_end: null } } })).statusCode).toBe(400);
+    users.setTimeZone.mockClear();
+    await app.inject({ method: 'PUT', url: '/push-settings', payload: { tab_finished: false, concierge, time_zone: 'Mars/Olympus' } });
+    expect(users.setTimeZone).not.toHaveBeenCalled();
   });
 
   it('400 on a bad body, 401 without a device session', async () => {

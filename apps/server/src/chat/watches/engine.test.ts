@@ -436,6 +436,27 @@ describe('reminders (TER-1100)', () => {
     expect((await store.findById(w.id))?.baseline).toEqual({ next: '2026-10-21T12:45:00.000Z' });
   });
 
+  it('a periodic summary stops with the job it follows (TER-1101 stop_with)', async () => {
+    tabs.set('t9', { id: 't9', name: 'build', project_id: 'p1', machine_id: 'm1', state: 'working' } as ProbeTab);
+    const job = await store.create({
+      user_id: 'u1', project_id: 'p1', conversation_id: 'c1', kind: 'tab', target_id: 't9', params: { events: ['finished'] }, baseline: { state: 'working', at: at() },
+      label: 'build', note: 'Avisar quando terminar', recurring: false, expires_at: new Date(clock.getTime() + 24 * 3600_000),
+    });
+    const summary = await remind({ recurring: true, params: { events: ['due'], at: at(60 * 60_000), every_minutes: 60, until: at(24 * 3600_000), zone: 'UTC', stop_with: job.id }, baseline: { next: at(60 * 60_000) } }, 60 * 60_000);
+    const e = engine();
+    advance(60 * 60_000);
+    await e.sweep();
+    expect(wakes).toHaveLength(1);
+    expect((await store.findById(summary.id))?.status).toBe('open');
+    // The job ends: its watch closes, and the summary goes with it before its next time.
+    await store.cancel(job.id, 'u1');
+    await e.sweep();
+    expect((await store.findById(summary.id))?.status).toBe('cancelled');
+    advance(60 * 60_000);
+    await e.sweep();
+    expect(wakes).toHaveLength(1);
+  });
+
   it('a cancelled reminder never wakes the chat', async () => {
     const w = await remind();
     await store.cancel(w.id, 'u1');

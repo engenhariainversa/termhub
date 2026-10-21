@@ -397,6 +397,17 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('context'), user_id: z.string(), conversation_id: z.string(), tokens: z.number(), window: z.number().nullable(), compacted_at: z.string().nullable().optional() }),
   /** The scope's open watches changed (TER-1099): the whole list, which replaces the app's. */
   z.object({ type: z.literal('watches'), user_id: z.string(), conversation_id: z.string(), watches: z.array(watchViewSchema) }),
+  /** A notice of the concierge left as a push (TER-1101): the phone already got the push; the app ignores it. */
+  z.object({
+    type: z.literal('concierge_notice'),
+    user_id: z.string(),
+    conversation_id: z.string(),
+    project_id: z.string().nullable(),
+    message_id: z.string().nullable(),
+    level: z.string(),
+    headline: z.string(),
+    count: z.number(),
+  }),
   /** "Compactar" (TER-315): started, done or failed. */
   z.object({
     type: z.literal('compact'),

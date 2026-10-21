@@ -131,6 +131,9 @@ export type ChatEvent =
   /** The scope's open watches changed (TER-1099): one was created, fired, expired or was cancelled. The whole
    *  list, so a screen just replaces its own. Ids, names and the concierge's note only. */
   | { type: 'watches'; user_id: string; conversation_id: string; watches: WatchView[] }
+  /** TER-1101: a notice of the concierge left as a push (`notify`): the browsers show it as a notification
+   *  when the page is in the background. The concierge's one-line headline, the level and where a click goes. */
+  | { type: 'concierge_notice'; user_id: string; conversation_id: string; project_id: string | null; message_id: string | null; level: 'needs_you' | 'done'; headline: string; count: number }
   /** "Compactar" (TER-315): started, done (with the sizes before and after, when the CLI said) or
    *  failed (with the code a failed answer would carry). */
   | { type: 'compact'; user_id: string; conversation_id: string; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null };

@@ -34,6 +34,8 @@ import { getChatContext } from '../control/chat-context.js';
 import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
 import { getClientContext } from '../control/client-context.js';
 import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
+import { notify, type NotifyArgs } from '../control/notices.js';
+import { NOTICE_LEVELS, NOTICE_LIMITS } from '../chat/notices/rules.js';
 import { REMINDER_LIMITS, WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
@@ -667,7 +669,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'schedule_wakeup',
     description:
-      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. note: what to do then, in your own words (≤500). To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
+      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. note: what to do then, in your own words (≤500). To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). For a periodic summary of a long job ("me manda um resumo a cada hora enquanto isso roda"): every_minutes plus stop_with = the watch_id of the watch on that job — the reminder stops by itself when that watch closes; send each summary with notify. At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
@@ -680,6 +682,7 @@ export const TOOLS: ToolDef[] = [
       times: z.number().int().min(1).max(REMINDER_LIMITS.maxTimes).optional(),
       until: z.string().trim().min(16).max(40).optional(),
       until_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+      stop_with: id.optional(),
     },
     run: (ctx, a) => scheduleWakeup(ctx, a as unknown as ScheduleWakeupArgs),
   },
@@ -700,6 +703,20 @@ export const TOOLS: ToolDef[] = [
     action: 'create',
     input: { watch_id: id },
     run: (ctx, a) => cancelWatch(ctx, a as { watch_id: string }),
+  },
+  {
+    name: 'notify',
+    description:
+      'Tell the person outside the chat that this answer matters: a push to their phone and a browser notification, sent when this answer ends; tapping it opens the chat at this message. Use it when you write on your own (woken by a watch, a reminder or a subagent) and the person may have the chat closed. level: needs_you (a question, an approval or an error that blocks — they must act), done (something they asked you to follow happened: build ready, PR merged, version published — pass the watch_id of that watch or reminder), fyi (just so they know: stays in the chat, no push; the default when in doubt). headline: one short line in the person\'s language (≤120 chars) — what happened, never secrets, tokens, code or terminal output. The person decides which levels push, quiet hours and grouping; a few notices in a row leave as one push, and there is a cap per hour. Never use done for something the person did not ask to follow. Still write the full message in the chat. Only works in the termhub chat.',
+    scope: 'read',
+    resource: 'chat',
+    action: 'create',
+    input: {
+      level: z.enum(NOTICE_LEVELS),
+      headline: z.string().trim().min(1).max(NOTICE_LIMITS.headlineMax),
+      watch_id: id.optional(),
+    },
+    run: (ctx, a) => notify(ctx, a as unknown as NotifyArgs),
   },
   {
     name: 'get_client_context',
