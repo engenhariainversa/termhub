@@ -75,6 +75,14 @@ describe('parseCodexLines — other shapes', () => {
     ]);
   });
 
+  it('reads a status by its word, whatever its spelling: only a failure is an error (TER-1102)', () => {
+    const exec = (status: string, exit_code: number | null = 0) =>
+      parseCodexLines([ev({ type: 'item_completed', item: { type: 'CommandExecution', id: 'e', command: 'ls', status, exit_code } })]).items.find((i) => i.kind === 'tool_result');
+    for (const status of ['completed', 'Completed', 'COMPLETED', 'success']) expect(exec(status)).toMatchObject({ error: false });
+    for (const status of ['failed', 'Failed', 'declined', 'Declined']) expect(exec(status, null)).toMatchObject({ error: true });
+    for (const status of ['in_progress', 'inProgress', 'InProgress']) expect(exec(status, null)).toBeUndefined();
+  });
+
   it('reads a compaction, a dropped line and an MCP call', () => {
     const { items } = parseCodexLines([
       ev({ type: 'context_compacted' }),

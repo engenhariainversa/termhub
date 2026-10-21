@@ -35,6 +35,7 @@ jest.mock('expo-router', () => ({
 }));
 
 import type { TTabQuestion } from '@/services/api/contract';
+import { ApiError } from '@/services/api/errors';
 import type { TabChatStore } from '@/features/tab-chat/viewmodel/useTabChatStore';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { SessionScreen } from './session-screen';
@@ -107,9 +108,10 @@ describe('an empty conversation says why (TER-1091)', () => {
 });
 
 describe('a plain shell offers to start the agent (TER-1094)', () => {
-  const claude = { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null };
-  const codex = { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null };
-  async function shell(agentOptions: { choices: (typeof claude)[]; suggested: string | null }) {
+  const claude = { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: 'opus' as string | null };
+  const codex = { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null as string | null };
+  async function shell(options: { choices: (typeof claude)[]; suggested: string | null; provider?: string | null }) {
+    const agentOptions = { provider: null, ...options };
     await renderSession();
     const startAgent = jest.fn(async (_id?: string) => null as string | null);
     await act(() => current().setState({ startAgent, items: [], questions: [], suggestions: [], emptyReason: 'no_agent', availability: 'no_session', agentOptions }));
@@ -119,7 +121,7 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
   it('with a suggested account, one button starts it and names it; the others wait behind "Escolher outra conta"', async () => {
     const startAgent = await shell({ choices: [claude, codex], suggested: 'acc-claude' });
     expect(screen.getByText('Esta aba é um terminal sem agente')).toBeTruthy();
-    expect(screen.getByText('Com Pessoal (Claude Code)')).toBeTruthy();
+    expect(screen.getByText('Com Pessoal (Claude Code) · modelo opus')).toBeTruthy();
     expect(screen.queryByTestId('session-start-agent-acc-codex')).toBeNull();
     await fireEvent.press(screen.getByTestId('session-start-agent'));
     expect(startAgent).toHaveBeenCalledWith(undefined);
@@ -128,12 +130,28 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
     expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
   });
 
-  it('without one, each account is its own button', async () => {
-    const startAgent = await shell({ choices: [claude, codex], suggested: null });
+  it('without one, a picker asks first: the project CLI preselected, its accounts and model, nothing started until pressed (TER-1104)', async () => {
+    const claude2 = { account_id: 'acc-claude-2', label: 'Outra', provider: 'claude', model: 'opus' as string | null };
+    const startAgent = await shell({ choices: [claude, claude2, codex], suggested: null, provider: 'claude' });
     expect(screen.queryByTestId('session-start-agent')).toBeNull();
-    await fireEvent.press(screen.getByTestId('session-start-agent-acc-claude'));
-    expect(startAgent).toHaveBeenCalledWith('acc-claude');
-    expect(screen.getByText('Iniciar com Trabalho (Codex)')).toBeTruthy();
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-cli-claude').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByTestId('session-account-acc-claude').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByText('Modelo: opus')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('session-account-acc-claude-2'));
+    await fireEvent.press(screen.getByTestId('session-start-chosen'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-claude-2');
+    await fireEvent.press(screen.getByTestId('session-cli-chatgpt'));
+    expect(screen.queryByTestId('session-account-acc-codex')).toBeNull();
+    expect(screen.getByText('Conta Trabalho')).toBeTruthy();
+    expect(screen.getByText('Modelo: padrão do CLI')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('session-start-chosen'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
+  });
+
+  it("without a project CLI, the picker starts on the first choice's", async () => {
+    await shell({ choices: [codex, claude], suggested: null });
+    expect(screen.getByTestId('session-cli-chatgpt').props.accessibilityState).toMatchObject({ selected: true });
   });
 
   it('without any account it says where to add one, with no button', async () => {
@@ -153,9 +171,11 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
 
   it('once started here, it says the conversation comes when the agent answers', async () => {
     await shell({ choices: [claude], suggested: 'acc-claude' });
-    await act(() => current().setState({ agentStarted: true }));
+    await act(() => current().setState({ agentStarted: true, startedWith: { provider: 'claude', account: 'Pessoal', model: 'opus' } }));
     expect(screen.getByText('Sessão iniciada. A conversa aparece aqui assim que o agente responder.')).toBeTruthy();
     expect(screen.queryByTestId('session-start-agent')).toBeNull();
+    // TER-1104: under the header, with what it started
+    expect(screen.getByTestId('session-started-with').props.children).toBe('Iniciado com Claude Code · conta Pessoal · modelo opus');
   });
 });
 
@@ -202,15 +222,61 @@ describe('the conversation', () => {
   });
 });
 
+describe('a Codex session gets the same feedback as Claude Code (TER-1102)', () => {
+  const setTab = (p: object) => act(() => current().setState({ tab: { ...current().getState().tab!, ...p } }));
+
+  it('names Codex in the header and says what it does, in words, while it works', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-agent')).toHaveTextContent('Codex');
+    expect(screen.getByText('Trabalhando · rodando comandos')).toBeTruthy();
+    expect(screen.queryByText('Padrão')).toBeNull();
+    // the commands and the edit the Codex session file recorded, folded as Claude's tools are
+    expect(screen.getByText('3 ferramentas')).toBeTruthy();
+  });
+
+  it('shows "pensando…" under the last row while it works, and drops it when the turn ends', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+    await setTab({ activity: 'coding' });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · editando arquivos');
+    // hooks not trusted: no activity, only the tab's state
+    await setTab({ activity: null });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando…');
+    await setTab({ state: 'idle', finished: true, activity: null });
+    expect(screen.queryByTestId('session-thinking')).toBeNull();
+    expect(screen.getByText('Concluído')).toBeTruthy();
+  });
+
+  it('a Claude tool running at the end of the history is named in the line', async () => {
+    await renderSession();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('executando Read · src/app.ts…');
+  });
+
+  it("an empty Codex session that already works still says so, under Codex's own empty text", async () => {
+    await renderSession('t-codex');
+    await act(() => current().setState({ items: [], emptyReason: 'new_session' }));
+    expect(screen.getByText(/sessão atual do Codex/)).toBeTruthy();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+  });
+
+  it('its menu has no "Alternar modo": that reads Claude Code\'s footer', async () => {
+    await renderSession('t-codex');
+    await fireEvent.press(screen.getByRole('button', { name: 'Mais ações' }));
+    expect(screen.queryByText('Alternar modo')).toBeNull();
+    expect(screen.getByText('Compactar (/compact)')).toBeTruthy();
+  });
+});
+
 describe('the composer', () => {
-  it('while the tab works, the send button interrupts; a long press still sends', async () => {
+  it('while the tab works, the empty box interrupts; once something is typed, ↑ sends it (TER-1102)', async () => {
     await renderSession();
     const action = jest.spyOn(stores.api, 'tabAction');
     const send = jest.spyOn(stores.api, 'sendTabMessage');
     await fireEvent.press(screen.getByRole('button', { name: 'Interromper' }));
     expect(action).toHaveBeenCalledWith(expect.anything(), 't-api', 'interrupt');
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'depois rode o lint');
-    await fireEvent(screen.getByRole('button', { name: 'Interromper' }), 'longPress');
+    expect(screen.queryByRole('button', { name: 'Interromper' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(send).toHaveBeenCalledWith(expect.anything(), 't-api', 'depois rode o lint'));
   });
 
@@ -281,8 +347,33 @@ describe('the composer', () => {
     mockPicked.files = [{ uri: 'file:///x/foto.png', name: 'foto.png', mime: 'image/png', bytes: 10 }];
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
-    expect(await screen.findByText('Não foi possível enviar o arquivo.')).toBeTruthy();
+    expect(await screen.findByText('Não foi possível enviar o arquivo: sem conexão com o servidor.')).toBeTruthy();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('a refused upload says why, and "tentar de novo" uploads it again (TER-1105)', async () => {
+    await renderSession();
+    await act(() => current().setState({ tab: { ...current().getState().tab!, state: 'idle' } }));
+    const upload = jest.spyOn(stores.api, 'uploadTabFile').mockRejectedValueOnce(new ApiError(503, 'AGENT_OFFLINE', 'Agente desconectado'));
+    mockPicked.files = [{ uri: 'file:///x/foto.png', name: 'foto.png', mime: 'image/png', bytes: 10 }];
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
+    expect(await screen.findByText('Não foi possível enviar o arquivo: Agente desconectado')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'tentar de novo' }));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Não foi possível enviar o arquivo: Agente desconectado')).toBeNull());
+  });
+
+  it('a file over 20 MB is refused before any upload', async () => {
+    await renderSession();
+    await act(() => current().setState({ tab: { ...current().getState().tab!, state: 'idle' } }));
+    const upload = jest.spyOn(stores.api, 'uploadTabFile');
+    // a video: the chat's own limit for it (64 MB) lets it through to the session's
+    mockPicked.files = [{ uri: 'file:///x/clip.mp4', name: 'clip.mp4', mime: 'video/mp4', bytes: 30 * 1024 * 1024 }];
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
+    expect(await screen.findByText('Arquivo grande demais: o limite numa sessão é 20 MB.')).toBeTruthy();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 

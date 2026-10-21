@@ -26,7 +26,7 @@ it('load() fills the tabs grouped by project, in the order the server sent', asy
   const { groups, loading, loaded, error } = sessions.getState();
   expect(groups.map((g) => [g.project.name, g.tabs.map((t) => t.id)])).toEqual([
     ['termhub', ['t-api', 't-web']],
-    ['opapingou', ['t-deploy']],
+    ['opapingou', ['t-deploy', 't-codex']],
   ]);
   expect(loading).toBe(false);
   expect(loaded).toBe(true);

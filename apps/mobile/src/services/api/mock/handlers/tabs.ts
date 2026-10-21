@@ -16,7 +16,7 @@ const TAB_NOT_FOUND = () => new WireError(404, 'NOT_FOUND', 'Aba não encontrada
 
 /** The accounts every mock machine can start an agent with (TER-1094): Claude Code is the one picked without asking. */
 const AGENT_CHOICES: TTabAgentChoice[] = [
-  { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null },
+  { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: 'opus' },
   { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null },
 ];
 
@@ -32,15 +32,16 @@ function seedItems(prefix: string, at: string, turns: number): TTabChatItem[] {
 export function seedTabs(state: MockState, now: number): void {
   const at = new Date(now - 10 * 60_000).toISOString();
   const tab = (
-    summary: Omit<TTabSummary, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'state_at' | 'activity_verb' | 'auto_ref'> & Partial<Pick<TTabSummary, 'auto_ref'>>,
+    summary: Omit<TTabSummary, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'state_at' | 'activity_verb' | 'auto_ref' | 'agent'> & Partial<Pick<TTabSummary, 'auto_ref' | 'agent'>>,
     session: string | null,
     items: TTabChatItem[],
     screen: string,
   ): MockTab => ({
-    summary: { background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, activity_verb: null, auto_ref: null, ...summary },
+    summary: { background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, activity_verb: null, auto_ref: null, agent: 'claude', ...summary },
     session,
     items,
-    mode: 'default',
+    // Codex has no permission mode the server reads off its footer (TER-1102)
+    mode: summary.agent === 'codex' ? null : 'default',
     screen,
   });
   state.tabs.set(
@@ -70,6 +71,26 @@ export function seedTabs(state: MockState, now: number): void {
       's-deploy',
       seedItems('deploy', at, 1),
       'Allow Bash(fly deploy)? 1. Yes 2. No',
+    ),
+  );
+  // A Codex session (TER-1102), its items as the server reads them from a Codex rollout file (codex-transcript.ts):
+  // commands are `Bash` with the script as the summary, edits `apply_patch` with the first path; each has its result.
+  state.tabs.set(
+    't-codex',
+    tab(
+      { id: 't-codex', name: 'June', project: { id: 'p-opapingou', key: 'OPM', name: 'opapingou' }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', needs_you: false, activity: 'terminal', availability: 'ready', agent: 'codex' },
+      's-codex',
+      [
+        { kind: 'user', id: 'cx-u1', at, text: 'resuma o repositório', images: 0 },
+        { kind: 'assistant', id: 'cx-a1', at, text: 'Vou ler a estrutura do projeto.' },
+        { kind: 'tool', id: 'exec-1', at, name: 'Bash', summary: "rg --files -g '!node_modules' | head -50" },
+        { kind: 'tool_result', id: 'exec-1:result', at, tool_id: 'exec-1', error: false, preview: 'apps/api/src/main.ts' },
+        { kind: 'tool', id: 'exec-2', at, name: 'Bash', summary: 'rg -n "TODO" apps/api' },
+        { kind: 'tool_result', id: 'exec-2:result', at, tool_id: 'exec-2', error: true, preview: null },
+        { kind: 'tool', id: 'patch-1', at, name: 'apply_patch', summary: 'apps/api/README.md' },
+        { kind: 'tool_result', id: 'patch-1:result', at, tool_id: 'patch-1', error: false, preview: 'Success. Updated the following files:\nM apps/api/README.md\n' },
+      ],
+      '› resuma o repositório\n\n• Working (12s • esc to interrupt)',
     ),
   );
 }
@@ -153,7 +174,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const id = `t-${randomId(6)}`;
     const at = new Date(ctx.now()).toISOString();
     state.tabs.set(id, {
-      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null },
+      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null, agent: 'claude' },
       session: `s-${randomId(6)}`,
       items: [{ kind: 'user', id: `${id}-u0`, at, text: body.prompt, images: 0 }],
       mode: 'default',
@@ -182,7 +203,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const { action } = tabActionBody.parse(ctx.body);
     const at = new Date(ctx.now()).toISOString();
     if (action === 'cycle_mode') {
-      tab.mode = MODES[(MODES.indexOf(tab.mode) + 1) % MODES.length]!;
+      tab.mode = MODES[(MODES.indexOf(tab.mode ?? '') + 1) % MODES.length]!;
       return { status: 200, body: { done: true, mode: tab.mode } };
     }
     if (action === 'clear') {
@@ -215,7 +236,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
   router.route('GET', '/api/m/v1/tabs/:id/agent', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     load(ctx.params.id!);
-    return { status: 200, body: { choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id } };
+    return { status: 200, body: { choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id, provider: 'claude' } };
   });
 
   router.route('POST', '/api/m/v1/tabs/:id/agent', (ctx) => {
@@ -235,7 +256,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
       id = `t-${randomId(6)}`;
       state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
     }
-    return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider } };
+    return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider, model: choice.model } };
   });
 
   // "Instalar hooks" (TER-1091): the machine's tabs stop being `no_hooks`; their sessions still wait for Claude.

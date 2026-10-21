@@ -72,11 +72,17 @@
   "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Sesión iniciada. La conversación aparece aquí en cuanto el agente responda.",
   "Iniciar sessão": "Iniciar sesión",
   "Iniciando…": "Iniciando…",
-  "Com {{account}} ({{cli}})": "Con {{account}} ({{cli}})",
   "{{account}} ({{cli}})": "{{account}} ({{cli}})",
   "Escolher outra conta": "Elegir otra cuenta",
-  "Escolha a conta para iniciar a sessão:": "Elige la cuenta para iniciar la sesión:",
   "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "Ninguna cuenta de IA en esta máquina puede iniciar un agente. Registra una en Cuentas de IA.",
   "Não foi possível ler as contas de IA.": "No se pudieron leer las cuentas de IA.",
-  "Não foi possível iniciar a sessão. Tente de novo.": "No se pudo iniciar la sesión. Inténtalo de nuevo."
+  "Não foi possível iniciar a sessão. Tente de novo.": "No se pudo iniciar la sesión. Inténtalo de nuevo.",
+  "Com {{account}} ({{cli}}) · modelo {{model}}": "Con {{account}} ({{cli}}) · modelo {{model}}",
+  "Escolha com qual agente iniciar a sessão:": "Elige con qué agente iniciar la sesión:",
+  "Agente": "Agente",
+  "Conta": "Cuenta",
+  "Conta {{account}}": "Cuenta {{account}}",
+  "Modelo: {{model}}": "Modelo: {{model}}",
+  "Iniciado com {{cli}} · conta {{account}} · modelo {{model}}": "Iniciado con {{cli}} · cuenta {{account}} · modelo {{model}}",
+  "padrão do CLI": "predeterminado del CLI"
 }

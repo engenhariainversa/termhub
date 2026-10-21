@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { availabilityText, buildRows, canType, cliName, mergeItems, modeLabel, startAgentPlan, stateLine, withAttachedPaths } from './tab-chat';
+import { availabilityText, buildRows, canType, choiceClis, cliName, mergeItems, modeLabel, rememberStartedAgent, startAgentPlan, startedAgentLine, startedAgentOf, stateLine, withAttachedPaths } from './tab-chat';
 import { applyFrame, becameReadable, fromPage, initialTabChat } from './use-tab-chat';
 import type { TabAgentChoice, TabChatItem, TabChatPage, TabChatSummary } from './types';
 
@@ -148,10 +148,24 @@ describe('a tab with no agent (TER-1094)', () => {
 
   it('offers the suggested account with the others behind it, the list when none is suggested, or nothing', () => {
     expect(startAgentPlan({ choices: [claude, codex], suggested: 'a2' })).toEqual({ kind: 'suggested', choice: codex, others: [claude] });
-    expect(startAgentPlan({ choices: [claude, codex], suggested: null })).toEqual({ kind: 'choose', choices: [claude, codex] });
+    expect(startAgentPlan({ choices: [claude, codex], suggested: null })).toEqual({ kind: 'choose', choices: [claude, codex], preselected: claude });
     // a suggestion that is not among the choices is no suggestion
-    expect(startAgentPlan({ choices: [claude], suggested: 'gone' })).toEqual({ kind: 'choose', choices: [claude] });
+    expect(startAgentPlan({ choices: [claude], suggested: 'gone' })).toEqual({ kind: 'choose', choices: [claude], preselected: claude });
     expect(startAgentPlan({ choices: [], suggested: null })).toEqual({ kind: 'none' });
+  });
+
+  it("the picker starts on the project's CLI, else on the first choice (TER-1104)", () => {
+    expect(startAgentPlan({ choices: [claude, codex], suggested: null, provider: 'chatgpt' })).toMatchObject({ kind: 'choose', preselected: codex });
+    expect(startAgentPlan({ choices: [claude, codex], suggested: null, provider: 'gemini' })).toMatchObject({ kind: 'choose', preselected: claude });
+    expect(choiceClis([claude, { ...claude, account_id: 'a3' }, codex])).toEqual(['claude', 'chatgpt']);
+  });
+
+  it('says what a session started with, the model or the CLI default (TER-1104)', () => {
+    expect(startedAgentLine({ provider: 'claude', account: 'Pessoal', model: 'opus' })).toBe('Iniciado com Claude Code · conta Pessoal · modelo opus');
+    expect(startedAgentLine({ provider: 'chatgpt', account: 'Trabalho', model: null })).toBe('Iniciado com Codex · conta Trabalho · modelo padrão do CLI');
+    expect(startedAgentOf('t-unknown')).toBeNull();
+    rememberStartedAgent('t-known', { provider: 'claude', account: 'Pessoal', model: null });
+    expect(startedAgentOf('t-known')).toEqual({ provider: 'claude', account: 'Pessoal', model: null });
   });
 
   it('names the CLI of each provider', () => {

@@ -96,7 +96,7 @@ export interface MockTab {
   summary: TTabSummary;
   session: string | null;
   items: TTabChatItem[];
-  mode: string;
+  mode: string | null;
   screen: string;
   /** With no session: why (TER-1091), `not_reported` when unset. `machines/:id/hooks` turns `no_hooks` into `not_reported`;
    *  `no_agent` (TER-1094) is a plain shell, which `tabs/:id/agent` turns into a new, empty session. */

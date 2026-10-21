@@ -24,7 +24,9 @@ import { sendInput, sendKey } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { HttpError, badRequest } from '../lib/errors.js';
+import { applyState } from '../monitor/ingest.js';
 import { readHooksStatus } from '../monitor/install.js';
+import { AT_PROMPT } from '../monitor/state.js';
 import { claudeAccountDirs } from '../monitor/machine-hooks.js';
 import { claudeFooterMode } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
@@ -221,6 +223,9 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: deps.surface ?? 'app' }));
     request.log.info({ tabId: tab.id, textLen: text.length }, 'tab chat: message sent');
     await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: tab.id, label: tab.name }, meta: { machine_id: tab.machine_id, chars: text.length, surface: deps.surface ?? 'app' } });
+    // An agent at its prompt starts a turn: the tab works from now, as the web's input marks it (TER-1102), so the
+    // conversation says "pensando…" before the agent's first hook — and at all with Codex hooks not trusted yet.
+    if (tab.state && AT_PROMPT.includes(tab.state)) await applyState(repos, request.log, tab, tab.state_tool ?? 'termhub', { kind: 'working', text: null, meta: { event: 'input', via: 'termhub' } });
     deps.hub.poke(tab.id);
     return { sent: true as const };
   });
@@ -265,8 +270,14 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       const { id } = idParam.parse(request.params);
       const { name } = tabFileQuery.parse(request.query);
       const { machine, tab } = await scoped(repos, request).tab(id);
-      if (!Buffer.isBuffer(request.body) || request.body.length === 0) throw badRequest('Arquivo vazio');
-      const saved = await saveFileOnMachine(machine, request.body, name);
+      const body = request.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) throw badRequest('Arquivo vazio');
+      // A refusal is logged with the step's status and code (TER-1105): the app shows the reason, the log says where it broke.
+      const saved = await saveFileOnMachine(machine, body, name).catch((err: unknown) => {
+        const status = err instanceof HttpError ? err.statusCode : 500;
+        request.log.warn({ tabId: tab.id, machineId: machine.id, bytes: body.length, status, code: err instanceof HttpError ? err.code : null }, 'tab chat: file not saved');
+        throw err;
+      });
       request.log.info({ tabId: tab.id, machineId: machine.id, bytes: saved.bytes }, 'tab chat: file saved');
       return { path: saved.path, name: saved.name };
     });

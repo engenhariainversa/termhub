@@ -185,16 +185,53 @@ export function cliName(provider: string): string {
 
 /**
  * What "Iniciar sessão" offers for a tab with no agent (TER-1094): one button for the account the server
- * picks (the others behind "Escolher outra conta"), the list when no rule picks one, or nothing to start.
+ * picks (the others behind "Escolher outra conta"), a picker when no rule picks one, or nothing to start.
+ * The picker (TER-1104) starts on the project's CLI (the server's `provider`), else the first choice's,
+ * and on that CLI's first account: the server lists the project's own first.
  */
 export type StartAgentPlan =
   | { kind: 'suggested'; choice: TabAgentChoice; others: TabAgentChoice[] }
-  | { kind: 'choose'; choices: TabAgentChoice[] }
+  | { kind: 'choose'; choices: TabAgentChoice[]; preselected: TabAgentChoice }
   | { kind: 'none' };
 
 export function startAgentPlan(options: TabAgentOptions): StartAgentPlan {
-  if (options.choices.length === 0) return { kind: 'none' };
+  const first = options.choices[0];
+  if (!first) return { kind: 'none' };
   const choice = options.choices.find((c) => c.account_id === options.suggested);
-  if (!choice) return { kind: 'choose', choices: options.choices };
+  if (!choice) return { kind: 'choose', choices: options.choices, preselected: options.choices.find((c) => c.provider === options.provider) ?? first };
   return { kind: 'suggested', choice, others: options.choices.filter((c) => c !== choice) };
+}
+
+/** The CLIs among the choices, in their order (the project's first): the picker's first row. */
+export function choiceClis(choices: readonly TabAgentChoice[]): string[] {
+  return [...new Set(choices.map((c) => c.provider))];
+}
+
+/** What "Iniciar sessão" started a tab's agent with (TER-1104). */
+export interface StartedAgent {
+  provider: string;
+  account: string;
+  model: string | null;
+}
+
+// Kept for the page's life, by tab: the conversation of the tab the agent went to (this one, or a new one)
+// says it once its session shows up. Never stored anywhere else.
+const startedAgents = new Map<string, StartedAgent>();
+
+export function rememberStartedAgent(tabId: string, agent: StartedAgent): void {
+  startedAgents.set(tabId, agent);
+}
+
+export function startedAgentOf(tabId: string): StartedAgent | null {
+  return startedAgents.get(tabId) ?? null;
+}
+
+/** "Iniciado com Claude Code · conta Pessoal · modelo opus": the notice and the header line after a start. */
+export function startedAgentLine(agent: StartedAgent): string {
+  return i18n.t('Iniciado com {{cli}} · conta {{account}} · modelo {{model}}', { cli: cliName(agent.provider), account: agent.account, model: agent.model ?? i18n.t('padrão do CLI') });
+}
+
+/** The model a choice starts with, as the picker shows it. */
+export function choiceModel(choice: TabAgentChoice): string {
+  return choice.model ?? i18n.t('padrão do CLI');
 }

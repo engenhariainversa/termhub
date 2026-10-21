@@ -22,6 +22,8 @@ const readScreen = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't1', lines: 30,
 vi.mock('../control/screen.js', () => ({ readScreen: (...a: unknown[]) => readScreen(...a) }));
 const saveFileOnMachine = vi.fn(async (_m: unknown, data: Buffer, name: string) => ({ path: `/home/u/.cache/termhub/paste/${name}`, name, bytes: data.length, mime: 'application/octet-stream' }));
 vi.mock('../terminal/paste-file.js', () => ({ saveFileOnMachine: (...a: unknown[]) => saveFileOnMachine(...(a as [never, Buffer, string])) }));
+const applyState = vi.fn(async (_repos: unknown, _log: unknown, tab: unknown, _tool: string, _next: unknown) => tab);
+vi.mock('../monitor/ingest.js', () => ({ applyState: (...a: unknown[]) => applyState(...(a as [never, never, never, string, never])) }));
 const agentState = { online: true, caps: ['transcript'] as string[] | null };
 vi.mock('../agent/registry.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../agent/registry.js')>();
@@ -379,6 +381,16 @@ describe('POST /tabs/:id/chat/messages', () => {
     expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'oi' }, expect.objectContaining({ level: 'person_typed', surface: 'web' }));
   });
 
+  it('an agent at its prompt works from the send on, as the web input marks it (TER-1102); a busy tab is left alone', async () => {
+    const { app } = build({ tabs: [tabRow({ state: 'finished', state_tool: 'codex' }), tabRow({ id: 't3', state: 'working' }), tabRow({ id: 't4', state: null })] });
+    expect((await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect(applyState).toHaveBeenCalledTimes(1);
+    expect(applyState).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ id: 't1' }), 'codex', { kind: 'working', text: null, meta: { event: 'input', via: 'termhub' } });
+    expect((await app.inject({ method: 'POST', url: '/tabs/t3/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/tabs/t4/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect(applyState).toHaveBeenCalledTimes(1);
+  });
+
   it('a tab waiting on a permission answers 409 WAITING_PERMISSION, pointing at the card', async () => {
     sendInput.mockRejectedValueOnce(new ControlError('WAITING_PERMISSION', 'Esta aba está esperando uma permissão: "x". Se a sua resposta…'));
     const { app } = build();
@@ -458,6 +470,25 @@ describe('POST /tabs/:id/chat/files', () => {
     expect((await upload(app, Buffer.from('x'), '/tabs/t1/chat/files')).statusCode).toBe(400);
     expect((await upload(app, Buffer.alloc(20 * 1024 * 1024 + 1))).statusCode).toBe(413);
     expect(saveFileOnMachine).not.toHaveBeenCalled();
+  });
+
+  it('takes a photo-sized raw body, as the app sends it (octet-stream, past the default 1 MB limit)', async () => {
+    const { app } = build();
+    const body = Buffer.alloc(3 * 1024 * 1024, 1);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/files?name=IMG_0001.jpg', payload: body, headers: { 'content-type': 'application/octet-stream' } });
+    expect(res.statusCode).toBe(200);
+    expect(saveFileOnMachine.mock.calls[0]?.[1].length).toBe(body.length);
+  });
+
+  it('a save the machine refuses answers its reason and logs the step, never the file', async () => {
+    saveFileOnMachine.mockRejectedValueOnce(new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE'));
+    const { app, logged } = build();
+    const res = await upload(app, Buffer.from('png bytes'));
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ code: 'AGENT_OFFLINE', error: 'Agente desconectado' });
+    const line = logged.map((l) => JSON.parse(String(l)) as Record<string, unknown>).find((l) => l.msg === 'tab chat: file not saved');
+    expect(line).toMatchObject({ tabId: 't1', machineId: 'm1', bytes: 9, status: 503, code: 'AGENT_OFFLINE' });
+    expect(JSON.stringify(logged)).not.toContain('png bytes');
   });
 
   it('needs terminals:write', async () => {
