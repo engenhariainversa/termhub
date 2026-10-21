@@ -8,10 +8,11 @@
 import { agents } from '../agent/registry.js';
 import type { ChatWatch } from '../db/repositories/chat-watches.js';
 import { initialBaseline, type WatchProbe } from '../chat/watches/evaluate.js';
-import { DEFAULT_EVENTS, EVENTS_BY_KIND, SEMVER, WATCH_LIMITS, type CardStatus, type WatchKind, type WatchParams } from '../chat/watches/kinds.js';
+import { DEFAULT_EVENTS, EVENTS_BY_KIND, REMINDER_LIMITS, SEMVER, WATCH_LIMITS, type CardStatus, type TargetKind, type WatchParams } from '../chat/watches/kinds.js';
 import { createWatchProbe } from '../chat/watches/probe.js';
 import { cancelWatchRow, publishWatches, watchView, type WatchView } from '../chat/watches/view.js';
 import { msg, type LocalizedText } from '../i18n/index.js';
+import { formatLocal, localDateTime, nextLocalTime, zoneOrUtc } from '../lib/local-time.js';
 import { ControlError, type ControlContext } from './context.js';
 
 const NOT_IN_CHAT = () => new ControlError('NOT_IN_CHAT', 'Esta ferramenta só funciona no chat do termhub: a assinatura acorda a própria conversa.');
@@ -19,7 +20,7 @@ const TASK_REF = /^[A-Za-z][A-Za-z0-9]{0,9}-\d{1,6}$/;
 const PR_URL = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+$/;
 
 export interface WatchArgs {
-  kind: WatchKind;
+  kind: TargetKind;
   tab_id?: string;
   task_id?: string;
   pr_url?: string;
@@ -104,6 +105,8 @@ async function currentOf(probe: WatchProbe, w: Pick<ChatWatch, 'user_id' | 'kind
       return { online: (await probe.machine(w.target_id!))?.online ?? false };
     case 'agent_release':
       return { latest: await probe.latestAgentVersion() };
+    case 'reminder':
+      return {};
   }
 }
 
@@ -154,4 +157,126 @@ export async function cancelWatch(ctx: ControlContext, a: { watch_id: string }):
   const watch = await cancelWatchRow(ctx.repos, ctx.scope.user.id, a.watch_id);
   if (!watch) throw new ControlError('WATCH_NOT_FOUND', 'Assinatura não encontrada ou já encerrada.');
   return { watch };
+}
+
+export interface ScheduleWakeupArgs {
+  /** In this many minutes. */
+  in_minutes?: number;
+  /** At this moment: ISO 8601 with an offset, or "YYYY-MM-DDTHH:MM" on the person's clock. */
+  at?: string;
+  /** At the next time the person's clock reads "HH:MM". */
+  at_time?: string;
+  note: string;
+  every_minutes?: number;
+  times?: number;
+  /** A repeating reminder stops here: ISO 8601 with an offset, or "YYYY-MM-DDTHH:MM" on the person's clock. */
+  until?: string;
+  /** A repeating reminder stops at the next time the person's clock reads "HH:MM" after the first one. */
+  until_time?: string;
+}
+
+export interface ScheduleWakeupResult {
+  watch: WatchView;
+  /** When it is due first, as an instant and on the person's clock. */
+  due_at: string;
+  due_local: string;
+  time_zone: string;
+  /** A repeating reminder's last possible time, on the person's clock. */
+  until_local: string | null;
+  note: string;
+}
+
+const OFFSET_ISO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+/** An `at`/`until` value: with an offset it is that instant; without, it is read on the person's clock. */
+function instantOf(text: string, zone: string): Date | null {
+  if (OFFSET_ISO.test(text)) {
+    const d = new Date(text);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+  return localDateTime(text, zone);
+}
+
+/**
+ * `schedule_wakeup` (TER-1100): "me acorde em 5 min", "às 18:00 confira o build". A reminder is a watch of
+ * kind `reminder` — same table, same engine, same wake, same list and "Cancelar" in the chat — whose event
+ * is the clock passing its time. Times without an offset are on the person's clock (their stored time
+ * zone, TER-1088; UTC when they have none), and the answer tells the time back on it so the concierge can
+ * confirm it. Limits: at most `REMINDER_LIMITS.openPerScope` open (and the watches' own cap), every 5 min
+ * at most, a cap on repetitions, and nothing beyond 7 days.
+ */
+export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs, now = new Date()): Promise<ScheduleWakeupResult> {
+  const { conversationId, projectId } = await chatScope(ctx);
+  const userId = ctx.scope.user.id;
+  const zone = zoneOrUtc(await ctx.repos.users.timeZone(userId));
+  const given = [a.in_minutes, a.at, a.at_time].filter((v) => v !== undefined).length;
+  if (given !== 1) throw bad(msg('Informe exatamente um entre in_minutes, at e at_time.'));
+  const due =
+    a.in_minutes !== undefined ? new Date(now.getTime() + a.in_minutes * 60_000)
+    : a.at !== undefined ? instantOf(a.at, zone)
+    : nextLocalTime(a.at_time!, zone, now);
+  if (!due) throw bad(msg('at deve ser ISO 8601 com fuso (2026-10-21T18:00:00-03:00) ou "AAAA-MM-DDTHH:MM" no relógio da pessoa.'));
+  const maxMs = WATCH_LIMITS.maxHours * 3600_000;
+  if (due.getTime() <= now.getTime()) throw bad(msg('O horário do lembrete já passou ({{local}}, {{zone}}).', { local: formatLocal(due, zone), zone }));
+  if (due.getTime() > now.getTime() + maxMs) throw bad(msg('Um lembrete vale por no máximo 7 dias a partir de agora.'));
+
+  const repeating = a.every_minutes !== undefined;
+  if (!repeating && (a.times !== undefined || a.until !== undefined || a.until_time !== undefined)) throw bad(msg('times, until e until_time só valem com every_minutes.'));
+  if (repeating && a.every_minutes! < REMINDER_LIMITS.minEveryMinutes) throw bad(msg('every_minutes deve ser no mínimo {{min}}.', { min: REMINDER_LIMITS.minEveryMinutes }));
+  if (a.times !== undefined && !(Number.isInteger(a.times) && a.times >= 1 && a.times <= REMINDER_LIMITS.maxTimes)) throw bad(msg('times vai de 1 a {{max}}.', { max: REMINDER_LIMITS.maxTimes }));
+  if (a.until !== undefined && a.until_time !== undefined) throw bad(msg('Informe until ou until_time, não os dois.'));
+  let until: Date | null = null;
+  if (repeating) {
+    const asked = a.until !== undefined ? instantOf(a.until, zone) : a.until_time !== undefined ? nextLocalTime(a.until_time, zone, due) : null;
+    if ((a.until !== undefined || a.until_time !== undefined) && !asked) throw bad(msg('until deve ser ISO 8601 com fuso ou "AAAA-MM-DDTHH:MM" no relógio da pessoa.'));
+    if (asked && asked.getTime() < due.getTime()) throw bad(msg('until precisa ser depois da primeira vez do lembrete.'));
+    // Neither a count nor an end: it repeats for a day. Never past 7 days from now.
+    const fallback = a.times === undefined ? due.getTime() + REMINDER_LIMITS.defaultRepeatHours * 3600_000 : Infinity;
+    const byTimes = a.times !== undefined ? due.getTime() + (a.times - 1) * a.every_minutes! * 60_000 : Infinity;
+    until = new Date(Math.min(asked?.getTime() ?? fallback, byTimes, now.getTime() + maxMs));
+  }
+
+  const open = await ctx.repos.chatWatches.listOpen(userId, projectId);
+  if (open.length >= WATCH_LIMITS.openPerScope)
+    throw new ControlError('WATCH_LIMIT', msg('Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.', { max: WATCH_LIMITS.openPerScope }));
+  if (open.filter((w) => w.kind === 'reminder').length >= REMINDER_LIMITS.openPerScope)
+    throw new ControlError('REMINDER_LIMIT', msg('Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.', { max: REMINDER_LIMITS.openPerScope }));
+
+  const note = a.note.trim().slice(0, WATCH_LIMITS.noteMax);
+  const params: WatchParams = {
+    events: ['due'],
+    at: due.toISOString(),
+    zone,
+    ...(repeating ? { every_minutes: a.every_minutes, until: until!.toISOString(), ...(a.times !== undefined ? { times: a.times } : {}) } : {}),
+  };
+  // A safety net only: the engine fires a reminder whose time passed before it ever expires it.
+  const last = until ?? due;
+  const row = await ctx.repos.chatWatches.create(
+    {
+      user_id: userId,
+      kind: 'reminder',
+      target_id: null,
+      params,
+      project_id: projectId,
+      conversation_id: conversationId,
+      baseline: { next: due.toISOString() },
+      label: note.split('\n')[0]!.slice(0, 120),
+      note,
+      recurring: repeating,
+      expires_at: new Date(last.getTime() + 3600_000),
+    },
+    now,
+  );
+  await publishWatches(ctx.repos, userId, projectId);
+  const dueLocal = formatLocal(due, zone);
+  return {
+    watch: watchView(row),
+    due_at: due.toISOString(),
+    due_local: dueLocal,
+    time_zone: zone,
+    until_local: until ? formatLocal(until, zone) : null,
+    note:
+      `Lembrete criado: o servidor acorda esta conversa em ${dueLocal} (${zone}), com a sua nota, mesmo depois de reinícios; se o servidor estiver fora na hora, acorda assim que voltar e diz o atraso. ` +
+      'Confirme à pessoa o horário no fuso dela (due_local). list_watches lista os lembretes, cancel_watch cancela. Não lance subagente para esperar.',
+  };
 }

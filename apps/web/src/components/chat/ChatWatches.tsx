@@ -2,7 +2,7 @@ import { useTranslation } from '../../i18n';
 import { memo } from 'react';
 import { Eye } from 'lucide-react';
 import type { ChatWatch } from '../../lib/types';
-import { watchEventsLabel, watchKindLabel, watchUntilLabel } from './watch-text';
+import { reminderDetails, watchEventsLabel, watchKindLabel, watchUntilLabel } from './watch-text';
 
 export interface ChatWatchesProps {
   watches: ChatWatch[];
@@ -36,9 +36,12 @@ export const ChatWatches = memo(function ChatWatches({ watches, cancelingId, err
                 <span className="text-fg-muted">{watchKindLabel(w.kind)}</span> {w.label}
               </p>
               <p className="truncate text-xs text-fg-dim">
-                {[w.events.length > 0 ? t('avisa em: {{events}}', { events: watchEventsLabel(w.events) }) : null, w.recurring ? t('sempre') : null, watchUntilLabel(w)].filter(Boolean).join(' · ')}
+                {w.kind === 'reminder'
+                  ? reminderDetails(w)
+                  : [w.events.length > 0 ? t('avisa em: {{events}}', { events: watchEventsLabel(w.events) }) : null, w.recurring ? t('sempre') : null, watchUntilLabel(w)].filter(Boolean).join(' · ')}
               </p>
-              {w.note && <p className="truncate text-xs text-fg-dim">{w.note}</p>}
+              {/* A reminder's label is its note's first line: the note shows only when it says more. */}
+              {w.note && w.note !== w.label && <p className="truncate text-xs text-fg-dim">{w.note}</p>}
               {errors[w.id] && <p className="text-xs text-danger">{errors[w.id]}</p>}
             </div>
             <button type="button" className="btn-ghost shrink-0 text-xs" disabled={cancelingId === w.id} aria-label={t('Cancelar {{name}}', { name: w.label })} onClick={() => onCancel(w.id)}>

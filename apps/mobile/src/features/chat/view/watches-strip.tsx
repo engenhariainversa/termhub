@@ -2,7 +2,7 @@ import { memo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { AppText, Icon } from '@/ui';
-import { watchEventsText, watchKindLabel, watchUntilLabel } from '../model/watch-text';
+import { reminderText, watchEventsText, watchKindLabel, watchUntilLabel } from '../model/watch-text';
 import type { ChatWatch } from '../model/types';
 
 type Props = {
@@ -16,9 +16,10 @@ type Props = {
 /** One watch: what it follows and when it speaks up, until when, the concierge's note, and "Cancelar". */
 function WatchRow({ watch, onCancel, now }: { watch: ChatWatch; onCancel(id: string): void; now: Date }) {
   const { t } = useTranslation();
-  const events = watchEventsText(watch);
-  const until = watchUntilLabel(watch.expires_at, now);
-  const details = [events, watch.recurring ? t('Recorrente') : '', until].filter(Boolean).join(' · ');
+  const details =
+    watch.kind === 'reminder'
+      ? reminderText(watch, now)
+      : [watchEventsText(watch), watch.recurring ? t('Recorrente') : '', watchUntilLabel(watch.expires_at, now)].filter(Boolean).join(' · ');
   return (
     <View testID={`watch-${watch.id}`} className="flex-row items-start gap-3 py-1.5">
       <View className="flex-1 gap-0.5">
@@ -28,7 +29,8 @@ function WatchRow({ watch, onCancel, now }: { watch: ChatWatch; onCancel(id: str
           {watch.label}
         </AppText>
         {details ? <AppText variant="muted">{details}</AppText> : null}
-        {watch.note ? (
+        {/* A reminder's label is its note's first line: the note shows only when it says more. */}
+        {watch.note && watch.note !== watch.label ? (
           <AppText variant="muted" className="text-xs" numberOfLines={2}>
             {watch.note}
           </AppText>

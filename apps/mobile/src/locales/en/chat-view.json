@@ -330,5 +330,7 @@
   "Recorrente": "Recurring",
   "Cancelar acompanhamento de {{label}}": "Stop watching {{label}}",
   "Acompanhando: {{label}}": "Watching: {{label}}",
-  "Acompanhando ({{n}})": "Watching ({{n}})"
+  "Acompanhando ({{n}})": "Watching ({{n}})",
+  "Lembrete": "Reminder",
+  "a cada {{n}} min": "every {{n}} min"
 }

@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n';
 import type { ChatWatch } from './types';
-import { watchEventLabel, watchEventsText, watchKindLabel, watchUntilLabel, withoutWatch } from './watch-text';
+import { reminderText, watchEventLabel, watchEventsText, watchKindLabel, watchUntilLabel, withoutWatch } from './watch-text';
 
 const watch = (patch: Partial<ChatWatch> = {}): ChatWatch => ({
   id: 'w1',
@@ -49,4 +49,14 @@ it('withoutWatch says where the row was', () => {
   const list = [watch(), watch({ id: 'w2' })];
   expect(withoutWatch(list, 'w2')).toEqual({ list: [list[0]], index: 1, watch: list[1] });
   expect(withoutWatch(list, 'nope')).toEqual({ list, index: -1, watch: null });
+});
+
+// TER-1100: a reminder says when and how often it wakes the chat, not "Quando …".
+it('tells a reminder by its next time and its pace', () => {
+  const now = new Date(2026, 9, 21, 9, 0);
+  const next = new Date(2026, 9, 21, 18, 0).toISOString();
+  expect(watchKindLabel('reminder')).toBe('Lembrete');
+  expect(reminderText(watch({ kind: 'reminder', events: ['due'], next_at: next, every_minutes: null }), now)).toBe('às 18:00');
+  expect(reminderText(watch({ kind: 'reminder', events: ['due'], recurring: true, next_at: next, every_minutes: 10, expires_at: new Date(2026, 9, 21, 20, 0).toISOString() }), now)).toBe('às 18:00 · a cada 10 min · até 20:00');
+  expect(reminderText(watch({ kind: 'reminder', events: ['due'], next_at: null }), now)).toBe('');
 });

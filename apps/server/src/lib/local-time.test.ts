@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nextLocalTime, zoneOrUtc } from './local-time.js';
+import { formatLocal, localDateTime, nextLocalTime, zoneOrUtc } from './local-time.js';
 
 describe('nextLocalTime', () => {
   it('"durante a noite" said at 22:00 in São Paulo → 08:00 of the next day', () => {
@@ -29,5 +29,24 @@ describe('zoneOrUtc', () => {
     expect(zoneOrUtc('America/Sao_Paulo')).toBe('America/Sao_Paulo');
     expect(zoneOrUtc(null)).toBe('UTC');
     expect(zoneOrUtc('Nowhere/Land')).toBe('UTC');
+  });
+});
+
+describe('localDateTime and formatLocal (TER-1100)', () => {
+  it('reads a wall time on the clock of a zone, DST included', () => {
+    expect(localDateTime('2026-10-22T10:00', 'America/Sao_Paulo')?.toISOString()).toBe('2026-10-22T13:00:00.000Z');
+    expect(localDateTime('2026-07-01 09:30', 'Europe/Lisbon')?.toISOString()).toBe('2026-07-01T08:30:00.000Z');
+    expect(localDateTime('2026-01-01T09:30', 'Europe/Lisbon')?.toISOString()).toBe('2026-01-01T09:30:00.000Z');
+  });
+
+  it('refuses what is not a real date or not that shape', () => {
+    expect(localDateTime('2026-02-30T10:00', 'UTC')).toBeNull();
+    expect(localDateTime('amanhã 10:00', 'UTC')).toBeNull();
+    expect(localDateTime('2026-10-22T24:00', 'UTC')).toBeNull();
+  });
+
+  it('tells an instant back on the clock of a zone', () => {
+    expect(formatLocal(new Date('2026-10-21T21:00:00.000Z'), 'America/Sao_Paulo')).toBe('2026-10-21 18:00');
+    expect(formatLocal(new Date('2026-10-21T21:00:00.000Z'), 'Asia/Tokyo')).toBe('2026-10-22 06:00');
   });
 });

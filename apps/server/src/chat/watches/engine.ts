@@ -15,7 +15,7 @@ import type { Repositories } from '../../db/repositories/index.js';
 import type { ChatWatch, ChatWatchFire } from '../../db/repositories/chat-watches.js';
 import { currentRulesBlock } from '../../memory/current-rules.js';
 import { failureLabel, type ChatService } from '../service.js';
-import { cooldownOf, evaluateWatch, expiredEvaluation, type Evaluation, type WatchProbe } from './evaluate.js';
+import { cooldownOf, evaluateReminder, evaluateWatch, expiredEvaluation, type Evaluation, type WatchProbe } from './evaluate.js';
 import { WATCH_LIMITS, type WatchKind } from './kinds.js';
 import { watchWakeText } from './text.js';
 import { publishWatches } from './view.js';
@@ -51,6 +51,8 @@ export interface WatchEngine {
   nudge(kind: WatchKind, targetId: string): void;
   /** Only delivers what is pending (tests, and after `watch` registered one already in its state). */
   deliver(): Promise<void>;
+  /** TER-1100: the soonest time an open reminder is due, as the last pass saw it (ms), or null. */
+  nextReminderAt(): number | null;
 }
 
 const scopeKey = (userId: string, projectId: string | null) => `${userId}:${projectId ?? ''}`;
@@ -60,6 +62,7 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
   const active = deps.active ?? (() => true);
   const wakesPerHour = deps.wakesPerHour ?? WATCH_LIMITS.wakesPerHour;
   const publish = deps.publish ?? ((userId: string, projectId: string | null) => publishWatches(deps.repos, userId, projectId));
+  let soonestReminder: number | null = null;
   /** Per chat scope: when a failed delivery may be tried again, and the pause after the next failure. */
   const retry = new Map<string, { at: number; pause: number }>();
   // One pass at a time in this process: a nudge during a sweep runs after it.
@@ -85,7 +88,9 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
     const changed = new Map<string, { userId: string; projectId: string | null }>();
     for (const w of watches) {
       try {
-        const ev = Date.parse(w.expires_at) <= now().getTime() ? expiredEvaluation(w) : await evaluateWatch(deps.probe, w);
+        const expired = Date.parse(w.expires_at) <= now().getTime();
+        // A reminder whose time passed while the server was down still fires (late) before it can expire.
+        const ev = w.kind === 'reminder' ? (evaluateReminder(w, now()) ?? (expired ? expiredEvaluation(w) : null)) : expired ? expiredEvaluation(w) : await evaluateWatch(deps.probe, w, now());
         if (ev && (await apply(w, ev))) changed.set(scopeKey(w.user_id, w.project_id), { userId: w.user_id, projectId: w.project_id });
       } catch (err) {
         deps.log.warn({ watchId: w.id, code: failureLabel(err) }, 'chat watch: evaluation failed');
@@ -148,7 +153,9 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
     sweep: () =>
       serial(async () => {
         if (!active()) return;
-        await check(await deps.repos.chatWatches.listAllOpen());
+        const open = await deps.repos.chatWatches.listAllOpen();
+        await check(open);
+        soonestReminder = soonestDue(open, now().getTime());
         await deliverPending();
       }),
     nudge(kind, targetId) {
@@ -162,7 +169,19 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
       serial(async () => {
         if (active()) await deliverPending();
       }),
+    nextReminderAt: () => soonestReminder,
   };
+}
+
+/** The soonest still-ahead time among the open reminders' `next` (a fired one moved on already). */
+function soonestDue(watches: ChatWatch[], after: number): number | null {
+  let soonest: number | null = null;
+  for (const w of watches) {
+    if (w.kind !== 'reminder' || typeof w.baseline.next !== 'string') continue;
+    const at = Date.parse(w.baseline.next);
+    if (at > after && (soonest === null || at < soonest)) soonest = at;
+  }
+  return soonest;
 }
 
 export interface StartWatchesDeps extends Omit<WatchEngineDeps, 'probe'> {
@@ -183,8 +202,22 @@ export interface StartWatchesDeps extends Omit<WatchEngineDeps, 'probe'> {
  */
 export function startWatchEngine(deps: StartWatchesDeps): { engine: WatchEngine; stop: () => void } {
   const engine = createWatchEngine(deps);
-  const timer = setInterval(() => void engine.sweep(), deps.sweepMs ?? SWEEP_MS);
-  const first = setTimeout(() => void engine.sweep(), 5_000);
+  const period = deps.sweepMs ?? SWEEP_MS;
+  // TER-1100: a reminder due before the next sweep gets its own sweep at its time, so "em 5 min" is not up
+  // to a sweep late. A reminder created between sweeps is caught by the next one (within `period`).
+  let precise: ReturnType<typeof setTimeout> | null = null;
+  const sweep = async () => {
+    await engine.sweep();
+    const at = engine.nextReminderAt();
+    if (precise) clearTimeout(precise);
+    precise = null;
+    if (at !== null && at - Date.now() < period) {
+      precise = setTimeout(() => void engine.sweep(), Math.max(0, at - Date.now()) + 50);
+      precise.unref();
+    }
+  };
+  const timer = setInterval(() => void sweep(), period);
+  const first = setTimeout(() => void sweep(), 5_000);
   const purge = setInterval(() => {
     void deps.repos.chatWatches.purgeClosedBefore(new Date(Date.now() - CLOSED_KEPT_MS)).catch((err: unknown) => deps.log.warn({ code: failureLabel(err) }, 'chat watches: purge failed'));
   }, HOUR_MS);
@@ -198,6 +231,7 @@ export function startWatchEngine(deps: StartWatchesDeps): { engine: WatchEngine;
     stop() {
       clearInterval(timer);
       clearTimeout(first);
+      if (precise) clearTimeout(precise);
       clearInterval(purge);
       offTab();
       offMachine();

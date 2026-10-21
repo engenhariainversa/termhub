@@ -19,6 +19,9 @@ export interface WatchView {
   created_at: string;
   expires_at: string;
   fire_count: number;
+  /** TER-1100, reminders only (null otherwise): when it is due next, and every how many minutes it repeats. */
+  next_at: string | null;
+  every_minutes: number | null;
 }
 
 export const watchView = (w: ChatWatch): WatchView => ({
@@ -32,6 +35,8 @@ export const watchView = (w: ChatWatch): WatchView => ({
   created_at: w.created_at,
   expires_at: w.expires_at,
   fire_count: w.fire_count,
+  next_at: w.kind === 'reminder' && typeof w.baseline.next === 'string' ? w.baseline.next : null,
+  every_minutes: w.kind === 'reminder' ? (w.params.every_minutes ?? null) : null,
 });
 
 /** The open watches of a chat scope, for `GET /api/chat` and the phone's. */

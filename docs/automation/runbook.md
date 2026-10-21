@@ -552,6 +552,29 @@ conversation when the event happens, with a turn that starts with "Automático:"
   `chat_watch_fires.delivered_at` null with `dropped_at` null is still to be delivered. Logs carry ids and
   event names only (`chat watch fired`, `chat watches: delivered`, `chat watches: delivery failed`).
 
+## 9f. "Me acorde em 5 min": the concierge's reminders (TER-1100)
+
+The concierge comes back on its own at a set time with the MCP tool `schedule_wakeup`. A reminder is a
+watch of kind `reminder` (section 9e): same tables, same sweep, same wake, same list and Cancelar, so it
+survives restarts and deploys the same way.
+
+- **When.** Exactly one of `in_minutes`, `at` (ISO 8601 with an offset, or `YYYY-MM-DDTHH:MM` read on the
+  person's clock) or `at_time` (`HH:MM`, the next time the person's clock reads it). The person's clock is
+  their stored time zone (TER-1088), UTC when they have none; the answer gives `due_local` and `time_zone`
+  so the concierge confirms the time in it.
+- **Repeating.** `every_minutes` (at least 5), stopping after `times` wakes (at most 100) and/or at `until` /
+  `until_time`; with neither it repeats for 24 h. The watches' 10-minute cooldown does not apply: the
+  reminder's own times pace it.
+- **Late or missed.** The sweep (20 s, plus a timer at the next reminder's exact time) fires a reminder once
+  its time has passed. If the server was down at that time, the first sweep after it comes back fires it,
+  and the wake says how many minutes late it is; a repeating one wakes once for every time it missed (it
+  says how many) and moves on to its next time after now. A reminder is fired before it can expire, so the
+  outage never turns it into `expired`.
+- **Limits.** 10 open reminders per chat, counted within the 30 watches; nothing beyond 7 days from now;
+  the 12 wakes per chat per hour hold for reminders too.
+- **Checking one.** `chat_watches.kind = 'reminder'`; `params.at` is the first time, `baseline.next` the
+  next one, `params.zone` the time zone it was set in. The wake turn names it "Lembrete <id>".
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no

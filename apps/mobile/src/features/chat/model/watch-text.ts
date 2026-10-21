@@ -13,6 +13,7 @@ const KIND_LABELS: Record<string, string> = {
   pr: tk('PR'),
   machine: tk('Máquina'),
   agent_release: tk('Versão do agent'),
+  reminder: tk('Lembrete'),
 };
 
 /** Each kind's events, as translation keys. `gone` reads differently per kind, so the table is per kind. */
@@ -70,6 +71,20 @@ export function watchEventLabel(kind: string, event: string): string {
 export function watchEventsText(watch: Pick<ChatWatch, 'kind' | 'events'>): string {
   if (watch.events.length === 0) return '';
   return t('Quando {{events}}', { events: watch.events.map((e) => watchEventLabel(watch.kind, e)).join(', ') });
+}
+
+/**
+ * A reminder (TER-1100): "às 18:00 · a cada 10 min · até 20:00". Its only event is its time, so the
+ * "Quando …" of the other watches would say nothing; `next_at` says when.
+ */
+export function reminderText(watch: Pick<ChatWatch, 'next_at' | 'every_minutes' | 'recurring' | 'expires_at'>, now = new Date()): string {
+  const next = watch.next_at ? new Date(watch.next_at) : null;
+  const at =
+    next && !Number.isNaN(next.getTime())
+      ? t('às {{time}}', { time: next.toDateString() === now.toDateString() ? formatTime(next) : formatDateTime(next, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })
+      : '';
+  const every = watch.every_minutes ? t('a cada {{n}} min', { n: watch.every_minutes }) : '';
+  return [at, every, watch.recurring ? watchUntilLabel(watch.expires_at, now) : ''].filter(Boolean).join(' · ');
 }
 
 /** "até 14:32" today, "até 23/10, 09:05" on another day; empty for a date it cannot read. */

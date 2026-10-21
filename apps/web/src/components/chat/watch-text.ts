@@ -9,6 +9,7 @@ const WATCH_KIND_LABEL: Record<string, string> = {
   pr: tk('PR'),
   machine: tk('Máquina'),
   agent_release: tk('Versão do agent'),
+  reminder: tk('Lembrete'),
 };
 
 /** The events of every kind (server: `chat/watches/kinds.ts`), in words. */
@@ -48,6 +49,25 @@ export const watchKindLabel = (kind: string): string => (Object.hasOwn(WATCH_KIN
 
 /** "merge, CI vermelho": the events, each in words, an unknown one as it came. */
 export const watchEventsLabel = (events: string[]): string => events.map((e) => (Object.hasOwn(WATCH_EVENT_LABEL, e) ? i18n.t(WATCH_EVENT_LABEL[e]!) : e)).join(', ');
+
+/** A time today as "14:32", another day with its date. */
+const timeOrDateTime = (at: Date, now: Date): string =>
+  at.toDateString() === now.toDateString() ? formatTime(at) : formatDateTime(at, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+
+/**
+ * A reminder (TER-1100) in words: "às 18:00 · a cada 10 min · até 20:00". Its only event is its time, so
+ * the "avisa em" of the other watches would say nothing; `next_at` says when.
+ */
+export function reminderDetails(w: Pick<ChatWatch, 'next_at' | 'every_minutes' | 'recurring' | 'expires_at'>, now = new Date()): string {
+  const next = w.next_at ? new Date(w.next_at) : null;
+  return [
+    next && !Number.isNaN(next.getTime()) ? i18n.t('às {{time}}', { time: timeOrDateTime(next, now) }) : null,
+    w.every_minutes ? i18n.t('a cada {{n}} min', { n: w.every_minutes }) : null,
+    w.recurring ? watchUntilLabel(w, now) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 /** "até 14:32" today, or "até <data e hora>": a watch can last for days, unlike a grant. */
 export function watchUntilLabel(w: Pick<ChatWatch, 'expires_at'>, now = new Date()): string {

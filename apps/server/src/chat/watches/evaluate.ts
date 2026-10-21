@@ -10,7 +10,7 @@ import type { CiState, TaskPullRequest } from '../../db/repositories/task-pull-r
 import type { ChatWatch } from '../../db/repositories/chat-watches.js';
 import type { TabState } from '../../db/repositories/types.js';
 import { versionAtLeast } from '../../agent/errors.js';
-import { SEMVER, TAB_EVENTS, WATCH_LIMITS, type CardStatus, type WatchStatus } from './kinds.js';
+import { REMINDER_LIMITS, SEMVER, TAB_EVENTS, WATCH_LIMITS, type CardStatus, type WatchStatus } from './kinds.js';
 
 /** How long a machine must stay offline before `offline` fires: a deploy moves every agent between colours. */
 export const OFFLINE_GRACE_MS = 3 * 60_000;
@@ -108,10 +108,13 @@ export async function initialBaseline(probe: WatchProbe, w: Pick<ChatWatch, 'use
     }
     case 'agent_release':
       return { seen: await probe.latestAgentVersion() };
+    case 'reminder':
+      return { next: w.params.at ?? now.toISOString() };
   }
 }
 
-export async function evaluateWatch(probe: WatchProbe, w: Watch): Promise<Evaluation | null> {
+/** `now` only matters to reminders, which follow the clock. */
+export async function evaluateWatch(probe: WatchProbe, w: Watch, now = new Date()): Promise<Evaluation | null> {
   switch (w.kind) {
     case 'tab':
       return evaluateTab(probe, w);
@@ -123,6 +126,8 @@ export async function evaluateWatch(probe: WatchProbe, w: Watch): Promise<Evalua
       return evaluateMachine(probe, w);
     case 'agent_release':
       return evaluateAgentRelease(probe, w);
+    case 'reminder':
+      return evaluateReminder(w, now);
   }
 }
 
@@ -225,10 +230,40 @@ async function evaluateAgentRelease(probe: WatchProbe, w: Watch): Promise<Evalua
   return { events: [{ key: `agent:${latest}`, event: 'published', payload: { package: '@termhub/agent', version: latest, min_version: min } }], baseline: { seen: latest }, close: done(w) };
 }
 
+/**
+ * TER-1100: a reminder is due once the clock passes its `next` time. One wake per due time — and when the
+ * server was down across several times of a repeating one, a single wake that says how many it skipped.
+ * Fired later than `lateAfterMs` (the server was down at the time), the payload says how late. A repeating
+ * reminder moves `next` past now; it closes after its last wake (`times` reached, or the next time past
+ * `until`), and the payload says that one was the last.
+ */
+export function evaluateReminder(w: Pick<Watch, 'params' | 'baseline' | 'recurring' | 'fire_count'>, now: Date): Evaluation | null {
+  const nextText = typeof w.baseline.next === 'string' ? w.baseline.next : w.params.at;
+  const next = nextText ? Date.parse(nextText) : NaN;
+  if (Number.isNaN(next) || now.getTime() < next) return null;
+  const lateMs = now.getTime() - next;
+  const payload: Record<string, unknown> = { due_at: new Date(next).toISOString(), fired_at: now.toISOString(), occurrence: w.fire_count + 1 };
+  if (w.params.zone) payload.zone = w.params.zone;
+  if (lateMs > REMINDER_LIMITS.lateAfterMs) payload.late_minutes = Math.round(lateMs / 60_000);
+  const every = w.params.every_minutes ? w.params.every_minutes * 60_000 : 0;
+  if (!w.recurring || !every) return { events: [{ key: `due:${payload.due_at}`, event: 'due', payload }], baseline: w.baseline, close: 'done' };
+  const passed = Math.floor(lateMs / every) + 1;
+  if (passed > 1) payload.skipped = passed - 1;
+  const upcoming = next + passed * every;
+  const until = w.params.until ? Date.parse(w.params.until) : NaN;
+  const last = (w.params.times !== undefined && w.fire_count + 1 >= w.params.times) || (!Number.isNaN(until) && upcoming > until);
+  payload.every_minutes = w.params.every_minutes;
+  if (last) payload.last = true;
+  else payload.next_at = new Date(upcoming).toISOString();
+  return { events: [{ key: `due:${payload.due_at}`, event: 'due', payload }], baseline: { next: new Date(upcoming).toISOString() }, close: last ? 'done' : null };
+}
+
 /** The `expired` event a watch whose validity ran out sends once, closing it. */
 export function expiredEvaluation(w: Pick<ChatWatch, 'baseline' | 'expires_at'>): Evaluation {
   return { events: [{ key: 'expired', event: 'expired', payload: { expires_at: w.expires_at } }], baseline: w.baseline, close: 'expired' };
 }
 
 /** The cooldown a recurring watch's fire must respect (one-shot watches fire once anyway). */
-export const cooldownOf = (w: Pick<ChatWatch, 'recurring'>): number | undefined => (w.recurring ? WATCH_LIMITS.recurringCooldownMs : undefined);
+export const cooldownOf = (w: Pick<ChatWatch, 'recurring' | 'kind'>): number | undefined =>
+  // A reminder's own times pace it (every 5 min at least): the 10 min cooldown would skip half of them.
+  w.recurring && w.kind !== 'reminder' ? WATCH_LIMITS.recurringCooldownMs : undefined;

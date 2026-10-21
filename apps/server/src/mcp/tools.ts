@@ -33,8 +33,8 @@ import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
 import { getClientContext } from '../control/client-context.js';
-import { cancelWatch, listWatches, watch, type WatchArgs } from '../control/watches.js';
-import { WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
+import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
+import { REMINDER_LIMITS, WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
 import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.js';
@@ -665,8 +665,27 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, a) => watch(ctx, a as unknown as WatchArgs),
   },
   {
+    name: 'schedule_wakeup',
+    description:
+      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. note: what to do then, in your own words (≤500). To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
+    scope: 'read',
+    resource: 'chat',
+    action: 'create',
+    input: {
+      in_minutes: z.number().int().min(1).max(WATCH_LIMITS.maxHours * 60).optional(),
+      at: z.string().trim().min(16).max(40).optional(),
+      at_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+      note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
+      every_minutes: z.number().int().min(REMINDER_LIMITS.minEveryMinutes).max(WATCH_LIMITS.maxHours * 60).optional(),
+      times: z.number().int().min(1).max(REMINDER_LIMITS.maxTimes).optional(),
+      until: z.string().trim().min(16).max(40).optional(),
+      until_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+    },
+    run: (ctx, a) => scheduleWakeup(ctx, a as unknown as ScheduleWakeupArgs),
+  },
+  {
     name: 'list_watches',
-    description: "This chat's open watches (from watch): id, kind, target, events, your note, whether recurring, and until when. Only works in the termhub chat.",
+    description: "This chat's open watches (from watch) and reminders (from schedule_wakeup, kind reminder, with next_at and every_minutes): id, kind, target, events, your note, whether recurring, and until when. Only works in the termhub chat.",
     scope: 'read',
     resource: 'chat',
     action: 'read',
@@ -675,7 +694,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'cancel_watch',
-    description: 'Cancel one of this chat\'s open watches (watch_id from watch or list_watches): it will not wake the chat any more. Use it when the person asks to stop following something, or when you no longer need it. Only works in the termhub chat.',
+    description: 'Cancel one of this chat\'s open watches or reminders (watch_id from watch, schedule_wakeup or list_watches): it will not wake the chat any more. Use it when the person asks to stop following something, or when you no longer need it. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
