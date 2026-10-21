@@ -31,7 +31,7 @@ const tab = (o: Partial<TTabSummary> = {}): TTabSummary => ({
   activity_verb: null,
   availability: 'ready',
   auto_ref: null,
-  tool: 'claude',
+  agent: 'claude',
   ...o,
 });
 

@@ -11,6 +11,8 @@ const BY_TOOL: Record<string, TabActivity> = {
   WebSearch: 'researching', WebFetch: 'researching',
   EnterPlanMode: 'planning', ExitPlanMode: 'planning', AskUserQuestion: 'planning', TodoWrite: 'planning', TaskCreate: 'planning', TaskUpdate: 'planning',
   Bash: 'terminal',
+  // Codex's own tool names, as its PreToolUse hook reports them (TER-1102); its shell is `Bash` too.
+  apply_patch: 'coding', web_search: 'researching', update_plan: 'planning', request_user_input: 'planning',
 };
 
 /** `Object.hasOwn`, not a plain lookup: an untrusted `toString` would otherwise read as a function. */

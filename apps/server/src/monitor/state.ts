@@ -288,6 +288,15 @@ function isTitleTurn(ev: Record<string, unknown>): boolean {
 }
 
 /**
+ * How a Codex turn end reads, the same rule as Claude's (TER-972, TER-1102): `finished` when the last message
+ * is a report that asks nothing, else a wait. Claude Code's login error is Claude's own wording, never Codex's.
+ */
+function codexTurnEnd(raw: string | null): TabState {
+  const kind = classifyTurnEnd(raw);
+  return kind === 'auth_required' ? 'waiting_input' : kind;
+}
+
+/**
  * Codex CLI hook payloads (stdin JSON, Claude-shaped, spec 2026-09-29 codex monitor hooks D3), from
  * `~/.codex/hooks.json`. They run only once the person trusted them in Codex, so a machine may send
  * nothing but `notify` — which keeps working as the end of every turn, as before.
@@ -335,7 +344,7 @@ function interpretCodexHook(ev: Record<string, unknown>, name: string): Interpre
     case 'Stop': {
       // The same finished turn the `notify` that follows reports: decideWait pairs the two into one wait.
       const raw = str(ev.last_assistant_message);
-      return withAnswer({ kind: 'waiting_input', text: cap(raw), meta: { event: name } }, raw);
+      return withAnswer({ kind: codexTurnEnd(raw), text: cap(raw), meta: { event: name } }, raw);
     }
     case 'Interrupt':
       // An Esc, during a turn or on an approval menu: the turn is over and neither Stop nor notify follows.
@@ -348,8 +357,8 @@ function interpretCodexHook(ev: Record<string, unknown>, name: string): Interpre
 /**
  * Codex CLI: its hooks (`hook_event_name`, see `interpretCodexHook`) and its `notify` payload (argv
  * JSON): `{ type: "agent-turn-complete", "last-assistant-message": ... }`. `notify` needs no trust and
- * fires at the end of every turn, so without trusted hooks a finished turn is the only "needs you"
- * signal: the last assistant message is the question the person has to answer. With them, the hooks
+ * fires at the end of every turn, so without trusted hooks a finished turn is the only signal: a wait
+ * when the last assistant message asks the person something, `finished` when it reports. With them, the hooks
  * add working and waiting_permission, and a turn's `Stop` and `notify` count as one wait.
  */
 function interpretCodex(ev: Record<string, unknown>): Interpreted | null {
@@ -361,7 +370,7 @@ function interpretCodex(ev: Record<string, unknown>): Interpreted | null {
   const type = str(ev.type);
   if (type === 'agent-turn-complete' && !isTitleTurn(ev)) {
     const raw = str(ev['last-assistant-message']);
-    return withAnswer({ kind: 'waiting_input', text: cap(raw), meta: { event: type } }, raw);
+    return withAnswer({ kind: codexTurnEnd(raw), text: cap(raw), meta: { event: type } }, raw);
   }
   return null;
 }

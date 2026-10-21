@@ -94,5 +94,20 @@
   "Nenhuma aba aberta neste projeto.": "No open tabs in this project.",
   "Concierge": "Concierge",
   "Chat do projeto": "Project chat",
-  "Terminal": "Terminal"
+  "Terminal": "Terminal",
+  "editando arquivos": "editing files",
+  "lendo arquivos": "reading files",
+  "pesquisando": "researching",
+  "planejando": "planning",
+  "rodando comandos": "running commands",
+  "executando {{tool}}…": "running {{tool}}…",
+  "pensando… · {{activity}}": "thinking… · {{activity}}",
+  "O Codex desta aba ainda não informou a sessão": "This tab's Codex has not reported its session yet",
+  "O histórico aparece assim que o Codex rodar nesta aba com os hooks do termhub. Se ele já estava aberto antes dos hooks, reinicie-o (codex resume retoma a conversa); se nada mudar, reinstale os hooks em {{machine}}.": "The history shows up once Codex runs in this tab with the termhub hooks. If it was already open before the hooks, restart it (codex resume picks the conversation back up); if nothing changes, reinstall the hooks on {{machine}}.",
+  "O arquivo da sessão do Codex não foi encontrado em {{machine}}. A próxima sessão do Codex nesta aba volta a aparecer aqui.": "The Codex session file was not found on {{machine}}. The next Codex session in this tab shows up here again.",
+  "Aqui aparece a sessão atual do Codex nesta aba: uma aba nova, um /new ou um reinício do Codex começam do zero. Escreva abaixo para falar com o Codex.": "This shows the current Codex session in this tab: a new tab, a /new or a Codex restart start from scratch. Write below to talk to Codex.",
+  "Escreva abaixo para falar com o Codex nesta aba.": "Write below to talk to Codex in this tab.",
+  "Hooks instalados. Reinicie o Codex nesta aba (codex resume retoma a conversa) para o histórico aparecer aqui.": "Hooks installed. Restart Codex in this tab (codex resume picks the conversation back up) for the history to show up here.",
+  "Limpar a conversa desta sessão? O Codex esquece o que foi dito até aqui.": "Clear this session's conversation? Codex forgets what was said so far.",
+  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o Codex nesta aba (codex resume retoma a conversa): a partir daí ela aparece aqui.": "This tab's history comes from Codex, and the hooks are what tell termhub which session to read. Install the hooks on {{machine}} and restart Codex in this tab (codex resume picks the conversation back up): from then on it shows up here."
 }

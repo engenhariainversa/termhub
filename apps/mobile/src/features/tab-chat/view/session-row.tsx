@@ -14,7 +14,7 @@ export function SessionRow({ tab, onPress, onScreen = true }: { tab: TTabSummary
   const why = availabilityText(tab.availability);
   const line = why ?? stateLine(tab);
   // "Trabalhando · Bash (automático, TER-123)": the automatic run's card, for whoever hears the row (TER-1044)
-  const agent = agentLabel(tab.tool);
+  const agent = agentLabel(tab.agent);
   const heard = tab.auto_ref ? t('{{state}} (automático, {{ref}})', { state: line, ref: tab.auto_ref }) : line;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={`${tab.name}, ${tab.machine.name}, ${agent}, ${heard}`} onPress={onPress} className="flex-row items-center gap-3 border-b border-app-border px-6 py-4">

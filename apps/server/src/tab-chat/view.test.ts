@@ -6,7 +6,7 @@ import { tabSummaryOf } from './view.js';
 const project = { id: 'p1', key: 'TH', name: 'termhub' } as Project;
 const machine = { id: 'm1', name: 'box' } as Machine;
 const tab = (o: Partial<Tab>) =>
-  ({ id: 't1', name: 'api', state: 'working', state_at: '2026-10-01T10:00:00.000Z', state_seen_at: null, state_tool: null, activity: null, activity_verb: null, ...o }) as Tab;
+  ({ id: 't1', name: 'api', state: 'working', state_at: '2026-10-01T10:00:00.000Z', state_seen_at: null, activity: null, activity_verb: null, state_tool: null, ...o }) as Tab;
 
 describe('tabSummaryOf', () => {
   it('carries the tab, its project, its machine and the availability', () => {
@@ -27,9 +27,11 @@ describe('tabSummaryOf', () => {
       activity_verb: 'Moonwalking',
       availability: 'ready',
       auto_ref: null,
-      tool: 'codex',
+      agent: 'codex',
     });
     expect(tabSummaryOf(tab(), project, machine, 'ready', 'TH-12').auto_ref).toBe('TH-12');
+    // the agent the hooks reported from, so the phone names it (TER-1102)
+    expect(tabSummaryOf(tab({ state_tool: 'codex' }), project, machine, 'ready').agent).toBe('codex');
   });
 
   it('a tab waiting on its own background work travels as working, flagged', () => {
