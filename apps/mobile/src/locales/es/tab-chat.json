@@ -38,7 +38,6 @@
   "Não foi possível enviar. Tente de novo.": "No se pudo enviar. Reintenta.",
   "Não foi possível iniciar a sessão. Tente de novo.": "No se pudo iniciar la sesión. Reintenta.",
   "Não foi possível ler a tela.": "No se pudo leer la pantalla.",
-  "O que o Claude deve fazer?": "¿Qué debe hacer Claude?",
   "Padrão": "Predeterminado",
   "Parado": "Inactivo",
   "Parte do histórico foi omitida por ser grande demais": "Parte del historial se omitió por ser demasiado grande",
@@ -88,8 +87,16 @@
   "Não foi possível iniciar o agente. Tente de novo.": "No se pudo iniciar el agente. Inténtalo de nuevo.",
   "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Sesión iniciada. La conversación aparece aquí en cuanto el agente responda.",
   "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "Ninguna cuenta de IA de esta máquina puede iniciar un agente. Registra una en Cuentas de IA.",
-  "Iniciar com {{account}} ({{cli}})": "Iniciar con {{account}} ({{cli}})",
   "Iniciar sessão": "Iniciar sesión",
   "Com {{account}} ({{cli}})": "Con {{account}} ({{cli}})",
-  "Escolher outra conta": "Elegir otra cuenta"
+  "Escolher outra conta": "Elegir otra cuenta",
+  "Modelo desta sessão": "Modelo de esta sesión",
+  "Padrão do projeto": "Predeterminado del proyecto",
+  "Id do modelo": "ID del modelo",
+  "Padrão do projeto: {{model}}": "Predeterminado del proyecto: {{model}}",
+  "Sem escolha, usa o padrão do CLI.": "Déjalo vacío para usar el predeterminado del CLI.",
+  "Informe um id de modelo válido.": "Introduce un ID de modelo válido.",
+  "Conta de IA": "Cuenta de IA",
+  "Escolha uma conta para definir o modelo desta sessão.": "Elige una cuenta para definir el modelo de esta sesión.",
+  "O que o agente deve fazer?": "¿Qué debe hacer el agente?"
 }

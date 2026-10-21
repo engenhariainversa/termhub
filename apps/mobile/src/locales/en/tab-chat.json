@@ -41,7 +41,6 @@
   "Não foi possível enviar. Tente de novo.": "Could not send. Try again.",
   "Não foi possível iniciar a sessão. Tente de novo.": "Could not start the session. Try again.",
   "Não foi possível ler a tela.": "Could not read the screen.",
-  "O que o Claude deve fazer?": "What should Claude do?",
   "Padrão": "Default",
   "Parado": "Idle",
   "Parte do histórico foi omitida por ser grande demais": "Part of the history was left out because it was too large",
@@ -88,8 +87,16 @@
   "Não foi possível iniciar o agente. Tente de novo.": "Could not start the agent. Try again.",
   "Sessão iniciada. A conversa aparece aqui assim que o agente responder.": "Session started. The conversation shows up here as soon as the agent answers.",
   "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one in AI accounts.",
-  "Iniciar com {{account}} ({{cli}})": "Start with {{account}} ({{cli}})",
   "Iniciar sessão": "Start session",
   "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
-  "Escolher outra conta": "Choose another account"
+  "Escolher outra conta": "Choose another account",
+  "Modelo desta sessão": "Model for this session",
+  "Padrão do projeto": "Project default",
+  "Id do modelo": "Model ID",
+  "Padrão do projeto: {{model}}": "Project default: {{model}}",
+  "Sem escolha, usa o padrão do CLI.": "Leave empty to use the CLI default.",
+  "Informe um id de modelo válido.": "Enter a valid model ID.",
+  "Conta de IA": "AI account",
+  "Escolha uma conta para definir o modelo desta sessão.": "Choose an account to set the model for this session.",
+  "O que o agente deve fazer?": "What should the agent do?"
 }

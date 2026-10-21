@@ -724,7 +724,7 @@ export interface StartTabAgentResult {
  * with something else, gone, or on an agent too old to tell gets a new tab of the same project and
  * machine instead, so nothing is ever typed into a program that is not the shell.
  */
-export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Project, machine: Machine, accountId?: string): Promise<StartTabAgentResult> {
+export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Project, machine: Machine, accountId?: string, modelOverride?: string): Promise<StartTabAgentResult> {
   if (tab.kind !== 'terminal' || !tab.tmux_session) throw new ControlError('NOT_A_TERMINAL', 'Só abas de terminal podem iniciar um agente');
   const { choices, suggested } = await tabAgentOptions(ctx, project, machine);
   const id = accountId ?? suggested;
@@ -736,8 +736,9 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   if (!choice) throw new ControlError('ACCOUNT_OTHER_MACHINE', msg('Esta conta não pode iniciar um agente em {{machine}} neste projeto', { machine: machine.name }));
   // an account exclusive to another project (TER-990) is never among the choices
   const account = await accountOnMachine(ctx, choice.account_id, machine);
+  const model = modelOverride ?? choice.model;
   // checked before anything is typed or opened
-  launchLine(account.provider, account.config_dir, null, null, choice.model);
+  launchLine(account.provider, account.config_dir, null, null, model);
 
   const pane = await paneForeground(machine, tab.tmux_session).catch((e: unknown) => {
     if (e instanceof HttpError && e.code === 'AGENT_OUTDATED') return null;
@@ -752,7 +753,7 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   // the tab's earlier MCP token (an agent that exited) dies before a new one is minted; best effort
   if (target.tab_id === tab.id) await ctx.repos.apiTokens.revokeForTab(tab.id).catch(() => undefined);
   const mcp = await tabMcp(ctx, machine, account.provider, target);
-  const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
+  const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, model) : launchLine(account.provider, account.config_dir, null, null, model);
   await typeCommandLine(machine, target.tmux_session, line);
   await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
   ctx.log?.info({ tabId: target.tab_id, machineId: machine.id, provider: account.provider, newTab: target.tab_id !== tab.id }, 'tab chat: agent started');

@@ -162,7 +162,8 @@ export function SessionView({ tabId }: { tabId: string }) {
         const saved = await uploadFile(file);
         onProgress(1);
         return asChip(file, saved.path);
-      } catch {
+      } catch (error) {
+        if (error instanceof ApiError) throw error;
         throw new ApiError(0, 'TAB_FILE_FAILED', TAB_CHAT_MSG.fileFailed);
       }
     },
@@ -188,13 +189,13 @@ export function SessionView({ tabId }: { tabId: string }) {
   const why = availabilityText(availability);
   const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '');
   // An agent started in another tab (this one's shell was busy): the screen follows it there.
-  const onStartAgent = async (accountId?: string) => {
-    const newTab = await startAgent(accountId);
+  const onStartAgent = async (accountId?: string, model?: string) => {
+    const newTab = await startAgent(accountId, model);
     if (newTab) router.replace(`/session/${newTab}` as Href);
   };
   const emptyAction =
     emptyReason === 'no_agent' && !agentStarted && !BLOCKED.has(availability) ? (
-      <StartAgentPanel options={agentOptions} optionsError={agentOptionsError} starting={startingAgent} error={startAgentError} onStart={(id) => void onStartAgent(id)} />
+      <StartAgentPanel options={agentOptions} optionsError={agentOptionsError} starting={startingAgent} error={startAgentError} onStart={(id, model) => void onStartAgent(id, model)} />
     ) : empty.install && !hooksInstalled && !BLOCKED.has(availability) ? (
       <Button testID="session-install-hooks" label={empty.install} onPress={() => void installHooks()} loading={installingHooks} />
     ) : undefined;

@@ -46,9 +46,8 @@ export interface Transport {
 }
 
 /**
- * `fetch`, React Native's `WebSocket` and `expo-file-system`'s upload task. `connect` and `upload` never run under Jest — the app talks
- * to `MockTransport` in every test; this class only needs to typecheck and to behave correctly on
- * a device.
+ * `fetch`, React Native's `WebSocket` and `expo-file-system`'s upload task. `connect` only runs on a device. Upload tests replace the native module while exercising
+ * this adapter, separately from API tests over `MockTransport`.
  */
 export class FetchTransport implements Transport {
   async fetch(input: TransportFetchInput): Promise<TransportFetchResult> {
@@ -75,18 +74,21 @@ export class FetchTransport implements Transport {
 
   async upload(url: string, fileUri: string, mime: string, headers: Record<string, string>, onProgress?: (fraction: number) => void): Promise<TransportUploadResult> {
     // Loaded on demand: `expo-file-system` reaches its native module at import time, and this file is
-    // imported by the `logic` jest project (through `services/api/index.ts`), where none exists. Like
-    // `connect`, this method itself only ever runs on a device — every test talks to `MockTransport`.
-    const { File, UploadType } = await import('expo-file-system');
-    const task = new File(fileUri).createUploadTask(url, {
+    // imported by the `logic` jest project (through `services/api/index.ts`), where none exists unless a transport test supplies it.
+    // Use the native upload API already present in installed binaries. The newer File upload
+    // task uses a separate native SharedObject, which an OTA cannot add to an older binary.
+    // Foreground requests also avoid iOS scheduling a signed DPoP request after its proof expires.
+    const { createUploadTask, FileSystemUploadType, FileSystemSessionType } = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
+    const task = createUploadTask(url, fileUri, {
       httpMethod: 'POST',
-      uploadType: UploadType.BINARY_CONTENT,
+      uploadType: FileSystemUploadType.BINARY_CONTENT,
+      sessionType: FileSystemSessionType.FOREGROUND,
       headers: { ...headers, 'Content-Type': mime },
-      onProgress: ({ bytesSent, totalBytes }) => {
-        if (onProgress && totalBytes > 0) onProgress(Math.min(1, bytesSent / totalBytes));
-      },
+    }, ({ totalBytesSent, totalBytesExpectedToSend }) => {
+      if (onProgress && totalBytesExpectedToSend > 0) onProgress(Math.min(1, totalBytesSent / totalBytesExpectedToSend));
     });
     const result = await task.uploadAsync();
+    if (!result) throw new Error('UPLOAD_CANCELLED');
     return { status: result.status, body: result.body };
   }
 }

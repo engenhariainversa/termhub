@@ -143,7 +143,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
   /** "Nova sessão": Claude Code in a new tab of the project, with the project's account and model. */
   app.post('/', { config: { action: 'write' } }, async (request) => {
     const body = startSessionBody.parse(request.body);
-    const started = await control(() => startAgent(ctxOf(request), { project_id: body.project_id, machine_id: body.machine_id, prompt: body.prompt }));
+    const started = await control(() => startAgent(ctxOf(request), body));
     request.log.info({ tabId: started.tab_id, projectId: body.project_id, promptLen: body.prompt.length }, 'tab chat: session started');
     return { tab_id: started.tab_id };
   });
@@ -204,9 +204,9 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
   /** Starts the agent in the tab (its shell is free) or in a new tab of the same project and machine. */
   app.post('/:id/agent', { config: { action: 'write' } }, async (request): Promise<TStartTabAgentResponse> => {
     const { id } = idParam.parse(request.params);
-    const { account_id } = startTabAgentBody.parse(request.body ?? {});
+    const { account_id, model } = startTabAgentBody.parse(request.body ?? {});
     const { tab, project, machine } = await scoped(repos, request).tab(id);
-    const started = await control(() => startTabAgent({ ...ctxOf(request), log: request.log }, tab, project, machine, account_id));
+    const started = await control(() => startTabAgent({ ...ctxOf(request), log: request.log }, tab, project, machine, account_id, model));
     // the CLI line is typed into the tab: the trail's terminal input, marked as an agent start
     await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: started.tab_id, label: tab.name }, meta: { machine_id: machine.id, agent_start: true, provider: started.provider, account_id: started.account.id, new_tab: started.new_tab, surface: deps.surface ?? 'app' } });
     deps.hub.poke(tab.id);

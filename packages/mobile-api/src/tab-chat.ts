@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { tabQuestionSchema, tabSuggestionSchema } from './events.js';
 import { progressTabState } from './progress.js';
+import { MODEL_RE } from './models.js';
 
 /**
  * A terminal tab that runs Claude Code, read on the phone as a conversation (spec 2026-10-01 tab chat
@@ -67,6 +68,8 @@ export const TAB_MESSAGE_MAX_CHARS = 4000;
 export const startSessionBody = z.object({
   project_id: z.string().min(1).max(64),
   machine_id: z.string().min(1).max(64).optional(),
+  account_id: z.string().min(1).max(64).optional(),
+  model: z.string().regex(MODEL_RE).optional(),
   prompt: z.string().min(1).max(TAB_MESSAGE_MAX_CHARS),
 });
 export type TStartSessionBody = z.infer<typeof startSessionBody>;
@@ -134,7 +137,10 @@ export const tabAgentOptions = z.object({
 export type TTabAgentOptions = z.infer<typeof tabAgentOptions>;
 
 /** `POST tabs/:id/agent` (TER-1094): no account = the suggested one (409 `ACCOUNT_CHOICE_REQUIRED` when there is none). */
-export const startTabAgentBody = z.object({ account_id: z.string().min(1).max(64).optional() });
+export const startTabAgentBody = z.object({
+  account_id: z.string().min(1).max(64).optional(),
+  model: z.string().regex(MODEL_RE).optional(),
+});
 export type TStartTabAgentBody = z.infer<typeof startTabAgentBody>;
 
 /** Where the agent started: this tab (its shell was free) or a new tab of the same project and machine. */
