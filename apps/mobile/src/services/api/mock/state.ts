@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion, TWatchView } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -203,6 +203,10 @@ export type MockTabSuggestion = TTabSuggestion & { conversation_id: string };
 /** A usage-limit card (spec 2026-09-30 project AI accounts §7.2): the wire shape plus the conversation it was pushed into. */
 export type MockTabLimit = TTabLimit & { conversation_id: string };
 
+/** A concierge watch (TER-1099): the wire shape plus its scope (`null` = the account-wide chat). Closed
+ * rows stay, with `closed`, so a second cancel is a 404 as on the server. */
+export type MockWatch = TWatchView & { project_id: string | null; closed: boolean };
+
 /** An uploaded file (spec 2026-09-26): the wire shape plus what the server keeps beside it. */
 export interface MockAttachment extends TChatAttachment {
   conversation_id: string;
@@ -250,6 +254,8 @@ export interface MockState {
   tabSuggestions: MockTabSuggestion[];
   /** Oldest first; closed rows stay (a second answer is a 409, as on the server). */
   tabLimits: MockTabLimit[];
+  /** The concierge's watches ("Acompanhando", TER-1099), oldest first; cancelled rows stay `closed`. */
+  watches: MockWatch[];
   /** The projects' AI accounts and models (spec 2026-09-30 project AI accounts §8), by project id; a
    * project with no entry has none chosen and no model set. */
   projectAi: Map<string, TProjectAi>;
@@ -336,6 +342,7 @@ export function createMockState(): MockState {
     tabQuestions: [],
     tabSuggestions: [],
     tabLimits: [],
+    watches: [],
     projectAi: new Map(),
     automation: new Map(),
     hasAutomation: true,

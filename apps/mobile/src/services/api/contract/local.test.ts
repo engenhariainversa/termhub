@@ -19,7 +19,7 @@ const readyHost = {
   sessionAtStake: false,
 };
 
-const fixture = { conversation, messages: [], actions: [], grants: [], project_grants: [], standing_grants: [], tab_questions: [], tab_suggestions: [], tab_limits: [], subagents: [], open_answer_ids: [], host: readyHost };
+const fixture = { conversation, messages: [], actions: [], grants: [], project_grants: [], standing_grants: [], tab_questions: [], tab_suggestions: [], tab_limits: [], subagents: [], watches: [], open_answer_ids: [], host: readyHost };
 
 describe('chatResponse', () => {
   it('parses a ready host', () => {
@@ -87,6 +87,13 @@ describe('chatResponse', () => {
   it('defaults subagents to empty when an older server sends none (spec 2026-09-26 panel §4)', () => {
     const { subagents: _subagents, ...withoutSubagents } = fixture;
     expect(chatResponse.parse(withoutSubagents)).toEqual(fixture);
+  });
+
+  it('defaults watches to empty when an older server sends none, and keeps the ones it lists (TER-1099)', () => {
+    const { watches: _watches, ...withoutWatches } = fixture;
+    expect(chatResponse.parse(withoutWatches)).toEqual(fixture);
+    const watch = { id: 'w1', kind: 'pr', target_id: null, label: 'PR #511 Mostrar assinaturas', events: ['merged'], recurring: false, note: '', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-22T12:00:00.000Z', fire_count: 0 };
+    expect(chatResponse.parse({ ...fixture, watches: [watch] }).watches).toEqual([watch]);
   });
 
   it("carries the context meter: the conversation's fill and compaction, and the person's limit (TER-1038)", () => {

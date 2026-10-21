@@ -1,7 +1,7 @@
 // The chat store (design spec §6) over the real `HttpMobileApi`, the in-memory `MockTransport`
 // and its fake socket, with an enrolled, unlocked session store built over the same mock.
 import * as SecureStore from 'expo-secure-store';
-import { chatResponse, type TChatEvent, type TChatMessage, type TChatStandingGrant } from '@/services/api/contract';
+import { chatResponse, type TChatEvent, type TChatMessage, type TChatStandingGrant, type TWatchView } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
 import { appBackgrounded, messageSent } from '@/features/shared/signals';
@@ -1003,7 +1003,7 @@ it('persists projects and each conversation, never live or transient state', asy
 
   const saved = JSON.parse(mmkv.getString('chat')!).state;
   expect(Object.keys(saved).sort()).toEqual(['conversations', 'projects']);
-  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'projectGrants', 'standingGrants', 'subagents', 'tabLimits', 'tabQuestions', 'tabSuggestions']);
+  expect(Object.keys(saved.conversations['p-termhub']).sort()).toEqual(['actions', 'conversation', 'grants', 'host', 'messages', 'projectGrants', 'standingGrants', 'subagents', 'tabLimits', 'tabQuestions', 'tabSuggestions', 'watches']);
 
   // A cold start shows the thread before any fetch.
   const again = createChatStore({ api, session: () => ({ phase: 'locked', auth: () => { throw new Error('LOCKED'); }, handleApiError: () => false, requestPinProof: async () => { throw new Error('CANCELLED'); }, requestPinProofs: async () => { throw new Error('CANCELLED'); }, tokenStale: () => true, renewToken: async () => null }) });
@@ -1814,4 +1814,110 @@ it("a context event moves the header's meter, keeping the last compaction when a
   expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 1_951, context_window: 200_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
   handlers().onEvent({ type: 'context', user_id: 'u1', conversation_id: 'c-termhub', tokens: 25_000, window: 200_000 });
   expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 25_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
+});
+
+describe('watches ("Acompanhando", TER-1099)', () => {
+  const watch = (patch: Partial<TWatchView> = {}): TWatchView => ({
+    id: 'w1',
+    kind: 'pr',
+    target_id: 'pr-511',
+    label: 'PR #511',
+    events: ['merged'],
+    recurring: false,
+    note: '',
+    created_at: '2026-09-24T12:00:00.000Z',
+    expires_at: '2026-09-25T12:00:00.000Z',
+    fire_count: 0,
+    ...patch,
+  });
+  const watchesEvent = (conversationId: string, watches: TWatchView[]): TChatEvent => ({ type: 'watches', user_id: 'u1', conversation_id: conversationId, watches });
+
+  it('the load seeds the slot with the scope\'s watches', async () => {
+    const { chat, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    expect(slot(chat, 'p-termhub').watches).toEqual([]);
+    // The mock's concierge keeps a watch when asked to "avisar"; the slot is then emptied by hand, so
+    // only the re-read can bring it back.
+    await chat.getState().send('me avise quando o PR mergear');
+    await jest.advanceTimersByTimeAsync(5000);
+    handlers().onEvent(watchesEvent('c-termhub', []));
+    expect(slot(chat, 'p-termhub').watches).toEqual([]);
+    await chat.getState().refresh('p-termhub');
+    expect(slot(chat, 'p-termhub').watches).toEqual([expect.objectContaining({ kind: 'pr', label: 'PR #511 Mostrar assinaturas no chat', events: ['merged', 'ci_failed'] })]);
+  });
+
+  it('a watches event replaces the list of its conversation, and another conversation\'s is ignored', async () => {
+    const { chat, handlers } = await setup();
+    await openAndConnect(chat, null);
+    await chat.getState().open('p-termhub');
+    handlers().onEvent(watchesEvent('c-termhub', [watch(), watch({ id: 'w2', kind: 'tab', label: 'api', events: ['finished'] })]));
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w2']);
+    handlers().onEvent(watchesEvent('c-termhub', [watch({ id: 'w2', kind: 'tab', label: 'api', events: ['finished'] })]));
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w2']);
+    // The account-wide chat's list: not this conversation's.
+    handlers().onEvent(watchesEvent('c-general', [watch({ id: 'w9' })]));
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w2']);
+    expect(slot(chat, null).watches).toEqual([]);
+  });
+
+  it('cancelWatch drops the row at once and the server cancels it', async () => {
+    const { chat, api, store } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    await chat.getState().send('me avise quando o PR mergear');
+    await jest.advanceTimersByTimeAsync(5000);
+    const [w] = slot(chat, 'p-termhub').watches;
+    expect(w).toBeDefined();
+    const cancelling = chat.getState().cancelWatch(w!.id);
+    expect(slot(chat, 'p-termhub').watches).toEqual([]);
+    await cancelling;
+    await jest.advanceTimersByTimeAsync(0);
+    expect(slot(chat, 'p-termhub').watches).toEqual([]);
+    expect(chat.getState().error).toBeNull();
+    const res = await api.chat(store.getState().auth(), 'p-termhub');
+    expect(res.watches).toEqual([]);
+  });
+
+  it('a failed cancel puts the row back where it was and says why; one already gone (404) stays gone', async () => {
+    const { chat, api, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    handlers().onEvent(watchesEvent('c-termhub', [watch(), watch({ id: 'w2' }), watch({ id: 'w3' })]));
+
+    let reject!: (e: unknown) => void;
+    jest.spyOn(api, 'cancelWatch').mockImplementationOnce(() => new Promise((_, r) => (reject = r)));
+    const cancelling = chat.getState().cancelWatch('w2');
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w3']);
+    reject(new ApiError(500, 'INTERNAL', 'Falhou.'));
+    await cancelling;
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w2', 'w3']);
+    expect(chat.getState().error).toBe('Falhou.');
+
+    jest.spyOn(api, 'cancelWatch').mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'Assinatura não encontrada'));
+    await chat.getState().cancelWatch('w2');
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w3']);
+    expect(chat.getState().error).toBeNull();
+  });
+
+  it('a failed cancel does not bring back a row a newer list no longer has', async () => {
+    const { chat, api, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    handlers().onEvent(watchesEvent('c-termhub', [watch(), watch({ id: 'w2' })]));
+    let reject!: (e: unknown) => void;
+    jest.spyOn(api, 'cancelWatch').mockImplementationOnce(() => new Promise((_, r) => (reject = r)));
+    const cancelling = chat.getState().cancelWatch('w2');
+    // Meanwhile the watch fired and closed: the server's list no longer has it.
+    handlers().onEvent(watchesEvent('c-termhub', [watch()]));
+    reject(new ApiError(500, 'INTERNAL', 'Falhou.'));
+    await cancelling;
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1']);
+  });
+
+  it('a reset keeps the watches: they belong to the scope, not the conversation', async () => {
+    const { chat } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    await chat.getState().send('me avise quando o PR mergear');
+    await jest.advanceTimersByTimeAsync(5000);
+    expect(slot(chat, 'p-termhub').watches).toHaveLength(1);
+    await chat.getState().reset();
+    expect(slot(chat, 'p-termhub').watches).toHaveLength(1);
+  });
 });

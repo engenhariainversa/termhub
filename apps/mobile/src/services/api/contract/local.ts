@@ -74,6 +74,7 @@ import {
   tabLimitAnswerResponse,
   tabLimitSchema,
   tabSuggestionSchema,
+  watchViewSchema,
   tabSuggestionSendBody,
   tokenBody,
   tokenResponse,
@@ -149,6 +150,9 @@ export const chatResponse = z.object({
    * an older server never sends the field. */
   tab_limits: z.array(tabLimitSchema).default([]),
   subagents: z.array(subagentViewSchema).default([]),
+  /** The watches the concierge keeps for this chat's scope (TER-1099, "Acompanhando"). Defaulted: an
+   * older server never sends the field. */
+  watches: z.array(watchViewSchema).default([]),
   /** The answer rows still to be answered (spec 2026-09-29): what the screen shows as "pensando…"
    * when it opens in the middle of a run. Defaulted: an older server never sends the field. */
   open_answer_ids: z.array(z.string()).default([]),
@@ -160,6 +164,9 @@ export const chatResponse = z.object({
 
 /** `POST chat/subagents/:id/cancel`'s `202` payload (spec 2026-09-26 panel §5.4). */
 export const cancelSubagentResponse = z.object({ subagent: subagentViewSchema });
+
+/** `DELETE chat/watches/:id`'s payload (TER-1099): the watch as it ended. */
+export const cancelWatchResponse = z.object({ watch: watchViewSchema });
 
 /** `GET me` (P§6). */
 export const meResponse = z.object({
@@ -346,6 +353,7 @@ export type { AutomationFeedEvent as TAutomationFeedEvent } from '@termhub/mobil
 export type TProgressEstimate = z.infer<typeof progressEstimate>;
 export type TPullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type TCancelSubagentResponse = z.infer<typeof cancelSubagentResponse>;
+export type TCancelWatchResponse = z.infer<typeof cancelWatchResponse>;
 // Legal acceptance (TER-742).
 export type TLegalVersion = z.infer<typeof legalVersionSchema>;
 export type TLegalStatus = z.infer<typeof legalStatusResponse>;
