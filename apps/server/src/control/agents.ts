@@ -4,7 +4,7 @@ import { buildGuardSettings, isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_D
 import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
 import { getAccountUsage } from '../ai/index.js';
-import { accountsOn, isAgentProvider, isAlias, loadProjectAi, modelFor } from '../ai/project-accounts.js';
+import { accountsOn, isAgentProvider, isAlias, loadProjectAi, modelFor, type AgentProvider } from '../ai/project-accounts.js';
 import { guardAccount, usableIn } from '../ai/exclusive.js';
 import { peakUtilization, SWAP_MAX_UTILIZATION } from './account-swap.js';
 import type { AiAccount, AiProvider, Machine, Project, Tab, Task } from '../db/repositories/types.js';
@@ -687,26 +687,40 @@ export interface TabAgentChoice {
 }
 
 /**
- * The accounts a tab's agent can start with (TER-1094): the accounts of the tab's machine whose CLI the
- * machine has, usable in the project (TER-990), the project's own list first and in its order. `suggested`
- * is what starts without asking: the project's first listed account with room (as `start_agent` picks it);
- * without a list on that machine, the machine's only account, else its only default login (no config dir).
- * Anything else (say a default Claude and a default Codex) is the person's choice: null.
+ * The CLI a project's agents start with (TER-1104): the provider of the first account of its list (on any
+ * machine) that can still run in it. null = no list, or none of it left: the project names no CLI.
  */
-export async function tabAgentOptions(ctx: ControlContext, project: Project, machine: Machine): Promise<{ choices: TabAgentChoice[]; suggested: string | null }> {
+function projectProvider(projectId: string, ai: ProjectAi, accounts: AiAccount[]): AgentProvider | null {
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  for (const id of ai.accounts) {
+    const a = byId.get(id);
+    if (a && isAgentProvider(a.provider) && usableIn(a, projectId)) return a.provider;
+  }
+  return null;
+}
+
+/**
+ * The accounts a tab's agent can start with (TER-1094): the accounts of the tab's machine whose CLI the
+ * machine has, usable in the project (TER-990), the project's CLI first: its listed accounts in the list's
+ * order, then its other accounts here, then the rest. `provider` is the project's CLI (null = it names
+ * none). `suggested` is what starts without asking, and never runs another CLI than the project's
+ * (TER-1104): the project's first listed account of that CLI here with room, else the first of them even
+ * at its limit; with none listed here, the project's CLI's only account on the machine; without a project
+ * CLI, the machine's only account. Anything else (two accounts, say Claude and Codex) is the person's
+ * choice: null.
+ */
+export async function tabAgentOptions(ctx: ControlContext, project: Project, machine: Machine): Promise<{ choices: TabAgentChoice[]; suggested: string | null; provider: AgentProvider | null }> {
   const { ai, accounts } = await loadProjectAi(ctx.repos, project.id, ctx.scope.ownerId);
   const here = accounts.filter((a) => a.machine_id === machine.id && isAgentProvider(a.provider) && usableIn(a, project.id) && machine.capabilities.includes(launcher(a.provider).binary));
-  const listed = accountsOn(project.id, ai, here, machine.id);
-  const ordered = [...listed, ...here.filter((a) => !listed.includes(a))];
+  const provider = projectProvider(project.id, ai, accounts);
+  const listed = provider ? accountsOn(project.id, ai, here, machine.id, provider) : [];
+  const sameCli = provider ? here.filter((a) => a.provider === provider) : here;
+  const ordered = [...new Set([...listed, ...sameCli, ...here])];
   const choices = ordered.map((a) => ({ account_id: a.id, label: a.label, provider: a.provider, model: modelFor(ai, a.provider) }));
   let suggested: AiAccount | undefined;
   if (listed.length) suggested = (await firstWithRoom(listed, () => machine)) ?? listed[0];
-  else if (here.length === 1) suggested = here[0];
-  else {
-    const defaults = here.filter((a) => a.config_dir === null);
-    if (defaults.length === 1) suggested = defaults[0];
-  }
-  return { choices, suggested: suggested?.id ?? null };
+  else if (sameCli.length === 1) suggested = sameCli[0];
+  return { choices, suggested: suggested?.id ?? null, provider };
 }
 
 export interface StartTabAgentResult {
@@ -715,6 +729,8 @@ export interface StartTabAgentResult {
   new_tab: boolean;
   account: { id: string; label: string };
   provider: AiProvider;
+  /** the model passed to the CLI (the project's for that CLI); null = the CLI's own default (TER-1104) */
+  model: string | null;
 }
 
 /**
@@ -756,7 +772,7 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   await typeCommandLine(machine, target.tmux_session, line);
   await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
   ctx.log?.info({ tabId: target.tab_id, machineId: machine.id, provider: account.provider, newTab: target.tab_id !== tab.id }, 'tab chat: agent started');
-  return { tab_id: target.tab_id, new_tab: target.tab_id !== tab.id, account: { id: account.id, label: account.label }, provider: account.provider };
+  return { tab_id: target.tab_id, new_tab: target.tab_id !== tab.id, account: { id: account.id, label: account.label }, provider: account.provider, model: choice.model };
 }
 
 /** Why a tab started without its memory MCP: the log's code and the note's pt-BR reason (D10). */

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from '../../i18n';
 import { api, ApiError } from '../../lib/api';
 import { isNearBottom } from '../../lib/chat-scroll';
-import { availabilityText, buildRows, canType, modeLabel, stateLine } from '../../lib/tab-chat';
+import { availabilityText, buildRows, canType, modeLabel, startedAgentLine, startedAgentOf, stateLine, type StartedAgent } from '../../lib/tab-chat';
 import { useTabChat } from '../../lib/use-tab-chat';
 import { DropdownMenu, type MenuItem } from '../DropdownMenu';
 import { Modal } from '../Modal';
@@ -84,6 +84,9 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
   const { t } = useTranslation();
   const chat = useTabChat(tabId, active);
   const [screenOpen, setScreenOpen] = useState(false);
+  // What "Iniciar sessão" started this tab's agent with, here or from the tab whose pane was busy (TER-1104)
+  const [startedWith, setStartedWith] = useState<StartedAgent | null>(() => startedAgentOf(tabId));
+  useEffect(() => setStartedWith(startedAgentOf(tabId)), [tabId]);
   const working = chat.tab?.state === 'working' && !chat.tab.background;
   const rows = useMemo(() => buildRows(chat.items, working), [chat.items, working]);
   const openQuestions = chat.questions.filter((q) => q.status === 'open' || q.id === chat.answeringQuestionId || chat.questionErrors[q.id]);
@@ -184,6 +187,11 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
         </div>
       </div>
 
+      {startedWith && (
+        <div className="border-b border-line px-3 py-1 text-xs text-fg-muted" data-testid="tab-chat-agent-line">
+          {startedAgentLine(startedWith)}
+        </div>
+      )}
       {reason && (
         <div className="flex items-center gap-2 border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
           <span>{reason}</span>
@@ -215,7 +223,7 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
                   </button>
                 </div>
               )}
-              {noAgent && <TabChatStartAgent tabId={tabId} onOpenOtherTab={onOpenOtherTab} />}
+              {noAgent && <TabChatStartAgent tabId={tabId} onOpenOtherTab={onOpenOtherTab} onStarted={setStartedWith} />}
               {rows.length === 0 && chat.status === 'ready' && !reason && !noAgent && <p className="py-8 text-center text-sm text-fg-dim">{t('Nada nesta sessão ainda.')}</p>}
               <ol className="flex flex-col gap-3" aria-label={t('Conversa da aba')}>
                 {rows.map((row) => (

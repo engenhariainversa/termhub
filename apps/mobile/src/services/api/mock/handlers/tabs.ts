@@ -16,7 +16,7 @@ const TAB_NOT_FOUND = () => new WireError(404, 'NOT_FOUND', 'Aba não encontrada
 
 /** The accounts every mock machine can start an agent with (TER-1094): Claude Code is the one picked without asking. */
 const AGENT_CHOICES: TTabAgentChoice[] = [
-  { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null },
+  { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: 'opus' },
   { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null },
 ];
 
@@ -236,7 +236,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
   router.route('GET', '/api/m/v1/tabs/:id/agent', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     load(ctx.params.id!);
-    return { status: 200, body: { choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id } };
+    return { status: 200, body: { choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id, provider: 'claude' } };
   });
 
   router.route('POST', '/api/m/v1/tabs/:id/agent', (ctx) => {
@@ -256,7 +256,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
       id = `t-${randomId(6)}`;
       state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
     }
-    return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider } };
+    return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider, model: choice.model } };
   });
 
   // "Instalar hooks" (TER-1091): the machine's tabs stop being `no_hooks`; their sessions still wait for Claude.

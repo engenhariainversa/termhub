@@ -25,6 +25,7 @@ import { RawScreenSheet } from './raw-screen-sheet';
 import { SessionHeader } from './session-header';
 import { SessionMenu, type SessionMenuChoice } from './session-menu';
 import { StartAgentPanel } from './start-agent-panel';
+import { startedAgentLine } from '../model/started-agent';
 import { ThinkingRow } from './thinking-row';
 import { ToolsRow } from './tools-row';
 
@@ -100,6 +101,7 @@ export function SessionView({ tabId }: { tabId: string }) {
   const startingAgent = store((s) => s.startingAgent);
   const startAgentError = store((s) => s.startAgentError);
   const agentStarted = store((s) => s.agentStarted);
+  const startedWith = store((s) => s.startedWith);
   const { send, act, installHooks, startAgent, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -213,6 +215,12 @@ export function SessionView({ tabId }: { tabId: string }) {
       {/* The composer sits on the keyboard, the same way as the chat's (TER-1022). */}
       <KeyboardInsetView testID="session-body">
         <SessionHeader tab={tab} availability={availability} mode={mode} onBack={goBack} onMenu={() => setMenuOpen(true)} />
+        {/* With what "Iniciar sessão" started this tab's agent (TER-1104) */}
+        {startedWith ? (
+          <AppText testID="session-started-with" variant="muted" className="border-b border-app-border px-4 py-1.5 text-xs">
+            {startedAgentLine(startedWith)}
+          </AppText>
+        ) : null}
         {status === 'error' && error ? (
           <View className="px-4 pt-3">
             <Banner tone="danger" text={error} />
