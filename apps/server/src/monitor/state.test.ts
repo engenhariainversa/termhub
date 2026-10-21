@@ -222,15 +222,16 @@ describe('interpretHookEvent — codex', () => {
   it('keeps a real answer shaped like a title: the person asked for it, and the tab must say Codex finished', () => {
     const asked = { type: 'agent-turn-complete', 'thread-id': 'main', 'input-messages': ['me devolva um JSON com o título do PR'], 'last-assistant-message': '{"title":"Fix login"}' };
     expect(interpretHookEvent('codex', asked)?.text).toBe('{"title":"Fix login"}');
-    expect(interpretHookEvent('codex', { ...asked, 'input-messages': undefined })?.kind).toBe('waiting_input');
+    // a report: the turn ended, nothing asked (TER-1102)
+    expect(interpretHookEvent('codex', { ...asked, 'input-messages': undefined })?.kind).toBe('finished');
   });
 
   it('needs both signals: the title prompt as the only input, and the title-shaped answer', () => {
     // the title prompt with an ordinary answer, or among the person's own messages
     expect(interpretHookEvent('codex', { ...titleTurn, 'last-assistant-message': 'Pronto.' })?.text).toBe('Pronto.');
-    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': ['um', TITLE_PROMPT] })?.kind).toBe('waiting_input');
-    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': [TITLE_PROMPT, 'dois'] })?.kind).toBe('waiting_input');
-    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': 'not a list' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': ['um', TITLE_PROMPT] })?.kind).toBe('finished');
+    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': [TITLE_PROMPT, 'dois'] })?.kind).toBe('finished');
+    expect(interpretHookEvent('codex', { ...titleTurn, 'input-messages': 'not a list' })?.kind).toBe('finished');
   });
 
   it('keeps an answer that only looks like JSON', () => {
@@ -759,9 +760,17 @@ describe('a claude Stop that ends with a report is finished, not a wait (TER-972
     expect(i?.answer).toBeUndefined();
   });
 
-  it('Codex and Cursor turns are not classified: they still end as waits', () => {
-    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Deploy feito.' })?.kind).toBe('waiting_input');
-    expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Deploy feito.' })?.kind).toBe('waiting_input');
+  it('Codex turns are classified the same way (TER-1102): a report is finished, a question a wait', () => {
+    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Deploy feito.' })?.kind).toBe('finished');
+    expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Deploy feito.' })?.kind).toBe('finished');
+    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Feito. Rodo os testes?' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('codex', { type: 'agent-turn-complete', 'last-assistant-message': 'Não consegui rodar o build.' })?.kind).toBe('waiting_input');
+    expect(interpretHookEvent('codex', { type: 'agent-turn-complete' })?.kind).toBe('waiting_input');
+    // Claude Code's login error is Claude's own wording: on Codex it is just a wait
+    expect(interpretHookEvent('codex', { hook_event_name: 'Stop', last_assistant_message: 'Login expired · Please run /login' })?.kind).toBe('waiting_input');
+  });
+
+  it('Cursor turns are not classified: they still end as waits', () => {
     expect(interpretHookEvent('cursor', { hook_event_name: 'afterAgentResponse', text: 'Deploy feito.' })?.kind).toBe('waiting_input');
   });
 

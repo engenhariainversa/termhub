@@ -1,6 +1,13 @@
 import { act, render, screen, waitFor } from '@testing-library/react-native';
-import { DeviceEventEmitter, Dimensions, StyleSheet, Text } from 'react-native';
-import { KeyboardInsetView, keyboardOverlap, keyboardTop, useAfterKeyboardMoves } from './keyboard-inset';
+import { DeviceEventEmitter, Dimensions, Text } from 'react-native';
+import { getAnimatedStyle } from 'react-native-reanimated';
+import { KeyboardState } from './keyboard-frames';
+import { KeyboardInsetView, keyboardOverlap, keyboardTop, trackedInset, useAfterKeyboardMoves } from './keyboard-inset';
+
+const { __setKeyboardFrame: setFrame, __resetKeyboardFrame: resetFrame } = jest.requireMock('./keyboard-frames') as {
+  __setKeyboardFrame(state: KeyboardState, height: number): void;
+  __resetKeyboardFrame(): void;
+};
 
 // Host views' native methods are jest mocks shared by every view: the body is 700 pt tall, from 91 pt
 // down the screen, so its bottom sits at 791.
@@ -21,7 +28,7 @@ function emit(name: string, height: number, screenY = SCREEN - height) {
   });
 }
 
-const padding = () => StyleSheet.flatten(screen.getByTestId('body').props.style).paddingBottom;
+const padding = () => (getAnimatedStyle(screen.getByTestId('body')) as { paddingBottom: number }).paddingBottom;
 
 describe('keyboardTop / keyboardOverlap', () => {
   it('reads the keyboard top from the end frame, and nothing for a keyboard going away', () => {
@@ -36,6 +43,16 @@ describe('keyboardTop / keyboardOverlap', () => {
     expect(keyboardTop({ screenX: 0, screenY: 300, width: 320, height: 260 }, false, SCREEN)).toBeNull();
   });
 
+  it('takes the frame-by-frame height only while the keyboard closes, never above the events\' inset', () => {
+    // The body ends 40 above the window's bottom: a keyboard of 336 covers 296 of it.
+    expect(trackedInset(KeyboardState.CLOSING, 236, 800, 840, 296)).toBe(196);
+    expect(trackedInset(KeyboardState.CLOSING, 20, 800, 840, 296)).toBe(0);
+    // A stale, taller height cannot lift the composer off the keyboard.
+    expect(trackedInset(KeyboardState.CLOSING, 400, 800, 840, 296)).toBe(296);
+    expect(trackedInset(KeyboardState.OPEN, 100, 800, 840, 296)).toBe(296);
+    expect(trackedInset(KeyboardState.OPENING, 100, 800, 840, 296)).toBe(296);
+  });
+
   it('covers only what overlaps', () => {
     expect(keyboardOverlap(800, 500)).toBe(300);
     expect(keyboardOverlap(400, 500)).toBe(0);
@@ -47,7 +64,10 @@ describe('KeyboardInsetView (TER-1022)', () => {
   beforeEach(() => {
     nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, BODY_TOP, 390, BODY_BOTTOM - BODY_TOP));
   });
-  afterEach(() => nativeMethods.measureInWindow.mockReset());
+  afterEach(() => {
+    nativeMethods.measureInWindow.mockReset();
+    resetFrame();
+  });
 
   async function mount() {
     await render(
@@ -88,6 +108,35 @@ describe('KeyboardInsetView (TER-1022)', () => {
     await act(() => emit('keyboardWillHide', KEYBOARD, SCREEN));
     await act(() => pending.forEach((run) => run()));
     expect(padding()).toBe(0);
+  });
+
+  it('follows the keyboard down under the finger, where iOS sends no event, and lands on the safe area (TER-1103)', async () => {
+    await mount();
+    await act(() => setFrame(KeyboardState.OPENING, KEYBOARD));
+    await act(() => emit('keyboardWillShow', KEYBOARD));
+    await act(() => setFrame(KeyboardState.OPEN, KEYBOARD));
+    await waitFor(() => expect(padding()).toBe(KEYBOARD - 40));
+    // The thread is dragged: only Reanimated sees the keyboard move.
+    await act(() => setFrame(KeyboardState.CLOSING, KEYBOARD - 100));
+    expect(padding()).toBe(KEYBOARD - 100 - 40);
+    await act(() => setFrame(KeyboardState.CLOSING, 30));
+    expect(padding()).toBe(0);
+    await act(() => emit('keyboardWillHide', KEYBOARD, SCREEN));
+    await act(() => setFrame(KeyboardState.CLOSED, 0));
+    await waitFor(() => expect(padding()).toBe(0));
+  });
+
+  it('goes back on the whole keyboard when a drag is let go before it closes', async () => {
+    await mount();
+    await act(() => emit('keyboardWillShow', KEYBOARD + QUICKTYPE));
+    await act(() => setFrame(KeyboardState.OPEN, KEYBOARD + QUICKTYPE));
+    await waitFor(() => expect(padding()).toBe(KEYBOARD + QUICKTYPE - 40));
+    await act(() => setFrame(KeyboardState.CLOSING, 200));
+    expect(padding()).toBe(200 - 40);
+    // Let go: the keyboard slides back up and settles where the events had it.
+    await act(() => setFrame(KeyboardState.OPENING, 260));
+    await act(() => setFrame(KeyboardState.OPEN, KEYBOARD + QUICKTYPE));
+    await waitFor(() => expect(padding()).toBe(KEYBOARD + QUICKTYPE - 40));
   });
 
   it('settles on the "did" events too, on Android-like paths', async () => {

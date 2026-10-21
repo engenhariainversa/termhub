@@ -276,10 +276,16 @@ Server to phone only:
   - A `tool` with no `tool_result` yet shows as running while the tab works.
   - Pull up loads the previous page (`before`).
   - The tab's open question and permission cards at the end, with the existing components.
-  - The header shows the state ("Trabalhando · Bash", "Esperando você") and the mode.
-  - The composer of the chat, with voice and attachments. While the tab works, the send button is an
-    interrupt button. A menu holds "Limpar conversa (/clear)", "Compactar (/compact)", "Alternar modo"
-    and "Ver tela".
+  - The header shows the agent (Claude Code, Codex: `tabSummary.agent`, TER-1102), the state
+    ("Trabalhando · rodando comandos", "Esperando você", "Concluído") and the mode.
+  - While the tab works, a "pensando…" line sits under the last row (TER-1102): the running tool when
+    the history has one (Claude Code writes the call as it starts), else the tab's activity (Codex
+    writes an item only once it ends; its PreToolUse hook gives the activity), else "pensando…" alone.
+    It goes when the turn ends. Sending from the conversation marks an agent at its prompt as working,
+    as the web's input does, so the line shows before the agent's first hook.
+  - The composer of the chat, with voice and attachments. While the tab works, the empty box's button
+    interrupts; once something is typed it sends (the agent queues it, TER-1102). A menu holds "Limpar
+    conversa (/clear)", "Compactar (/compact)", "Alternar modo" (Claude Code only) and "Ver tela".
   - "Ver tela" opens a sheet with the raw screen in a monospace font, with a refresh.
   - `degraded` shows a line: "Não consegui ler parte do histórico. Use Ver tela."
 - **State**: a store per open tab (zustand, as the chat's): the first page over REST, then the socket

@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DeviceEventEmitter, Dimensions } from 'react-native';
+import { getAnimatedStyle } from 'react-native-reanimated';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
@@ -201,15 +203,61 @@ describe('the conversation', () => {
   });
 });
 
+describe('a Codex session gets the same feedback as Claude Code (TER-1102)', () => {
+  const setTab = (p: object) => act(() => current().setState({ tab: { ...current().getState().tab!, ...p } }));
+
+  it('names Codex in the header and says what it does, in words, while it works', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-agent')).toHaveTextContent('Codex');
+    expect(screen.getByText('Trabalhando · rodando comandos')).toBeTruthy();
+    expect(screen.queryByText('Padrão')).toBeNull();
+    // the commands and the edit the Codex session file recorded, folded as Claude's tools are
+    expect(screen.getByText('3 ferramentas')).toBeTruthy();
+  });
+
+  it('shows "pensando…" under the last row while it works, and drops it when the turn ends', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+    await setTab({ activity: 'coding' });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · editando arquivos');
+    // hooks not trusted: no activity, only the tab's state
+    await setTab({ activity: null });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando…');
+    await setTab({ state: 'idle', finished: true, activity: null });
+    expect(screen.queryByTestId('session-thinking')).toBeNull();
+    expect(screen.getByText('Concluído')).toBeTruthy();
+  });
+
+  it('a Claude tool running at the end of the history is named in the line', async () => {
+    await renderSession();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('executando Read · src/app.ts…');
+  });
+
+  it("an empty Codex session that already works still says so, under Codex's own empty text", async () => {
+    await renderSession('t-codex');
+    await act(() => current().setState({ items: [], emptyReason: 'new_session' }));
+    expect(screen.getByText(/sessão atual do Codex/)).toBeTruthy();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+  });
+
+  it('its menu has no "Alternar modo": that reads Claude Code\'s footer', async () => {
+    await renderSession('t-codex');
+    await fireEvent.press(screen.getByRole('button', { name: 'Mais ações' }));
+    expect(screen.queryByText('Alternar modo')).toBeNull();
+    expect(screen.getByText('Compactar (/compact)')).toBeTruthy();
+  });
+});
+
 describe('the composer', () => {
-  it('while the tab works, the send button interrupts; a long press still sends', async () => {
+  it('while the tab works, the empty box interrupts; once something is typed, ↑ sends it (TER-1102)', async () => {
     await renderSession();
     const action = jest.spyOn(stores.api, 'tabAction');
     const send = jest.spyOn(stores.api, 'sendTabMessage');
     await fireEvent.press(screen.getByRole('button', { name: 'Interromper' }));
     expect(action).toHaveBeenCalledWith(expect.anything(), 't-api', 'interrupt');
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'depois rode o lint');
-    await fireEvent(screen.getByRole('button', { name: 'Interromper' }), 'longPress');
+    expect(screen.queryByRole('button', { name: 'Interromper' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(send).toHaveBeenCalledWith(expect.anything(), 't-api', 'depois rode o lint'));
   });
 
@@ -240,6 +288,36 @@ describe('the composer', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(send).toHaveBeenCalledWith(expect.anything(), 't-api', 'olha isso\n/tmp/termhub-uploads/foto.png'));
+  });
+
+  it('sits on the keyboard and follows it down while the thread is dragged, then lands on the safe area (TER-1103)', async () => {
+    // Host views' native methods are jest mocks shared by every view: the session's body runs from
+    // 91 pt down the screen to 34 pt above its bottom (the home indicator).
+    const SCREEN = Dimensions.get('window').height;
+    const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
+    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 34 - 91));
+    const frames = jest.requireMock('@/ui/keyboard-frames') as { KeyboardState: { OPEN: number; CLOSING: number; CLOSED: number }; __setKeyboardFrame(state: number, height: number): void; __resetKeyboardFrame(): void };
+    const { OPEN, CLOSING, CLOSED } = frames.KeyboardState;
+    const keyboard = (name: string, height: number, screenY = SCREEN - height) =>
+      act(() => {
+        DeviceEventEmitter.emit(name, { duration: 0, easing: 'keyboard', startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 }, endCoordinates: { screenX: 0, screenY, width: 390, height }, isEventFromThisApp: true });
+      });
+    const padding = () => (getAnimatedStyle(screen.getByTestId('session-body')) as { paddingBottom: number }).paddingBottom;
+    try {
+      await renderSession();
+      await keyboard('keyboardWillShow', 335);
+      await act(() => frames.__setKeyboardFrame(OPEN, 335));
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      // The drag takes the keyboard down with the finger: iOS sends no event, only its frame moves.
+      await act(() => frames.__setKeyboardFrame(CLOSING, 180));
+      expect(padding()).toBe(180 - 34);
+      await keyboard('keyboardWillHide', 335, SCREEN);
+      await act(() => frames.__setKeyboardFrame(CLOSED, 0));
+      await waitFor(() => expect(padding()).toBe(0));
+    } finally {
+      nativeMethods.measureInWindow.mockReset();
+      frames.__resetKeyboardFrame();
+    }
   });
 
   it('a failed upload says so and sends nothing', async () => {

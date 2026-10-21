@@ -94,5 +94,20 @@
   "Iniciar com {{account}} ({{cli}})": "Iniciar con {{account}} ({{cli}})",
   "Iniciar sessão": "Iniciar sesión",
   "Com {{account}} ({{cli}})": "Con {{account}} ({{cli}})",
-  "Escolher outra conta": "Elegir otra cuenta"
+  "Escolher outra conta": "Elegir otra cuenta",
+  "editando arquivos": "editando archivos",
+  "lendo arquivos": "leyendo archivos",
+  "pesquisando": "investigando",
+  "planejando": "planificando",
+  "rodando comandos": "ejecutando comandos",
+  "executando {{tool}}…": "ejecutando {{tool}}…",
+  "pensando… · {{activity}}": "pensando… · {{activity}}",
+  "O Codex desta aba ainda não informou a sessão": "El Codex de esta pestaña aún no informó la sesión",
+  "O histórico aparece assim que o Codex rodar nesta aba com os hooks do termhub. Se ele já estava aberto antes dos hooks, reinicie-o (codex resume retoma a conversa); se nada mudar, reinstale os hooks em {{machine}}.": "El historial aparece en cuanto Codex se ejecute en esta pestaña con los hooks de termhub. Si ya estaba abierto antes de los hooks, reinícialo (codex resume retoma la conversación); si nada cambia, reinstala los hooks en {{machine}}.",
+  "O arquivo da sessão do Codex não foi encontrado em {{machine}}. A próxima sessão do Codex nesta aba volta a aparecer aqui.": "No se encontró el archivo de la sesión de Codex en {{machine}}. La próxima sesión de Codex en esta pestaña vuelve a aparecer aquí.",
+  "Aqui aparece a sessão atual do Codex nesta aba: uma aba nova, um /new ou um reinício do Codex começam do zero. Escreva abaixo para falar com o Codex.": "Aquí aparece la sesión actual de Codex en esta pestaña: una pestaña nueva, un /new o un reinicio de Codex empiezan de cero. Escribe abajo para hablar con Codex.",
+  "Escreva abaixo para falar com o Codex nesta aba.": "Escribe abajo para hablar con Codex en esta pestaña.",
+  "Hooks instalados. Reinicie o Codex nesta aba (codex resume retoma a conversa) para o histórico aparecer aqui.": "Hooks instalados. Reinicia Codex en esta pestaña (codex resume retoma la conversación) para que el historial aparezca aquí.",
+  "Limpar a conversa desta sessão? O Codex esquece o que foi dito até aqui.": "¿Limpiar la conversación de esta sesión? Codex olvida lo dicho hasta ahora.",
+  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o Codex nesta aba (codex resume retoma a conversa): a partir daí ela aparece aqui.": "El historial de esta pestaña viene de Codex, y son los hooks los que le dicen a termhub qué sesión leer. Instala los hooks en {{machine}} y reinicia Codex en esta pestaña (codex resume retoma la conversación): a partir de ahí aparece aquí."
 }

@@ -22,6 +22,8 @@ const readScreen = vi.fn(async (..._a: unknown[]) => ({ tab_id: 't1', lines: 30,
 vi.mock('../control/screen.js', () => ({ readScreen: (...a: unknown[]) => readScreen(...a) }));
 const saveFileOnMachine = vi.fn(async (_m: unknown, data: Buffer, name: string) => ({ path: `/home/u/.cache/termhub/paste/${name}`, name, bytes: data.length, mime: 'application/octet-stream' }));
 vi.mock('../terminal/paste-file.js', () => ({ saveFileOnMachine: (...a: unknown[]) => saveFileOnMachine(...(a as [never, Buffer, string])) }));
+const applyState = vi.fn(async (_repos: unknown, _log: unknown, tab: unknown, _tool: string, _next: unknown) => tab);
+vi.mock('../monitor/ingest.js', () => ({ applyState: (...a: unknown[]) => applyState(...(a as [never, never, never, string, never])) }));
 const agentState = { online: true, caps: ['transcript'] as string[] | null };
 vi.mock('../agent/registry.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../agent/registry.js')>();
@@ -377,6 +379,16 @@ describe('POST /tabs/:id/chat/messages', () => {
     const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'oi' } });
     expect(res.statusCode).toBe(200);
     expect(sendInput).toHaveBeenCalledWith(expect.anything(), { tab_id: 't1', text: 'oi' }, expect.objectContaining({ level: 'person_typed', surface: 'web' }));
+  });
+
+  it('an agent at its prompt works from the send on, as the web input marks it (TER-1102); a busy tab is left alone', async () => {
+    const { app } = build({ tabs: [tabRow({ state: 'finished', state_tool: 'codex' }), tabRow({ id: 't3', state: 'working' }), tabRow({ id: 't4', state: null })] });
+    expect((await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect(applyState).toHaveBeenCalledTimes(1);
+    expect(applyState).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.objectContaining({ id: 't1' }), 'codex', { kind: 'working', text: null, meta: { event: 'input', via: 'termhub' } });
+    expect((await app.inject({ method: 'POST', url: '/tabs/t3/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/tabs/t4/chat/messages', payload: { text: 'segue' } })).statusCode).toBe(200);
+    expect(applyState).toHaveBeenCalledTimes(1);
   });
 
   it('a tab waiting on a permission answers 409 WAITING_PERMISSION, pointing at the card', async () => {
