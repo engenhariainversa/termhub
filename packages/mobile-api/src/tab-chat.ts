@@ -56,6 +56,9 @@ export const tabSummary = z.object({
   availability: z.string(),
   /** the card ref ("TER-123") of the automatic run working in this tab; null = none (TER-1044, absent from an older server) */
   auto_ref: z.string().nullable().default(null),
+  /** the AI CLI the tab's hooks last reported from (`claude`, `codex`, `cursor`), read as a plain string; null = none
+   *  reported yet, or an older server (TER-1102) */
+  agent: z.string().nullable().default(null),
 });
 export type TTabSummary = z.infer<typeof tabSummary>;
 
