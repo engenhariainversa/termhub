@@ -8,6 +8,9 @@ import {
   autoAnswerSeconds,
   choiceAnswerDescription,
   choiceAnswerLabel,
+  compactQuestionLine,
+  compactQuestionOutcome,
+  compactQuestionSubject,
   formatCountdown,
   isNoteSuggestion,
   pausedAutoAnswerSeconds,
@@ -149,5 +152,24 @@ describe('Codex titles', () => {
     expect(permissionTitle(q('permission', 'codex'))).toBe('A aba «api» pede permissão (o Codex)');
     expect(permissionTitle({ ...q('permission', 'codex'), tab_name: null } as TabQuestion)).toBe('Uma aba pede permissão (o Codex)');
     expect(permissionTitle(q('permission'))).toBe('A aba «api» pede permissão para usar «Bash»');
+  });
+});
+
+describe('compact line of a settled card (TER-1108)', () => {
+  it('names the tab, the tool and how a permission ended', () => {
+    expect(compactQuestionLine(permission({ status: 'answered_in_tab', tab_name: 'codex · ChatGPT' }))).toBe('«codex · ChatGPT» · Bash · respondida na aba');
+    expect(compactQuestionLine(permission({ status: 'answered', answer: { allow: true } }))).toBe('«api» · Bash · permitida');
+    expect(compactQuestionLine(permission({ status: 'answered', answer: { allow: false, text: 'não' } }))).toBe('«api» · Bash · negada');
+    expect(compactQuestionLine(permission({ status: 'expired' }))).toBe('«api» · Bash · expirada');
+    expect(compactQuestionLine(permission({ status: 'failed', error_code: 'MACHINE_OFFLINE' }))).toBe('«api» · Bash · falhou');
+  });
+  it('a choice card shows its first question, cut, and counts the others; a gone tab reads as "Uma aba"', () => {
+    expect(compactQuestionLine(choice({ status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] } }))).toBe('«api» · Qual cor? +1 outra · respondida');
+    const long = 'Qual destas opções você prefere para a configuração do ambiente de testes do projeto?';
+    expect(compactQuestionSubject(choice({ payload: { questions: [{ question: long, header: '', multi_select: false, options: [] }] } } as Partial<TabQuestion>))).toBe(`${long.slice(0, 60)}…`);
+    expect(compactQuestionLine(choice({ status: 'answered_in_tab', tab_name: null }))).toBe('Uma aba · Qual cor? +1 outra · respondida na aba');
+  });
+  it('an open card has no outcome yet', () => {
+    expect(compactQuestionOutcome(permission())).toBe('');
   });
 });

@@ -702,7 +702,9 @@ it('shows a tab question from GET /chat and answers it with one click', async ()
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Permitir' }));
   await waitFor(() => expect(answerMock).toHaveBeenCalledWith('q1', { allow: true }));
-  expect(await screen.findByText('Respondida')).toBeInTheDocument();
+  // Answered, the card folds into one neutral line by itself (TER-1108).
+  expect(await screen.findByText('«api» · Bash · permitida')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
   expect(screenMock).toHaveBeenCalledWith('q1');
 });
 
@@ -799,7 +801,8 @@ it('tab question events add and update the card; another conversation\'s are ign
   onEvent({ type: 'tab_question', conversation_id: 'c_p1', question: question({ id: 'q1' }) });
   expect(await screen.findByText('A aba «api» pede permissão para usar «Bash»')).toBeInTheDocument();
   onEvent({ type: 'tab_question_closed', conversation_id: 'c_p1', question: question({ id: 'q1', status: 'answered_in_tab' }) });
-  expect(await screen.findByText('Respondida na aba')).toBeInTheDocument();
+  // Closed in the tab, the card folds into one line (TER-1108).
+  expect(await screen.findByText('«api» · Bash · respondida na aba')).toBeInTheDocument();
 });
 
 const suggestion = (over: Partial<TabSuggestion> & { id: string }): TabSuggestion => ({ tab_id: 't1', tab_name: 'api', kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', answer: null, error_code: null, created_at: '2026-09-21T00:00:00.000Z', answered_at: null, closed_at: null, ...over });

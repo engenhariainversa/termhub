@@ -9,13 +9,14 @@ import { activeGrantIndex } from '../model/grant-time';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
-import { chatTimeline, groupPendingActions, groupSettledActions, type ChatEntry } from '../model/timeline';
-import type { ChatAction, ChatMessage, ChatStandingGrant } from '../model/types';
+import { chatTimeline, groupPendingActions, groupSettledActions, groupSettledQuestions, type ChatEntry } from '../model/timeline';
+import type { ChatAction, ChatMessage, ChatStandingGrant, TabQuestion } from '../model/types';
 import type { ChatDecision } from '../viewmodel/createChatStore';
 import { useChatStore } from '../viewmodel/useChatStore';
 import { ActionCard } from './action-card';
 import { ActionGroupCard } from './action-group-card';
 import { ActionTrailCard } from './action-trail-card';
+import { QuestionTrailCard } from './question-trail-card';
 import { Composer } from './composer';
 import { ContextMeter } from './context-meter';
 import { HostLine } from './host-line';
@@ -64,13 +65,17 @@ const entryKey = (entry: ChatEntry) =>
           ? `s:${entry.suggestion.id}`
           : entry.kind === 'tab_limit'
             ? `l:${entry.limit.id}`
-            : `q:${entry.question.id}`;
+            : // A tab card and the run's accordion it folds into share the first card's key (TER-1108), as above.
+              entry.kind === 'question_trail'
+              ? `q:${entry.questions[0]!.id}`
+              : `q:${entry.question.id}`;
 
 /** Whether `entry` is the card of the action or question `id` — a group holds several actions. */
 const holds = (entry: ChatEntry, id: string): boolean =>
   (entry.kind === 'action' && entry.action.id === id) ||
   ((entry.kind === 'action_group' || entry.kind === 'action_trail') && entry.actions.some((a) => a.id === id)) ||
-  (entry.kind === 'tab_question' && entry.question.id === id);
+  (entry.kind === 'tab_question' && entry.question.id === id) ||
+  (entry.kind === 'question_trail' && entry.questions.some((q) => q.id === id));
 
 /** How long the thread waits, after an approximate scroll, to retry a jump to a row not measured yet. */
 const JUMP_RETRY_MS = 300;
@@ -232,8 +237,9 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
     .join(',');
   useEffect(() => setSeparate(false), [pendingKey]);
   // Newest first, for the inverted list that keeps the thread pinned to its end. A turn's settled cards
-  // fold into one accordion above its answer (TER-1024); pending ones never do.
-  const entries = useMemo(() => groupSettledActions(separate ? timeline : groupPendingActions(timeline)).slice().reverse(), [separate, timeline]);
+  // fold into one accordion above its answer (TER-1024), and a run of settled tab cards into another
+  // (TER-1108); pending ones never do.
+  const entries = useMemo(() => groupSettledQuestions(groupSettledActions(separate ? timeline : groupPendingActions(timeline))).slice().reverse(), [separate, timeline]);
   // The pending bar's jump (TER-477): scrolls the thread to the row that holds the card. A row far
   // up the list may not be measured yet: `onScrollToIndexFailed` scrolls to its estimated offset,
   // which renders it, then tries once more.
@@ -342,6 +348,23 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
     ),
     [onReplyCard, decidingId, onDecide, grantIndex, projectGrantIndex, standingGrantIndex, revokingId, onRevoke, onRepropose],
   );
+  /** One tab card, alone in the thread or inside a run's accordion (TER-1108). */
+  const renderQuestion = useCallback(
+    (question: TabQuestion) => (
+      <SwipeToReply onReply={() => onReplyCard({ kind: 'tab_question', question })}>
+        <TabQuestionCard
+          question={question}
+          busy={answeringQuestionIds.includes(question.id)}
+          error={questionErrors[question.id] ?? null}
+          onAnswer={onAnswer}
+          loadScreen={loadTabQuestionScreen}
+          onForget={onForget}
+          onCancelAutoAnswer={onCancelAutoAnswer}
+        />
+      </SwipeToReply>
+    ),
+    [onReplyCard, answeringQuestionIds, questionErrors, onAnswer, loadTabQuestionScreen, onForget, onCancelAutoAnswer],
+  );
   const renderItem = useCallback(
     ({ item }: { item: ChatEntry }) =>
       item.kind === 'tab_suggestion' ? (
@@ -355,17 +378,9 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
       ) : item.kind === 'tab_limit' ? (
         <TabLimitCard limit={item.limit} busy={busyLimitIds.includes(item.limit.id)} error={limitErrors[item.limit.id] ?? null} onAnswer={onAnswerLimit} />
       ) : item.kind === 'tab_question' ? (
-        <SwipeToReply onReply={() => onReplyCard({ kind: 'tab_question', question: item.question })}>
-          <TabQuestionCard
-            question={item.question}
-            busy={answeringQuestionIds.includes(item.question.id)}
-            error={questionErrors[item.question.id] ?? null}
-            onAnswer={onAnswer}
-            loadScreen={loadTabQuestionScreen}
-            onForget={onForget}
-            onCancelAutoAnswer={onCancelAutoAnswer}
-          />
-        </SwipeToReply>
+        renderQuestion(item.question)
+      ) : item.kind === 'question_trail' ? (
+        <QuestionTrailCard questions={item.questions} renderQuestion={renderQuestion} />
       ) : item.kind === 'message' ? (
         <MessageRow message={item.message} onReply={onReply} onOpenReply={onOpenReply} highlighted={highlightId === item.message.id} />
       ) : item.kind === 'action_group' ? (
@@ -403,6 +418,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
       onRepropose,
       onSendSuggestion,
       renderAction,
+      renderQuestion,
       revokingId,
     ],
   );

@@ -663,15 +663,30 @@ describe('Conversa', () => {
   });
 
   it.each([
-    [{ ...OPEN_CHOICE, status: 'answered', answer: { answers: [{ selected: [1] }] } } as TTabQuestion, ['Qual banco usamos nos testes? → SQLite', 'Respondida']],
-    [{ ...OPEN_PERMISSION, status: 'answered_in_tab' } as TTabQuestion, ['Respondida na aba']],
-    [{ ...OPEN_PERMISSION, status: 'expired' } as TTabQuestion, ['Expirada']],
-    [{ ...OPEN_PERMISSION, status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as TTabQuestion, ['Permitido', 'Falhou — a máquina está offline']],
-  ])('a closed tab question is read-only and says how it ended (%#)', async (q, texts) => {
+    [{ ...OPEN_CHOICE, id: 'closed-0', status: 'answered', answer: { answers: [{ selected: [1] }] } } as TTabQuestion, '«api» · Qual banco usamos nos testes? · respondida', ['Qual banco usamos nos testes? → SQLite', 'Respondida']],
+    [{ ...OPEN_PERMISSION, id: 'closed-1', status: 'answered_in_tab' } as TTabQuestion, '«api» · Bash · respondida na aba', ['Respondida na aba']],
+    [{ ...OPEN_PERMISSION, id: 'closed-2', status: 'expired' } as TTabQuestion, '«api» · Bash · expirada', ['Expirada']],
+    [{ ...OPEN_PERMISSION, id: 'closed-3', status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as TTabQuestion, '«api» · Bash · falhou', ['Permitido', 'Falhou — a máquina está offline']],
+  ])('a closed tab question is one compact line, read-only, and opens to say how it ended (%#)', async (q, line, texts) => {
     serveQuestions([q]);
     await render(<ConversationScreen />);
-    for (const t of texts) expect(await screen.findByText(t, undefined, LOAD)).toBeTruthy();
+    // Folded into one neutral line (TER-1108); the whole card is behind the tap.
+    expect(await screen.findByText(line, undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
+    for (const t of texts) expect(screen.getByText(t)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Responder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+  });
+
+  it('consecutive settled tab cards fold into one accordion, closed by default, and open to their lines (TER-1108)', async () => {
+    const codex = (id: string, n: number) => ({ ...OPEN_PERMISSION, id, tab_name: 'codex · ChatGPT', status: 'answered_in_tab', payload: { tool_name: 'Bash', agent: 'codex', question: `Posso rodar o passo ${n}?` }, created_at: new Date(Date.now() + n * 1000).toISOString() }) as TTabQuestion;
+    serveQuestions([codex('cx-1', 1), codex('cx-2', 2), codex('cx-3', 3), codex('cx-4', 4)]);
+    await render(<ConversationScreen />);
+    const toggle = await screen.findByRole('button', { name: '4 permissões do Codex respondidas na aba' }, LOAD);
+    expect(screen.queryByText('«codex · ChatGPT» · Bash · respondida na aba')).toBeNull();
+    await fireEvent.press(toggle);
+    expect(screen.getAllByText('«codex · ChatGPT» · Bash · respondida na aba')).toHaveLength(4);
+    expect(screen.queryByText('Posso rodar o passo 1?')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
   });
 
