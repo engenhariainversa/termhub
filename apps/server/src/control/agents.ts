@@ -642,7 +642,7 @@ export async function startAgent(
     ...(model !== null && account.provider === 'claude' && !isAlias(model)
       ? { warning: `O modelo ${model} não é um apelido (${CLAUDE_MODEL_ALIAS_LIST}): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.` }
       : {}),
-    note: `O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
+    note: `O agente está subindo com o prompt. Para saber quando ele terminar ou parar, use watch (kind tab) no chat — ou wait_for_state fora dele —, e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
   };
 }
 

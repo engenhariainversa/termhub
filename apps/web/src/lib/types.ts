@@ -1399,6 +1399,24 @@ export interface SubagentView {
 }
 
 /**
+ * One watch the concierge keeps for the chat (TER-1099, "me avise quando…"), as `GET /api/chat` and the
+ * `watches` event send it. `kind` and `events` are plain strings: a value a newer server adds must still
+ * render. `label` is the target's own name and `note` the concierge's: data, never translated.
+ */
+export interface ChatWatch {
+  id: string;
+  kind: string;
+  target_id: string | null;
+  label: string;
+  events: string[];
+  recurring: boolean;
+  note: string;
+  created_at: string;
+  expires_at: string;
+  fire_count: number;
+}
+
+/**
  * A "Permitir sempre nesta aba" grant, as the server enriches it: `tab_name` is the tab's name at
  * read time, or null once the tab is gone — the card and the strip still name it plainly either way.
  */
@@ -1833,6 +1851,8 @@ export type ChatEvent =
   | { type: 'subagent_cancel_failed'; subagent_id: string; conversation_id?: string }
   /** How full the session is now, after an answer or a compaction (TER-315). */
   | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
+  /** The conversation's open watches changed (TER-1099): the whole list, which replaces the screen's. */
+  | { type: 'watches'; watches: ChatWatch[]; conversation_id?: string }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 

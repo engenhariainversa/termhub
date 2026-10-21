@@ -521,6 +521,37 @@ kind: a download on the web, the share sheet on iOS (photo library, Files) and t
   above and are not overridden; `FILE_SHARE_LIMIT` lifts as the 24 h window moves; `ATTACHMENT_QUOTA` means
   the person's attachment space is full.
 
+## 9e. "Me avise quando…": the concierge's watches (TER-1099)
+
+The concierge no longer follows a tab, a PR or a deploy with a background subagent that waits (it died at
+every restart and spent tokens waiting). It calls the MCP tool `watch`, and the server wakes the
+conversation when the event happens, with a turn that starts with "Automático:" and carries the event
+(ids, URLs, state, version) and the concierge's own note.
+
+- **What can be watched** (`kind`): `tab` (its stops: `finished`, `waiting_input`, `waiting_permission`,
+  `idle`, `error`, `blocked`, `auth_required`, `trust_prompt`, `waiting_background`, and `gone` when it is
+  closed or its session ended); `card` (`moved`, optionally `to` a category; `gone`); `pr` (by card or by
+  URL: `opened`, `merged`, `closed`, `ci_failed`, `ci_passed`, `deploy_ok`, `deploy_failed`, `release_ok` and
+  `release_failed` with the release's version — agent, OTA, store workflows; needs the project's GitHub
+  integration, the same data as the CI panel); `machine` (`online`, `offline` after 3 minutes, `gone`);
+  `agent_release` (a `@termhub/agent` at or above a version is on npm, checked at most every 2 minutes).
+- **How it holds up.** Watches (`chat_watches`) and what they caught (`chat_watch_fires`) are in the
+  database. Every 20 s each colour compares the watched targets with the state the watch started from (a
+  tab is read from its persisted state events), so an event that happened during a restart or a deploy is
+  caught by the next process's first sweep. Tab and agent changes are checked at once. A fire is written
+  once per event (unique `(watch_id, event_key)`, and the watch row decides who fires), and delivered under
+  a claim; a delivery that cannot start (the chat's machine is away) is retried with a growing pause and
+  dropped after 24 h. A conversation in the middle of a turn gets the wake injected or queued for its next
+  turn. A draining colour neither fires nor delivers.
+- **Limits.** 30 open watches per chat (person + project); validity 24 h by default, 7 days at most, and
+  the chat is told once when one expires; a recurring watch fires at most every 10 minutes; at most 12 wakes
+  per chat per hour (fires that wait are delivered together in the next one).
+- **Where the person sees them.** The chat (web and app) lists the open ones under "Acompanhando", with
+  Cancelar; the concierge has `list_watches` and `cancel_watch`. Closed watches are purged after 30 days.
+- **Checking one.** `chat_watches.status` is `open`, `done`, `cancelled`, `expired` or `gone`;
+  `chat_watch_fires.delivered_at` null with `dropped_at` null is still to be delivered. Logs carry ids and
+  event names only (`chat watch fired`, `chat watches: delivered`, `chat watches: delivery failed`).
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no

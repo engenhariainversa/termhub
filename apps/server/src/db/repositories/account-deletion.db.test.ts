@@ -71,6 +71,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     await db.chatDefaultRestriction.create({ data: { userId, kind: 'close_tab' } });
     // TER-1081: a command rule of run_command (cascades with the user).
     await db.chatCommandRule.create({ data: { id: newId(), userId, projectId, words: ['git', 'status'], match: 'exact', machineIds: [], conversationId } });
+    // TER-1099: a watch and one event it caught (the watch cascades with the user, the fire with the watch).
+    const watchId = newId();
+    await db.chatWatch.create({ data: { id: watchId, userId, projectId, conversationId, kind: 'tab', targetId: 't1', params: { events: ['finished'] }, baseline: {}, label: 'api', note: 'avisar', expiresAt: new Date(Date.now() + 3600_000) } });
+    await db.chatWatchFire.create({ data: { id: newId(), watchId, userId, projectId, eventKey: 'tab:e1', event: 'finished', payload: {} } });
     // TER-1086: a trusted folder for share_file (cascades with the user and the machine).
     await db.chatFileGrant.create({ data: { id: newId(), userId, machineId, folder: '~/fotos', conversationId } });
     await db.chatDecision.create({

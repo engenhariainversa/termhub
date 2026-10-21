@@ -133,6 +133,8 @@ function build(opts: {
       stateForUser: vi.fn(async () => ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab'].map((kind) => ({ kind, allowed: kind !== 'terminal' }))),
       setAllowed: vi.fn(async () => {}),
     },
+    // Watches (TER-1099): none by default.
+    chatWatches: { listOpen: vi.fn(async () => []), cancel: vi.fn(async (): Promise<unknown> => null) },
     // ...and then to standing grants (TER-386): by default none matches either.
     chatStandingGrants: {
       grant: vi.fn(async (input: { user_id: string; project_id: string; kind: string; conversation_id: string | null; source_action_id: string | null }) => ({ id: 'sg1', ...input, created_at: '2026-09-28T10:00:00.000Z', revoked_at: null, revoked_by: null })),

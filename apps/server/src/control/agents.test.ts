@@ -123,7 +123,7 @@ beforeEach(() => {
   cfg.mcpUrl = null;
 });
 
-const NOTE = 'O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat.';
+const NOTE = 'O agente está subindo com o prompt. Para saber quando ele terminar ou parar, use watch (kind tab) no chat — ou wait_for_state fora dele —, e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat.';
 const MCP_URL = 'https://termhub.dev/mcp';
 /** The fixed deny list as typed (TER-968): every rule single-quoted. */
 const DENY = `--disallowedTools ${AUTOMATION_DENIED_TOOLS.map((t) => `'${t}'`).join(' ')}`;

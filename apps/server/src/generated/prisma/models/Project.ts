@@ -300,6 +300,7 @@ export type ProjectWhereInput = {
   pullRequests?: Prisma.TaskPullRequestListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
   chatCommandRules?: Prisma.ChatCommandRuleListRelationFilter
+  chatWatches?: Prisma.ChatWatchListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
@@ -341,6 +342,7 @@ export type ProjectOrderByWithRelationInput = {
   pullRequests?: Prisma.TaskPullRequestOrderByRelationAggregateInput
   standingGrants?: Prisma.ChatStandingGrantOrderByRelationAggregateInput
   chatCommandRules?: Prisma.ChatCommandRuleOrderByRelationAggregateInput
+  chatWatches?: Prisma.ChatWatchOrderByRelationAggregateInput
   automationEvents?: Prisma.AutomationEventOrderByRelationAggregateInput
   automationRuns?: Prisma.AutomationRunOrderByRelationAggregateInput
   tabUsageDays?: Prisma.TabUsageDayOrderByRelationAggregateInput
@@ -385,6 +387,7 @@ export type ProjectWhereUniqueInput = Prisma.AtLeast<{
   pullRequests?: Prisma.TaskPullRequestListRelationFilter
   standingGrants?: Prisma.ChatStandingGrantListRelationFilter
   chatCommandRules?: Prisma.ChatCommandRuleListRelationFilter
+  chatWatches?: Prisma.ChatWatchListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
@@ -464,6 +467,7 @@ export type ProjectCreateInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -503,6 +507,7 @@ export type ProjectUncheckedCreateInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -542,6 +547,7 @@ export type ProjectUpdateInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -581,6 +587,7 @@ export type ProjectUncheckedUpdateInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -1042,6 +1049,22 @@ export type ProjectUpdateOneWithoutChatCommandRulesNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutChatCommandRulesInput, Prisma.ProjectUpdateWithoutChatCommandRulesInput>, Prisma.ProjectUncheckedUpdateWithoutChatCommandRulesInput>
 }
 
+export type ProjectCreateNestedOneWithoutChatWatchesInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutChatWatchesInput, Prisma.ProjectUncheckedCreateWithoutChatWatchesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutChatWatchesInput
+  connect?: Prisma.ProjectWhereUniqueInput
+}
+
+export type ProjectUpdateOneWithoutChatWatchesNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutChatWatchesInput, Prisma.ProjectUncheckedCreateWithoutChatWatchesInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutChatWatchesInput
+  upsert?: Prisma.ProjectUpsertWithoutChatWatchesInput
+  disconnect?: Prisma.ProjectWhereInput | boolean
+  delete?: Prisma.ProjectWhereInput | boolean
+  connect?: Prisma.ProjectWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutChatWatchesInput, Prisma.ProjectUpdateWithoutChatWatchesInput>, Prisma.ProjectUncheckedUpdateWithoutChatWatchesInput>
+}
+
 export type ProjectCreateNestedOneWithoutTabLimitNoticesInput = {
   create?: Prisma.XOR<Prisma.ProjectCreateWithoutTabLimitNoticesInput, Prisma.ProjectUncheckedCreateWithoutTabLimitNoticesInput>
   connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutTabLimitNoticesInput
@@ -1163,6 +1186,7 @@ export type ProjectCreateWithoutOwnerInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1201,6 +1225,7 @@ export type ProjectUncheckedCreateWithoutOwnerInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -1284,6 +1309,7 @@ export type ProjectCreateWithoutMachinesInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1322,6 +1348,7 @@ export type ProjectUncheckedCreateWithoutMachinesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -1376,6 +1403,7 @@ export type ProjectUpdateWithoutMachinesInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -1414,6 +1442,7 @@ export type ProjectUncheckedUpdateWithoutMachinesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -1452,6 +1481,7 @@ export type ProjectCreateWithoutRepositoriesInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1490,6 +1520,7 @@ export type ProjectUncheckedCreateWithoutRepositoriesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -1544,6 +1575,7 @@ export type ProjectUpdateWithoutRepositoriesInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -1582,6 +1614,7 @@ export type ProjectUncheckedUpdateWithoutRepositoriesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -1620,6 +1653,7 @@ export type ProjectCreateWithoutTabsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1658,6 +1692,7 @@ export type ProjectUncheckedCreateWithoutTabsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -1712,6 +1747,7 @@ export type ProjectUpdateWithoutTabsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -1750,6 +1786,7 @@ export type ProjectUncheckedUpdateWithoutTabsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -1788,6 +1825,7 @@ export type ProjectCreateWithoutTicketsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1826,6 +1864,7 @@ export type ProjectUncheckedCreateWithoutTicketsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -1880,6 +1919,7 @@ export type ProjectUpdateWithoutTicketsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -1918,6 +1958,7 @@ export type ProjectUncheckedUpdateWithoutTicketsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -1956,6 +1997,7 @@ export type ProjectCreateWithoutColumnsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -1994,6 +2036,7 @@ export type ProjectUncheckedCreateWithoutColumnsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -2037,6 +2080,7 @@ export type ProjectCreateWithoutAgentColumnInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -2075,6 +2119,7 @@ export type ProjectUncheckedCreateWithoutAgentColumnInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -2134,6 +2179,7 @@ export type ProjectUpdateWithoutColumnsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -2172,6 +2218,7 @@ export type ProjectUncheckedUpdateWithoutColumnsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -2226,6 +2273,7 @@ export type ProjectCreateWithoutTasksInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -2264,6 +2312,7 @@ export type ProjectUncheckedCreateWithoutTasksInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -2318,6 +2367,7 @@ export type ProjectUpdateWithoutTasksInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -2356,6 +2406,7 @@ export type ProjectUncheckedUpdateWithoutTasksInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -2394,6 +2445,7 @@ export type ProjectCreateWithoutPullRequestsInput = {
   columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -2432,6 +2484,7 @@ export type ProjectUncheckedCreateWithoutPullRequestsInput = {
   columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -2486,6 +2539,7 @@ export type ProjectUpdateWithoutPullRequestsInput = {
   columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -2524,6 +2578,7 @@ export type ProjectUncheckedUpdateWithoutPullRequestsInput = {
   columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -2563,6 +2618,7 @@ export type ProjectCreateWithoutAutomationEventsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2601,6 +2657,7 @@ export type ProjectUncheckedCreateWithoutAutomationEventsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2655,6 +2712,7 @@ export type ProjectUpdateWithoutAutomationEventsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2693,6 +2751,7 @@ export type ProjectUncheckedUpdateWithoutAutomationEventsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2731,6 +2790,7 @@ export type ProjectCreateWithoutAutomationRunsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2769,6 +2829,7 @@ export type ProjectUncheckedCreateWithoutAutomationRunsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2823,6 +2884,7 @@ export type ProjectUpdateWithoutAutomationRunsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2861,6 +2923,7 @@ export type ProjectUncheckedUpdateWithoutAutomationRunsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2899,6 +2962,7 @@ export type ProjectCreateWithoutTabUsageDaysInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2937,6 +3001,7 @@ export type ProjectUncheckedCreateWithoutTabUsageDaysInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2991,6 +3056,7 @@ export type ProjectUpdateWithoutTabUsageDaysInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -3029,6 +3095,7 @@ export type ProjectUncheckedUpdateWithoutTabUsageDaysInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -3067,6 +3134,7 @@ export type ProjectCreateWithoutAiMemoryPagesInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3105,6 +3173,7 @@ export type ProjectUncheckedCreateWithoutAiMemoryPagesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3159,6 +3228,7 @@ export type ProjectUpdateWithoutAiMemoryPagesInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -3197,6 +3267,7 @@ export type ProjectUncheckedUpdateWithoutAiMemoryPagesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -3234,6 +3305,7 @@ export type ProjectCreateWithoutNoteInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3272,6 +3344,7 @@ export type ProjectUncheckedCreateWithoutNoteInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3326,6 +3399,7 @@ export type ProjectUpdateWithoutNoteInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -3364,6 +3438,7 @@ export type ProjectUncheckedUpdateWithoutNoteInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -3402,6 +3477,7 @@ export type ProjectCreateWithoutSetupInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3440,6 +3516,7 @@ export type ProjectUncheckedCreateWithoutSetupInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3494,6 +3571,7 @@ export type ProjectUpdateWithoutSetupInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -3532,6 +3610,7 @@ export type ProjectUncheckedUpdateWithoutSetupInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -3571,6 +3650,7 @@ export type ProjectCreateWithoutExclusiveAiAccountsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3609,6 +3689,7 @@ export type ProjectUncheckedCreateWithoutExclusiveAiAccountsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3663,6 +3744,7 @@ export type ProjectUpdateWithoutExclusiveAiAccountsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -3701,6 +3783,7 @@ export type ProjectUncheckedUpdateWithoutExclusiveAiAccountsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -3738,6 +3821,7 @@ export type ProjectCreateWithoutChatConversationsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3776,6 +3860,7 @@ export type ProjectUncheckedCreateWithoutChatConversationsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3830,6 +3915,7 @@ export type ProjectUpdateWithoutChatConversationsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -3868,6 +3954,7 @@ export type ProjectUncheckedUpdateWithoutChatConversationsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -3906,6 +3993,7 @@ export type ProjectCreateWithoutStandingGrantsInput = {
   columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -3944,6 +4032,7 @@ export type ProjectUncheckedCreateWithoutStandingGrantsInput = {
   columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -3998,6 +4087,7 @@ export type ProjectUpdateWithoutStandingGrantsInput = {
   columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4036,6 +4126,7 @@ export type ProjectUncheckedUpdateWithoutStandingGrantsInput = {
   columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4074,6 +4165,7 @@ export type ProjectCreateWithoutChatCommandRulesInput = {
   columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4112,6 +4204,7 @@ export type ProjectUncheckedCreateWithoutChatCommandRulesInput = {
   columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -4166,6 +4259,7 @@ export type ProjectUpdateWithoutChatCommandRulesInput = {
   columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4204,6 +4298,179 @@ export type ProjectUncheckedUpdateWithoutChatCommandRulesInput = {
   columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
+}
+
+export type ProjectCreateWithoutChatWatchesInput = {
+  id: string
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  aiMemoryLessons?: boolean
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutProjectsInput
+  machines?: Prisma.ProjectMachineCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
+  tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutProjectInput
+  memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutProjectInput
+  agentColumn?: Prisma.TaskColumnCreateNestedOneWithoutAgentForInput
+  columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
+}
+
+export type ProjectUncheckedCreateWithoutChatWatchesInput = {
+  id: string
+  ownerId?: string | null
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  agentColumnId?: string | null
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  aiMemoryLessons?: boolean
+  createdAt?: Date | string
+  machines?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
+  tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutProjectInput
+  columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
+}
+
+export type ProjectCreateOrConnectWithoutChatWatchesInput = {
+  where: Prisma.ProjectWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutChatWatchesInput, Prisma.ProjectUncheckedCreateWithoutChatWatchesInput>
+}
+
+export type ProjectUpsertWithoutChatWatchesInput = {
+  update: Prisma.XOR<Prisma.ProjectUpdateWithoutChatWatchesInput, Prisma.ProjectUncheckedUpdateWithoutChatWatchesInput>
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutChatWatchesInput, Prisma.ProjectUncheckedCreateWithoutChatWatchesInput>
+  where?: Prisma.ProjectWhereInput
+}
+
+export type ProjectUpdateToOneWithWhereWithoutChatWatchesInput = {
+  where?: Prisma.ProjectWhereInput
+  data: Prisma.XOR<Prisma.ProjectUpdateWithoutChatWatchesInput, Prisma.ProjectUncheckedUpdateWithoutChatWatchesInput>
+}
+
+export type ProjectUpdateWithoutChatWatchesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  aiMemoryLessons?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutProjectsNestedInput
+  machines?: Prisma.ProjectMachineUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
+  tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutProjectNestedInput
+  memoryRules?: Prisma.MemoryRuleUpdateManyWithoutProjectNestedInput
+  agentColumn?: Prisma.TaskColumnUpdateOneWithoutAgentForNestedInput
+  columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
+}
+
+export type ProjectUncheckedUpdateWithoutChatWatchesInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  agentColumnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  aiMemoryLessons?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machines?: Prisma.ProjectMachineUncheckedUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
+  tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutProjectNestedInput
+  columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4242,6 +4509,7 @@ export type ProjectCreateWithoutTabLimitNoticesInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4280,6 +4548,7 @@ export type ProjectUncheckedCreateWithoutTabLimitNoticesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -4334,6 +4603,7 @@ export type ProjectUpdateWithoutTabLimitNoticesInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4372,6 +4642,7 @@ export type ProjectUncheckedUpdateWithoutTabLimitNoticesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4410,6 +4681,7 @@ export type ProjectCreateWithoutTabQuestionsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4448,6 +4720,7 @@ export type ProjectUncheckedCreateWithoutTabQuestionsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -4502,6 +4775,7 @@ export type ProjectUpdateWithoutTabQuestionsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4540,6 +4814,7 @@ export type ProjectUncheckedUpdateWithoutTabQuestionsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4578,6 +4853,7 @@ export type ProjectCreateWithoutChatDecisionsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4616,6 +4892,7 @@ export type ProjectUncheckedCreateWithoutChatDecisionsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -4670,6 +4947,7 @@ export type ProjectUpdateWithoutChatDecisionsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4708,6 +4986,7 @@ export type ProjectUncheckedUpdateWithoutChatDecisionsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4746,6 +5025,7 @@ export type ProjectCreateWithoutMemoryItemsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4784,6 +5064,7 @@ export type ProjectUncheckedCreateWithoutMemoryItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -4838,6 +5119,7 @@ export type ProjectUpdateWithoutMemoryItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -4876,6 +5158,7 @@ export type ProjectUncheckedUpdateWithoutMemoryItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -4914,6 +5197,7 @@ export type ProjectCreateWithoutMemoryRulesInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -4952,6 +5236,7 @@ export type ProjectUncheckedCreateWithoutMemoryRulesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -5006,6 +5291,7 @@ export type ProjectUpdateWithoutMemoryRulesInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -5044,6 +5330,7 @@ export type ProjectUncheckedUpdateWithoutMemoryRulesInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -5082,6 +5369,7 @@ export type ProjectCreateWithoutGroupItemsInput = {
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
@@ -5120,6 +5408,7 @@ export type ProjectUncheckedCreateWithoutGroupItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
@@ -5174,6 +5463,7 @@ export type ProjectUpdateWithoutGroupItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -5212,6 +5502,7 @@ export type ProjectUncheckedUpdateWithoutGroupItemsInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -5265,6 +5556,7 @@ export type ProjectUpdateWithoutOwnerInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -5303,6 +5595,7 @@ export type ProjectUncheckedUpdateWithoutOwnerInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -5371,6 +5664,7 @@ export type ProjectUpdateWithoutAgentColumnInput = {
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
@@ -5409,6 +5703,7 @@ export type ProjectUncheckedUpdateWithoutAgentColumnInput = {
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
   standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
@@ -5453,6 +5748,7 @@ export type ProjectCountOutputType = {
   pullRequests: number
   standingGrants: number
   chatCommandRules: number
+  chatWatches: number
   automationEvents: number
   automationRuns: number
   tabUsageDays: number
@@ -5477,6 +5773,7 @@ export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extension
   pullRequests?: boolean | ProjectCountOutputTypeCountPullRequestsArgs
   standingGrants?: boolean | ProjectCountOutputTypeCountStandingGrantsArgs
   chatCommandRules?: boolean | ProjectCountOutputTypeCountChatCommandRulesArgs
+  chatWatches?: boolean | ProjectCountOutputTypeCountChatWatchesArgs
   automationEvents?: boolean | ProjectCountOutputTypeCountAutomationEventsArgs
   automationRuns?: boolean | ProjectCountOutputTypeCountAutomationRunsArgs
   tabUsageDays?: boolean | ProjectCountOutputTypeCountTabUsageDaysArgs
@@ -5609,6 +5906,13 @@ export type ProjectCountOutputTypeCountChatCommandRulesArgs<ExtArgs extends runt
 /**
  * ProjectCountOutputType without action
  */
+export type ProjectCountOutputTypeCountChatWatchesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ChatWatchWhereInput
+}
+
+/**
+ * ProjectCountOutputType without action
+ */
 export type ProjectCountOutputTypeCountAutomationEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.AutomationEventWhereInput
 }
@@ -5676,6 +5980,7 @@ export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   pullRequests?: boolean | Prisma.Project$pullRequestsArgs<ExtArgs>
   standingGrants?: boolean | Prisma.Project$standingGrantsArgs<ExtArgs>
   chatCommandRules?: boolean | Prisma.Project$chatCommandRulesArgs<ExtArgs>
+  chatWatches?: boolean | Prisma.Project$chatWatchesArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Project$automationEventsArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
@@ -5758,6 +6063,7 @@ export type ProjectInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   pullRequests?: boolean | Prisma.Project$pullRequestsArgs<ExtArgs>
   standingGrants?: boolean | Prisma.Project$standingGrantsArgs<ExtArgs>
   chatCommandRules?: boolean | Prisma.Project$chatCommandRulesArgs<ExtArgs>
+  chatWatches?: boolean | Prisma.Project$chatWatchesArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Project$automationEventsArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
@@ -5803,6 +6109,7 @@ export type $ProjectPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     pullRequests: Prisma.$TaskPullRequestPayload<ExtArgs>[]
     standingGrants: Prisma.$ChatStandingGrantPayload<ExtArgs>[]
     chatCommandRules: Prisma.$ChatCommandRulePayload<ExtArgs>[]
+    chatWatches: Prisma.$ChatWatchPayload<ExtArgs>[]
     automationEvents: Prisma.$AutomationEventPayload<ExtArgs>[]
     automationRuns: Prisma.$AutomationRunPayload<ExtArgs>[]
     tabUsageDays: Prisma.$TabUsageDayPayload<ExtArgs>[]
@@ -6267,6 +6574,7 @@ export interface Prisma__ProjectClient<T, Null = never, ExtArgs extends runtime.
   pullRequests<T extends Prisma.Project$pullRequestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$pullRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskPullRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   standingGrants<T extends Prisma.Project$standingGrantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$standingGrantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatStandingGrantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatCommandRules<T extends Prisma.Project$chatCommandRulesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$chatCommandRulesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatCommandRulePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  chatWatches<T extends Prisma.Project$chatWatchesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$chatWatchesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatWatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationEvents<T extends Prisma.Project$automationEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$automationEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationRuns<T extends Prisma.Project$automationRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$automationRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabUsageDays<T extends Prisma.Project$tabUsageDaysArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tabUsageDaysArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabUsageDayPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -7172,6 +7480,30 @@ export type Project$chatCommandRulesArgs<ExtArgs extends runtime.Types.Extension
   take?: number
   skip?: number
   distinct?: Prisma.ChatCommandRuleScalarFieldEnum | Prisma.ChatCommandRuleScalarFieldEnum[]
+}
+
+/**
+ * Project.chatWatches
+ */
+export type Project$chatWatchesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ChatWatch
+   */
+  select?: Prisma.ChatWatchSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ChatWatch
+   */
+  omit?: Prisma.ChatWatchOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ChatWatchInclude<ExtArgs> | null
+  where?: Prisma.ChatWatchWhereInput
+  orderBy?: Prisma.ChatWatchOrderByWithRelationInput | Prisma.ChatWatchOrderByWithRelationInput[]
+  cursor?: Prisma.ChatWatchWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ChatWatchScalarFieldEnum | Prisma.ChatWatchScalarFieldEnum[]
 }
 
 /**

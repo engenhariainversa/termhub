@@ -56,6 +56,7 @@ import type {
   TStartSessionBody,
   TStartSessionResponse,
   TSubagentView,
+  TWatchView,
   TTabActionResponse,
   TTabChatAction,
   TTabChatFrame,
@@ -172,6 +173,10 @@ export interface MobileApi {
    * `stopping`; the panel's own update arrives over the socket. 404 unknown, 409 `SUBAGENT_NOT_RUNNING`
    * (already at rest) or `SUBAGENT_GONE` (its process is no longer around to ask). */
   cancelSubagent(auth: Auth, subagentId: string): Promise<TSubagentView>;
+  /** "Cancelar" on a watch of the "Acompanhando" strip (TER-1099) — no PIN, like revoking a grant: it only
+   * takes something away. Answers the watch as it ended; the scope's `watches` event follows. 404 unknown,
+   * another user's or already closed. */
+  cancelWatch(auth: Auth, watchId: string): Promise<TWatchView>;
 
   // the project's AI accounts and models (spec 2026-09-30 project AI accounts §8)
   /** The project's accounts (ids, priority order) and default models, with every account its linked

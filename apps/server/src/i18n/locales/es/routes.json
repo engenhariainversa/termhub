@@ -98,5 +98,6 @@
   "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "La dirección de ai-memory debe ser local (127.0.0.1, localhost) o de red privada",
   "Esta proposta já foi decidida": "Esta propuesta ya fue decidida",
   "Nenhum projeto desta proposta continua seu": "Ningún proyecto de esta propuesta sigue siendo tuyo",
-  "A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada": "La página sigue en el ai-memory de la máquina; si cambia, vuelve como lección no verificada"
+  "A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada": "La página sigue en el ai-memory de la máquina; si cambia, vuelve como lección no verificada",
+  "Assinatura não encontrada": "Suscripción no encontrada"
 }

@@ -45,9 +45,10 @@ import {
   type TTabLimit,
   type TTabQuestion,
   type TTabSuggestion,
+  type TWatchView,
 } from '../../contract';
 import type { MockRouter } from '../router';
-import { broadcast, countPinFailure, type MockAction, type MockAttachment, type MockConversation, type MockDecision, type MockDevice, type MockGrant, type MockLesson, type MockMemoryRule, type MockMessage, type MockNote, type MockProjectGrant, type MockStandingGrant, type MockSubagent, type MockState, type MockTabLimit, type MockTabQuestion, type MockTabSuggestion, verifyAuth, WireError } from '../state';
+import { broadcast, countPinFailure, type MockAction, type MockAttachment, type MockConversation, type MockDecision, type MockDevice, type MockGrant, type MockLesson, type MockMemoryRule, type MockMessage, type MockNote, type MockProjectGrant, type MockStandingGrant, type MockSubagent, type MockState, type MockTabLimit, type MockTabQuestion, type MockTabSuggestion, type MockWatch, verifyAuth, WireError } from '../state';
 import { pushConfirmationNotification, pushReplyNotification } from './notifications';
 
 const USER_ID = 'u1';
@@ -419,10 +420,51 @@ function createSubagent(state: MockState, now: number, conversationId: string): 
   return subagent;
 }
 
+// --- watches ("Acompanhando", TER-1099) ---------------------------------------------------------
+
+/** The wire shape of a watch (the server's `WatchView`). */
+function watchView(w: MockWatch): TWatchView {
+  const { project_id: _project, closed: _closed, ...view } = w;
+  return view;
+}
+
+/** The scope's open watches, oldest first, as `GET chat` and the `watches` event list them. */
+function openWatchesFor(state: MockState, projectId: string | null): TWatchView[] {
+  return state.watches.filter((w) => !w.closed && w.project_id === projectId).map(watchView);
+}
+
+/** The server's `publishWatches`: the whole list, to the scope's active conversation. */
+function publishWatches(state: MockState, projectId: string | null): void {
+  const id = state.activeConversation.get(projectId);
+  if (!id) return;
+  broadcast(state, { type: 'watches', user_id: USER_ID, conversation_id: id, watches: openWatchesFor(state, projectId) });
+}
+
+/** The canned watch an `avise…` message makes the concierge keep: the PR of the mock's tab `api`, until it
+ * is merged or its CI goes red, for the next 24 h. */
+function createWatch(state: MockState, now: number, projectId: string | null): MockWatch {
+  const watch: MockWatch = {
+    id: randomId(10),
+    project_id: projectId,
+    closed: false,
+    kind: 'pr',
+    target_id: 'pr-511',
+    label: 'PR #511 Mostrar assinaturas no chat',
+    events: ['merged', 'ci_failed'],
+    recurring: false,
+    note: 'Avisar o Pedro para rodar o deploy.',
+    created_at: new Date(now).toISOString(),
+    expires_at: new Date(now + 24 * 60 * 60_000).toISOString(),
+    fire_count: 0,
+  };
+  state.watches.push(watch);
+  return watch;
+}
+
 // --- the canned reply and its streaming (ruling 3) ----------------------------------------------
 
 interface AnswerOutcome {
-  kind: 'normal' | 'confirmation' | 'error' | 'tab_question' | 'tab_permission' | 'tab_suggestion' | 'tab_limit' | 'subagent';
+  kind: 'normal' | 'confirmation' | 'error' | 'tab_question' | 'tab_permission' | 'tab_suggestion' | 'tab_limit' | 'subagent' | 'watch';
   text: string;
 }
 
@@ -438,6 +480,7 @@ function pickAnswer(text: string): AnswerOutcome {
   if (/sugest/.test(text)) return { kind: 'tab_suggestion', text: 'A aba api sugere um próximo passo — veja o card.' };
   if (/limite/.test(text)) return { kind: 'tab_limit', text: 'A aba api atingiu o limite de uso da conta — veja o card.' };
   if (/subagente/.test(text)) return { kind: 'subagent', text: 'Chamei uma subagente para isso — acompanhe no painel.' };
+  if (/avise/.test(text)) return { kind: 'watch', text: 'Combinado: aviso quando o PR #511 for mergeado ou o CI ficar vermelho.' };
   if (/test|teste/.test(text)) return { kind: 'normal', text: 'Rodei `npm test` no jarvis: 1066 testes passaram, 137 pulados. Nada quebrou.' };
   if (/deploy/.test(text)) return { kind: 'normal', text: 'O último deploy foi há 2 h, verde. Quer que eu dispare outro?' };
   if (/status/.test(text)) return { kind: 'normal', text: 'Duas abas trabalhando, uma esperando você: a aba api pediu para rodar os testes.' };
@@ -591,6 +634,11 @@ function scheduleStream(o: StreamOptions): void {
       if (outcome.kind === 'subagent') {
         const subagent = createSubagent(o.state, o.now(), o.conversationId);
         broadcast(o.state, subagentEvent(subagent));
+      }
+
+      if (outcome.kind === 'watch') {
+        createWatch(o.state, o.now(), o.projectId);
+        publishWatches(o.state, o.projectId);
       }
 
       const chunks = chunkText(outcome.text);
@@ -819,6 +867,7 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
         tab_limits: state.tabLimits.filter((l) => l.conversation_id === conversation.id).map(tabLimitView),
         context_limit: state.chatContextLimit,
         subagents: state.subagents.filter((s) => s.conversation_id === conversation.id).map(subagentView),
+        watches: openWatchesFor(state, projectId),
         host: hostFor(conversation),
       },
     };
@@ -1303,6 +1352,17 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
       broadcast(state, subagentEvent(subagent));
     }, stepMs);
     return { status: 202, body: { subagent: subagentView(subagent) } };
+  });
+
+  /** "Cancelar" on a watch (TER-1099) — no PIN. 404 unknown or already closed, like the server; the scope's
+   * `watches` event follows. */
+  router.route('DELETE', '/api/m/v1/chat/watches/:id', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'DELETE', htu: ctx.htu, now: ctx.now() });
+    const watch = state.watches.find((w) => w.id === ctx.params.id && !w.closed);
+    if (!watch) throw new WireError(404, 'NOT_FOUND', 'Assinatura não encontrada');
+    watch.closed = true;
+    publishWatches(state, watch.project_id);
+    return { status: 200, body: { watch: watchView(watch) } };
   });
 
   // --- "Memória do chat" (spec 2026-09-26 §4.6/§5.2) --------------------------------------------

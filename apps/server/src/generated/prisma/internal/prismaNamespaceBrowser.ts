@@ -97,6 +97,8 @@ export const ModelName = {
   ChatFileGrant: 'ChatFileGrant',
   ChatDefaultRestriction: 'ChatDefaultRestriction',
   ChatCommandRule: 'ChatCommandRule',
+  ChatWatch: 'ChatWatch',
+  ChatWatchFire: 'ChatWatchFire',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -912,6 +914,47 @@ export const ChatCommandRuleScalarFieldEnum = {
 } as const
 
 export type ChatCommandRuleScalarFieldEnum = (typeof ChatCommandRuleScalarFieldEnum)[keyof typeof ChatCommandRuleScalarFieldEnum]
+
+
+export const ChatWatchScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  projectId: 'projectId',
+  conversationId: 'conversationId',
+  kind: 'kind',
+  targetId: 'targetId',
+  params: 'params',
+  baseline: 'baseline',
+  label: 'label',
+  note: 'note',
+  recurring: 'recurring',
+  status: 'status',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  closedAt: 'closedAt',
+  lastFiredAt: 'lastFiredAt',
+  fireCount: 'fireCount'
+} as const
+
+export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]
+
+
+export const ChatWatchFireScalarFieldEnum = {
+  id: 'id',
+  watchId: 'watchId',
+  userId: 'userId',
+  projectId: 'projectId',
+  eventKey: 'eventKey',
+  event: 'event',
+  payload: 'payload',
+  createdAt: 'createdAt',
+  claimedAt: 'claimedAt',
+  attempts: 'attempts',
+  deliveredAt: 'deliveredAt',
+  droppedAt: 'droppedAt'
+} as const
+
+export type ChatWatchFireScalarFieldEnum = (typeof ChatWatchFireScalarFieldEnum)[keyof typeof ChatWatchFireScalarFieldEnum]
 
 
 export const TabLimitNoticeScalarFieldEnum = {

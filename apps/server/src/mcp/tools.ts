@@ -33,6 +33,8 @@ import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
 import { getClientContext } from '../control/client-context.js';
+import { cancelWatch, listWatches, watch, type WatchArgs } from '../control/watches.js';
+import { WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
 import { updateMachineAgent } from '../control/agent-update.js';
 import { getMachineNetwork, wakeMachineTool } from '../control/machine-network.js';
@@ -638,6 +640,47 @@ export const TOOLS: ToolDef[] = [
     action: 'read',
     input: {},
     run: (ctx) => getChatContext(ctx),
+  },
+  {
+    name: 'watch',
+    description:
+      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). note: what to do when it happens, in your own words (≤500). hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
+    scope: 'read',
+    resource: 'chat',
+    action: 'create',
+    input: {
+      kind: z.enum(WATCH_KINDS),
+      tab_id: id.optional(),
+      task_id: id.optional(),
+      pr_url: z.string().trim().url().max(300).optional(),
+      machine_id: id.optional(),
+      version: z.string().trim().regex(/^\d+\.\d+\.\d+$/).optional(),
+      events: z.array(z.string().min(1).max(40)).min(1).max(12).optional(),
+      to: taskStatus.optional(),
+      workflow: z.string().trim().min(1).max(200).optional(),
+      note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
+      hours: z.number().positive().max(WATCH_LIMITS.maxHours).optional(),
+      recurring: z.boolean().optional(),
+    },
+    run: (ctx, a) => watch(ctx, a as unknown as WatchArgs),
+  },
+  {
+    name: 'list_watches',
+    description: "This chat's open watches (from watch): id, kind, target, events, your note, whether recurring, and until when. Only works in the termhub chat.",
+    scope: 'read',
+    resource: 'chat',
+    action: 'read',
+    input: {},
+    run: (ctx) => listWatches(ctx),
+  },
+  {
+    name: 'cancel_watch',
+    description: 'Cancel one of this chat\'s open watches (watch_id from watch or list_watches): it will not wake the chat any more. Use it when the person asks to stop following something, or when you no longer need it. Only works in the termhub chat.',
+    scope: 'read',
+    resource: 'chat',
+    action: 'create',
+    input: { watch_id: id },
+    run: (ctx, a) => cancelWatch(ctx, a as { watch_id: string }),
   },
   {
     name: 'get_client_context',

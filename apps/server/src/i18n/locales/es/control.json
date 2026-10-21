@@ -137,5 +137,17 @@
   "Uma decisão desta conversa só pode ser registrada no chat do termhub": "Una decisión de esta conversación solo se puede registrar en el chat de termhub",
   "{{ref}} já foi substituído ou esquecido": "{{ref}} ya fue reemplazado u olvidado",
   "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Solo una nota (note:) o una decisión (decision:) puede reemplazarse: {{ref}}",
-  "URL do ai-memory inválida": "URL de ai-memory no válida"
+  "URL do ai-memory inválida": "URL de ai-memory no válida",
+  "Esta ferramenta só funciona no chat do termhub: a assinatura acorda a própria conversa.": "Esta herramienta solo funciona en el chat de termhub: la suscripción despierta la propia conversación.",
+  "Informe tab_id para acompanhar uma aba.": "Indica tab_id para seguir una pestaña.",
+  "Informe task_id (o id ou a referência, como TER-12) para acompanhar um card.": "Indica task_id (el id o la referencia, como TER-12) para seguir una tarjeta.",
+  "pr_url deve ser a URL de um pull request do GitHub (https://github.com/dono/repo/pull/123).": "pr_url debe ser la URL de un pull request de GitHub (https://github.com/dueño/repo/pull/123).",
+  "O termhub não acompanha este PR: ele precisa citar um card de um projeto seu com a integração do GitHub (o painel de CI). Acompanhe pelo card (task_id).": "termhub no sigue este PR: debe citar una tarjeta de uno de tus proyectos con la integración de GitHub (el panel de CI). Síguelo por la tarjeta (task_id).",
+  "Informe pr_url ou task_id (os PRs do card) para acompanhar um pull request.": "Indica pr_url o task_id (los PR de la tarjeta) para seguir un pull request.",
+  "Informe machine_id para acompanhar uma máquina.": "Indica machine_id para seguir una máquina.",
+  "Informe version (x.y.z): a menor versão do @termhub/agent que conta.": "Indica version (x.y.z): la versión más baja de @termhub/agent que cuenta.",
+  "Eventos que {{kind}} não tem: {{unknown}}. Use: {{events}}.": "Eventos que {{kind}} no tiene: {{unknown}}. Usa: {{events}}.",
+  "hours vai de um pouco mais de 0 até {{max}} (7 dias).": "hours va de un poco más de 0 hasta {{max}} (7 días).",
+  "Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.": "Esta conversación ya tiene {{max}} suscripciones abiertas: cancela alguna con cancel_watch (list_watches las lista todas) antes de crear otra.",
+  "Assinatura não encontrada ou já encerrada.": "Suscripción no encontrada o ya cerrada."
 }

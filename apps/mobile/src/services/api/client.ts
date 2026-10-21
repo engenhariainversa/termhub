@@ -26,6 +26,7 @@ import {
   challengeResponse,
   decisionChallengesResponse,
   cancelSubagentResponse,
+  cancelWatchResponse,
   chatAttachmentResponse,
   chatGrantListResponse,
   chatMemoryResponse,
@@ -380,6 +381,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/resume`, aiLoginResumeResponse, { token: a.accessToken, body: { tab_ids: tabIds } }),
     cancelSubagent: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/subagents/${encodeURIComponent(id)}/cancel`, cancelSubagentResponse, { token: a.accessToken }).then((r) => r.subagent),
+    cancelWatch: (a: Auth, id: string) => call('DELETE', `/api/m/v1/chat/watches/${encodeURIComponent(id)}`, cancelWatchResponse, { token: a.accessToken }).then((r) => r.watch),
     // The name and project ride in the query (the body is the file itself); `uploadCall` signs the proof
     // over the bare path, as the server checks it.
     uploadAttachment: (a: Auth, file, projectId, onProgress) =>

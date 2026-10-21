@@ -9,6 +9,7 @@ import { chatMemoryRoutes } from './chat-memory.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
+import { activeWatches, cancelWatchRow } from '../chat/watches/view.js';
 import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
@@ -111,7 +112,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // The trail comes from here, not from live events (which only update what is already on
     // screen): a reload must see every pending/decided action exactly as the server has it,
     // including an old denied row sitting beside a newer pending one for the same proposal.
-    const [messages, rows, host, grants, project_grants, standing_grants, command_rules, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, command_rules, questionRows, subagents, open, limitRows, context_limit, watches] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       // The state, not a rendered sentence: which machine will run the next message, or which of the
@@ -134,6 +135,8 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       repos.tabLimitNotices.listByConversation(conversation.id),
       // What the context meter measures against (TER-1038): null = the model's window.
       repos.users.chatContextLimit(request.scope.user.id),
+      // The watches the concierge keeps for this scope (TER-1099): "Acompanhando…" with a Cancelar.
+      activeWatches(repos, request.scope.user.id, conversation.project_id),
     ]);
     // Scoped to this request's own user: a card must never resolve a name this user cannot see.
     const actions = await describeActions(repos, rows, request.scope.user.id);
@@ -156,6 +159,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
       context_limit,
+      watches,
     };
   });
 
@@ -416,6 +420,14 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   });
 
   /** "Revogar". Declared as `create`, the permission deciding a card needs: whoever can grant can revoke. */
+  /** "Cancelar" on a watch (TER-1099): it no longer wakes the chat. `create`, like revoking a grant; 404 unknown, another user's or already closed. */
+  app.delete('/watches/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    const watch = await cancelWatchRow(repos, request.scope.user.id, id);
+    if (!watch) throw notFound('Assinatura não encontrada');
+    return { watch };
+  });
+
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
     const { id } = grantIdParam.parse(request.params);
     return { grant: await revokeGrant(repos, request.scope.user.id, id) };

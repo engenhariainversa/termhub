@@ -334,6 +334,21 @@ export type ChatDefaultRestriction = Prisma.ChatDefaultRestrictionModel
  */
 export type ChatCommandRule = Prisma.ChatCommandRuleModel
 /**
+ * Model ChatWatch
+ * TER-1099: "me avise quando…" — an event the concierge asked to be woken for (a tab stopping, a card moving,
+ * a PR, its deploy or release, a machine, an agent release). Kept per chat scope (user + project): the wake
+ * goes to the scope's active conversation, so "Nova conversa" does not lose it. Holds ids, states and the
+ * concierge's own note only — never terminal content.
+ */
+export type ChatWatch = Prisma.ChatWatchModel
+/**
+ * Model ChatWatchFire
+ * One event a watch caught, until it reaches the conversation (TER-1099). `(watch_id, event_key)` is unique:
+ * both colours may see the same event, only one row is born. Delivered by the claim (`claimed_at`), so a
+ * restart in between hands it to the next sweep instead of losing or doubling it.
+ */
+export type ChatWatchFire = Prisma.ChatWatchFireModel
+/**
  * Model TabLimitNotice
  * A project tab stuck on a usage limit whose machine does not swap accounts by itself (TER-589): a card in
  * the project's chat saying so and offering the manual swap to the project's other accounts. One per

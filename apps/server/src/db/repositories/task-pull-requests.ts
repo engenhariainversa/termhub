@@ -116,6 +116,11 @@ export class TaskPullRequestsRepository {
     return (await this.db.taskPullRequest.findMany({ where: { taskId: { in: taskIds } }, orderBy: [{ number: 'desc' }] })).map(map);
   }
 
+  /** TER-1099: the rows of one PR, by its URL, in this owner's projects (a PR naming several cards has one row each). */
+  async listByUrlForOwner(url: string, ownerId: string): Promise<TaskPullRequest[]> {
+    return (await this.db.taskPullRequest.findMany({ where: { url, project: { ownerId } }, orderBy: [{ syncedAt: 'desc' }] })).map(map);
+  }
+
   /**
    * Open PRs of the setup's current repo, and (when a deploy workflow is set: `includeMerged`) its PRs merged
    * less than a day ago whose deploy is not passed/failed yet. Rows of a previous repo are never watched.

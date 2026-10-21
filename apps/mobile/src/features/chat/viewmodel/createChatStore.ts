@@ -24,10 +24,11 @@ import { applyEvent, applyStandingGrantEvent, droppedRows, mergeThread, settlePe
 import { belongsTo } from '../model/filter';
 import { approveAlwaysLabel, CHAT_MSG } from '../model/messages';
 import { upsertTabLimit } from '../model/tab-limit-text';
+import { withoutWatch } from '../model/watch-text';
 import { closeLive, emptyFold, pruneLive, seedLive, type LiveFold } from '../model/live';
 import type { PickedFile } from './attachments';
 import { createThrottledStorage } from './throttled-storage';
-import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabLimit, TabQuestion, TabSuggestion } from '../model/types';
+import type { ChatAction, ChatConversation, ChatEvent, ChatGrant, ChatHostState, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabLimit, TabQuestion, TabSuggestion } from '../model/types';
 import { replyBody, replyOnRow, replyRefOfRow, type ReplyRef } from '../model/reply';
 
 /** `approve_tab` approves the card *and* trusts its tab for send_input ("Permitir sempre nesta aba");
@@ -67,6 +68,10 @@ export interface ConversationSlot {
   tabLimits: TabLimit[];
   /** The subagents panel of this conversation, newest first (spec 2026-09-26 panel §4). */
   subagents: SubagentView[];
+  /** The watches the concierge keeps for this chat's scope ("Acompanhando", TER-1099), as the server last
+   * listed them (`GET chat`, or the `watches` event, which carries the whole list). Bound to the scope, not
+   * the conversation: a reset keeps them. */
+  watches: ChatWatch[];
   /** Ids whose "Cancelar" came back with `subagent_cancel_failed`, or any other cancel failure (a
    * 404, a 5xx, a dropped connection) marked the same way — cleared once a fresh `subagent` event
    * for that id arrives. */
@@ -168,6 +173,9 @@ export interface ChatState {
   /** "Cancelar" on a subagent's row (spec 2026-09-26 panel §5.4) — no PIN. A 409 (already at rest, or
    * its process gone) re-reads the trail; any other failure marks that row `cancelFailed`. */
   cancelSubagent(subagentId: string): Promise<void>;
+  /** "Cancelar" on a watch of the "Acompanhando" strip (TER-1099) — no PIN. The row goes at once; a
+   * failure puts it back with the banner, unless the list changed meanwhile. One already gone (404) stays gone. */
+  cancelWatch(watchId: string): Promise<void>;
   /** "Esquecer esta decisão" on a tab question's suggestion line (chat decision memory spec
    * 2026-09-26 §5.1): the card itself clears its own pre-selection regardless of the outcome, so a
    * session-ending error is the only thing worth reacting to here. */
@@ -190,7 +198,7 @@ export interface ChatState {
 
 type Data = Omit<ChatState, { [K in keyof ChatState]: ChatState[K] extends (...args: never[]) => unknown ? K : never }[keyof ChatState]>;
 
-type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'projectGrants' | 'standingGrants' | 'tabQuestions' | 'tabSuggestions' | 'tabLimits' | 'subagents' | 'host'>;
+type PersistedSlot = Pick<ConversationSlot, 'conversation' | 'messages' | 'actions' | 'grants' | 'projectGrants' | 'standingGrants' | 'tabQuestions' | 'tabSuggestions' | 'tabLimits' | 'subagents' | 'watches' | 'host'>;
 type Persisted = { projects: TChatProjectItem[]; conversations: Record<string, PersistedSlot> };
 
 const initialData = (): Data => ({
@@ -214,7 +222,7 @@ const initialData = (): Data => ({
   attachmentStatuses: {},
 });
 
-const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], projectGrants: [], standingGrants: [], tabQuestions: [], tabSuggestions: [], tabLimits: [], subagents: [], cancelFailed: [], host: null, loaded: false, error: null });
+const emptySlot = (): ConversationSlot => ({ conversation: null, messages: [], actions: [], grants: [], projectGrants: [], standingGrants: [], tabQuestions: [], tabSuggestions: [], tabLimits: [], subagents: [], watches: [], cancelFailed: [], host: null, loaded: false, error: null });
 const keyOf = (projectId: string | null): string => projectId ?? '';
 const projectOf = (key: string): string | null => (key === '' ? null : key);
 
@@ -277,6 +285,12 @@ export function createChatStore(deps: ChatDeps) {
   /** App-level taps into every raw event (`subscribeEvents`), independent of the open conversation
    * and never cleared by `close()`/`generation` — a subscriber outlives any one socket connection. */
   const eventListeners = new Set<(e: ChatEvent) => void>();
+  /** Per conversation key, how many times the server's own list of watches replaced the slot's (a read, a
+   * `watches` event): a failed "Cancelar" puts its row back only when no newer list came meanwhile. */
+  const watchLists = new Map<string, number>();
+  const watchListArrived = (key: string): void => {
+    watchLists.set(key, (watchLists.get(key) ?? 0) + 1);
+  };
   /** The persisted slice's writer (spec §4.2 "Persistence"): at most one MMKV write per 2 s, plus a
    * flush at the end of a run and when the app goes to the background. */
   const storage = createThrottledStorage<Persisted>(mmkvStateStorage);
@@ -332,6 +346,7 @@ export function createChatStore(deps: ChatDeps) {
             // rows stay either way.
             const same = get().conversations[key]?.conversation?.id === res.conversation.id;
             const onScreen = key === activeKey();
+            watchListArrived(key);
             const dropped = same && onScreen ? droppedRows(get().conversations[key]?.messages ?? [], res.messages, arrived) : [];
             patchSlot(key, (slot) => ({
               conversation: res.conversation,
@@ -344,6 +359,7 @@ export function createChatStore(deps: ChatDeps) {
               tabSuggestions: res.tab_suggestions,
               tabLimits: res.tab_limits,
               subagents: res.subagents,
+              watches: res.watches,
               contextLimit: res.context_limit ?? null,
               host: res.host,
               loaded: true,
@@ -496,6 +512,11 @@ export function createChatStore(deps: ChatDeps) {
                 ? { conversation: { ...slot.conversation, context_tokens: e.tokens, context_window: e.window, ...(e.compacted_at !== undefined ? { context_compacted_at: e.compacted_at } : {}) } }
                 : {},
             );
+          // The whole list of the scope's watches (TER-1099): it replaces the slot's.
+          if (e.type === 'watches') {
+            watchListArrived(key);
+            patchSlot(key, () => ({ watches: e.watches }));
+          }
           if (e.type === 'attachment_status') set((s) => ({ attachmentStatuses: { ...s.attachmentStatuses, [e.attachment.id]: e.attachment } }));
           // The answer is complete (or failed): what streamed in is worth an MMKV write now.
           if (e.type === 'run_finished') storage.flush();
@@ -964,6 +985,30 @@ export function createChatStore(deps: ChatDeps) {
             }
           },
 
+          async cancelWatch(watchId) {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            const removed = withoutWatch(get().conversations[key]?.watches ?? [], watchId);
+            if (removed.watch === null) return;
+            const listSeq = watchLists.get(key) ?? 0;
+            set({ error: null });
+            patchSlot(key, () => ({ watches: removed.list }));
+            try {
+              await api.cancelWatch(session().auth(), watchId);
+            } catch (e) {
+              if (gen !== generation) return;
+              // Already cancelled, fired or expired: gone either way.
+              if (isApiError(e) && e.status === 404) return;
+              // Back where it was — unless a `watches` event or a re-read replaced the list meanwhile: that
+              // list is newer than the row this tap took away.
+              const { watch, index } = removed;
+              if ((watchLists.get(key) ?? 0) === listSeq) patchSlot(key, (slot) => (slot.watches.some((w) => w.id === watch.id) ? {} : { watches: [...slot.watches.slice(0, index), watch, ...slot.watches.slice(index)] }));
+              fail(gen, e);
+            }
+          },
+
           uploadAttachment(file, onProgress) {
             const projectId = get().activeProject;
             if (projectId === undefined) return Promise.reject(new Error('NO_CONVERSATION'));
@@ -1086,7 +1131,7 @@ export function createChatStore(deps: ChatDeps) {
             // A row still in flight, or one that failed, is this device's alone: not worth a restart.
             Object.entries(s.conversations).map(([key, c]) => [
               key,
-              { conversation: c.conversation, messages: c.messages.filter((m) => m.local === undefined), actions: c.actions, grants: c.grants, projectGrants: c.projectGrants, standingGrants: c.standingGrants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, tabLimits: c.tabLimits, subagents: c.subagents, host: c.host },
+              { conversation: c.conversation, messages: c.messages.filter((m) => m.local === undefined), actions: c.actions, grants: c.grants, projectGrants: c.projectGrants, standingGrants: c.standingGrants, tabQuestions: c.tabQuestions, tabSuggestions: c.tabSuggestions, tabLimits: c.tabLimits, subagents: c.subagents, watches: c.watches, host: c.host },
             ]),
           ),
         }),
