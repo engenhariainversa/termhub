@@ -149,5 +149,16 @@
   "Eventos que {{kind}} não tem: {{unknown}}. Use: {{events}}.": "Eventos que {{kind}} no tiene: {{unknown}}. Usa: {{events}}.",
   "hours vai de um pouco mais de 0 até {{max}} (7 dias).": "hours va de un poco más de 0 hasta {{max}} (7 días).",
   "Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.": "Esta conversación ya tiene {{max}} suscripciones abiertas: cancela alguna con cancel_watch (list_watches las lista todas) antes de crear otra.",
-  "Assinatura não encontrada ou já encerrada.": "Suscripción no encontrada o ya cerrada."
+  "Assinatura não encontrada ou já encerrada.": "Suscripción no encontrada o ya cerrada.",
+  "Informe exatamente um entre in_minutes, at e at_time.": "Indique exactamente uno entre in_minutes, at y at_time.",
+  "at deve ser ISO 8601 com fuso (2026-10-21T18:00:00-03:00) ou \"AAAA-MM-DDTHH:MM\" no relógio da pessoa.": "at debe ser ISO 8601 con zona horaria (2026-10-21T18:00:00-03:00) o \"AAAA-MM-DDTHH:MM\" en el reloj de la persona.",
+  "O horário do lembrete já passou ({{local}}, {{zone}}).": "La hora del recordatorio ya pasó ({{local}}, {{zone}}).",
+  "Um lembrete vale por no máximo 7 dias a partir de agora.": "Un recordatorio vale como máximo 7 días a partir de ahora.",
+  "times, until e until_time só valem com every_minutes.": "times, until y until_time solo valen con every_minutes.",
+  "every_minutes deve ser no mínimo {{min}}.": "every_minutes debe ser como mínimo {{min}}.",
+  "times vai de 1 a {{max}}.": "times va de 1 a {{max}}.",
+  "Informe until ou until_time, não os dois.": "Indique until o until_time, no ambos.",
+  "until deve ser ISO 8601 com fuso ou \"AAAA-MM-DDTHH:MM\" no relógio da pessoa.": "until debe ser ISO 8601 con zona horaria o \"AAAA-MM-DDTHH:MM\" en el reloj de la persona.",
+  "until precisa ser depois da primeira vez do lembrete.": "until debe ser posterior a la primera vez del recordatorio.",
+  "Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.": "Esta conversación ya tiene {{max}} recordatorios abiertos: cancele alguno con cancel_watch (list_watches los lista todos) antes de crear otro."
 }

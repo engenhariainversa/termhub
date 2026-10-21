@@ -577,5 +577,7 @@
   "release falhou": "release falló",
   "online": "en línea",
   "offline": "sin conexión",
-  "publicou": "publicada"
+  "publicou": "publicada",
+  "Lembrete": "Recordatorio",
+  "a cada {{n}} min": "cada {{n}} min"
 }

@@ -357,3 +357,90 @@ it('the account-wide chat is woken in its own conversation', async () => {
 // Keeps the fake honest about the interface it stands in for.
 const _typecheck: Pick<Repositories['chatWatches'], keyof FakeWatches & keyof Repositories['chatWatches']> = new FakeWatches(() => new Date());
 void _typecheck;
+
+describe('reminders (TER-1100)', () => {
+  async function remind(over: Partial<NewChatWatch> = {}, inMs = 5 * 60_000) {
+    const due = new Date(clock.getTime() + inMs).toISOString();
+    return store.create({
+      user_id: 'u1', project_id: 'p1', conversation_id: 'c1', kind: 'reminder', target_id: null, params: { events: ['due'], at: due, zone: 'America/Sao_Paulo' }, baseline: { next: due },
+      label: 'Conferir o build', note: 'Conferir o build', recurring: false, expires_at: new Date(Date.parse(due) + 3600_000), ...over,
+    });
+  }
+
+  it('wakes the chat at its time, on the person\'s clock, once, and closes', async () => {
+    const w = await remind();
+    const e = engine();
+    advance(4 * 60_000);
+    await e.sweep();
+    expect(wakes).toEqual([]);
+    expect(e.nextReminderAt()).toBe(Date.parse('2026-10-21T12:05:00.000Z'));
+    advance(60_000);
+    await e.sweep();
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0].text).toMatch(/^Automático: chegou a hora do lembrete que você marcou\./);
+    expect(wakes[0].text).toContain(`Lembrete ${w.id}`);
+    expect(wakes[0].text).toContain('2026-10-21 09:05 America/Sao_Paulo');
+    expect(wakes[0].text).toContain('«Conferir o build»');
+    expect(wakes[0].text).not.toContain('atraso');
+    expect((await store.findById(w.id))?.status).toBe('done');
+    expect(e.nextReminderAt()).toBeNull();
+    await e.sweep();
+    expect(wakes).toHaveLength(1);
+  });
+
+  it('a restart before its time loses nothing: the next process fires it', async () => {
+    const w = await remind();
+    await engine().sweep();
+    advance(5 * 60_000);
+    await engine().sweep();
+    expect(wakes).toHaveLength(1);
+    expect((await store.findById(w.id))?.status).toBe('done');
+  });
+
+  it('a server down at its time (even past its validity) fires it as soon as it is back, saying how late', async () => {
+    const w = await remind();
+    advance(3 * 3600_000);
+    await engine().sweep();
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0].text).toContain('com 175 min de atraso');
+    expect(wakes[0].text).not.toContain('venceu');
+    expect((await store.findById(w.id))?.status).toBe('done');
+  });
+
+  it('repeats every N minutes up to its cap, without the watches\' cooldown, and says the last one', async () => {
+    const w = await remind({ recurring: true, params: { events: ['due'], at: at(10 * 60_000), every_minutes: 5, times: 3, until: at(20 * 60_000), zone: 'UTC' }, baseline: { next: at(10 * 60_000) } }, 10 * 60_000);
+    const e = engine();
+    advance(10 * 60_000);
+    await e.sweep();
+    expect(wakes[0].text).toContain('o próximo é 2026-10-21 12:15 UTC');
+    expect(wakes[0].text).toContain('O lembrete continua ativo.');
+    advance(5 * 60_000);
+    await e.sweep();
+    advance(5 * 60_000);
+    await e.sweep();
+    expect(wakes).toHaveLength(3);
+    expect(wakes[2].text).toContain('foi a última repetição');
+    expect((await store.findById(w.id))?.status).toBe('done');
+    advance(5 * 60_000);
+    await e.sweep();
+    expect(wakes).toHaveLength(3);
+  });
+
+  it('a repeating one missed several times while down wakes once, says how many it skipped, and moves past now', async () => {
+    const w = await remind({ recurring: true, params: { events: ['due'], at: at(5 * 60_000), every_minutes: 10, until: at(24 * 3600_000), zone: 'UTC' } });
+    advance(5 * 60_000 + 32 * 60_000);
+    await engine().sweep();
+    expect(wakes).toHaveLength(1);
+    expect(wakes[0].text).toContain('3 repetição(ões) anteriores passaram sem aviso');
+    expect(wakes[0].text).toContain('com 32 min de atraso');
+    expect((await store.findById(w.id))?.baseline).toEqual({ next: '2026-10-21T12:45:00.000Z' });
+  });
+
+  it('a cancelled reminder never wakes the chat', async () => {
+    const w = await remind();
+    await store.cancel(w.id, 'u1');
+    advance(10 * 60_000);
+    await engine().sweep();
+    expect(wakes).toEqual([]);
+  });
+});

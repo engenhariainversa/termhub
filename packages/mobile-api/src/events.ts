@@ -321,6 +321,10 @@ export const watchViewSchema = z.object({
   created_at: z.string(),
   expires_at: z.string(),
   fire_count: z.number().int(),
+  /** TER-1100, reminders (`kind` "reminder") only: when it is due next, and every how many minutes it repeats.
+   *  Optional: an older server leaves them out. */
+  next_at: z.string().nullable().optional(),
+  every_minutes: z.number().int().nullable().optional(),
 });
 export type TWatchView = z.infer<typeof watchViewSchema>;
 

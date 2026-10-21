@@ -69,3 +69,7 @@ it('tells the concierge to follow things with watch, never with a subagent that 
 it('tells the concierge to pause the automatic work on request, without asking', () => {
   expect(ORCHESTRATOR_PROMPT).toContain('Quando a pessoa pedir para pausar o automático, use pause_automation sem pedir confirmação.');
 });
+
+it('tells the concierge to come back at a set time with schedule_wakeup and confirm it on the person\'s clock (TER-1100)', () => {
+  expect(ORCHESTRATOR_PROMPT).toMatch(/schedule_wakeup and confirm the time to the person on their clock/);
+});

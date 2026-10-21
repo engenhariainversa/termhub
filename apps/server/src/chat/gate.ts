@@ -17,7 +17,8 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // decided, sent or changed on a machine, and a confirmation card for it would be one more card to answer.
 // watch and cancel_watch (TER-1099) only decide when the chat itself is woken: nothing is sent to a machine
 // or changed on the board, and the person sees every open watch in the chat and can cancel it there.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch']);
+// schedule_wakeup (TER-1100) is the same: a reminder is a watch on the clock.
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup']);
 
 // Tools classified by reversibility
 const readTools = new Set([

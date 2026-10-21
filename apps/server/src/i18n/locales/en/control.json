@@ -149,5 +149,16 @@
   "Eventos que {{kind}} não tem: {{unknown}}. Use: {{events}}.": "Events {{kind}} does not have: {{unknown}}. Use: {{events}}.",
   "hours vai de um pouco mais de 0 até {{max}} (7 dias).": "hours goes from just above 0 up to {{max}} (7 days).",
   "Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.": "This conversation already has {{max}} open watches: cancel one with cancel_watch (list_watches lists them all) before creating another.",
-  "Assinatura não encontrada ou já encerrada.": "Watch not found or already closed."
+  "Assinatura não encontrada ou já encerrada.": "Watch not found or already closed.",
+  "Informe exatamente um entre in_minutes, at e at_time.": "Pass exactly one of in_minutes, at and at_time.",
+  "at deve ser ISO 8601 com fuso (2026-10-21T18:00:00-03:00) ou \"AAAA-MM-DDTHH:MM\" no relógio da pessoa.": "at must be ISO 8601 with an offset (2026-10-21T18:00:00-03:00) or \"YYYY-MM-DDTHH:MM\" on the person's clock.",
+  "O horário do lembrete já passou ({{local}}, {{zone}}).": "The reminder's time has already passed ({{local}}, {{zone}}).",
+  "Um lembrete vale por no máximo 7 dias a partir de agora.": "A reminder can be set at most 7 days from now.",
+  "times, until e until_time só valem com every_minutes.": "times, until and until_time only apply with every_minutes.",
+  "every_minutes deve ser no mínimo {{min}}.": "every_minutes must be at least {{min}}.",
+  "times vai de 1 a {{max}}.": "times goes from 1 to {{max}}.",
+  "Informe until ou until_time, não os dois.": "Pass until or until_time, not both.",
+  "until deve ser ISO 8601 com fuso ou \"AAAA-MM-DDTHH:MM\" no relógio da pessoa.": "until must be ISO 8601 with an offset or \"YYYY-MM-DDTHH:MM\" on the person's clock.",
+  "until precisa ser depois da primeira vez do lembrete.": "until must be after the reminder's first time.",
+  "Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.": "This conversation already has {{max}} open reminders: cancel one with cancel_watch (list_watches lists them all) before creating another."
 }

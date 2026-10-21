@@ -577,5 +577,7 @@
   "release falhou": "release failed",
   "online": "online",
   "offline": "offline",
-  "publicou": "published"
+  "publicou": "published",
+  "Lembrete": "Reminder",
+  "a cada {{n}} min": "every {{n}} min"
 }

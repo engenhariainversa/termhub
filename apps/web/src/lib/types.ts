@@ -1414,6 +1414,10 @@ export interface ChatWatch {
   created_at: string;
   expires_at: string;
   fire_count: number;
+  /** TER-1100, reminders (`kind` "reminder") only: when it is due next, and every how many minutes it
+   *  repeats. Null or absent otherwise (an older server leaves them out). */
+  next_at?: string | null;
+  every_minutes?: number | null;
 }
 
 /**
