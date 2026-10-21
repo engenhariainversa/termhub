@@ -56,6 +56,9 @@ export const tabSummary = z.object({
   availability: z.string(),
   /** the card ref ("TER-123") of the automatic run working in this tab; null = none (TER-1044, absent from an older server) */
   auto_ref: z.string().nullable().default(null),
+  /** the AI CLI the tab's hooks last reported ("claude", "codex", …); null = none yet, a plain terminal
+   *  as far as termhub knows (TER-1106, absent from an older server) */
+  tool: z.string().nullable().default(null),
 });
 export type TTabSummary = z.infer<typeof tabSummary>;
 

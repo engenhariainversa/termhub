@@ -14,7 +14,7 @@ export const TAB_CHAT_MSG = {
   get fileFailed() { return t('Não foi possível enviar o arquivo.'); },
   get degraded() { return t('Não consegui ler parte do histórico. Use Ver tela.'); },
   get listFailed() { return t('Não foi possível carregar as sessões.'); },
-  get emptyList() { return t('Nenhuma aba aberta nos seus projetos.'); },
+  get emptyList() { return t('Nenhuma aba aberta neste projeto.'); },
   get startFailed() { return t('Não foi possível iniciar a sessão. Tente de novo.'); },
   get updateApp() { return t('Atualize o app para continuar.'); },
   get installFailed() { return t('Não foi possível instalar os hooks. Tente de novo.'); },

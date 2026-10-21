@@ -31,6 +31,7 @@ const tab = (o: Partial<TTabSummary> = {}): TTabSummary => ({
   activity_verb: null,
   availability: 'ready',
   auto_ref: null,
+  tool: 'claude',
   ...o,
 });
 
@@ -109,17 +110,17 @@ describe('SessionRow (TER-1044)', () => {
 
   it('tells whoever hears the row that an automatic run works in it, and on which card', async () => {
     await render(<SessionRow tab={tab({ activity: 'Bash', auto_ref: 'TER-123' })} onPress={jest.fn()} />);
-    expect(screen.getByLabelText('api, jarvis, Trabalhando · Bash (automático, TER-123)')).toBeTruthy();
+    expect(screen.getByLabelText('api, jarvis, Claude, Trabalhando · Bash (automático, TER-123)')).toBeTruthy();
   });
 
   it('says it in English too', async () => {
     setLocale('en');
     await render(<SessionRow tab={tab({ auto_ref: 'TER-123' })} onPress={jest.fn()} />);
-    expect(screen.getByLabelText('api, jarvis, Working (automatic, TER-123)')).toBeTruthy();
+    expect(screen.getByLabelText('api, jarvis, Claude, Working (automatic, TER-123)')).toBeTruthy();
   });
 
   it('a manual tab is heard as before', async () => {
     await render(<SessionRow tab={tab()} onPress={jest.fn()} />);
-    expect(screen.getByLabelText('api, jarvis, Trabalhando')).toBeTruthy();
+    expect(screen.getByLabelText('api, jarvis, Claude, Trabalhando')).toBeTruthy();
   });
 });

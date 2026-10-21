@@ -30,5 +30,7 @@
   "{{count}} falharam_one": "{{count}} falhou",
   "{{count}} falharam_other": "{{count}} falharam",
   "+{{count}} outras_one": "+{{count}} outra",
-  "+{{count}} outras_other": "+{{count}} outras"
+  "+{{count}} outras_other": "+{{count}} outras",
+  "{{count}} pendências_one": "{{count}} pendência",
+  "{{count}} pendências_other": "{{count}} pendências"
 }

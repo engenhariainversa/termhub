@@ -1,4 +1,4 @@
-import { useRouter, type Href } from 'expo-router';
+import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from '@/i18n';
@@ -27,6 +27,7 @@ function Choice({ label, selected, onPress }: { label: string; selected: boolean
  * "Nova sessão" (spec 2026-10-01 tab chat §6): Claude Code in a new tab of a project, started with the
  * first message. The machine is asked only when the project's accounts live on more than one; otherwise
  * the server picks. On success the route becomes the new session, so "Voltar" goes back to the list.
+ * Opened from a project's sessions (TER-1106), `?projectId=` comes chosen.
  */
 export function NewSessionScreen() {
   const { t } = useTranslation();
@@ -39,7 +40,8 @@ export function NewSessionScreen() {
   const projectMachines = useSessionsStore((s) => s.projectMachines);
   const clearStartError = useSessionsStore((s) => s.clearStartError);
 
-  const [projectId, setProjectId] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ projectId?: string }>();
+  const [projectId, setProjectId] = useState<string | null>(typeof params.projectId === 'string' && params.projectId ? params.projectId : null);
   const [machines, setMachines] = useState<{ id: string; name: string }[]>([]);
   const [machineId, setMachineId] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');

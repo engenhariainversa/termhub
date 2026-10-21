@@ -32,12 +32,12 @@ function seedItems(prefix: string, at: string, turns: number): TTabChatItem[] {
 export function seedTabs(state: MockState, now: number): void {
   const at = new Date(now - 10 * 60_000).toISOString();
   const tab = (
-    summary: Omit<TTabSummary, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'state_at' | 'activity_verb' | 'auto_ref'> & Partial<Pick<TTabSummary, 'auto_ref'>>,
+    summary: Omit<TTabSummary, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt' | 'state_at' | 'activity_verb' | 'auto_ref' | 'tool'> & Partial<Pick<TTabSummary, 'auto_ref' | 'tool'>>,
     session: string | null,
     items: TTabChatItem[],
     screen: string,
   ): MockTab => ({
-    summary: { background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, activity_verb: null, auto_ref: null, ...summary },
+    summary: { background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, activity_verb: null, auto_ref: null, tool: 'claude', ...summary },
     session,
     items,
     mode: 'default',
@@ -61,12 +61,12 @@ export function seedTabs(state: MockState, now: number): void {
   );
   state.tabs.set(
     't-web',
-    tab({ id: 't-web', name: 'web', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-hulk', name: 'hulk' }, state: 'idle', needs_you: false, activity: null, availability: 'agent_outdated' }, null, [], ''),
+    tab({ id: 't-web', name: 'web', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-hulk', name: 'hulk' }, state: 'idle', needs_you: false, activity: null, availability: 'agent_outdated', tool: null }, null, [], ''),
   );
   state.tabs.set(
     't-deploy',
     tab(
-      { id: 't-deploy', name: 'deploy', project: { id: 'p-opapingou', key: 'OPM', name: 'opapingou' }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'waiting_permission', needs_you: true, activity: null, availability: 'ready' },
+      { id: 't-deploy', name: 'deploy', project: { id: 'p-opapingou', key: 'OPM', name: 'opapingou' }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'waiting_permission', needs_you: true, activity: null, availability: 'ready', tool: 'codex' },
       's-deploy',
       seedItems('deploy', at, 1),
       'Allow Bash(fly deploy)? 1. Yes 2. No',
@@ -153,7 +153,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const id = `t-${randomId(6)}`;
     const at = new Date(ctx.now()).toISOString();
     state.tabs.set(id, {
-      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null },
+      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null, tool: 'claude' },
       session: `s-${randomId(6)}`,
       items: [{ kind: 'user', id: `${id}-u0`, at, text: body.prompt, images: 0 }],
       mode: 'default',
@@ -233,7 +233,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
       tab.summary = { ...tab.summary, availability: 'ready', state: 'idle', state_at: at };
     } else {
       id = `t-${randomId(6)}`;
-      state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
+      state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', tool: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
     }
     return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider } };
   });

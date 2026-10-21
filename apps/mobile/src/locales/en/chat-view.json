@@ -107,7 +107,6 @@
   "sintoma, projeto ou arquivo": "symptom, project or file",
   "Nenhuma lição ainda.": "No lessons yet.",
   "Carregar mais lições": "Load more lessons",
-  "Conversas": "Chats",
   "Sessões": "Sessions",
   "Chat geral": "General chat",
   "Chats": "Chats",
@@ -332,5 +331,9 @@
   "Acompanhando: {{label}}": "Watching: {{label}}",
   "Acompanhando ({{n}})": "Watching ({{n}})",
   "Lembrete": "Reminder",
-  "a cada {{n}} min": "every {{n}} min"
+  "a cada {{n}} min": "every {{n}} min",
+  "Sessões de {{name}}": "{{name}} sessions",
+  "Chat de {{name}}": "{{name}} chat",
+  "{{count}} pendências_one": "{{count}} item needs you",
+  "{{count}} pendências_other": "{{count}} items need you"
 }

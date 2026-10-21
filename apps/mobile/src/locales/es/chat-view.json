@@ -107,7 +107,6 @@
   "sintoma, projeto ou arquivo": "síntoma, proyecto o archivo",
   "Nenhuma lição ainda.": "Todavía no hay lecciones.",
   "Carregar mais lições": "Cargar más lecciones",
-  "Conversas": "Conversaciones",
   "Sessões": "Sesiones",
   "Chat geral": "Chat general",
   "Chats": "Chats",
@@ -332,5 +331,9 @@
   "Acompanhando: {{label}}": "Siguiendo: {{label}}",
   "Acompanhando ({{n}})": "Siguiendo ({{n}})",
   "Lembrete": "Recordatorio",
-  "a cada {{n}} min": "cada {{n}} min"
+  "a cada {{n}} min": "cada {{n}} min",
+  "Sessões de {{name}}": "Sesiones de {{name}}",
+  "Chat de {{name}}": "Chat de {{name}}",
+  "{{count}} pendências_one": "{{count}} pendiente",
+  "{{count}} pendências_other": "{{count}} pendientes"
 }
