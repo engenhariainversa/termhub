@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MODEL_RE } from '@termhub/mobile-api';
 import { unsafeAllowedTool } from '../control/automation-tools.js';
 import { tk } from '../i18n/index.js';
 
@@ -77,14 +78,10 @@ export const approvalsSchema = z.object({
 
 /**
  * A model id as the CLI takes it after `--model`/`-m` (TER-589): an alias (`opus`, `sonnet[1m]`) or a full
- * id (`claude-opus-5-5`, `gpt-5-codex`). Nothing the shell could read is allowed, even though the line
- * quotes it anyway; nor a leading `-`, which the CLI would read as another option.
- *
- * Every `[`, `]` and `-` inside the class is escaped (TER-626): this pattern reaches the start_agent
- * tool's JSON schema, and a validator whose regex engine nests classes (the Claude API's) read the bare
- * `[` as a class that never closes, refused the schema, and every session loading the MCP died with it.
+ * id (`claude-opus-5-5`, `gpt-5-codex`). The rule itself is shared with the web and the app
+ * (`@termhub/mobile-api` models.ts, TER-1097); re-exported here for the routes that validate a model.
  */
-export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:\[\]\-]{0,99}$/;
+export { MODEL_RE };
 const modelSchema = z.string().trim().regex(MODEL_RE, 'Modelo inválido').nullable().default(null);
 
 /**

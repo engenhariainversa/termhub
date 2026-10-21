@@ -1,5 +1,6 @@
 import { z, type ZodRawShape } from 'zod';
 import { MODEL_RE } from '../setup/schema.js';
+import { CLAUDE_MODEL_ALIAS_LIST } from '@termhub/mobile-api';
 import { TMUX_KEYS, tmuxKey } from '@termhub/agent-protocol';
 import type { Action, Resource } from '../auth/permissions.js';
 import type { ApiTokenScope } from '../auth/api-tokens.js';
@@ -296,13 +297,13 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'start_agent',
-    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own). The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
+    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own); for Claude prefer an alias (${CLAUDE_MODEL_ALIAS_LIST}: the CLI resolves it to the newest model of that family) over a full id. The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       project_id: id,
       machine_id: id.optional(),
       account_id: id.optional(),
-      model: z.string().regex(MODEL_RE, 'use an alias (opus, sonnet, haiku) or a model id').optional(),
+      model: z.string().regex(MODEL_RE, `use an alias (${CLAUDE_MODEL_ALIAS_LIST}) or a model id`).optional(),
       prompt: z.string().min(1).max(PROMPT_MAX_CHARS),
       task_id: id.optional(),
       tab_name: z.string().trim().min(1).max(60).optional(),

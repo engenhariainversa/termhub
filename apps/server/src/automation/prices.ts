@@ -3,13 +3,14 @@
  * an "equivalente em API": subscription accounts are not billed per token.
  *
  * Keyed by model family, so a new version of a family is priced without a release. US$ per million tokens,
- * the current model of each family (Claude Opus 5.5, Claude Sonnet 5.5, Claude Haiku 4.5). Older versions
- * of a family are priced as the current one, which makes their estimate approximate (Opus 4.x cost $5/$25).
- * Source: Anthropic's pricing page, https://platform.claude.com/docs/en/about-claude/pricing, as cached in
- * the Claude API reference on 2026-09-25 and read on 2026-10-05. Cache writes are the 5-minute rate
- * (1.25 × input); cache reads are the published rate.
+ * the current model of each family (Claude Fable 5.1, Claude Opus 5.5, Claude Sonnet 5.5, Claude Haiku 4.5).
+ * Older versions of a family are priced as the current one, which makes their estimate approximate (Opus
+ * 4.x cost $5/$25). Source: Anthropic's pricing page, https://platform.claude.com/docs/en/about-claude/pricing,
+ * as cached in the Claude API reference on 2026-09-25 and read on 2026-10-05 (Fable: cached 2026-10-06,
+ * read on 2026-10-20). Cache writes are the 5-minute rate (1.25 × input); cache reads are the published rate.
  */
 export const PRICES_USD_PER_MTOK = {
+  fable: { input: 10, output: 50, cacheRead: 0.25, cacheWrite: 12.5 },
   opus: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
   sonnet: { input: 2, output: 10, cacheRead: 0.2, cacheWrite: 2.5 },
   haiku: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },

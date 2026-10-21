@@ -1,4 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
+// The model list, the model rule and the alias check are the shared ones (TER-1097): the server, the
+// app and this card read them from the same module, so a new model enters everywhere at once.
+import { CLAUDE_MODEL_ALIASES, CLAUDE_MODEL_ALIAS_LIST, isClaudeModelAlias, MODEL_ID_EXAMPLE, MODEL_RE } from '@termhub/mobile-api/models';
 import { api, ApiError } from '../lib/api';
 import type { Project, ProjectAi, ProjectAiOption } from '../lib/types';
 import { useTranslation } from '../i18n';
@@ -6,14 +9,11 @@ import { ExclusiveBadge } from './AiAccountsView';
 import { ConfirmDialog } from './Modal';
 
 const PROVIDERS = [
-  { key: 'claude', label: 'Claude Code', aliases: ['opus', 'sonnet', 'haiku'] },
+  { key: 'claude', label: 'Claude Code', aliases: CLAUDE_MODEL_ALIASES },
   { key: 'chatgpt', label: 'Codex', aliases: [] },
 ] as const;
 type ProviderKey = (typeof PROVIDERS)[number]['key'];
 
-/** The value the server accepts (same rule as the server's MODEL_RE): no leading `-`, nothing the shell reads. */
-const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:\[\]\-]{0,99}$/;
-const isAlias = (m: string) => /^(opus|sonnet|haiku)(\[[a-z0-9]+\])?$/.test(m);
 const OTHER = '__other__';
 
 function sameAi(a: ProjectAi, b: ProjectAi): boolean {
@@ -191,13 +191,15 @@ export function ProjectAiCard({ project }: { project: Project }) {
                   value={value ?? ''}
                   onChange={(e) => setModel(p.key, e.target.value.trim() || null)}
                   // i18n-ignore: model ids
-                  placeholder={p.key === 'claude' ? 'claude-opus-5-5' : 'gpt-5-codex'}
+                  placeholder={MODEL_ID_EXAMPLE[p.key]}
                 />
               )}
             </div>
             {value !== null && !MODEL_RE.test(value) && <p className="mt-1 text-xs text-danger">{t('Use só letras, números, ponto, hífen, dois-pontos ou colchetes.')}</p>}
-            {p.key === 'claude' && value !== null && MODEL_RE.test(value) && !isAlias(value) && (
-              <p className="mt-1 text-xs text-warn">{t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.')}</p>
+            {p.key === 'claude' && value !== null && MODEL_RE.test(value) && !isClaudeModelAlias(value) && (
+              <p className="mt-1 text-xs text-warn">
+                {t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido ({{aliases}}) o próprio CLI resolve para o modelo mais novo.', { aliases: CLAUDE_MODEL_ALIAS_LIST })}
+              </p>
             )}
           </div>
         );

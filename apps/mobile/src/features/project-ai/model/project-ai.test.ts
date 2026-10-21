@@ -63,6 +63,7 @@ describe('the model', () => {
     const draft = draftFrom({ accounts: [], models: { claude: 'sonnet', chatgpt: 'gpt-5' } }, AVAILABLE);
     expect(draft.models.claude).toEqual({ choice: 'sonnet', other: '' });
     expect(draft.models.chatgpt).toEqual({ choice: 'other', other: 'gpt-5' });
+    expect(draftFrom({ accounts: [], models: { claude: 'fable', chatgpt: null } }, AVAILABLE).models.claude).toEqual({ choice: 'fable', other: '' });
     expect(draftFrom({ accounts: [], models: { claude: 'claude-opus-4-1', chatgpt: null } }, AVAILABLE).models).toEqual({ claude: { choice: 'other', other: 'claude-opus-4-1' }, chatgpt: { choice: 'default', other: '' } });
   });
 
@@ -79,7 +80,9 @@ describe('the model', () => {
   it('warns about a free Claude id that is not an alias, not about an alias nor a Codex id', () => {
     expect(modelWarning('claude', { choice: 'other', other: 'claude-opus-4-1' })).toBe(PROJECT_AI_MSG.freeIdWarning);
     expect(modelWarning('claude', { choice: 'other', other: 'opus' })).toBeNull();
+    expect(modelWarning('claude', { choice: 'other', other: 'sonnet[1m]' })).toBeNull();
     expect(modelWarning('claude', { choice: 'opus', other: '' })).toBeNull();
+    expect(modelWarning('claude', { choice: 'fable', other: '' })).toBeNull();
     expect(modelWarning('claude', { choice: 'other', other: 'opus 4' })).toBeNull();
     expect(modelWarning('chatgpt', { choice: 'other', other: 'gpt-5' })).toBeNull();
   });

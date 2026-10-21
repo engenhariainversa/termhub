@@ -2,10 +2,10 @@
 // screen — the accounts in priority order, the model choice per provider, what is saved. The web's
 // setup card follows the same rules (`apps/web`'s SetupForm); the server validates what it saves.
 import { t } from '@/i18n';
-import { CLAUDE_MODEL_ALIASES, type TProjectAi, type TProjectAiOption } from '@/services/api/contract';
+import { CLAUDE_MODEL_ALIASES, CLAUDE_MODEL_ALIAS_LIST, isClaudeModelAlias, MODEL_RE, type ClaudeModelAlias, type TProjectAi, type TProjectAiOption } from '@/services/api/contract';
 
 export type Provider = TProjectAiOption['provider'];
-export type ClaudeAlias = (typeof CLAUDE_MODEL_ALIASES)[number];
+export type ClaudeAlias = ClaudeModelAlias;
 
 /** One provider's model as the screen edits it: the CLI's default (no model), an alias (Claude only), or a free id. */
 export interface ModelDraft {
@@ -20,11 +20,11 @@ export interface ProjectAiDraft {
   models: Record<Provider, ModelDraft>;
 }
 
-/** The server's model rule (`apps/server`'s setup schema): a CLI model id or alias. */
-export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:\[\]\-]{0,99}$/;
+/** The model rule and the alias list are the shared ones (`@termhub/mobile-api` models.ts, TER-1097): the same the server validates with. */
+export { MODEL_RE };
 
 export const PROVIDERS: readonly Provider[] = ['claude', 'chatgpt'];
-/** The Claude aliases every CLI version resolves itself, in the order the screen offers them. */
+/** The Claude aliases the CLI resolves itself, in the order the screen offers them. */
 export const CLAUDE_ALIASES: readonly ClaudeAlias[] = CLAUDE_MODEL_ALIASES;
 export const PROVIDER_LABEL: Record<Provider, string> = { claude: 'Claude', chatgpt: 'Codex' };
 
@@ -33,11 +33,12 @@ export const PROJECT_AI_MSG = {
   get title() { return t('Contas e modelo do projeto'); },
   get empty() { return t('Sem contas escolhidas, cada início de agente pede a conta, como hoje.'); },
   get invalidModel() { return t('Use só letras, números, ponto, hífen, dois-pontos ou colchetes.'); },
-  get freeIdWarning() { return t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.'); },
+  get freeIdWarning() { return t('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido ({{aliases}}) o próprio CLI resolve para o modelo mais novo.', { aliases: CLAUDE_MODEL_ALIAS_LIST }); },
   get saved() { return t('Contas e modelo salvos.'); },
   get network() { return t('Não foi possível falar com o servidor. Tente de novo.'); },
 };
 
+/** A bare alias, as the screen's choices: `sonnet[1m]` is a free id here, since the choices carry no suffix. */
 const isAlias = (value: string): value is ClaudeAlias => (CLAUDE_MODEL_ALIASES as readonly string[]).includes(value);
 
 /** "Pessoal (login padrão) · Claude · jarvis". */
@@ -82,11 +83,11 @@ export function modelError(m: ModelDraft): string | null {
   return m.choice === 'other' && m.other.trim() !== '' && !MODEL_RE.test(m.other.trim()) ? PROJECT_AI_MSG.invalidModel : null;
 }
 
-/** A valid free Claude id that is not an alias: an older CLI may not know it. */
+/** A valid free Claude id that is not an alias (`sonnet[1m]` still is one): an older CLI may not know it. */
 export function modelWarning(provider: Provider, m: ModelDraft): string | null {
   if (provider !== 'claude' || m.choice !== 'other') return null;
   const value = m.other.trim();
-  return MODEL_RE.test(value) && !isAlias(value) ? PROJECT_AI_MSG.freeIdWarning : null;
+  return MODEL_RE.test(value) && !isClaudeModelAlias(value) ? PROJECT_AI_MSG.freeIdWarning : null;
 }
 
 /** The PUT body's `ai`: the listed accounts only (never an id the project cannot list), and each model. */

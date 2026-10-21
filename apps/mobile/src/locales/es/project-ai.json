@@ -2,7 +2,7 @@
   "Contas e modelo do projeto": "Cuentas y modelo del proyecto",
   "Sem contas escolhidas, cada início de agente pede a conta, como hoje.": "Sin cuentas elegidas, cada inicio de agente pide la cuenta, como ahora.",
   "Use só letras, números, ponto, hífen, dois-pontos ou colchetes.": "Usa solo letras, números, punto, guion, dos puntos o corchetes.",
-  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.": "Un CLI más antiguo en una máquina puede no reconocer este id. Un alias (opus, sonnet, haiku) funciona en cualquier versión.",
+  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido ({{aliases}}) o próprio CLI resolve para o modelo mais novo.": "Un CLI más antiguo en una máquina puede no reconocer este id. El propio CLI resuelve un alias ({{aliases}}) al modelo más nuevo.",
   "Contas e modelo salvos.": "Cuentas y modelo guardados.",
   "Não foi possível falar com o servidor. Tente de novo.": "No se pudo conectar con el servidor. Reintenta.",
   "{{label}} (login padrão)": "{{label}} (login predeterminado)",

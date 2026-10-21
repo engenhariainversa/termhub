@@ -1,3 +1,4 @@
+import { isClaudeModelAlias } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, AiProvider } from '../db/repositories/types.js';
 import type { ProjectAi } from '../setup/schema.js';
@@ -29,12 +30,11 @@ export function modelFor(ai: ProjectAi, provider: AiProvider): string | null {
 }
 
 /**
- * Whether the model is an alias every Claude CLI resolves itself (owner decision 2026-09-30): a full id
- * may be unknown to an older CLI, which is what broke the concierge container on 2026-09-30.
+ * Whether the model is an alias the Claude CLI resolves itself (owner decision 2026-09-30): a full id
+ * may be unknown to an older CLI, which is what broke the concierge container on 2026-09-30. The list
+ * is the shared one (`@termhub/mobile-api` models.ts, TER-1097).
  */
-export function isAlias(model: string): boolean {
-  return /^(opus|sonnet|haiku)(\[[a-z0-9]+\])?$/.test(model);
-}
+export const isAlias = isClaudeModelAlias;
 
 /** The project's `ai` block and the owner's accounts, read once. */
 export async function loadProjectAi(repos: Pick<Repositories, 'projectSetup' | 'aiAccounts'>, projectId: string, ownerId: string | null): Promise<{ ai: ProjectAi; accounts: AiAccount[] }> {

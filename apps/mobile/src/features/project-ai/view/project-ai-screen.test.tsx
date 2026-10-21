@@ -50,9 +50,11 @@ describe('Contas e modelo do projeto', () => {
     expect(screen.getByText('Modelo do Claude')).toBeTruthy();
     expect(screen.getByText('Modelo do Codex')).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'opus' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'fable' })).toBeTruthy(); // TER-1097
     // Aliases are Claude's only: one "Padrão do CLI" and one "Outro id…" per provider, one "opus".
     expect(screen.getAllByRole('radio', { name: 'Padrão do CLI' })).toHaveLength(2);
     expect(screen.getAllByRole('radio', { name: 'opus' })).toHaveLength(1);
+    expect(screen.getAllByRole('radio', { name: 'fable' })).toHaveLength(1);
     // The unknown id is already out of the edit: nothing to save yet.
     expect(saveButton().props.accessibilityState.disabled).toBe(true);
   });
@@ -98,7 +100,7 @@ describe('Contas e modelo do projeto', () => {
 
     await fireEvent.changeText(screen.getByLabelText('Id do modelo do Claude'), 'claude-opus-4-1');
     expect(screen.queryByText('Use só letras, números, ponto, hífen, dois-pontos ou colchetes.')).toBeNull();
-    expect(screen.getByText('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.')).toBeTruthy();
+    expect(screen.getByText('Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (fable, opus, sonnet, haiku) o próprio CLI resolve para o modelo mais novo.')).toBeTruthy();
     expect(saveButton().props.accessibilityState.disabled).toBe(false);
   });
 
