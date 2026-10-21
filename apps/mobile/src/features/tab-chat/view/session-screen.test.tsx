@@ -1,4 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { DeviceEventEmitter, Dimensions } from 'react-native';
+import { getAnimatedStyle } from 'react-native-reanimated';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
@@ -258,6 +260,36 @@ describe('the composer', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'tentar de novo' }));
     await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
+  });
+
+  it('sits on the keyboard and follows it down while the thread is dragged, then lands on the safe area (TER-1103)', async () => {
+    // Host views' native methods are jest mocks shared by every view: the session's body runs from
+    // 91 pt down the screen to 34 pt above its bottom (the home indicator).
+    const SCREEN = Dimensions.get('window').height;
+    const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
+    nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 34 - 91));
+    const frames = jest.requireMock('@/ui/keyboard-frames') as { KeyboardState: { OPEN: number; CLOSING: number; CLOSED: number }; __setKeyboardFrame(state: number, height: number): void; __resetKeyboardFrame(): void };
+    const { OPEN, CLOSING, CLOSED } = frames.KeyboardState;
+    const keyboard = (name: string, height: number, screenY = SCREEN - height) =>
+      act(() => {
+        DeviceEventEmitter.emit(name, { duration: 0, easing: 'keyboard', startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 }, endCoordinates: { screenX: 0, screenY, width: 390, height }, isEventFromThisApp: true });
+      });
+    const padding = () => (getAnimatedStyle(screen.getByTestId('session-body')) as { paddingBottom: number }).paddingBottom;
+    try {
+      await renderSession();
+      await keyboard('keyboardWillShow', 335);
+      await act(() => frames.__setKeyboardFrame(OPEN, 335));
+      await waitFor(() => expect(padding()).toBe(335 - 34));
+      // The drag takes the keyboard down with the finger: iOS sends no event, only its frame moves.
+      await act(() => frames.__setKeyboardFrame(CLOSING, 180));
+      expect(padding()).toBe(180 - 34);
+      await keyboard('keyboardWillHide', 335, SCREEN);
+      await act(() => frames.__setKeyboardFrame(CLOSED, 0));
+      await waitFor(() => expect(padding()).toBe(0));
+    } finally {
+      nativeMethods.measureInWindow.mockReset();
+      frames.__resetKeyboardFrame();
+    }
   });
 
   it('a failed upload says so and sends nothing', async () => {
