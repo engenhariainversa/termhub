@@ -77,8 +77,10 @@ describe('TabQuestionCard: suggested answer (chat decision memory spec 2026-09-2
   });
 
   it('an answered/closed card shows no suggestion line even if `suggestion` is still on the payload', async () => {
-    const closed: TabQuestion = { ...BASE_QUESTION, suggestion: SUGGESTION, status: 'answered', answer: { answers: [{ selected: [1] }] } };
+    const closed: TabQuestion = { ...BASE_QUESTION, id: 'closed-suggestion', suggestion: SUGGESTION, status: 'answered', answer: { answers: [{ selected: [1] }] } };
     await render(<TabQuestionCard question={closed} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onForget={jest.fn()} />);
+    // Folded into one line (TER-1108): the whole card is behind the tap.
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
     expect(screen.queryByText(/Sugestão da memória/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Esquecer esta decisão' })).toBeNull();
   });
@@ -344,6 +346,7 @@ describe('automatic answer countdown (concierge memory spec 2026-09-26 §6/§8)'
     await render(
       <TabQuestionCard
         question={card({
+          id: 'closed-auto',
           status: 'answered',
           answer: { answers: [{ selected: [0] }] },
           answered_via: 'auto',
@@ -355,6 +358,8 @@ describe('automatic answer countdown (concierge memory spec 2026-09-26 §6/§8)'
         onForget={onForget}
       />,
     );
+    // Folded into one line (TER-1108): the whole card is behind the tap.
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
     expect(screen.getByText('Respondida automaticamente: «Sim» — motivo Mesma pergunta respondida antes')).toBeTruthy();
     await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Esquecer o precedente' })));
     expect(onForget).toHaveBeenCalledWith('d1');
@@ -440,6 +445,52 @@ describe('TabQuestionCard: the dialog options of a permission (TER-995)', () => 
   it('a closed card names the option chosen', async () => {
     const answered = { ...PERMISSION, status: 'answered', answer: { allow: true, option: { number: 3, label: auto, summary: 'Yes, and switch to auto mode' } } } as TabQuestion;
     await render(<TabQuestionCard question={answered} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    // Folded into one line (TER-1108): the whole card is behind the tap.
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
     expect(screen.getByText('Permitido: «Yes, and switch to auto mode»')).toBeTruthy();
+  });
+});
+
+// TER-1108: a card nobody has to answer any more reads as one neutral line; only an open card stands out.
+describe('TabQuestionCard: a settled card folds into a compact line (TER-1108)', () => {
+  const PERMISSION = { ...BASE_QUESTION, kind: 'permission', tab_name: 'codex · ChatGPT', payload: { tool_name: 'Bash', agent: 'codex', question: 'Posso enviar a branch?' }, answer: null } as TabQuestion;
+
+  it('a permission answered in the tab is one line, no buttons, and opens to the card on a tap', async () => {
+    await render(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-1', status: 'answered_in_tab' } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · respondida na aba')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+    expect(screen.queryByText('Posso enviar a branch?')).toBeNull();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Ver detalhes' }));
+    expect(screen.getByText('A aba «codex · ChatGPT» pede permissão (o Codex)')).toBeTruthy();
+    expect(screen.getByText('Posso enviar a branch?')).toBeTruthy();
+    expect(screen.getByText('Respondida na aba')).toBeTruthy();
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Recolher' }));
+    expect(screen.queryByText('Posso enviar a branch?')).toBeNull();
+  });
+
+  it('an open card keeps its full form; once answered it folds by itself', async () => {
+    const view = await render(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-2' } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByRole('button', { name: 'Permitir' })).toBeTruthy();
+
+    await view.rerender(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-2', status: 'answered', answer: { allow: true } } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · permitida')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+  });
+
+  it('a denied permission and a failed one read as such, and an answered choice card shows its question', async () => {
+    const view = await render(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-3', status: 'answered', answer: { allow: false } } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · negada')).toBeTruthy();
+    await view.rerender(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-4', status: 'failed', error_code: 'MACHINE_OFFLINE' } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · falhou')).toBeTruthy();
+    await view.rerender(<TabQuestionCard question={{ ...BASE_QUESTION, id: 'fold-5', status: 'answered', answer: { answers: [{ selected: [1] }] } } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«api» · Usar worktree? · respondida')).toBeTruthy();
+  });
+
+  it('the compact line keeps "Decisão automática" in sight (TER-641)', async () => {
+    await render(<TabQuestionCard question={{ ...PERMISSION, id: 'fold-6', status: 'answered', answer: { allow: true }, answered_via: 'auto', auto_decision: { reason: 'Liberada pelas regras', sources: [] } } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · permitida')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Decisão automática' })).toBeTruthy();
   });
 });

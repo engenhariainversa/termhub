@@ -332,5 +332,21 @@
   "Acompanhando: {{label}}": "Watching: {{label}}",
   "Acompanhando ({{n}})": "Watching ({{n}})",
   "Lembrete": "Reminder",
-  "a cada {{n}} min": "every {{n}} min"
+  "a cada {{n}} min": "every {{n}} min",
+  "respondida na aba": "answered in the tab",
+  "permitida": "allowed",
+  "negada": "denied",
+  "respondida": "answered",
+  "{{count}} permissões_one": "{{count}} permission",
+  "{{count}} permissões_other": "{{count}} permissions",
+  "{{count}} perguntas_one": "{{count}} question",
+  "{{count}} perguntas_other": "{{count}} questions",
+  "{{count}} perguntas e permissões_one": "{{count}} questions and permissions",
+  "{{count}} perguntas e permissões_other": "{{count}} questions and permissions",
+  "do Codex": "from Codex",
+  "respondidas na aba": "answered in the tab",
+  "respondidas no chat": "answered in the chat",
+  "expiradas": "expired",
+  "falharam": "failed",
+  "resolvidas": "resolved"
 }

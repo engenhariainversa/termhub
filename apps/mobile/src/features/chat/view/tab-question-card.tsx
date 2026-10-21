@@ -4,8 +4,20 @@ import type { TTabQuestionAnswerBody, TTabQuestionScreenResponse } from '@/servi
 import { useTranslation } from '@/i18n';
 import { AppText, Button } from '@/ui';
 import { AutoDecisionBadge } from './auto-decision-badge';
-import { answerSummary, autoAnswerFailureText, autoAnswerLine, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, pausedSeconds, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
+import { answerSummary, autoAnswerFailureText, autoAnswerLine, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, compactQuestionLine, formatCountdown, pausedSeconds, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence } from '../model/tab-question-text';
 import type { TabQuestion, TabQuestionSuggestionItem } from '../model/types';
+
+/** Which settled cards the person opened, by id, outside the component (TER-1108): the list recycles rows
+ * and remounts a card when its row folds into an accordion, and one the person opened must not snap shut. */
+const expandedIds = new Set<string>();
+
+/** The glyph a settled card's compact line starts with: how it ended, at a glance. */
+function compactGlyph(question: TabQuestion): string {
+  if (question.status === 'failed') return '✗';
+  if (question.status === 'expired') return '○';
+  if (question.status === 'answered' && question.kind === 'permission' && question.answer && !question.answer.allow) return '✗';
+  return '✓';
+}
 
 type Props = {
   question: TabQuestion;
@@ -37,12 +49,48 @@ const INPUT = 'rounded-xl border border-app-border bg-app-surface px-4 py-3 text
  * `onAnswer` and `loadScreen` are the store's own (stable) actions. */
 export const TabQuestionCard = memo(function TabQuestionCard(props: Props) {
   // Re-renders the card (and the model's composed lines) when the language changes.
-  useTranslation();
+  const { t } = useTranslation();
   const { question } = props;
+  // TER-1108: a card nobody has to answer any more — answered here, in the tab, by a rule or by the
+  // countdown, expired or failed — reads as one neutral line, and opens to the whole card on a tap. Only
+  // a card still waiting on the person keeps its full form and its accent border; the moment it is
+  // answered it folds by itself.
+  const settled = question.status !== 'open';
+  const [expanded, setExpanded] = useState(() => expandedIds.has(question.id));
+  const toggle = (open: boolean) => {
+    if (open) expandedIds.add(question.id);
+    else expandedIds.delete(question.id);
+    setExpanded(open);
+  };
+  if (settled && !expanded) {
+    return (
+      <Pressable
+        testID={`tab-question-${question.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={t('Ver detalhes')}
+        accessibilityState={{ expanded: false }}
+        onPress={() => toggle(true)}
+        className="flex-row items-center gap-2 rounded-xl px-2 py-1"
+      >
+        <AppText variant="muted">{compactGlyph(question)}</AppText>
+        {/* Plain text only (a tab's name, a question an agent wrote): the whole card is behind the tap. */}
+        <AppText variant="muted" numberOfLines={1} className="flex-1">
+          {compactQuestionLine(question)}
+        </AppText>
+        {question.auto_decision ? <AutoDecisionBadge decision={question.auto_decision} /> : null}
+      </Pressable>
+    );
+  }
   return (
     // The testID disambiguates this card's own controls (e.g. "Enviar" on a permission's deny-text
-    // form) from the composer's own button of the same accessible name, both on screen at once.
-    <View testID={`tab-question-${question.id}`} className="gap-3 rounded-2xl border border-app-accent bg-app-surface2 p-4">
+    // form) from the composer's own button of the same accessible name, both on screen at once. A
+    // settled card waits on nobody, so it drops the accent border.
+    <View testID={`tab-question-${question.id}`} className={`gap-3 rounded-2xl border ${settled ? 'border-app-border' : 'border-app-accent'} bg-app-surface2 p-4`}>
+      {settled ? (
+        <View className="flex-row justify-end">
+          <Button label={t('Recolher')} variant="ghost" onPress={() => toggle(false)} />
+        </View>
+      ) : null}
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
       {/* TER-641: the countdown decides (or decided) this card by itself, from memory. */}
       {question.auto_decision ? <AutoDecisionBadge decision={question.auto_decision} /> : null}

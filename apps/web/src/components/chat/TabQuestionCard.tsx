@@ -3,7 +3,22 @@ import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { PermissionOption, TabQuestion, TabQuestionAnswer, TabQuestionChoice, TabQuestionPermission, TabQuestionScreen, TabQuestionSuggestionItem } from '../../lib/types';
 import { AutoDecisionBadge } from './AutoDecisionBadge';
 import { ChatReplyButton } from './ChatReplyButton';
-import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, formatCountdown, pausedAutoAnswerSeconds, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
+import { answerSummary, autoAnswerFailureText, autoAnswerReason, autoAnswerSeconds, choiceAnswerDescription, choiceAnswerLabel, choiceTitle, compactQuestionLine, formatCountdown, pausedAutoAnswerSeconds, permissionTitle, statusLabel, suggestionLine, suggestionSourceSentence, tabLabel } from './tab-question-text';
+
+/**
+ * Which settled cards the person opened, by id, outside the component (TER-1108): the thread remounts a
+ * card when its row folds into an accordion or the panel reloads, and one the person opened must not
+ * snap shut.
+ */
+const expandedIds = new Set<string>();
+
+/** The glyph a settled card's compact line starts with: how it ended, at a glance. */
+function compactGlyph(question: TabQuestion): { glyph: string; tone: string } {
+  if (question.status === 'failed') return { glyph: '✗', tone: 'text-danger' };
+  if (question.status === 'expired') return { glyph: '○', tone: 'text-fg-dim' };
+  if (question.status === 'answered' && question.kind === 'permission' && question.answer && !question.answer.allow) return { glyph: '✗', tone: 'text-danger' };
+  return { glyph: '✓', tone: 'text-ok' };
+}
 
 export interface TabQuestionCardProps {
   question: TabQuestion;
@@ -33,9 +48,48 @@ export interface TabQuestionCardProps {
 export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionCardProps) {
   const { t } = useTranslation();
   const { question, error } = props;
+  // TER-1108: a card nobody has to answer any more — answered here, in the tab, by a rule or by the
+  // countdown, expired or failed — reads as one neutral line, and opens to the whole card on a click. Only
+  // a card still waiting on the person keeps its full form and its attention border; the moment it is
+  // answered it folds by itself.
+  const settled = question.status !== 'open';
+  const [expanded, setExpanded] = useState(() => expandedIds.has(question.id));
+  const toggle = (open: boolean) => {
+    if (open) expandedIds.add(question.id);
+    else expandedIds.delete(question.id);
+    setExpanded(open);
+  };
+  if (settled && !expanded) {
+    const { glyph, tone } = compactGlyph(question);
+    return (
+      // `data-chat-card`: how the pending bar and a reply's quote find this card (TER-477, TER-849). No
+      // `chat-enter`: the line replaces a card that was already on screen, and fading it in would blink.
+      <li data-chat-card={question.id} data-compact="" className="flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-xs text-fg-dim">
+        <span aria-hidden="true" className={tone}>
+          {glyph}
+        </span>
+        {/* Plain text only (a tab's name, a question an agent wrote): the whole card is behind "Ver detalhes". */}
+        <span className="min-w-0 flex-1 truncate text-fg-muted" title={compactQuestionLine(question)}>
+          {compactQuestionLine(question)}
+        </span>
+        {question.auto_decision && <AutoDecisionBadge decision={question.auto_decision} />}
+        <button type="button" className="shrink-0 underline hover:text-fg" aria-expanded={false} onClick={() => toggle(true)}>
+          {t('Ver detalhes')}
+        </button>
+      </li>
+    );
+  }
   return (
-    // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477).
-    <li data-chat-card={question.id} className="chat-enter group rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
+    // `data-chat-card`: how the pending bar finds this card to scroll to it (TER-477). A settled card waits
+    // on nobody, so it drops the attention border.
+    <li data-chat-card={question.id} className={`chat-enter group rounded-xl border ${settled ? 'border-line' : 'border-attention/40'} bg-bg-2 px-4 py-3 text-sm`}>
+      {settled && (
+        <div className="flex justify-end">
+          <button type="button" className="text-xs text-fg-dim underline hover:text-fg" aria-expanded onClick={() => toggle(false)}>
+            {t('Recolher')}
+          </button>
+        </div>
+      )}
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
       {props.onReply && (
         <div className="mt-1 flex justify-end">
