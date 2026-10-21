@@ -4,6 +4,7 @@ import type { TChatEvent, TTabChatPage, TTabQuestion, TTabSuggestion } from '@/s
 import { ApiError } from '@/services/api/errors';
 import { mmkv } from '@/services/storage';
 import { enrol, setupSession } from '../../../../test/helpers/enrolled-session';
+import { startedAgentOf } from '../model/started-agent';
 import { createTabChatStore } from './createTabChatStore';
 
 type Store = ReturnType<typeof createTabChatStore>;
@@ -291,7 +292,7 @@ describe('an empty conversation (TER-1091)', () => {
 });
 
 describe('a plain shell (TER-1094)', () => {
-  const options = { choices: [{ account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null }, { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null }], suggested: 'acc-claude' };
+  const options = { choices: [{ account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null }, { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null }], suggested: 'acc-claude', provider: 'claude' };
 
   it('loads the accounts an agent can start with only when the page says no_agent', async () => {
     const ctx = await setup();
@@ -322,7 +323,7 @@ describe('a plain shell (TER-1094)', () => {
   it('"Iniciar sessão" with the suggested account sends none, then reads the page again and says what comes next', async () => {
     const ctx = await setup();
     jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(await noSessionPage(ctx, 'no_agent'));
-    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude' });
+    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude', model: 'opus' });
     await openAndConnect(ctx.chat);
     const read = jest.spyOn(ctx.api, 'tabChat');
     read.mockClear(); // the same spy as above: only the reads from here on
@@ -330,11 +331,13 @@ describe('a plain shell (TER-1094)', () => {
     expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', {});
     expect(read).toHaveBeenCalledTimes(1);
     expect(ctx.chat.getState()).toMatchObject({ agentStarted: true, startingAgent: false, startAgentError: null });
+    // TER-1104: with what it started, for the header line
+    expect(ctx.chat.getState().startedWith).toEqual({ provider: 'claude', account: 'Pessoal', model: 'opus' });
   });
 
   it('a chosen account goes with the call', async () => {
     const ctx = await setup();
-    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-codex', label: 'Trabalho' }, provider: 'chatgpt' });
+    const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-codex', label: 'Trabalho' }, provider: 'chatgpt', model: null });
     await ctx.chat.getState().open();
     await ctx.chat.getState().startAgent('acc-codex');
     expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', { account_id: 'acc-codex' });
@@ -342,12 +345,14 @@ describe('a plain shell (TER-1094)', () => {
 
   it('an agent started in a new tab answers its id, and this screen reads nothing again', async () => {
     const ctx = await setup();
-    jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-new', new_tab: true, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude' });
+    jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-new', new_tab: true, account: { id: 'acc-claude', label: 'Pessoal' }, provider: 'claude', model: null });
     await ctx.chat.getState().open();
     const read = jest.spyOn(ctx.api, 'tabChat');
     await expect(ctx.chat.getState().startAgent()).resolves.toBe('t-new');
     expect(read).not.toHaveBeenCalled();
     expect(ctx.chat.getState().agentStarted).toBe(false);
+    // the new tab's screen says with what it started (TER-1104)
+    expect(startedAgentOf('t-new')).toEqual({ provider: 'claude', account: 'Pessoal', model: null });
   });
 
   it('a refused start keeps the server\'s message; a network failure the generic one', async () => {

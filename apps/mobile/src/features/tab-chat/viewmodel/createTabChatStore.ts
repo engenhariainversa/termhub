@@ -28,6 +28,7 @@ import {
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
 import { TAB_CHAT_MSG } from '../model/messages';
+import { rememberStartedAgent, startedAgentOf, type StartedAgent } from '../model/started-agent';
 import { mergeItems } from '../model/timeline';
 
 export interface SessionApi {
@@ -76,6 +77,8 @@ export interface TabChatState {
   startAgentError: string | null;
   /** "Iniciar sessão" started the agent in this tab: the screen says the conversation comes once it answers. */
   agentStarted: boolean;
+  /** What "Iniciar sessão" started this tab's agent with (TER-1104), here or from a tab whose pane was busy. */
+  startedWith: StartedAgent | null;
 
   open(): Promise<void>;
   /** "Instalar hooks" on the tab's machine, then the page again. A refusal is the screen's `error`. */
@@ -131,6 +134,7 @@ const initialData = (): Data => ({
   startingAgent: false,
   startAgentError: null,
   agentStarted: false,
+  startedWith: null,
 });
 
 const isApiError = (e: unknown, code?: string): e is ApiError => e instanceof ApiError && (code === undefined || e.code === code);
@@ -327,6 +331,7 @@ export function createTabChatStore(deps: TabChatDeps) {
 
     return {
       ...initialData(),
+      startedWith: startedAgentOf(tabId),
 
       async open() {
         const gen = generation;
@@ -379,9 +384,12 @@ export function createTabChatStore(deps: TabChatDeps) {
         try {
           const started = await api.startTabAgent(session().auth(), tabId, accountId ? { account_id: accountId } : {});
           if (gen !== generation) return null;
+          const model = started.model ?? get().agentOptions?.choices.find((c) => c.account_id === started.account.id)?.model ?? null;
+          const agent: StartedAgent = { provider: started.provider, account: started.account.label, model };
+          rememberStartedAgent(started.tab_id, agent);
           if (started.new_tab) return started.tab_id;
           // Started here: the hooks report its session, and the tab turning readable reads the page again.
-          set({ agentStarted: true });
+          set({ agentStarted: true, startedWith: agent });
           await reload();
           return null;
         } catch (e) {

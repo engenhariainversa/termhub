@@ -2158,6 +2158,8 @@ export interface TabAgentChoice {
 export interface TabAgentOptions {
   choices: TabAgentChoice[];
   suggested: string | null;
+  /** the project's CLI (TER-1104), preselected when the person chooses; null or absent = the project names none */
+  provider?: string | null;
 }
 
 /** `POST tab-chat/:id/agent`: where the agent started (this tab, or a new one of the same project and machine). */
@@ -2166,6 +2168,8 @@ export interface StartTabAgentResult {
   new_tab: boolean;
   account: { id: string; label: string };
   provider: string;
+  /** the model the CLI started with (TER-1104); null = the CLI's own default; absent from an older server */
+  model?: string | null;
 }
 
 export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';

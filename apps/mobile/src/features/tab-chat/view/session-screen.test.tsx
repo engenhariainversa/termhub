@@ -135,9 +135,10 @@ describe('the first message of a session started here (TER-1107)', () => {
 });
 
 describe('a plain shell offers to start the agent (TER-1094)', () => {
-  const claude = { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: null };
-  const codex = { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null };
-  async function shell(agentOptions: { choices: (typeof claude)[]; suggested: string | null }) {
+  const claude = { account_id: 'acc-claude', label: 'Pessoal', provider: 'claude', model: 'opus' as string | null };
+  const codex = { account_id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt', model: null as string | null };
+  async function shell(options: { choices: (typeof claude)[]; suggested: string | null; provider?: string | null }) {
+    const agentOptions = { provider: null, ...options };
     await renderSession();
     const startAgent = jest.fn(async (_id?: string) => null as string | null);
     await act(() => current().setState({ startAgent, items: [], questions: [], suggestions: [], emptyReason: 'no_agent', availability: 'no_session', agentOptions }));
@@ -147,7 +148,7 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
   it('with a suggested account, one button starts it and names it; the others wait behind "Escolher outra conta"', async () => {
     const startAgent = await shell({ choices: [claude, codex], suggested: 'acc-claude' });
     expect(screen.getByText('Esta aba é um terminal sem agente')).toBeTruthy();
-    expect(screen.getByText('Com Pessoal (Claude Code)')).toBeTruthy();
+    expect(screen.getByText('Com Pessoal (Claude Code) · modelo opus')).toBeTruthy();
     expect(screen.queryByTestId('session-start-agent-acc-codex')).toBeNull();
     await fireEvent.press(screen.getByTestId('session-start-agent'));
     expect(startAgent).toHaveBeenCalledWith(undefined);
@@ -156,12 +157,28 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
     expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
   });
 
-  it('without one, each account is its own button', async () => {
-    const startAgent = await shell({ choices: [claude, codex], suggested: null });
+  it('without one, a picker asks first: the project CLI preselected, its accounts and model, nothing started until pressed (TER-1104)', async () => {
+    const claude2 = { account_id: 'acc-claude-2', label: 'Outra', provider: 'claude', model: 'opus' as string | null };
+    const startAgent = await shell({ choices: [claude, claude2, codex], suggested: null, provider: 'claude' });
     expect(screen.queryByTestId('session-start-agent')).toBeNull();
-    await fireEvent.press(screen.getByTestId('session-start-agent-acc-claude'));
-    expect(startAgent).toHaveBeenCalledWith('acc-claude');
-    expect(screen.getByText('Iniciar com Trabalho (Codex)')).toBeTruthy();
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-cli-claude').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByTestId('session-account-acc-claude').props.accessibilityState).toMatchObject({ selected: true });
+    expect(screen.getByText('Modelo: opus')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('session-account-acc-claude-2'));
+    await fireEvent.press(screen.getByTestId('session-start-chosen'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-claude-2');
+    await fireEvent.press(screen.getByTestId('session-cli-chatgpt'));
+    expect(screen.queryByTestId('session-account-acc-codex')).toBeNull();
+    expect(screen.getByText('Conta Trabalho')).toBeTruthy();
+    expect(screen.getByText('Modelo: padrão do CLI')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('session-start-chosen'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
+  });
+
+  it("without a project CLI, the picker starts on the first choice's", async () => {
+    await shell({ choices: [codex, claude], suggested: null });
+    expect(screen.getByTestId('session-cli-chatgpt').props.accessibilityState).toMatchObject({ selected: true });
   });
 
   it('without any account it says where to add one, with no button', async () => {
@@ -181,9 +198,11 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
 
   it('once started here, it says the conversation comes when the agent answers', async () => {
     await shell({ choices: [claude], suggested: 'acc-claude' });
-    await act(() => current().setState({ agentStarted: true }));
+    await act(() => current().setState({ agentStarted: true, startedWith: { provider: 'claude', account: 'Pessoal', model: 'opus' } }));
     expect(screen.getByText('Sessão iniciada. A conversa aparece aqui assim que o agente responder.')).toBeTruthy();
     expect(screen.queryByTestId('session-start-agent')).toBeNull();
+    // TER-1104: under the header, with what it started
+    expect(screen.getByTestId('session-started-with').props.children).toBe('Iniciado com Claude Code · conta Pessoal · modelo opus');
   });
 });
 
