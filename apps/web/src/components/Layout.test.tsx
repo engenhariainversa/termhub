@@ -33,6 +33,7 @@ vi.mock('./SidebarRail', () => ({
   ),
 }));
 vi.mock('./chat/ChatDock', () => ({ ChatDock: () => <aside aria-label="dock" /> }));
+vi.mock('./chat/ConciergeNotices', () => ({ ConciergeNotices: () => null }));
 const dock = vi.hoisted(() => ({ shownProjectId: null as string | null, maximized: false }));
 vi.mock('../lib/project-chat', () => ({
   ProjectChatProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,

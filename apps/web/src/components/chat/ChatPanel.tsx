@@ -20,6 +20,7 @@ import { ConfirmDialog } from '../Modal';
 import { api, ApiError } from '../../lib/api';
 import { patchMessageAttachment } from '../../lib/attachments';
 import { useChatStream } from '../../lib/chat';
+import { clearChatJump, useChatJump } from '../../lib/chat-jump';
 import { compactDoneText, compactFailedText, contextLevel, contextMax, contextShare, isCompactCommand, isCompactShortcut } from '../../lib/chat-context';
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
@@ -856,6 +857,12 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     setHighlightId(id);
     return true;
   }, []);
+  // TER-1101: a notification's click asked for a message of this conversation: brought to the middle and
+  // ringed like a quote's original, once it is in the thread (the thread may still be loading).
+  const jump = useChatJump(conversationId);
+  useEffect(() => {
+    if (jump && messages.some((m) => m.id === jump.messageId) && openReply(jump.messageId)) clearChatJump(jump);
+  }, [jump, messages, openReply]);
 
   const send = useCallback(
     async (value: string, attachmentIds: string[], replyToId?: string): Promise<boolean> => {

@@ -38,6 +38,7 @@ describe('SettingsSidebar', () => {
       ['Integrações', '/settings/integrations'],
       ['Tokens de API', '/settings/api-tokens'],
       ['Aparelhos', '/settings/devices'],
+      ['Avisos', '/settings/notifications'],
       ['Permissões do chat', '/settings/chat-grants'],
       ['Contas de IA', '/settings/ai'],
       ['Hardware', '/settings/hardware'],

@@ -12,6 +12,7 @@ describe('settings sections', () => {
       'account:integrations',
       'account:api-tokens',
       'account:devices',
+      'account:notifications',
       'account:chat-grants',
       'account:ai',
       'account:hardware',
@@ -60,7 +61,7 @@ describe('settings sections', () => {
 
   it('puts Permissões do chat under Conta, gated by the chat resource', () => {
     expect(SETTINGS_SECTIONS.find((s) => s.key === 'chat-grants')).toEqual({ key: 'chat-grants', label: 'Permissões do chat', resource: 'chat', group: 'account' });
-    expect(visibleSettingsSections((r) => r === 'chat').map((s) => s.key)).toEqual(['profile', 'city', 'account-security', 'chat-grants']);
+    expect(visibleSettingsSections((r) => r === 'chat').map((s) => s.key)).toEqual(['profile', 'city', 'account-security', 'notifications', 'chat-grants']);
   });
 
   it('puts Auditoria under Administração, gated by the security trail resource (TER-577)', () => {

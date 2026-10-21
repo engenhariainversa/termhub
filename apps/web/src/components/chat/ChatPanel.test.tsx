@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { requestChatJump } from '../../lib/chat-jump';
 import { ChatPanel } from './ChatPanel';
 import type { ChatAction, ChatGrant, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabQuestion, TabSuggestion } from '../../lib/types';
 
@@ -1789,6 +1790,22 @@ describe('replies (TER-447)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ver mensagem original: Você, uma antiga' }));
     expect(screen.getByText('Mensagem original indisponível')).toBeInTheDocument();
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('a notification\'s click opens the chat at its message, once the thread has it (TER-1101)', async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: thread, actions: [], host: READY });
+    requestChatJump({ conversationId: 'c_p1', messageId: 'm1' });
+    const { container } = render(
+      <MemoryRouter>
+        <ChatPanel projectId="p1" />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledTimes(1));
+    const row = container.querySelector('[data-message-id="m1"]')!;
+    expect(scrollIntoView.mock.contexts[0]).toBe(row);
+    expect(row.className).toContain('ring-accent/60');
   });
 });
 
