@@ -98,3 +98,31 @@ describe('"aba terminou" setting (TER-925)', () => {
     expect(store.getState().pushSettingsError).toBe('Erro interno');
   });
 });
+
+describe('concierge notices (TER-1101)', () => {
+  it('loads the rules, saves a change with the phone\'s zone and keeps "aba terminou" as it was', async () => {
+    const { store, api } = await setup();
+    expect(store.getState().concierge).toBeNull();
+    await store.getState().loadPushSettings();
+    const rules = store.getState().concierge!;
+    expect(rules).toEqual({ needs_you: true, done: true, quiet_start: null, quiet_end: null, group_minutes: 5 });
+    const spy = jest.spyOn(api, 'setPushSettings');
+    await store.getState().setConcierge({ ...rules, done: false, quiet_start: '22:00', quiet_end: '07:00' });
+    expect(spy).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ tab_finished: false, concierge: { ...rules, done: false, quiet_start: '22:00', quiet_end: '07:00' } }));
+    expect(store.getState().concierge).toMatchObject({ done: false, quiet_start: '22:00' });
+    await store.getState().loadPushSettings();
+    expect(store.getState().concierge).toMatchObject({ done: false, quiet_end: '07:00' });
+    sessionEnded.emit();
+    expect(store.getState().concierge).toBeNull();
+  });
+
+  it('a failed change goes back and says why', async () => {
+    const { store, api } = await setup();
+    await store.getState().loadPushSettings();
+    const rules = store.getState().concierge!;
+    jest.spyOn(api, 'setPushSettings').mockRejectedValue(new ApiError(500, 'INTERNAL', 'Erro interno'));
+    await store.getState().setConcierge({ ...rules, group_minutes: 30 });
+    expect(store.getState().concierge).toEqual(rules);
+    expect(store.getState().pushSettingsError).toBe('Erro interno');
+  });
+});

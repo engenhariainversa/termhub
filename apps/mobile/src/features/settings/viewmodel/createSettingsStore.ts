@@ -9,6 +9,8 @@ import type { TDeviceSelf } from '@/services/api/contract';
 import { TERMHUB_URL } from '@/services/api/config';
 import { ApiError } from '@/services/api/errors';
 import type { Auth, MobileApi } from '@/services/api/types';
+import type { ConciergePushSettings } from '@/services/api/contract';
+import { deviceTimeZone } from '@/features/automation/model/automation';
 import { serverLabel } from '../model/server-label';
 
 export interface SessionApi {
@@ -41,6 +43,10 @@ export interface SettingsState {
   pushSettingsError: string | null;
   loadPushSettings(): Promise<void>;
   setTabFinished(on: boolean): Promise<void>;
+  /** TER-1101: the concierge's notices (levels, quiet hours, grouping), per account; `null` until loaded, or
+   *  from a server older than them. */
+  concierge: ConciergePushSettings | null;
+  setConcierge(next: ConciergePushSettings): Promise<void>;
 }
 
 /** Time to close the app before the test push is sent. */
@@ -62,12 +68,13 @@ export function createSettingsStore(deps: SettingsDeps) {
     pushTest: { sending: false, note: null, error: null },
     tabFinished: null,
     pushSettingsError: null,
+    concierge: null,
 
     async loadPushSettings() {
       const gen = generation;
       try {
-        const { tab_finished } = await api.pushSettings(session().auth());
-        if (gen === generation) set({ tabFinished: tab_finished, pushSettingsError: null });
+        const { tab_finished, concierge } = await api.pushSettings(session().auth());
+        if (gen === generation) set({ tabFinished: tab_finished, concierge: concierge ?? null, pushSettingsError: null });
       } catch (e) {
         if (gen !== generation || session().handleApiError(e)) return;
         set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
@@ -82,6 +89,21 @@ export function createSettingsStore(deps: SettingsDeps) {
         set({ tabFinished: tab_finished });
       } catch (e) {
         set({ tabFinished: before });
+        if (session().handleApiError(e)) return;
+        set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
+      }
+    },
+
+    async setConcierge(next) {
+      const { tabFinished, concierge: before } = store.getState();
+      if (tabFinished === null) return;
+      set({ concierge: next, pushSettingsError: null });
+      try {
+        const zone = deviceTimeZone();
+        const saved = await api.setPushSettings(session().auth(), { tab_finished: tabFinished, concierge: next, ...(zone ? { time_zone: zone } : {}) });
+        set({ concierge: saved.concierge ?? next });
+      } catch (e) {
+        set({ concierge: before });
         if (session().handleApiError(e)) return;
         set({ pushSettingsError: e instanceof ApiError ? e.message : networkMsg() });
       }
@@ -115,7 +137,7 @@ export function createSettingsStore(deps: SettingsDeps) {
 
   sessionEnded.subscribe(() => {
     generation++;
-    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null }, tabFinished: null, pushSettingsError: null });
+    store.setState({ device: null, loadingDevice: false, error: null, pushTest: { sending: false, note: null, error: null }, tabFinished: null, pushSettingsError: null, concierge: null });
   });
 
   // The label is copy ("Servidor: …"): it follows a language change.

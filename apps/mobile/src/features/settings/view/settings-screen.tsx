@@ -20,6 +20,7 @@ import { AppText, Button, Screen, Sheet } from '@/ui';
 import { runKeyDiagnostic, type KeyDiagnosticResult } from '../model/key-diagnostic';
 import { updateLabel } from '../model/update-label';
 import { useSettingsStore } from '../viewmodel/useSettingsStore';
+import { ConciergeNoticeSettings } from './concierge-notices';
 import { KeyDiagnosticSheet } from './key-diagnostic-sheet';
 
 const PLATFORM_LABEL: Record<'ios' | 'android', string> = { ios: 'iOS', android: 'Android' };
@@ -174,6 +175,7 @@ export function SettingsScreen() {
                 />
               </View>
               <AppText variant="muted">{PERMISSIONS_MSG.tabFinishedHint}</AppText>
+              <ConciergeNoticeSettings />
               {pushSettingsError ? <AppText className="text-app-danger">{pushSettingsError}</AppText> : null}
               <Button label={PERMISSIONS_MSG.pushTest} variant="secondary" loading={pushTest.sending} onPress={() => void sendTestPush()} />
               <AppText variant="muted">{pushTest.note ? `${pushTest.note} ${PERMISSIONS_MSG.pushTestHint}` : PERMISSIONS_MSG.pushTestHint}</AppText>

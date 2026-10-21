@@ -574,6 +574,42 @@ survives restarts and deploys the same way.
   the 12 wakes per chat per hour hold for reminders too.
 - **Checking one.** `chat_watches.kind = 'reminder'`; `params.at` is the first time, `baseline.next` the
   next one, `params.zone` the time zone it was set in. The wake turn names it "Lembrete <id>".
+- **Periodic summary of a long job** (TER-1101). "Me manda um resumo a cada hora enquanto isso roda": a
+  repeating reminder with `stop_with` = the id of the open watch on that job. Once that watch is no longer
+  open (it fired, expired or was cancelled), the next sweep cancels the reminder before it wakes again.
+
+## 9g. Notices outside the chat: push with levels (TER-1101)
+
+When the concierge writes on its own (a watch, a reminder, a subagent, a tab's card), it calls the MCP tool
+`notify` in that answer with a level and a one-line headline. Nothing else reaches a closed chat: a woken
+answer no longer sends the generic "Resposta pronta" push (a late audio transcript still does: the person
+sent it).
+
+- **Levels.** `needs_you` (a question, an approval, an error that blocks), `done` (something the person
+  asked to follow happened; must name the watch or reminder in `watch_id`, of the same chat, else
+  `NOTICE_NOT_FOLLOWED`), `fyi` (stays in the chat, nothing is stored).
+- **When it leaves.** The notice (`concierge_notices`) is pending until its answer ends (`run_finished`
+  sets `message_id` and `ready_at`), or 10 minutes later if the run never said so (then it points at the
+  newest answer). The dispatcher (on every answer's end and every 30 s, both colours, claim per row) applies
+  the person's rules, per conversation:
+  - a level turned off → `status = 'dropped'`, `reason = 'level_off'`;
+  - quiet hours on the person's clock (`users.time_zone`, UTC when unset) → waits (`reason = 'quiet'`),
+    then everything leaves as one push when they end;
+  - grouping: within `group_minutes` (default 5) of the conversation's last push, notices wait for the
+    window's end and leave as one (`reason = 'grouped'`); `needs_you` does not wait for it;
+  - cap: 6 pushes per conversation per rolling hour, every level (`reason = 'capped'`).
+  One push carries the most urgent level, the latest headline of it and "(+N avisos)"; one notification per
+  conversation on the phone (`collapseId concierge:<conversation>`).
+- **Where.** Phones without a live chat socket (history kind `confirmation` for needs_you, `reply` for done;
+  `data.kind = 'concierge'`, `data.message_id`: the tap opens `/chat/<id>?message=<msg>`), and the
+  `concierge_notice` event on `/ws/chat`, which the web shows as a browser notification (one per
+  conversation, `tag`) unless that chat is on screen; the click opens the dock or `/chat` at the message.
+- **Rules.** `users.concierge_push` (JSON; null = defaults: both levels on, no quiet hours, 5 min). Set in
+  Configurações → Avisos (web, `GET`/`PUT /api/auth/me/concierge-push`) and Ajustes → Notificações
+  (app, `concierge` in `/api/m/v1/push-settings`; an older app's PUT without it keeps them).
+- **Checking one.** `SELECT level, status, reason, ready_at, sent_at FROM concierge_notices WHERE
+  conversation_id = …`. Pending ones older than 24 h are dropped (`stale`); rows go after 7 days. Logs
+  carry ids, levels and counts, never the headline.
 
 ## 10. After a failed deploy or release
 

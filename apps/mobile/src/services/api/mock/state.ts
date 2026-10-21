@@ -7,6 +7,7 @@ import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
 import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion, TWatchView } from '../contract';
+import type { ConciergePushSettings } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
  * `transport.ts`. `error` is pt-BR text; `extra` carries `attempts_left` / `retry_after`, spread
@@ -311,6 +312,8 @@ export interface MockState {
   legalPending: TLegalVersion[];
   /** "Avisar quando uma aba terminar" (TER-925). */
   pushTabFinished: boolean;
+  /** TER-1101: the concierge's notice rules. */
+  conciergePush: ConciergePushSettings;
   /** Feature flags `GET me` sends for the mock user (TER-1040): all off, like a fresh server. */
   features: { subscriptions: boolean };
   /** "Refazer login" (TER-1047): each AI account's login state (`ok` until a test sets otherwise), and
@@ -367,6 +370,7 @@ export function createMockState(): MockState {
     accountDeletion: null,
     legalPending: [],
     pushTabFinished: false,
+    conciergePush: { needs_you: true, done: true, quiet_start: null, quiet_end: null, group_minutes: 5 },
     features: { subscriptions: false },
     aiLoginStates: new Map(),
     aiLoginFlows: new Map(),

@@ -1,1 +1,4 @@
-{}
+{
+  "{{count}} min_one": "{{count}} min",
+  "{{count}} min_other": "{{count}} min"
+}

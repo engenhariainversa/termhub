@@ -64,13 +64,15 @@ export function registerMeRoutes(router: MockRouter, state: MockState): void {
 
   router.route('GET', '/api/m/v1/push-settings', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
-    return { status: 200, body: { tab_finished: state.pushTabFinished } };
+    return { status: 200, body: { tab_finished: state.pushTabFinished, concierge: state.conciergePush } };
   });
 
   router.route('PUT', '/api/m/v1/push-settings', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'PUT', htu: ctx.htu, now: ctx.now() });
-    state.pushTabFinished = pushSettings.parse(ctx.body).tab_finished;
-    return { status: 200, body: { tab_finished: state.pushTabFinished } };
+    const body = pushSettings.parse(ctx.body);
+    state.pushTabFinished = body.tab_finished;
+    if (body.concierge) state.conciergePush = body.concierge;
+    return { status: 200, body: { tab_finished: state.pushTabFinished, concierge: state.conciergePush } };
   });
 
   // Nothing is really sent in mock mode: it answers like the server (TER-913).
