@@ -256,7 +256,7 @@ export const CODEX_TAB_MCP_ENABLED = true;
  */
 function modelFlag(provider: AiProvider, model: string | null | undefined): string {
   if (model === null || model === undefined) return '';
-  if (!MODEL_RE.test(model)) throw new ControlError('INVALID_MODEL', `Modelo inválido: use um apelido (${CLAUDE_MODEL_ALIAS_LIST}) ou o id do modelo`);
+  if (!MODEL_RE.test(model)) throw new ControlError('INVALID_MODEL', msg('Modelo inválido: use um apelido ({{aliases}}) ou o id do modelo', { aliases: CLAUDE_MODEL_ALIAS_LIST }));
   return ` ${provider === 'chatgpt' ? '-m' : '--model'} ${shellQuote(model)}`;
 }
 
