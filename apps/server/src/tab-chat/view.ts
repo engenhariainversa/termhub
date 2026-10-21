@@ -24,5 +24,6 @@ export function tabSummaryOf(
     activity_verb: tab.activity_verb,
     availability,
     auto_ref: autoRef,
+    agent: tab.state_tool,
   };
 }

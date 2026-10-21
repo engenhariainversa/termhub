@@ -202,15 +202,61 @@ describe('the conversation', () => {
   });
 });
 
+describe('a Codex session gets the same feedback as Claude Code (TER-1102)', () => {
+  const setTab = (p: object) => act(() => current().setState({ tab: { ...current().getState().tab!, ...p } }));
+
+  it('names Codex in the header and says what it does, in words, while it works', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-agent')).toHaveTextContent('Codex');
+    expect(screen.getByText('Trabalhando · rodando comandos')).toBeTruthy();
+    expect(screen.queryByText('Padrão')).toBeNull();
+    // the commands and the edit the Codex session file recorded, folded as Claude's tools are
+    expect(screen.getByText('3 ferramentas')).toBeTruthy();
+  });
+
+  it('shows "pensando…" under the last row while it works, and drops it when the turn ends', async () => {
+    await renderSession('t-codex');
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+    await setTab({ activity: 'coding' });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · editando arquivos');
+    // hooks not trusted: no activity, only the tab's state
+    await setTab({ activity: null });
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando…');
+    await setTab({ state: 'idle', finished: true, activity: null });
+    expect(screen.queryByTestId('session-thinking')).toBeNull();
+    expect(screen.getByText('Concluído')).toBeTruthy();
+  });
+
+  it('a Claude tool running at the end of the history is named in the line', async () => {
+    await renderSession();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('executando Read · src/app.ts…');
+  });
+
+  it("an empty Codex session that already works still says so, under Codex's own empty text", async () => {
+    await renderSession('t-codex');
+    await act(() => current().setState({ items: [], emptyReason: 'new_session' }));
+    expect(screen.getByText(/sessão atual do Codex/)).toBeTruthy();
+    expect(screen.getByTestId('session-thinking')).toHaveTextContent('pensando… · rodando comandos');
+  });
+
+  it('its menu has no "Alternar modo": that reads Claude Code\'s footer', async () => {
+    await renderSession('t-codex');
+    await fireEvent.press(screen.getByRole('button', { name: 'Mais ações' }));
+    expect(screen.queryByText('Alternar modo')).toBeNull();
+    expect(screen.getByText('Compactar (/compact)')).toBeTruthy();
+  });
+});
+
 describe('the composer', () => {
-  it('while the tab works, the send button interrupts; a long press still sends', async () => {
+  it('while the tab works, the empty box interrupts; once something is typed, ↑ sends it (TER-1102)', async () => {
     await renderSession();
     const action = jest.spyOn(stores.api, 'tabAction');
     const send = jest.spyOn(stores.api, 'sendTabMessage');
     await fireEvent.press(screen.getByRole('button', { name: 'Interromper' }));
     expect(action).toHaveBeenCalledWith(expect.anything(), 't-api', 'interrupt');
     await fireEvent.changeText(screen.getByLabelText('Mensagem'), 'depois rode o lint');
-    await fireEvent(screen.getByRole('button', { name: 'Interromper' }), 'longPress');
+    expect(screen.queryByRole('button', { name: 'Interromper' })).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(send).toHaveBeenCalledWith(expect.anything(), 't-api', 'depois rode o lint'));
   });
 
