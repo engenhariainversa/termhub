@@ -53,6 +53,19 @@ describe('ProjectAiCard', () => {
     expect(await screen.findByText('Contas e modelo salvos.')).toBeInTheDocument();
   });
 
+  it('offers Fable among the Claude aliases and saves it as the alias (TER-1097)', async () => {
+    get.mockResolvedValue(view({ accounts: ['a1'] }));
+    save.mockImplementation(async (_p: string, ai: ProjectAiView['ai']) => ({ ...view(), ai }));
+    render(<ProjectAiCard project={project} />);
+    const select = await screen.findByLabelText('Modelo padrão — Claude Code');
+    expect(Array.from((select as HTMLSelectElement).options).map((o) => o.value)).toEqual(['', 'fable', 'opus', 'sonnet', 'haiku', '__other__']);
+    fireEvent.change(select, { target: { value: 'fable' } });
+    // An alias: no warning about older CLIs.
+    expect(screen.queryByText(/Um CLI mais antigo numa máquina pode não reconhecer este id/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar contas e modelo' }));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('p1', { accounts: ['a1'], models: { claude: 'fable', chatgpt: null } }));
+  });
+
   it('warns about a full model id and refuses one the server would refuse', async () => {
     get.mockResolvedValue(view({ models: { claude: 'claude-opus-5-5', chatgpt: null } }));
     render(<ProjectAiCard project={project} />);

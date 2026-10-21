@@ -248,7 +248,7 @@
   "Trabalho automático": "Trabajo automático",
   "Título": "Título",
   "Título do épico": "Título de la épica",
-  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.": "Un CLI más antiguo en una máquina puede no reconocer este id. Un alias (opus, sonnet, haiku) funciona en cualquier versión.",
+  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido ({{aliases}}) o próprio CLI resolve para o modelo mais novo.": "Un CLI más antiguo en una máquina puede no reconocer este id. El propio CLI resuelve un alias ({{aliases}}) al modelo más nuevo.",
   "Um projeto junta os terminais, as tarefas e as notas de um trabalho, numa pasta de uma das suas máquinas.": "Un proyecto reúne los terminales, las tareas y las notas de un trabajo, en una carpeta de una de tus máquinas.",
   "Usada nas URLs e nos números dos cards; não muda.": "Se usa en las URL y en los números de las tarjetas; no cambia.",
   "Use só letras, números, ponto, hífen, dois-pontos ou colchetes.": "Usa solo letras, números, punto, guion, dos puntos o corchetes.",

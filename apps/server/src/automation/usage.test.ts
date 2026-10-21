@@ -109,9 +109,9 @@ describe('meterTab', () => {
   });
 
   it('stores a null cost for an unknown model, with the counts', async () => {
-    s.transcript.append(assistant('msg1', 'claude-fable-5-1', { input_tokens: 5, output_tokens: 7 }));
+    s.transcript.append(assistant('msg1', 'claude-mythos-5-1', { input_tokens: 5, output_tokens: 7 }));
     await meterTab(s.deps, baseTab);
-    expect(s.record.mock.calls[0]![0]).toMatchObject({ model: 'claude-fable-5-1', cost_usd: null, tokens: { input: 5, output: 7 } });
+    expect(s.record.mock.calls[0]![0]).toMatchObject({ model: 'claude-mythos-5-1', cost_usd: null, tokens: { input: 5, output: 7 } });
   });
 
   it('passes nothing but ids, counts, the day and the offset to the repository', async () => {

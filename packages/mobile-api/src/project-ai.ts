@@ -27,8 +27,7 @@ export type ProjectAiResponse = z.infer<typeof projectAiResponse>;
 
 export const projectAiBody = z.object({ ai: projectAiSchema });
 
-/** Aliases every Claude CLI resolves itself; anything else is a full id an older CLI may not know. */
-export const CLAUDE_MODEL_ALIASES = ['opus', 'sonnet', 'haiku'] as const;
+// The Claude aliases the screens offer (`CLAUDE_MODEL_ALIASES`) and the model rule live in `models.ts`.
 
 /**
  * A usage-limit card in a project's chat (TER-589): a tab stuck on its account's limit on a machine that

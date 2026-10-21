@@ -246,7 +246,7 @@ describe('launchLine with a model (TER-589)', () => {
   });
   it('refuses a model the shell could read, before anything is typed', () => {
     for (const bad of ['opus; id', '$(id)', "o'pus", '-p', ''])
-      expect(() => launchLine('claude', null, 'x', null, bad), bad).toThrow(new ControlError('INVALID_MODEL', 'Modelo inválido: use um apelido (opus, sonnet, haiku) ou o id do modelo'));
+      expect(() => launchLine('claude', null, 'x', null, bad), bad).toThrow(new ControlError('INVALID_MODEL', 'Modelo inválido: use um apelido (fable, opus, sonnet, haiku) ou o id do modelo'));
   });
 });
 
@@ -704,7 +704,15 @@ describe('startAgent with the project setup (TER-589)', () => {
   it('warns when the model is a full id an older CLI may not know', async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'claude-opus-5-5' } } });
     const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
-    expect(r.warning).toBe('O modelo claude-opus-5-5 não é um apelido (opus, sonnet, haiku): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.');
+    expect(r.warning).toBe('O modelo claude-opus-5-5 não é um apelido (fable, opus, sonnet, haiku): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.');
+  });
+
+  it('starts on Fable through its alias, without the full-id warning (TER-1097)', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'fable' } } });
+    const r = await startAgent(c, { project_id: 'p1', prompt: 'p' });
+    expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', started('p'), null, 'fable'));
+    expect(r.model).toBe('fable');
+    expect(r.warning).toBeUndefined();
   });
 
   it('refuses a bad model before opening anything', async () => {

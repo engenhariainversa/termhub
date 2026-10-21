@@ -2,7 +2,7 @@
   "Contas e modelo do projeto": "Project accounts and model",
   "Sem contas escolhidas, cada início de agente pede a conta, como hoje.": "With no accounts chosen, each agent start asks for the account, as it does today.",
   "Use só letras, números, ponto, hífen, dois-pontos ou colchetes.": "Use only letters, numbers, dots, hyphens, colons or brackets.",
-  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido (opus, sonnet, haiku) vale em qualquer versão.": "An older CLI on a machine may not recognize this id. An alias (opus, sonnet, haiku) works in any version.",
+  "Um CLI mais antigo numa máquina pode não reconhecer este id. Um apelido ({{aliases}}) o próprio CLI resolve para o modelo mais novo.": "An older CLI on a machine may not recognize this id. The CLI itself resolves an alias ({{aliases}}) to the newest model.",
   "Contas e modelo salvos.": "Accounts and model saved.",
   "Não foi possível falar com o servidor. Tente de novo.": "Could not reach the server. Try again.",
   "{{label}} (login padrão)": "{{label}} (default login)",

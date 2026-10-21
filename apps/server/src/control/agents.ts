@@ -1,4 +1,5 @@
 import { mcpConfig } from '@termhub/claude-cli';
+import { CLAUDE_MODEL_ALIAS_LIST } from '@termhub/mobile-api';
 import { buildGuardSettings, isClaudeSessionId, shellQuote, TAB_ID_RE, TAB_MCP_DIR_REL } from '@termhub/machine-ops';
 import { config } from '../config.js';
 import { MODEL_RE, type ProjectAi } from '../setup/schema.js';
@@ -255,7 +256,7 @@ export const CODEX_TAB_MCP_ENABLED = true;
  */
 function modelFlag(provider: AiProvider, model: string | null | undefined): string {
   if (model === null || model === undefined) return '';
-  if (!MODEL_RE.test(model)) throw new ControlError('INVALID_MODEL', 'Modelo inválido: use um apelido (opus, sonnet, haiku) ou o id do modelo');
+  if (!MODEL_RE.test(model)) throw new ControlError('INVALID_MODEL', msg('Modelo inválido: use um apelido ({{aliases}}) ou o id do modelo', { aliases: CLAUDE_MODEL_ALIAS_LIST }));
   return ` ${provider === 'chatgpt' ? '-m' : '--model'} ${shellQuote(model)}`;
 }
 
@@ -639,7 +640,7 @@ export async function startAgent(
     account: { id: account.id, label: account.label },
     model,
     ...(model !== null && account.provider === 'claude' && !isAlias(model)
-      ? { warning: `O modelo ${model} não é um apelido (opus, sonnet, haiku): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.` }
+      ? { warning: `O modelo ${model} não é um apelido (${CLAUDE_MODEL_ALIAS_LIST}): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.` }
       : {}),
     note: `O agente está subindo com o prompt. Chame wait_for_state para saber quando ele terminar ou parar (num único subagente em segundo plano, que termina na primeira parada), e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
   };

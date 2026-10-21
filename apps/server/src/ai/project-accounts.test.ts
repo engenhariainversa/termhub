@@ -29,7 +29,7 @@ describe('modelFor', () => {
 
 describe('isAlias', () => {
   it('knows the aliases every Claude CLI resolves itself', () => {
-    for (const m of ['opus', 'sonnet', 'haiku', 'sonnet[1m]']) expect(isAlias(m), m).toBe(true);
-    for (const m of ['claude-opus-5-5', 'gpt-5-codex', 'opusplan2']) expect(isAlias(m), m).toBe(false);
+    for (const m of ['fable', 'opus', 'sonnet', 'haiku', 'sonnet[1m]', 'fable[1m]']) expect(isAlias(m), m).toBe(true);
+    for (const m of ['claude-fable-5-1', 'claude-opus-5-5', 'gpt-5-codex', 'opusplan2']) expect(isAlias(m), m).toBe(false);
   });
 });

@@ -52,7 +52,7 @@
   "Limite de 20 lições por hora atingido; tente mais tarde": "Limit of 20 lessons per hour reached; try again later",
   "Limite de 30 anotações por hora atingido; tente mais tarde": "Limit of 30 notes per hour reached; try again later",
   "MCP_URL inválido": "Invalid MCP_URL",
-  "Modelo inválido: use um apelido (opus, sonnet, haiku) ou o id do modelo": "Invalid model: use an alias (opus, sonnet, haiku) or the model id",
+  "Modelo inválido: use um apelido ({{aliases}}) ou o id do modelo": "Invalid model: use an alias ({{aliases}}) or the model id",
   "Nenhuma outra conta do Claude desta máquina pôde assumir a sessão (mesma conta, pasta ausente ou conflito)": "No other Claude account on this machine could take over the session (same account, missing folder or conflict)",
   "Nenhuma outra conta do Claude desta máquina tem limite disponível": "No other Claude account on this machine has usage left",
   "Não consegui falar com o GitHub para testar o token da máquina {{machine}}; nada foi salvo": "Could not reach GitHub to test the token of machine {{machine}}; nothing was saved",
