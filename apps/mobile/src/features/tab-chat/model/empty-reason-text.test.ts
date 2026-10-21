@@ -28,3 +28,14 @@ it('no reason, or one this build does not know, reads as the generic empty conve
   expect(emptyReasonText(null, 'box')).toEqual({ title: 'Nenhuma mensagem ainda', hint: 'Escreva abaixo para falar com o Claude nesta aba.', install: null });
   expect(emptyReasonText('something_newer', 'box').title).toBe('Nenhuma mensagem ainda');
 });
+
+it("a Codex tab gets Codex's wording, never Claude's (TER-1102)", () => {
+  expect(emptyReasonText('not_reported', 'box', 'codex')).toMatchObject({ title: 'O Codex desta aba ainda não informou a sessão', install: 'Reinstalar hooks' });
+  expect(emptyReasonText('not_reported', 'box', 'codex').hint).toContain('codex resume');
+  expect(emptyReasonText('transcript_missing', 'box', 'codex').hint).toContain('sessão do Codex');
+  expect(emptyReasonText('new_session', 'box', 'codex').hint).toContain('/new');
+  expect(emptyReasonText(null, 'box', 'codex').hint).toBe('Escreva abaixo para falar com o Codex nesta aba.');
+  // the reasons with no Codex wording of their own keep theirs
+  expect(emptyReasonText('codex_untrusted', 'box', 'codex').title).toBe('O Codex ainda não confia nos hooks do termhub');
+  for (const reason of TAB_CHAT_EMPTY_REASONS) expect(emptyReasonText(reason, 'box', 'codex').hint).not.toMatch(/Claude/);
+});

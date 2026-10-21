@@ -95,16 +95,22 @@ it('a message over 4000 characters is refused before the call', async () => {
 describe('the keyboard (TER-1107)', () => {
   // Host views' native methods are shared jest mocks: the body ends 40 pt above the screen's bottom.
   const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
-  const { DeviceEventEmitter, Dimensions, StyleSheet } = require('react-native') as typeof import('react-native');
+  const { DeviceEventEmitter, Dimensions } = require('react-native') as typeof import('react-native');
+  const { getAnimatedStyle } = require('react-native-reanimated') as typeof import('react-native-reanimated');
+  // The keyboard as Reanimated sees it, frame by frame (TER-1103): the inset's padding is an animated style.
+  const frames = jest.requireMock('@/ui/keyboard-frames') as { KeyboardState: { OPEN: number; CLOSED: number }; __setKeyboardFrame(state: number, height: number): void; __resetKeyboardFrame(): void };
   const SCREEN = Dimensions.get('screen').height;
   const KEYBOARD = 336;
 
   beforeEach(() => nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 40 - 91)));
-  afterEach(() => nativeMethods.measureInWindow.mockReset());
+  afterEach(() => {
+    nativeMethods.measureInWindow.mockReset();
+    frames.__resetKeyboardFrame();
+  });
 
   const emit = (name: string, height: number, screenY = SCREEN - height) =>
     DeviceEventEmitter.emit(name, { duration: 0, easing: 'keyboard', startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 }, endCoordinates: { screenX: 0, screenY, width: 390, height }, isEventFromThisApp: true });
-  const padding = () => StyleSheet.flatten(screen.getByTestId('new-session-body').props.style).paddingBottom;
+  const padding = () => (getAnimatedStyle(screen.getByTestId('new-session-body')) as { paddingBottom: number }).paddingBottom;
 
   it('keeps the first message and Iniciar above the keyboard, outside the list that scrolls', async () => {
     await render(<NewSessionScreen />);
@@ -114,8 +120,10 @@ describe('the keyboard (TER-1107)', () => {
     expect(within(footer).getByRole('button', { name: 'Iniciar' })).toBeTruthy();
     expect(padding()).toBe(0);
     await act(() => emit('keyboardWillShow', KEYBOARD));
+    await act(() => frames.__setKeyboardFrame(frames.KeyboardState.OPEN, KEYBOARD));
     await waitFor(() => expect(padding()).toBe(KEYBOARD - 40));
     await act(() => emit('keyboardWillHide', KEYBOARD, SCREEN));
+    await act(() => frames.__setKeyboardFrame(frames.KeyboardState.CLOSED, 0));
     await waitFor(() => expect(padding()).toBe(0));
   });
 });

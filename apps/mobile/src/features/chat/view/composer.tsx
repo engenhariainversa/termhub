@@ -112,8 +112,8 @@ type Props = {
   onCancelReply?(): void;
   /** Nothing can be typed or sent (a session whose machine is offline, spec 2026-10-01 tab chat §7). */
   disabled?: boolean;
-  /** Set while the other side works (a terminal session): ↑ becomes "Interromper", always shown, and a
-   * long press on it still sends what is typed (Claude Code queues it). */
+  /** Set while the other side works (a terminal session): with nothing typed, ↑ becomes ■ "Interromper";
+   * once there is text or a chip it is ↑ again and sends (the agent queues it, TER-1102). */
   onInterrupt?(): void;
   /** The chat this box belongs to (`inboxKey`): files sent here from a file preview land as chips. */
   inbox?: string;
@@ -489,8 +489,8 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
               {/* The microphone is a plain symbol; ↑ is the filled circle in the text colour, so it
                   inverts with the theme (white on the dark one). */}
               {showMic || holding ? <HoldMic note={note} disabled={micDisabled && !holding} /> : null}
-              {holding ? null : onInterrupt ? (
-                <RoundButton label={t('Interromper')} icon={STOP_ICON} onPress={onInterrupt} onLongPress={() => void submit()} disabled={disabled} fill="bg-app-text" tone="bg" />
+              {holding ? null : onInterrupt && !hasText && !hasChips ? (
+                <RoundButton label={t('Interromper')} icon={STOP_ICON} onPress={onInterrupt} disabled={disabled} fill="bg-app-text" tone="bg" />
               ) : showSend ? (
                 <RoundButton label={t('Enviar')} icon={SEND_ICON} onPress={() => void submit()} disabled={sendDisabled} fill="bg-app-text" tone="bg" />
               ) : null}

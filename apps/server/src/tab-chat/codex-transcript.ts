@@ -59,10 +59,16 @@ function previewOf(...outputs: unknown[]): string | null {
   return text ? text.slice(0, PREVIEW_MAX) : null;
 }
 
+/** A status as one word, whatever its case and separators: `in_progress`, `inProgress` and `InProgress` are one. */
+const statusWord = (status: string): string => status.toLowerCase().replace(/[_\s-]/g, '');
+
+/** The statuses that say a tool call did not go through; any other one (a newer spelling of "completed") is not an error (TER-1102). */
+const FAILED = new Set(['failed', 'declined', 'error', 'rejected', 'cancelled', 'canceled']);
+
 /** A tool call's result, once Codex says how it ended. */
 function resultOf(id: string, at: string, status: string | null, failed: boolean, preview: string | null): TabChatItem[] {
-  if (status === null || status === 'in_progress') return [];
-  return [{ kind: 'tool_result', id: `${id}:result`, at, tool_id: id, error: failed || status !== 'completed', preview }];
+  if (status === null || statusWord(status) === 'inprogress') return [];
+  return [{ kind: 'tool_result', id: `${id}:result`, at, tool_id: id, error: failed || FAILED.has(statusWord(status)), preview }];
 }
 
 /** Items of one `item_completed` item, or null when it matched no rule. */

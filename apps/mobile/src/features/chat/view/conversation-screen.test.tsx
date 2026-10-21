@@ -483,7 +483,7 @@ describe('Conversa', () => {
   it('leaves no room under the composer while the keyboard is down', async () => {
     await render(<ConversationScreen />);
     await screen.findByText(SEEDED_USER, undefined, LOAD);
-    expect(StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom).toBe(0);
+    expect((getAnimatedStyle(screen.getByTestId('conversation-body')) as { paddingBottom: number }).paddingBottom).toBe(0);
   });
 
   it('keeps the composer on the keyboard through show, a QuickType frame change, a drag-dismiss and a reopen (TER-1022)', async () => {
@@ -502,7 +502,7 @@ describe('Conversa', () => {
           isEventFromThisApp: true,
         });
       });
-    const padding = () => StyleSheet.flatten(screen.getByTestId('conversation-body').props.style).paddingBottom;
+    const padding = () => (getAnimatedStyle(screen.getByTestId('conversation-body')) as { paddingBottom: number }).paddingBottom;
     try {
       await render(<ConversationScreen />);
       await screen.findByText(SEEDED_USER, undefined, LOAD);

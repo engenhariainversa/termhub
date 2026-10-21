@@ -31,6 +31,9 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+// The keyboard followed frame by frame (Reanimated) has no native side under jest either.
+jest.mock('@/ui/keyboard-frames', () => require('./fakes/keyboard-frames'));
+
 // No native MMKV binding under jest; the in-memory fake backs zustand's persisted stores.
 jest.mock('react-native-mmkv', () => require('./fakes/mmkv'));
 
