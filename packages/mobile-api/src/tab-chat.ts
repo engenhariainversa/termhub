@@ -126,13 +126,16 @@ export type TTabAgentChoice = z.infer<typeof tabAgentChoice>;
 
 /**
  * `GET tabs/:id/agent` (TER-1094): the accounts of the tab's machine an agent can start with, the project's
- * own first, and the one the server picks without asking (`suggested`: the project's first account with
- * room; without a project list, the machine's only account or its only default login). null = more than
- * one fits and no rule decides: the person chooses.
+ * CLI first, and the one the server picks without asking (`suggested`: the project's first listed account of
+ * its CLI with room, or that CLI's only account here; without a project CLI, the machine's only account).
+ * It never names another CLI than the project's (TER-1104). null = more than one fits and no rule decides:
+ * the person chooses. `provider` is the project's CLI (`claude` or `chatgpt`, the picker's preselection);
+ * null = the project names none (also from an older server).
  */
 export const tabAgentOptions = z.object({
   choices: z.array(tabAgentChoice),
   suggested: z.string().nullable(),
+  provider: z.string().nullable().default(null),
 });
 export type TTabAgentOptions = z.infer<typeof tabAgentOptions>;
 
@@ -146,6 +149,8 @@ export const startTabAgentResponse = z.object({
   new_tab: z.boolean(),
   account: z.object({ id: z.string(), label: z.string() }),
   provider: z.string(),
+  /** the model the CLI started with (TER-1104); null = the CLI's own default, or an older server */
+  model: z.string().nullable().default(null),
 });
 export type TStartTabAgentResponse = z.infer<typeof startTabAgentResponse>;
 
