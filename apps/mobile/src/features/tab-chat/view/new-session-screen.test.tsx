@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
@@ -90,4 +90,42 @@ it('a message over 4000 characters is refused before the call', async () => {
   await fireEvent.press(iniciar());
   expect(await screen.findByText('Mensagem longa demais (máximo de 4000 caracteres)')).toBeTruthy();
   expect(start).not.toHaveBeenCalled();
+});
+
+describe('the keyboard (TER-1107)', () => {
+  // Host views' native methods are shared jest mocks: the body ends 40 pt above the screen's bottom.
+  const nativeMethods = require('@react-native/jest-preset/jest/MockNativeMethods').default as { measureInWindow: jest.Mock };
+  const { DeviceEventEmitter, Dimensions, StyleSheet } = require('react-native') as typeof import('react-native');
+  const SCREEN = Dimensions.get('screen').height;
+  const KEYBOARD = 336;
+
+  beforeEach(() => nativeMethods.measureInWindow.mockImplementation((cb: (x: number, y: number, w: number, h: number) => void) => cb(0, 91, 390, SCREEN - 40 - 91)));
+  afterEach(() => nativeMethods.measureInWindow.mockReset());
+
+  const emit = (name: string, height: number, screenY = SCREEN - height) =>
+    DeviceEventEmitter.emit(name, { duration: 0, easing: 'keyboard', startCoordinates: { screenX: 0, screenY: SCREEN, width: 390, height: 0 }, endCoordinates: { screenX: 0, screenY, width: 390, height }, isEventFromThisApp: true });
+  const padding = () => StyleSheet.flatten(screen.getByTestId('new-session-body').props.style).paddingBottom;
+
+  it('keeps the first message and Iniciar above the keyboard, outside the list that scrolls', async () => {
+    await render(<NewSessionScreen />);
+    await screen.findByRole('button', { name: 'termhub' }, LOAD);
+    const footer = screen.getByTestId('new-session-footer');
+    expect(within(footer).getByLabelText('Primeira mensagem')).toBeTruthy();
+    expect(within(footer).getByRole('button', { name: 'Iniciar' })).toBeTruthy();
+    expect(padding()).toBe(0);
+    await act(() => emit('keyboardWillShow', KEYBOARD));
+    await waitFor(() => expect(padding()).toBe(KEYBOARD - 40));
+    await act(() => emit('keyboardWillHide', KEYBOARD, SCREEN));
+    await waitFor(() => expect(padding()).toBe(0));
+  });
+});
+
+it('a started session keeps its first message for the session screen (TER-1107)', async () => {
+  await render(<NewSessionScreen />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), '  revisa o PR  ');
+  await fireEvent.press(iniciar());
+  await waitFor(() => expect(mockReplace).toHaveBeenCalled());
+  const tabId = String(mockReplace.mock.calls[0]![0]).replace('/session/', '');
+  expect(stores.sessions.getState().firstPrompts[tabId]).toBe('revisa o PR');
 });

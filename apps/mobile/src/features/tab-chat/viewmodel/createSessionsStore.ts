@@ -29,6 +29,11 @@ export interface SessionsState {
   starting: boolean;
   /** Why the last start failed, in pt-BR (the server's own text for a refusal it explains). */
   startError: string | null;
+  /**
+   * The first message of a session started here, by tab id (TER-1107): the session screen shows it as
+   * sent until the transcript brings it, the agent taking a few seconds to start. Memory only.
+   */
+  firstPrompts: Record<string, string>;
   load(): Promise<void>;
   refresh(): Promise<void>;
   /** The machines a new session in `projectId` can run on (the ones the project's AI accounts live
@@ -37,6 +42,8 @@ export interface SessionsState {
   /** Starts a session; resolves the new tab's id, or null with `startError` set. */
   start(body: TStartSessionBody): Promise<string | null>;
   clearStartError(): void;
+  /** The transcript holds the first message now: the screen stops showing its own copy. */
+  dropFirstPrompt(tabId: string): void;
 }
 
 /** The tabs by project, each project where its first tab is. */
@@ -63,6 +70,7 @@ export function createSessionsStore(deps: { api: MobileApi; session: () => Sessi
     error: null,
     starting: false,
     startError: null,
+    firstPrompts: {},
     async load() {
       const mine = ++generation;
       set({ loading: true });
@@ -106,8 +114,9 @@ export function createSessionsStore(deps: { api: MobileApi; session: () => Sessi
       const mine = generation;
       set({ starting: true, startError: null });
       try {
-        const { tab_id } = await deps.api.startSession(deps.session().auth(), { ...body, prompt: body.prompt.trim() });
-        if (mine === generation) set({ starting: false });
+        const prompt = body.prompt.trim();
+        const { tab_id } = await deps.api.startSession(deps.session().auth(), { ...body, prompt });
+        if (mine === generation) set((s) => ({ starting: false, firstPrompts: { ...s.firstPrompts, [tab_id]: prompt } }));
         return tab_id;
       } catch (err) {
         if (mine !== generation) return null;
@@ -120,11 +129,16 @@ export function createSessionsStore(deps: { api: MobileApi; session: () => Sessi
     clearStartError() {
       set({ startError: null });
     },
+    dropFirstPrompt(tabId) {
+      if (!(tabId in get().firstPrompts)) return;
+      const { [tabId]: _dropped, ...rest } = get().firstPrompts;
+      set({ firstPrompts: rest });
+    },
   }));
 
   sessionEnded.subscribe(() => {
     generation++;
-    store.setState({ tabs: [], groups: [], loading: false, refreshing: false, loaded: false, forbidden: false, error: null, starting: false, startError: null });
+    store.setState({ tabs: [], groups: [], loading: false, refreshing: false, loaded: false, forbidden: false, error: null, starting: false, startError: null, firstPrompts: {} });
   });
 
   return store;

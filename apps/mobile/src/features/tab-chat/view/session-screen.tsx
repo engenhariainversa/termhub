@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter, type Href } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Text, View } from 'react-native';
 import { replyRefOf, type ReplyRef } from '@/features/chat/model/reply';
 import { MessageBubble } from '@/features/chat/view/message-bubble';
@@ -17,6 +17,7 @@ import { emptyReasonText } from '../model/empty-reason-text';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { quotedText } from '../model/reply-text';
 import { buildRows, type Row } from '../model/timeline';
+import { useSessionsStore } from '../viewmodel/useSessionsStore';
 import { useTabChatStore } from '../viewmodel/useTabChatStore';
 import { RawScreenSheet } from './raw-screen-sheet';
 import { SessionHeader } from './session-header';
@@ -31,9 +32,23 @@ const BLOCKED = new Set(['offline', 'agent_outdated', 'unsupported_machine']);
 /** Availabilities where the transcript cannot be read but the tab can still be typed into and looked at. */
 const SCREEN_ONLY = new Set(['no_session', 'unsupported_tool']);
 
-type Entry = { kind: 'row'; row: Row } | { kind: 'question'; question: TTabQuestion } | { kind: 'suggestion'; suggestion: TTabSuggestion };
+type Entry = { kind: 'row'; row: Row } | { kind: 'question'; question: TTabQuestion } | { kind: 'suggestion'; suggestion: TTabSuggestion } | { kind: 'first'; text: string };
 
-const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 'question' ? `q:${e.question.id}` : `s:${e.suggestion.id}`);
+const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 'question' ? `q:${e.question.id}` : e.kind === 'suggestion' ? `s:${e.suggestion.id}` : 'first');
+
+/** The first message of a session started from this phone, shown as sent until the transcript brings it (TER-1107). */
+function FirstPrompt({ text }: { text: string }) {
+  const { t } = useTranslation();
+  const message = useMemo(() => ({ id: 'first-prompt', conversation_id: '', role: 'user' as const, text, usage: null, error_code: null, created_at: '' }), [text]);
+  return (
+    <View testID="session-first-prompt" className="gap-1">
+      <MessageBubble message={message} streamed={undefined} started={false} />
+      <AppText variant="muted" className="self-end text-xs">
+        {t('Enviada · o agente está iniciando')}
+      </AppText>
+    </View>
+  );
+}
 
 /** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. A
  * touch held on it opens its menu, with "Responder" quoting it above the composer (TER-1090). */
@@ -103,16 +118,26 @@ export function SessionView({ tabId }: { tabId: string }) {
   const [replyTo, setReplyTo] = useState<ReplyRef | null>(null);
   const cancelReply = useCallback(() => setReplyTo(null), []);
 
+  // The first message typed in "Nova sessão": shown until the transcript has a message of the person's.
+  const firstPrompt = useSessionsStore((s) => s.firstPrompts[tabId] ?? null);
+  const dropFirstPrompt = useSessionsStore((s) => s.dropFirstPrompt);
+  const transcriptHasPrompt = useMemo(() => items.some((i) => i.kind === 'user'), [items]);
+  useEffect(() => {
+    if (firstPrompt !== null && transcriptHasPrompt) dropFirstPrompt(tabId);
+  }, [firstPrompt, transcriptHasPrompt, dropFirstPrompt, tabId]);
+  const pendingFirst = firstPrompt !== null && !transcriptHasPrompt ? firstPrompt : null;
+
   const working = tab?.state === 'working' && !tab.background;
   const rows = useMemo(() => buildRows(items, tab?.state === 'working'), [items, tab?.state]);
-  // Newest first for the inverted list: the open cards sit after the last row.
+  // Newest first for the inverted list: the open cards sit after the last row, the first message before the first.
   const entries = useMemo<Entry[]>(
     () => [
       ...suggestions.map((suggestion): Entry => ({ kind: 'suggestion', suggestion })).reverse(),
       ...questions.map((question): Entry => ({ kind: 'question', question })).reverse(),
       ...rows.map((row): Entry => ({ kind: 'row', row })).reverse(),
+      ...(pendingFirst !== null ? [{ kind: 'first', text: pendingFirst } as Entry] : []),
     ],
-    [rows, questions, suggestions],
+    [rows, questions, suggestions, pendingFirst],
   );
 
   const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
@@ -122,6 +147,7 @@ export function SessionView({ tabId }: { tabId: string }) {
 
   const renderItem = useCallback(
     ({ item }: { item: Entry }) => {
+      if (item.kind === 'first') return <FirstPrompt text={item.text} />;
       if (item.kind === 'question')
         return (
           <TabQuestionCard

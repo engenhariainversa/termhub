@@ -4,7 +4,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { useChatStore } from '@/features/chat/viewmodel/useChatStore';
 import { TAB_MESSAGE_MAX_CHARS } from '@/services/api/contract';
-import { AppText, Button, Screen } from '@/ui';
+import { AppText, Button, KeyboardInsetView, Screen } from '@/ui';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { useSessionsStore } from '../viewmodel/useSessionsStore';
 
@@ -76,44 +76,49 @@ export function NewSessionScreen() {
 
   return (
     <Screen padded={false}>
-      <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
-        <Button label={t('Voltar')} variant="ghost" onPress={goBack} />
-        <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
-          {t('Nova sessão')}
-        </AppText>
-      </View>
-      <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" contentContainerClassName="gap-5 px-6 py-4">
-        <View className="gap-2">
-          <AppText variant="label">{t('Projeto')}</AppText>
-          {projects.map((p) => (
-            <Choice key={p.id} label={p.name} selected={p.id === projectId} onPress={() => setProjectId(p.id)} />
-          ))}
+      {/* The pickers scroll; the first message and "Iniciar" sit on the keyboard, as the chat's composer (TER-1107). */}
+      <KeyboardInsetView testID="new-session-body">
+        <View className="flex-row items-center gap-2 border-b border-app-border px-2 py-2">
+          <Button label={t('Voltar')} variant="ghost" onPress={goBack} />
+          <AppText variant="title" className="flex-1 text-xl" numberOfLines={1}>
+            {t('Nova sessão')}
+          </AppText>
         </View>
-        {machines.length > 1 ? (
+        <ScrollView className="flex-1" keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive" contentContainerClassName="gap-5 px-6 py-4">
           <View className="gap-2">
-            <AppText variant="label">{t('Máquina')}</AppText>
-            {machines.map((m) => (
-              <Choice key={m.id} label={m.name} selected={m.id === machineId} onPress={() => setMachineId(m.id)} />
+            <AppText variant="label">{t('Projeto')}</AppText>
+            {projects.map((p) => (
+              <Choice key={p.id} label={p.name} selected={p.id === projectId} onPress={() => setProjectId(p.id)} />
             ))}
           </View>
-        ) : null}
-        <View className="gap-1.5">
-          <AppText variant="label">{t('Primeira mensagem')}</AppText>
-          <TextInput
-            value={prompt}
-            onChangeText={setPrompt}
-            accessibilityLabel={t('Primeira mensagem')}
-            placeholder={t('O que o Claude deve fazer?')}
-            multiline
-            textAlignVertical="top"
-            style={{ minHeight: 110 }}
-            className="rounded-xl border border-app-border bg-app-surface px-4 py-3 text-base text-app-text placeholder:text-app-muted"
-          />
-          {tooLong ? <Text className="text-sm text-app-danger">{TAB_CHAT_MSG.tooLong}</Text> : null}
+          {machines.length > 1 ? (
+            <View className="gap-2">
+              <AppText variant="label">{t('Máquina')}</AppText>
+              {machines.map((m) => (
+                <Choice key={m.id} label={m.name} selected={m.id === machineId} onPress={() => setMachineId(m.id)} />
+              ))}
+            </View>
+          ) : null}
+        </ScrollView>
+        <View testID="new-session-footer" className="gap-3 border-t border-app-border px-6 py-3">
+          <View className="gap-1.5">
+            <AppText variant="label">{t('Primeira mensagem')}</AppText>
+            <TextInput
+              value={prompt}
+              onChangeText={setPrompt}
+              accessibilityLabel={t('Primeira mensagem')}
+              placeholder={t('O que o Claude deve fazer?')}
+              multiline
+              textAlignVertical="top"
+              style={{ minHeight: 88, maxHeight: 160 }}
+              className="rounded-xl border border-app-border bg-app-surface px-4 py-3 text-base text-app-text placeholder:text-app-muted"
+            />
+            {tooLong ? <Text className="text-sm text-app-danger">{TAB_CHAT_MSG.tooLong}</Text> : null}
+          </View>
+          <Button label={t('Iniciar')} onPress={() => void submit()} disabled={!canStart} loading={starting} />
+          {startError && !tooLong ? <Text className="text-sm text-app-danger">{startError}</Text> : null}
         </View>
-        <Button label={t('Iniciar')} onPress={() => void submit()} disabled={!canStart} loading={starting} />
-        {startError && !tooLong ? <Text className="text-sm text-app-danger">{startError}</Text> : null}
-      </ScrollView>
+      </KeyboardInsetView>
     </Screen>
   );
 }

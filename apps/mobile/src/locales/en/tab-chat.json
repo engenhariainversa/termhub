@@ -91,5 +91,6 @@
   "Iniciar com {{account}} ({{cli}})": "Start with {{account}} ({{cli}})",
   "Iniciar sessão": "Start session",
   "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
-  "Escolher outra conta": "Choose another account"
+  "Escolher outra conta": "Choose another account",
+  "Enviada · o agente está iniciando": "Sent · the agent is starting"
 }

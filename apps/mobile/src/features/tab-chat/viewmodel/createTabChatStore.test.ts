@@ -211,13 +211,48 @@ describe('an empty conversation (TER-1091)', () => {
   it('a state frame turning the tab readable while nothing was followed loads the page again', async () => {
     const ctx = await setup();
     const empty = await noSessionPage(ctx, 'not_reported');
-    const read = jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty).mockResolvedValueOnce(empty);
+    // the socket's hello still says no session; the state frame is what says ready
+    ctx.controls.patchTab('t-api', { availability: 'no_session' });
+    const read = jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty);
     await openAndConnect(ctx.chat);
     expect(ctx.chat.getState().items).toEqual([]);
+    expect(read).toHaveBeenCalledTimes(1);
+    ctx.controls.patchTab('t-api', { availability: 'ready' });
     ctx.controls.tabFrame('t-api', { type: 'state', tab: { ...ctx.chat.getState().tab!, availability: 'ready' } });
-    await jest.advanceTimersByTimeAsync(0);
-    expect(read).toHaveBeenCalledTimes(3);
+    await jest.advanceTimersByTimeAsync(100);
+    expect(read).toHaveBeenCalledTimes(2);
     expect(ctx.chat.getState().items.length).toBeGreaterThan(0);
+    // and the socket follows again from the page it just read (TER-1107)
+    expect(ctx.tabEvents).toHaveBeenCalledTimes(2);
+    expect(ctx.tabEvents.mock.calls[1]![2].after()).toBe(ctx.chat.getState().live);
+  });
+
+  it("turning readable follows the socket again from the re-read page's cursor, so a first prompt written in between is not lost (TER-1107)", async () => {
+    const ctx = await setup();
+    const empty = await noSessionPage(ctx, 'not_reported');
+    jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty);
+    await ctx.chat.getState().open();
+    expect(ctx.tabEvents).toHaveBeenCalledTimes(1);
+    expect(ctx.chat.getState().live).toBeNull();
+    await jest.advanceTimersByTimeAsync(0); // the hello: the session was reported meanwhile
+    const live = ctx.chat.getState().live;
+    expect(live).not.toBeNull();
+    // the socket that joined with no cursor is gone; the new one starts where the page ended
+    expect(ctx.tabEvents).toHaveBeenCalledTimes(2);
+    expect(ctx.tabEvents.mock.calls[1]![2].after()).toBe(live);
+    await jest.advanceTimersByTimeAsync(100);
+    ctx.controls.appendTabItems('t-api', [{ kind: 'user', id: 'first', at, text: 'revisa o PR', images: 0 }]);
+    expect(ids(ctx.chat)).toContain('first');
+  });
+
+  it('a socket a reread opened, saying ready to a page that still has no session, reads the page but does not reopen (TER-1107)', async () => {
+    const ctx = await setup();
+    const empty = await noSessionPage(ctx, 'not_reported');
+    const read = jest.spyOn(ctx.api, 'tabChat').mockResolvedValueOnce(empty).mockResolvedValueOnce(empty).mockResolvedValueOnce(empty);
+    await ctx.chat.getState().open();
+    await jest.advanceTimersByTimeAsync(1000);
+    expect(ctx.tabEvents).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenCalledTimes(3);
   });
 
   it('a state frame of a tab already followed never re-reads the page', async () => {
