@@ -44,9 +44,36 @@ const TEXT: Record<string, { title: string; hint: string; install: string | null
   },
 };
 
-/** What the empty conversation says for `reason`; the generic line for null or a reason this build does not know. */
-export function emptyReasonText(reason: string | null, machine: string): EmptyReasonText {
-  const entry = reason !== null && Object.prototype.hasOwnProperty.call(TEXT, reason) ? TEXT[reason]! : null;
-  if (!entry) return { title: t('Nenhuma mensagem ainda'), hint: t('Escreva abaixo para falar com o Claude nesta aba.'), install: null };
+/** A Codex tab's own wording where Claude Code's would be wrong (TER-1102): the CLI, its commands and its files. */
+const CODEX_TEXT: Record<string, { title: string; hint: string; install: string | null }> = {
+  no_hooks: {
+    title: tk('Sem histórico: a máquina não tem os hooks do termhub'),
+    hint: tk('O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o Codex nesta aba (codex resume retoma a conversa): a partir daí ela aparece aqui.'),
+    install: tk('Instalar hooks'),
+  },
+  not_reported: {
+    title: tk('O Codex desta aba ainda não informou a sessão'),
+    hint: tk('O histórico aparece assim que o Codex rodar nesta aba com os hooks do termhub. Se ele já estava aberto antes dos hooks, reinicie-o (codex resume retoma a conversa); se nada mudar, reinstale os hooks em {{machine}}.'),
+    install: tk('Reinstalar hooks'),
+  },
+  transcript_missing: {
+    title: tk('O histórico desta sessão não está mais na máquina'),
+    hint: tk('O arquivo da sessão do Codex não foi encontrado em {{machine}}. A próxima sessão do Codex nesta aba volta a aparecer aqui.'),
+    install: null,
+  },
+  new_session: {
+    title: tk('Nenhuma mensagem nesta sessão ainda'),
+    hint: tk('Aqui aparece a sessão atual do Codex nesta aba: uma aba nova, um /new ou um reinício do Codex começam do zero. Escreva abaixo para falar com o Codex.'),
+    install: null,
+  },
+};
+
+/** What the empty conversation says for `reason`; the generic line for null or a reason this build does not know. `agent`
+ * is the tab's CLI (`TTabSummary.agent`): a Codex tab gets Codex's wording. */
+export function emptyReasonText(reason: string | null, machine: string, agent: string | null = null): EmptyReasonText {
+  const codex = agent === 'codex';
+  const table = codex && reason !== null && Object.prototype.hasOwnProperty.call(CODEX_TEXT, reason) ? CODEX_TEXT : TEXT;
+  const entry = reason !== null && Object.prototype.hasOwnProperty.call(table, reason) ? table[reason]! : null;
+  if (!entry) return { title: t('Nenhuma mensagem ainda'), hint: codex ? t('Escreva abaixo para falar com o Codex nesta aba.') : t('Escreva abaixo para falar com o Claude nesta aba.'), install: null };
   return { title: t(entry.title), hint: t(entry.hint, { machine }), install: entry.install ? t(entry.install) : null };
 }

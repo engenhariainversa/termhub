@@ -8,6 +8,8 @@ describe('activityOf', () => {
     ['WebSearch', 'researching'], ['WebFetch', 'researching'],
     ['EnterPlanMode', 'planning'], ['ExitPlanMode', 'planning'], ['AskUserQuestion', 'planning'], ['TodoWrite', 'planning'], ['TaskCreate', 'planning'], ['TaskUpdate', 'planning'],
     ['Bash', 'terminal'],
+    // Codex (TER-1102)
+    ['apply_patch', 'coding'], ['web_search', 'researching'], ['update_plan', 'planning'], ['request_user_input', 'planning'],
   ])('%s → %s', (tool, activity) => {
     expect(activityOf(tool)).toBe(activity);
   });

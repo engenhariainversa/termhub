@@ -12,16 +12,19 @@ import { useTranslation } from '@/i18n';
 import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTabQuestionAnswerBody, type TTabSuggestion } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
+import { agentName } from '../model/agent-label';
 import { availabilityText } from '../model/availability-text';
 import { emptyReasonText } from '../model/empty-reason-text';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { quotedText } from '../model/reply-text';
+import { thinkingLine } from '../model/thinking';
 import { buildRows, type Row } from '../model/timeline';
 import { useTabChatStore } from '../viewmodel/useTabChatStore';
 import { RawScreenSheet } from './raw-screen-sheet';
 import { SessionHeader } from './session-header';
 import { SessionMenu, type SessionMenuChoice } from './session-menu';
 import { StartAgentPanel } from './start-agent-panel';
+import { ThinkingRow } from './thinking-row';
 import { ToolsRow } from './tools-row';
 
 const READABLE_COLUMN = readableColumn(MAX_READABLE_WIDTH);
@@ -37,7 +40,7 @@ const entryKey = (e: Entry) => (e.kind === 'row' ? `r:${e.row.id}` : e.kind === 
 
 /** A message row as the chat's bubble: same markdown for the assistant. A row's images are counted. A
  * touch held on it opens its menu, with "Responder" quoting it above the composer (TER-1090). */
-function SessionMessage({ row, tabId, onReply }: { row: Extract<Row, { kind: 'message' }>; tabId: string; onReply(ref: ReplyRef): void }) {
+function SessionMessage({ row, tabId, agent, onReply }: { row: Extract<Row, { kind: 'message' }>; tabId: string; agent: string; onReply(ref: ReplyRef): void }) {
   const { t } = useTranslation();
   const message = useMemo(() => ({ id: row.id, conversation_id: '', role: row.role, text: row.text, usage: null, error_code: null, created_at: row.at }), [row]);
   // A Markdown path in the session's answer opens as a preview, read on the tab's machine.
@@ -45,7 +48,7 @@ function SessionMessage({ row, tabId, onReply }: { row: Extract<Row, { kind: 'me
   return (
     <View className="gap-1">
       {row.text ? (
-        <MessageMenu message={message} onReply={() => onReply({ ...replyRefOf(message), ...(message.role === 'assistant' ? { author: 'Claude' } : {}) })}>
+        <MessageMenu message={message} onReply={() => onReply({ ...replyRefOf(message), ...(message.role === 'assistant' ? { author: agent } : {}) })}>
           <MessageBubble message={message} streamed={undefined} started={false} fileContext={fileContext} />
         </MessageMenu>
       ) : null}
@@ -105,6 +108,9 @@ export function SessionView({ tabId }: { tabId: string }) {
 
   const working = tab?.state === 'working' && !tab.background;
   const rows = useMemo(() => buildRows(items, tab?.state === 'working'), [items, tab?.state]);
+  // "pensando…" under the last row while the agent works, for Claude Code and Codex alike (TER-1102).
+  const thinking = useMemo(() => thinkingLine(tab, rows), [tab, rows]);
+  const agent = agentName(tab?.agent);
   // Newest first for the inverted list: the open cards sit after the last row.
   const entries = useMemo<Entry[]>(
     () => [
@@ -144,7 +150,7 @@ export function SessionView({ tabId }: { tabId: string }) {
           />
         );
       const row = item.row;
-      if (row.kind === 'message') return <SessionMessage row={row} tabId={tabId} onReply={setReplyTo} />;
+      if (row.kind === 'message') return <SessionMessage row={row} tabId={tabId} agent={agent} onReply={setReplyTo} />;
       if (row.kind === 'tools') return <ToolsRow tools={row.tools} />;
       return (
         <AppText variant="muted" className="self-center text-center text-xs">
@@ -152,7 +158,7 @@ export function SessionView({ tabId }: { tabId: string }) {
         </AppText>
       );
     },
-    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen, tabId],
+    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen, tabId, agent],
   );
 
   // The composer's chips: the file is saved on the tab's machine; its path is sent as a line of the text.
@@ -186,7 +192,7 @@ export function SessionView({ tabId }: { tabId: string }) {
   };
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)/chats' as Href));
   const why = availabilityText(availability);
-  const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '');
+  const empty = emptyReasonText(emptyReason, tab?.machine.name ?? '', tab?.agent);
   // An agent started in another tab (this one's shell was busy): the screen follows it there.
   const onStartAgent = async (accountId?: string) => {
     const newTab = await startAgent(accountId);
@@ -220,9 +226,15 @@ export function SessionView({ tabId }: { tabId: string }) {
               <View testID="session-empty" className="flex-1">
                 <EmptyState
                   title={empty.title}
-                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? TAB_CHAT_MSG.hooksInstalled : empty.hint}
+                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? (tab?.agent === 'codex' ? TAB_CHAT_MSG.codexHooksInstalled : TAB_CHAT_MSG.hooksInstalled) : empty.hint}
                   action={emptyAction}
                 />
+              </View>
+            ) : null}
+            {/* A first turn with nothing in the history yet (or no history to read) still says the agent works. */}
+            {thinking ? (
+              <View style={READABLE_COLUMN} className="px-4 pb-2">
+                <ThinkingRow text={thinking} />
               </View>
             ) : null}
           </View>
@@ -241,6 +253,8 @@ export function SessionView({ tabId }: { tabId: string }) {
             onEndReached={() => void loadEarlier()}
             onEndReachedThreshold={0.3}
             ListFooterComponent={loadingEarlier ? <ActivityIndicator /> : null}
+            // Inverted: the header is the end of the conversation, under the last row.
+            ListHeaderComponent={thinking ? <ThinkingRow text={thinking} /> : null}
           />
         )}
         <View style={READABLE_COLUMN}>
@@ -266,7 +280,7 @@ export function SessionView({ tabId }: { tabId: string }) {
           {status !== 'error' && error ? <Text className="px-4 pb-2 text-xs text-app-danger">{error}</Text> : null}
         </View>
       </KeyboardInsetView>
-      <SessionMenu open={menuOpen} onClose={() => setMenuOpen(false)} onChoose={onMenu} />
+      <SessionMenu open={menuOpen} onClose={() => setMenuOpen(false)} onChoose={onMenu} agent={tab?.agent ?? null} />
       <RawScreenSheet open={screenOpen} onClose={() => setScreenOpen(false)} load={loadScreen} />
     </Screen>
   );

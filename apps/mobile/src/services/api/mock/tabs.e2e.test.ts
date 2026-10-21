@@ -18,7 +18,7 @@ async function setup() {
 it('lists the tabs and pages back through a conversation', async () => {
   const { api, auth } = await setup();
   const { tabs } = await api.tabs(auth());
-  expect(tabs.map((t) => t.id)).toEqual(['t-api', 't-web', 't-deploy']);
+  expect(tabs.map((t) => t.id)).toEqual(['t-api', 't-web', 't-deploy', 't-codex']);
   const first = await api.tabChat(auth(), 't-api');
   expect(first.items).toHaveLength(PAGE_ITEMS);
   expect(first.before).not.toBeNull();
