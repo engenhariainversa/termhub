@@ -796,41 +796,86 @@ describe('startAgent with an account exclusive to a project (TER-990)', () => {
   });
 });
 
-describe('tabAgentOptions (TER-1094)', () => {
+describe('tabAgentOptions (TER-1094, TER-1104)', () => {
   const m1 = machines[0]!;
   const m2 = machines[1]!;
   const p1 = projects[0]!;
   const p2 = projects[1]!;
+  const usage = (peak: number | null) => (peak === null ? { ok: false, plan: null, windows: [], error: 'x', hint: null } : { ok: true, plan: null, windows: [{ key: '5h', label: '5h', utilization: peak, resets_at: null }], error: null, hint: null });
+  const withAccounts = async (extra: AiAccount[], run: () => Promise<void>) => {
+    accounts.push(...extra);
+    try {
+      await run();
+    } finally {
+      for (const a of extra) accounts.splice(accounts.indexOf(a), 1);
+    }
+  };
 
-  it("lists the machine's accounts whose CLI it has, the project's first, and suggests the first listed with room", async () => {
+  it("lists the machine's accounts whose CLI it has, the project's CLI first, and suggests its first listed account with room", async () => {
     const { c } = ctx(undefined, { ai: { accounts: ['a2'], models: { claude: 'opus' } } });
     const r = await tabAgentOptions(c, p1, m1);
     expect(r.choices).toEqual([
       { account_id: 'a2', label: 'ChatGPT', provider: 'chatgpt', model: null },
       { account_id: 'a1', label: 'pedrogoiania', provider: 'claude', model: 'opus' },
     ]);
-    expect(r.suggested).toBe('a2');
+    expect(r).toMatchObject({ suggested: 'a2', provider: 'chatgpt' });
   });
 
-  it("without a project list, the machine's only account is suggested (a CLI the machine lacks is no choice)", async () => {
+  it("never falls over to another CLI: the project's Claude accounts at their limit still start Claude, not the Codex listed after them", async () => {
+    // the TER-1104 report: Claude listed first, Codex after it, the Claude accounts near their limit
+    const a7 = account({ id: 'a7', label: 'Claude 2', machine_id: 'm1', config_dir: '/Users/p/.claude-2' });
+    await withAccounts([a7], async () => {
+      getAccountUsage.mockImplementation(async (a: { provider: string }) => usage(a.provider === 'chatgpt' ? null : 97));
+      const { c } = ctx(undefined, { ai: { accounts: ['a1', 'a7', 'a2'] } });
+      const r = await tabAgentOptions(c, p1, m1);
+      expect(r).toMatchObject({ suggested: 'a1', provider: 'claude' });
+      expect(r.choices.map((x) => x.account_id)).toEqual(['a1', 'a7', 'a2']);
+      // with room on the second Claude, that one
+      getAccountUsage.mockImplementation(async (a: { id: string }) => usage(a.id === 'a1' ? 97 : 10));
+      expect((await tabAgentOptions(c, p1, m1)).suggested).toBe('a7');
+    });
+  });
+
+  it("with the project's accounts on another machine, its CLI's only account here starts; two of them leave the choice to the person", async () => {
+    // p1 lists only a3 (Claude, on m2): on m1, Claude is the project's CLI and a1 its only account
+    const { c } = ctx(undefined, { ai: { accounts: ['a3'] } });
+    const r = await tabAgentOptions(c, p1, m1);
+    expect(r).toMatchObject({ suggested: 'a1', provider: 'claude' });
+    expect(r.choices.map((x) => x.account_id)).toEqual(['a1', 'a2']);
+    const a7 = account({ id: 'a7', label: 'Claude da máquina', machine_id: 'm1' });
+    await withAccounts([a7], async () => {
+      const two = await tabAgentOptions(c, p1, m1);
+      expect(two).toMatchObject({ suggested: null, provider: 'claude' });
+      expect(two.choices.map((x) => x.account_id)).toEqual(['a1', 'a7', 'a2']);
+    });
+  });
+
+  it("with the project's CLI missing from the machine, nothing starts without asking", async () => {
+    // p2 lists a4 (Codex): m2 has no codex, so its Claude account is a choice, never the suggestion
+    const { c } = ctx(undefined, { ai: { accounts: ['a4'] } });
+    expect(await tabAgentOptions(c, p2, m2)).toEqual({ choices: [{ account_id: 'a3', label: 'Claude', provider: 'claude', model: null }], suggested: null, provider: 'chatgpt' });
+  });
+
+  it("without a project CLI, the machine's only account is suggested (a CLI the machine lacks is no choice)", async () => {
     const { c } = ctx();
     // m2 has no codex: a4 is left out
-    expect(await tabAgentOptions(c, p2, m2)).toEqual({ choices: [{ account_id: 'a3', label: 'Claude', provider: 'claude', model: null }], suggested: 'a3' });
+    expect(await tabAgentOptions(c, p2, m2)).toEqual({ choices: [{ account_id: 'a3', label: 'Claude', provider: 'claude', model: null }], suggested: 'a3', provider: null });
   });
 
-  it("without a project list, the machine's only default login is suggested; two defaults leave the choice to the person", async () => {
+  it('without a project CLI and more than one account, the person chooses, even with a single default login', async () => {
     const { c } = ctx();
-    // m1: a1 has a config dir, a2 (Codex) is the default login
-    expect((await tabAgentOptions(c, p1, m1)).suggested).toBe('a2');
-    const a7 = account({ id: 'a7', label: 'Claude da máquina', machine_id: 'm1' });
-    accounts.push(a7);
-    try {
-      const r = await tabAgentOptions(c, p1, m1);
-      expect(r.suggested).toBeNull();
-      expect(r.choices.map((x) => x.account_id)).toEqual(['a1', 'a2', 'a7']);
-    } finally {
-      accounts.splice(accounts.indexOf(a7), 1);
-    }
+    // m1: a1 (Claude, config dir) and a2 (Codex, the default login): TER-1094 started Codex here unasked
+    const r = await tabAgentOptions(c, p1, m1);
+    expect(r).toMatchObject({ suggested: null, provider: null });
+    expect(r.choices.map((x) => x.account_id)).toEqual(['a1', 'a2']);
+  });
+
+  it('a listed account gone or exclusive to another project names no CLI', async () => {
+    const a8 = account({ id: 'a8', label: 'só p2', provider: 'chatgpt', machine_id: 'm1', exclusive_project: { id: 'p2', name: 'p2' } });
+    await withAccounts([a8], async () => {
+      const { c } = ctx(undefined, { ai: { accounts: ['gone', 'a8'] } });
+      expect(await tabAgentOptions(c, p1, m1)).toMatchObject({ suggested: null, provider: null });
+    });
   });
 });
 
@@ -845,7 +890,7 @@ describe('startTabAgent (TER-1094)', () => {
     paneForeground.mockResolvedValue('shell');
     const { c, repos } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'sonnet' } } });
     const r = await startTabAgent(c, t1, p1, m1);
-    expect(r).toEqual({ tab_id: 't1', new_tab: false, account: { id: 'a1', label: 'pedrogoiania' }, provider: 'claude' });
+    expect(r).toEqual({ tab_id: 't1', new_tab: false, account: { id: 'a1', label: 'pedrogoiania' }, provider: 'claude', model: 'sonnet' });
     expect(sessionOf()).toBe('th-t1');
     expect(lineOf()).toBe(launchLine('claude', '/Users/p/.claude-work', null, null, 'sonnet'));
     expect(openTab).not.toHaveBeenCalled();

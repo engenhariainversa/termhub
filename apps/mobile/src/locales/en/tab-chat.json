@@ -90,6 +90,11 @@
   "Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.": "No AI account on this machine can start an agent. Add one in AI accounts.",
   "Iniciar com {{account}} ({{cli}})": "Start with {{account}} ({{cli}})",
   "Iniciar sessão": "Start session",
-  "Com {{account}} ({{cli}})": "With {{account}} ({{cli}})",
-  "Escolher outra conta": "Choose another account"
+  "Escolher outra conta": "Choose another account",
+  "Com {{account}} ({{cli}}) · modelo {{model}}": "With {{account}} ({{cli}}) · model {{model}}",
+  "Escolha com qual agente iniciar a sessão:": "Choose which agent to start the session with:",
+  "Conta {{account}}": "Account {{account}}",
+  "Modelo: {{model}}": "Model: {{model}}",
+  "Iniciado com {{cli}} · conta {{account}} · modelo {{model}}": "Started with {{cli}} · account {{account}} · model {{model}}",
+  "padrão do CLI": "CLI default"
 }
