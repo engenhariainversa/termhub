@@ -25,7 +25,8 @@ import { compactDoneText, compactFailedText, contextLevel, contextMax, contextSh
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
 import { replyTargetOf, replyTargetOfAction, replyTargetOfQuestion, type ReplyTarget } from '../../lib/chat-reply';
-import { chatTimeline, groupPendingActions, groupSettledActions } from '../../lib/chat-timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions, groupSettledQuestions } from '../../lib/chat-timeline';
+import { ChatQuestionTrail } from './ChatQuestionTrail';
 import { activeGrantsLabel } from './grant-list-text';
 import { isGrantActive } from './grant-time';
 import { isActive, upsertSubagent } from '../../lib/subagents';
@@ -747,8 +748,9 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     .map((a) => a.id)
     .join(',');
   useEffect(() => setSeparate(false), [pendingKey]);
-  // A turn's settled cards fold into one accordion above its answer (TER-1024); pending ones never do.
-  const entries = useMemo(() => groupSettledActions(separate ? timeline : groupPendingActions(timeline)), [separate, timeline]);
+  // A turn's settled cards fold into one accordion above its answer (TER-1024), and a run of settled tab
+  // cards into another (TER-1108); pending ones never do.
+  const entries = useMemo(() => groupSettledQuestions(groupSettledActions(separate ? timeline : groupPendingActions(timeline))), [separate, timeline]);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -846,6 +848,20 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   // A confirmation or a tab's question is answered the same way (TER-849).
   const startActionReply = useCallback((a: ChatAction) => setReplyTo(replyTargetOfAction(a)), []);
   const startQuestionReply = useCallback((q: TabQuestion) => setReplyTo(replyTargetOfQuestion(q)), []);
+  /** One tab card, alone in the thread or inside a run's accordion (TER-1108). */
+  const renderQuestion = (q: TabQuestion) => (
+    <TabQuestionCard
+      key={`q:${q.id}`}
+      question={q}
+      answering={answeringQuestionId === q.id}
+      error={questionErrors[q.id]}
+      onAnswer={answerQuestion}
+      loadScreen={loadTabQuestionScreen}
+      onForget={forgetDecision}
+      onCancelAutoAnswer={cancelAutoAnswer}
+      onReply={startQuestionReply}
+    />
+  );
   const cancelReply = useCallback(() => setReplyTo(null), []);
   /** A quote's click: the original, if this thread has it, is brought to the middle and ringed. */
   const openReply = useCallback((id: string): boolean => {
@@ -1123,22 +1139,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
             const s = entry.suggestion;
             return <TabSuggestionRow key={`s:${s.id}`} suggestion={s} busy={busySuggestionId === s.id} error={suggestionErrors[s.id]} onSend={sendSuggestion} onDismiss={dismissSuggestion} />;
           }
-          if (entry.kind === 'tab_question') {
-            const q = entry.question;
-            return (
-              <TabQuestionCard
-                key={`q:${q.id}`}
-                question={q}
-                answering={answeringQuestionId === q.id}
-                error={questionErrors[q.id]}
-                onAnswer={answerQuestion}
-                loadScreen={loadTabQuestionScreen}
-                onForget={forgetDecision}
-                onCancelAutoAnswer={cancelAutoAnswer}
-                onReply={startQuestionReply}
-              />
-            );
-          }
+          if (entry.kind === 'tab_question') return renderQuestion(entry.question);
+          if (entry.kind === 'question_trail') return <ChatQuestionTrail key={`q:${entry.questions[0]!.id}`} questions={entry.questions} renderQuestion={renderQuestion} />;
           if (entry.kind === 'action_trail') return <ChatActionTrail key={`t:${entry.actions[0]!.id}`} actions={entry.actions} renderAction={renderAction} initiallyOpen={entry.actions.some((a) => queuedNotes[a.id] !== undefined)} />;
           if (entry.kind === 'action') return renderAction(entry.action);
           const m = entry.message;

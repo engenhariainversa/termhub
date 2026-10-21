@@ -119,6 +119,44 @@ export function statusLabel(q: TabQuestion): string {
   }
 }
 
+/** How much of a choice card's first question the compact line shows. */
+const COMPACT_QUESTION_MAX = 60;
+
+/** How a settled card ended, in a word, for its compact line (TER-1108): "respondida na aba" when the
+ *  tab moved on by itself, "permitida"/"negada" when the chat answered a permission, and so on. */
+export function compactQuestionOutcome(q: TabQuestion): string {
+  switch (q.status) {
+    case 'open':
+      return '';
+    case 'answered_in_tab':
+      return i18n.t('respondida na aba');
+    case 'answered':
+      if (q.kind === 'permission' && q.answer) return q.answer.allow ? i18n.t('permitida') : i18n.t('negada');
+      return i18n.t('respondida');
+    case 'expired':
+      return i18n.t('expirada');
+    case 'failed':
+      return i18n.t('falhou');
+  }
+}
+
+/** What a settled card is about, in a few words: the tool a permission was for, or a choice card's first
+ *  question (cut at 60 characters, "+N" when it asked more than one). */
+export function compactQuestionSubject(q: TabQuestion): string {
+  if (q.kind === 'permission') return q.payload.tool_name;
+  const first = q.payload.questions[0]?.question.trim() ?? '';
+  const cut = first.length > COMPACT_QUESTION_MAX ? `${first.slice(0, COMPACT_QUESTION_MAX)}…` : first;
+  const rest = q.payload.questions.length - 1;
+  return rest > 0 ? `${cut} ${i18n.t('+{{count}} outras', { count: rest })}` : cut;
+}
+
+/** The one line a settled card reads as (TER-1108): "«codex · ChatGPT» · Bash · respondida na aba". Plain
+ *  text, never HTML: the tab's name and the question are what an agent wrote. */
+export function compactQuestionLine(q: TabQuestion): string {
+  const tab = q.tab_name ? `«${q.tab_name}»` : i18n.t('Uma aba');
+  return `${tab} · ${compactQuestionSubject(q)} · ${compactQuestionOutcome(q)}`;
+}
+
 /** The read-only summary a closed card keeps: each question and what was answered, when the chat answered it. */
 export function answerSummary(q: TabQuestion): string[] {
   if (q.kind === 'permission') {

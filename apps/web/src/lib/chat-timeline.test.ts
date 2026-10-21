@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatAction, ChatMessage, TabQuestion, TabSuggestion } from './types';
-import { chatTimeline, groupPendingActions, groupSettledActions } from './chat-timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions, groupSettledQuestions } from './chat-timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const T1 = '2026-01-01T00:01:00.000Z';
@@ -322,5 +322,38 @@ describe('groupSettledActions (TER-1024)', () => {
     const first = groupSettledActions(chatTimeline(messages, actions));
     const reloaded = groupSettledActions(chatTimeline([...messages].reverse(), [...actions].reverse()));
     expect(reloaded).toEqual(first);
+  });
+});
+
+describe('groupSettledQuestions (TER-1108)', () => {
+  const at = (n: number) => `2026-01-01T00:0${n}:00.000Z`;
+  const user = (id: string, n: number) => message({ id, role: 'user', created_at: at(n) });
+  const answer = (id: string, n: number) => message({ id, created_at: at(n) });
+  const permission = (id: string, n: number, status: TabQuestion['status'] = 'answered_in_tab') =>
+    ({ id, tab_id: 't1', tab_name: 'codex', kind: 'permission', status, answer: null, payload: { tool_name: 'Bash', agent: 'codex' }, error_code: null, created_at: at(n), answered_at: null, closed_at: null }) as TabQuestion;
+  const shape = (entries: ReturnType<typeof chatTimeline>) =>
+    entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join('+') : e.kind === 'tab_question' ? e.question.id : e.kind));
+
+  it('folds consecutive settled tab cards into one trail where the first one sat', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [], [permission('q1', 2), permission('q2', 3, 'answered'), permission('q3', 4, 'expired')]);
+    const result = groupSettledQuestions(entries);
+    expect(shape(result)).toEqual(['u1', 'm1', 'q1+q2+q3']);
+    expect(result[2]!.at).toBe(at(2));
+  });
+
+  it('never folds an open card, and a lone settled card stays a card', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [], [permission('q1', 2), permission('p1', 3, 'open'), permission('q2', 4)]);
+    expect(shape(groupSettledQuestions(entries))).toEqual(['u1', 'm1', 'q1', 'p1', 'q2']);
+  });
+
+  it('a message, a gate card or a pending card between two runs keeps them apart', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1), user('u2', 4)], [action({ id: 'a1', created_at: at(6) })], [permission('q1', 2), permission('q2', 3), permission('q3', 5), permission('q4', 7), permission('q5', 8)]);
+    expect(shape(groupSettledQuestions(groupSettledActions(entries)))).toEqual(['u1', 'm1', 'q1+q2', 'u2', 'q3', 'action', 'q4+q5']);
+  });
+
+  it('leaves a turn\'s action trail alone', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [action({ id: 'a1', status: 'executed', created_at: at(2) }), action({ id: 'a2', status: 'executed', created_at: at(3) })], [permission('q1', 4), permission('q2', 5)]);
+    const result = groupSettledQuestions(groupSettledActions(entries));
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action_trail', 'message', 'question_trail']);
   });
 });

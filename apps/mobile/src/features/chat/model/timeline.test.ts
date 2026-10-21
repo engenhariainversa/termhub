@@ -2,7 +2,7 @@
 // import (jest supplies the same globals) and the `message()` fixture (`usage` is a required field
 // of the contract's `ChatMessage`, unlike the web's own) were adapted.
 import type { ChatAction, ChatMessage, TabLimit, TabQuestion, TabSuggestion } from './types';
-import { chatTimeline, groupPendingActions, groupSettledActions } from './timeline';
+import { chatTimeline, groupPendingActions, groupSettledActions, groupSettledQuestions } from './timeline';
 
 const T0 = '2026-01-01T00:00:00.000Z';
 const T1 = '2026-01-01T00:01:00.000Z';
@@ -44,7 +44,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('breaks a tie by putting the message before the action, regardless of the arrays\' own order', () => {
@@ -76,7 +76,7 @@ describe('chatTimeline', () => {
     const shuffledActions = [actions[1]!, actions[0]!];
     const backward = chatTimeline(shuffledMessages, shuffledActions);
 
-    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')));
+    const idsOf = (entries: typeof forward) => entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')));
     expect(idsOf(backward)).toEqual(idsOf(forward));
     expect(idsOf(forward)).toEqual(['m1', 'a1', 'm2', 'a2']);
   });
@@ -104,7 +104,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['m1']);
   });
 
   it('keeps an action newer than the oldest message, including one tied with it', () => {
@@ -113,7 +113,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a-tied', 'm2', 'a-newer']);
   });
 
   it('measures the cutoff from the oldest message, not from the array\'s first element', () => {
@@ -124,7 +124,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline(messages, actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'a1', 'm2']);
   });
 
   it('keeps every action when there are no messages at all: there is nothing to compare against', () => {
@@ -132,7 +132,7 @@ describe('chatTimeline', () => {
 
     const result = chatTimeline([], actions);
 
-    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['a1', 'a2']);
+    expect(result.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['a1', 'a2']);
   });
 
   it('carries the row\'s own created_at as the entry\'s at', () => {
@@ -148,7 +148,7 @@ describe('chatTimeline', () => {
   it('places a tab question by its time, after a message of the same instant, inside the message window', () => {
     const q = { id: 'q1', tab_id: 't1', tab_name: 'api', kind: 'permission', payload: { tool_name: 'Bash' }, answer: null, status: 'open', error_code: null, created_at: T1, answered_at: null, closed_at: null } as TabQuestion;
     const entries = chatTimeline([message({ id: 'm1', created_at: T0 }), message({ id: 'm2', created_at: T1 })], [], [q, { ...q, id: 'q0', created_at: '2025-12-31T23:59:00.000Z' } as TabQuestion]);
-    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'm2', 'q1']);
+    expect(entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'action' ? e.action.id : e.kind === 'tab_question' ? e.question.id : e.kind === 'tab_suggestion' ? e.suggestion.id : e.kind === 'tab_limit' ? e.limit.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join(',') : e.actions.map((a) => a.id).join(',')))).toEqual(['m1', 'm2', 'q1']);
   });
 
   it('places a tab suggestion by created_at, after the message of the same instant, inside the message window', () => {
@@ -324,5 +324,38 @@ describe('groupSettledActions (TER-1024)', () => {
     const first = groupSettledActions(chatTimeline(messages, actions));
     const reloaded = groupSettledActions(chatTimeline([...messages].reverse(), [...actions].reverse()));
     expect(reloaded).toEqual(first);
+  });
+});
+
+describe('groupSettledQuestions (TER-1108)', () => {
+  const at = (n: number) => `2026-01-01T00:0${n}:00.000Z`;
+  const user = (id: string, n: number) => message({ id, role: 'user', created_at: at(n) });
+  const answer = (id: string, n: number) => message({ id, created_at: at(n) });
+  const permission = (id: string, n: number, status: TabQuestion['status'] = 'answered_in_tab') =>
+    ({ id, tab_id: 't1', tab_name: 'codex', kind: 'permission', status, answer: null, payload: { tool_name: 'Bash', agent: 'codex' }, error_code: null, created_at: at(n), answered_at: null, closed_at: null }) as TabQuestion;
+  const shape = (entries: ReturnType<typeof chatTimeline>) =>
+    entries.map((e) => (e.kind === 'message' ? e.message.id : e.kind === 'question_trail' ? e.questions.map((q) => q.id).join('+') : e.kind === 'tab_question' ? e.question.id : e.kind));
+
+  it('folds consecutive settled tab cards into one trail where the first one sat', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [], [permission('q1', 2), permission('q2', 3, 'answered'), permission('q3', 4, 'expired')]);
+    const result = groupSettledQuestions(entries);
+    expect(shape(result)).toEqual(['u1', 'm1', 'q1+q2+q3']);
+    expect(result[2]!.at).toBe(at(2));
+  });
+
+  it('never folds an open card, and a lone settled card stays a card', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [], [permission('q1', 2), permission('p1', 3, 'open'), permission('q2', 4)]);
+    expect(shape(groupSettledQuestions(entries))).toEqual(['u1', 'm1', 'q1', 'p1', 'q2']);
+  });
+
+  it('a message, a gate card or a pending card between two runs keeps them apart', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1), user('u2', 4)], [action({ id: 'a1', created_at: at(6) })], [permission('q1', 2), permission('q2', 3), permission('q3', 5), permission('q4', 7), permission('q5', 8)]);
+    expect(shape(groupSettledQuestions(groupSettledActions(entries)))).toEqual(['u1', 'm1', 'q1+q2', 'u2', 'q3', 'action', 'q4+q5']);
+  });
+
+  it('leaves a turn\'s action trail alone', () => {
+    const entries = chatTimeline([user('u1', 0), answer('m1', 1)], [action({ id: 'a1', status: 'executed', created_at: at(2) }), action({ id: 'a2', status: 'executed', created_at: at(3) })], [permission('q1', 4), permission('q2', 5)]);
+    const result = groupSettledQuestions(groupSettledActions(entries));
+    expect(result.map((e) => e.kind)).toEqual(['message', 'action_trail', 'message', 'question_trail']);
   });
 });

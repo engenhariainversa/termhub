@@ -6,6 +6,7 @@ export type ChatEntry =
   | { kind: 'action_group'; at: string; actions: ChatAction[] }
   | { kind: 'action_trail'; at: string; actions: ChatAction[] }
   | { kind: 'tab_question'; at: string; question: TabQuestion }
+  | { kind: 'question_trail'; at: string; questions: TabQuestion[] }
   | { kind: 'tab_suggestion'; at: string; suggestion: TabSuggestion }
   | { kind: 'tab_limit'; at: string; limit: TabLimit };
 
@@ -113,6 +114,40 @@ export function groupSettledActions(entries: ChatEntry[]): ChatEntry[] {
     if (e.kind === 'action' && isSettledAction(e.action)) {
       if (run.length === 0) runAt = e.at;
       run.push(e.action);
+      continue;
+    }
+    flush();
+    out.push(e);
+  }
+  flush();
+  return out;
+}
+
+/** A tab's question or permission card nobody has to answer any more: answered here, in the tab, by a rule
+ * or by the countdown, expired or failed (TER-1108). */
+export const isSettledQuestion = (question: TabQuestion): boolean => question.status !== 'open';
+
+/**
+ * Two or more settled tab cards in a row — a Codex tab asking permission for every command it runs, each
+ * answered in the tab before anyone looked — become one accordion, closed by default (TER-1108), the
+ * same way a turn's settled gate cards do. Consecutive means consecutive in the thread: a card from
+ * another tab in the run joins it (each line inside names its tab), while an open card, a gate card, a
+ * suggestion, a usage limit and every message break the run — what waits on the person is never folded
+ * away. Runs after `groupSettledActions`, which this one leaves alone.
+ */
+export function groupSettledQuestions(entries: ChatEntry[]): ChatEntry[] {
+  const out: ChatEntry[] = [];
+  let run: TabQuestion[] = [];
+  let runAt = '';
+  const flush = () => {
+    if (run.length >= 2) out.push({ kind: 'question_trail', at: runAt, questions: run });
+    else if (run.length === 1) out.push({ kind: 'tab_question', at: runAt, question: run[0]! });
+    run = [];
+  };
+  for (const e of entries) {
+    if (e.kind === 'tab_question' && isSettledQuestion(e.question)) {
+      if (run.length === 0) runAt = e.at;
+      run.push(e.question);
       continue;
     }
     flush();
