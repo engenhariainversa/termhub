@@ -270,8 +270,14 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       const { id } = idParam.parse(request.params);
       const { name } = tabFileQuery.parse(request.query);
       const { machine, tab } = await scoped(repos, request).tab(id);
-      if (!Buffer.isBuffer(request.body) || request.body.length === 0) throw badRequest('Arquivo vazio');
-      const saved = await saveFileOnMachine(machine, request.body, name);
+      const body = request.body;
+      if (!Buffer.isBuffer(body) || body.length === 0) throw badRequest('Arquivo vazio');
+      // A refusal is logged with the step's status and code (TER-1105): the app shows the reason, the log says where it broke.
+      const saved = await saveFileOnMachine(machine, body, name).catch((err: unknown) => {
+        const status = err instanceof HttpError ? err.statusCode : 500;
+        request.log.warn({ tabId: tab.id, machineId: machine.id, bytes: body.length, status, code: err instanceof HttpError ? err.code : null }, 'tab chat: file not saved');
+        throw err;
+      });
       request.log.info({ tabId: tab.id, machineId: machine.id, bytes: saved.bytes }, 'tab chat: file saved');
       return { path: saved.path, name: saved.name };
     });

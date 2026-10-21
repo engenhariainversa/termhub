@@ -15,6 +15,7 @@ import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WI
 import { agentName } from '../model/agent-label';
 import { availabilityText } from '../model/availability-text';
 import { emptyReasonText } from '../model/empty-reason-text';
+import { tabFileFailureText, tabFileTooLarge, tabFileTooLargeText } from '../model/file-failure-text';
 import { TAB_CHAT_MSG } from '../model/messages';
 import { quotedText } from '../model/reply-text';
 import { thinkingLine } from '../model/thinking';
@@ -162,14 +163,16 @@ export function SessionView({ tabId }: { tabId: string }) {
   );
 
   // The composer's chips: the file is saved on the tab's machine; its path is sent as a line of the text.
+  // A failure says why (TER-1105), and the chip's "tentar de novo" runs the upload again.
   const uploadAttachment = useCallback(
     async (file: PickedFile, onProgress: (fraction: number) => void) => {
+      if (tabFileTooLarge(file.bytes)) throw new ApiError(413, 'TAB_FILE_TOO_LARGE', tabFileTooLargeText());
       try {
         const saved = await uploadFile(file);
         onProgress(1);
         return asChip(file, saved.path);
-      } catch {
-        throw new ApiError(0, 'TAB_FILE_FAILED', TAB_CHAT_MSG.fileFailed);
+      } catch (e) {
+        throw new ApiError(e instanceof ApiError ? e.status : 0, 'TAB_FILE_FAILED', tabFileFailureText(e));
       }
     },
     [uploadFile],
