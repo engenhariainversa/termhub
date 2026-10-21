@@ -137,5 +137,17 @@
   "Uma decisão desta conversa só pode ser registrada no chat do termhub": "A decision for this conversation can only be recorded in the termhub chat",
   "{{ref}} já foi substituído ou esquecido": "{{ref}} was already replaced or forgotten",
   "Só uma anotação (note:) ou decisão (decision:) pode ser substituída: {{ref}}": "Only a note (note:) or a decision (decision:) can be replaced: {{ref}}",
-  "URL do ai-memory inválida": "Invalid ai-memory URL"
+  "URL do ai-memory inválida": "Invalid ai-memory URL",
+  "Esta ferramenta só funciona no chat do termhub: a assinatura acorda a própria conversa.": "This tool only works in the termhub chat: the watch wakes that same conversation.",
+  "Informe tab_id para acompanhar uma aba.": "Pass tab_id to watch a tab.",
+  "Informe task_id (o id ou a referência, como TER-12) para acompanhar um card.": "Pass task_id (the id or the reference, such as TER-12) to watch a card.",
+  "pr_url deve ser a URL de um pull request do GitHub (https://github.com/dono/repo/pull/123).": "pr_url must be the URL of a GitHub pull request (https://github.com/owner/repo/pull/123).",
+  "O termhub não acompanha este PR: ele precisa citar um card de um projeto seu com a integração do GitHub (o painel de CI). Acompanhe pelo card (task_id).": "termhub does not follow this PR: it must name a card of one of your projects with the GitHub integration (the CI panel). Watch it through the card (task_id).",
+  "Informe pr_url ou task_id (os PRs do card) para acompanhar um pull request.": "Pass pr_url or task_id (the card's PRs) to watch a pull request.",
+  "Informe machine_id para acompanhar uma máquina.": "Pass machine_id to watch a machine.",
+  "Informe version (x.y.z): a menor versão do @termhub/agent que conta.": "Pass version (x.y.z): the lowest @termhub/agent version that counts.",
+  "Eventos que {{kind}} não tem: {{unknown}}. Use: {{events}}.": "Events {{kind}} does not have: {{unknown}}. Use: {{events}}.",
+  "hours vai de um pouco mais de 0 até {{max}} (7 dias).": "hours goes from just above 0 up to {{max}} (7 days).",
+  "Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.": "This conversation already has {{max}} open watches: cancel one with cancel_watch (list_watches lists them all) before creating another.",
+  "Assinatura não encontrada ou já encerrada.": "Watch not found or already closed."
 }

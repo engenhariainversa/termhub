@@ -443,6 +443,8 @@ export const ModelName = {
   ChatFileGrant: 'ChatFileGrant',
   ChatDefaultRestriction: 'ChatDefaultRestriction',
   ChatCommandRule: 'ChatCommandRule',
+  ChatWatch: 'ChatWatch',
+  ChatWatchFire: 'ChatWatchFire',
   TabLimitNotice: 'TabLimitNotice',
   TabQuestion: 'TabQuestion',
   ChatAutoSample: 'ChatAutoSample',
@@ -484,7 +486,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -3892,6 +3894,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ChatWatch: {
+      payload: Prisma.$ChatWatchPayload<ExtArgs>
+      fields: Prisma.ChatWatchFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ChatWatchFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ChatWatchFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        findFirst: {
+          args: Prisma.ChatWatchFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ChatWatchFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        findMany: {
+          args: Prisma.ChatWatchFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>[]
+        }
+        create: {
+          args: Prisma.ChatWatchCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        createMany: {
+          args: Prisma.ChatWatchCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ChatWatchCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>[]
+        }
+        delete: {
+          args: Prisma.ChatWatchDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        update: {
+          args: Prisma.ChatWatchUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        deleteMany: {
+          args: Prisma.ChatWatchDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ChatWatchUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ChatWatchUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>[]
+        }
+        upsert: {
+          args: Prisma.ChatWatchUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchPayload>
+        }
+        aggregate: {
+          args: Prisma.ChatWatchAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateChatWatch>
+        }
+        groupBy: {
+          args: Prisma.ChatWatchGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatWatchGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ChatWatchCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatWatchCountAggregateOutputType> | number
+        }
+      }
+    }
+    ChatWatchFire: {
+      payload: Prisma.$ChatWatchFirePayload<ExtArgs>
+      fields: Prisma.ChatWatchFireFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ChatWatchFireFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ChatWatchFireFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        findFirst: {
+          args: Prisma.ChatWatchFireFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ChatWatchFireFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        findMany: {
+          args: Prisma.ChatWatchFireFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>[]
+        }
+        create: {
+          args: Prisma.ChatWatchFireCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        createMany: {
+          args: Prisma.ChatWatchFireCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ChatWatchFireCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>[]
+        }
+        delete: {
+          args: Prisma.ChatWatchFireDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        update: {
+          args: Prisma.ChatWatchFireUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        deleteMany: {
+          args: Prisma.ChatWatchFireDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ChatWatchFireUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ChatWatchFireUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>[]
+        }
+        upsert: {
+          args: Prisma.ChatWatchFireUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ChatWatchFirePayload>
+        }
+        aggregate: {
+          args: Prisma.ChatWatchFireAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateChatWatchFire>
+        }
+        groupBy: {
+          args: Prisma.ChatWatchFireGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatWatchFireGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ChatWatchFireCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ChatWatchFireCountAggregateOutputType> | number
+        }
+      }
+    }
     TabLimitNotice: {
       payload: Prisma.$TabLimitNoticePayload<ExtArgs>
       fields: Prisma.TabLimitNoticeFieldRefs
@@ -6628,6 +6778,47 @@ export const ChatCommandRuleScalarFieldEnum = {
 export type ChatCommandRuleScalarFieldEnum = (typeof ChatCommandRuleScalarFieldEnum)[keyof typeof ChatCommandRuleScalarFieldEnum]
 
 
+export const ChatWatchScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  projectId: 'projectId',
+  conversationId: 'conversationId',
+  kind: 'kind',
+  targetId: 'targetId',
+  params: 'params',
+  baseline: 'baseline',
+  label: 'label',
+  note: 'note',
+  recurring: 'recurring',
+  status: 'status',
+  createdAt: 'createdAt',
+  expiresAt: 'expiresAt',
+  closedAt: 'closedAt',
+  lastFiredAt: 'lastFiredAt',
+  fireCount: 'fireCount'
+} as const
+
+export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]
+
+
+export const ChatWatchFireScalarFieldEnum = {
+  id: 'id',
+  watchId: 'watchId',
+  userId: 'userId',
+  projectId: 'projectId',
+  eventKey: 'eventKey',
+  event: 'event',
+  payload: 'payload',
+  createdAt: 'createdAt',
+  claimedAt: 'claimedAt',
+  attempts: 'attempts',
+  deliveredAt: 'deliveredAt',
+  droppedAt: 'droppedAt'
+} as const
+
+export type ChatWatchFireScalarFieldEnum = (typeof ChatWatchFireScalarFieldEnum)[keyof typeof ChatWatchFireScalarFieldEnum]
+
+
 export const TabLimitNoticeScalarFieldEnum = {
   id: 'id',
   tabId: 'tabId',
@@ -7545,6 +7736,8 @@ export type GlobalOmitConfig = {
   chatFileGrant?: Prisma.ChatFileGrantOmit
   chatDefaultRestriction?: Prisma.ChatDefaultRestrictionOmit
   chatCommandRule?: Prisma.ChatCommandRuleOmit
+  chatWatch?: Prisma.ChatWatchOmit
+  chatWatchFire?: Prisma.ChatWatchFireOmit
   tabLimitNotice?: Prisma.TabLimitNoticeOmit
   tabQuestion?: Prisma.TabQuestionOmit
   chatAutoSample?: Prisma.ChatAutoSampleOmit

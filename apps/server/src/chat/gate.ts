@@ -15,7 +15,9 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // spec TER-205 D11. Never add a tool here that acts on a machine directly.
 // recap_pending_cards only moves the person's own cards to the end of their chat (TER-477): nothing is
 // decided, sent or changed on a machine, and a confirmation card for it would be one more card to answer.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run']);
+// watch and cancel_watch (TER-1099) only decide when the chat itself is woken: nothing is sent to a machine
+// or changed on the board, and the person sees every open watch in the chat and can cancel it there.
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch']);
 
 // Tools classified by reversibility
 const readTools = new Set([
@@ -52,6 +54,8 @@ const readTools = new Set([
   'list_command_rules',
   // TER-1088: where the person's last message came from, as the server read it; nothing is changed.
   'get_client_context',
+  // TER-1099: the chat's own open watches; nothing is changed.
+  'list_watches',
 ]);
 
 const writeTools = new Set([

@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatPanel } from './ChatPanel';
-import type { ChatAction, ChatGrant, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabQuestion, TabSuggestion } from '../../lib/types';
+import type { ChatAction, ChatGrant, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabQuestion, TabSuggestion } from '../../lib/types';
 
 const chatMock = vi.fn();
 const sendMock = vi.fn();
@@ -27,6 +27,7 @@ const forgetDecisionMock = vi.fn();
 const cancelSubagentMock = vi.fn();
 const compactMock = vi.fn();
 const cancelAutoAnswerMock = vi.fn();
+const cancelWatchMock = vi.fn();
 
 vi.mock('../../lib/api', () => {
   // Same signature as the real one: the page shows `message`, so a stand-in that swallows it would
@@ -65,6 +66,7 @@ vi.mock('../../lib/api', () => {
       forgetChatDecision: (...a: unknown[]) => forgetDecisionMock(...a),
       cancelSubagent: (...a: unknown[]) => cancelSubagentMock(...a),
       cancelAutoAnswer: (...a: unknown[]) => cancelAutoAnswerMock(...a),
+      cancelChatWatch: (...a: unknown[]) => cancelWatchMock(...a),
       machines: { list: (...a: unknown[]) => machinesMock(...a) },
       aiAccounts: { list: (...a: unknown[]) => accountsMock(...a) },
     },
@@ -162,6 +164,7 @@ beforeEach(() => {
   compactMock.mockReset();
   compactMock.mockResolvedValue({ conversation_id: 'c1' });
   cancelAutoAnswerMock.mockReset();
+  cancelWatchMock.mockReset();
   screenMock.mockResolvedValue({ text: 'Do you want to proceed?' });
   accountsMock.mockResolvedValue({ accounts: [] });
   auth.state = { user: { id: 'u1' }, viewAs: null };
@@ -385,6 +388,46 @@ it('project_grant_revoked removes it from the indicator', async () => {
   expect(await settings.findByRole('link', { name: '2 permissões ativas' })).toBeInTheDocument();
   onEvent({ type: 'project_grant_revoked', conversation_id: 'c_p1', grant_id: 'pg1' });
   expect(await settings.findByRole('link', { name: '1 permissão ativa' })).toBeInTheDocument();
+});
+
+const watchRow = (over: Partial<ChatWatch> & { id: string }): ChatWatch => ({
+  kind: 'pr',
+  target_id: 'pr1',
+  label: 'PR #511 Login fix',
+  events: ['merged'],
+  recurring: false,
+  note: '',
+  created_at: '2026-10-21T10:00:00.000Z',
+  expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+  fire_count: 0,
+  ...over,
+});
+
+it('shows the open watches, takes the whole list from a watches event of this conversation, and cancels one', async () => {
+  let onEvent!: (e: unknown) => void;
+  streamMock.mockImplementation((_reload: unknown, cb: (e: unknown) => void) => {
+    onEvent = cb;
+    return { connected: true };
+  });
+  chatMock.mockResolvedValue({ conversation: { id: 'c_p1', project_id: 'p1', ai_account_id: null }, messages: [], actions: [], host: READY, watches: [watchRow({ id: 'w1' })] });
+  cancelWatchMock.mockResolvedValue({ watch: watchRow({ id: 'w1' }) });
+  render(
+    <MemoryRouter>
+      <ChatPanel projectId="p1" />
+    </MemoryRouter>,
+  );
+  expect(await screen.findByText('PR #511 Login fix')).toBeInTheDocument();
+  // Another conversation's list is not this screen's.
+  act(() => onEvent({ type: 'watches', conversation_id: 'c_other', watches: [] }));
+  expect(screen.getByText('PR #511 Login fix')).toBeInTheDocument();
+  act(() => onEvent({ type: 'watches', conversation_id: 'c_p1', watches: [watchRow({ id: 'w1' }), watchRow({ id: 'w2', kind: 'machine', label: 'jarvis', events: ['online'] })] }));
+  expect(screen.getByText('jarvis')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar PR #511 Login fix' }));
+  expect(cancelWatchMock).toHaveBeenCalledWith('w1');
+  await waitFor(() => expect(screen.queryByText('PR #511 Login fix')).toBeNull());
+  expect(screen.getByText('jarvis')).toBeInTheDocument();
+  act(() => onEvent({ type: 'watches', conversation_id: 'c_p1', watches: [] }));
+  expect(screen.queryByText('Acompanhando')).toBeNull();
 });
 
 it('no link without an active grant', async () => {

@@ -12,6 +12,7 @@ import { type IndexActionsFn } from './chat.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
+import { activeWatches, cancelWatchRow } from '../chat/watches/view.js';
 import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
@@ -120,7 +121,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
     const projectId = project ?? null;
     const user = request.scope.user;
     const conversation = await deps.chat.conversationFor(user, projectId);
-    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit] = await Promise.all([
+    const [messages, rows, host, grants, project_grants, standing_grants, questionRows, subagents, open, limitRows, context_limit, watches] = await Promise.all([
       repos.chat.listMessages(conversation.id),
       repos.chatActions.listByConversation(conversation.id),
       deps.chat.hostFor(user, projectId),
@@ -137,6 +138,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       repos.tabLimitNotices.listByConversation(conversation.id),
       // What the context meter measures against (TER-1038): null = the model's window.
       repos.users.chatContextLimit(user.id),
+      // The watches the concierge keeps for this scope (TER-1099): "Acompanhando…" with a Cancelar.
+      activeWatches(repos, user.id, conversation.project_id),
     ]);
     const actions = await describeActions(repos, rows, user.id);
     const { tab_questions, tab_suggestions } = splitTabRows(await describeTabQuestions(repos, questionRows, user.id));
@@ -155,6 +158,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
       context_limit,
+      watches,
     };
   });
 
@@ -461,6 +465,14 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.get('/grants', async (request) => chatGrantListResponse.parse(await listGrants(repos, request.scope.user.id, chatGrantListQuery.parse(request.query))));
 
   /** "Revogar" from the phone. No PIN: it only takes power away. `create`, like deciding a card. */
+  /** "Cancelar" on a watch (TER-1099): it no longer wakes the chat. `create`, like revoking a grant; 404 unknown, another user's or already closed. */
+  app.delete('/watches/:id', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    const watch = await cancelWatchRow(repos, request.scope.user.id, id);
+    if (!watch) throw notFound('Assinatura não encontrada');
+    return { watch };
+  });
+
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {
     const { id } = grantIdParam.parse(request.params);
     return { grant: await revokeGrant(repos, request.scope.user.id, id) };

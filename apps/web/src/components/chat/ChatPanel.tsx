@@ -11,6 +11,7 @@ import { ChatPendingBar } from './ChatPendingBar';
 import { ChatSettingsButton, ChatSettingsDialog } from './ChatSettings';
 import { ChatSubagents } from './ChatSubagents';
 import { ChatThread } from './ChatThread';
+import { ChatWatches } from './ChatWatches';
 import { ChatTurn } from './ChatTurn';
 import { TabQuestionCard } from './TabQuestionCard';
 import { TabSuggestionCard } from './TabSuggestionCard';
@@ -30,7 +31,7 @@ import { isActive, upsertSubagent } from '../../lib/subagents';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
-import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatCommandRule, ChatMessage, ChatProjectGrant, ChatStandingGrant, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
+import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatCommandRule, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /** How often the panel's elapsed labels ("há N min") refresh while it is open. */
 const SUBAGENTS_REFRESH_MS = 30_000;
@@ -142,6 +143,11 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    *  chat): from `GET /api/chat` and a decision's answer; only the cards that created one show it. */
   const [commandRules, setCommandRules] = useState<ChatCommandRule[]>([]);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  /** The concierge's open watches of this conversation (TER-1099, "Acompanhando"): from `GET /api/chat`,
+   *  replaced whole by each `watches` event. */
+  const [watches, setWatches] = useState<ChatWatch[]>([]);
+  const [cancelingWatchId, setCancelingWatchId] = useState<string | null>(null);
+  const [watchErrors, setWatchErrors] = useState<Record<string, string>>({});
   /** The tabs' questions of this conversation (spec 2026-09-25 §6.2), from `GET /api/chat` and the three events. */
   const [tabQuestions, setTabQuestions] = useState<TabQuestion[]>([]);
   const [answeringQuestionId, setAnsweringQuestionId] = useState<string | null>(null);
@@ -278,7 +284,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     const snapshot = await (projectId ? api.chat(projectId) : api.chat()).finally(() => reads.current.delete(arrived));
     if (seq <= appliedSeq.current) return;
     appliedSeq.current = seq;
-    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, command_rules, tab_questions, tab_suggestions, tab_limits, subagents, compacting, context_limit } = snapshot;
+    const { conversation, messages, open_answer_ids, actions, host, grants, project_grants, standing_grants, command_rules, tab_questions, tab_suggestions, tab_limits, subagents, watches, compacting, context_limit } = snapshot;
     // The same conversation: the snapshot merges into the thread, so a row that ended or was removed
     // while this read was in flight is not brought back, and a row the server deleted leaves and is
     // closed (its started mark must not outlive it). Another one (a reset, another project) replaces
@@ -304,6 +310,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     setTabSuggestions(tab_suggestions ?? []);
     setTabLimits(tab_limits ?? []);
     setSubagents(subagents ?? []);
+    setWatches(watches ?? []);
     setHost(host ?? null);
     setHostAccountId(conversation.ai_account_id ?? null);
     setContext(typeof conversation.context_tokens === 'number' ? { tokens: conversation.context_tokens, window: conversation.context_window ?? null, compacted_at: conversation.context_compacted_at ?? null } : null);
@@ -408,6 +415,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       else if (e.type === 'tab_question' || e.type === 'tab_question_answered' || e.type === 'tab_question_closed') setTabQuestions((prev) => upsertTabQuestion(prev, e.question));
       else if (e.type === 'tab_suggestion' || e.type === 'tab_suggestion_closed') setTabSuggestions((prev) => upsertTabSuggestion(prev, e.suggestion));
       else if (e.type === 'tab_limit' || e.type === 'tab_limit_closed') setTabLimits((prev) => upsertById(prev, e.notice));
+      else if (e.type === 'watches') setWatches(e.watches);
       else if (e.type === 'attachment_status') {
         // Into the message that carries it (no refetch: only that row gets a new object) and into the
         // composer's chips, for a file uploaded but not yet sent.
@@ -537,6 +545,23 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setRevokingId(null);
     }
   }, []);
+
+  /** "Cancelar" on a watch (TER-1099). Removed at once; the server's `watches` event follows with the
+   *  whole list. 404: it already fired its last time, expired or was cancelled elsewhere — gone either way. */
+  const cancelWatch = useCallback(async (id: string) => {
+    setCancelingWatchId(id);
+    setWatchErrors(({ [id]: _dropped, ...rest }) => rest);
+    try {
+      await api.cancelChatWatch(id);
+      setWatches((prev) => prev.filter((w) => w.id !== id));
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) setWatches((prev) => prev.filter((w) => w.id !== id));
+      else setWatchErrors((prev) => ({ ...prev, [id]: e instanceof ApiError ? e.message : i18n.t('Não foi possível cancelar') }));
+    } finally {
+      setCancelingWatchId(null);
+    }
+  }, []);
+  const onCancelWatch = useCallback((id: string) => void cancelWatch(id), [cancelWatch]);
 
   /** A click on a tab question's card is the answer: no confirmation, no model turn. */
   const answerQuestion = useCallback(async (id: string, body: TabQuestionAnswer) => {
@@ -914,6 +939,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setSuggestionErrors({});
       setSubagents([]);
       setCancelFailed(new Set());
+      setWatches([]);
+      setWatchErrors({});
       setCompactNote(null);
       await load();
     } catch (e) {
@@ -1135,6 +1162,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         })}
       </ChatThread>
       {/* What waits on the person, however far up it sits (TER-477): hidden while nothing does. */}
+      {/* What the concierge keeps an eye on for this conversation (TER-1099): hidden while nothing. */}
+      <ChatWatches watches={watches} cancelingId={cancelingWatchId} errors={watchErrors} onCancel={onCancelWatch} />
       <ChatPendingBar entries={timeline} batchDeciding={batchDeciding} onApprove={approveReversible} onLocate={unstick} />
       {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
        *  decision errors go in its status line too: a line that mounts above the thread shifts it.

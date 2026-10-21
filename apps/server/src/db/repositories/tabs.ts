@@ -306,6 +306,14 @@ export class TabsRepository {
     return r.count;
   }
 
+  /** TER-1099: the tab's state events of these kinds after `after`, oldest first — what a watch caught,
+   *  even when the tab already moved on (the sweep after a restart reads them here). */
+  async eventsAfter(tabId: string, after: Date, kinds: readonly TabState[], limit = 50): Promise<TabEvent[]> {
+    if (kinds.length === 0) return [];
+    const rows = await this.db.tabEvent.findMany({ where: { tabId, createdAt: { gt: after }, kind: { in: [...kinds] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: limit });
+    return rows.map(mapTabEvent);
+  }
+
   async listEvents(tabId: string, limit = 50): Promise<TabEvent[]> {
     const rows = await this.db.tabEvent.findMany({ where: { tabId }, orderBy: { createdAt: 'desc' }, take: limit });
     return rows.map(mapTabEvent);

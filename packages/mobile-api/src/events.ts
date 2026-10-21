@@ -307,6 +307,23 @@ export const subagentViewSchema = z.object({
 });
 export type TSubagentView = z.infer<typeof subagentViewSchema>;
 
+/** TER-1099: one watch the concierge keeps for the chat ("Acompanhando: PR #511 até o merge"). Mirrors the
+ *  server's `WatchView` (chat/watches/view.ts). `kind` and `events` are plain strings: a value a newer server
+ *  adds must not break an installed app. `label` is the target's own name (data); the app composes the sentence. */
+export const watchViewSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  target_id: z.string().nullable(),
+  label: z.string(),
+  events: z.array(z.string()),
+  recurring: z.boolean(),
+  note: z.string(),
+  created_at: z.string(),
+  expires_at: z.string(),
+  fire_count: z.number().int(),
+});
+export type TWatchView = z.infer<typeof watchViewSchema>;
+
 // Mirrors the `ChatEvent` union in `apps/server/src/chat/bus.ts`, plus the `hello` variant the
 // mobile socket sends first (there is no browser-side equivalent: the app has no other way to
 // learn the protocol version and the server's clock before its first real event).
@@ -374,6 +391,8 @@ export const chatEventSchema = z.discriminatedUnion('type', [
   /** How full the conversation's CLI session is (TER-315): after a turn or a compaction. `compacted_at`
    *  (TER-1038): when it was last compacted; absent from a server before it. */
   z.object({ type: z.literal('context'), user_id: z.string(), conversation_id: z.string(), tokens: z.number(), window: z.number().nullable(), compacted_at: z.string().nullable().optional() }),
+  /** The scope's open watches changed (TER-1099): the whole list, which replaces the app's. */
+  z.object({ type: z.literal('watches'), user_id: z.string(), conversation_id: z.string(), watches: z.array(watchViewSchema) }),
   /** "Compactar" (TER-315): started, done or failed. */
   z.object({
     type: z.literal('compact'),

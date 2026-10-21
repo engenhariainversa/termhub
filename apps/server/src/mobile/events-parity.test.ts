@@ -98,6 +98,11 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   tab_suggestion_closed: { type: 'tab_suggestion_closed', ...base, suggestion: { ...suggestion, status: 'dismissed', closed_at: '2026-09-25T12:02:00.000Z' } },
   context: { type: 'context', ...base, tokens: 25258, window: 1_000_000, compacted_at: '2026-09-25T12:03:00.000Z' },
   compact: { type: 'compact', ...base, state: 'done', tokens_before: 20693, tokens: 1951, error_code: null },
+  watches: {
+    type: 'watches',
+    ...base,
+    watches: [{ id: 'w1', kind: 'pr', target_id: 'task1', label: 'PRs de TER-12 Login', events: ['merged'], recurring: false, note: 'Avisar e mover o card', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-22T12:00:00.000Z', fire_count: 0 }],
+  },
   attachment_status: {
     type: 'attachment_status',
     ...base,

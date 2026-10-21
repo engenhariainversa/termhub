@@ -5,6 +5,7 @@ import type { ChatActionClass } from '../db/repositories/chat-actions.js';
 import type { ChatActionCard, ChatGrantView, ChatProjectGrantView, ChatStandingGrantView } from '../db/repositories/chat-actions-view.js';
 import type { TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import type { SubagentView } from './subagent-view.js';
+import type { WatchView } from './watches/view.js';
 import type { ChatAttachment } from '@termhub/mobile-api';
 
 /** What the browser is told while an answer is being written. Terminal content never travels here:
@@ -127,6 +128,9 @@ export type ChatEvent =
    *  `window` is the model's context window, null when the CLI never reported it. */
   /** `compacted_at` (TER-1038): when the session was last compacted, null when never. */
   | { type: 'context'; user_id: string; conversation_id: string; tokens: number; window: number | null; compacted_at: string | null }
+  /** The scope's open watches changed (TER-1099): one was created, fired, expired or was cancelled. The whole
+   *  list, so a screen just replaces its own. Ids, names and the concierge's note only. */
+  | { type: 'watches'; user_id: string; conversation_id: string; watches: WatchView[] }
   /** "Compactar" (TER-315): started, done (with the sizes before and after, when the CLI said) or
    *  failed (with the code a failed answer would carry). */
   | { type: 'compact'; user_id: string; conversation_id: string; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null };

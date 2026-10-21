@@ -59,6 +59,9 @@ import { startDecisionSweeper } from './chat/decision-memory.js';
 import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
+import { startWatchEngine } from './chat/watches/engine.js';
+import { monitorBus } from './monitor/bus.js';
+import { createWatchProbe } from './chat/watches/probe.js';
 import { startMemorySweeper } from './memory/sweeper.js';
 import { startAiMemoryRulesSweeper } from './memory/ai-memory-sync.js';
 import { agentRunner } from './chat/agent-runner.js';
@@ -454,6 +457,35 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   fastify.addHook('preClose', async () => {
     await within(chat.suspendAll().catch((err: unknown) => fastify.log.warn({ err: err instanceof Error ? err.message : String(err) }, 'preClose: suspend failed')), PRE_CLOSE_SUSPEND_MS, () => fastify.log.warn({}, 'preClose: suspend budget exceeded'));
   });
+  // TER-1099: the concierge's watches ("me avise quando…"). Both colours sweep; the fire and the delivery are
+  // claimed in the database, and a draining colour does neither. Tab and agent changes are checked at once.
+  const watches = startWatchEngine({
+    repos,
+    chat,
+    probe: createWatchProbe({ repos, agents }),
+    log: fastify.log,
+    active: () => !lifecycle.draining,
+    buses: {
+      onTab: (listener) => {
+        const offState = monitorBus.subscribe((change) => listener(change.tab.id));
+        const offLifecycle = monitorBus.subscribeLifecycle((event) => {
+          if (event.kind === 'removed') listener(event.tab_id);
+        });
+        return () => {
+          offState();
+          offLifecycle();
+        };
+      },
+      onMachine: (listener) => {
+        agents.on('online', listener);
+        agents.on('offline', listener);
+        return () => {
+          agents.off('online', listener);
+          agents.off('offline', listener);
+        };
+      },
+    },
+  });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
   // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
   const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
@@ -488,6 +520,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     agents.off('online', onAgentOnline);
     clearTimeout(onlineSweep);
     stopSync();
+    watches.stop();
     stopCiSync();
     stopSummaries();
     stopAiLoginChecks();

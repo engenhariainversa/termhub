@@ -99,6 +99,7 @@ model User {
   memoryRules             MemoryRule[]
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
+  chatWatches             ChatWatch[]
   fileGrants              ChatFileGrant[]
   chatDefaultRestrictions ChatDefaultRestriction[]
   /// Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
@@ -325,6 +326,7 @@ model Project {
   pullRequests        TaskPullRequest[]
   standingGrants      ChatStandingGrant[]
   chatCommandRules    ChatCommandRule[]
+  chatWatches         ChatWatch[]
   automationEvents    AutomationEvent[]
   automationRuns      AutomationRun[]
   tabUsageDays        TabUsageDay[]
@@ -1360,6 +1362,73 @@ model ChatCommandRule {
 
   @@index([userId, revokedAt])
   @@map("chat_command_rules")
+}
+
+/// TER-1099: "me avise quando…" — an event the concierge asked to be woken for (a tab stopping, a card moving,
+/// a PR, its deploy or release, a machine, an agent release). Kept per chat scope (user + project): the wake
+/// goes to the scope's active conversation, so "Nova conversa" does not lose it. Holds ids, states and the
+/// concierge's own note only — never terminal content.
+model ChatWatch {
+  id             String          @id
+  userId         String          @map("user_id")
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// null = the account-wide chat
+  projectId      String?         @map("project_id")
+  project        Project?        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// the conversation that created it (informative: the wake goes to the scope's active one)
+  conversationId String?         @map("conversation_id")
+  /// tab | card | pr | machine | agent_release (chat/watches/kinds.ts)
+  kind           String
+  /// the tab, card or machine watched; null for pr by url and agent_release
+  targetId       String?         @map("target_id")
+  /// { events: string[], pr_url?, version?, to? }
+  params         Json
+  /// what the next event is measured against: the target's state when created, then after each fire
+  baseline       Json
+  /// the target's name when created, for lists and the wake text ("PR #511", the tab's name)
+  label          String
+  /// what the concierge said to do when it happens, in its own words
+  note           String
+  recurring      Boolean         @default(false)
+  /// open | done | cancelled | expired | gone
+  status         String          @default("open")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  expiresAt      DateTime        @map("expires_at")
+  closedAt       DateTime?       @map("closed_at")
+  lastFiredAt    DateTime?       @map("last_fired_at")
+  fireCount      Int             @default(0) @map("fire_count")
+  fires          ChatWatchFire[]
+
+  @@index([status, kind])
+  @@index([userId, projectId, status])
+  @@map("chat_watches")
+}
+
+/// One event a watch caught, until it reaches the conversation (TER-1099). `(watch_id, event_key)` is unique:
+/// both colours may see the same event, only one row is born. Delivered by the claim (`claimed_at`), so a
+/// restart in between hands it to the next sweep instead of losing or doubling it.
+model ChatWatchFire {
+  id          String    @id
+  watchId     String    @map("watch_id")
+  watch       ChatWatch @relation(fields: [watchId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id")
+  projectId   String?   @map("project_id")
+  eventKey    String    @map("event_key")
+  /// the event's name (merged, finished, online…)
+  event       String
+  /// ids, URLs, states and versions — never terminal content
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  claimedAt   DateTime? @map("claimed_at")
+  attempts    Int       @default(0)
+  deliveredAt DateTime? @map("delivered_at")
+  /// never delivered (the conversation's host stayed away too long)
+  droppedAt   DateTime? @map("dropped_at")
+
+  @@unique([watchId, eventKey])
+  @@index([deliveredAt, droppedAt])
+  @@index([userId, deliveredAt])
+  @@map("chat_watch_fires")
 }
 
 /// A project tab stuck on a usage limit whose machine does not swap accounts by itself (TER-589): a card in

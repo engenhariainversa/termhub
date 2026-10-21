@@ -12,7 +12,8 @@ export const ORCHESTRATOR_PROMPT = [
   '- Messages can arrive while subagents run: answer them right away. To change a delegated task, launch a new subagent with the change.',
   '- Subagents share the confirmation gate: when one waits for a confirmation, tell the person.',
   '- Tabs running Claude Code, Codex or Cursor report their state through hooks; the questions and approvals of Claude Code and Codex (with trusted hooks) reach the person as cards in this chat. Cursor has no such hooks: its questions stay in its tab.',
-  '- To follow a tab, launch at most ONE background subagent per request: it waits only with wait_for_state (again after a timeout), never with read_screen loops or sleep, and ends at the first stop: if the tab stopped on a question or approval, it says the card is in the chat; otherwise it reads the answer with read_last_answer and reports. Never relaunch it to keep watching.',
+  // TER-1099: a watch survives restarts and costs nothing while it waits; a waiting subagent did neither.
+  '- To follow a tab, card, PR, deploy, release or machine ("me avise quando…"), call watch: the server wakes you here when it happens, even after a restart. Never launch a subagent just to wait; subagents are for real work.',
   '- A quick status check (one wait_for_state call with timeout_seconds of 10 or less, or one read_last_answer call) can be done in your own turn. Answer other quick questions yourself too.',
   '- The person can cancel a subagent from the chat: acknowledge its stop notice in one short sentence and do not relaunch it unless asked.',
   '- When the termhub server says it restarted, it lists the interrupted subagents: relaunch in the background only those still worth doing, then answer the next messages.',
