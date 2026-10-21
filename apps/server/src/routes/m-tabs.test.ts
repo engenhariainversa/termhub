@@ -167,6 +167,23 @@ describe('POST /tabs', () => {
     expect(startAgent).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), { project_id: 'p1', machine_id: 'm1', prompt: 'faz o deploy' });
   });
 
+  it('passes a session-only model and account to the launcher', async () => {
+    const { app } = build();
+    const body = { project_id: 'p1', prompt: 'oi', account_id: 'acc1', model: 'gpt-test-codex' };
+    expect((await app.inject({ method: 'POST', url: '/tabs', payload: body })).statusCode).toBe(200);
+    expect(startAgent).toHaveBeenCalledWith(expect.anything(), body);
+    expect((await app.inject({ method: 'POST', url: '/tabs/t1/agent', payload: { account_id: 'acc1', model: 'sonnet' } })).statusCode).toBe(200);
+    expect(startTabAgent).toHaveBeenCalledWith(expect.anything(), expect.anything(), project, machine, 'acc1', 'sonnet');
+  });
+
+  it.each(['--help', 'model;command', '', 'x'.repeat(101)])('rejects invalid model %s before any launch', async (model) => {
+    const { app } = build();
+    expect((await app.inject({ method: 'POST', url: '/tabs', payload: { project_id: 'p1', prompt: 'oi', model } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/tabs/t1/agent', payload: { model } })).statusCode).toBe(400);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(startTabAgent).not.toHaveBeenCalled();
+  });
+
   it('needs terminals:write', async () => {
     const { app } = build({ grants: ['terminals:read'] });
     expect((await app.inject({ method: 'POST', url: '/tabs', payload: { project_id: 'p1', prompt: 'x' } })).statusCode).toBe(403);
@@ -338,7 +355,7 @@ describe('POST /tabs/:id/agent', () => {
     const res = await app.inject({ method: 'POST', url: '/tabs/t1/agent', payload: { account_id: 'acc1' } });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ tab_id: 't1', new_tab: false, account: { id: 'acc1', label: 'Pessoal' }, provider: 'claude' });
-    expect(startTabAgent).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), expect.objectContaining({ id: 't1' }), project, machine, 'acc1');
+    expect(startTabAgent).toHaveBeenCalledWith(expect.objectContaining({ scope: expect.objectContaining({ ownerId: 'u1' }) }), expect.objectContaining({ id: 't1' }), project, machine, 'acc1', undefined);
     expect(hub.poke).toHaveBeenCalledWith('t1');
   });
 
@@ -348,7 +365,7 @@ describe('POST /tabs/:id/agent', () => {
     const res = await app.inject({ method: 'POST', url: '/tabs/t1/agent' });
     expect(res.statusCode).toBe(409);
     expect(res.json()).toEqual({ error: 'Escolha a conta para iniciar a sessão', code: 'ACCOUNT_CHOICE_REQUIRED' });
-    expect(startTabAgent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 't1' }), project, machine, undefined);
+    expect(startTabAgent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ id: 't1' }), project, machine, undefined, undefined);
   });
 
   it('needs terminals:write and the scope', async () => {

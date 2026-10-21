@@ -82,7 +82,7 @@ export interface TabChatState {
   installHooks(): Promise<void>;
   /** "Iniciar sessão" (TER-1094) with `accountId`, or the suggested account when none. Resolves the new tab's id when
    *  the agent started in another tab (the screen goes there), null otherwise; a refusal is `startAgentError`. */
-  startAgent(accountId?: string): Promise<string | null>;
+  startAgent(accountId?: string, model?: string): Promise<string | null>;
   close(): void;
   loadEarlier(): Promise<void>;
   /** Resolves `true` once the server typed it into the tab; `false` leaves the text with the composer. */
@@ -356,12 +356,12 @@ export function createTabChatStore(deps: TabChatDeps) {
         }
       },
 
-      async startAgent(accountId) {
+      async startAgent(accountId, model) {
         if (get().startingAgent) return null;
         const gen = generation;
         set({ startingAgent: true, startAgentError: null });
         try {
-          const started = await api.startTabAgent(session().auth(), tabId, accountId ? { account_id: accountId } : {});
+          const started = await api.startTabAgent(session().auth(), tabId, { ...(accountId ? { account_id: accountId } : {}), ...(model ? { model } : {}) });
           if (gen !== generation) return null;
           if (started.new_tab) return started.tab_id;
           // Started here: the hooks report its session, and the tab turning readable reads the page again.

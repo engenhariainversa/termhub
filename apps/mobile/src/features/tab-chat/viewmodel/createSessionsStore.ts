@@ -2,7 +2,7 @@
 // project in the order the server sent them. Same factory shape as the progress store.
 import { create } from 'zustand';
 import { sessionEnded } from '@/features/shared/signals';
-import { TAB_MESSAGE_MAX_CHARS, type TStartSessionBody, type TTabSummary } from '@/services/api/contract';
+import { TAB_MESSAGE_MAX_CHARS, type TProjectAiResponse, type TStartSessionBody, type TTabSummary } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import type { MobileApi } from '@/services/api/types';
 import { TAB_CHAT_MSG } from '../model/messages';
@@ -33,6 +33,7 @@ export interface SessionsState {
   refresh(): Promise<void>;
   /** The machines a new session in `projectId` can run on (the ones the project's AI accounts live
    * on); empty when they cannot be read, and the server picks. */
+  projectOptions(projectId: string): Promise<TProjectAiResponse | null>;
   projectMachines(projectId: string): Promise<{ id: string; name: string }[]>;
   /** Starts a session; resolves the new tab's id, or null with `startError` set. */
   start(body: TStartSessionBody): Promise<string | null>;
@@ -84,6 +85,14 @@ export function createSessionsStore(deps: { api: MobileApi; session: () => Sessi
         await get().load();
       } finally {
         set({ refreshing: false });
+      }
+    },
+    async projectOptions(projectId) {
+      try {
+        return await deps.api.getProjectAi(deps.session().auth(), projectId);
+      } catch (err) {
+        deps.session().handleApiError(err);
+        return null;
       }
     },
     async projectMachines(projectId) {

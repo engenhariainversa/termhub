@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
@@ -90,4 +90,38 @@ it('a message over 4000 characters is refused before the call', async () => {
   await fireEvent.press(iniciar());
   expect(await screen.findByText('Mensagem longa demais (máximo de 4000 caracteres)')).toBeTruthy();
   expect(start).not.toHaveBeenCalled();
+});
+
+
+it('chooses a Codex account and model just for the new session', async () => {
+  const settings = { ai: { accounts: ['acc-codex'], models: { claude: 'sonnet', chatgpt: 'project-codex' } }, available: [
+    { id: 'acc-codex', label: 'Trabalho', provider: 'chatgpt' as const, machine_id: 'm-jarvis', machine_name: 'jarvis', default: true },
+  ] };
+  jest.spyOn(stores.api, 'getProjectAi').mockResolvedValue(settings);
+  const save = jest.spyOn(stores.api, 'saveProjectAi');
+  const start = jest.spyOn(stores.api, 'startSession');
+  await render(<NewSessionScreen />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await fireEvent.press(await screen.findByRole('button', { name: 'Trabalho · Codex' }));
+  expect(screen.getByText('Padrão do projeto: project-codex')).toBeTruthy();
+  await fireEvent.changeText(screen.getByLabelText('Id do modelo'), 'gpt-test-codex');
+  await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'revisa');
+  await fireEvent.press(iniciar());
+  expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', account_id: 'acc-codex', model: 'gpt-test-codex', prompt: 'revisa' });
+  expect(save).not.toHaveBeenCalled();
+});
+
+it('blocks a start while account options are loading or failed, then lets the person retry', async () => {
+  let fail!: (reason: unknown) => void;
+  const load = jest.spyOn(stores.api, 'getProjectAi').mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+  await render(<NewSessionScreen />);
+  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
+  expect(iniciar()).toBeDisabled();
+  await act(async () => { fail(new Error('offline'));  });
+  expect(await screen.findByText('Não foi possível carregar as contas de IA.')).toBeTruthy();
+  expect(iniciar()).toBeDisabled();
+  await fireEvent.press(screen.getByRole('button', { name: 'Tentar de novo' }));
+  await waitFor(() => expect(iniciar()).toBeEnabled());
+  expect(load).toHaveBeenCalledTimes(2);
 });

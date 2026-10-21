@@ -852,6 +852,21 @@ describe('startTabAgent (TER-1094)', () => {
     expect(repos.tabs.setAgentFields).toHaveBeenCalledWith('t1', { ai_account_id: 'a1' });
   });
 
+  it.each([['a1', 'claude', 'opus'], ['a2', 'chatgpt', 'gpt-test-codex']])('launches %s with the chosen model without changing the project default', async (accountId, provider, model) => {
+    paneForeground.mockResolvedValue('shell');
+    const { c } = ctx(undefined, { ai: { accounts: ['a1'], models: { claude: 'sonnet', chatgpt: 'default-codex' } } });
+    await startTabAgent(c, t1, p1, m1, accountId, model);
+    expect(lineOf()).toContain(`${provider === 'chatgpt' ? '-m' : '--model'} '${model}'`);
+    expect((await tabAgentOptions(c, p1, m1)).choices.find((choice) => choice.account_id === accountId)?.model).toBe(provider === 'claude' ? 'sonnet' : 'default-codex');
+  });
+
+  it('validates a model override before opening a tab or typing', async () => {
+    const { c } = ctx(undefined, { ai: { accounts: ['a1'] } });
+    await expect(startTabAgent(c, t1, p1, m1, 'a1', 'bad;command')).rejects.toMatchObject({ code: 'INVALID_MODEL' });
+    expect(openTab).not.toHaveBeenCalled();
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
   it('gives the tab its memory MCP, revoking the token an earlier agent left', async () => {
     cfg.mcpUrl = MCP_URL;
     paneForeground.mockResolvedValue('shell');

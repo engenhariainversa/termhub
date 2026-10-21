@@ -297,12 +297,12 @@ describe('a plain shell (TER-1094)', () => {
     expect(ctx.chat.getState()).toMatchObject({ agentStarted: true, startingAgent: false, startAgentError: null });
   });
 
-  it('a chosen account goes with the call', async () => {
+  it('a chosen account and session model go with the call', async () => {
     const ctx = await setup();
     const start = jest.spyOn(ctx.api, 'startTabAgent').mockResolvedValueOnce({ tab_id: 't-api', new_tab: false, account: { id: 'acc-codex', label: 'Trabalho' }, provider: 'chatgpt' });
     await ctx.chat.getState().open();
-    await ctx.chat.getState().startAgent('acc-codex');
-    expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', { account_id: 'acc-codex' });
+    await ctx.chat.getState().startAgent('acc-codex', 'gpt-test-codex');
+    expect(start).toHaveBeenCalledWith(expect.anything(), 't-api', { account_id: 'acc-codex', model: 'gpt-test-codex' });
   });
 
   it('an agent started in a new tab answers its id, and this screen reads nothing again', async () => {

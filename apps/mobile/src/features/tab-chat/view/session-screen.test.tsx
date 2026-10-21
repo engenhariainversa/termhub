@@ -34,6 +34,7 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ tabId: mockTabId }),
 }));
 
+import { ApiError } from '@/services/api/errors';
 import type { TTabQuestion } from '@/services/api/contract';
 import type { TabChatStore } from '@/features/tab-chat/viewmodel/useTabChatStore';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
@@ -122,18 +123,22 @@ describe('a plain shell offers to start the agent (TER-1094)', () => {
     expect(screen.getByText('Com Pessoal (Claude Code)')).toBeTruthy();
     expect(screen.queryByTestId('session-start-agent-acc-codex')).toBeNull();
     await fireEvent.press(screen.getByTestId('session-start-agent'));
-    expect(startAgent).toHaveBeenCalledWith(undefined);
+    expect(startAgent).toHaveBeenCalledWith(undefined, undefined);
     await fireEvent.press(screen.getByText('Escolher outra conta'));
-    await fireEvent.press(screen.getByText('Iniciar com Trabalho (Codex)'));
-    expect(startAgent).toHaveBeenLastCalledWith('acc-codex');
+    await fireEvent.press(screen.getByTestId('session-start-agent-acc-codex'));
+    await fireEvent.changeText(screen.getByLabelText('Id do modelo'), 'gpt-test-codex');
+    await fireEvent.press(screen.getByTestId('session-start-agent'));
+    expect(startAgent).toHaveBeenLastCalledWith('acc-codex', 'gpt-test-codex');
   });
 
   it('without one, each account is its own button', async () => {
     const startAgent = await shell({ choices: [claude, codex], suggested: null });
     expect(screen.queryByTestId('session-start-agent')).toBeNull();
     await fireEvent.press(screen.getByTestId('session-start-agent-acc-claude'));
-    expect(startAgent).toHaveBeenCalledWith('acc-claude');
-    expect(screen.getByText('Iniciar com Trabalho (Codex)')).toBeTruthy();
+    expect(startAgent).not.toHaveBeenCalled();
+    await fireEvent.changeText(screen.getByLabelText('Id do modelo'), 'sonnet');
+    await fireEvent.press(screen.getByTestId('session-start-agent'));
+    expect(startAgent).toHaveBeenCalledWith('acc-claude', 'sonnet');
   });
 
   it('without any account it says where to add one, with no button', async () => {
@@ -241,6 +246,20 @@ describe('the composer', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
     await fireEvent.press(screen.getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(send).toHaveBeenCalledWith(expect.anything(), 't-api', 'olha isso\n/tmp/termhub-uploads/foto.png'));
+  });
+
+  it.each([['foto.png', 'image/png'], ['audio.m4a', 'audio/mp4']])('keeps the server refusal on %s and lets the person retry it', async (name, mime) => {
+    await renderSession();
+    await act(() => current().setState({ tab: { ...current().getState().tab!, state: 'idle' } }));
+    const upload = jest.spyOn(stores.api, 'uploadTabFile').mockRejectedValueOnce(new ApiError(503, 'MACHINE_OFFLINE', 'A máquina está offline'));
+    mockPicked.files = [{ uri: `file:///x/${name}`, name, mime, bytes: 10 }];
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
+    expect(await screen.findByText('A máquina está offline')).toBeTruthy();
+    expect(screen.queryByText('Não foi possível enviar o arquivo.')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'tentar de novo' }));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar' })).toBeEnabled());
   });
 
   it('sits on the keyboard and follows it down while the thread is dragged, then lands on the safe area (TER-1103)', async () => {
