@@ -33,6 +33,7 @@ jest.mock('expo-router', () => ({
 }));
 
 import type { TTabQuestion } from '@/services/api/contract';
+import { ApiError } from '@/services/api/errors';
 import type { TabChatStore } from '@/features/tab-chat/viewmodel/useTabChatStore';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { SessionScreen } from './session-screen';
@@ -249,8 +250,33 @@ describe('the composer', () => {
     mockPicked.files = [{ uri: 'file:///x/foto.png', name: 'foto.png', mime: 'image/png', bytes: 10 }];
     await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
-    expect(await screen.findByText('Não foi possível enviar o arquivo.')).toBeTruthy();
+    expect(await screen.findByText('Não foi possível enviar o arquivo: sem conexão com o servidor.')).toBeTruthy();
     expect(send).not.toHaveBeenCalled();
+  });
+
+  it('a refused upload says why, and "tentar de novo" uploads it again (TER-1105)', async () => {
+    await renderSession();
+    await act(() => current().setState({ tab: { ...current().getState().tab!, state: 'idle' } }));
+    const upload = jest.spyOn(stores.api, 'uploadTabFile').mockRejectedValueOnce(new ApiError(503, 'AGENT_OFFLINE', 'Agente desconectado'));
+    mockPicked.files = [{ uri: 'file:///x/foto.png', name: 'foto.png', mime: 'image/png', bytes: 10 }];
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
+    expect(await screen.findByText('Não foi possível enviar o arquivo: Agente desconectado')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'tentar de novo' }));
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Não foi possível enviar o arquivo: Agente desconectado')).toBeNull());
+  });
+
+  it('a file over 20 MB is refused before any upload', async () => {
+    await renderSession();
+    await act(() => current().setState({ tab: { ...current().getState().tab!, state: 'idle' } }));
+    const upload = jest.spyOn(stores.api, 'uploadTabFile');
+    // a video: the chat's own limit for it (64 MB) lets it through to the session's
+    mockPicked.files = [{ uri: 'file:///x/clip.mp4', name: 'clip.mp4', mime: 'video/mp4', bytes: 30 * 1024 * 1024 }];
+    await fireEvent.press(screen.getByRole('button', { name: 'Anexar' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Escolher arquivo' }));
+    expect(await screen.findByText('Arquivo grande demais: o limite numa sessão é 20 MB.')).toBeTruthy();
+    expect(upload).not.toHaveBeenCalled();
   });
 });
 

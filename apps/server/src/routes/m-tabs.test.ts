@@ -460,6 +460,25 @@ describe('POST /tabs/:id/chat/files', () => {
     expect(saveFileOnMachine).not.toHaveBeenCalled();
   });
 
+  it('takes a photo-sized raw body, as the app sends it (octet-stream, past the default 1 MB limit)', async () => {
+    const { app } = build();
+    const body = Buffer.alloc(3 * 1024 * 1024, 1);
+    const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/files?name=IMG_0001.jpg', payload: body, headers: { 'content-type': 'application/octet-stream' } });
+    expect(res.statusCode).toBe(200);
+    expect(saveFileOnMachine.mock.calls[0]?.[1].length).toBe(body.length);
+  });
+
+  it('a save the machine refuses answers its reason and logs the step, never the file', async () => {
+    saveFileOnMachine.mockRejectedValueOnce(new HttpError(503, 'Agente desconectado', 'AGENT_OFFLINE'));
+    const { app, logged } = build();
+    const res = await upload(app, Buffer.from('png bytes'));
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toMatchObject({ code: 'AGENT_OFFLINE', error: 'Agente desconectado' });
+    const line = logged.map((l) => JSON.parse(String(l)) as Record<string, unknown>).find((l) => l.msg === 'tab chat: file not saved');
+    expect(line).toMatchObject({ tabId: 't1', machineId: 'm1', bytes: 9, status: 503, code: 'AGENT_OFFLINE' });
+    expect(JSON.stringify(logged)).not.toContain('png bytes');
+  });
+
   it('needs terminals:write', async () => {
     expect((await upload(build({ grants: ['terminals:read'] }).app, Buffer.from('x'))).statusCode).toBe(403);
   });
