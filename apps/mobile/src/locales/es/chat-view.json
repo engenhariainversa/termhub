@@ -335,5 +335,21 @@
   "Sessões de {{name}}": "Sesiones de {{name}}",
   "Chat de {{name}}": "Chat de {{name}}",
   "{{count}} pendências_one": "{{count}} pendiente",
-  "{{count}} pendências_other": "{{count}} pendientes"
+  "{{count}} pendências_other": "{{count}} pendientes",
+  "respondida na aba": "respondida en la pestaña",
+  "permitida": "permitida",
+  "negada": "denegada",
+  "respondida": "respondida",
+  "{{count}} permissões_one": "{{count}} solicitud de permiso",
+  "{{count}} permissões_other": "{{count}} solicitudes de permiso",
+  "{{count}} perguntas_one": "{{count}} pregunta",
+  "{{count}} perguntas_other": "{{count}} preguntas",
+  "{{count}} perguntas e permissões_one": "{{count}} preguntas y solicitudes de permiso",
+  "{{count}} perguntas e permissões_other": "{{count}} preguntas y solicitudes de permiso",
+  "do Codex": "de Codex",
+  "respondidas na aba": "respondidas en la pestaña",
+  "respondidas no chat": "respondidas en el chat",
+  "expiradas": "expiradas",
+  "falharam": "fallaron",
+  "resolvidas": "resueltas"
 }

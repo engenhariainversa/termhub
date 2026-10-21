@@ -83,7 +83,9 @@ it('a permission card offers every option of the dialog, the one that stops aski
 });
 
 it('a closed permission card names the option chosen', () => {
-  render(<TabQuestionCard question={permission({ status: 'answered', answer: { allow: true, option: { number: 3, label: 'x', summary: 'Yes, and switch to auto mode' } } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+  render(<TabQuestionCard question={permission({ id: 'closed-option', status: 'answered', answer: { allow: true, option: { number: 3, label: 'x', summary: 'Yes, and switch to auto mode' } } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+  // Folded into one line (TER-1108): the whole card is behind "Ver detalhes".
+  fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
   expect(screen.getByText('Permitido: «Yes, and switch to auto mode»')).toBeInTheDocument();
 });
 
@@ -94,12 +96,14 @@ it('disables every answer while one is in flight', () => {
 });
 
 it.each([
-  [choice({ status: 'answered', answer: { answers: [{ selected: [1] }, { selected: [0] }] } } as Partial<TabQuestion>), ['What is your favorite color? → Green', 'Respondida']],
-  [choice({ status: 'answered_in_tab' }), ['Respondida na aba']],
-  [permission({ status: 'expired' }), ['Expirada']],
-  [permission({ status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as Partial<TabQuestion>), ['Permitido', 'Falhou — a máquina está offline']],
+  [choice({ id: 'closed-0', status: 'answered', answer: { answers: [{ selected: [1] }, { selected: [0] }] } } as Partial<TabQuestion>), ['What is your favorite color? → Green', 'Respondida']],
+  [choice({ id: 'closed-1', status: 'answered_in_tab' }), ['Respondida na aba']],
+  [permission({ id: 'closed-2', status: 'expired' }), ['Expirada']],
+  [permission({ id: 'closed-3', status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as Partial<TabQuestion>), ['Permitido', 'Falhou — a máquina está offline']],
 ])('a closed card is read-only and says how it ended (%#)', (q, texts) => {
   render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} loadScreen={vi.fn(async () => ({ text: 'x' }))} />);
+  // Folded into one line (TER-1108): the whole card is behind "Ver detalhes".
+  fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
   for (const t of texts) expect(screen.getByText(t)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Responder|Permitir/ })).toBeNull();
 });
@@ -429,6 +433,7 @@ describe('automatic answer countdown (spec 2026-09-26 concierge memory §6/§8)'
       <TabQuestionCard
         question={
           card({
+            id: 'closed-auto',
             status: 'answered',
             answer: { answers: [{ selected: [0] }] },
             answered_via: 'auto',
@@ -440,6 +445,8 @@ describe('automatic answer countdown (spec 2026-09-26 concierge memory §6/§8)'
         onForget={onForget}
       />,
     );
+    // Folded into one line (TER-1108): the whole card is behind "Ver detalhes".
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
     expect(screen.getByText('Respondida automaticamente: «Sim» — motivo Mesma pergunta respondida antes')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Esquecer o precedente' }));
     expect(onForget).toHaveBeenCalledWith('d1');
@@ -512,5 +519,64 @@ describe('"Decisão automática" (TER-641)', () => {
   it('no badge without auto_decision', () => {
     render(<TabQuestionCard question={choice({ status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] }, answered_via: 'card' })} answering={false} onAnswer={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Decisão automática' })).toBeNull();
+  });
+});
+
+// TER-1108: a card nobody has to answer any more reads as one neutral line; only an open card stands out.
+describe('a settled card folds into a compact line (TER-1108)', () => {
+  it('a permission answered in the tab is one line, no attention border, no buttons, and opens to the card on "Ver detalhes"', () => {
+    const q = permission({ id: 'fold-1', status: 'answered_in_tab', tab_name: 'codex · ChatGPT', payload: { tool_name: 'Bash', agent: 'codex', question: 'Posso enviar a branch?' } } as Partial<TabQuestion>);
+    const { container } = render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} onReply={vi.fn()} />);
+    expect(screen.getByText('«codex · ChatGPT» · Bash · respondida na aba')).toBeInTheDocument();
+    expect(container.querySelector('[data-chat-card="fold-1"][data-compact]')).not.toBeNull();
+    expect(container.querySelector('.border-attention\\/40')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+    expect(screen.queryByText('Posso enviar a branch?')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
+    expect(screen.getByText('A aba «codex · ChatGPT» pede permissão (o Codex)')).toBeInTheDocument();
+    expect(screen.getByText('Posso enviar a branch?')).toBeInTheDocument();
+    expect(screen.getByText('Respondida na aba')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Responder no chat' })).toBeInTheDocument();
+    expect(container.querySelector('.border-line')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Recolher' }));
+    expect(screen.queryByText('Posso enviar a branch?')).toBeNull();
+  });
+
+  it('an open card keeps its full form and attention border; once answered it folds by itself', () => {
+    const { container, rerender } = render(<TabQuestionCard question={permission({ id: 'fold-2' })} answering={false} onAnswer={vi.fn()} />);
+    expect(container.querySelector('.border-attention\\/40')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Permitir' })).toBeInTheDocument();
+
+    rerender(<TabQuestionCard question={permission({ id: 'fold-2', status: 'answered', answer: { allow: true } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('«api» · Bash · permitida')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Permitir' })).toBeNull();
+    expect(container.querySelector('.border-attention\\/40')).toBeNull();
+  });
+
+  it('a denied permission and a failed one read as such, and an answered choice card shows its first question', () => {
+    const { rerender } = render(<TabQuestionCard question={permission({ id: 'fold-3', status: 'answered', answer: { allow: false } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('«api» · Bash · negada')).toBeInTheDocument();
+    rerender(<TabQuestionCard question={permission({ id: 'fold-4', status: 'failed', error_code: 'MACHINE_OFFLINE' } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('«api» · Bash · falhou')).toBeInTheDocument();
+    rerender(<TabQuestionCard question={choice({ id: 'fold-5', status: 'answered', answer: { answers: [{ selected: [0] }, { selected: [1] }] } } as Partial<TabQuestion>)} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('«api» · What is your favorite color? +1 outra · respondida')).toBeInTheDocument();
+  });
+
+  it('the compact line keeps "Decisão automática" in sight (TER-641)', () => {
+    const q = permission({ id: 'fold-6', status: 'answered', answer: { allow: true }, answered_via: 'auto', auto_decision: { reason: 'Liberada pelas regras', sources: [] } } as Partial<TabQuestion>);
+    render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByText('«api» · Bash · permitida')).toBeInTheDocument();
+    expect(screen.getByText(/Decisão automática/)).toBeInTheDocument();
+  });
+
+  it('stays open across a remount once the person opened it', () => {
+    const q = permission({ id: 'q-remount', status: 'expired' } as Partial<TabQuestion>);
+    const { unmount } = render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
+    unmount();
+    render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Recolher' })).toBeInTheDocument();
   });
 });
