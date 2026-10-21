@@ -5,7 +5,7 @@ import { tk } from '../i18n';
  * heading each sits under (spec 2026-09-23 app chrome §4). `resource: null` is a section every
  * signed-in user sees; Perfil is one, so `/settings` always has somewhere to land.
  */
-export type SettingsSection = 'profile' | 'city' | 'account-security' | 'integrations' | 'api-tokens' | 'devices' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
+export type SettingsSection = 'profile' | 'city' | 'account-security' | 'integrations' | 'api-tokens' | 'devices' | 'notifications' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
 export type SettingsGroupId = 'account' | 'admin';
 
 export interface SettingsSectionInfo {
@@ -23,6 +23,7 @@ export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'integrations', label: tk('Integrações'), resource: 'integrations', group: 'account' },
   { key: 'api-tokens', label: tk('Tokens de API'), resource: 'api_tokens', group: 'account' },
   { key: 'devices', label: tk('Aparelhos'), resource: 'devices', group: 'account' },
+  { key: 'notifications', label: tk('Avisos'), resource: 'chat', group: 'account' },
   { key: 'chat-grants', label: tk('Permissões do chat'), resource: 'chat', group: 'account' },
   { key: 'ai', label: tk('Contas de IA'), resource: 'ai_accounts', group: 'account' },
   { key: 'hardware', label: tk('Hardware'), resource: 'hardware', group: 'account' },

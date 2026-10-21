@@ -8,6 +8,7 @@ import { clientLocation } from '../mobile/auth.js';
 import { REQUEST_SECRET_RE } from '../mobile/codes.js';
 import type { EnrolmentService } from '../mobile/enrolment.js';
 import type { MobilePushService } from '../mobile/push.js';
+import { saveConciergePush } from '../chat/notices/settings.js';
 import type { RevokeInput } from '../mobile/revocation.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -92,15 +93,17 @@ export async function mobilePushTokenRoutes(app: FastifyInstance, repos: Reposit
   app.get('/push-settings', async (request) => {
     const mobile = request.mobile;
     if (!mobile || !('device' in mobile)) throw unauthorized();
-    return pushSettings.parse({ tab_finished: await repos.users.pushTabFinished(mobile.user.id) });
+    return pushSettings.parse({ tab_finished: await repos.users.pushTabFinished(mobile.user.id), concierge: await repos.users.conciergePush(mobile.user.id) });
   });
 
+  // An older app sends `tab_finished` alone: the concierge's rules are kept as they were (TER-1101).
   app.put('/push-settings', async (request) => {
     const body = pushSettings.parse(request.body ?? {});
     const mobile = request.mobile;
     if (!mobile || !('device' in mobile)) throw unauthorized();
     await repos.users.setPushTabFinished(mobile.user.id, body.tab_finished);
-    return body;
+    if (body.concierge) await saveConciergePush(repos, mobile.user.id, body.concierge, body.time_zone);
+    return pushSettings.parse({ tab_finished: body.tab_finished, concierge: await repos.users.conciergePush(mobile.user.id) });
   });
 
   // A test push to the calling device. Not `allowPendingDeletion`: refused like every other route (TER-920).

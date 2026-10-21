@@ -18,6 +18,7 @@ import { attachmentContext, isTranscribed } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
 import { withMessageRef } from './message-ref.js';
+import { markWokenAnswer } from './woken-answers.js';
 import { forgetOrigin, originLine, rememberOrigin, sameNetworkAs, type ClientOrigin, type ClientSignals } from './client-origin.js';
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
@@ -1098,7 +1099,11 @@ export class ChatService {
   async wake(user: User, conversationId: string, text: string, opts?: Pick<StartOptions, 'lateRows'>): Promise<StartedRun> {
     const conversation = await this.deps.repos.chat.findByIdForUser(conversationId, user.id);
     if (!conversation || conversation.archived_at !== null) throw new HttpError(409, 'Esta conversa foi encerrada', 'CHAT_ARCHIVED');
-    return this.startIn(user, conversation, text, opts);
+    const started = await this.startIn(user, conversation, text, opts);
+    // TER-1101: an answer written on its own reaches the phone only through `notify`, never as "Resposta pronta".
+    // A late transcript is the answer to what the person sent, so it keeps "Resposta pronta".
+    if (!opts?.lateRows?.length) markWokenAnswer(started.assistant_message_id);
+    return started;
   }
 
   /**

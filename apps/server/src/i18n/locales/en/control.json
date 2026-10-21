@@ -160,5 +160,10 @@
   "Informe until ou until_time, não os dois.": "Pass until or until_time, not both.",
   "until deve ser ISO 8601 com fuso ou \"AAAA-MM-DDTHH:MM\" no relógio da pessoa.": "until must be ISO 8601 with an offset or \"YYYY-MM-DDTHH:MM\" on the person's clock.",
   "until precisa ser depois da primeira vez do lembrete.": "until must be after the reminder's first time.",
-  "Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.": "This conversation already has {{max}} open reminders: cancel one with cancel_watch (list_watches lists them all) before creating another."
+  "Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.": "This conversation already has {{max}} open reminders: cancel one with cancel_watch (list_watches lists them all) before creating another.",
+  "Um aviso \"done\" precisa de watch_id: a assinatura (watch) ou o lembrete (schedule_wakeup) que a pessoa pediu para acompanhar. Sem isso, use fyi.": "A \"done\" notice needs watch_id: the watch or the reminder (schedule_wakeup) the person asked to follow. Without one, use fyi.",
+  "Assinatura não encontrada nesta conversa: um aviso \"done\" só vale para algo que a pessoa pediu para acompanhar aqui. Sem isso, use fyi.": "Watch not found in this conversation: a \"done\" notice only counts for something the person asked to follow here. Without one, use fyi.",
+  "Esta conversa já tem {{max}} avisos esperando para sair: escreva no chat sem notify.": "This conversation already has {{max}} notices waiting to go out: write in the chat without notify.",
+  "stop_with só vale com every_minutes: é o fim de um resumo periódico.": "stop_with only works with every_minutes: it ends a periodic summary.",
+  "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with must be the id of an open watch of this conversation: the job the summary follows."
 }

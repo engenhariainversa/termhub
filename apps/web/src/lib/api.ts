@@ -7,6 +7,7 @@ import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './typ
 import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
 import type { LegalStatus } from './types';
 import type { WebSession } from './types';
+import type { ConciergePushSettings } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -154,6 +155,9 @@ export const api = {
     setLocale: (locale: Locale | null) => request<null>('PATCH', '/auth/me/locale', { locale }),
     /** The browser's IANA zone, for the automation's daily summary hour. 204. */
     setTimeZone: (time_zone: string) => request<null>('PATCH', '/auth/me/time-zone', { time_zone }),
+    /** TER-1101: the concierge's notices — which levels push, quiet hours (on the browser's zone, sent along), grouping. */
+    conciergePush: () => request<{ concierge: ConciergePushSettings }>('GET', '/auth/me/concierge-push'),
+    setConciergePush: (concierge: ConciergePushSettings, time_zone?: string) => request<{ concierge: ConciergePushSettings }>('PUT', '/auth/me/concierge-push', { concierge, ...(time_zone ? { time_zone } : {}) }),
     /** The city address and its short link. May create the partner link on the way (the server rate-limits that). */
     cityLink: () => request<CityLink>('GET', '/auth/me/city-link'),
     /** 400 SHORT_LINK_INVALID, 400 SHORT_LINK_MISMATCH (the message says where the link really goes), 502 SHORT_LINK_UNREACHABLE */

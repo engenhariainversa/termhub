@@ -8,6 +8,7 @@ import { FocusProvider, useFocusMode } from '../lib/focus';
 import { MonitorProvider } from '../lib/monitor';
 import { useNarrowWindow } from '../lib/narrow-window';
 import { ProjectChatProvider, useProjectChat } from '../lib/project-chat';
+import { ConciergeNotices } from './chat/ConciergeNotices';
 import { ProjectGroupsProvider } from '../lib/project-groups';
 import { isSettingsPath, useSettingsExit } from '../lib/settings-nav';
 import { ToastProvider, Toaster } from '../lib/toast';
@@ -109,6 +110,7 @@ function LayoutRow({ collapsed, setCollapsed, onLeaveSettings }: { collapsed: bo
         <Outlet />
       </main>
       {can('chat') && <ChatDock />}
+      {can('chat') && <ConciergeNotices />}
     </div>
   );
 }

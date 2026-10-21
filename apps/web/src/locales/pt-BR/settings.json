@@ -35,5 +35,9 @@
   "{{count}} dias antes_one": "{{count}} dia antes",
   "{{count}} dias antes_other": "{{count}} dias antes",
   "O login do {{provider}} em {{machine}} expira em {{count}} dias_one": "O login do {{provider}} em {{machine}} expira em {{count}} dia",
-  "O login do {{provider}} em {{machine}} expira em {{count}} dias_other": "O login do {{provider}} em {{machine}} expira em {{count}} dias"
+  "O login do {{provider}} em {{machine}} expira em {{count}} dias_other": "O login do {{provider}} em {{machine}} expira em {{count}} dias",
+  "{{count}} min_one": "{{count}} min",
+  "{{count}} min_other": "{{count}} min",
+  "{{headline}} (+{{count}} avisos)_one": "{{headline}} (+{{count}} aviso)",
+  "{{headline}} (+{{count}} avisos)_other": "{{headline}} (+{{count}} avisos)"
 }

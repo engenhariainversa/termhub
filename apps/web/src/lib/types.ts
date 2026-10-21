@@ -1857,6 +1857,9 @@ export type ChatEvent =
   | { type: 'context'; tokens: number; window: number | null; compacted_at?: string | null; conversation_id?: string }
   /** The conversation's open watches changed (TER-1099): the whole list, which replaces the screen's. */
   | { type: 'watches'; watches: ChatWatch[]; conversation_id?: string }
+  /** A notice of the concierge left as a push (TER-1101): shown as a browser notification while the page is in
+   *  the background. `headline` is the concierge's one line; a click opens the conversation at `message_id`. */
+  | { type: 'concierge_notice'; conversation_id: string; project_id: string | null; message_id: string | null; level: 'needs_you' | 'done'; headline: string; count: number }
   /** "Compactar": started, done (sizes before and after, when known) or failed (with its code). */
   | { type: 'compact'; state: 'started' | 'done' | 'failed'; tokens_before: number | null; tokens: number | null; error_code: string | null; conversation_id?: string };
 
@@ -2174,3 +2177,14 @@ export type TabChatFrame =
   | { type: 'state'; tab: TabChatSummary }
   | { type: 'reset'; session_id: string | null }
   | { type: 'unavailable'; availability: TabChatAvailability };
+
+/** TER-1101: the person's rules for the concierge's notices outside the chat (push and browser notifications). */
+export interface ConciergePushSettings {
+  needs_you: boolean;
+  done: boolean;
+  /** "HH:MM" on the person's clock; both set or both null. */
+  quiet_start: string | null;
+  quiet_end: string | null;
+  /** Notices within this many minutes of a push leave as one; 0 = off. */
+  group_minutes: number;
+}

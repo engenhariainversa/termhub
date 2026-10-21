@@ -104,6 +104,7 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
     watches: [{ id: 'w1', kind: 'pr', target_id: 'task1', label: 'PRs de TER-12 Login', events: ['merged'], recurring: false, note: 'Avisar e mover o card', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-22T12:00:00.000Z', fire_count: 0, next_at: null, every_minutes: null },
       { id: 'w2', kind: 'reminder', target_id: null, label: 'Conferir o build', events: ['due'], recurring: true, note: 'Conferir o build', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-21T15:00:00.000Z', fire_count: 1, next_at: '2026-10-21T12:20:00.000Z', every_minutes: 10 }],
   },
+  concierge_notice: { type: 'concierge_notice', ...base, project_id: 'p1', message_id: 'm1', level: 'done', headline: 'Build pronto', count: 2 },
   attachment_status: {
     type: 'attachment_status',
     ...base,

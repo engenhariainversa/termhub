@@ -6,6 +6,8 @@ import { authRoutes } from './routes.js';
 
 const setLocale = vi.fn();
 const setTimeZone = vi.fn();
+const conciergePush = vi.fn();
+const setConciergePush = vi.fn();
 const findById = vi.fn();
 const LEGAL = { pending: [{ id: 'v1', document: 'terms', version: '1', effective_at: '2026-10-01T00:00:00.000Z', url: 'https://termhub.dev/termos/', requires_acceptance: true, summary: null }], upcoming: [] };
 const statusFor = vi.fn(async () => LEGAL);
@@ -17,7 +19,7 @@ function buildApp(user: Record<string, unknown> | null) {
     request.user = user as never;
     if (user) request.scope = { user, viewAs: { kind: 'self' }, ownerId: user.id, createAs: user.id } as never;
   });
-  const repos = { users: { setLocale, setTimeZone }, roles: { findById }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) }, legal: { statusFor } } as unknown as Repositories;
+  const repos = { users: { setLocale, setTimeZone, conciergePush, setConciergePush }, roles: { findById }, featureFlags: { instanceValue: vi.fn(async () => null), overrideFor: vi.fn(async () => null) }, legal: { statusFor } } as unknown as Repositories;
   app.register((a) => authRoutes(a, { repos } as never), { prefix: '/auth' });
   return app;
 }
@@ -90,5 +92,31 @@ describe('PATCH /auth/me/time-zone', () => {
 
   it('needs a signed-in user', async () => {
     expect((await send(buildApp(null), { time_zone: 'UTC' })).statusCode).toBe(401);
+  });
+});
+
+describe('/auth/me/concierge-push (TER-1101)', () => {
+  const rules = { needs_you: true, done: true, quiet_start: null, quiet_end: null, group_minutes: 5 };
+  beforeEach(() => {
+    setTimeZone.mockReset().mockResolvedValue(undefined);
+    setConciergePush.mockReset().mockResolvedValue(undefined);
+    conciergePush.mockReset().mockResolvedValue(rules);
+  });
+  const put = (app: ReturnType<typeof buildApp>, payload: unknown) => app.inject({ method: 'PUT', url: '/auth/me/concierge-push', payload: payload as never });
+
+  it('reads and saves the person\'s rules; quiet hours keep the browser\'s zone', async () => {
+    expect((await buildApp(user).inject({ url: '/auth/me/concierge-push' })).json()).toEqual({ concierge: rules });
+    const next = { ...rules, done: false, quiet_start: '22:00', quiet_end: '07:00' };
+    const res = await put(buildApp(user), { concierge: next, time_zone: 'America/Sao_Paulo' });
+    expect(res.statusCode).toBe(200);
+    expect(setConciergePush).toHaveBeenCalledWith('u1', next);
+    expect(setTimeZone).toHaveBeenCalledWith('u1', 'America/Sao_Paulo');
+  });
+
+  it('refuses half a quiet window or a group over an hour; needs a signed-in user', async () => {
+    expect((await put(buildApp(user), { concierge: { ...rules, quiet_start: '22:00' } })).statusCode).toBe(400);
+    expect((await put(buildApp(user), { concierge: { ...rules, group_minutes: 61 } })).statusCode).toBe(400);
+    expect((await put(buildApp(null), { concierge: rules })).statusCode).toBe(401);
+    expect(setConciergePush).not.toHaveBeenCalled();
   });
 });

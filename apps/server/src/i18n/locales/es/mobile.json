@@ -51,5 +51,9 @@
   "uma máquina": "una máquina",
   "Login expirado em {{machine}}": "Login caducado en {{machine}}",
   "A conta {{account}} precisa de /login. Abra a aba {{tab}} e entre de novo.": "La cuenta {{account}} necesita /login. Abre la pestaña {{tab}} e inicia sesión de nuevo.",
-  "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code necesita /login. Abre la pestaña {{tab}} e inicia sesión de nuevo."
+  "O Claude Code precisa de /login. Abra a aba {{tab}} e entre de novo.": "Claude Code necesita /login. Abre la pestaña {{tab}} e inicia sesión de nuevo.",
+  "{{project}}: novidade do concierge": "{{project}}: novedad del concierge",
+  "Novidade do concierge": "Novedad del concierge",
+  "{{headline}} (+{{count}} avisos)_one": "{{headline}} (+{{count}} aviso)",
+  "{{headline}} (+{{count}} avisos)_other": "{{headline}} (+{{count}} avisos)"
 }

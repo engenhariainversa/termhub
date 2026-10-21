@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { api } from './api';
 import { useAuth } from './auth';
 import { useChatStream } from './chat';
+import { publishConciergeNotice } from './concierge-notice';
 import { dropAlive, touchAlive } from './chat-pool';
 import { DEFAULT_CHAT_PREF, loadChatPrefs, prefOf, saveChatPrefs, withPref, type ChatPref, type ChatPrefs } from './project-chat-prefs';
 import type { ChatEvent, ProjectChatStatus } from './types';
@@ -131,6 +132,8 @@ function ProjectChatStatusFeed({ onStatuses }: { onStatuses: (statuses: Map<stri
   // the only re-reads. A suggestion is not counted.
   const onEvent = useCallback((e: ChatEvent) => {
     if (REREAD_ON.has(e.type)) void refresh();
+    // TER-1101: the concierge's notices ride the same socket; `ConciergeNotices` (Layout) shows them.
+    if (e.type === 'concierge_notice') publishConciergeNotice(e);
   }, [refresh]);
   useChatStream(refresh, onEvent);
 

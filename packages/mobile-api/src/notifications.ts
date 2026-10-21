@@ -31,9 +31,33 @@ export const pushTestResponse = z.object({
 });
 export type PushTestResponse = z.infer<typeof pushTestResponse>;
 
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+/**
+ * The concierge's notices outside the chat (TER-1101): which levels become a push (`needs_you`: it needs the
+ * person; `done`: something they asked to follow happened — "só para saber" never pushes), quiet hours on
+ * the person's clock (both set or both null) and the grouping window (several notices within it leave as
+ * one push; 0 = off). The same rules hold for the phone and the browser.
+ */
+export const conciergePushSettings = z
+  .object({
+    needs_you: z.boolean(),
+    done: z.boolean(),
+    quiet_start: hhmm.nullable(),
+    quiet_end: hhmm.nullable(),
+    group_minutes: z.number().int().min(0).max(60),
+  })
+  .refine((s) => (s.quiet_start === null) === (s.quiet_end === null), { message: 'quiet_start and quiet_end go together', path: ['quiet_end'] });
+export type ConciergePushSettings = z.infer<typeof conciergePushSettings>;
+
 /** `GET` / `PUT /api/m/v1/push-settings`: the person's opt-in pushes (TER-925). */
 export const pushSettings = z.object({
   /** "Avisar quando uma aba terminar": a push when a project tab finishes its turn. Off by default. */
   tab_finished: z.boolean(),
+  /** TER-1101: the concierge's notices. Always in a newer server's answer; left out of a PUT, kept as they were
+   *  (an older app only sends `tab_finished`). */
+  concierge: conciergePushSettings.optional(),
+  /** The phone's IANA zone, sent with `concierge` so the quiet hours are read on the person's clock. */
+  time_zone: z.string().min(1).max(64).optional(),
 });
 export type PushSettings = z.infer<typeof pushSettings>;

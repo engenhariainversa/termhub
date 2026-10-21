@@ -325,6 +325,14 @@ export type ChatWatch = Prisma.ChatWatchModel
  */
 export type ChatWatchFire = Prisma.ChatWatchFireModel
 /**
+ * Model ConciergeNotice
+ * A notice the concierge asked to send outside the chat (TER-1101, `notify`): its level, its one-line
+ * headline and the message it points at. Pending until the answer is written, then sent as a push (and a
+ * browser notification) by the person's rules — levels, quiet hours, grouping, the hourly cap — or dropped.
+ * Several pending notices of a conversation leave as one push. Kept a week for the hourly cap and tests.
+ */
+export type ConciergeNotice = Prisma.ConciergeNoticeModel
+/**
  * Model TabLimitNotice
  * A project tab stuck on a usage limit whose machine does not swap accounts by itself (TER-589): a card in
  * the project's chat saying so and offering the manual swap to the project's other accounts. One per

@@ -9,13 +9,15 @@ import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, conciergeNoticeText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
 import { localeOf, t, tk, type Locale } from '../i18n/index.js';
+import { isWokenAnswer } from '../chat/woken-answers.js';
+import type { OutgoingNotice } from '../chat/notices/dispatcher.js';
 
 export interface PushMessage {
   to: string;
@@ -336,6 +338,26 @@ export class MobilePushService {
     );
   }
 
+  /**
+   * A notice of the concierge (TER-1101): the dispatcher already applied the person's rules. Goes where a
+   * confirmation goes (devices without a live chat socket: whoever has the app open sees it in the chat),
+   * one per conversation in the notification center (`collapseId`). The tap opens the conversation at the
+   * message (`message_id`; an older app opens the conversation). History kind `confirmation` for
+   * needs_you and `reply` for done, which every app version parses.
+   */
+  async conciergeNotice(n: OutgoingNotice): Promise<void> {
+    const ctx = await this.names(n.userId, n.projectId, null, null);
+    const data = { kind: 'concierge', level: n.level, conversation_id: n.conversationId, project_id: n.projectId, ...(n.messageId ? { message_id: n.messageId } : {}) };
+    await this.deliver(
+      n.userId,
+      n.level === 'needs_you' ? 'confirmation' : 'reply',
+      (locale) => conciergeNoticeText(ctx, n.level, n.headline, n.count, locale),
+      data,
+      await this.offline(n.userId),
+      `concierge:${n.conversationId}`,
+    );
+  }
+
   /** Called by the enrolment service for a real request: goes to every device, live or not. */
   async deviceRequest(user: User, request: DeviceRequest): Promise<void> {
     try {
@@ -608,7 +630,8 @@ export class MobilePushService {
       const data = { kind: 'tab_question', conversation_id: event.conversation_id, project_id: projectId, tab_question_id: event.question.id };
       const questionKind = event.question.kind;
       await this.deliver(event.user_id, 'confirmation', (locale) => tabQuestionText(ctx, questionKind, locale), data, await this.offline(event.user_id));
-    } else if (event.type === 'run_finished' && event.ok) {
+    } else if (event.type === 'run_finished' && event.ok && !(event.message_id && isWokenAnswer(event.message_id))) {
+      // An answer the concierge wrote on its own (a wake, TER-1101) is pushed only through `notify`, by its level.
       const projectId = await this.conversationProject(event.conversation_id, event.user_id);
       const ctx = await this.names(event.user_id, projectId, null, null);
       const data = { kind: 'reply', conversation_id: event.conversation_id, project_id: projectId };

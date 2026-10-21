@@ -42,7 +42,7 @@ export interface WatchResult {
 }
 
 /** The conversation's scope; the tools refuse outside the chat. */
-async function chatScope(ctx: ControlContext): Promise<{ conversationId: string; projectId: string | null }> {
+export async function chatScope(ctx: ControlContext): Promise<{ conversationId: string; projectId: string | null }> {
   const conversationId = ctx.token?.chat_conversation_id;
   if (!conversationId) throw NOT_IN_CHAT();
   const conversation = await ctx.repos.chat.findByIdForUser(conversationId, ctx.scope.user.id);
@@ -173,6 +173,8 @@ export interface ScheduleWakeupArgs {
   until?: string;
   /** A repeating reminder stops at the next time the person's clock reads "HH:MM" after the first one. */
   until_time?: string;
+  /** TER-1101: a repeating reminder (a periodic summary) also stops when this open watch of the chat closes. */
+  stop_with?: string;
 }
 
 export interface ScheduleWakeupResult {
@@ -237,6 +239,11 @@ export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs,
   }
 
   const open = await ctx.repos.chatWatches.listOpen(userId, projectId);
+  if (a.stop_with !== undefined) {
+    if (!repeating) throw bad(msg('stop_with só vale com every_minutes: é o fim de um resumo periódico.'));
+    const job = open.find((w) => w.id === a.stop_with);
+    if (!job || job.kind === 'reminder') throw bad(msg('stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.'));
+  }
   if (open.length >= WATCH_LIMITS.openPerScope)
     throw new ControlError('WATCH_LIMIT', msg('Esta conversa já tem {{max}} assinaturas abertas: cancele alguma com cancel_watch (list_watches lista todas) antes de criar outra.', { max: WATCH_LIMITS.openPerScope }));
   if (open.filter((w) => w.kind === 'reminder').length >= REMINDER_LIMITS.openPerScope)
@@ -248,6 +255,7 @@ export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs,
     at: due.toISOString(),
     zone,
     ...(repeating ? { every_minutes: a.every_minutes, until: until!.toISOString(), ...(a.times !== undefined ? { times: a.times } : {}) } : {}),
+    ...(a.stop_with !== undefined ? { stop_with: a.stop_with } : {}),
   };
   // A safety net only: the engine fires a reminder whose time passed before it ever expires it.
   const last = until ?? due;
@@ -277,6 +285,7 @@ export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs,
     until_local: until ? formatLocal(until, zone) : null,
     note:
       `Lembrete criado: o servidor acorda esta conversa em ${dueLocal} (${zone}), com a sua nota, mesmo depois de reinícios; se o servidor estiver fora na hora, acorda assim que voltar e diz o atraso. ` +
-      'Confirme à pessoa o horário no fuso dela (due_local). list_watches lista os lembretes, cancel_watch cancela. Não lance subagente para esperar.',
+      'Confirme à pessoa o horário no fuso dela (due_local). list_watches lista os lembretes, cancel_watch cancela. Não lance subagente para esperar.' +
+      (a.stop_with !== undefined ? ' Ele para sozinho quando a assinatura stop_with fechar.' : ''),
   };
 }

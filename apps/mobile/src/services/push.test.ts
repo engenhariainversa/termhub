@@ -91,6 +91,11 @@ it('pushRoute: the tab of an "aba terminou" push first, else the conversation, e
   expect(pushRoute({ tab_id: '' , conversation_id: 'c1' })).toBe('/chat/c1');
 });
 
+it('pushRoute: a notice of the concierge opens the conversation at its message (TER-1101)', () => {
+  expect(pushRoute({ kind: 'concierge', level: 'done', conversation_id: 'c1', message_id: 'm 7' })).toBe('/chat/c1?message=m%207');
+  expect(pushRoute({ kind: 'concierge', level: 'needs_you', conversation_id: 'c1' })).toBe('/chat/c1');
+});
+
 it('pushRoute: an expired AI login opens its "Refazer login" modal (TER-1047)', () => {
   expect(pushRoute({ kind: 'ai_login', account_id: 'a1', notification_id: 'n1' })).toBe('/ai-login/a1');
   expect(pushRoute({ kind: 'ai_login' })).toBeNull();

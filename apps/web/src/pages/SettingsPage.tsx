@@ -9,6 +9,7 @@ import { ConfirmDialog, Modal } from '../components/Modal';
 import { UploadsView } from '../components/UploadsView';
 import { ApiTokensView } from '../components/ApiTokensView';
 import { DevicesView } from '../components/DevicesView';
+import { ConciergeNoticesView } from '../components/ConciergeNoticesView';
 import { ReviewAccountPanel } from '../components/ReviewAccountPanel';
 import { MyCityView } from '../components/MyCityView';
 import { ProfileView } from '../components/ProfileView';
@@ -65,6 +66,12 @@ export function SettingsPage() {
       return (
         <PageFrame title={t(current.label)}>
           <WaitlistView />
+        </PageFrame>
+      );
+    case 'notifications':
+      return (
+        <PageFrame title={t(current.label)}>
+          <ConciergeNoticesView />
         </PageFrame>
       );
     case 'chat-grants':

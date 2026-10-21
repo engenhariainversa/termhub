@@ -75,6 +75,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     const watchId = newId();
     await db.chatWatch.create({ data: { id: watchId, userId, projectId, conversationId, kind: 'tab', targetId: 't1', params: { events: ['finished'] }, baseline: {}, label: 'api', note: 'avisar', expiresAt: new Date(Date.now() + 3600_000) } });
     await db.chatWatchFire.create({ data: { id: newId(), watchId, userId, projectId, eventKey: 'tab:e1', event: 'finished', payload: {} } });
+    await db.conciergeNotice.create({ data: { id: newId(), userId, conversationId, projectId, level: 'done', headline: 'Build pronto', watchId } });
     // TER-1086: a trusted folder for share_file (cascades with the user and the machine).
     await db.chatFileGrant.create({ data: { id: newId(), userId, machineId, folder: '~/fotos', conversationId } });
     await db.chatDecision.create({

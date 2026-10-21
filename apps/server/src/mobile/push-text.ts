@@ -128,3 +128,14 @@ export function aiLoginExpiringText(provider: 'claude' | 'chatgpt' | 'gemini' | 
     body: t(locale, '{{machine}}: toque para refazer o login', { machine: machineName }),
   };
 }
+
+/**
+ * A notice of the concierge (TER-1101, `notify`): the level says what kind of news it is, the body is the
+ * concierge's own one-line headline (written for the push, in the person's language), and how many more
+ * notices this push gathers. The headline is the one exception to "never a reply's text": the concierge
+ * writes it to be shown here and is told to keep secrets, code and terminal output out of it.
+ */
+export function conciergeNoticeText(ctx: PushContext, level: 'needs_you' | 'done', headline: string, count: number, locale: Locale = DEFAULT_LOCALE): PushText {
+  const title = level === 'needs_you' ? needsYou(locale, ctx) : ctx.projectName ? t(locale, '{{project}}: novidade do concierge', { project: ctx.projectName }) : t(locale, 'Novidade do concierge');
+  return { title, body: count > 1 ? t(locale, '{{headline}} (+{{count}} avisos)', { headline, count: count - 1 }) : headline };
+}

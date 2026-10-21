@@ -80,14 +80,17 @@ export const pushTabId = (data: unknown): string | null => dataString(data, 'tab
 export const pushAiLoginAccountId = (data: unknown): string | null => (dataString(data, 'kind') === 'ai_login' ? dataString(data, 'account_id') : null);
 
 /** Where a tapped push goes: an expired AI login's "Refazer login" modal, else the tab it names (its
- * session screen), else its conversation, else nowhere (the app just opens). */
+ * session screen), else its conversation — at the message it names, if any — else nowhere (the app just opens). */
 export function pushRoute(data: unknown): string | null {
   const accountId = pushAiLoginAccountId(data);
   if (accountId) return `/ai-login/${encodeURIComponent(accountId)}`;
   const tabId = pushTabId(data);
   if (tabId) return `/session/${tabId}`;
   const conversationId = pushConversationId(data);
-  return conversationId ? `/chat/${conversationId}` : null;
+  if (!conversationId) return null;
+  // A notice of the concierge (TER-1101) opens the conversation at its message.
+  const messageId = dataString(data, 'message_id');
+  return messageId ? `/chat/${conversationId}?message=${encodeURIComponent(messageId)}` : `/chat/${conversationId}`;
 }
 
 /** The history row a push was sent for (`data.notification_id`), or `null` for a push from a server

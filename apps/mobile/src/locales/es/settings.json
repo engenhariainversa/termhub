@@ -42,5 +42,16 @@
   "{{step}}: ok": "{{step}}: ok",
   "{{step}}: falhou": "{{step}}: falló",
   "Enviada. Ela chega em {{seconds}} s.": "Enviada. Llega en {{seconds}} s.",
-  "OTA: binário": "OTA: incluida"
+  "OTA: binário": "OTA: incluida",
+  "Avisos do concierge": "Avisos del concierge",
+  "Definido na web: {{start}}–{{end}}.": "Definido en la web: {{start}}–{{end}}.",
+  "Desligado": "Apagado",
+  "Horário de silêncio": "Horario de silencio",
+  "Juntar avisos em": "Agrupar avisos en",
+  "Não juntar": "No agrupar",
+  "No seu fuso. O que chegar no silêncio, ou logo depois de um aviso, sai junto num só. \"Precisa de você\" não espera o agrupamento.": "En tu zona horaria. Lo que llegue en el silencio, o justo después de un aviso, sale junto en uno solo. \"Te necesita\" no espera la agrupación.",
+  "Precisa de você": "Te necesita",
+  "Quando o concierge escreve sozinho, ele avisa conforme o nível. \"Só para saber\" fica só no chat.": "Cuando el concierge escribe por su cuenta, avisa según el nivel. \"Solo para saber\" queda solo en el chat.",
+  "{{count}} min_one": "{{count}} min",
+  "{{count}} min_other": "{{count}} min"
 }

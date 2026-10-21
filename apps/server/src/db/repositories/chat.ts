@@ -376,6 +376,12 @@ export class ChatRepository {
    * the payload never again contains the message the user just sent or its answer — the screen
    * would freeze on ancient history with no error and no way out.
    */
+  /** TER-1101: the conversation's newest answer, for a notice whose own answer never said it was done. */
+  async latestAssistantMessageId(conversationId: string): Promise<string | null> {
+    const row = await this.db.chatMessage.findFirst({ where: { conversationId, role: 'assistant' }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true } });
+    return row?.id ?? null;
+  }
+
   async listMessages(conversationId: string, limit = 200): Promise<ChatMessage[]> {
     const rows = await this.db.chatMessage.findMany({ where: { conversationId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit });
     const messages = rows.reverse().map(mapMessage);

@@ -60,6 +60,7 @@ import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startWatchEngine } from './chat/watches/engine.js';
+import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
 import { startMemorySweeper } from './memory/sweeper.js';
@@ -486,6 +487,21 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       },
     },
   });
+  // TER-1101: the concierge's notices outside the chat (`notify`). A notice leaves once its answer ends, by the
+  // person's rules; both colours run it, the claim in the database picks one, and a draining colour sends none.
+  const notices = startNoticeDispatcher({
+    repos,
+    log: fastify.log,
+    active: () => !lifecycle.draining,
+    send: async (n) => {
+      chatBus.publish({ type: 'concierge_notice', user_id: n.userId, conversation_id: n.conversationId, project_id: n.projectId, message_id: n.messageId, level: n.level, headline: n.headline, count: n.count });
+      if (mobile) await mobile.push.conciergeNotice(n);
+    },
+    onAnswerDone: (listener) =>
+      chatBus.subscribe((e) => {
+        if (e.type === 'run_finished') listener(e.user_id, e.conversation_id, e.message_id);
+      }),
+  });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
   // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
   const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
@@ -521,6 +537,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     clearTimeout(onlineSweep);
     stopSync();
     watches.stop();
+    notices.stop();
     stopCiSync();
     stopSummaries();
     stopAiLoginChecks();

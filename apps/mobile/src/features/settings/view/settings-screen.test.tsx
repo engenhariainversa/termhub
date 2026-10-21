@@ -216,6 +216,20 @@ describe('Notificações e Privacidade (permission prompts spec §2)', () => {
     await act(async () => stores.settings.getState().setTabFinished(false));
   });
 
+  it('granted: the concierge\'s notices — a level, quiet hours and grouping change the account rules (TER-1101)', async () => {
+    stores.permissionDeps.notificationStatus.mockResolvedValueOnce('granted');
+    await render(<SettingsScreen />);
+    const done = await screen.findByRole('switch', { name: 'Concluído' }, LOAD);
+    await waitFor(() => expect(stores.settings.getState().tabFinished).not.toBeNull());
+    await act(async () => fireEvent(done, 'valueChange', false));
+    await waitFor(() => expect(stores.settings.getState().concierge?.done).toBe(false));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: '22:00–07:00' })));
+    await waitFor(() => expect(stores.settings.getState().concierge).toMatchObject({ quiet_start: '22:00', quiet_end: '07:00' }));
+    await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Não juntar' })));
+    await waitFor(() => expect(stores.settings.getState().concierge?.group_minutes).toBe(0));
+    await act(async () => stores.settings.getState().setConcierge({ needs_you: true, done: true, quiet_start: null, quiet_end: null, group_minutes: 5 }));
+  });
+
   it('not granted: no test push button', async () => {
     stores.permissionDeps.notificationStatus.mockResolvedValueOnce('denied');
     await render(<SettingsScreen />);

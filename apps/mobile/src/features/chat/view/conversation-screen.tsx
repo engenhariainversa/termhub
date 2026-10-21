@@ -121,7 +121,7 @@ const MessageRow = memo(function MessageRow({
  * the pending bar and composer; the header's cog opens its settings (TER-1039). `routeId` is a conversation id (a deep link), a project id or
  * `general` — the store resolves which. `embedded` is the iPad split's right pane (spec 2026-09-28
  * §2.3): no "Voltar", the list next to it is the way out. */
-export function ConversationView({ routeId, embedded = false }: { routeId: string; embedded?: boolean }) {
+export function ConversationView({ routeId, embedded = false, jumpTo }: { routeId: string; embedded?: boolean; jumpTo?: string }) {
   const { t } = useTranslation();
   const router = useRouter();
   const openByRoute = useChatStore((s) => s.openByRoute);
@@ -311,6 +311,13 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
     setHighlightId(id);
     return true;
   }, []);
+
+  // TER-1101: a tapped notice of the concierge opens the conversation at its message, once the thread has it.
+  const jumped = useRef<string | null>(null);
+  useEffect(() => {
+    if (!jumpTo || jumped.current === jumpTo) return;
+    if (onOpenReply(jumpTo)) jumped.current = jumpTo;
+  }, [jumpTo, entries, onOpenReply]);
 
   // Stable across deltas: a message row reads its own streamed text from the store (`MessageRow`),
   // so neither this callback nor `extra` change while an answer streams. The memoised rows re-render
@@ -506,6 +513,6 @@ export function ConversationView({ routeId, embedded = false }: { routeId: strin
 
 /** The `/chat/[id]` route: the conversation full screen, with "Voltar". */
 export function ConversationScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  return <ConversationView routeId={id} />;
+  const { id, message } = useLocalSearchParams<{ id: string; message?: string }>();
+  return <ConversationView routeId={id} jumpTo={message} />;
 }
