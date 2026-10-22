@@ -30,6 +30,17 @@ ASC_KEY_ID=<key id> ASC_ISSUER_ID=<issuer uuid> npm run release:ios -w @termhub/
 Also close the termhub workspace in Xcode before a release: an open `ios/termhub.xcworkspace` makes
 `expo prebuild --clean` fail with `ENOTEMPTY: directory not empty, rmdir '.../apps/mobile/ios'`.
 
+## Seen again (2026-10-22, app 0.8.0, TER-1109)
+
+Same failure on another Mac: Xcode still listed the account, but `xcodebuild` logged
+`DVTDeveloperAccountManager: Failed to load credentials … missing Xcode-Username` at the start of the
+archive, and the export failed with `No Accounts`. The archive itself succeeds (it signs with the
+development identity), so after the person signs in again there is no need to rebuild: rerun only
+`xcodebuild -exportArchive` with the script's `ExportOptions` plist (`destination` `export`, then
+`upload`) against `apps/mobile/build/termhub.xcarchive`. Check the account before a release:
+`defaults read com.apple.dt.Xcode DVTDeveloperAccountManagerAppleIDLists` lists an identifier, and the
+archive log has no `Failed to load credentials` line.
+
 ## How to check
 
 The script prints `Signing and uploading with App Store Connect API key <id>` and ends with
