@@ -16,8 +16,10 @@ export const repoSchema = z.object({
   /** owner/repo */
   full_name: z.string().trim().regex(/^[\w.-]+\/[\w.-]+$/, 'use owner/repo').nullable().default(null),
   base_branch: z.string().trim().min(1).max(100).default('main'),
-  /** placeholders: {ticket} {slug} */
+  /** placeholders: {ticket} (the external ticket's key, else the card's ref), {ticket_lower}, {ref}, {slug} */
   branch_pattern: z.string().trim().min(1).max(100).default('{ticket}-{slug}'),
+  /** TER-1110: automatic work only on cards with an external ticket (or an explicit branch), and never the termhub ref on GitHub */
+  require_ticket: z.boolean().default(false),
   draft_pr: z.boolean().default(true),
   /** GitHub Actions workflow whose run on the merge commit is "the deploy" (file name or display name); null = not tracked */
   deploy_workflow: z.string().trim().min(1).max(200).nullable().default(null),

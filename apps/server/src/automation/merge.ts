@@ -18,7 +18,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import { currentRulesBlock } from '../memory/current-rules.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { epicBranchName, targetOf } from './branches.js';
+import { epicBranchName, namingRule, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
@@ -413,7 +413,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
+  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, naming: namingRule(task, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
   // TER-1051: the card's open tab is busy or in use; the next sync asks again
@@ -569,7 +569,7 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
 async function startCiFixer(c: PullCtx, row: TaskPullRequest, trigger: string): Promise<TriggeredStart> {
   const base = row.base_ref ?? c.baseBranch;
   const rules = await currentRulesBlock(c.deps.repos, c.project.owner_id, c.project.id);
-  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
+  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, naming: namingRule(c.primary, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
   return c.deps.startFixer({ projectId: c.project.id, taskId: c.primary.id, role: 'fixer', triggerSha: trigger, branch: row.head_ref, base, prompt });
 }
 

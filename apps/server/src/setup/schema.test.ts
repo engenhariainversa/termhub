@@ -47,7 +47,7 @@ describe('setup repo.deploy_workflow', () => {
 });
 
 describe('setup repositories (TER-1076)', () => {
-  const legacyRepo = { integration_id: 'i1', full_name: 'acme/app', base_branch: 'develop', branch_pattern: '{ticket}', draft_pr: false, deploy_workflow: 'deploy.yml' };
+  const legacyRepo = { integration_id: 'i1', full_name: 'acme/app', base_branch: 'develop', branch_pattern: '{ticket}', require_ticket: false, draft_pr: false, deploy_workflow: 'deploy.yml' };
 
   it('a v2 setup with only repo gets the defaults and keeps repo as it was', () => {
     const d = normalizeSetup({ repo: legacyRepo }, 2);

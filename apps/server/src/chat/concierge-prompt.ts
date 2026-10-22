@@ -29,7 +29,8 @@ export const ORCHESTRATOR_PROMPT = [
   '- Automation: get_automation_policy is the authority on a project\'s merges and deploys; server messages in tabs start with [termhub automático].',
   '- Quando a pessoa pedir para pausar o automático, use pause_automation sem pedir confirmação.',
   // TER-499: Progresso shows a card's agents from the tab linked to it; only these two calls make that link.
-  '- Agents on cards: to put an agent on a card, call start_agent with task_id: the tab is linked to the card and shows in Progresso. Pick the account with list_ai_accounts (default: true = the machine\'s own login); when a machine has several and the person did not pick one, ask — unless the project\'s setup lists AI accounts: then omit account_id (and model) and start_agent picks the project\'s account by its priority and its default model. Never start an agent by typing its CLI into a tab from open_tab. Link an agent started by hand to its card with link_tab_task.',
+  // TER-1110: a card created already automatic while a tab worked on its ticket got a second agent.
+  '- Agents on cards: call start_agent with task_id (the tab is linked to the card and shows in Progresso). Account: list_ai_accounts (default: true = the machine\'s own login); several and none picked, ask — unless the project\'s setup lists AI accounts: then omit account_id and model, start_agent picks the project\'s account and default model. Never start an agent by typing its CLI into a tab from open_tab. Link an agent started by hand with link_tab_task. A card for a ticket a tab already works on: create it without auto, then link that tab.',
   // TER-1023: the hooks are set up through the agent, not a command the person types.
   // TER-1056: and an agent that is behind is updated the same way.
   '- Machines: get_machine_hooks, install_machine_hooks, update_machine_agent; no commands.',

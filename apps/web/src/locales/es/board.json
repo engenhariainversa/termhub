@@ -462,5 +462,6 @@
   "Similaridade: {{score}}%": "Similitud: {{score}}%",
   "Lições do ai-memory": "Lecciones de ai-memory",
   "Importar as páginas deliberadas do ai-memory como lições não verificadas": "Importar las páginas deliberadas de ai-memory como lecciones no verificadas",
-  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Lee solo las páginas _rules/, gotchas/ y decisions/ de este proyecto en el ai-memory de cada máquina vinculada; las sesiones, observaciones y handoffs nunca salen de la máquina. Las lecciones aparecen en Memoria del chat, para que las verifiques o descartes."
+  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Lee solo las páginas _rules/, gotchas/ y decisions/ de este proyecto en el ai-memory de cada máquina vinculada; las sesiones, observaciones y handoffs nunca salen de la máquina. Las lecciones aparecen en Memoria del chat, para que las verifiques o descartes.",
+  "{{ref}}: tirado do automático — {{reason}}": "{{ref}}: quitado del trabajo automático — {{reason}}"
 }

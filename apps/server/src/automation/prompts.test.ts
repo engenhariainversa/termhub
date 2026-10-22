@@ -35,6 +35,19 @@ describe('prompts', () => {
     expect(implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null })).not.toContain('Regras vigentes');
   });
 
+  it("TER-1110: the implementer and the fixer carry the project's naming rule next to the branch, under the cap", () => {
+    const naming = 'Este card vem do ticket APPS-337: cite APPS-337 nos commits e no título do PR. Nunca use a ref DRH-21 do termhub em branch, commit, título ou descrição de PR, nem em nada no GitHub.';
+    const prompts = [
+      implementerPrompt({ card, branch: 'b', base: 'main', naming, policy: 'p'.repeat(5000), custom, description: 'd'.repeat(5000) }),
+      fixerPrompt({ ref: 'TER-1', branch: 'b', base: 'main', naming, reason: 'ci', detail: 'x'.repeat(5000), custom }),
+    ];
+    for (const p of prompts) {
+      expect(p).toContain(`outro push pede aprovação. ${naming}`);
+      expect(p.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
+    }
+    expect(implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null })).not.toContain('Nunca use a ref');
+  });
+
   it('never forbid merging absolutely', () => {
     for (const p of [...all(null), ...all(custom)]) expect(p).not.toMatch(/não faça merge|do not merge/i);
   });
