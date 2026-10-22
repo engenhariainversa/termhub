@@ -44,6 +44,8 @@ export const CI_CAP = 'ci_cap';
 export const CARD_BUDGET = 'card_budget';
 /** The agent itself said it is stuck (`report_card blocked`). */
 export const REPORTED_BLOCKED = 'reported_blocked';
+/** TER-1112: the agent called `report_card blocked` in a tab whose run had already ended (a request typed there later). */
+export const POST_RUN_BLOCKED = 'post_run_blocked';
 /** TER-1043: the agent stopped on a question that falls in an exception (credentials, deploy, stores, production data, scope). */
 export const DECISION_EXCEPTION = 'decision_exception';
 /** TER-1043: the agent stopped on a question and the project chose "Parar em decisões de produto". */
@@ -85,6 +87,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [ACCOUNT_EXCLUSIVE]: tk('O agente saiu e a conta dele é exclusiva de outro projeto; não foi reiniciado. Escolha outra conta e retome.'),
   [CARD_BUDGET]: tk('Orçamento do card estourado; o agente não foi retomado. Confira a aba e retome quando quiser.'),
   [REPORTED_BLOCKED]: tk('O agente disse que travou e precisa de você.'),
+  [POST_RUN_BLOCKED]: tk('O agente travou numa aba cujo trabalho automático já tinha terminado; confira a aba.'),
   [DECISION_EXCEPTION]: tk('O agente parou numa decisão que o automático não toma sozinho (credenciais, deploy, lojas, dados de produção ou escopo maior que o card); responda na aba.'),
   [DECISION_NEEDED]: tk('O agente parou numa decisão e o projeto pede para parar nelas; responda na aba.'),
   [GITHUB_TRANSIENT]: tk('O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.'),
