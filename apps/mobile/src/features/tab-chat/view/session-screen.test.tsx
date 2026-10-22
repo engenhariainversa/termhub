@@ -4,6 +4,7 @@ import { getAnimatedStyle } from 'react-native-reanimated';
 
 jest.mock('@/features/session/viewmodel/useSessionStore', () => ({ useSessionStore: require('../../../../test/helpers/ui-stores').stores.store }));
 jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: require('../../../../test/helpers/ui-stores').stores.chat }));
+jest.mock('@/features/tab-chat/viewmodel/useSessionsStore', () => ({ useSessionsStore: require('../../../../test/helpers/ui-stores').stores.sessions }));
 jest.mock('@/features/tab-chat/viewmodel/useTabChatStore', () => {
   const actual = jest.requireActual('@/features/tab-chat/viewmodel/useTabChatStore');
   return { ...actual, useTabChatStore: (tabId: string) => actual.useTabChatStore(tabId, (id: string) => mockMake(id)) };
@@ -104,6 +105,32 @@ describe('an empty conversation says why (TER-1091)', () => {
     await empty('new_session', 'ready');
     expect(screen.getByText('Nenhuma mensagem nesta sessão ainda')).toBeTruthy();
     expect(screen.queryByTestId('session-install-hooks')).toBeNull();
+  });
+});
+
+describe('the first message of a session started here (TER-1107)', () => {
+  afterEach(() => stores.sessions.setState({ firstPrompts: {} }));
+
+  it('shows as sent while the transcript has none, instead of the empty state', async () => {
+    await renderSession();
+    // the mock's page already holds messages: the screen as a new session's, before its transcript
+    await act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason: 'not_reported', availability: 'no_session' }));
+    await act(() => stores.sessions.setState({ firstPrompts: { 't-api': 'revisa o PR' } }));
+    expect(screen.getByTestId('session-first-prompt')).toBeTruthy();
+    expect(screen.getByText('revisa o PR')).toBeTruthy();
+    expect(screen.getByText('Enviada · o agente está iniciando')).toBeTruthy();
+    expect(screen.queryByTestId('session-empty')).toBeNull();
+  });
+
+  it("goes once the transcript brings the person's message", async () => {
+    await renderSession();
+    await act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason: 'not_reported', availability: 'no_session' }));
+    await act(() => stores.sessions.setState({ firstPrompts: { 't-api': 'revisa o PR' } }));
+    expect(screen.getByTestId('session-first-prompt')).toBeTruthy();
+    await act(() => current().setState({ items: [{ kind: 'user', id: 'u1', at, text: 'revisa o PR', images: 0 }], questions: [], suggestions: [], availability: 'ready' }));
+    expect(screen.queryByTestId('session-first-prompt')).toBeNull();
+    expect(screen.getByText('revisa o PR')).toBeTruthy();
+    expect(stores.sessions.getState().firstPrompts).toEqual({});
   });
 });
 

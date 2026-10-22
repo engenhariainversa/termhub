@@ -152,6 +152,8 @@ export function createTabChatStore(deps: TabChatDeps) {
   const { api, session, tabId } = deps;
   let generation = 0;
   let closeSocket: (() => void) | null = null;
+  /** The socket was opened by a `reread`: its hello turning the tab readable reads the page, nothing more. */
+  let socketFromReread = false;
   /** Frames held while a `reset` loads the new session's first page: applied after it, in order. */
   let held: TTabChatFrame[] | null = null;
   let unsubscribeSessionEnded: (() => void) | null = null;
@@ -196,8 +198,10 @@ export function createTabChatStore(deps: TabChatDeps) {
 
     /**
      * The tab became readable while this screen had no transcript to follow (TER-1091): its first session
-     * was reported, or a missing transcript came back. The socket follows from the end of the file, so
-     * what the session already holds comes with the page, read again.
+     * was reported, or a missing transcript came back. The socket joined with no cursor, so the server
+     * placed it at the end of the file whenever it first read it, before or after this page: a line
+     * written in between (a new session's first prompt, TER-1107) came neither way. So the page is read
+     * again and the socket follows again from that page's own cursor (`reread`).
      */
     const becameReadable = (availability: string): boolean => availability === 'ready' && get().availability !== 'ready' && get().live === null && get().status === 'ready';
 
@@ -236,6 +240,15 @@ export function createTabChatStore(deps: TabChatDeps) {
       }
     };
 
+    /** The page read again, then the socket opened again from its cursor: nothing between them is lost. */
+    const reread = async (): Promise<void> => {
+      const gen = generation;
+      closeSocket?.();
+      closeSocket = null;
+      await reload();
+      if (gen === generation) openSocket(true);
+    };
+
     const onFrame = (f: TTabChatFrame): void => {
       if (held !== null && f.type !== 'reset') {
         held.push(f);
@@ -243,9 +256,11 @@ export function createTabChatStore(deps: TabChatDeps) {
       }
       switch (f.type) {
         case 'hello': {
-          const reread = becameReadable(f.availability);
+          const readable = becameReadable(f.availability);
           set({ availability: f.availability });
-          if (reread) void reload();
+          // The hello of a socket a reread opened only reads the page: a session whose file is missing
+          // says ready here and no_session on the page, and would reopen the socket forever.
+          if (readable) void (socketFromReread ? reload() : reread());
           return;
         }
         case 'items':
@@ -253,10 +268,10 @@ export function createTabChatStore(deps: TabChatDeps) {
           return;
         case 'state': {
           const previous = get().tab;
-          const reread = becameReadable(f.tab.availability);
+          const readable = becameReadable(f.tab.availability);
           set({ tab: f.tab, availability: f.tab.availability });
-          if (reread) {
-            void reload();
+          if (readable) {
+            void reread();
             return;
           }
           // The cards come with the page, not over this socket: a tab that starts or stops needing the
@@ -273,8 +288,9 @@ export function createTabChatStore(deps: TabChatDeps) {
       }
     };
 
-    const openSocket = (): void => {
+    const openSocket = (fromReread = false): void => {
       if (closeSocket) return;
+      socketFromReread = fromReread;
       const gen = generation;
       closeSocket = api.tabEvents(() => session().auth(), tabId, {
         after: () => get().live,
