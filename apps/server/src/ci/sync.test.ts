@@ -30,6 +30,7 @@ function setup(over: { integrationOwner?: string | null; projectOwner?: string |
     },
     tasks: { findByRef: vi.fn(async (_p: string, n: number) => cards[n]) },
     taskPullRequests: { replaceLinks, updateCi, listWatched },
+    automationRuns: { taskOfBranch: vi.fn(async () => null) },
   } as unknown as Repositories;
   const github: GithubCiClient = {
     listPulls: vi.fn(async () => ({ notModified: false as const, etag: 'e2', pulls: [pull()] })),
@@ -93,6 +94,19 @@ describe('syncProjectCi', () => {
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'x', body: null, head: { ref: 'main-fix', sha: 'z' } })] });
     await syncProjectCi(deps, 'p1');
     expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), []);
+  });
+
+  it('links a PR that names no card to the card whose automatic run works on its branch (TER-1110)', async () => {
+    const { deps, replaceLinks, github } = setup();
+    const taskOfBranch = vi.fn(async (_p: string, branch: string) => (branch === 'feature/apps-337-more' ? 'card2' : null));
+    Object.assign(deps.repos, {
+      automationRuns: { taskOfBranch },
+      tasks: { findByRef: vi.fn(async () => undefined), findById: vi.fn(async (id: string) => ({ id, type: 'story', parent_id: null })) },
+    });
+    vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'APPS-337 More tab', body: null, head: { ref: 'feature/apps-337-more', sha: 'z' } })] });
+    await syncProjectCi(deps, 'p1');
+    expect(taskOfBranch).toHaveBeenCalledWith('p1', 'feature/apps-337-more');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2']);
   });
 
   it('maps a merged PR', async () => {

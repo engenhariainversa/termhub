@@ -107,6 +107,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       instance: `test-${newId()}`,
       lifecycle: { draining: false },
       now: () => new Date(),
+      newCardGraceMs: 0,
       startAgent: startAgent as unknown as DispatcherDeps['startAgent'],
       ensureWorkspace: ensureWorkspace as unknown as DispatcherDeps['ensureWorkspace'],
       ensureEpicBranch: ensureEpicBranch as unknown as DispatcherDeps['ensureEpicBranch'],
@@ -164,6 +165,43 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     // the next tick does not start it again
     await tickOnce(deps);
     expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  // TER-1110: a tab opened by hand already worked on the ticket, and the automatic work opened a second agent
+  it('a card whose ticket a tab already works on is untagged with the reason, and no agent starts', async () => {
+    const c = await card();
+    await repos.tabs.create(projectId, machineId, `${c.ref} feito à mão`);
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await runsOf()).toEqual([]);
+    expect((await repos.tasks.findById(c.id))!.auto).toBe(false);
+    const events = await eventsOf();
+    expect(events.map((e) => [e.kind, e.taskId])).toEqual([['untagged', c.id]]);
+    expect(events[0]!.payload).toMatchObject({ via: 'existing_work', message: `Já há trabalho em andamento neste ticket: a aba ${c.ref} feito à mão` });
+  });
+
+  it('a card created a moment ago waits the grace period before it starts (TER-1110)', async () => {
+    const c = await card();
+    const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await reasonOf(c.id)).toBe('just_created');
+    await tickOnce({ ...deps, now: () => new Date(Date.now() + 61_000) });
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a project that requires a ticket starts a card without one on no branch of the termhub ref (TER-1110)', async () => {
+    await setSetup({ repo: { require_ticket: true, branch_pattern: 'feature/{ticket_lower}-{slug}' } });
+    const bare = await card('Sem ticket');
+    const named = await repos.tasks.create(projectId, { title: 'More tab', column_id: todoId, auto: true, description: 'Branch: `feature/apps-337-more-tab-list`\n\nfaça isto' });
+    const { deps, startAgent, ensureWorkspace } = makeDeps();
+    await tickOnce(deps);
+    expect(await reasonOf(bare.id)).toBe('no_ticket');
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    expect(ensureWorkspace.mock.calls[0]![1]).toMatchObject({ ref: named.ref, branch: 'feature/apps-337-more-tab-list' });
+    const prompt = (startAgent.mock.calls[0] as unknown as [unknown, { prompt: string }])[1].prompt;
+    expect(prompt).toContain(`Nunca use a ref ${named.ref} do termhub`);
   });
 
   it("a start makes sure the owner has an active project chat, so the agent's questions become cards (review I1)", async () => {

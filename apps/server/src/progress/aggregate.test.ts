@@ -196,6 +196,13 @@ describe('automatic tabs and the feed', () => {
     expect(feedOf([row('1', 'run_blocked', { code: 'X', reason: 'agent_exited' })], 'pt-BR')[0].reason_text).toBeNull();
   });
 
+  it('says why a card was untagged when its ticket already had work going on, and nothing for a person untagging it (TER-1110)', () => {
+    const found = { via: 'existing_work', message: 'Já há trabalho em andamento neste ticket: a aba x', message_en: 'This ticket already has work in progress: the tab x' };
+    expect(feedOf([row('1', 'untagged', found)], 'pt-BR')[0].reason_text).toBe('Já há trabalho em andamento neste ticket: a aba x');
+    expect(feedOf([row('1', 'untagged', found)], 'en')[0].reason_text).toBe('This ticket already has work in progress: the tab x');
+    expect(feedOf([row('1', 'untagged', { via: 'web', cards: 1 })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
   it('says why a run was cancelled, in the reader language, and nothing for a reason it does not know (TER-974)', () => {
     expect(feedOf([row('1', 'run_cancelled', { reason: 'tab_closed' })], 'pt-BR')[0].reason_text).toBe('a aba foi fechada');
     expect(feedOf([row('1', 'run_cancelled', { reason: 'untagged' })], 'en')[0].reason_text).toBe('the card left automatic work');

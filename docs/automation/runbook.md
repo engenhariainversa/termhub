@@ -147,6 +147,41 @@ Notes:
 - Setting `release_workflows` makes the base branch count as "pending" while those workflows run, so merges
   go one delivery at a time.
 
+### Branch names and external tickets (TER-1110)
+
+The repository's "Padrão da branch" (`repo.branch_pattern`, default `{ticket}-{slug}`) takes:
+
+| Placeholder | Becomes |
+| --- | --- |
+| `{ticket}` | the key of the card's external ticket (Jira `APPS-337`, Linear `ENG-12`, the number of a GitHub issue), or the card's ref (`TER-9`) when it has none |
+| `{ticket_lower}` | the same, in lower case (`apps-337`) |
+| `{ref}` | always the card's ref |
+| `{slug}` | the title, ASCII and dashed, at most 40 characters |
+
+- A line `branch: <name>` (also `**Branch:** \`<name>\``, or as a list item) at the start of a line of the
+  card's description wins over the pattern. Only a name with a slash, a dash, an underscore or a digit counts,
+  and never the base branch.
+- "Exigir ticket externo" (`repo.require_ticket`, off by default) is for a client whose GitHub only accepts
+  branches named after their own tracker, e.g. `feature/{ticket_lower}-{slug}`: a card with neither an
+  external ticket nor an explicit branch stays in the queue as "O projeto exige um ticket externo…" instead
+  of starting on a branch with the termhub ref, and the agent is told never to put the termhub ref on GitHub
+  (branch, commits, PR title or body). Its PR is still followed: a PR that names no card is linked to the card
+  whose run works on its branch.
+- The agent's prompt (implementer and CI/conflict fixer) cites the ticket key for commits and the PR title.
+  The push the tab may send without asking is only to its own branch, so a wrong name asks for approval.
+
+### Work already going on for a ticket (TER-1110)
+
+Before a card starts, the dispatcher looks for work on its ref or its ticket's key that the card's own runs
+did not start: a tab of the project whose name or folder names it, an open PR whose branch or title names it,
+or a branch on GitHub that names it (whole words: `apps-337` does not match `apps-3370`). If it finds one, it
+does not start: the card is untagged and the feed says "tirado do automático — Já há trabalho em andamento
+neste ticket: …". Link the tab to the card (`link_tab_task`) and follow it by hand, or close that work and tag
+the card again. A GitHub error only skips the GitHub part of the check.
+
+A card created already tagged waits 2 minutes before it is taken ("Card recém-criado…" in the queue), so the
+chat can link a tab that already works on the ticket first. The concierge creates such a card without the tag.
+
 ## 4a. Doing it from the chat (MCP)
 
 The chat's assistant (and any MCP client with the `terminals` scope and the matching permission) can do
@@ -690,3 +725,10 @@ is updated anyway.
 TER-1086 (section 9c) gives every user the `share_file` tool: the concierge can show them their machines'
 files in the chat. Nothing leaves a machine without a card the person approves, a folder they trusted
 themselves, or an agent tab sharing from its own project folder.
+
+TER-1110 (section 4, "Branch names and external tickets") changes every project with automation on whose
+cards come from an external ticket: their branches now carry the ticket's key instead of the termhub ref
+(`{ticket}` in the default pattern), and the agent is told to cite that key. Every project with automation on
+also gets the 2-minute wait for cards created already tagged, and a card whose ref or ticket already has a
+tab, an open PR or a branch is untagged instead of getting a second agent. "Exigir ticket externo" is opt-in
+per project.

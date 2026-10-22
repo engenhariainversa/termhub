@@ -4,7 +4,21 @@ import * as errors from '../agent/errors.js';
 import type { Machine } from '../db/repositories/types.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
 import { normalizeSetup, SETUP_VERSION } from '../setup/schema.js';
-import { cardBranchName, isValidBranchName, ensureEpicBranch, ensureWorkspace, epicBranchName, slugOf, targetOf } from './branches.js';
+import {
+  cardBranchName,
+  ensureEpicBranch,
+  ensureWorkspace,
+  epicBranchName,
+  explicitBranchOf,
+  hasTicketOrBranch,
+  implementerBranchOf,
+  isValidBranchName,
+  namingRule,
+  slugOf,
+  targetOf,
+  ticketBranchPart,
+  ticketKeyOf,
+} from './branches.js';
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -87,5 +101,45 @@ describe('ensureWorkspace', () => {
     const rpc = vi.spyOn(errors, 'agentRpc').mockResolvedValue({ path: '/w/p1/TER-9', head: 'a'.repeat(40), created: true });
     expect(await ensureWorkspace(machine, input)).toEqual({ path: '/w/p1/TER-9', created: true });
     expect(rpc).toHaveBeenCalledWith(machine, 'git.worktree.ensure', { repo_dir: '/r', root: '/w', path: '/w/p1/TER-9', branch: 'TER-9-x', base: 'main' });
+  });
+});
+
+describe('ticket keys and explicit branches (TER-1110)', () => {
+  const jira = { provider: 'jira', key: 'APPS-337', provider_id: 'APPS-337' };
+  const repo = (over: Record<string, unknown> = {}) => ({ branch_pattern: '{ticket}-{slug}', base_branch: 'main', require_ticket: false, ...over });
+  const task = (over: Record<string, unknown> = {}) => ({ ref: 'DRH-21', title: 'More tab list', description: 'faça isto', external_ref: jira, ...over });
+
+  it('{ticket} is the external ticket key, {ticket_lower} the same in lower case, {ref} always the card ref', () => {
+    expect(cardBranchName('{ticket}-{slug}', { ref: 'DRH-21', title: 'More tab', ticket: 'APPS-337' })).toBe('APPS-337-more-tab');
+    expect(cardBranchName('feature/{ticket_lower}-{slug}', { ref: 'DRH-21', title: 'More tab', ticket: 'APPS-337' })).toBe('feature/apps-337-more-tab');
+    expect(cardBranchName('{ref}/{ticket}', { ref: 'DRH-21', title: 'x', ticket: 'APPS-337' })).toBe('DRH-21/APPS-337');
+  });
+  it('without a ticket, {ticket} falls back to the ref; a GitHub issue gives its number', () => {
+    expect(cardBranchName('feature/{ticket_lower}-{slug}', { ref: 'TER-9', title: 'x', ticket: null })).toBe('feature/ter-9-x');
+    expect(cardBranchName('{ticket}-{slug}', { ref: 'TER-9', title: 'x', ticket: 'acme/app#12' })).toBe('12-x');
+  });
+  it('a "branch:" line of the description wins over the pattern', () => {
+    expect(explicitBranchOf('Contexto\n\n**Branch:** `feature/apps-337-more-tab-list`\n')).toBe('feature/apps-337-more-tab-list');
+    expect(explicitBranchOf('- branch: feature/apps-337-x.')).toBe('feature/apps-337-x');
+    expect(implementerBranchOf(task({ description: 'branch: feature/apps-337-more-tab-list' }), repo())).toBe('feature/apps-337-more-tab-list');
+  });
+  it('a sentence or a mention in the middle of a line is not an explicit branch, nor is the base branch', () => {
+    expect(explicitBranchOf('Branch: o automático usa essa')).toBeNull();
+    expect(explicitBranchOf('a descrição pedia ("branch: feature/apps-337-x")')).toBeNull();
+    expect(explicitBranchOf(null)).toBeNull();
+    expect(implementerBranchOf(task({ description: 'branch: release-1' }), repo({ base_branch: 'release-1' }))).toBe('APPS-337-more-tab-list');
+  });
+  it('a project that requires a ticket refuses a card without one, instead of using the termhub ref', () => {
+    expect(() => implementerBranchOf(task({ external_ref: null }), repo({ require_ticket: true }))).toThrow(expect.objectContaining({ code: 'TICKET_REQUIRED' }));
+    expect(implementerBranchOf(task(), repo({ require_ticket: true, branch_pattern: 'feature/{ticket_lower}-{slug}' }))).toBe('feature/apps-337-more-tab-list');
+    expect(hasTicketOrBranch({ external_ref: null, description: 'branch: feature/apps-337-x' })).toBe(true);
+    expect(hasTicketOrBranch({ external_ref: null, description: 'x' })).toBe(false);
+  });
+  it('namingRule cites the ticket and, when a ticket is required, forbids the termhub ref', () => {
+    expect(namingRule({ ref: 'TER-9', external_ref: null }, repo())).toBeNull();
+    expect(namingRule({ ref: 'DRH-21', external_ref: jira }, repo())).toBe('Este card vem do ticket APPS-337: cite APPS-337 nos commits e no título do PR.');
+    expect(namingRule({ ref: 'DRH-21', external_ref: jira }, repo({ require_ticket: true }))).toContain('Nunca use a ref DRH-21 do termhub');
+    expect(ticketKeyOf({ external_ref: jira })).toBe('APPS-337');
+    expect(ticketBranchPart('acme/app#12')).toBe('12');
   });
 });

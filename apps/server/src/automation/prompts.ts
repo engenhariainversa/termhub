@@ -47,6 +47,9 @@ export const SHELL_LINE =
   'Leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já liberados. O diretório atual já é a worktree: rode tudo nele, sem git -C nem cd. Um comando por vez, programas pelo nome (ls, não /bin/ls): sem vários cd, sem grupos entre parênteses ( … ), sem heredoc longo; caminhos a partir da raiz (grep -rn x apps/web/src), Grep para buscar e Edit/Write para mudar arquivos (não sed -i).';
 /** The push the tab may send without asking (TER-968, R5: only its own branch is pre-allowed). */
 const pushLine = (branch: string) => `Para enviar, use git push -u origin ${branch}; outro push pede aprovação.`;
+/** The branch line, with the project's naming rule after it (`namingRule`, TER-1110) when there is one. */
+const namingOf = (naming: string | null | undefined) => (naming?.trim() ? clip(naming.trim(), NAMING_MAX) : null);
+const branchLine = (head: string, branch: string, naming: string | null | undefined) => [`${head} ${pushLine(branch)}`, namingOf(naming)].filter(Boolean).join(' ');
 /**
  * TER-1025: a GitHub outage is not the card's problem. The agent retries a push or a PR that failed on
  * GitHub's side a couple of times, then hands the wait to the server (`code: github_transient`), which
@@ -57,6 +60,8 @@ export const GITHUB_LINE =
   'Erro do GitHub em push ou gh pr create (5xx, "commit_refs", "Something went wrong") não é do card: tente de novo, sem force; se continuar, report_card blocked com code github_transient, e o termhub retoma quando o GitHub voltar.';
 // 660 and 200 (TER-1043): room for the decision line under PROMPT_MAX_CHARS; the whole policy is in get_automation_policy
 const POLICY_MAX = 660;
+/** The naming rule's longest form (two ticket keys and a ref) fits well under it. */
+const NAMING_MAX = 300;
 const TITLE_MAX = 200;
 
 /** What startAgent adds after our text for a Claude tab (the lessons reminder is ours: `promptIsFinal`). */
@@ -105,13 +110,17 @@ function assemble(parts: (string | Optional | null)[], description: string | nul
   return `${body}${excerpt}${TAIL}`;
 }
 
-const policyLine = (policy: string) => `Política do projeto (consulte também get_automation_policy):\n${clip(policy, POLICY_MAX)}`;
+const policyLine = (policy: string, max = POLICY_MAX) => `Política do projeto (consulte também get_automation_policy):\n${clip(policy, max)}`;
+/** What the naming rule takes from another part, so the prompt stays under the cap (TER-1110). */
+const namingRoom = (naming: string | null | undefined) => (namingOf(naming)?.length ?? -1) + 1;
 const ref = (c: { ref: string; url: string; title: string }) => `${c.ref} ${clip(c.title, TITLE_MAX)}\n${c.url}`;
 
 export function implementerPrompt(i: {
   card: { ref: string; url: string; title: string };
   branch: string;
   base: string;
+  /** The project's naming rule for this card (`namingRule`, TER-1110): the ticket to cite, the ref never to use. */
+  naming?: string | null;
   policy: string;
   custom: string | null;
   description?: string | null;
@@ -123,9 +132,10 @@ export function implementerPrompt(i: {
   return assemble(
     [
       `Você trabalha no card ${ref(i.card)}`,
-      `Trabalhe na branch ${i.branch} (base ${i.base}). ${pushLine(i.branch)}`,
+      branchLine(`Trabalhe na branch ${i.branch} (base ${i.base}).`, i.branch, i.naming),
       i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
-      policyLine(i.policy),
+      // the whole policy is in get_automation_policy: its excerpt gives up the room the naming rule takes
+      policyLine(i.policy, POLICY_MAX - namingRoom(i.naming)),
       i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,
@@ -172,6 +182,7 @@ export function fixerPrompt(i: {
   base: string;
   reason: 'conflict' | 'ci';
   detail: string;
+  naming?: string | null;
   custom: string | null;
   rules?: string | null;
   stopOnDecisions?: boolean;
@@ -179,9 +190,10 @@ export function fixerPrompt(i: {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
   return assemble(
     [
-      `${what} Trabalhe na branch ${i.branch}. ${pushLine(i.branch)}`,
-      // 900: room for the decision line (TER-1043) under PROMPT_MAX_CHARS with the longest custom text
-      `Detalhe:\n${clip(i.detail, 900)}`,
+      branchLine(`${what} Trabalhe na branch ${i.branch}.`, i.branch, i.naming),
+      // 900: room for the decision line (TER-1043) under PROMPT_MAX_CHARS with the longest custom text, less
+      // what the naming rule takes (TER-1110)
+      `Detalhe:\n${clip(i.detail, 900 - namingRoom(i.naming))}`,
       i.custom?.trim() ||
         (i.reason === 'conflict'
           ? DEFAULT_FIXER_CONFLICT_TEXT(i.base)

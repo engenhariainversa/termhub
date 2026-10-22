@@ -12,7 +12,7 @@ const row = (full_name: string, key: string, over: Partial<ProjectRepository> = 
   id: `r-${key}`, project_id: 'p1', full_name, key, description: null, status: 'ok', discovered_at: '', updated_at: '', checkouts: [checkout({ dir: key })], ...over,
 });
 
-const legacyRepo = { integration_id: 'g1', full_name: 'acme/api', base_branch: 'develop', branch_pattern: 'feat/{ticket}', draft_pr: false, deploy_workflow: 'deploy.yml' };
+const legacyRepo = { integration_id: 'g1', full_name: 'acme/api', base_branch: 'develop', branch_pattern: 'feat/{ticket}', require_ticket: false, draft_pr: false, deploy_workflow: 'deploy.yml' };
 const projectPolicy = { autonomy: 'merge', required_checks: ['CI'], release_workflows: ['publish.yml'], release_paths: ['apps/agent/package.json'], store_paths: ['apps/mobile/app.json'] };
 
 describe('effectiveRepos', () => {
@@ -132,7 +132,7 @@ describe('withRepoMirror', () => {
     const s = setup({ repo: legacyRepo, repo_defaults: { integration_id: 'gd' }, automation: projectPolicy, repos: [{ full_name: 'acme/api', enabled: false, autonomy: 'merge' }] });
     const rows = [row('acme/api', 'main'), row('acme/web', 'web', { checkouts: [checkout({ dir: 'web', default_branch: 'trunk' })] })];
     const out = withRepoMirror(s, rows);
-    expect(out.repo).toEqual({ integration_id: 'gd', full_name: 'acme/web', base_branch: 'trunk', branch_pattern: 'feat/{ticket}', draft_pr: false, deploy_workflow: null });
+    expect(out.repo).toEqual({ integration_id: 'gd', full_name: 'acme/web', base_branch: 'trunk', branch_pattern: 'feat/{ticket}', require_ticket: false, draft_pr: false, deploy_workflow: null });
     const list = effectiveRepos(out, rows);
     expect(list.find((e) => e.key === 'web')).toMatchObject({ has_override: true, autonomy: 'pr', required_checks: [], release_paths: [], store_paths: [] });
     // the repository that left repo keeps what it read from the repo block
@@ -158,7 +158,7 @@ describe('withRepoMirror', () => {
   it('with no repo block, the first discovered repository becomes the mirror, at pr', () => {
     const rows = [row('acme/web', 'web'), row('acme/api', 'api')];
     const out = withRepoMirror(setup({ automation: projectPolicy, repo_defaults: { integration_id: 'gd' } }), rows);
-    expect(out.repo).toEqual({ integration_id: 'gd', full_name: 'acme/api', base_branch: 'main', branch_pattern: '{ticket}-{slug}', draft_pr: true, deploy_workflow: null });
+    expect(out.repo).toEqual({ integration_id: 'gd', full_name: 'acme/api', base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: null });
     expect(effectiveRepos(out, rows).find((e) => e.key === 'api')).toMatchObject({ has_override: true, autonomy: 'pr', required_checks: [] });
   });
 

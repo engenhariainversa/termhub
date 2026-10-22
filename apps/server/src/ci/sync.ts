@@ -75,6 +75,13 @@ async function cardsNamed(repos: Repositories, projectId: string, key: string, p
     if (!t || t.type === 'epic') continue;
     ids.add(t.parent_id ?? t.id);
   }
+  // TER-1110: a PR that names no card (a project whose branches and titles carry the ticket's key, never the
+  // termhub ref) is the card's whose automatic run works on its branch
+  if (ids.size === 0) {
+    const taskId = await repos.automationRuns.taskOfBranch(projectId, pull.head.ref);
+    const t = taskId ? await repos.tasks.findById(taskId) : undefined;
+    if (t && t.type !== 'epic') ids.add(t.parent_id ?? t.id);
+  }
   return [...ids];
 }
 

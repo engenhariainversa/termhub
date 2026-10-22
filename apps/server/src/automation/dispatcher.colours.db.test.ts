@@ -177,6 +177,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         instance,
         lifecycle,
         now: () => new Date(),
+        newCardGraceMs: 0,
         startAgent: fakeStartAgent(instance) as unknown as DispatcherDeps['startAgent'],
         ensureWorkspace: (async (_m: unknown, i: { projectId: string; ref: string }) => ({ path: `/w/${i.projectId}/${i.ref}`, created: true })) as unknown as DispatcherDeps['ensureWorkspace'],
         ensureEpicBranch: (async () => {}) as unknown as DispatcherDeps['ensureEpicBranch'],

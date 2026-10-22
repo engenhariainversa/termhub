@@ -30,7 +30,14 @@ export interface GithubWriteClient {
   merge(token: string, repo: string, n: number, i: { sha: string; title: string; method: 'squash' | 'merge' }): Promise<{ merged: boolean; sha: string | null }>;
   /** Merges the base into a PR that is behind it (GitHub's "Update branch"). False when the head moved or there was nothing to do (422). */
   updateBranch(token: string, repo: string, n: number, expectedHeadSha: string): Promise<boolean>;
+  /** The repository's open pull requests, newest first, at most `OPEN_LIST_PAGES` pages (TER-1110). */
+  openPulls(token: string, repo: string): Promise<Array<PullInfo & { title: string; head_ref: string }>>;
+  /** The repository's branch names, at most `OPEN_LIST_PAGES` pages (TER-1110). */
+  branchNames(token: string, repo: string): Promise<string[]>;
 }
+
+/** How many pages of 100 the work-in-progress check reads of a repository's pulls and branches. */
+export const OPEN_LIST_PAGES = 5;
 
 /** Like the CI client's mapping, but a 403 that is not a rate limit on a write means the token is read-only. */
 function writeFailure(res: Response): GithubCiError {
@@ -57,6 +64,19 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
   const toInfo = (p: { number: number; html_url: string }): PullInfo => ({ number: p.number, url: p.html_url });
+  /** Up to `pages` pages of a list, following `rel="next"` on GitHub's own origin only (the token is a header). */
+  async function list<T>(token: string, first: string, pages: number): Promise<T[]> {
+    const out: T[] = [];
+    let url: string | null = first;
+    for (let page = 0; url && page < pages; page++) {
+      const res: Response = await call(token, 'GET', url);
+      if (!res.ok) throw writeFailure(res);
+      out.push(...((await res.json()) as T[]));
+      const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') ?? '')?.[1] ?? null;
+      url = next && new URL(next, API).origin === API ? next : null;
+    }
+    return out;
+  }
 
   return {
     async branchSha(token, repo, branch) {
@@ -121,6 +141,13 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
       if (res.status === 422) return false;
       if (!res.ok) throw writeFailure(res);
       return true;
+    },
+    async openPulls(token, repo) {
+      const pulls = await list<{ number: number; html_url: string; title: string; head: { ref: string } }>(token, `/repos/${repo}/pulls?state=open&per_page=${PER_PAGE}`, OPEN_LIST_PAGES);
+      return pulls.map((p) => ({ ...toInfo(p), title: p.title, head_ref: p.head.ref }));
+    },
+    async branchNames(token, repo) {
+      return (await list<{ name: string }>(token, `/repos/${repo}/branches?per_page=${PER_PAGE}`, OPEN_LIST_PAGES)).map((b) => b.name);
     },
   };
 }

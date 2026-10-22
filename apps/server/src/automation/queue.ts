@@ -3,7 +3,8 @@ import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
-import { eligibilityOf, REASON_TEXT, type IneligibleReason } from './eligibility.js';
+import { hasTicketOrBranch } from './branches.js';
+import { eligibilityOf, NEW_CARD_GRACE_MS, REASON_TEXT, type IneligibleReason } from './eligibility.js';
 import { mergeWaitEntryOf, type MergeWaitEntry } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
@@ -65,8 +66,18 @@ async function startRetryOf(ctx: ControlContext, taskId: string, locale: Locale,
   return typeof why === 'string' && why ? `${head}. ${why}` : head;
 }
 
-/** The queue as the eligibility rules read it (spec §5), without the dispatcher's waiting reasons: what the dispatcher walks. */
-export async function eligibilityQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
+/**
+ * The queue as the eligibility rules read it (spec §5), without the dispatcher's waiting reasons: what the dispatcher walks.
+ * `graceMs`: how long a new card waits (`NEW_CARD_GRACE_MS`, TER-1110), measured against `now`.
+ */
+export async function eligibilityQueue(
+  ctx: ControlContext,
+  projectId: string,
+  locale: Locale = DEFAULT_LOCALE,
+  opts: { now?: Date; graceMs?: number } = {},
+): Promise<QueueItem[]> {
+  const now = (opts.now ?? new Date()).getTime();
+  const graceMs = opts.graceMs ?? NEW_CARD_GRACE_MS;
   const { project: row } = await ctx.scoped.project(projectId);
   const { repos } = ctx;
   const [cards, columns, setup, links, runs] = await Promise.all([
@@ -93,6 +104,7 @@ export async function eligibilityQueue(ctx: ControlContext, projectId: string, l
     paused: await isPaused(repos, row.owner_id, projectId),
     repo_ready: Boolean(repo?.full_name && repo.integration_id),
     capable_machines: capable,
+    require_ticket: repo?.require_ticket ?? false,
   };
 
   const items: Array<QueueItem & { col: number; pos: number }> = [];
@@ -109,6 +121,8 @@ export async function eligibilityQueue(ctx: ControlContext, projectId: string, l
         subtask_count: c.subtask_counts.total,
         tab_alive: Boolean(tab),
         active_run: running.has(c.id),
+        has_ticket: hasTicketOrBranch(c),
+        just_created: now - new Date(c.created_at).getTime() < graceMs,
       },
       project,
     });

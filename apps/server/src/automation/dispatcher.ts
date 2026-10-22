@@ -12,7 +12,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import { currentRulesBlock } from '../memory/current-rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { cleanupRuns, markCancelledWorktreesDue } from './cleanup.js';
-import { cardBranchName, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
+import { namingRule, implementerBranchOf, removeWorkspace as removeWorkspaceFn, targetOf, type ensureEpicBranch as ensureEpicBranchFn, type ensureWorkspace as ensureWorkspaceFn } from './branches.js';
 import { budgetReached } from './budget.js';
 import { automationBus, dispatchTriggers, recordEvent } from './events.js';
 import { SLOT_FREE_REASONS, START_FAILED } from './escalation-text.js';
@@ -26,6 +26,7 @@ import { implementerPrompt, serverMessage } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { eligibilityQueue } from './queue.js';
+import { existingWorkText, findExistingWork, type ExistingWork } from './existing-work.js';
 
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
@@ -63,6 +64,8 @@ export interface DispatcherDeps {
   removeWorkspace?: typeof removeWorkspaceFn;
   /** Closes a tab a failed start left open with nothing running; default: `closeTab` as the owner. */
   closeTab?: (ctx: ControlContext, tabId: string) => Promise<void>;
+  /** How long a card created already tagged waits before it is taken (TER-1110); default `NEW_CARD_GRACE_MS`. */
+  newCardGraceMs?: number;
   /** Escape in a tab ("Pausar e interromper"); default: the tab's own session. */
   pressEscape?: PressEscape;
   /** Types a fixer's prompt into the card's open tab it takes over (TER-1051), as the project's owner.
@@ -300,7 +303,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     try {
       const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
       const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
-      branch = work ? work.branch : cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', task);
+      branch = work ? work.branch : implementerBranchOf(task, repo);
       const { permission, dropped } = startPermission(automation, branch);
       if (dropped > 0) log.warn({ runId: run.id, taskId: task.id, code: 'ALLOWED_TOOL_DROPPED', count: dropped }, 'automation: allow rules too broad for an automatic tab dropped');
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
@@ -316,6 +319,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         implementerPrompt({
           card: { ref: task.ref, url: cardUrl(task.ref), title: task.title },
           branch,
+          naming: namingRule(task, repo),
           base,
           policy: policyText(automation, repo?.deploy_workflow ?? null),
           custom: automation.prompts.implementer,
@@ -353,6 +357,40 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     await markRunning(ctx, project, run, task, place, tabId, branch, true);
   }
 
+  /**
+   * Work on the card's ticket that this card's runs did not start (TER-1110): a tab, an open PR or a branch on
+   * GitHub that names its ref or its ticket's key. GitHub is asked only here, once per card about to start.
+   */
+  async function existingWork(project: Project, setup: ProjectSetupData, task: Task): Promise<ExistingWork | null> {
+    let own: string | null = null;
+    try {
+      own = implementerBranchOf(task, setup.repo);
+    } catch {
+      // the start itself fails on it and says why
+    }
+    const github = await githubToken(project, setup).catch(() => null);
+    return findExistingWork({ repos, github: github && { gh: deps.gh, ...github }, log }, task, own, setup.repo?.base_branch ?? 'main');
+  }
+
+  /** The card leaves the queue (untagged) with the work it found in the feed: no second agent on the ticket. */
+  async function skipForExistingWork(project: Project, task: Task, found: ExistingWork): Promise<void> {
+    log.warn({ taskId: task.id, kind: found.kind }, 'automation: card untagged, its ticket already has work going on');
+    await repos.tasks.setAuto(task.id, false);
+    await recordEvent(repos, {
+      project_id: project.id,
+      task_id: task.id,
+      kind: 'untagged',
+      payload: {
+        via: 'existing_work',
+        message: existingWorkText('pt-BR', found),
+        message_en: existingWorkText('en', found),
+        message_es: existingWorkText('es', found),
+        ...(found.kind === 'pull' ? { pr_url: found.url } : {}),
+        ...(found.kind === 'tab' ? { tab_id: found.tab_id } : {}),
+      },
+    }).catch((e: unknown) => log.warn({ taskId: task.id, code: errorCode(e) }, 'automation: untagged not recorded'));
+  }
+
   /** A version of the Terms in force that the owner has not accepted (TER-742); none registered = false. */
   async function legalPending(ownerId: string): Promise<boolean> {
     return (await repos.legal.statusFor(ownerId)).pending.length > 0;
@@ -371,7 +409,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
     const ctx = controlContextFor(repos, owner);
-    const queue = (await eligibilityQueue(ctx, projectId)).filter((i) => i.eligible);
+    const queue = (await eligibilityQueue(ctx, projectId, undefined, { now: deps.now(), graceMs: deps.newCardGraceMs })).filter((i) => i.eligible);
     const max = enabledSetup.automation.max_parallel;
 
     for (let i = 0; i < queue.length; i++) {
@@ -411,6 +449,17 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         await release(run);
         for (const rest of queue.slice(i)) noteWaiting(rest.task_id, why, deps.now(), place.detail ?? null);
         return;
+      }
+      // TER-1110: someone already works on this ticket (a tab opened by hand, a PR, a branch): no second agent.
+      // Only once the card has a place, so a card waiting for one does not ask GitHub on every tick.
+      const found = await existingWork(project, wanted.setup, wanted.task).catch((e: unknown) => {
+        log.warn({ taskId: item.task_id, code: errorCode(e) }, 'automation: existing work not checked');
+        return null;
+      });
+      if (found) {
+        await release(run);
+        await skipForExistingWork(project, wanted.task, found).catch((e: unknown) => log.warn({ taskId: item.task_id, code: errorCode(e) }, 'automation: card with existing work not untagged'));
+        continue;
       }
       clearWaiting(item.task_id);
       placed(place);
