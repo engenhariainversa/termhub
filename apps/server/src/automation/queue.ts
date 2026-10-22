@@ -26,7 +26,8 @@ export interface QueueItem {
  * priority), each with its eligibility. Untagged cards and subtasks are not in the queue. An eligible card
  * the dispatcher found no place for shows why it waits (`no_account`, …) instead, with each machine and
  * account it left out (TER-985). One whose last start failed and waits for the next attempt says so, with the
- * failure's reason (`start_backoff`, TER-987).
+ * failure's reason (`start_backoff`, TER-987). A card still in its first minutes (`just_created`, TER-1110)
+ * the dispatcher already tried shows that instead: what it found is newer than the wait.
  */
 export async function automationQueue(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<QueueItem[]> {
   const now = new Date();
@@ -36,11 +37,13 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
       // a card past `todo` whose PR the merge executor holds says why it is not merged yet
       const merge = item.reason === 'not_in_todo' ? mergeWaitEntryOf(item.task_id, now) : null;
       if (merge) return { ...item, reason: merge.wait, reason_text: mergeWaitText(merge, locale) };
-      if (item.eligible) {
+      // the dispatcher may run with a shorter wait than the queue's default (`newCardGraceMs`)
+      const tried = item.eligible || item.reason === 'just_created';
+      if (tried) {
         const retry = await startRetryOf(ctx, item.task_id, locale, now);
         if (retry) return { ...item, eligible: false, reason: 'start_backoff' as const, reason_text: retry };
       }
-      const waiting = item.eligible ? waitingOf(item.task_id, now) : null;
+      const waiting = tried ? waitingOf(item.task_id, now) : null;
       if (!waiting) return item;
       const reason = WAITING_AS_REASON[waiting.reason];
       const detail = waiting.detail ? placeDetailText(locale, waiting.detail) : '';
