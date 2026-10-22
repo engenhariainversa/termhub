@@ -530,7 +530,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
 
   // TER-987: the event said only LAUNCH_FAILED, and nobody could tell why the agent never started
   it('run_blocked carries the reason of our own errors, in pt-BR and English, and the wait grows after the second failure', async () => {
-    await card();
+    const c = await card();
+    // past the new-card wait (TER-1110), so the queue reads the card as eligible once the backoff ends
+    await db.task.update({ where: { id: c.id }, data: { createdAt: new Date(Date.now() - 10 * 60_000) } });
     const reason = new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: 'tab-1', reason: msg('Parâmetros inválidos para a máquina') }));
     const first = makeDeps();
     first.startAgent.mockRejectedValueOnce(Object.defineProperty(reason, 'tab_id', { value: 'tab-1' }));
