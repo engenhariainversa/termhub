@@ -4,14 +4,14 @@
     "slug": "termhub",
     "owner": "engenharia-inversa",
     "scheme": "termhub",
-    "version": "0.7.1",
+    "version": "0.8.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0B0F19",
     "ios": {
       "supportsTablet": true,
-      "buildNumber": "202609300448",
+      "buildNumber": "202610220017",
       "bundleIdentifier": "dev.termhub.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
@@ -148,7 +148,7 @@
     },
     "android": {
       "package": "dev.termhub.app",
-      "versionCode": 9,
+      "versionCode": 10,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0B0F19",

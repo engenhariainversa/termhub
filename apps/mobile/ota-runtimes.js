@@ -11,10 +11,12 @@
 // TestFlight on its own after the merge ("Mobile TestFlight (hulk)" workflow); review this list in the
 // same PR as the bump, not after the build.
 module.exports = {
-  for: '0.7.1',
-  // 0.7.0 → 0.7.1 adds the expo-clipboard native module (TER-994), and 0.6.0 → 0.7.0 added
-  // modules/key-commands (TER-368), which the composer imports: no older binary can run this JS.
-  runtimes: [],
+  for: '0.8.0',
+  // 0.7.1 → 0.8.0 is a clean store build of the JS shipped by OTA since 0.7.1 (TER-1109): no new
+  // native module, dependency or config, so 0.7.1 binaries run this JS. 0.7.0 → 0.7.1 added the
+  // expo-clipboard native module (TER-994) and 0.6.0 → 0.7.0 modules/key-commands (TER-368),
+  // which the composer imports: nothing older than 0.7.1 can run it.
+  runtimes: ['0.7.1'],
 };
 
 /** The extra runtimes to publish to when the app is at `version`. */
