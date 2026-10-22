@@ -6,6 +6,7 @@ import { canAccess, type Action, type Resource } from '../auth/permissions.js';
 import { Scoped, type Scope } from '../auth/scope.js';
 import type { ExtractionQueue } from '../chat/attachments/queue.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
+import type { PostRunWaker } from '../chat/wake.js';
 import { LocalizedText } from '../i18n/index.js';
 
 /** What `share_file` needs besides the context (TER-1086): the extraction queue and the person's attachment quota. */
@@ -34,6 +35,9 @@ export interface ControlContext {
   /** Set by the gate when the call runs a confirmation card the person clicked (`grant_id` null): what
    *  it types is then text they approved word for word (TER-851 `person_approved`). Never set by a grant. */
   approval?: { actionId: string; approvedAt: Date };
+  /** Wakes the project's chat for a block reported in a tab whose run ended (`report_card`, TER-1112); set by
+   *  the MCP route. Absent, the block is still escalated to the person. */
+  postRunWaker?: PostRunWaker;
 }
 
 /** What a control operation knows of the /mcp token it runs under. */
