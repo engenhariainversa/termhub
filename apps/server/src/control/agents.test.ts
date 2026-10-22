@@ -1083,20 +1083,20 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: null, guardTabId: 'abc' })).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
   });
 
-  it('a run on an agent without the guard (before 0.19.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
+  it('a run on an agent without the guard (before 0.36.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
     const { c } = ctx();
     const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission: { ...PERMISSION, worktree: WORKTREE } }).catch((e: unknown) => e);
     expect(err).toMatchObject({ code: 'GUARD_UNSUPPORTED' });
-    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.19\.0/);
+    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.36\.0/);
     expect(openTab).not.toHaveBeenCalled();
     expect(installTabMcp).not.toHaveBeenCalled();
     expect(sendTextToSession).not.toHaveBeenCalled();
   });
 
-  it('on agent 0.19.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
+  it('on agent 0.36.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
     const m1 = machines[0]!;
     const before = m1.agent_version;
-    m1.agent_version = '0.19.0';
+    m1.agent_version = '0.36.0';
     try {
       cfg.mcpUrl = MCP_URL;
       tabMcpSupported.mockReturnValue(true);
@@ -1341,7 +1341,7 @@ describe('ai-memory in the agents termhub starts (TER-1020)', () => {
   const m1 = machines[0]!;
   const before = { ...m1 };
   beforeEach(() => {
-    Object.assign(m1, { ai_memory_enabled: true, ai_memory_url: null, agent_version: '0.35.0' });
+    Object.assign(m1, { ai_memory_enabled: true, ai_memory_url: null, agent_version: '0.36.0' });
   });
   afterEach(() => {
     Object.assign(m1, before);
