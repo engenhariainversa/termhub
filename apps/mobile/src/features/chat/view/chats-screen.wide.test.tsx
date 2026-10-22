@@ -60,7 +60,7 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
 
   it('opens a chat in the pane next to the list, not as a pushed screen', async () => {
     await render(<ChatsScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: /^termhub/ }, LOAD));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Chat de termhub' }, LOAD));
     expect(await screen.findByText(SEEDED_USER, undefined, LOAD)).toBeTruthy();
     expect(mockPush).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Voltar' })).toBeNull();
@@ -68,9 +68,21 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
     expect(screen.queryByText('Escolha uma conversa')).toBeNull();
   });
 
+  it('a tap on a project shows its sessions in the pane; its concierge opens there too (TER-1106)', async () => {
+    await render(<ChatsScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: /^termhub/ }, LOAD));
+    expect(await screen.findByText('api', undefined, LOAD)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /^termhub/ }).props.accessibilityState).toMatchObject({ selected: true });
+
+    await fireEvent.press(screen.getByRole('button', { name: /^Concierge/ }));
+    expect(await screen.findByText(SEEDED_USER, undefined, LOAD)).toBeTruthy();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('collapses to the list when the window narrows, and brings the chat back when it widens', async () => {
     const view = await render(<ChatsScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: /^termhub/ }, LOAD));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Chat de termhub' }, LOAD));
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
     mockWindow.width = 390; // Slide Over / a narrow Split View
@@ -92,7 +104,7 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
     const chatSpy = jest.spyOn(stores.api, 'chat');
     const projectsSpy = jest.spyOn(stores.api, 'chatProjects');
 
-    await fireEvent.press(screen.getByRole('button', { name: /^termhub/ }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Chat de termhub' }));
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
     // Selecting a row mounts `ConversationView`, whose own effect opens it — the focus effect must
@@ -104,7 +116,7 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
 
   it('re-opens its own chat when the tab regains focus after a pushed one took over the store', async () => {
     await render(<ChatsScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: /^termhub/ }, LOAD));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Chat de termhub' }, LOAD));
     await screen.findByText(SEEDED_USER, undefined, LOAD);
 
     // A notification tap pushed the account-wide chat, which became the store's active one.
@@ -122,7 +134,7 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
     await act(() => useChatStore.setState({ error: 'Sem conexão' }));
     expect(screen.getAllByText('Sem conexão')).toHaveLength(1); // no pane yet: the list says it
 
-    await fireEvent.press(screen.getByRole('button', { name: /^termhub/ }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Chat de termhub' }));
     await screen.findByText(SEEDED_USER, undefined, LOAD);
     await act(() => useChatStore.setState({ error: 'Sem conexão' }));
     // The store has one `error`: the list and the pane both read it, so only the pane shows it.
@@ -134,7 +146,7 @@ describe('Chats on a wide window (iPad, spec 2026-09-28 §2.3)', () => {
   // Last in the file: it denies the seeded confirmations on the shared mock server.
   it('keeps the list live next to the pane: a decision taken there clears its row\'s badge, with no spinner', async () => {
     await render(<ChatsScreen />);
-    await fireEvent.press(await screen.findByRole('button', { name: /^termhub/ }, LOAD));
+    await fireEvent.press(await screen.findByRole('button', { name: 'Chat de termhub' }, LOAD));
     await screen.findByText(SEEDED_USER, undefined, LOAD);
     expect(screen.getByLabelText('2 confirmações pendentes')).toBeTruthy();
     await waitFor(() => expect(useChatStore.getState().loadingProjects).toBe(false));

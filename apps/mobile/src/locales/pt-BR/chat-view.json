@@ -31,6 +31,8 @@
   "{{count}} falharam_other": "{{count}} falharam",
   "+{{count}} outras_one": "+{{count}} outra",
   "+{{count}} outras_other": "+{{count}} outras",
+  "{{count}} pendências_one": "{{count}} pendência",
+  "{{count}} pendências_other": "{{count}} pendências",
   "{{count}} permissões_one": "{{count}} permissão",
   "{{count}} permissões_other": "{{count}} permissões",
   "{{count}} perguntas_one": "{{count}} pergunta",

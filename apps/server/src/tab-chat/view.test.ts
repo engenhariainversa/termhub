@@ -10,7 +10,7 @@ const tab = (o: Partial<Tab>) =>
 
 describe('tabSummaryOf', () => {
   it('carries the tab, its project, its machine and the availability', () => {
-    expect(tabSummaryOf(tab({ activity: 'coding', activity_verb: 'Moonwalking' }), project, machine, 'ready')).toEqual({
+    expect(tabSummaryOf(tab({ activity: 'coding', activity_verb: 'Moonwalking', state_tool: 'codex' }), project, machine, 'ready')).toEqual({
       id: 't1',
       name: 'api',
       project: { id: 'p1', key: 'TH', name: 'termhub' },
@@ -27,7 +27,7 @@ describe('tabSummaryOf', () => {
       activity_verb: 'Moonwalking',
       availability: 'ready',
       auto_ref: null,
-      agent: null,
+      agent: 'codex',
     });
     expect(tabSummaryOf(tab(), project, machine, 'ready', 'TH-12').auto_ref).toBe('TH-12');
     // the agent the hooks reported from, so the phone names it (TER-1102)

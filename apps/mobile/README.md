@@ -162,7 +162,7 @@ Manifests are code-signed: the server holds the app's private key, and `certs/ce
 
 ## Sessões (a terminal tab as a conversation)
 
-The Chats tab has two segments: "Conversas" (the concierge chat) and "Sessões". Sessões lists the terminal tabs of your projects and opens one that runs Claude Code as a conversation, with no concierge in between (spec `docs/superpowers/specs/2026-10-01-tab-chat-design.md`).
+The Chats tab is one list of projects (TER-1106): Chat geral, then your Favoritos (in their order, as on Home and the web sidebar), then the rest in the server's order. Each row counts what waits on you (the concierge's confirmations plus the tabs waiting on you). Tapping a row, or its list icon, opens the project's sessions (`app/project-sessions/[projectId].tsx`): the concierge first, then each terminal tab of the project (name, machine, agent, state), opened as a conversation with no concierge in between, and "Iniciar sessão" for a new one; the chat icon opens the concierge directly (spec `docs/superpowers/specs/2026-10-01-tab-chat-design.md`).
 
 - **What it reads.** The session's own Claude Code transcript, read on the machine by the agent (`transcript.read`, agent **0.15.0** or newer) and turned into items by the server (`apps/server/src/tab-chat/`). Tabs on an older agent show "Atualize o agente desta máquina"; only agent machines and Claude Code tabs open. The tab's state comes from the hooks, as everywhere else.
 - **Nothing is stored.** The server relays the transcript while a phone has the screen open (`GET /api/m/v1/tabs/:id/chat` for a page, `/ws/m/tabs/:id` for live items) and keeps nothing; the app keeps the items in memory only. Neither side logs content.

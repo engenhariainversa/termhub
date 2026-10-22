@@ -62,7 +62,7 @@ export function seedTabs(state: MockState, now: number): void {
   );
   state.tabs.set(
     't-web',
-    tab({ id: 't-web', name: 'web', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-hulk', name: 'hulk' }, state: 'idle', needs_you: false, activity: null, availability: 'agent_outdated' }, null, [], ''),
+    tab({ id: 't-web', name: 'web', project: { id: 'p-termhub', key: 'TER', name: 'termhub' }, machine: { id: 'm-hulk', name: 'hulk' }, state: 'idle', needs_you: false, activity: null, availability: 'agent_outdated', agent: null }, null, [], ''),
   );
   state.tabs.set(
     't-deploy',
@@ -254,7 +254,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
       tab.summary = { ...tab.summary, availability: 'ready', state: 'idle', state_at: at };
     } else {
       id = `t-${randomId(6)}`;
-      state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
+      state.tabs.set(id, { summary: { ...tab.summary, id, name: choice.provider === 'chatgpt' ? 'codex' : 'claude', agent: choice.provider === 'chatgpt' ? 'codex' : 'claude', availability: 'ready', state: 'idle', state_at: at }, session: `s-${randomId(6)}`, items: [], mode: 'default', screen: '' });
     }
     return { status: 200, body: { tab_id: id, new_tab: id !== tab.summary.id, account: { id: choice.account_id, label: choice.label }, provider: choice.provider, model: choice.model } };
   });

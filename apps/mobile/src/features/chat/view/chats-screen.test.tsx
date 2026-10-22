@@ -73,12 +73,35 @@ describe('Chats', () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it('opens the account-wide chat and a project by route', async () => {
+  it('opens the account-wide chat by route, and a project\'s sessions on a tap (TER-1106)', async () => {
     await render(<ChatsScreen />);
     await fireEvent.press(await screen.findByRole('button', { name: /^Chat geral/ }, LOAD));
     expect(mockPush).toHaveBeenLastCalledWith('/chat/general');
     await fireEvent.press(screen.getByRole('button', { name: /^termhub/ }));
-    expect(mockPush).toHaveBeenLastCalledWith('/chat/p-termhub');
+    expect(mockPush).toHaveBeenLastCalledWith('/project-sessions/p-termhub');
+  });
+
+  it('the list icon opens the project\'s sessions, the chat icon its concierge; Chat geral has neither', async () => {
+    await render(<ChatsScreen />);
+    await fireEvent.press(await screen.findByRole('button', { name: 'Sessões de opapingou' }, LOAD));
+    expect(mockPush).toHaveBeenLastCalledWith('/project-sessions/p-opapingou');
+    await fireEvent.press(screen.getByRole('button', { name: 'Chat de opapingou' }));
+    expect(mockPush).toHaveBeenLastCalledWith('/chat/p-opapingou');
+    expect(screen.queryByRole('button', { name: 'Chat de Chat geral' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sessões de Chat geral' })).toBeNull();
+  });
+
+  it('has no Conversas / Sessões switch any more', async () => {
+    await render(<ChatsScreen />);
+    await screen.findByText('termhub', undefined, LOAD);
+    expect(screen.queryByRole('tab')).toBeNull();
+  });
+
+  it('counts the tabs waiting on the person in the project\'s badge', async () => {
+    await render(<ChatsScreen />);
+    // opapingou's `deploy` tab waits on a permission; its chat has no confirmation.
+    expect(await screen.findByLabelText('1 pendência', undefined, LOAD)).toBeTruthy();
+    expect(screen.getByLabelText('2 confirmações pendentes')).toBeTruthy();
   });
 });
 
@@ -101,9 +124,29 @@ describe('Chats: pinning a project (TER-541)', () => {
     await fireEvent.press(await screen.findByRole('button', { name: 'Fixar termhub em Favoritos' }, LOAD));
     expect(write).toHaveBeenCalledWith(expect.anything(), 'p-termhub', true);
     expect(await screen.findByRole('button', { name: 'Tirar termhub de Favoritos' })).toBeTruthy();
-    // The row itself still opens the chat.
+    // The row itself still opens the project.
     await fireEvent.press(screen.getByRole('button', { name: /^termhub/ }));
-    expect(mockPush).toHaveBeenLastCalledWith('/chat/p-termhub');
+    expect(mockPush).toHaveBeenLastCalledWith('/project-sessions/p-termhub');
+  });
+
+  it('a pinned project moves to the top, after Chat geral, and back to its place when unpinned', async () => {
+    await render(<ChatsScreen />);
+    const order = () => screen.getAllByRole('button', { name: /^Fixar .* em Favoritos$|^Tirar .* de Favoritos$/ }).map((b) => String(b.props.accessibilityLabel).replace(/^(Fixar|Tirar) | (em|de) Favoritos$/g, ''));
+    await screen.findByRole('button', { name: 'Fixar reactivando em Favoritos' }, LOAD);
+    const before = order();
+    expect(before[before.length - 1]).toBe('reactivando');
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Fixar reactivando em Favoritos' }));
+    await screen.findByRole('button', { name: 'Tirar reactivando de Favoritos' });
+    expect(order()[0]).toBe('reactivando');
+    await fireEvent.press(screen.getByRole('button', { name: 'Fixar opapingou em Favoritos' }));
+    await screen.findByRole('button', { name: 'Tirar opapingou de Favoritos' });
+    // Favoritos keep the order they were pinned in, as on Home and the web sidebar.
+    expect(order().slice(0, 2)).toEqual(['reactivando', 'opapingou']);
+
+    await fireEvent.press(screen.getByRole('button', { name: 'Tirar reactivando de Favoritos' }));
+    await screen.findByRole('button', { name: 'Fixar reactivando em Favoritos' });
+    expect(order()).toEqual(['opapingou', ...before.filter((n) => n !== 'opapingou')]);
   });
 
   it('a long press on the row opens a sheet that pins it', async () => {
@@ -118,25 +161,3 @@ describe('Chats: pinning a project (TER-541)', () => {
   });
 });
 
-
-describe('Chats: the Sessões segment (spec 2026-10-01 tab chat §6)', () => {
-  it('starts on Conversas, and Sessões shows the open tabs, loading them once', async () => {
-    const load = jest.spyOn(stores.api, 'tabs');
-    await render(<ChatsScreen />);
-    const conversas = await screen.findByRole('tab', { name: 'Conversas' }, LOAD);
-    expect(conversas.props.accessibilityState).toMatchObject({ selected: true });
-    expect(screen.getByText('Chat geral')).toBeTruthy();
-    expect(load).not.toHaveBeenCalled();
-
-    await fireEvent.press(screen.getByRole('tab', { name: 'Sessões' }));
-    expect(await screen.findByText('Trabalhando · Bash', undefined, LOAD)).toBeTruthy();
-    expect(screen.queryByText('Chat geral')).toBeNull();
-    expect(load).toHaveBeenCalledTimes(1);
-
-    await fireEvent.press(screen.getByRole('button', { name: /^api/ }));
-    expect(mockPush).toHaveBeenLastCalledWith('/session/t-api');
-
-    await fireEvent.press(screen.getByRole('tab', { name: 'Conversas' }));
-    expect(screen.getByText('Chat geral')).toBeTruthy();
-  });
-});
