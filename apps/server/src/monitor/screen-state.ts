@@ -1,4 +1,5 @@
 import { dialogFooterVisible, lastNonBlankLines, permissionDialogVisible } from '../chat/permission-dialog.js';
+import { trustDialogOf } from './trust-dialogs.js';
 import { isAuthMessage } from './turn-end.js';
 
 /**
@@ -9,7 +10,7 @@ import { isAuthMessage } from './turn-end.js';
  * - `busy`: the spinner of a turn in progress (`✢ Catapulting… (14s · ↓ 145 tokens)`);
  * - `background`: the turn ended and Claude Code waits on background work it started
  *   (`✻ Waiting for 1 background agent to finish`, TER-644) — not a wait for the person;
- * - `trust`: Claude Code asks whether the folder is trusted, before any hook fires (TER-1046);
+ * - `trust`: the CLI asks whether the folder is trusted, before any hook fires (TER-1046; any CLI, TER-1122);
  * - `auth`: Claude Code is back at its input box and its last answer is its login error ("Login expired ·
  *   Please run /login", TER-1046);
  * - `prompt`: Claude Code is back at its input box with no turn running;
@@ -35,18 +36,17 @@ const RULE = /^\s*[─━]{10,}\s*$/;
 /** The input box's first row: the prompt glyph at column 0 (`>` is the ASCII fallback). */
 const INPUT = /^[❯>](?: |$)/;
 
-/** The folder trust dialog (Claude Code 2.1.x): its question and its "Yes" option (automation/trust.ts answers it). */
-const TRUST_QUESTION = /one you trust|trust this folder|trust the files in this folder/i;
-const TRUST_YES = /^\s*(?:❯\s*)?1\.\s*Yes, I trust this folder/;
 /** The first line of an answer in the transcript ("⏺", "●" on terminals without it). */
 const ANSWER = /^[⏺●] /u;
 /** The line a finished turn leaves under its answer: "✻ Worked for 0s · done 9:09 AM". */
 const TURN_SUMMARY = /^[·✢✳✶✻✽*] /u;
 
-/** Whether the screen shows the folder trust dialog, whatever option is selected (TER-1046). */
+/**
+ * Whether the screen shows a folder trust dialog, whatever option is selected (TER-1046): Claude Code's, or
+ * Codex's, Cursor's or Gemini's (TER-1122, trust-dialogs.ts) — the same wait for the person in any CLI.
+ */
 export function trustDialogVisible(screen: string): boolean {
-  const lines = lastNonBlankLines(screen, SCREEN_STATE_LINES).split('\n');
-  return TRUST_QUESTION.test(lines.join('\n')) && lines.some((l) => TRUST_YES.test(l));
+  return trustDialogOf(screen) !== null;
 }
 
 /**

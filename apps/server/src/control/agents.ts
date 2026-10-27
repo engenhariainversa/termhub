@@ -645,9 +645,9 @@ export async function startAgent(
   // which account runs this tab: a later swap must not pick it again (spec 2026-09-26 account swap);
   // best effort, the agent is already running
   await ctx.repos.tabs.setAgentFields(tab.tab_id, { ai_account_id: account.id }).catch(() => undefined);
-  // TER-1117: Claude's folder trust dialog is settled within seconds instead of the tab looking busy.
-  // An automatic run (`internal`) has its own follower for it.
-  if (!internal && account.provider === 'claude') followLaunch(ctx.repos, ctx.log ?? quiet, tab.tab_id, machine);
+  // TER-1117: the CLI's folder trust dialog is settled within seconds instead of the tab looking busy (any
+  // CLI, TER-1122). An automatic run (`internal`) has its own follower for it.
+  if (!internal) followLaunch(ctx.repos, ctx.log ?? quiet, tab.tab_id, machine);
   if (task) {
     try {
       await attachTask(ctx, task.id, tab.tab_id);
@@ -804,7 +804,7 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
   await typeCommandLine(machine, target.tmux_session, line);
   await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
-  if (account.provider === 'claude') followLaunch(ctx.repos, ctx.log ?? quiet, target.tab_id, machine);
+  followLaunch(ctx.repos, ctx.log ?? quiet, target.tab_id, machine);
   ctx.log?.info({ tabId: target.tab_id, machineId: machine.id, provider: account.provider, newTab: target.tab_id !== tab.id }, 'tab chat: agent started');
   return { tab_id: target.tab_id, new_tab: target.tab_id !== tab.id, account: { id: account.id, label: account.label }, provider: account.provider, model: choice.model };
 }

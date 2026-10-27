@@ -1,25 +1,27 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { captureScreen } from '../agent/screen.js';
 import { recordEvent } from '../automation/events.js';
-import { showsTrustQuestion } from '../automation/trust.js';
 import { failureLabel } from '../chat/service.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab, TabState } from '../db/repositories/types.js';
 import { sendKeyToSession } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
-import { SCREEN_STATE_LINES, claudeScreenState } from './screen-state.js';
-import { TRUST_PROMPT_TEXT } from './state.js';
+import { SCREEN_STATE_LINES } from './screen-state.js';
+import { trustPromptText } from './state.js';
+import { TRUST_CLI_LABEL, trustDialogOf } from './trust-dialogs.js';
 
 /*
- * Claude Code's folder trust dialog in a project's own folder (TER-1117). A folder Claude Code never opened
+ * The agent CLI's folder trust dialog in a project's own folder (TER-1117; every CLI, TER-1122). A folder Claude Code never opened
  * (a project just linked, a new machine, an account that never ran there) stops on "Is this a project you
  * created or one you trust?" before any hook fires: the tab reported nothing, or `working` from the input
  * that started it, and looked busy while it waited. The folder of a project ↔ machine link is one the person
  * chose, so the server answers "Yes" there itself (the project can turn that off in Setup, `agent.
  * trust_project_folder`) and records it in the feed; anywhere else (a folder outside the link, the option
  * off, the "No" option selected) the tab becomes `trust_prompt` at once, which pushes and wakes the chat.
- * Worktrees of automatic work keep their own rule (automation/trust.ts). Claude Code only: Codex's screen has
- * no rule here. The screen is compared and dropped, never logged.
+ * Worktrees of automatic work keep their own rule (automation/trust.ts). TER-1122: Codex, Cursor and Gemini ask
+ * the same thing in their own words (trust-dialogs.ts) and get the same answer; a dialog that would also change
+ * the CLI's permissions (Codex's older "without asking for approval") is never answered, only reported. The
+ * screen is compared and dropped, never logged.
  */
 
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
@@ -72,33 +74,35 @@ export async function settleTrustDialog(
 ): Promise<TrustOutcome> {
   const last = answered.get(tab.id);
   if (last !== undefined && deps.now() - last < ANSWERED_HOLD_MS) return 'unchanged';
-  if (showsTrustQuestion(screen) && (await trustsProjectFolder(repos, tab))) {
+  const dialog = trustDialogOf(screen);
+  if (dialog?.acceptable && (await trustsProjectFolder(repos, tab))) {
     await deps.sendEnter(machine, tab.tmux_session);
     if (answered.size > 1000) answered.clear();
     answered.set(tab.id, deps.now());
-    log.info({ tabId: tab.id, machineId: machine.id }, 'monitor: trust dialog answered in the project folder');
-    await recordEvent(repos, { project_id: tab.project_id, kind: 'trust_auto_accepted', payload: { tab_id: tab.id, tab_name: tab.name, folder: 'project' } }).catch((err: unknown) =>
+    log.info({ tabId: tab.id, machineId: machine.id, cli: dialog.cli }, 'monitor: trust dialog answered in the project folder');
+    await recordEvent(repos, { project_id: tab.project_id, kind: 'trust_auto_accepted', payload: { tab_id: tab.id, tab_name: tab.name, folder: 'project', cli: dialog.cli } }).catch((err: unknown) =>
       log.warn({ tabId: tab.id, code: failureLabel(err) }, 'monitor: trust_auto_accepted not recorded'),
     );
     return 'accepted';
   }
   if (tab.state === 'trust_prompt') return 'unchanged';
+  const cli = dialog?.cli ?? 'claude';
   const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, {
     kind: 'trust_prompt',
-    tool: 'claude',
-    text: TRUST_PROMPT_TEXT,
+    tool: cli,
+    text: trustPromptText(TRUST_CLI_LABEL[cli]),
     meta: { event: 'ScreenCheck', screen: 'trust' },
     ifStateAt: tab.state_at,
     ifStateIn,
   });
-  log.info({ tabId: tab.id, machineId: machine.id, recorded: event !== null }, 'monitor: tab waits on the trust dialog');
+  log.info({ tabId: tab.id, machineId: machine.id, cli, recorded: event !== null }, 'monitor: tab waits on the trust dialog');
   if (!event) return 'unchanged';
   publishTabChange(updated, tab.project_id, machine);
   return 'reported';
 }
 
 /**
- * Right after termhub typed a Claude Code line into a tab (start_agent, "Iniciar sessão"), reads its screen
+ * Right after termhub typed an agent CLI's line into a tab (start_agent, "Iniciar sessão"), reads its screen
  * a few times (`LAUNCH_CHECKS_MS`) for the trust dialog and settles it, instead of leaving it to the sweeps
  * (minutes later). Stops once the dialog was settled or the tab is gone. Fire and forget; never throws.
  */
@@ -127,7 +131,7 @@ export async function checkLaunch(repos: Repositories, log: Log, tabId: string, 
   if (!tab || !tab.tmux_session) return true;
   if (tab.state === 'trust_prompt') return true;
   const screen = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
-  if (claudeScreenState(screen) !== 'trust') return false;
+  if (!trustDialogOf(screen)) return false;
   return (await settleTrustDialog(repos, log, tab as Tab & { tmux_session: string }, machine, screen, deps)) !== 'unchanged';
 }
 

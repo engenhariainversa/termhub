@@ -12,6 +12,7 @@ import { takeInputOrigin } from '../terminal/input-origin.js';
 import { buildOriginNote } from '../terminal/origin-note.js';
 import { applyRunOutcome, checkAuthOnScreen, defaultAuthScreenDeps } from './attention.js';
 import { monitorBus } from './bus.js';
+import { followLaunch } from './folder-trust.js';
 import { claudeSessionOf, codexSessionOf, interpretHookEvent, isRateLimit, type HookTool, type Interpreted } from './state.js';
 
 /** `origin_note`: what the hook prints back for a prompt termhub typed (TER-851), when one matched. */
@@ -128,6 +129,9 @@ async function ingestForTab(
   // never throws, and the hook's answer does not wait for the card.
   if (input.tool === 'codex' && interpreted.meta.event === 'Stop' && interpreted.meta.subagent !== true) void openCodexReply(repos, log, updated.id, interpreted.answer ?? interpreted.text);
   if (isRateLimit(interpreted)) autoSwapOnLimit(repos, log, updated);
+  // TER-1122: a Cursor session that just started reads `idle`, so the sweep of tabs with no state never looks
+  // at it: its workspace trust dialog is looked for now, as after start_agent. Not awaited; never throws.
+  if (input.tool === 'cursor' && interpreted.meta.event === 'sessionStart') void followCursorStart(repos, log, updated);
   // Claude's idle reminder on a wait: the turn may have ended on its login error with nothing in the Stop
   // (TER-1046). Not awaited; it never throws.
   if (input.tool === 'claude' && interpreted.meta.event === 'Notification' && interpreted.meta.type === 'idle_prompt' && updated.state === 'waiting_input') {
@@ -261,4 +265,14 @@ async function noteClaudeSession(repos: Repositories, tab: Tab, event: unknown, 
   } else if (tab.rate_limited_at && endsLimit(interpreted, !!session && session.session_id !== tab.agent_session_id)) patch.rate_limited_at = null;
   if (Object.keys(patch).length === 0) return tab;
   return (await repos.tabs.setAgentFields(tab.id, patch)) ?? tab;
+}
+
+/** The trust dialog check of a Cursor tab that just started (TER-1122): the same reads as after start_agent. Never throws. */
+async function followCursorStart(repos: Repositories, log: FastifyBaseLogger, tab: Tab): Promise<void> {
+  try {
+    const machine = await repos.machines.findById(tab.machine_id);
+    if (machine && tab.tmux_session) followLaunch(repos, log, tab.id, machine);
+  } catch (err) {
+    log.warn({ tabId: tab.id, err: err instanceof Error ? err.name : 'unknown' }, 'monitor: cursor trust check not scheduled');
+  }
 }
