@@ -9,6 +9,7 @@ import { listAutomationEvents } from '../automation/events.js';
 import { DEFAULT_FIXER_CI_TEXT, DEFAULT_FIXER_CONFLICT_TEXT, DEFAULT_IMPLEMENTER_TEXT, DEFAULT_INTEGRATOR_TEXT } from '../automation/prompts.js';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { projectUsage } from '../automation/usage.js';
+import { projectPrCi } from '../automation/pr-ci.js';
 
 const id = z.string().min(1).max(64);
 const idParam = z.object({ id });
@@ -48,6 +49,11 @@ export async function projectAutomationEventRoutes(app: FastifyInstance, repos: 
     const { id } = idParam.parse(request.params);
     const q = usageQuery.parse(request.query);
     return projectUsage(controlContextForRequest(repos, request), id, q);
+  });
+  /** TER-1114: whether the repository runs CI on pull requests, for the Setup's warning at merge level or above. */
+  app.get('/:id/automation/pr-ci', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return { state: await projectPrCi(controlContextForRequest(repos, request), id) };
   });
 }
 

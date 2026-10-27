@@ -29,6 +29,8 @@ export type PullsPage = { notModified: true } | { notModified: false; etag: stri
 export interface GithubCiClient {
   listPulls(token: string, repo: string, etag: string | null): Promise<PullsPage>;
   listRuns(token: string, repo: string, headSha: string): Promise<WorkflowRun[]>;
+  /** Whether any workflow run of the repository was triggered by `event` (TER-1114: a repository with no CI on pull requests). */
+  hasRunsFor(token: string, repo: string, event: string): Promise<boolean>;
   /** The head commit of a branch; null when the branch is gone. */
   branchSha(token: string, repo: string, branch: string): Promise<string | null>;
   /** Whether `ancestor` is part of `descendant`'s history (or the same commit). */
@@ -98,6 +100,11 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       if (!res.ok) throw failure(res);
       const body = (await res.json()) as { workflow_runs: WorkflowRun[] };
       return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at, updated_at }) => ({ id, name, path, status, conclusion, html_url, created_at, updated_at }));
+    },
+    async hasRunsFor(token, repo, event) {
+      const res = await get(token, `/repos/${repo}/actions/runs?event=${encodeURIComponent(event)}&per_page=1`);
+      if (!res.ok) throw failure(res);
+      return (((await res.json()) as { total_count?: number }).total_count ?? 0) > 0;
     },
     async branchSha(token, repo, branch) {
       const res = await get(token, `/repos/${repo}/git/ref/heads/${branch.split('/').map(encodeURIComponent).join('/')}`);
