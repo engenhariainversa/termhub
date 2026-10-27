@@ -3,7 +3,7 @@ import { emptyReasonText } from './empty-reason-text';
 
 it.each([
   ['no_hooks', 'Sem histórico: a máquina não tem os hooks do termhub', 'Instalar hooks'],
-  ['not_reported', 'O Claude desta aba ainda não informou a sessão', 'Reinstalar hooks'],
+  ['not_reported', 'O agente desta aba ainda não informou a sessão', 'Reinstalar hooks'],
   ['transcript_missing', 'O histórico desta sessão não está mais na máquina', null],
   ['new_session', 'Nenhuma mensagem nesta sessão ainda', null],
   ['codex_untrusted', 'O Codex ainda não confia nos hooks do termhub', null],
@@ -27,6 +27,13 @@ it('every reason of the contract has its own text', () => {
 it('no reason, or one this build does not know, reads as the generic empty conversation', () => {
   expect(emptyReasonText(null, 'box')).toEqual({ title: 'Nenhuma mensagem ainda', hint: 'Escreva abaixo para falar com o Claude nesta aba.', install: null });
   expect(emptyReasonText('something_newer', 'box').title).toBe('Nenhuma mensagem ainda');
+});
+
+it('a tab whose CLI never reported names both CLIs, and a Claude tab keeps its own wording (TER-1118)', () => {
+  expect(emptyReasonText('not_reported', 'box').hint).toContain('claude --continue ou codex resume');
+  expect(emptyReasonText('no_hooks', 'box').hint).toContain('Claude Code ou do Codex');
+  expect(emptyReasonText('not_reported', 'box', 'claude')).toMatchObject({ title: 'O Claude desta aba ainda não informou a sessão', install: 'Reinstalar hooks' });
+  expect(emptyReasonText('no_hooks', 'box', 'claude').hint).not.toContain('codex');
 });
 
 it("a Codex tab gets Codex's wording, never Claude's (TER-1102)", () => {
