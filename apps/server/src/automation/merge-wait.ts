@@ -44,3 +44,32 @@ export function mergeWaitOf(taskId: string, now: Date = new Date()): MergeWait |
 export function resetMergeWaits(): void {
   waits.clear();
 }
+
+/** TER-1121: the base branch's head as the merge executor last read it, per project, for the health watcher. */
+export interface BaseReading {
+  state: 'green' | 'red' | 'pending';
+  sha: string | null;
+  /** the workflows failing (red) or not done yet (pending) on it, by name */
+  failing: string[];
+  at: number;
+}
+
+/** Kept this long: past it the executor stopped reading the base (no PR waits on it) and nothing is told. */
+export const BASE_READING_TTL_MS = 15 * 60_000;
+
+const bases = new Map<string, BaseReading>();
+
+export function noteBaseReading(projectId: string, reading: Omit<BaseReading, 'at'>, now: Date = new Date()): void {
+  bases.set(projectId, { ...reading, at: now.getTime() });
+}
+
+export function baseReadingOf(projectId: string, now: Date = new Date()): BaseReading | null {
+  const b = bases.get(projectId);
+  if (!b || now.getTime() - b.at > BASE_READING_TTL_MS) return null;
+  return b;
+}
+
+/** Tests only. */
+export function resetBaseReadings(): void {
+  bases.clear();
+}

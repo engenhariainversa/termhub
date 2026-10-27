@@ -61,6 +61,7 @@ import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startWatchEngine } from './chat/watches/engine.js';
 import { startTrustWake } from './chat/trust-wake.js';
+import { startHealthWatcher } from './health/watcher.js';
 import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
@@ -505,6 +506,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
         if (e.type === 'run_finished') listener(e.user_id, e.conversation_id, e.message_id);
       }),
   });
+  // TER-1121: the project health watcher notices stalled work (a green PR left unmerged, a red base, a stuck tab…)
+  // and tells the person (a needs_you notice) and the project's chat once per episode; the claims pick one colour.
+  const stopHealth = startHealthWatcher({ repos, chat, log: fastify.log, active: () => !lifecycle.draining });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
   // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
   const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
@@ -541,6 +545,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopSync();
     watches.stop();
     stopTrustWake();
+    stopHealth();
     notices.stop();
     stopCiSync();
     stopSummaries();

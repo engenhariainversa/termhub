@@ -26,7 +26,7 @@ import { CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_PERSON_CARD, RUN_DONE_NO_PUS
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
-import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
+import { clearMergeWait, noteBaseReading, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
@@ -394,13 +394,20 @@ async function checksGreen(c: PullCtx, row: TaskPullRequest, seen: Map<string, s
  */
 async function baseState(c: PullCtx, baseBranch: string): Promise<'green' | 'red' | 'pending'> {
   const sha = await c.deps.gh.branchSha(c.token, c.repo, baseBranch);
-  if (!sha) return 'red';
+  // TER-1121: every reading is kept for the health watcher, with the workflows behind it
+  const note = (state: 'green' | 'red' | 'pending', failing: WorkflowRun[] = []) => {
+    noteBaseReading(c.project.id, { state, sha, failing: failing.map((r) => r.name) });
+    return state;
+  };
+  if (!sha) return note('red');
   const runs = latestPerWorkflow(await c.deps.ci.listRuns(c.token, c.repo, sha));
   const delivery = [c.setup.repo?.deploy_workflow ?? null, ...c.setup.automation.release_workflows].filter((w): w is string => !!w);
   const isDelivery = (r: WorkflowRun) => delivery.some((w) => matchesWorkflow(r, w));
-  if (runs.length === 0 || runs.some((r) => r.status !== 'completed')) return 'pending';
-  if (runs.some((r) => FAILED.has(r.conclusion ?? '') && !(isDelivery(r) && r.conclusion === 'cancelled'))) return 'red';
-  return 'green';
+  if (runs.length === 0) return note('pending');
+  if (runs.some((r) => r.status !== 'completed')) return note('pending', runs.filter((r) => r.status !== 'completed'));
+  const failed = runs.filter((r) => FAILED.has(r.conclusion ?? '') && !(isDelivery(r) && r.conclusion === 'cancelled'));
+  if (failed.length > 0) return note('red', failed);
+  return note('green');
 }
 
 /** A PR GitHub cannot merge cleanly: one fixer run per head (R2), up to `fix_attempts`, then the person. A

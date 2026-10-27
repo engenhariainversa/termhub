@@ -338,6 +338,8 @@ model Project {
   exclusiveAiAccounts AiAccount[]
   /// Current rules published as pinned ai-memory pages on the project's machines (TER-1019)
   aiMemoryPages       AiMemoryPage[]
+  /// Stalled work the health watcher saw (TER-1121)
+  healthAlerts        ProjectHealthAlert[]
 
   @@index([ownerId])
   @@map("projects")
@@ -1955,6 +1957,38 @@ model AutomationSummary {
 
   @@id([userId, day])
   @@map("automation_summaries")
+}
+
+/// One sign of stalled work the project's health watcher saw (TER-1121): a green PR left unmerged, a red base,
+/// a stuck tab… One row per (project, signal, subject); an episode runs from `firstSeenAt` until the sign is
+/// gone (`resolvedAt`), and seeing it again later starts a new episode on the same row. `wokenAt` and
+/// `noticedAt` are claims: the chat is woken and the person pushed once per episode, whichever colour wins.
+/// Ids, URLs, states and reason codes only — never terminal content.
+model ProjectHealthAlert {
+  id          String    @id
+  projectId   String    @map("project_id")
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// pr_ready | base_red | queue_stalled | tab_stuck | tab_waiting | card_orphan | run_blocked | machine_offline | delivery_failed | agent_outdated
+  signal      String
+  /// what it is about (a PR url, a tab, card, run or machine id, the base branch)
+  subject     String
+  /// needs_you (only the person can act) | concierge (the chat may resolve it)
+  level       String
+  /// { label, url, reason, … } flat strings and numbers for the texts
+  detail      Json      @default("{}")
+  /// when the sign started, as far as the watcher can tell (the PR's last sync, the tab's last event…)
+  sinceAt     DateTime  @map("since_at") @db.Timestamptz
+  firstSeenAt DateTime  @map("first_seen_at") @db.Timestamptz
+  lastSeenAt  DateTime  @map("last_seen_at") @db.Timestamptz
+  /// past its threshold: an open alert (the panel shows it)
+  openedAt    DateTime? @map("opened_at") @db.Timestamptz
+  wokenAt     DateTime? @map("woken_at") @db.Timestamptz
+  noticedAt   DateTime? @map("noticed_at") @db.Timestamptz
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz
+
+  @@unique([projectId, signal, subject])
+  @@index([projectId, resolvedAt])
+  @@map("project_health_alerts")
 }
 
 /// A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate

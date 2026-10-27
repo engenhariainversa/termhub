@@ -121,6 +121,16 @@ export class TaskPullRequestsRepository {
     return (await this.db.taskPullRequest.findMany({ where: { url, project: { ownerId } }, orderBy: [{ syncedAt: 'desc' }] })).map(map);
   }
 
+  /** TER-1121: the project's open PRs and those merged since `mergedSince`, for the health watcher. */
+  async listForHealth(projectId: string, mergedSince: Date): Promise<TaskPullRequest[]> {
+    const rows = await this.db.taskPullRequest.findMany({
+      where: { projectId, OR: [{ state: 'open' }, { state: 'merged', mergedAt: { gt: mergedSince } }] },
+      orderBy: [{ number: 'desc' }],
+      take: 200,
+    });
+    return rows.map(map);
+  }
+
   /**
    * Open PRs of the setup's current repo, and (when a deploy workflow is set: `includeMerged`) its PRs merged
    * less than a day ago whose deploy is not passed/failed yet. Rows of a previous repo are never watched.

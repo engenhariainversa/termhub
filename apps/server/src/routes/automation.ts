@@ -9,6 +9,7 @@ import { listAutomationEvents } from '../automation/events.js';
 import { DEFAULT_FIXER_CI_TEXT, DEFAULT_FIXER_CONFLICT_TEXT, DEFAULT_IMPLEMENTER_TEXT, DEFAULT_INTEGRATOR_TEXT } from '../automation/prompts.js';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { projectUsage } from '../automation/usage.js';
+import { projectHealth } from '../health/view.js';
 
 const id = z.string().min(1).max(64);
 const idParam = z.object({ id });
@@ -18,6 +19,11 @@ export async function projectAutomationRoutes(app: FastifyInstance, repos: Repos
   app.get('/:id/automation/queue', async (request) => {
     const { id } = idParam.parse(request.params);
     return { items: await automationQueue(controlContextForRequest(repos, request), id, requestLocale(request)) };
+  });
+  /** TER-1121: the project's open health alerts ("Saúde do projeto"): stalled work the watcher saw. */
+  app.get('/:id/health', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return projectHealth(controlContextForRequest(repos, request), id, requestLocale(request));
   });
 }
 

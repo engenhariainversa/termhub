@@ -16,6 +16,7 @@ import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMac
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
+import { projectHealth } from '../health/view.js';
 import { policyText } from '../automation/policy.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
@@ -337,6 +338,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
+  },
+  {
+    name: 'get_project_health',
+    description:
+      "The project's open health alerts (TER-1121): stalled work termhub's watcher noticed on its own, oldest first. Each has its signal (pr_ready: a green PR left unmerged, with why it waits; base_red: the base branch red or never finishing; queue_stalled: automatic cards in todo and none started; tab_stuck: a tab working with no event; tab_waiting: a tab waiting on a question, a permission, the folder trust or a login; card_orphan: a card in doing with no tab nor run; run_blocked: a run escalated or blocked with no answer; machine_offline: a machine holding the project's work is offline; delivery_failed: the last merge's deploy or release failed; agent_outdated: a machine's agent below the minimum), level (needs_you = only the person can act; concierge = you may resolve it), the pt-BR text, a url when there is one, the subject's id (tab, card, run or machine), since when and whether the chat was already woken about it. An alert closes by itself once the sign is gone.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => projectHealth(ctx, (a as { project_id: string }).project_id),
   },
   {
     name: 'get_automation_policy',

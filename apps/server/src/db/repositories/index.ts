@@ -52,6 +52,7 @@ import { TaskPullRequestsRepository } from './task-pull-requests.js';
 import { AccountDeletionRepository } from './account-deletion.js';
 import { DataExportsRepository } from './data-exports.js';
 import { AutomationSummariesRepository } from './automation-summaries.js';
+import { HealthAlertsRepository } from './health-alerts.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
 import { AutomationRunsRepository } from './automation-runs.js';
@@ -122,6 +123,7 @@ export interface Repositories {
   dataExports: DataExportsRepository;
   automationPauses: AutomationPausesRepository;
   automationSummaries: AutomationSummariesRepository;
+  healthAlerts: HealthAlertsRepository;
   automationEvents: AutomationEventsRepository;
   automationRuns: AutomationRunsRepository;
   viewAsAudit: ViewAsAuditRepository;
@@ -194,6 +196,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     dataExports: new DataExportsRepository(db),
     automationPauses: new AutomationPausesRepository(db),
     automationSummaries: new AutomationSummariesRepository(db),
+    healthAlerts: new HealthAlertsRepository(db),
     automationEvents: new AutomationEventsRepository(db),
     automationRuns: new AutomationRunsRepository(db),
     viewAsAudit: new ViewAsAuditRepository(db),

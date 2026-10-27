@@ -5,6 +5,7 @@ import { AutomationBadge } from './AutomationBadge';
 import { UsageCost } from './UsageCost';
 import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
+import { ProjectHealthPanel } from './ProjectHealthPanel';
 import { feedLine, feedWhy } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
@@ -286,6 +287,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
         </div>
       </div>
       <PauseBanner projectId={projectId} />
+      <ProjectHealthPanel projectId={projectId} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       {waiting.length > 0 && (
         <div className="rounded-lg border border-amber-500 bg-amber-50 p-3 dark:bg-amber-950">
