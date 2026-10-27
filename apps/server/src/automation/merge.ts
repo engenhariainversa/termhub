@@ -22,7 +22,7 @@ import { epicBranchName, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
-import { CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_PERSON_CARD, RUN_DONE_NO_PUSH } from './escalation-text.js';
+import { CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_NO_CI, MERGE_PERSON_CARD, RUN_DONE_NO_PUSH } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery } from './follower.js';
@@ -60,9 +60,16 @@ export interface MergeDeps {
   /** Green readings per PR (`<project>:<repo>#<n>` → head sha): with no `required_checks`, a merge needs two
    *  in a row (spike R1). Per process; a restart costs one more sync. */
   seen?: Map<string, string>;
+  /** TER-1114: when each PR head was first read with no CI run at all (`<project>:<repo>#<n>` → head and ms).
+   *  Per process, like `seen`; a restart only delays the notice. */
+  noCiSince?: Map<string, { sha: string; at: number }>;
 }
 
 const defaultSeen = new Map<string, string>();
+const defaultNoCiSince = new Map<string, { sha: string; at: number }>();
+
+/** A head with no CI run for this long is told to the person: right after a push GitHub may not have queued its runs yet. */
+export const NO_CI_GRACE_MS = 5 * 60_000;
 
 /** One card per PR head and base (spec §10.1): a push or a retarget makes a new question. */
 export const mergeKey = (repo: string, n: number, sha: string, base: string) => `${MERGE_TOOL}:${repo}#${n}@${sha}->${base}`;
@@ -223,9 +230,9 @@ const sameTarget = (c: PullCtx, row: TaskPullRequest, pull: { head_ref: string; 
  * For each open PR of an automatic card's own branch (`candidateOf`) whose CI is green: merges it (squash,
  * the PR's own title) when the project's level allows what its files need, or asks the owner once per PR head
  * with an irreversible card. Store paths, and a file list GitHub could not give whole, always ask. A PR in
- * conflict gets one fixer run per head, and a red CI one fix request per head (`onRedCi`), both up to
- * `fix_attempts` together. Nothing happens
- * while the instance drains, the project is paused, or its automation is off.
+ * conflict gets one fixer run per head, whatever its CI, and a red CI one fix request per head (`onRedCi`),
+ * both up to `fix_attempts` together; a head with no CI at all is told to the person once (`onNoCi`).
+ * Nothing happens while the instance drains, the project is paused, or its automation is off.
  */
 export async function runMergeExecutor(deps: MergeDeps, projectId: string): Promise<void> {
   const { repos } = deps;
@@ -284,28 +291,34 @@ async function handlePull(c: PullCtx): Promise<void> {
   const row = c.rows[0]!;
   const seen = deps.seen ?? defaultSeen;
   const seenKey = `${c.project.id}:${repo}#${row.number}`;
-  // `none` is never green
-  if (row.ci_state === 'failed' || row.ci_state === 'none') {
-    seen.delete(seenKey);
-    if (row.ci_state === 'failed') await onRedCi(c, row);
-    return;
-  }
-  if (!(await checksGreen(c, row, seen, seenKey))) return;
+  if (row.ci_state === 'failed' || row.ci_state === 'none') seen.delete(seenKey);
+  if (row.ci_state !== 'none') (deps.noCiSince ?? defaultNoCiSince).delete(seenKey);
 
   // a card already asked for this head: act on an approval a missed hook left behind, else wait for the person
   // (a conflict that appears while the card waits is left to the person, who sees it on GitHub)
   const asked = await repos.chatActions.findLatestByKeyInProject(c.project.owner_id, c.project.id, mergeKey(repo, row.number, row.head_sha, row.base_ref!));
-  if (asked) {
-    if (asked.status === 'approved') await mergeApproved(deps, asked.id);
-    else if (asked.status === 'pending') waitOn(c, (asked.args as { needed?: unknown })?.needed === 'store' ? 'merge_store' : 'merge_needs_approval');
+
+  // TER-1114: the conflict comes before the CI gate. GitHub runs no pull_request workflow on a PR in conflict,
+  // so its CI is often `none`, and a red CI on a conflicting head waits for the conflict's fix anyway.
+  const pull = asked ? null : await deps.gh.pull(token, repo, row.number);
+  if (pull) {
+    if (pull.head_sha !== row.head_sha) return; // the head moved since CI: the next sync reads the new one
+    if (!sameTarget(c, row, pull)) return;
+    if (pull.mergeable === false || pull.mergeable_state === 'dirty') return void (await onConflict(c, row, pull.base_ref));
+  }
+
+  // `none` is never green
+  if (row.ci_state === 'failed') return void (await onRedCi(c, row));
+  if (row.ci_state === 'none') return void (await onNoCi(c, row, seenKey));
+  if (!(await checksGreen(c, row, seen, seenKey))) return;
+
+  if (asked || !pull) {
+    if (asked?.status === 'approved') await mergeApproved(deps, asked.id);
+    else if (asked?.status === 'pending') waitOn(c, (asked.args as { needed?: unknown })?.needed === 'store' ? 'merge_store' : 'merge_needs_approval');
     return;
   }
 
-  const pull = await deps.gh.pull(token, repo, row.number);
-  if (pull.head_sha !== row.head_sha) return; // the head moved since CI: the next sync reads the new one
-  if (!sameTarget(c, row, pull)) return;
   if (pull.mergeable === null) return; // GitHub is still computing it
-  if (pull.mergeable === false || pull.mergeable_state === 'dirty') return void (await onConflict(c, row, pull.base_ref));
 
   const delivery = await deliveryGate(c, row, pull);
   if (delivery !== 'ok') {
@@ -401,6 +414,23 @@ async function baseState(c: PullCtx, baseBranch: string): Promise<'green' | 'red
   if (runs.length === 0 || runs.some((r) => r.status !== 'completed')) return 'pending';
   if (runs.some((r) => FAILED.has(r.conclusion ?? '') && !(isDelivery(r) && r.conclusion === 'cancelled'))) return 'red';
   return 'green';
+}
+
+/**
+ * A PR head with no CI run at all (TER-1114): termhub merges only a green CI, so without this the PR would
+ * wait in silence. Past `NO_CI_GRACE_MS` on the same head the queue says why, and the feed (with a push and
+ * a chat line) says it once per PR head, as `onHeld` does.
+ */
+async function onNoCi(c: PullCtx, row: TaskPullRequest, key: string): Promise<void> {
+  const { repos } = c.deps;
+  const since = c.deps.noCiSince ?? defaultNoCiSince;
+  const at = now(c.deps).getTime();
+  const first = since.get(key);
+  if (first?.sha !== row.head_sha) return void since.set(key, { sha: row.head_sha, at });
+  if (at - first.at < NO_CI_GRACE_MS) return;
+  waitOn(c, 'merge_no_ci', row.head_sha);
+  if (await repos.automationEvents.findOnce(c.primary.id, 'escalated', { reason: MERGE_NO_CI, pr: row.number, sha: row.head_sha })) return;
+  await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, MERGE_NO_CI, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha });
 }
 
 /** A PR GitHub cannot merge cleanly: one fixer run per head (R2), up to `fix_attempts`, then the person. A
