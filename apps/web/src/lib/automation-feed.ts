@@ -59,6 +59,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       // TER-1117: answered in the project's own folder, outside any run (the server's line names the tab)
       if (!e.task_id && e.reason_text) return e.reason_text;
       return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
+    case 'workflow_no_runner':
+      // TER-1120: delivered nothing and does not hold the merge queue
+      return t('Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue', { workflow: e.workflow ?? t('sem nome') });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':

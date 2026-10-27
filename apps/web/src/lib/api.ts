@@ -528,6 +528,8 @@ export const api = {
   },
   automation: {
     queue: (projectId: string) => request<{ items: AutomationQueueItem[] }>('GET', `/projects/${projectId}/automation/queue`),
+    /** TER-1120: workflows a push to the base runs that the Setup names nowhere. */
+    workflows: (projectId: string) => request<{ unlisted: Array<{ name: string; path: string }> }>('GET', `/projects/${projectId}/automation/workflows`),
     /** Tokens and cost per card, epic and account; `from`/`to` are `YYYY-MM-DD` (open when absent). */
     usage: (projectId: string, range: { from?: string; to?: string } = {}) => {
       const q = new URLSearchParams(Object.entries(range).filter((e): e is [string, string] => typeof e[1] === 'string')).toString();

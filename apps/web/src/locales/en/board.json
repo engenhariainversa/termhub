@@ -463,5 +463,8 @@
   "Similaridade: {{score}}%": "Similarity: {{score}}%",
   "Lições do ai-memory": "ai-memory lessons",
   "Importar as páginas deliberadas do ai-memory como lições não verificadas": "Import deliberate ai-memory pages as unverified lessons",
-  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Reads only this project's _rules/, gotchas/ and decisions/ pages in the ai-memory of each linked machine; sessions, observations and handoffs never leave the machine. The lessons show up in Chat memory, for you to verify or discard."
+  "Lê só as páginas _rules/, gotchas/ e decisions/ deste projeto no ai-memory de cada máquina vinculada; sessões, observações e handoffs nunca saem da máquina. As lições aparecem em Memória do chat, para você verificar ou descartar.": "Reads only this project's _rules/, gotchas/ and decisions/ pages in the ai-memory of each linked machine; sessions, observations and handoffs never leave the machine. The lessons show up in Chat memory, for you to verify or discard.",
+  "Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue": "Workflow {{workflow}} cancelled without a runner on the base branch; the merge queue goes on",
+  "sem nome": "unnamed",
+  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "These run on a push to the base branch and are not the deploy, a release workflow or a required check: {{list}}. If one publishes something, add it here; a failure of it on the base holds the merge queue."
 }

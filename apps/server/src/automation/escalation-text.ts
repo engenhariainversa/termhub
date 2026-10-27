@@ -38,6 +38,8 @@ export const ACCOUNT_EXCLUSIVE = 'account_exclusive';
 export const CONFLICT_CAP = 'conflict_cap';
 /** TER-1004: a green PR of an automatic card that also cites a person's card not yet done: a person merges it (or drops the citation). */
 export const MERGE_PERSON_CARD = 'merge_person_card';
+/** TER-1120: the base branch's head stayed red past BASE_RED_ESCALATE_MS while a ready PR waited on it: nothing is merged until it is green. */
+export const MERGE_BASE_RED = 'merge_base_red';
 /** TER-1114: a PR whose head has had no CI run at all for a while: termhub only merges a green CI, so it waits for a person. */
 export const MERGE_NO_CI = 'merge_no_ci';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
@@ -100,6 +102,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [MERGE_PERSON_CARD]: tk('O PR está verde, mas cita um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão ou tire a citação do PR.'),
   [MERGE_NO_CI]: tk('O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
+  [MERGE_BASE_RED]: tk('A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.'),
 };
 
 /** What a reason with no text of its own shows. */
@@ -126,8 +129,17 @@ export function escalationEventText(payload: Record<string, unknown>, locale: Lo
   const reason = typeof payload.reason === 'string' ? payload.reason : '';
   const sha = typeof payload.sha === 'string' && payload.sha ? payload.sha.slice(0, 7) : null;
   const cause = typeof payload.cause === 'string' ? payload.cause : '';
+  if (reason === MERGE_BASE_RED) return baseRedText(payload, locale);
   if (reason !== CONFLICT_CAP || !sha) return escalationReasonText(reason, locale);
   return t(locale, CONFLICT_TEXT[cause] ?? CONFLICT_TEXT['']!, { sha });
+}
+
+/** A red base escalation (TER-1120) names its head and the workflow that left it red, when it knows them. */
+export function baseRedText(payload: Record<string, unknown>, locale: Locale = DEFAULT_LOCALE): string {
+  const sha = typeof payload.base_sha === 'string' && payload.base_sha ? payload.base_sha.slice(0, 7) : null;
+  const workflow = typeof payload.workflow === 'string' && payload.workflow ? payload.workflow : null;
+  if (!sha || !workflow) return escalationReasonText(MERGE_BASE_RED, locale);
+  return t(locale, 'A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.', { sha, workflow });
 }
 
 /** `escalationText`, or the generic text for a reason with none. */

@@ -519,7 +519,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
   // draining colour claims, types and takes over nothing.
-  const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) } });
+  const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) }, merge: { wakeBaseRed: (i) => waker.wakeForBaseRed(i) } });
   // The CI panel's poll, then the merge executor for projects with automation on (spec §10.1); approving a
   // merge card in the chat merges that PR once (F-19).
   const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });

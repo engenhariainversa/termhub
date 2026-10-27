@@ -11,6 +11,8 @@ export interface WorkflowRun {
   created_at: string;
   /** When the run last changed (its end, for a finished one); absent in older fixtures. */
   updated_at?: string;
+  /** What started it (`push`, `pull_request`, `workflow_dispatch`…); absent in older fixtures. */
+  event?: string;
 }
 
 export const FAILED = new Set(['failure', 'timed_out', 'cancelled', 'action_required', 'startup_failure', 'stale']);
