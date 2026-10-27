@@ -16,6 +16,9 @@ export const MAX_WORKING_INTERVAL_S = 7200;
  */
 const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished', 'blocked', 'auth_required', 'trust_prompt'];
 
+/** How many tabs one pass of the stale working sweep lists (`listStaleWorking`). */
+export const STALE_WORKING_LIMIT = 500;
+
 const metaOf = (meta: unknown): Record<string, unknown> => (meta && typeof meta === 'object' && !Array.isArray(meta) ? (meta as Record<string, unknown>) : {});
 
 /** The hook event name an event row carries in its meta (`{ event: 'Stop', … }`), or null. */
@@ -134,9 +137,11 @@ export class TabsRepository {
   /**
    * Claude Code and Codex tabs left `working` (or `waiting_background`, TER-644) with no hook event since
    * `before` (TER-615), oldest first, at most `limit`: the tabs the monitor looks at again
-   * (monitor/stale-working.ts).
+   * (monitor/stale-working.ts). The limit is wide on purpose (TER-1133): tabs that stay on this list for good
+   * (on a machine that is offline, Codex tabs, whose screen has no rule) are the oldest, and a short limit
+   * would keep the newer ones out of every pass.
    */
-  async listStaleWorking(before: Date, limit = 50): Promise<Tab[]> {
+  async listStaleWorking(before: Date, limit = STALE_WORKING_LIMIT): Promise<Tab[]> {
     const rows = await this.db.tab.findMany({
       where: { kind: 'terminal', tmuxSession: { not: null }, state: { in: ['working', 'waiting_background'] }, stateTool: { in: ['claude', 'codex'] }, stateAt: { lt: before } },
       orderBy: [{ stateAt: 'asc' }],
@@ -252,7 +257,14 @@ export class TabsRepository {
         hasActivity: !!current?.activity,
         seenAgeMs: current?.stateSeenAt ? at.getTime() - current.stateSeenAt.getTime() : null,
       };
-      const incoming = { kind: event.kind, name: eventName(event.meta), continuesWait: !!event.continuesWait, keepsWaitText: !!event.keepsWaitText, subagent: subagentOf(event.meta) };
+      const incoming = {
+        kind: event.kind,
+        name: eventName(event.meta),
+        continuesWait: !!event.continuesWait,
+        keepsWaitText: !!event.keepsWaitText,
+        subagent: subagentOf(event.meta),
+        compaction: eventName(event.meta) === 'SessionStart' && metaOf(event.meta).source === 'compact',
+      };
       const expected: readonly (TabState | null)[] = event.ifStateIn ?? ['working', 'waiting_background'];
       const unchanged = expected.includes((current?.state ?? null) as TabState | null) && (current?.stateAt?.toISOString() ?? null) === event.ifStateAt;
       const outdated = event.ifStateAt !== undefined && !unchanged;

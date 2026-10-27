@@ -22,6 +22,13 @@ describe('interpretHookEvent — claude', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'UserPromptSubmit', prompt: 'secret plans' })).toEqual({ kind: 'working', text: null, meta: { event: 'UserPromptSubmit' } });
   });
 
+  it("keeps what started a session (TER-1133): a compaction is told apart, anything else of the payload is not kept", () => {
+    expect(interpretHookEvent('claude', { hook_event_name: 'SessionStart', source: 'compact', model: 'x' })).toEqual({ kind: 'working', text: null, meta: { event: 'SessionStart', source: 'compact' } });
+    expect(interpretHookEvent('claude', { hook_event_name: 'SessionStart', source: 'startup' })?.meta).toEqual({ event: 'SessionStart', source: 'startup' });
+    expect(interpretHookEvent('claude', { hook_event_name: 'SessionStart', source: 'something else' })?.meta).toEqual({ event: 'SessionStart' });
+    expect(interpretHookEvent('claude', { hook_event_name: 'SessionStart' })?.meta).toEqual({ event: 'SessionStart' });
+  });
+
   it('treats a finished turn as waiting for the person, like Codex', () => {
     expect(interpretHookEvent('claude', { hook_event_name: 'Stop', stop_hook_active: false })).toEqual({ kind: 'waiting_input', text: null, meta: { event: 'Stop' } });
     expect(interpretHookEvent('claude', { hook_event_name: 'Stop', last_assistant_message: '  Pronto. Posso seguir?  ' })?.text).toBe('Pronto. Posso seguir?');
