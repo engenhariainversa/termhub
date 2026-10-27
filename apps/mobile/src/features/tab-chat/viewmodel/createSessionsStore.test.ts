@@ -92,9 +92,32 @@ describe('starting a session', () => {
     expect(sessions.getState().startError).toBe('Mensagem longa demais (máximo de 4000 caracteres)');
   });
 
-  it("projectMachines lists the machines of the project's accounts once each", async () => {
+  it("startOptions lists the project's machines with their accounts (TER-1119)", async () => {
     const { sessions } = await setup();
-    expect(await sessions.getState().projectMachines('p-termhub')).toEqual([{ id: 'm-jarvis', name: 'jarvis' }]);
-    expect(await sessions.getState().projectMachines('p-nope')).toEqual([]);
+    const machines = await sessions.getState().startOptions('p-termhub');
+    expect(machines.map((m) => [m.id, m.online, m.choices.length, m.suggested])).toEqual([
+      ['m-jarvis', true, 2, 'acc-claude'],
+      ['m-hulk', false, 0, null],
+    ]);
+    expect(await sessions.getState().startOptions('p-nope')).toEqual([]);
+  });
+
+  it('an older server without start-options falls back to the machines of the project\'s accounts', async () => {
+    const { sessions, api } = await setup();
+    jest.spyOn(api, 'sessionStartOptions').mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'Not Found'));
+    expect(await sessions.getState().startOptions('p-termhub')).toEqual([
+      {
+        id: 'm-jarvis',
+        name: 'jarvis',
+        online: true,
+        suggested: null,
+        provider: null,
+        choices: [
+          { account_id: 'acc-1', label: 'Claude Pedro', provider: 'claude', model: null },
+          { account_id: 'acc-2', label: 'Claude Trabalho', provider: 'claude', model: null },
+          { account_id: 'acc-3', label: 'Codex Pedro', provider: 'chatgpt', model: null },
+        ],
+      },
+    ]);
   });
 });
