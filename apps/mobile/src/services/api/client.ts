@@ -58,6 +58,7 @@ import {
   tabLimitAnswerResponse,
   tabQuestionAutoAnswerCancelResponse,
   tabQuestionScreenResponse,
+  sessionStartOptions,
   startSessionResponse,
   tabActionResponse,
   tabChatPage,
@@ -464,6 +465,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     fileRecent: (a: Auth, projectId: string) =>
       call('GET', `/api/m/v1/file-recent?project_id=${encodeURIComponent(projectId)}`, fileRecentResponse, { token: a.accessToken }),
     tabs: (a: Auth) => call('GET', '/api/m/v1/tabs', tabsResponse, { token: a.accessToken }),
+    sessionStartOptions: (a: Auth, projectId: string) => call('GET', `/api/m/v1/tabs/start-options?project_id=${encodeURIComponent(projectId)}`, sessionStartOptions, { token: a.accessToken }),
     startSession: (a: Auth, body: TStartSessionBody) => call('POST', '/api/m/v1/tabs', startSessionResponse, { token: a.accessToken, body }),
     tabChat: (a: Auth, tabId: string, before?: string) =>
       call('GET', `/api/m/v1/tabs/${encodeURIComponent(tabId)}/chat${before ? `?before=${encodeURIComponent(before)}` : ''}`, tabChatPage, { token: a.accessToken }),
