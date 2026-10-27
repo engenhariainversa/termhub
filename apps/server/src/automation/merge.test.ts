@@ -11,6 +11,9 @@ import { epicBranchName } from './branches.js';
 import type { TriggeredStart } from './dispatcher.js';
 import { mergeApproved, mergeKey, MERGE_TOOL, runMergeExecutor, type MergeDeps } from './merge.js';
 import { mergeWaitEntryOf, mergeWaitOf, resetMergeWaits } from './merge-wait.js';
+import { resetPushOnlyWorkflows, unlistedWorkflows } from './unlisted-workflows.js';
+import type { RunJob } from '../integrations/github-ci.js';
+import { BASE_RED_ESCALATE_MS } from './merge.js';
 
 // The card's sentence is built from many repositories; what matters here is that the card is asked and published.
 vi.mock('../db/repositories/chat-actions-view.js', () => ({ describeActions: vi.fn(async (_r: unknown, rows: ChatAction[]) => rows.map(() => ({ summary: 's', subagent: null }))) }));
@@ -107,7 +110,14 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       // the unique index of ci_fix_requested (task, pr, sha); a tick before the check lets two passes interleave
       insertOnce: vi.fn(async (e: { kind: string; task_id: string; payload: Record<string, unknown> }) => {
         await Promise.resolve();
-        if (state.events.some((x) => x.kind === e.kind && x.task_id === e.task_id && x.payload?.pr === e.payload.pr && x.payload?.sha === e.payload.sha)) return null;
+        // TER-1120: a red base once per project and base head, a no-runner warning once per run
+        const same = (x: { kind: string; task_id?: string | null; payload?: Record<string, unknown> }) =>
+          e.kind === 'workflow_no_runner'
+            ? x.payload?.run_id === e.payload.run_id
+            : e.payload.reason === 'merge_base_red'
+              ? x.payload?.reason === 'merge_base_red' && x.payload?.base_sha === e.payload.base_sha
+              : x.task_id === e.task_id && x.payload?.pr === e.payload.pr && x.payload?.sha === e.payload.sha;
+        if (state.events.some((x) => x.kind === e.kind && same(x))) return null;
         const row = { id: `ev${++state.eventSeq}`, created_at: '', ...e };
         state.events.push(row);
         return row;
@@ -217,7 +227,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   const seen = new Map([['p1:acme/app#7', 'h1']]);
   const removeWorkspace = vi.fn(async (_m: unknown, _i: { repoDir: string; root: string; path: string }) => ({ removed: true, dirty: false }));
   const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
-  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z') };
+  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z'), redSince: new Map(), neverStarted: new Map() };
   return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor, removeWorkspace, closeTab };
 }
 
@@ -227,6 +237,7 @@ const approve = (a: ChatAction) => {
 
 beforeEach(() => {
   resetMergeWaits();
+  resetPushOnlyWorkflows();
   setCiError('p1', null);
 });
 
@@ -344,6 +355,100 @@ describe('runMergeExecutor', () => {
       expect(w.gh.merge).toHaveBeenCalledTimes(wait ? 0 : 1);
       if (wait) expect(mergeWaitOf('c2', new Date('2026-10-05T12:00:00Z'))).toBe(wait);
     }
+  });
+
+  // TER-1120: "Mobile TestFlight (hulk)" sat a day in the queue with no runner and ended cancelled
+  describe('a red base (TER-1120)', () => {
+    const setup = setupWith({ autonomy: 'deploy', release_workflows: ['publish-agent.yml'] }, { deploy_workflow: 'deploy.yml' });
+    const T0 = new Date('2026-10-05T12:00:00Z').getTime();
+    const queued: RunJob[] = [{ name: 'build', status: 'completed', conclusion: 'cancelled', steps: [], runner_name: null }];
+    const started: RunJob[] = [{ name: 'build', status: 'completed', conclusion: 'cancelled', steps: [{ name: 'checkout', conclusion: 'success' }], runner_name: 'hulk' }];
+
+    function redBase(baseRuns: WorkflowRun[], jobs: RunJob[] = queued) {
+      const w = world({ setup, prs: [pr({ task_id: 'c2', base_ref: 'main' })] });
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? baseRuns : [run('ci', 'completed', 'success')]));
+      const runJobs = vi.fn(async () => jobs);
+      const wakeBaseRed = vi.fn(async () => true);
+      let at = T0;
+      Object.assign(w.deps, { ci: { ...w.ci, runJobs }, wakeBaseRed, now: () => new Date(at) });
+      return { ...w, runJobs, wakeBaseRed, later: (ms: number) => (at += ms) };
+    }
+
+    it('a workflow cancelled before any job got a runner does not hold the queue, and is reported once', async () => {
+      const w = redBase([run('ci', 'completed', 'success', 1), run('mobile-testflight', 'completed', 'cancelled', 2)]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.runJobs).toHaveBeenCalledWith('tok', 'acme/app', 2);
+      expect(w.gh.merge).toHaveBeenCalledTimes(1);
+      const warned = w.state.events.filter((e) => e.kind === 'workflow_no_runner');
+      expect(warned).toHaveLength(1);
+      expect(warned[0]!.payload).toMatchObject({ run_id: '2', workflow: 'mobile-testflight', sha: 'base1' });
+      expect(w.state.messages.some((m) => m.includes('mobile-testflight') && m.includes('sem runner'))).toBe(true);
+      // the next PR on the same base reads the run from the cache: no second read, no second warning
+      w.state.prs = [pr({ task_id: 'c2', base_ref: 'main', number: 8, head_sha: 'h2' })];
+      w.gh.pull.mockResolvedValue(w.pullFor({ head_sha: 'h2', base_ref: 'main' }));
+      w.seen.set('p1:acme/app#8', 'h2');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.runJobs).toHaveBeenCalledTimes(1);
+      expect(w.state.events.filter((e) => e.kind === 'workflow_no_runner')).toHaveLength(1);
+    });
+
+    it('a cancelled workflow whose job ran on a runner still makes the base red', async () => {
+      const w = redBase([run('ci', 'completed', 'success', 1), run('mobile-testflight', 'completed', 'cancelled', 2)], started);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(mergeWaitEntryOf('c2', new Date(T0))).toMatchObject({ wait: 'merge_base_red', detail: 'mobile-testflight' });
+      expect(w.state.events.some((e) => e.kind === 'workflow_no_runner')).toBe(false);
+    });
+
+    it('a real red base is escalated once per base head, after it held a ready PR for 15 minutes', async () => {
+      const w = redBase([run('ci', 'completed', 'failure', 1)]);
+      await runMergeExecutor(w.deps, 'p1');
+      w.later(BASE_RED_ESCALATE_MS - 60_000);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+      w.later(60_000);
+      await runMergeExecutor(w.deps, 'p1');
+      await runMergeExecutor(w.deps, 'p1');
+      const escalated = w.state.events.filter((e) => e.kind === 'escalated');
+      expect(escalated).toHaveLength(1);
+      expect(escalated[0]).toMatchObject({ task_id: 'c2', payload: { reason: 'merge_base_red', base: 'main', base_sha: 'base1', workflow: 'ci', run_url: 'r/ci', pr: 7 } });
+      expect(w.wakeBaseRed).toHaveBeenCalledTimes(1);
+      expect(w.wakeBaseRed).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', cardRef: 'TER-6', pr: 7, baseBranch: 'main', baseSha: 'base1', workflow: 'ci' }));
+      expect(w.state.messages.some((m) => m.includes('TER-6') && m.includes('base1'.slice(0, 7)) && m.includes('«ci»'))).toBe(true);
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      // a new base head that is red again is told again, once it held the PR as long
+      w.gh.branchSha.mockResolvedValue('base2');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(1);
+      w.later(BASE_RED_ESCALATE_MS);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated').map((e) => e.payload?.base_sha)).toEqual(['base1', 'base2']);
+      expect(w.wakeBaseRed).toHaveBeenCalledTimes(2);
+    });
+
+    it('a base that turns green between readings starts the 15 minutes over', async () => {
+      const w = redBase([run('ci', 'completed', 'failure', 1)]);
+      await runMergeExecutor(w.deps, 'p1');
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? [run('ci', 'in_progress', null, 1)] : [run('ci', 'completed', 'success')]));
+      w.later(BASE_RED_ESCALATE_MS);
+      await runMergeExecutor(w.deps, 'p1');
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? [run('ci', 'completed', 'failure', 1)] : [run('ci', 'completed', 'success')]));
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    });
+
+    it('a workflow only a push to the base runs, named nowhere in the Setup, is the Setup warning', async () => {
+      const push = (name: string, id: number): WorkflowRun => ({ ...run(name, 'completed', 'success', id), event: 'push' });
+      const w = redBase([push('ci', 1), push('deploy', 2), push('mobile-testflight', 3), { ...run('nightly', 'completed', 'success', 4), event: 'schedule' }]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(unlistedWorkflows('p1', setup)).toEqual([{ name: 'mobile-testflight', path: '.github/workflows/mobile-testflight.yml' }]);
+      // named as a release workflow, it is no longer a warning
+      expect(unlistedWorkflows('p1', setupWith({ release_workflows: ['mobile-testflight.yml'] }, { deploy_workflow: 'deploy.yml' }))).toEqual([]);
+      // read once per base head
+      const reads = w.ci.listRuns.mock.calls.filter(([, , sha]) => sha === 'h1').length;
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.ci.listRuns.mock.calls.filter(([, , sha]) => sha === 'h1').length).toBe(reads);
+    });
   });
 
   it('a PR into the base that is behind it (compared explicitly) is updated and waits for CI again', async () => {
@@ -1194,7 +1299,7 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     Object.assign(w.state.runs[0]!, { status: 'done', ended_at: NOW });
     await runMergeExecutor(w.deps, 'p1');
     expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', sha: 'h1', cause: 'fixer_no_push' }) })]);
-    expect(mergeWaitEntryOf('c1', NOW)).toEqual({ wait: 'merge_conflict_cap', sha: 'h1' });
+    expect(mergeWaitEntryOf('c1', NOW)).toEqual({ wait: 'merge_conflict_cap', sha: 'h1', detail: null });
 
     // a new run of the card works and reports done, but pushes nothing: h1 is still the head, still in conflict
     w.state.runs.push({ id: 'again', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'running', waiting_reason: null, tab_id: 'tab2', branch: BRANCH.c1!, fix_count: 0 });

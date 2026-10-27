@@ -10,6 +10,8 @@ export const MERGE_WAIT_TTL_MS = 3 * 60_000;
 export interface MergeWaitEntry {
   wait: MergeWait;
   sha: string | null;
+  /** What the text names besides the reason: the workflow that left the base red (TER-1120). */
+  detail?: string | null;
 }
 
 /**
@@ -18,8 +20,8 @@ export interface MergeWaitEntry {
  */
 const waits = new Map<string, MergeWaitEntry & { at: number }>();
 
-export function noteMergeWait(taskIds: string[], wait: MergeWait, now: Date, sha: string | null = null): void {
-  for (const id of taskIds) waits.set(id, { wait, sha, at: now.getTime() });
+export function noteMergeWait(taskIds: string[], wait: MergeWait, now: Date, sha: string | null = null, detail: string | null = null): void {
+  for (const id of taskIds) waits.set(id, { wait, sha, detail, at: now.getTime() });
 }
 
 export function clearMergeWait(taskIds: string[]): void {
@@ -33,7 +35,7 @@ export function mergeWaitEntryOf(taskId: string, now: Date = new Date()): MergeW
     waits.delete(taskId);
     return null;
   }
-  return { wait: w.wait, sha: w.sha };
+  return { wait: w.wait, sha: w.sha, detail: w.detail ?? null };
 }
 
 export function mergeWaitOf(taskId: string, now: Date = new Date()): MergeWait | null {

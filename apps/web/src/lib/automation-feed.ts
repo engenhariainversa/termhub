@@ -57,6 +57,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return t('{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar', { ref });
     case 'trust_auto_accepted':
       return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
+    case 'workflow_no_runner':
+      // TER-1120: delivered nothing and does not hold the merge queue
+      return t('Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue', { workflow: e.workflow ?? t('sem nome') });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':

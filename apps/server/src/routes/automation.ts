@@ -9,6 +9,7 @@ import { listAutomationEvents } from '../automation/events.js';
 import { DEFAULT_FIXER_CI_TEXT, DEFAULT_FIXER_CONFLICT_TEXT, DEFAULT_IMPLEMENTER_TEXT, DEFAULT_INTEGRATOR_TEXT } from '../automation/prompts.js';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { projectUsage } from '../automation/usage.js';
+import { unlistedWorkflows } from '../automation/unlisted-workflows.js';
 
 const id = z.string().min(1).max(64);
 const idParam = z.object({ id });
@@ -48,6 +49,13 @@ export async function projectAutomationEventRoutes(app: FastifyInstance, repos: 
     const { id } = idParam.parse(request.params);
     const q = usageQuery.parse(request.query);
     return projectUsage(controlContextForRequest(repos, request), id, q);
+  });
+  /** TER-1120: the workflows a push to the base runs that the Setup names nowhere (deploy, release, required checks). */
+  app.get('/:id/automation/workflows', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const { project } = await controlContextForRequest(repos, request).scoped.project(id);
+    const setup = (await repos.projectSetup.get(project.id)).data;
+    return { unlisted: unlistedWorkflows(project.id, setup) };
   });
 }
 

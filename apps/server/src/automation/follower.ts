@@ -9,7 +9,7 @@ import type { PaneForeground } from '@termhub/machine-ops';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
-import { localeOf, msg, t } from '../i18n/index.js';
+import { localeOf, msg, t, type Locale } from '../i18n/index.js';
 import { chatBus } from '../chat/bus.js';
 import type { AutomationEventPayload } from '../db/repositories/automation-events.js';
 import type { StoppedTabWake } from '../chat/wake.js';
@@ -163,7 +163,7 @@ function writeRun(repos: Repositories, run: AutomationRun, patch: Pick<Automatio
  * active conversation, opened when there is none. `detail` — the chat's or the agent's own words —
  * replaces the reason's text here only; it is never put in an event. Never throws.
  */
-async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 'id' | 'project_id' | 'task_id' | 'tab_id'>, reason: string, detail: string | null, log: Log): Promise<void> {
+export async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 'id' | 'project_id' | 'task_id' | 'tab_id'>, reason: string, detail: string | null | ((locale: Locale) => string), log: Log): Promise<void> {
   try {
     const project = await repos.projects.findById(run.project_id);
     if (!project?.owner_id) return;
@@ -171,7 +171,7 @@ async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 
     const [owner, task] = await Promise.all([repos.users.findById(ownerId), run.task_id ? repos.tasks.findById(run.task_id) : undefined]);
     if (!owner) return;
     const locale = localeOf(owner.locale);
-    const why = detail?.trim() || escalationReasonText(reason, locale);
+    const why = (typeof detail === 'function' ? detail(locale) : detail?.trim()) || escalationReasonText(reason, locale);
     const latest = CARD_REASONS.has(reason) && run.tab_id ? await repos.tabQuestions.latestQuestionForTab(run.tab_id) : undefined;
     // the card the escalation is about: still open (or, for question_expired, the one that closed unanswered),
     // the owner's, in a conversation still on screen — never an older answered card

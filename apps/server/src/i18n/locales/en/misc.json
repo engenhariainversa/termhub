@@ -142,5 +142,8 @@
   "nenhuma decisão sua na memória para esta pergunta": "no decision of yours in memory for this question",
   "a decisão mais parecida não era próxima o bastante para responder sozinho": "the closest decision was not close enough to answer alone",
   "a resposta automática foi cancelada ou não saiu": "the automatic answer was cancelled or did not go out",
-  "nenhuma regra do projeto libera esta permissão": "no project rule allows this permission"
+  "nenhuma regra do projeto libera esta permissão": "no project rule allows this permission",
+  "A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.": "The base branch is red and holds the ready PRs; nothing is merged until it is green. Check the run that failed.",
+  "A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.": "The base branch is red at {{sha}} because of “{{workflow}}” and holds the ready PRs; nothing is merged until it is green. Check the run.",
+  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "The workflow “{{workflow}}” was cancelled without running at {{sha}} (no runner took it); nothing was delivered and the merge queue goes on: {{url}}"
 }

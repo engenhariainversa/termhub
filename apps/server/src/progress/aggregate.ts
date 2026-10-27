@@ -214,6 +214,8 @@ export const FEED_KINDS = [
   'run_cancelled', 'permission_auto_approved', 'guard_blocked',
   // TER-1025
   'deploy_retried', 'github_wait', 'trust_auto_accepted',
+  // TER-1120: a base workflow cancelled without a runner (the app's feed skips it until it has a line)
+  'workflow_no_runner',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
