@@ -68,11 +68,27 @@ const CODEX_TEXT: Record<string, { title: string; hint: string; install: string 
   },
 };
 
+/** A tab whose CLI never reported (TER-1118): it may run Claude Code or Codex, so the wording names both. */
+const UNKNOWN_TEXT: Record<string, { title: string; hint: string; install: string | null }> = {
+  no_hooks: {
+    title: tk('Sem histórico: a máquina não tem os hooks do termhub'),
+    hint: tk('O histórico desta aba vem do Claude Code ou do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o agente nesta aba (claude --continue ou codex resume retomam a conversa): a partir daí ela aparece aqui.'),
+    install: tk('Instalar hooks'),
+  },
+  not_reported: {
+    title: tk('O agente desta aba ainda não informou a sessão'),
+    hint: tk('O histórico aparece assim que o Claude Code ou o Codex rodar nesta aba com os hooks do termhub. Se ele já estava aberto antes dos hooks, reinicie-o (claude --continue ou codex resume retomam a conversa); se nada mudar, reinstale os hooks em {{machine}}.'),
+    install: tk('Reinstalar hooks'),
+  },
+};
+
 /** What the empty conversation says for `reason`; the generic line for null or a reason this build does not know. `agent`
- * is the tab's CLI (`TTabSummary.agent`): a Codex tab gets Codex's wording. */
+ * is the tab's CLI (`TTabSummary.agent`): a Codex tab gets Codex's wording, and one that never reported (null) a
+ * wording that fits either CLI where Claude Code's would guess. */
 export function emptyReasonText(reason: string | null, machine: string, agent: string | null = null): EmptyReasonText {
   const codex = agent === 'codex';
-  const table = codex && reason !== null && Object.prototype.hasOwnProperty.call(CODEX_TEXT, reason) ? CODEX_TEXT : TEXT;
+  const own = codex ? CODEX_TEXT : agent === null ? UNKNOWN_TEXT : TEXT;
+  const table = reason !== null && Object.prototype.hasOwnProperty.call(own, reason) ? own : TEXT;
   const entry = reason !== null && Object.prototype.hasOwnProperty.call(table, reason) ? table[reason]! : null;
   if (!entry) return { title: t('Nenhuma mensagem ainda'), hint: codex ? t('Escreva abaixo para falar com o Codex nesta aba.') : t('Escreva abaixo para falar com o Claude nesta aba.'), install: null };
   return { title: t(entry.title), hint: t(entry.hint, { machine }), install: entry.install ? t(entry.install) : null };
