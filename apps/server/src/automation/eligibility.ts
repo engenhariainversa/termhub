@@ -44,7 +44,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   not_in_todo: tk('Fora da coluna A fazer'),
   no_description: tk('Sem descrição'),
   has_agent: tk('Já tem um agente'),
-  no_capable_machine: tk('Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente'),
+  no_capable_machine: tk('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente'),
   repo_missing: tk('Repositório não configurado no Setup'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
