@@ -100,6 +100,7 @@ import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
 import { startAutomation } from './automation/start.js';
+import { reopenRunInTab } from './automation/post-run.js';
 import { TranscriptionService } from './terminal/transcription.js';
 import { createUpgradeRouter } from './ws/router.js';
 import { createAccessLogRecorder, registerAccessLog, upgradeClientIp } from './access-log/recorder.js';
@@ -342,7 +343,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => fileRecentRoutes(a, repos), '/file-recent');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
-      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
+      await guarded('terminals', (a) => hooksRoutes(a, repos, {
+          waker,
+          onTabEvent: (tabId) => tabChat.poke(tabId),
+          // TER-1112: a guard block in a tab whose run ended wakes the chat; a request typed there reopens a run
+          postRunWaker: waker,
+          reopenRun: (tab) => reopenRunInTab({ repos, instance: automation.instance, lifecycle, log: fastify.log }, tab),
+        }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
       // "Refazer login" of an account (TER-1047); the app registers the same plugin.
       await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
@@ -374,7 +381,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   );
 
   // --- MCP endpoint for the global terminal (public route: a personal API token authenticates each call) ---
-  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes } }));
+  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes }, postRunWaker: waker }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
   if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));

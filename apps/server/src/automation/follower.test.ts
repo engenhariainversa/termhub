@@ -743,7 +743,8 @@ describe('report_card (spec D17, F-8)', () => {
   it('a run already ended by the PR fallback is not ended twice', async () => {
     const w = world({ prs: [{ state: 'open', head_ref: 'TER-1-card', url: 'u', number: 4 }] });
     await followRun(w.deps, w.run.id);
-    await expect(reportCard(tabCtx(w.repos), { status: 'done' })).rejects.toMatchObject({ code: 'NO_RUN' });
+    const ctx = { ...tabCtx(w.repos), scope: { user: { locale: 'pt-BR' } } } as unknown as ControlContext;
+    expect(await reportCard(ctx, { status: 'done' })).toEqual({ ok: true, message: 'O trabalho automático desta aba já tinha terminado; nada foi alterado' });
     expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
   });
 });
@@ -786,9 +787,11 @@ describe('report_card done after the run ended blocked (spike TER-1031 §5.4)', 
     expect(w.run.status).toBe('blocked');
   });
 
-  it('another run\'s tab, a run past the window, a newer run of the card or a fixer get today\'s refusal', async () => {
+  it('another run\'s tab is refused; a run past the window, a newer run of the card or a fixer change nothing (TER-1112)', async () => {
+    const other = blocked({ prs: [PR] });
+    expect(await tabMayReport(ctxOf(other.repos, 'other-tab'))).toBe(false);
+    await expect(reportCard(ctxOf(other.repos, 'other-tab'), { status: 'done', pr_url: PR.url })).rejects.toMatchObject({ code: 'NO_RUN' });
     const cases = [
-      { tabId: 'other-tab', w: blocked({ prs: [PR] }) },
       { tabId: 'tab1', w: blocked({ prs: [PR], run: { ended_at: new Date(Date.now() - ADOPT_WINDOW_MS - 60_000) } }) },
       { tabId: 'tab1', w: blocked({ prs: [PR], newerRun: { id: 'run-newer', status: 'done' } }) },
       { tabId: 'tab1', w: blocked({ prs: [PR], run: { role: 'fixer' } }) },
@@ -797,8 +800,10 @@ describe('report_card done after the run ended blocked (spike TER-1031 §5.4)', 
       { tabId: 'tab1', w: blocked({ prs: [PR], run: { status: 'failed' } }) },
     ];
     for (const { tabId, w } of cases) {
-      expect(await tabMayReport(ctxOf(w.repos, tabId))).toBe(false);
-      await expect(reportCard(ctxOf(w.repos, tabId), { status: 'done', pr_url: PR.url })).rejects.toMatchObject({ code: 'NO_RUN' });
+      // the tab's run ended, so the tool is there for a block (TER-1112); done adopts nothing
+      expect(await tabMayReport(ctxOf(w.repos, tabId))).toBe(true);
+      expect(await reportCard(ctxOf(w.repos, tabId), { status: 'done', pr_url: PR.url })).toMatchObject({ ok: true, message: expect.stringContaining('nada foi alterado') });
+      expect(w.run.status).toBe(w.run.status === 'failed' ? 'failed' : 'blocked');
       expect(w.kinds()).toEqual([]);
     }
   });
@@ -807,6 +812,45 @@ describe('report_card done after the run ended blocked (spike TER-1031 §5.4)', 
     const w = blocked({ prs: [PR] });
     expect(await tabHasActiveRun(ctxOf(w.repos))).toBe(false);
     await expect(getRunCard(ctxOf(w.repos))).rejects.toMatchObject({ code: 'NO_RUN' });
+  });
+});
+
+describe('report_card in a tab whose run already ended (TER-1112)', () => {
+  const ended = new Date(Date.now() - 60 * 60_000);
+  const ctxOf = (repos: Repositories, postRunWaker?: ControlContext['postRunWaker']) =>
+    ({ ...tabCtx(repos), scope: { user: { locale: 'pt-BR' } }, postRunWaker }) as unknown as ControlContext;
+  const done = (o: Parameters<typeof world>[0] = {}) => world({ ...o, run: { status: 'done', ended_at: ended, ...o.run } });
+
+  it('blocked escalates the last run (post_run_blocked, after_run) and wakes the chat', async () => {
+    const w = done();
+    const wakeForPostRunBlock = vi.fn(async () => true);
+    expect(await tabMayReport(ctxOf(w.repos))).toBe(true);
+    expect(await reportCard(ctxOf(w.repos, { wakeForPostRunBlock }), { status: 'blocked', reason: 'A trava barrou o docker' })).toEqual({ ok: true });
+    expect(w.run.status).toBe('done');
+    expect(w.kinds()).toEqual(['escalated']);
+    expect(w.events[0]).toMatchObject({ run_id: w.run.id, task_id: 't1', payload: { reason: 'post_run_blocked', cause: 'post_run_blocked', after_run: true, tab_id: 'tab1' } });
+    expect(w.repos.chat.addMessage).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('A trava barrou o docker') }));
+    expect(wakeForPostRunBlock).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u1', projectId: 'p1', runId: w.run.id, tabId: 'tab1', cardRef: 'TER-1', cause: 'reported_blocked', reason: 'A trava barrou o docker' }));
+  });
+
+  it('blocked still needs a reason', async () => {
+    const w = done();
+    await expect(reportCard(ctxOf(w.repos), { status: 'blocked' })).rejects.toMatchObject({ code: 'REASON_REQUIRED' });
+    expect(w.kinds()).toEqual([]);
+  });
+
+  it('a run that ended blocked and was typed into since escalates the new block instead of refusing it', async () => {
+    const w = world({ run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date(Date.now() - 60_000), trigger_sha: null } });
+    (w.repos.tabs as unknown as { promptedSince: unknown }).promptedSince = vi.fn(async () => true);
+    expect(await reportCard(ctxOf(w.repos), { status: 'blocked', reason: 'Travou de novo' })).toEqual({ ok: true });
+    expect(w.events[0]).toMatchObject({ kind: 'escalated', payload: { reason: 'post_run_blocked', after_run: true } });
+  });
+
+  it('a block in a tab whose run never ended is the run\'s own', async () => {
+    const w = world();
+    await reportCard(ctxOf(w.repos), { status: 'blocked', reason: 'x' });
+    expect(w.kinds()).toEqual(['run_blocked', 'escalated']);
+    expect(w.events[1]!.payload).toMatchObject({ reason: 'reported_blocked' });
   });
 });
 
