@@ -157,6 +157,14 @@ describe('automatic tabs and the feed', () => {
     expect(feed[2]).toMatchObject({ workflow: 'npm', version: '1.2.3' });
   });
 
+  it("TER-1117: the trust dialog answered in the project's own folder names the tab, in the reader's language", () => {
+    const own = (locale: 'pt-BR' | 'en') => feedOf([row('1', 'trust_auto_accepted', { tab_id: 'tab2', tab_name: 'api', folder: 'project' }, { ref: null })], locale)[0];
+    expect(own('pt-BR')).toMatchObject({ tab_id: 'tab2', reason_text: 'Aba api: pasta do projeto confiada sozinha' });
+    expect(own('en').reason_text).toBe('Tab api: project folder trusted automatically');
+    // a run's worktree keeps its card line
+    expect(feedOf([row('1', 'trust_auto_accepted', { tab_id: 'tab1' })], 'pt-BR')[0].reason_text).toBeNull();
+  });
+
   it('writes the escalation reason in the reader language, with a fallback for an unknown one', () => {
     const [pt, en, unknown] = [feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'pt-BR')[0], feedOf([row('1', 'escalated', { reason: 'trust_prompt' })], 'en')[0], feedOf([row('1', 'escalated', { reason: 'novo' })], 'pt-BR')[0]];
     expect(pt.reason_text).toContain('confiança');
