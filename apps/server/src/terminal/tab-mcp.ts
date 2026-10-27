@@ -26,11 +26,13 @@ export function tabMcpSupported(machine: Machine): boolean {
   return !!version && versionAtLeast(version, TAB_MCP_MIN_AGENT_VERSION);
 }
 
-/** First agent release that ships the hard-lock guard script (TER-993); the server only points
- *  `--settings` at it on a machine new enough to have it, so an older agent gets no dangling hook. */
-export const GUARD_MIN_AGENT_VERSION = '0.19.0';
+/** The agent release whose guard script automatic work needs. 0.19.0 shipped the hard lock (TER-993); 0.36.0
+ *  ships guard v3 (TER-1111), which reads a Bash command whole: v2 cut it at the first `"`, so a push, docker
+ *  or `gh pr merge` after a quote went through. The server only points `--settings` at the guard, and the
+ *  dispatcher only places a run, on a machine with this agent or newer. */
+export const GUARD_MIN_AGENT_VERSION = '0.36.0';
 
-/** Whether the machine has the guard script `~/.termhub/bin/termhub-guard` (agent 0.19.0+). ssh/local
+/** Whether the machine has the current guard script `~/.termhub/bin/termhub-guard` (agent 0.36.0+). ssh/local
  *  machines never run automatic work, so they are not a case here; an agent's live version wins. */
 export function guardSupported(machine: Machine): boolean {
   if (machine.type !== 'agent') return false;
