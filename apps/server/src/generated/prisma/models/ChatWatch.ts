@@ -46,6 +46,7 @@ export type ChatWatchMinAggregateOutputType = {
   targetId: string | null
   label: string | null
   note: string | null
+  summary: string | null
   recurring: boolean | null
   status: string | null
   createdAt: Date | null
@@ -53,6 +54,7 @@ export type ChatWatchMinAggregateOutputType = {
   closedAt: Date | null
   lastFiredAt: Date | null
   fireCount: number | null
+  lastEvent: string | null
 }
 
 export type ChatWatchMaxAggregateOutputType = {
@@ -64,6 +66,7 @@ export type ChatWatchMaxAggregateOutputType = {
   targetId: string | null
   label: string | null
   note: string | null
+  summary: string | null
   recurring: boolean | null
   status: string | null
   createdAt: Date | null
@@ -71,6 +74,7 @@ export type ChatWatchMaxAggregateOutputType = {
   closedAt: Date | null
   lastFiredAt: Date | null
   fireCount: number | null
+  lastEvent: string | null
 }
 
 export type ChatWatchCountAggregateOutputType = {
@@ -84,6 +88,7 @@ export type ChatWatchCountAggregateOutputType = {
   baseline: number
   label: number
   note: number
+  summary: number
   recurring: number
   status: number
   createdAt: number
@@ -91,6 +96,7 @@ export type ChatWatchCountAggregateOutputType = {
   closedAt: number
   lastFiredAt: number
   fireCount: number
+  lastEvent: number
   _all: number
 }
 
@@ -112,6 +118,7 @@ export type ChatWatchMinAggregateInputType = {
   targetId?: true
   label?: true
   note?: true
+  summary?: true
   recurring?: true
   status?: true
   createdAt?: true
@@ -119,6 +126,7 @@ export type ChatWatchMinAggregateInputType = {
   closedAt?: true
   lastFiredAt?: true
   fireCount?: true
+  lastEvent?: true
 }
 
 export type ChatWatchMaxAggregateInputType = {
@@ -130,6 +138,7 @@ export type ChatWatchMaxAggregateInputType = {
   targetId?: true
   label?: true
   note?: true
+  summary?: true
   recurring?: true
   status?: true
   createdAt?: true
@@ -137,6 +146,7 @@ export type ChatWatchMaxAggregateInputType = {
   closedAt?: true
   lastFiredAt?: true
   fireCount?: true
+  lastEvent?: true
 }
 
 export type ChatWatchCountAggregateInputType = {
@@ -150,6 +160,7 @@ export type ChatWatchCountAggregateInputType = {
   baseline?: true
   label?: true
   note?: true
+  summary?: true
   recurring?: true
   status?: true
   createdAt?: true
@@ -157,6 +168,7 @@ export type ChatWatchCountAggregateInputType = {
   closedAt?: true
   lastFiredAt?: true
   fireCount?: true
+  lastEvent?: true
   _all?: true
 }
 
@@ -257,6 +269,7 @@ export type ChatWatchGroupByOutputType = {
   baseline: runtime.JsonValue
   label: string
   note: string
+  summary: string | null
   recurring: boolean
   status: string
   createdAt: Date
@@ -264,6 +277,7 @@ export type ChatWatchGroupByOutputType = {
   closedAt: Date | null
   lastFiredAt: Date | null
   fireCount: number
+  lastEvent: string | null
   _count: ChatWatchCountAggregateOutputType | null
   _avg: ChatWatchAvgAggregateOutputType | null
   _sum: ChatWatchSumAggregateOutputType | null
@@ -300,6 +314,7 @@ export type ChatWatchWhereInput = {
   baseline?: Prisma.JsonFilter<"ChatWatch">
   label?: Prisma.StringFilter<"ChatWatch"> | string
   note?: Prisma.StringFilter<"ChatWatch"> | string
+  summary?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
   recurring?: Prisma.BoolFilter<"ChatWatch"> | boolean
   status?: Prisma.StringFilter<"ChatWatch"> | string
   createdAt?: Prisma.DateTimeFilter<"ChatWatch"> | Date | string
@@ -307,6 +322,7 @@ export type ChatWatchWhereInput = {
   closedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
+  lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   fires?: Prisma.ChatWatchFireListRelationFilter
@@ -323,6 +339,7 @@ export type ChatWatchOrderByWithRelationInput = {
   baseline?: Prisma.SortOrder
   label?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  summary?: Prisma.SortOrderInput | Prisma.SortOrder
   recurring?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -330,6 +347,7 @@ export type ChatWatchOrderByWithRelationInput = {
   closedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   lastFiredAt?: Prisma.SortOrderInput | Prisma.SortOrder
   fireCount?: Prisma.SortOrder
+  lastEvent?: Prisma.SortOrderInput | Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   project?: Prisma.ProjectOrderByWithRelationInput
   fires?: Prisma.ChatWatchFireOrderByRelationAggregateInput
@@ -349,6 +367,7 @@ export type ChatWatchWhereUniqueInput = Prisma.AtLeast<{
   baseline?: Prisma.JsonFilter<"ChatWatch">
   label?: Prisma.StringFilter<"ChatWatch"> | string
   note?: Prisma.StringFilter<"ChatWatch"> | string
+  summary?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
   recurring?: Prisma.BoolFilter<"ChatWatch"> | boolean
   status?: Prisma.StringFilter<"ChatWatch"> | string
   createdAt?: Prisma.DateTimeFilter<"ChatWatch"> | Date | string
@@ -356,6 +375,7 @@ export type ChatWatchWhereUniqueInput = Prisma.AtLeast<{
   closedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
+  lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   fires?: Prisma.ChatWatchFireListRelationFilter
@@ -372,6 +392,7 @@ export type ChatWatchOrderByWithAggregationInput = {
   baseline?: Prisma.SortOrder
   label?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  summary?: Prisma.SortOrderInput | Prisma.SortOrder
   recurring?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -379,6 +400,7 @@ export type ChatWatchOrderByWithAggregationInput = {
   closedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   lastFiredAt?: Prisma.SortOrderInput | Prisma.SortOrder
   fireCount?: Prisma.SortOrder
+  lastEvent?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.ChatWatchCountOrderByAggregateInput
   _avg?: Prisma.ChatWatchAvgOrderByAggregateInput
   _max?: Prisma.ChatWatchMaxOrderByAggregateInput
@@ -400,6 +422,7 @@ export type ChatWatchScalarWhereWithAggregatesInput = {
   baseline?: Prisma.JsonWithAggregatesFilter<"ChatWatch">
   label?: Prisma.StringWithAggregatesFilter<"ChatWatch"> | string
   note?: Prisma.StringWithAggregatesFilter<"ChatWatch"> | string
+  summary?: Prisma.StringNullableWithAggregatesFilter<"ChatWatch"> | string | null
   recurring?: Prisma.BoolWithAggregatesFilter<"ChatWatch"> | boolean
   status?: Prisma.StringWithAggregatesFilter<"ChatWatch"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"ChatWatch"> | Date | string
@@ -407,6 +430,7 @@ export type ChatWatchScalarWhereWithAggregatesInput = {
   closedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChatWatch"> | Date | string | null
   lastFiredAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntWithAggregatesFilter<"ChatWatch"> | number
+  lastEvent?: Prisma.StringNullableWithAggregatesFilter<"ChatWatch"> | string | null
 }
 
 export type ChatWatchCreateInput = {
@@ -418,6 +442,7 @@ export type ChatWatchCreateInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -425,6 +450,7 @@ export type ChatWatchCreateInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
@@ -441,6 +467,7 @@ export type ChatWatchUncheckedCreateInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -448,6 +475,7 @@ export type ChatWatchUncheckedCreateInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -460,6 +488,7 @@ export type ChatWatchUpdateInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -467,6 +496,7 @@ export type ChatWatchUpdateInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
@@ -483,6 +513,7 @@ export type ChatWatchUncheckedUpdateInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -490,6 +521,7 @@ export type ChatWatchUncheckedUpdateInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -504,6 +536,7 @@ export type ChatWatchCreateManyInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -511,6 +544,7 @@ export type ChatWatchCreateManyInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
 }
 
 export type ChatWatchUpdateManyMutationInput = {
@@ -522,6 +556,7 @@ export type ChatWatchUpdateManyMutationInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -529,6 +564,7 @@ export type ChatWatchUpdateManyMutationInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ChatWatchUncheckedUpdateManyInput = {
@@ -542,6 +578,7 @@ export type ChatWatchUncheckedUpdateManyInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -549,6 +586,7 @@ export type ChatWatchUncheckedUpdateManyInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ChatWatchListRelationFilter = {
@@ -572,6 +610,7 @@ export type ChatWatchCountOrderByAggregateInput = {
   baseline?: Prisma.SortOrder
   label?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  summary?: Prisma.SortOrder
   recurring?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -579,6 +618,7 @@ export type ChatWatchCountOrderByAggregateInput = {
   closedAt?: Prisma.SortOrder
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
+  lastEvent?: Prisma.SortOrder
 }
 
 export type ChatWatchAvgOrderByAggregateInput = {
@@ -594,6 +634,7 @@ export type ChatWatchMaxOrderByAggregateInput = {
   targetId?: Prisma.SortOrder
   label?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  summary?: Prisma.SortOrder
   recurring?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -601,6 +642,7 @@ export type ChatWatchMaxOrderByAggregateInput = {
   closedAt?: Prisma.SortOrder
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
+  lastEvent?: Prisma.SortOrder
 }
 
 export type ChatWatchMinOrderByAggregateInput = {
@@ -612,6 +654,7 @@ export type ChatWatchMinOrderByAggregateInput = {
   targetId?: Prisma.SortOrder
   label?: Prisma.SortOrder
   note?: Prisma.SortOrder
+  summary?: Prisma.SortOrder
   recurring?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
@@ -619,6 +662,7 @@ export type ChatWatchMinOrderByAggregateInput = {
   closedAt?: Prisma.SortOrder
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
+  lastEvent?: Prisma.SortOrder
 }
 
 export type ChatWatchSumOrderByAggregateInput = {
@@ -737,6 +781,7 @@ export type ChatWatchCreateWithoutUserInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -744,6 +789,7 @@ export type ChatWatchCreateWithoutUserInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
 }
@@ -758,6 +804,7 @@ export type ChatWatchUncheckedCreateWithoutUserInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -765,6 +812,7 @@ export type ChatWatchUncheckedCreateWithoutUserInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -808,6 +856,7 @@ export type ChatWatchScalarWhereInput = {
   baseline?: Prisma.JsonFilter<"ChatWatch">
   label?: Prisma.StringFilter<"ChatWatch"> | string
   note?: Prisma.StringFilter<"ChatWatch"> | string
+  summary?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
   recurring?: Prisma.BoolFilter<"ChatWatch"> | boolean
   status?: Prisma.StringFilter<"ChatWatch"> | string
   createdAt?: Prisma.DateTimeFilter<"ChatWatch"> | Date | string
@@ -815,6 +864,7 @@ export type ChatWatchScalarWhereInput = {
   closedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
+  lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
 }
 
 export type ChatWatchCreateWithoutProjectInput = {
@@ -826,6 +876,7 @@ export type ChatWatchCreateWithoutProjectInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -833,6 +884,7 @@ export type ChatWatchCreateWithoutProjectInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
 }
@@ -847,6 +899,7 @@ export type ChatWatchUncheckedCreateWithoutProjectInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -854,6 +907,7 @@ export type ChatWatchUncheckedCreateWithoutProjectInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -892,6 +946,7 @@ export type ChatWatchCreateWithoutFiresInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -899,6 +954,7 @@ export type ChatWatchCreateWithoutFiresInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
 }
@@ -914,6 +970,7 @@ export type ChatWatchUncheckedCreateWithoutFiresInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -921,6 +978,7 @@ export type ChatWatchUncheckedCreateWithoutFiresInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
 }
 
 export type ChatWatchCreateOrConnectWithoutFiresInput = {
@@ -948,6 +1006,7 @@ export type ChatWatchUpdateWithoutFiresInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -955,6 +1014,7 @@ export type ChatWatchUpdateWithoutFiresInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
 }
@@ -970,6 +1030,7 @@ export type ChatWatchUncheckedUpdateWithoutFiresInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -977,6 +1038,7 @@ export type ChatWatchUncheckedUpdateWithoutFiresInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ChatWatchCreateManyUserInput = {
@@ -989,6 +1051,7 @@ export type ChatWatchCreateManyUserInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -996,6 +1059,7 @@ export type ChatWatchCreateManyUserInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
 }
 
 export type ChatWatchUpdateWithoutUserInput = {
@@ -1007,6 +1071,7 @@ export type ChatWatchUpdateWithoutUserInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1014,6 +1079,7 @@ export type ChatWatchUpdateWithoutUserInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
 }
@@ -1028,6 +1094,7 @@ export type ChatWatchUncheckedUpdateWithoutUserInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1035,6 +1102,7 @@ export type ChatWatchUncheckedUpdateWithoutUserInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -1048,6 +1116,7 @@ export type ChatWatchUncheckedUpdateManyWithoutUserInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1055,6 +1124,7 @@ export type ChatWatchUncheckedUpdateManyWithoutUserInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 export type ChatWatchCreateManyProjectInput = {
@@ -1067,6 +1137,7 @@ export type ChatWatchCreateManyProjectInput = {
   baseline: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label: string
   note: string
+  summary?: string | null
   recurring?: boolean
   status?: string
   createdAt?: Date | string
@@ -1074,6 +1145,7 @@ export type ChatWatchCreateManyProjectInput = {
   closedAt?: Date | string | null
   lastFiredAt?: Date | string | null
   fireCount?: number
+  lastEvent?: string | null
 }
 
 export type ChatWatchUpdateWithoutProjectInput = {
@@ -1085,6 +1157,7 @@ export type ChatWatchUpdateWithoutProjectInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1092,6 +1165,7 @@ export type ChatWatchUpdateWithoutProjectInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
 }
@@ -1106,6 +1180,7 @@ export type ChatWatchUncheckedUpdateWithoutProjectInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1113,6 +1188,7 @@ export type ChatWatchUncheckedUpdateWithoutProjectInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -1126,6 +1202,7 @@ export type ChatWatchUncheckedUpdateManyWithoutProjectInput = {
   baseline?: Prisma.JsonNullValueInput | runtime.InputJsonValue
   label?: Prisma.StringFieldUpdateOperationsInput | string
   note?: Prisma.StringFieldUpdateOperationsInput | string
+  summary?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   recurring?: Prisma.BoolFieldUpdateOperationsInput | boolean
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1133,6 +1210,7 @@ export type ChatWatchUncheckedUpdateManyWithoutProjectInput = {
   closedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
+  lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
 }
 
 
@@ -1177,6 +1255,7 @@ export type ChatWatchSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   baseline?: boolean
   label?: boolean
   note?: boolean
+  summary?: boolean
   recurring?: boolean
   status?: boolean
   createdAt?: boolean
@@ -1184,6 +1263,7 @@ export type ChatWatchSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   closedAt?: boolean
   lastFiredAt?: boolean
   fireCount?: boolean
+  lastEvent?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
   fires?: boolean | Prisma.ChatWatch$firesArgs<ExtArgs>
@@ -1201,6 +1281,7 @@ export type ChatWatchSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   baseline?: boolean
   label?: boolean
   note?: boolean
+  summary?: boolean
   recurring?: boolean
   status?: boolean
   createdAt?: boolean
@@ -1208,6 +1289,7 @@ export type ChatWatchSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   closedAt?: boolean
   lastFiredAt?: boolean
   fireCount?: boolean
+  lastEvent?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
 }, ExtArgs["result"]["chatWatch"]>
@@ -1223,6 +1305,7 @@ export type ChatWatchSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   baseline?: boolean
   label?: boolean
   note?: boolean
+  summary?: boolean
   recurring?: boolean
   status?: boolean
   createdAt?: boolean
@@ -1230,6 +1313,7 @@ export type ChatWatchSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   closedAt?: boolean
   lastFiredAt?: boolean
   fireCount?: boolean
+  lastEvent?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
 }, ExtArgs["result"]["chatWatch"]>
@@ -1245,6 +1329,7 @@ export type ChatWatchSelectScalar = {
   baseline?: boolean
   label?: boolean
   note?: boolean
+  summary?: boolean
   recurring?: boolean
   status?: boolean
   createdAt?: boolean
@@ -1252,9 +1337,10 @@ export type ChatWatchSelectScalar = {
   closedAt?: boolean
   lastFiredAt?: boolean
   fireCount?: boolean
+  lastEvent?: boolean
 }
 
-export type ChatWatchOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "kind" | "targetId" | "params" | "baseline" | "label" | "note" | "recurring" | "status" | "createdAt" | "expiresAt" | "closedAt" | "lastFiredAt" | "fireCount", ExtArgs["result"]["chatWatch"]>
+export type ChatWatchOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "kind" | "targetId" | "params" | "baseline" | "label" | "note" | "summary" | "recurring" | "status" | "createdAt" | "expiresAt" | "closedAt" | "lastFiredAt" | "fireCount" | "lastEvent", ExtArgs["result"]["chatWatch"]>
 export type ChatWatchInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
@@ -1312,6 +1398,10 @@ export type $ChatWatchPayload<ExtArgs extends runtime.Types.Extensions.InternalA
      * what the concierge said to do when it happens, in its own words
      */
     note: string
+    /**
+     * TER-1115: what the person reads of it, written by the concierge for them; never the note. null on older rows
+     */
+    summary: string | null
     recurring: boolean
     /**
      * open | done | cancelled | expired | gone
@@ -1322,6 +1412,10 @@ export type $ChatWatchPayload<ExtArgs extends runtime.Types.Extensions.InternalA
     closedAt: Date | null
     lastFiredAt: Date | null
     fireCount: number
+    /**
+     * TER-1115: the last event it caught (finished, merged…), for the chat's "terminou às 14:32"
+     */
+    lastEvent: string | null
   }, ExtArgs["result"]["chatWatch"]>
   composites: {}
 }
@@ -1758,6 +1852,7 @@ export interface ChatWatchFieldRefs {
   readonly baseline: Prisma.FieldRef<"ChatWatch", 'Json'>
   readonly label: Prisma.FieldRef<"ChatWatch", 'String'>
   readonly note: Prisma.FieldRef<"ChatWatch", 'String'>
+  readonly summary: Prisma.FieldRef<"ChatWatch", 'String'>
   readonly recurring: Prisma.FieldRef<"ChatWatch", 'Boolean'>
   readonly status: Prisma.FieldRef<"ChatWatch", 'String'>
   readonly createdAt: Prisma.FieldRef<"ChatWatch", 'DateTime'>
@@ -1765,6 +1860,7 @@ export interface ChatWatchFieldRefs {
   readonly closedAt: Prisma.FieldRef<"ChatWatch", 'DateTime'>
   readonly lastFiredAt: Prisma.FieldRef<"ChatWatch", 'DateTime'>
   readonly fireCount: Prisma.FieldRef<"ChatWatch", 'Int'>
+  readonly lastEvent: Prisma.FieldRef<"ChatWatch", 'String'>
 }
     
 

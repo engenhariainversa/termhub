@@ -20,7 +20,7 @@ class FakeWatches {
   constructor(private clock: () => Date) {}
 
   async create(input: NewChatWatch, now = this.clock()): Promise<ChatWatch> {
-    const w: ChatWatch = { id: `w${++this.n}`, ...input, expires_at: input.expires_at.toISOString(), status: 'open', created_at: now.toISOString(), closed_at: null, last_fired_at: null, fire_count: 0 };
+    const w: ChatWatch = { id: `w${++this.n}`, ...input, summary: input.summary ?? null, last_event: null, expires_at: input.expires_at.toISOString(), status: 'open', created_at: now.toISOString(), closed_at: null, last_fired_at: null, fire_count: 0 };
     this.watches.set(w.id, w);
     return { ...w };
   }
@@ -52,6 +52,7 @@ class FakeWatches {
     w.baseline = firing.baseline;
     w.last_fired_at = now.toISOString();
     w.fire_count += firing.events.length;
+    w.last_event = firing.events[firing.events.length - 1]!.event;
     if (firing.close) w.status = firing.close;
     for (const e of fresh)
       this.fires.push({ id: `f${++this.n}`, watch_id: w.id, user_id: w.user_id, project_id: w.project_id, event_key: e.key, event: e.event, payload: e.payload, created_at: now.toISOString(), attempts: 0, claimed_at: null, delivered_at: null, dropped_at: null });
@@ -200,6 +201,26 @@ describe('firing and delivering', () => {
     await e.deliver();
     expect(store.fires.map((f) => f.event_key)).toEqual(['tab:ev1']);
     expect(wakes).toHaveLength(1);
+  });
+
+  it('a watched tab that changes state without firing still refreshes its screens; a fire publishes once (TER-1115)', async () => {
+    await watchTab();
+    const published: string[] = [];
+    const e = engine({ publish: async (u, p) => void published.push(`${u}:${p}`) });
+    e.nudge('tab', 't1');
+    await e.deliver();
+    expect(store.fires).toEqual([]);
+    expect(published).toEqual(['u1:p1']);
+    events.push({ tabId: 't1', id: 'ev1', kind: 'finished', created_at: at(1000) });
+    advance(2000);
+    e.nudge('tab', 't1');
+    await e.deliver();
+    expect(published).toEqual(['u1:p1', 'u1:p1']);
+    const [w] = [...store.watches.values()];
+    expect(w).toMatchObject({ last_event: 'finished', fire_count: 1 });
+    e.nudge('tab', 't9');
+    await e.deliver();
+    expect(published).toHaveLength(2);
   });
 
   it('several events of one scope share one wake', async () => {

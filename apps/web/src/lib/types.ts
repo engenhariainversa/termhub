@@ -1419,6 +1419,12 @@ export interface ChatWatch {
    *  repeats. Null or absent otherwise (an older server leaves them out). */
   next_at?: string | null;
   every_minutes?: number | null;
+  /** TER-1115: the concierge's line for the person (`note` comes blank: it is the concierge's own); what
+   *  already happened (the last event and when); a watched tab's state now. Absent from an older server. */
+  summary?: string | null;
+  last_event?: string | null;
+  last_fired_at?: string | null;
+  target_state?: string | null;
 }
 
 /**

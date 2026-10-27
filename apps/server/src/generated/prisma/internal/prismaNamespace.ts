@@ -6865,13 +6865,15 @@ export const ChatWatchScalarFieldEnum = {
   baseline: 'baseline',
   label: 'label',
   note: 'note',
+  summary: 'summary',
   recurring: 'recurring',
   status: 'status',
   createdAt: 'createdAt',
   expiresAt: 'expiresAt',
   closedAt: 'closedAt',
   lastFiredAt: 'lastFiredAt',
-  fireCount: 'fireCount'
+  fireCount: 'fireCount',
+  lastEvent: 'lastEvent'
 } as const
 
 export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]
