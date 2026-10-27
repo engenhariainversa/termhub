@@ -103,13 +103,104 @@ TOOL="\${1:-claude}"
 [ -f "$HOME/${HOOK_ENV_REL}" ] || exit 0
 . "$HOME/${HOOK_ENV_REL}"
 [ -n "$TERMHUB_HOOK_URL" ] && [ -n "$TERMHUB_HOOK_TOKEN" ] || exit 0
-[ -n "$TMUX_PANE" ] || exit 0
 PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
-SESSION=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null) || exit 0
-[ -n "$SESSION" ] || exit 0
 # Codex's notify passes the payload as an argument; its hooks (like Claude's and Cursor's) send it on stdin.
 if [ "$TOOL" = codex ] && [ -n "$2" ]; then EVENT="$2"; else EVENT=$(cat 2>/dev/null); fi
 [ -n "$EVENT" ] || EVENT='{}'
+if [ "$TOOL" = codex ]; then
+  # Codex 0.16x (TER-1118): a \`codex\` typed in a shell attaches to Codex's shared app-server daemon, and the
+  # daemon, not the tab's own process, runs the hooks and notify, with the environment of the pane it was
+  # started from (days ago, maybe another project's tab): $TMUX_PANE names that pane, or none. So the event
+  # is the pane's only when the pane's shell is one of this script's ancestors. Under the daemon, the tab is
+  # the termhub pane already bound to this Codex session, or else the only termhub pane running Codex in the
+  # event's folder that no other live Codex session holds; anything else is dropped, since an event posted
+  # under the wrong tab is worse than none. Each pane's binding is "<codex session> <codex pid> <tmux
+  # session>" in a file under TMPDIR, written by its own events too. One ps answers every process question.
+  PANE_PID=
+  SESSION=
+  if [ -n "$TMUX_PANE" ]; then
+    PANE=$(tmux display-message -p -t "$TMUX_PANE" '#{pane_pid} #{session_name}' 2>/dev/null) || PANE=
+    case "$PANE" in *' '*) PANE_PID=\${PANE%% *}; SESSION=\${PANE#* } ;; esac
+  fi
+  PROCS=$(ps -A -o pid= -o ppid= -o tty= -o command= 2>/dev/null)
+  # "pane" (the pane's shell is an ancestor), "daemon" (Codex's app-server is, or no ancestor has a
+  # terminal) or "foreign" (a terminal outside any termhub pane runs this Codex).
+  WHERE=$(printf '%s\\n' "$PROCS" | awk -v me="$$" -v pane="$PANE_PID" '
+    { pp[$1] = $2; tty[$1] = $3; c = $4; sub(/.*\\//, "", c); if (c == "codex" && $5 == "app-server") daemon[$1] = 1 }
+    END {
+      p = me; t = 0
+      for (i = 0; i < 64 && p > 1 && (p in pp); i++) {
+        if (p in daemon) { print "daemon"; exit }
+        if (p == pane) { print "pane"; exit }
+        if (tty[p] !~ /^(\\?+|-)$/) t = 1
+        p = pp[p]
+      }
+      print (t ? "foreign" : "daemon")
+    }')
+  # No ps to ask (a stripped-down machine): the pane's word is taken, as before TER-1118.
+  [ -n "$PROCS" ] || { [ -n "$PANE_PID" ] && WHERE=pane; }
+  # The event's own top-level string field $1 (Codex writes session_id and cwd before any tool input).
+  field() { R=\${EVENT#*"\\"$1\\""}; [ "$R" != "$EVENT" ] || return 0; R=\${R#*'"'}; printf '%s' "\${R%%'"'*}"; }
+  # The Codex on the pane whose shell is $1: the CLI itself, or node running its npm launcher.
+  codex_of() {
+    printf '%s\\n' "$PROCS" | awk -v sh="$1" '$2 == sh { c = $4; sub(/.*\\//, "", c); a = $5; sub(/.*\\//, "", a)
+      if ((c == "codex" && $5 != "app-server") || (c == "node" && a == "codex")) { print $1; exit } }'
+  }
+  bind_file() { printf '%s/termhub-codex-%s' "\${TMPDIR:-/tmp}" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9_-' '_')"; }
+  SID=$(field session_id)
+  [ -n "$SID" ] || SID=$(field thread-id)
+  case "$SID" in *[!A-Za-z0-9-]*) SID= ;; esac
+  case "$WHERE" in
+    pane)
+      if [ -n "$SID" ]; then
+        CPID=$(codex_of "$PANE_PID")
+        F=$(bind_file "$SESSION")
+        [ -z "$CPID" ] || [ "$(cat "$F" 2>/dev/null)" = "$SID $CPID $SESSION" ] || printf '%s %s %s\\n' "$SID" "$CPID" "$SESSION" > "$F" 2>/dev/null
+      fi
+      ;;
+    daemon)
+      [ -n "$SID" ] || exit 0
+      SESSION=
+      for F in "\${TMPDIR:-/tmp}"/termhub-codex-*; do
+        [ -f "$F" ] || continue
+        B_SID= B_PID= B_SESSION=
+        read -r B_SID B_PID B_SESSION < "$F"
+        [ "$B_SID" = "$SID" ] || continue
+        if printf '%s\\n' "$PROCS" | awk -v p="$B_PID" '$1 == p { f = 1 } END { exit !f }'; then SESSION=$B_SESSION; break; fi
+      done
+      if [ -z "$SESSION" ]; then
+        CWD=$(field cwd)
+        case "$CWD" in '' | *\\\\*) exit 0 ;; esac
+        PANES=$(tmux list-panes -a -F '#{pane_pid}\t#{session_name}\t#{pane_current_path}' 2>/dev/null)
+        FREE=0
+        PICK=
+        while IFS='\t' read -r P_PID P_SESSION P_PATH; do
+          case "$P_SESSION" in termhub-*) ;; *) continue ;; esac
+          [ "$P_PATH" = "$CWD" ] || continue
+          CPID=$(codex_of "$P_PID")
+          [ -n "$CPID" ] || continue
+          F=$(bind_file "$P_SESSION")
+          B_SID= B_PID=
+          [ ! -f "$F" ] || read -r B_SID B_PID B_REST < "$F"
+          # another Codex session holds this pane while its Codex (the same process) still runs
+          if [ -n "$B_SID" ] && [ "$B_SID" != "$SID" ] && [ "$B_PID" = "$CPID" ]; then continue; fi
+          FREE=$((FREE + 1))
+          SESSION=$P_SESSION
+          PICK=$CPID
+        done <<EOF
+$PANES
+EOF
+        [ "$FREE" = 1 ] || exit 0
+        printf '%s %s %s\\n' "$SID" "$PICK" "$SESSION" > "$(bind_file "$SESSION")" 2>/dev/null
+      fi
+      ;;
+    *) exit 0 ;;
+  esac
+else
+  [ -n "$TMUX_PANE" ] || exit 0
+  SESSION=$(tmux display-message -p -t "$TMUX_PANE" '#{session_name}' 2>/dev/null) || exit 0
+fi
+[ -n "$SESSION" ] || exit 0
 # Tool calls (Claude's PreToolUse, Codex's PreToolUse and PostToolUse): only the tool's name travels (never its input), with the spinner's verb when one is on
 # screen, and only when the pair changed since the last one for this session — twenty edits in a row
 # are one request as long as the verb stays the same (a new verb mid-run is a new request). The marker is per tmux

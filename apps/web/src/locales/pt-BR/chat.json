@@ -38,5 +38,7 @@
   "{{count}} perguntas_one": "{{count}} pergunta",
   "{{count}} perguntas_other": "{{count}} perguntas",
   "{{count}} perguntas e permissões_one": "{{count}} perguntas e permissões",
-  "{{count}} perguntas e permissões_other": "{{count}} perguntas e permissões"
+  "{{count}} perguntas e permissões_other": "{{count}} perguntas e permissões",
+  "Acompanhando {{count}} coisas_one": "Acompanhando {{count}} coisa",
+  "Acompanhando {{count}} coisas_other": "Acompanhando {{count}} coisas"
 }

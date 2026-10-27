@@ -386,7 +386,7 @@ export function SetupForm({ project }: Props) {
         </ul>
       </Card>
 
-      {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
+      {data.automation && <AutomationSetup projectId={project.id} value={data.automation} onChange={(next) => patch('automation', next)} />}
 
       {data.health && <HealthSetup value={data.health} onChange={(next) => patch('health', next)} />}
 

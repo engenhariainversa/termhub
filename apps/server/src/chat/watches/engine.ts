@@ -32,7 +32,8 @@ const RETRY_MAX_MS = 15 * 60_000;
 const HOUR_MS = 3600_000;
 
 export interface WatchEngineDeps {
-  repos: Pick<Repositories, 'chatWatches' | 'users' | 'chat' | 'memoryItems'>;
+  /** `tabs` lets the published list carry a watched tab's state now (TER-1115). */
+  repos: Pick<Repositories, 'chatWatches' | 'users' | 'chat' | 'memoryItems'> & Partial<Pick<Repositories, 'tabs'>>;
   chat: Pick<ChatService, 'wake'>;
   probe: WatchProbe;
   log: Log;
@@ -184,7 +185,14 @@ export function createWatchEngine(deps: WatchEngineDeps): WatchEngine {
     nudge(kind, targetId) {
       void serial(async () => {
         if (!active()) return;
-        const fired = await check(await deps.repos.chatWatches.listAllOpen({ kind, targetId }));
+        const watches = await deps.repos.chatWatches.listAllOpen({ kind, targetId });
+        const fired = await check(watches);
+        // TER-1115: a watched tab changed state without firing (it went back to work, or stopped in a way
+        // the watch did not ask about): its screens still show the state now.
+        if (kind === 'tab') {
+          const quiet = new Map(watches.filter((w) => !fired.has(scopeKey(w.user_id, w.project_id))).map((w) => [scopeKey(w.user_id, w.project_id), w]));
+          for (const w of quiet.values()) await publish(w.user_id, w.project_id);
+        }
         if (fired.size) await deliverPending();
       });
     },

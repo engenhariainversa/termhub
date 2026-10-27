@@ -56,6 +56,14 @@ Store submissions are never automatic at any level. A PR touching `store_paths` 
   `# termhub-guard v2`) also takes the run's own branch pushed as `git -C <worktree>/<key> push …`, in the
   same four plain forms, where `<key>` is a direct subfolder named like a repo key (no `/`, no `..`). It is
   for multi-repo runs, whose worktree is a workspace root with one repo per folder.
+  Guard version 3 (agent 0.36.0+, now `GUARD_MIN_AGENT_VERSION`: the dispatcher places runs only there,
+  TER-1111) reads a Bash command whole — v2 cut it at the first `"`, so a push, `docker` or `gh pr merge`
+  after a quote went through — and splits it into simple commands (`;`, `&&`, `|`, newlines, `$( )`,
+  backticks, subshells, `sh -c`, `eval`; quoted text and quoted heredocs are data). The run's push may end
+  a chain (`git commit -m "…" && git push -u origin <branch>`) and take `-q`, `2>&1` and `| tail -N`, but
+  nothing may follow it, and a `cd` elsewhere or a `GIT_*=` in the same command denies it. `git -C
+  <worktree> push` and `git --no-pager push` are not in the allow list any more: the guard never took them.
+  A command it cannot read (an open quote, `$'…'`) is denied.
   The server writes `guard.json` before it types any line that names it — the start, the follower's
   restart of an agent that exited, the resume card and the account swap (`installRunGuard`, TER-1005).
   A run never starts or comes back without the lock: a machine whose agent is older than 0.19.0 is left

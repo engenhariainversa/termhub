@@ -5,11 +5,13 @@ jest.mock('@/features/chat/viewmodel/useChatStore', () => ({ useChatStore: requi
 jest.mock('@/features/tab-chat/viewmodel/useSessionsStore', () => ({ useSessionsStore: require('../../../../test/helpers/ui-stores').stores.sessions }));
 
 const mockReplace = jest.fn();
+let mockParams: { projectId?: string } = {};
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: jest.fn(), back: jest.fn(), replace: mockReplace, canGoBack: () => true }),
-  useLocalSearchParams: () => ({}),
+  useLocalSearchParams: () => mockParams,
 }));
 
+import type { TSessionStartMachine } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { enrolStores, stores } from '../../../../test/helpers/ui-stores';
 import { NewSessionScreen } from './new-session-screen';
@@ -25,57 +27,129 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  mockParams = {};
   mockReplace.mockClear();
   jest.restoreAllMocks();
 });
 
+/** From Chats: the project, then what comes chosen with it (jarvis and its suggested account). */
+const pickTermhub = async () => {
+  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await screen.findByText('Conta de IA');
+};
 const iniciar = () => screen.getByRole('button', { name: 'Iniciar' });
 
-it('Iniciar waits for a project and a message, then replaces the route with the new session', async () => {
+const machine = (o: Partial<TSessionStartMachine> & Pick<TSessionStartMachine, 'id' | 'name'>): TSessionStartMachine => ({ online: true, choices: [], suggested: null, provider: 'claude', ...o });
+const CLAUDE = { account_id: 'acc-claude', label: 'Claude', provider: 'claude', model: 'opus' };
+const PEDRO = { account_id: 'acc-pedro', label: 'claude pedro goiania', provider: 'claude', model: null };
+const CODEX = { account_id: 'acc-codex', label: 'ChatGPT', provider: 'chatgpt', model: null };
+const options = (...machines: TSessionStartMachine[]) => jest.spyOn(stores.api, 'sessionStartOptions').mockResolvedValue({ machines });
+const selected = (testID: string) => screen.getByTestId(testID).props.accessibilityState?.selected;
+
+it('from Chats, Iniciar waits for a project and a message, then replaces the route with the new session', async () => {
   const start = jest.spyOn(stores.api, 'startSession');
   await render(<NewSessionScreen />);
   const project = await screen.findByRole('button', { name: 'termhub' }, LOAD);
   expect(iniciar()).toBeDisabled();
   await fireEvent.press(project);
   expect(iniciar()).toBeDisabled();
+  // the mock's only online machine (jarvis) and the account the server suggests there come chosen
+  await screen.findByText('Conta de IA');
+  expect(selected('new-session-machine-m-jarvis')).toBe(true);
+  expect(selected('new-session-account-acc-claude')).toBe(true);
   await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'revisa o PR');
   expect(iniciar()).toBeEnabled();
   await fireEvent.press(iniciar());
   await screen.findByRole('button', { name: 'Iniciar' });
-  expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', prompt: 'revisa o PR' });
+  expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', machine_id: 'm-jarvis', account_id: 'acc-claude', prompt: 'revisa o PR' });
   expect(mockReplace).toHaveBeenCalledWith(expect.stringMatching(/^\/session\/t-/));
 });
 
-it('a project on one machine shows no machine picker', async () => {
-  await render(<NewSessionScreen />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
-  await screen.findByLabelText('Primeira mensagem');
-  expect(screen.queryByText('Máquina')).toBeNull();
-});
-
-it('a project on more than one machine asks which, and sends it', async () => {
-  jest.spyOn(stores.api, 'getProjectAi').mockResolvedValue({
-    ai: { accounts: [], models: { claude: null, chatgpt: null } },
-    available: [
-      { id: 'acc-1', label: 'Claude', provider: 'claude', machine_id: 'm-jarvis', machine_name: 'jarvis', default: true },
-      { id: 'acc-2', label: 'Claude', provider: 'claude', machine_id: 'm-hulk', machine_name: 'hulk', default: false },
-    ],
+describe('from a project (TER-1119)', () => {
+  beforeEach(() => {
+    mockParams = { projectId: 'p-termhub' };
   });
-  const start = jest.spyOn(stores.api, 'startSession');
-  await render(<NewSessionScreen />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
-  expect(await screen.findByText('Máquina')).toBeTruthy();
-  await fireEvent.press(screen.getByRole('button', { name: 'hulk' }));
-  await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
-  await fireEvent.press(iniciar());
-  await screen.findByRole('button', { name: 'Iniciar' });
-  expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', machine_id: 'm-hulk', prompt: 'oi' });
+
+  it('shows the project in the header, never the list of projects', async () => {
+    await render(<NewSessionScreen />);
+    expect(await screen.findByText('Máquina', undefined, LOAD)).toBeTruthy();
+    expect(screen.queryByText('Projeto')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('new-session-project')).toHaveTextContent('termhub'));
+  });
+
+  it('one machine with one account: both come chosen, and Iniciar sends them', async () => {
+    options(machine({ id: 'm-jarvis', name: 'jarvis', choices: [PEDRO] }));
+    const start = jest.spyOn(stores.api, 'startSession');
+    await render(<NewSessionScreen />);
+    await screen.findByText('Conta de IA', undefined, LOAD);
+    expect(selected('new-session-machine-m-jarvis')).toBe(true);
+    expect(selected('new-session-account-acc-pedro')).toBe(true);
+    expect(screen.getByText('Claude Code · modelo padrão do CLI')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
+    await fireEvent.press(iniciar());
+    await waitFor(() => expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', machine_id: 'm-jarvis', account_id: 'acc-pedro', prompt: 'oi' }));
+  });
+
+  it('several accounts and none suggested: the person picks, and the placeholder follows the CLI', async () => {
+    options(machine({ id: 'm-jarvis', name: 'jarvis', choices: [CLAUDE, PEDRO, CODEX], provider: null }));
+    const start = jest.spyOn(stores.api, 'startSession');
+    await render(<NewSessionScreen />);
+    await screen.findByText('Conta de IA', undefined, LOAD);
+    expect(screen.getByText('Claude Code · modelo opus')).toBeTruthy();
+    expect(selected('new-session-account-acc-claude')).toBe(false);
+    await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
+    expect(iniciar()).toBeDisabled();
+    await fireEvent.press(screen.getByRole('button', { name: 'ChatGPT' }));
+    expect(screen.getByLabelText('Primeira mensagem').props.placeholder).toBe('O que o Codex deve fazer?');
+    await fireEvent.press(iniciar());
+    await waitFor(() => expect(start).toHaveBeenCalledWith(expect.anything(), { project_id: 'p-termhub', machine_id: 'm-jarvis', account_id: 'acc-codex', prompt: 'oi' }));
+  });
+
+  it("only the accounts the server lists show: one exclusive to another project never does", async () => {
+    // the server leaves an account exclusive to another project out of `choices` (TER-990)
+    options(machine({ id: 'm-jarvis', name: 'jarvis', choices: [CLAUDE], suggested: 'acc-claude' }));
+    await render(<NewSessionScreen />);
+    await screen.findByText('Conta de IA', undefined, LOAD);
+    expect(screen.queryByRole('button', { name: 'claude pedro goiania' })).toBeNull();
+    expect(selected('new-session-account-acc-claude')).toBe(true);
+  });
+
+  it('an offline machine shows but cannot be picked; with two online, none comes chosen', async () => {
+    options(
+      machine({ id: 'm-jarvis', name: 'jarvis', choices: [CLAUDE] }),
+      machine({ id: 'm-hulk', name: 'hulk', choices: [PEDRO] }),
+      machine({ id: 'm-ironman', name: 'homem de ferro', online: false, choices: [CODEX] }),
+    );
+    await render(<NewSessionScreen />);
+    await screen.findByText('Máquina', undefined, LOAD);
+    expect(screen.getByText('Offline')).toBeTruthy();
+    expect(screen.getByTestId('new-session-machine-m-ironman')).toBeDisabled();
+    expect(selected('new-session-machine-m-jarvis')).toBe(false);
+    expect(screen.queryByText('Conta de IA')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'hulk' }));
+    // the machine's only account comes chosen with it
+    expect(selected('new-session-account-acc-pedro')).toBe(true);
+  });
+
+  it('a machine with no account says so and keeps Iniciar off', async () => {
+    options(machine({ id: 'm-jarvis', name: 'jarvis' }));
+    await render(<NewSessionScreen />);
+    expect(await screen.findByText('Nenhuma conta de IA nesta máquina pode iniciar um agente. Cadastre uma em Contas de IA.', undefined, LOAD)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
+    expect(iniciar()).toBeDisabled();
+  });
+
+  it('a project with no machine says so', async () => {
+    options();
+    await render(<NewSessionScreen />);
+    expect(await screen.findByText('Nenhuma máquina ligada a este projeto.', undefined, LOAD)).toBeTruthy();
+  });
 });
 
 it("a 409 shows the server's message under the button", async () => {
   jest.spyOn(stores.api, 'startSession').mockRejectedValueOnce(new ApiError(409, 'NO_ACCOUNT', 'O projeto não tem conta de IA'));
   await render(<NewSessionScreen />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await pickTermhub();
   await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'oi');
   await fireEvent.press(iniciar());
   expect(await screen.findByText('O projeto não tem conta de IA')).toBeTruthy();
@@ -85,7 +159,7 @@ it("a 409 shows the server's message under the button", async () => {
 it('a message over 4000 characters is refused before the call', async () => {
   const start = jest.spyOn(stores.api, 'startSession');
   await render(<NewSessionScreen />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await pickTermhub();
   await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), 'x'.repeat(4001));
   await fireEvent.press(iniciar());
   expect(await screen.findByText('Mensagem longa demais (máximo de 4000 caracteres)')).toBeTruthy();
@@ -130,7 +204,7 @@ describe('the keyboard (TER-1107)', () => {
 
 it('a started session keeps its first message for the session screen (TER-1107)', async () => {
   await render(<NewSessionScreen />);
-  await fireEvent.press(await screen.findByRole('button', { name: 'termhub' }, LOAD));
+  await pickTermhub();
   await fireEvent.changeText(screen.getByLabelText('Primeira mensagem'), '  revisa o PR  ');
   await fireEvent.press(iniciar());
   await waitFor(() => expect(mockReplace).toHaveBeenCalled());

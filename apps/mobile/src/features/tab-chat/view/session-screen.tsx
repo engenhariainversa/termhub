@@ -263,7 +263,7 @@ export function SessionView({ tabId }: { tabId: string }) {
               <View testID="session-empty" className="flex-1">
                 <EmptyState
                   title={empty.title}
-                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? (tab?.agent === 'codex' ? TAB_CHAT_MSG.codexHooksInstalled : TAB_CHAT_MSG.hooksInstalled) : empty.hint}
+                  hint={agentStarted && emptyReason === 'no_agent' ? TAB_CHAT_MSG.agentStarted : hooksInstalled ? (tab?.agent === 'codex' ? TAB_CHAT_MSG.codexHooksInstalled : tab?.agent ? TAB_CHAT_MSG.hooksInstalled : TAB_CHAT_MSG.unknownHooksInstalled) : empty.hint}
                   action={emptyAction}
                 />
               </View>
