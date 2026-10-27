@@ -70,15 +70,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('red CI across colours (Po
     return run.id;
   }
 
-  /** One colour's executor: its own instance id, typing and fixer start; GitHub is never asked on a red head. */
+  /** One colour's executor: its own instance id, typing and fixer start; on a red head GitHub is only asked
+   *  whether the PR conflicts (TER-1114), and it does not. */
   function colour(instance: string) {
     const type = vi.fn(async () => {
       await new Promise((r) => setTimeout(r, Math.random() * 4));
     });
     const startFixer = vi.fn(async () => 'started' as const);
+    const pull = vi.fn(async () => ({ mergeable: true, mergeable_state: 'clean', head_sha: 'h1', head_ref: BRANCH, head_repo: 'acme/app', base_ref: 'main' }));
     const deps: MergeDeps = {
       repos,
-      gh: {} as GithubWriteClient,
+      gh: { pull } as unknown as GithubWriteClient,
       ci: { listRuns: vi.fn(async () => []) },
       lifecycle: { draining: false },
       instance,
