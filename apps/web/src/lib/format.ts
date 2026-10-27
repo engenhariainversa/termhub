@@ -28,6 +28,11 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
   return value.toLocaleString(currentLocale(), options);
 }
 
+/** "a, b ou c" / "a, b or c": a list joined the language's way (`disjunction` for "ou", `conjunction` for "e"). */
+export function formatList(items: string[], type: 'conjunction' | 'disjunction' = 'conjunction'): string {
+  return new Intl.ListFormat(currentLocale(), { style: 'long', type }).format(items);
+}
+
 /** A similarity or one of its thresholds (0–1) as the screens show it: two decimals ("0,95" / "0.95"). */
 export function formatSimilarity(value: number): string {
   return formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });

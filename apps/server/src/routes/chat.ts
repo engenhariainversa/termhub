@@ -9,7 +9,7 @@ import { chatMemoryRoutes } from './chat-memory.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
-import { activeWatches, cancelWatchRow } from '../chat/watches/view.js';
+import { activeWatches, cancelWatchRow, forScreen } from '../chat/watches/view.js';
 import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
@@ -425,7 +425,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const { id } = grantIdParam.parse(request.params);
     const watch = await cancelWatchRow(repos, request.scope.user.id, id);
     if (!watch) throw notFound('Assinatura não encontrada');
-    return { watch };
+    return { watch: forScreen(watch) };
   });
 
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {

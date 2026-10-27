@@ -325,6 +325,12 @@ export const watchViewSchema = z.object({
    *  Optional: an older server leaves them out. */
   next_at: z.string().nullable().optional(),
   every_minutes: z.number().int().nullable().optional(),
+  /** TER-1115: the concierge's line for the person (`note` is its own and comes blank); what already happened
+   *  (the last event and when); a tab's state now (a plain string, as `kind`). Optional: an older server leaves them out. */
+  summary: z.string().nullable().optional(),
+  last_event: z.string().nullable().optional(),
+  last_fired_at: z.string().nullable().optional(),
+  target_state: z.string().nullable().optional(),
 });
 export type TWatchView = z.infer<typeof watchViewSchema>;
 
