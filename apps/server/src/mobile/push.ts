@@ -9,7 +9,7 @@ import type { AiProvider, User } from '../db/repositories/types.js';
 import type { PushTestKind, PushTestResponse } from '@termhub/mobile-api';
 import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
-import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, conciergeNoticeText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
+import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, conciergeNoticeText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabTrustPromptText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
 import { escalationReasonText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
@@ -261,6 +261,8 @@ export class MobilePushService {
   private readonly escalations = new Set<string>();
   /** Tabs already told about their expired login (TER-1046): once until the tab works again. */
   private readonly authAlerted = new Set<string>();
+  /** Tabs already told about the folder trust dialog (TER-1117): once until the tab works again. */
+  private readonly trustAlerted = new Set<string>();
 
   /** Releases already pushed, by project, workflow and version. In memory, like `escalations`. */
   private readonly releases = new Set<string>();
@@ -484,7 +486,19 @@ export class MobilePushService {
       }
       return;
     }
-    if (tab.state === 'working') this.authAlerted.delete(tab.id);
+    if (tab.state === 'trust_prompt') {
+      this.working.delete(tab.id);
+      if (owner_id && !this.trustAlerted.has(tab.id)) {
+        if (this.trustAlerted.size > 10_000) this.trustAlerted.clear();
+        this.trustAlerted.add(tab.id);
+        void this.trustPrompt(tab, owner_id).catch((err) => this.deps.log.warn({ err: failureLabel(err), userId: owner_id, tabId: tab.id }, 'mobile push failed'));
+      }
+      return;
+    }
+    if (tab.state === 'working') {
+      this.authAlerted.delete(tab.id);
+      this.trustAlerted.delete(tab.id);
+    }
     if (tab.state === 'working') {
       if (pending) clearTimeout(pending);
       this.settling.delete(tab.id);
@@ -540,6 +554,21 @@ export class MobilePushService {
     const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
     const data = { kind: 'tab_auth_required', tab_id: tab.id, project_id: tab.project_id, machine_id: tab.machine_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
     await this.deliver(ownerId, 'confirmation', (locale) => tabAuthRequiredText({ ...ctx, accountLabel }, locale), data, await repos.devices.listActiveWithPush(ownerId), `auth:${tab.id}`);
+  }
+
+  /**
+   * A tab waits on Claude Code's folder trust dialog (TER-1117), outside the project's folder or with the
+   * project's automatic answer off: "A aba X está esperando você confiar na pasta Y", to every device of the
+   * owner (nothing else tells them: no hook fired). The tap opens the project's chat, which the same state
+   * wakes. History kind `confirmation`, which every app version parses.
+   */
+  private async trustPrompt(tab: TabStateChange['tab'], ownerId: string): Promise<void> {
+    const { repos } = this.deps;
+    const ctx = await this.names(ownerId, tab.project_id, tab.id, tab.machine_id);
+    const folder = tab.cwd ?? (await repos.projectMachines.find(tab.project_id, tab.machine_id))?.cwd ?? null;
+    const conversation = await repos.chat.findLatestActiveForProject(tab.project_id, ownerId);
+    const data = { kind: 'tab_trust_prompt', tab_id: tab.id, project_id: tab.project_id, machine_id: tab.machine_id, ...(conversation ? { conversation_id: conversation.id } : {}) };
+    await this.deliver(ownerId, 'confirmation', (locale) => tabTrustPromptText({ ...ctx, folder }, locale), data, await repos.devices.listActiveWithPush(ownerId), `trust:${tab.id}`);
   }
 
   /**

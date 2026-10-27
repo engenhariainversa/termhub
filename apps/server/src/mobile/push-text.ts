@@ -74,6 +74,17 @@ export function tabAuthRequiredText(ctx: PushContext & { accountLabel: string | 
   };
 }
 
+/** A tab waits on Claude Code's folder trust dialog (TER-1117): which tab and which folder, nothing from the screen. */
+export function tabTrustPromptText(ctx: PushContext & { folder: string | null }, locale: Locale = DEFAULT_LOCALE): PushText {
+  const tab = ctx.tabName ?? '—';
+  return {
+    title: needsYou(locale, ctx),
+    body: ctx.folder
+      ? t(locale, 'A aba {{tab}} está esperando você confiar na pasta {{folder}}.', { tab, folder: ctx.folder })
+      : t(locale, 'A aba {{tab}} está esperando você confiar na pasta.', { tab }),
+  };
+}
+
 /** A tab asked something in a project's chat (spec 2026-09-25 §6.1): which tab, never what it asked. */
 export function tabQuestionText(ctx: PushContext, kind: 'choice' | 'permission', locale: Locale = DEFAULT_LOCALE): PushText {
   const tab = ctx.tabName ? msg('A aba {{tab}}', { tab: ctx.tabName }) : msg('Uma aba');
