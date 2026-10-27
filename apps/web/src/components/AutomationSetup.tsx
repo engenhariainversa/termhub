@@ -23,7 +23,8 @@ const PROMPT_FIELDS: { role: keyof ProjectAutomation['prompts']; label: string }
 ];
 
 interface Props {
-  projectId: string;
+  /** The project, to warn when its repository runs no CI on pull requests (TER-1114). */
+  projectId?: string;
   value: ProjectAutomation;
   onChange: (next: ProjectAutomation) => void;
 }
@@ -43,8 +44,18 @@ export function AutomationSetup({ projectId, value, onChange }: Props) {
   // TER-1120: workflows a push to the base runs that nothing below names; their failure holds the merge queue
   const [unlisted, setUnlisted] = useState<Array<{ name: string; path: string }>>([]);
   useEffect(() => {
+    if (!projectId) return;
     let live = true;
     api.automation.workflows(projectId).then((d) => live && setUnlisted(d.unlisted)).catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [projectId]);
+  const [prCi, setPrCi] = useState<'present' | 'absent' | 'unknown'>('unknown');
+  useEffect(() => {
+    if (!projectId) return;
+    let live = true;
+    api.automation.prCi(projectId).then((r) => live && setPrCi(r.state)).catch(() => {});
     return () => {
       live = false;
     };
@@ -93,6 +104,11 @@ export function AutomationSetup({ projectId, value, onChange }: Props) {
             ))}
           </select>
           <p className="mt-1 text-xs text-fg-dim">{t('Envio às lojas nunca é automático.')}</p>
+          {prCi === 'absent' && value.autonomy !== 'pr' && (
+            <p className="mt-1 text-xs text-warn">
+              {t('Nenhum workflow do repositório rodou em pull_request: o termhub não mescla sem CI verde, então os PRs vão ficar esperando. Adicione um workflow em pull_request ou use o nível PR.')}
+            </p>
+          )}
         </Field>
 
         <label className="flex items-start gap-2 text-sm">

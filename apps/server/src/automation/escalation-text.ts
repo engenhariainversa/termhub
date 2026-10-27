@@ -40,6 +40,8 @@ export const CONFLICT_CAP = 'conflict_cap';
 export const MERGE_PERSON_CARD = 'merge_person_card';
 /** TER-1120: the base branch's head stayed red past BASE_RED_ESCALATE_MS while a ready PR waited on it: nothing is merged until it is green. */
 export const MERGE_BASE_RED = 'merge_base_red';
+/** TER-1114: a PR whose head has had no CI run at all for a while: termhub only merges a green CI, so it waits for a person. */
+export const MERGE_NO_CI = 'merge_no_ci';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
 export const CI_CAP = 'ci_cap';
 /** R8: the card's estimated cost passed `card_budget_usd`; the run is parked, not resumed. */
@@ -95,6 +97,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CI_CAP]: tk('O CI do PR continua falhando depois das tentativas de correção; confira o PR.'),
   [MERGE_PERSON_CARD]: tk('O PR está verde, mas cita um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão ou tire a citação do PR.'),
+  [MERGE_NO_CI]: tk('O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
   [MERGE_BASE_RED]: tk('A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.'),
 };

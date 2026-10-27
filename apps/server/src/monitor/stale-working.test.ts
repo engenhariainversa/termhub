@@ -222,6 +222,18 @@ describe('sweepStaleWorking / sweepUnreported — the trust dialog and the login
     expect(login.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'auth_required', ifStateIn: [null] }));
   });
 
+  it("TER-1117: a Claude Code started by hand in the project's own folder has the dialog answered, not reported", async () => {
+    publish.mockClear();
+    const unreported = tab({ state: null, state_at: null, state_tool: null, cwd: null });
+    const s = setup([unreported], TRUST, { pane: 'busy' });
+    (s.repos as unknown as { projectSetup: unknown }).projectSetup = { get: vi.fn(async () => ({ data: { agent: { trust_project_folder: true } } })) };
+    const sendEnter = vi.fn(async () => {});
+    await sweepUnreported(s.repos, log() as never, now, { ...s.deps, trust: { capture: s.capture, sendEnter, now: () => 0 } });
+    expect(sendEnter).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'th-t1');
+    expect(s.recordEvent).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
   it('a plain shell or an ordinary prompt stays unreported, and is read again only after the recheck delay', async () => {
     const unreported = tab({ state: null, state_at: null, state_tool: null });
     const shell = setup([unreported], 'pedro@jarvis:~$ ', { pane: 'shell' });

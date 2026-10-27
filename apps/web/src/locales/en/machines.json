@@ -289,6 +289,7 @@
   "Usa <0>asdf</0>? Rode": "Using <0>asdf</0>? Run",
   "Usar esta pasta": "Use this folder",
   "Usar git worktree por run (isola a branch de cada ticket)": "Use a git worktree per run (isolates each ticket's branch)",
+  "Confiar sozinho na pasta do projeto quando o Claude Code perguntar": "Trust the project folder automatically when Claude Code asks",
   "Usuário SSH": "SSH user",
   "Vale para novas sessões tmux; tabs já abertas continuam onde estão.": "Applies to new tmux sessions; tabs already open stay where they are.",
   "Verificação": "Verification",

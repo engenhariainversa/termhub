@@ -108,8 +108,13 @@ beforeEach(() => {
   mkdirSync(bin, { recursive: true });
   writeFileSync(join(home, HOOK_ENV_REL), `TERMHUB_HOOK_URL='http://x/api/hooks/events'\nTERMHUB_HOOK_TOKEN='thk_test'\n`);
   writeFileSync(join(bin, 'termhub-hook'), HOOK_SCRIPT);
-  // capture-pane prints the fake screen (nothing, and a failure, when there is none); anything else is display-message
-  writeFileSync(join(bin, 'tmux'), `#!/bin/sh\ncase "$1" in capture-pane) cat "${pane}" 2>/dev/null ;; *) echo th-abc ;; esac\n`);
+  // capture-pane prints the fake screen (nothing, and a failure, when there is none); list-panes the panes a
+  // test wrote to $TH_PANES; anything else is display-message. Asked for the pane's pid (Codex, TER-1118), it
+  // answers this process, the parent of every script a test runs, unless a test names another ($TH_PANE_PID).
+  writeFileSync(
+    join(bin, 'tmux'),
+    `#!/bin/sh\ncase "$1" in\n  capture-pane) cat "${pane}" 2>/dev/null ;;\n  list-panes) cat "$TH_PANES" 2>/dev/null ;;\n  *) case "$*" in *pane_pid*) echo "\${TH_PANE_PID:-${process.pid}} th-abc" ;; *) echo th-abc ;; esac ;;\nesac\n`,
+  );
   // A synchronous fake: reads the body from stdin (--data-binary @-) and appends it as one line, in a
   // single write. Body and newline used to be two appends: a test saw the body, finished, and the
   // newline's append recreated the log inside the directory afterEach was removing (ENOTEMPTY on CI).
@@ -895,5 +900,114 @@ describe('hook script — origin note on UserPromptSubmit (TER-851)', () => {
     expect(runReplying('codex', prompt, { TH_REPLY: note })).toBe('');
     expect(runReplying('claude', { session_id: 's1', agent_id: 'a1', hook_event_name: 'UserPromptSubmit', prompt: 'x' }, { TH_REPLY: note })).toBe('');
     await bodies(3);
+  });
+});
+
+/**
+ * Codex 0.164 (TER-1118): a `codex` typed in a shell attaches to Codex's shared app-server daemon, which runs
+ * the hooks and notify with the environment of the pane it was started from — another tab's $TMUX_PANE.
+ * A fake `ps` answers the process table: the script ("ME", the fake's parent) under the daemon, and the
+ * termhub panes' shells with their Codex; a fake `list-panes` answers each pane's shell, session and folder.
+ */
+describe('hook script — Codex under the shared app-server daemon', () => {
+  const SID = '01a17dc3-d139-7e53-843b-c28eea709692';
+  const OTHER = '01a17dc2-ae1c-71d1-8e1b-b9b2013235be';
+  const prompt = { session_id: SID, turn_id: 't1', transcript_path: `/h/.codex/sessions/2026/10/27/rollout-2026-10-27T11-29-07-${SID}.jsonl`, cwd: '/w/termhub', hook_event_name: 'UserPromptSubmit', prompt: 'Teste' };
+  const notify = JSON.stringify({ type: 'agent-turn-complete', 'thread-id': SID, 'turn-id': 't1', 'last-assistant-message': 'Tudo certo!' });
+  const DAEMON = ['ME 1000 ?? /bin/sh /h/.termhub/bin/termhub-hook codex', '1000 1 ?? /h/.codex/packages/bin/codex app-server --listen unix:// --managed-daemon'];
+  // pane A (2001) and pane B (3001) run Codex in the same folder; pane C (4001) runs it elsewhere
+  const PANE_PROCS = [
+    '2001 1 ttys045 -zsh',
+    '2002 2001 ttys045 node /h/.nvm/versions/node/v22/bin/codex',
+    '3001 1 ttys044 -zsh',
+    '3002 3001 ttys044 /opt/homebrew/bin/codex --no-alt-screen',
+    '4001 1 ttys021 -zsh',
+    '4002 4001 ttys021 node /h/.nvm/versions/node/v22/bin/codex',
+  ];
+  const PANES = ['2001\ttermhub-p-a\t/w/termhub', '3001\ttermhub-p-b\t/w/termhub', '4001\ttermhub-q-c\t/w/other', '5001\tmine\t/w/termhub'];
+
+  function setUp(procs: string[], panes: string[]): void {
+    writeFileSync(join(home, 'ps.txt'), `${procs.join('\n')}\n`);
+    writeFileSync(join(home, 'panes.txt'), `${panes.join('\n')}\n`);
+    writeFileSync(join(bin, 'ps'), `#!/bin/sh\nsed "s/^ME /$PPID /" "${join(home, 'ps.txt')}"\n`);
+    chmodSync(join(bin, 'ps'), 0o755);
+  }
+
+  /** Runs the script as the daemon would: the stale pane of another tab in $TMUX_PANE, the event on stdin or (notify) in argv. */
+  function runUnderDaemon(event: unknown, argv: string | null = null): void {
+    const r = spawnSync('sh', [join(bin, 'termhub-hook'), 'codex', ...(argv === null ? [] : [argv])], {
+      input: argv === null ? JSON.stringify(event) : '',
+      env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, TMUX_PANE: '%3773', TH_PANE_PID: '9999', TH_PANES: join(home, 'panes.txt'), TMPDIR: tmp, TH_SEQ: nextSeq() },
+      timeout: 5000,
+    });
+    if (r.error && (r.error as NodeJS.ErrnoException).code !== 'EPIPE') throw r.error;
+    expect(r.status).toBe(0);
+  }
+
+  const sessionOf = (body: string) => (JSON.parse(body) as { session: string }).session;
+  const bind = (session: string, line: string) => writeFileSync(join(tmp, `termhub-codex-${session.replace(/[^A-Za-z0-9_-]/g, '_')}`), `${line}\n`);
+
+  it('posts under the one termhub pane running Codex in the event’s folder, never under the daemon’s pane', async () => {
+    setUp([...DAEMON, '2001 1 ttys045 -zsh', '2002 2001 ttys045 node /h/.nvm/versions/node/v22/bin/codex', '4001 1 ttys021 -zsh', '4002 4001 ttys021 node /h/.nvm/versions/node/v22/bin/codex'], PANES);
+    runUnderDaemon(prompt);
+    const [body] = await bodies(1);
+    expect(JSON.parse(body)).toEqual({ tool: 'codex', session: 'termhub-p-a', event: prompt });
+  });
+
+  it('remembers the pane, so the notify that carries only the session id reaches it too', async () => {
+    setUp([...DAEMON, '2001 1 ttys045 -zsh', '2002 2001 ttys045 node /h/.nvm/versions/node/v22/bin/codex'], PANES);
+    runUnderDaemon(prompt);
+    await bodies(1);
+    runUnderDaemon(null, notify);
+    const sent = await bodies(2);
+    expect(sent.map(sessionOf)).toEqual(['termhub-p-a', 'termhub-p-a']);
+    expect(eventOf(sent[1])).toEqual(JSON.parse(notify));
+  });
+
+  it('drops the event when two free panes run Codex in that folder', async () => {
+    setUp([...DAEMON, ...PANE_PROCS], PANES);
+    runUnderDaemon(prompt);
+    await sleep(300);
+    expect(logged()).toEqual([]);
+  });
+
+  it('skips a pane another live Codex session holds', async () => {
+    setUp([...DAEMON, ...PANE_PROCS], PANES);
+    bind('termhub-p-b', `${OTHER} 3002 termhub-p-b`);
+    runUnderDaemon(prompt);
+    const [body] = await bodies(1);
+    expect(sessionOf(body)).toBe('termhub-p-a');
+  });
+
+  it('frees a pane whose binding names a Codex that is no longer running there', async () => {
+    setUp([...DAEMON, ...PANE_PROCS], PANES);
+    bind('termhub-p-a', `${OTHER} 1999 termhub-p-a`);
+    bind('termhub-p-b', `${OTHER} 3002 termhub-p-b`);
+    runUnderDaemon(prompt);
+    const [body] = await bodies(1);
+    expect(sessionOf(body)).toBe('termhub-p-a');
+  });
+
+  it('drops a notify of a session no pane is bound to (it has no folder to look in)', async () => {
+    setUp([...DAEMON, ...PANE_PROCS], PANES);
+    runUnderDaemon(null, notify);
+    await sleep(300);
+    expect(logged()).toEqual([]);
+  });
+
+  it('drops the event of a Codex running in a terminal outside the termhub panes', async () => {
+    setUp(['ME 700 ttys009 /bin/sh /h/.termhub/bin/termhub-hook codex', '700 600 ttys009 /opt/homebrew/bin/codex', '600 1 ttys009 -zsh', '2001 1 ttys045 -zsh', '2002 2001 ttys045 node /h/.nvm/versions/node/v22/bin/codex'], PANES);
+    runUnderDaemon(prompt);
+    await sleep(300);
+    expect(logged()).toEqual([]);
+  });
+
+  it('binds the pane an in-process Codex runs in, so the daemon’s next session picks the other pane', async () => {
+    // in-process: the pane's shell (this process, per the fake tmux) is the script's parent
+    setUp([`ME ${process.pid} ttys044 /bin/sh /h/.termhub/bin/termhub-hook codex`, `${process.pid} 1 ttys044 -zsh`, `3002 ${process.pid} ttys044 /opt/homebrew/bin/codex`], PANES);
+    runAs('codex', { ...prompt, session_id: OTHER });
+    const [first] = await bodies(1);
+    expect(sessionOf(first)).toBe('th-abc');
+    expect(readFileSync(join(tmp, 'termhub-codex-th-abc'), 'utf8')).toBe(`${OTHER} 3002 th-abc\n`);
   });
 });

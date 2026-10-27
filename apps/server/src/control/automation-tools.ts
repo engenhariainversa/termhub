@@ -270,10 +270,14 @@ export function runBranchRules(branch: string | null, repos?: RunRepos | null): 
  * With `keys` (spec 2026-10-07 multi-repo R13), the worktree is a multi-repo run's workspace root and each
  * repo folder gets the `-C` forms too, by exact path: `<worktree>/<key>` and, relative to the tab's cwd,
  * `<key>`. Still no wildcard in a path, and no other subfolder.
+ *
+ * A push gets no form (TER-1111): the guard takes only the run's exact pushes (`runBranchRules`, the
+ * `git -C <worktree>/<key>` ones of a multi-repo run included), so an allow rule for `git -C <worktree> push`
+ * or `git --no-pager push` would only let the classifier skip a call the guard then denies.
  */
 export function gitRuleForms(rule: string, worktree: string | null, keys: readonly string[] = []): string[] {
   const m = /^Bash\(git (?!-)([\s\S]+)\)$/.exec(rule);
-  if (!m) return [];
+  if (!m || /^push(\s|$)/.test(m[1]!)) return [];
   const dir = ruleDir(worktree);
   const repoPaths = runRepoPaths({ workspace: dir, keys });
   const paths = dir ? [dir, `${dir}/`, '.', ...repoPaths.flatMap((p) => [p, p.slice(dir.length + 1)])] : [];

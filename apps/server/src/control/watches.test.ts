@@ -77,6 +77,15 @@ describe('watch', () => {
     expect(events).toEqual([expect.objectContaining({ type: 'watches', user_id: 'u1', conversation_id: 'c1' })]);
   });
 
+  it('keeps the person\'s line apart from the note; the screens get the line and never the note (TER-1115)', async () => {
+    listOpen.mockImplementation(async () => [row({ ...create.mock.calls[0][0], last_event: null })]);
+    const out = await watch(ctxWith(), { kind: 'tab', tab_id: 't1', label: '  Te aviso quando\n a aba api parar ', note: 'A cada parada: read_last_answer e notify' }, probe);
+    expect(create.mock.calls[0][0]).toMatchObject({ label: 'api', summary: 'Te aviso quando a aba api parar', note: 'A cada parada: read_last_answer e notify' });
+    expect(out.watch).toMatchObject({ summary: 'Te aviso quando a aba api parar', note: 'A cada parada: read_last_answer e notify' });
+    const published = events.find((e) => e.type === 'watches');
+    expect(published).toMatchObject({ watches: [{ summary: 'Te aviso quando a aba api parar', note: '' }] });
+  });
+
   it('takes a card by its ref, with `to`', async () => {
     await watch(ctxWith(), { kind: 'card', task_id: 'TER-12', to: 'done', note: 'x' }, probe);
     expect(scoped.taskByRef).toHaveBeenCalledWith('TER-12');
@@ -153,6 +162,11 @@ describe('schedule_wakeup (TER-1100)', () => {
     expect(out.watch).toMatchObject({ kind: 'reminder', next_at: '2026-10-21T18:05:00.000Z', every_minutes: null });
     expect(out.note).toMatch(/Confirme à pessoa o horário no fuso dela/);
     expect(events).toEqual([expect.objectContaining({ type: 'watches', user_id: 'u1', conversation_id: 'c1' })]);
+  });
+
+  it('a reminder\'s label is the person\'s line, apart from the note (TER-1115)', async () => {
+    await scheduleWakeup(ctxWith(), { in_minutes: 5, label: 'Conferir o build', note: 'list_tasks; se CI vermelho, notify needs_you' }, now);
+    expect(create.mock.calls[0][0]).toMatchObject({ label: 'Conferir o build', summary: 'Conferir o build', note: 'list_tasks; se CI vermelho, notify needs_you' });
   });
 
   it('"às 18:00" is the person\'s 18:00 (their time zone), today or tomorrow', async () => {

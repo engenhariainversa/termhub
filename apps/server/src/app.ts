@@ -60,6 +60,7 @@ import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startWatchEngine } from './chat/watches/engine.js';
+import { startTrustWake } from './chat/trust-wake.js';
 import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
@@ -487,6 +488,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       },
     },
   });
+  // TER-1117: a tab stuck on the folder trust dialog wakes its project's chat without a watch of the concierge's.
+  const stopTrustWake = startTrustWake(repos, fastify.log, (tabId) => watches.engine.nudge('tab', tabId));
   // TER-1101: the concierge's notices outside the chat (`notify`). A notice leaves once its answer ends, by the
   // person's rules; both colours run it, the claim in the database picks one, and a draining colour sends none.
   const notices = startNoticeDispatcher({
@@ -537,6 +540,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     clearTimeout(onlineSweep);
     stopSync();
     watches.stop();
+    stopTrustWake();
     notices.stop();
     stopCiSync();
     stopSummaries();

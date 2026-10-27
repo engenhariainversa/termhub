@@ -220,6 +220,34 @@ describe('MobilePushService', () => {
     ]);
   });
 
+  it('a tab on the folder trust dialog pushes once to every device, naming the tab and the folder, until it works again (TER-1117)', async () => {
+    const t = setup({ live: ['d1'] });
+    (t.repos as Record<string, unknown>).projectMachines = { find: vi.fn(async () => ({ cwd: '~/code/novo' })) };
+    stop = t.service.start();
+    const tab = (state: Tab['state']) => ({ id: 't1', project_id: 'p1', machine_id: 'm1', name: 'api', state, cwd: null }) as Tab;
+    const publish = (state: Tab['state']) => monitorBus.publish({ tab: tab(state), project_id: 'p1', machine_id: 'm1', owner_id: 'u1' });
+    publish('trust_prompt');
+    await flush();
+    const body = 'A aba api está esperando você confiar na pasta ~/code/novo.';
+    expect(t.repos.userNotifications.create).toHaveBeenCalledWith({
+      user_id: 'u1',
+      kind: 'confirmation',
+      title: 'termhub precisa de você',
+      body,
+      data: { kind: 'tab_trust_prompt', tab_id: 't1', project_id: 'p1', machine_id: 'm1', conversation_id: 'cp' },
+    });
+    // every device, live socket or not: no hook fired, nothing else tells them
+    expect(t.sent[0].map((m) => m.to)).toEqual(['ExponentPushToken[a]', 'ExponentPushToken[b]']);
+    expect(t.sent[0][0].collapseId).toBe('trust:t1');
+    publish('trust_prompt');
+    await flush();
+    expect(t.sent).toHaveLength(1);
+    publish('working');
+    publish('trust_prompt');
+    await flush();
+    expect(t.sent).toHaveLength(2);
+  });
+
   it('clears the token of a device Expo reports as not registered', async () => {
     const t = setup();
     t.sender.send.mockImplementationOnce(async (messages: PushMessage[]) => messages.map((m) => (m.to === 'ExponentPushToken[b]' ? { to: m.to, error: 'DeviceNotRegistered' } : { to: m.to })));

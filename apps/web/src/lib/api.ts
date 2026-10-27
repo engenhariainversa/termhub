@@ -535,6 +535,8 @@ export const api = {
       const q = new URLSearchParams(Object.entries(range).filter((e): e is [string, string] => typeof e[1] === 'string')).toString();
       return request<AutomationUsage>('GET', `/projects/${projectId}/automation/usage${q ? `?${q}` : ''}`);
     },
+    /** TER-1114: whether the project's repository runs any workflow on pull requests. */
+    prCi: (projectId: string) => request<{ state: 'present' | 'absent' | 'unknown' }>('GET', `/projects/${projectId}/automation/pr-ci`),
     promptDefaults: () => request<{ implementer: string; integrator: string; fixer: string }>('GET', '/automation/prompt-defaults'),
     pauseState: () => request<AutomationPauseState>('GET', '/automation/state'),
     /** `scope`: `all` ("Pausar tudo") or a project id. `interrupt` also asks to stop the tabs running now. */
