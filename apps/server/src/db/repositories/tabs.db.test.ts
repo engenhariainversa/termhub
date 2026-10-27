@@ -262,6 +262,46 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabsRepository.markSeen /
     });
   });
 
+  describe('recordEvent — Claude Code compacting at its prompt (TER-1133)', () => {
+    const compaction = { kind: 'working' as const, tool: 'claude', text: null, meta: { event: 'SessionStart', source: 'compact' } };
+
+    it('"Compacted while idle" leaves a finished tab finished, with its report, and its answer current', async () => {
+      await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+      await repo.recordEvent(tabId, { kind: 'finished', tool: 'claude', text: 'PR aberto.', meta: { event: 'Stop' }, answer: 'PR aberto.' });
+      const compacted = await repo.recordEvent(tabId, compaction);
+      expect(compacted.event).toBeNull();
+      expect(compacted.tab).toMatchObject({ state: 'finished', state_text: 'PR aberto.' });
+      expect((await repo.readLastAnswer(tabId))?.stale).toBe(false);
+    });
+
+    it('a tab stuck by an older compaction goes back to its turn end from the screen, already seen', async () => {
+      await repo.recordEvent(tabId, { kind: 'waiting_input', tool: 'claude', text: 'Posso mesclar?', meta: { event: 'Stop' }, answer: 'Posso mesclar?' });
+      await repo.markSeen(tabId);
+      // what a compaction recorded before this fix
+      const stuck = await repo.recordEvent(tabId, { ...compaction, meta: { event: 'SessionStart' } });
+      expect(stuck.tab.state).toBe('working');
+      const restored = await repo.recordEvent(tabId, {
+        kind: 'waiting_input',
+        tool: 'claude',
+        text: 'Posso mesclar?',
+        meta: { event: 'ScreenCheck', screen: 'prompt', restored: true },
+        continuesWait: true,
+        keepsWaitText: true,
+        ifStateAt: stuck.tab.state_at,
+      });
+      expect(restored.event).not.toBeNull();
+      expect(restored.tab).toMatchObject({ state: 'waiting_input', state_text: 'Posso mesclar?' });
+      expect(needsYou(restored.tab)).toBe(false);
+    });
+
+    it('a compaction in the middle of a turn keeps the tab working', async () => {
+      await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
+      const mid = await repo.recordEvent(tabId, compaction);
+      expect(mid.event).not.toBeNull();
+      expect(mid.tab.state).toBe('working');
+    });
+  });
+
   describe('stale working tabs (TER-615)', () => {
     it('lists Claude and Codex terminal tabs working with nothing since the cut, oldest first (TER-643: Codex too)', async () => {
       const { tab } = await repo.recordEvent(tabId, { kind: 'working', tool: 'claude', text: null, meta: { event: 'UserPromptSubmit' } });
