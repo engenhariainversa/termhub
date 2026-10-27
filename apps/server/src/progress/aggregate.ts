@@ -228,6 +228,8 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'escalated') return escalationEventText(p, locale);
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
+  // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
+  if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });
   if (e.kind === 'run_cancelled') {
     const reason = str(p.reason);
     return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;
