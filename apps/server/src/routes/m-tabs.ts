@@ -1,4 +1,5 @@
 import {
+  sessionStartOptionsQuery,
   startSessionBody,
   startTabAgentBody,
   TAB_FILE_MAX_BYTES,
@@ -7,6 +8,7 @@ import {
   tabFileQuery,
   tabMessageBody,
   tabScreenQuery,
+  type TSessionStartOptions,
   type TTabActionResponse,
   type TStartTabAgentResponse,
   type TTabAgentOptions,
@@ -16,6 +18,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireTranscriptCapable } from '../agent/errors.js';
+import { agents } from '../agent/registry.js';
 import { scoped } from '../auth/scope.js';
 import { startAgent, startTabAgent, tabAgentOptions } from '../control/agents.js';
 import { ControlError, controlContextFor } from '../control/context.js';
@@ -142,10 +145,31 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     };
   });
 
-  /** "Nova sessão": Claude Code in a new tab of the project, with the project's account and model. */
+  /**
+   * "Nova sessão" from a project (TER-1119): the project's machines, online or not, each with the accounts
+   * an agent can start with there and the one picked without asking — the same rule as `GET /:id/agent`.
+   */
+  app.get('/start-options', async (request): Promise<TSessionStartOptions> => {
+    const { project_id } = sessionStartOptionsQuery.parse(request.query);
+    const { project, machines } = await scoped(repos, request).projectMachines(project_id);
+    const ctx = ctxOf(request);
+    const online = deps.agent ?? agents;
+    return {
+      machines: await Promise.all(
+        machines.map(async ({ machine }) => ({
+          id: machine.id,
+          name: machine.name,
+          online: machine.type !== 'agent' || online.isOnline(machine.id),
+          ...(await control(() => tabAgentOptions(ctx, project, machine))),
+        })),
+      ),
+    };
+  });
+
+  /** "Nova sessão": an agent in a new tab of the project, with the chosen account (else the project's) and the project's model. */
   app.post('/', { config: { action: 'write' } }, async (request) => {
     const body = startSessionBody.parse(request.body);
-    const started = await control(() => startAgent(ctxOf(request), { project_id: body.project_id, machine_id: body.machine_id, prompt: body.prompt }));
+    const started = await control(() => startAgent(ctxOf(request), { project_id: body.project_id, machine_id: body.machine_id, ...(body.account_id ? { account_id: body.account_id } : {}), prompt: body.prompt }));
     request.log.info({ tabId: started.tab_id, projectId: body.project_id, promptLen: body.prompt.length }, 'tab chat: session started');
     return { tab_id: started.tab_id };
   });
