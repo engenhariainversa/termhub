@@ -325,6 +325,9 @@ export function SetupForm({ project }: Props) {
         <Row label={t('Argumentos extras')}>
           <input className="input font-mono" value={data.agent.extra_args ?? ''} onChange={(e) => patch('agent', { ...data.agent, extra_args: e.target.value || null })} /* i18n-ignore */ placeholder="--permission-mode acceptEdits" />
         </Row>
+        <Check checked={data.agent.trust_project_folder !== false} onChange={(v) => patch('agent', { ...data.agent, trust_project_folder: v })}>
+          {t('Confiar sozinho na pasta do projeto quando o Claude Code perguntar')}
+        </Check>
       </Card>
 
       <Card title={t('Verificação')} hint={t('Evidência anexada ao PR para você aprovar.')}>

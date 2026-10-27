@@ -675,7 +675,8 @@ export interface ProjectSetupData {
   } | null;
   ticket_sources: TicketSource[];
   runner: { machine_id: string | null; cwd: string | null; setup_command: string | null; worktree: boolean };
-  agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null };
+  /** trust_project_folder: absent from an older server (TER-1117); on unless false */
+  agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null; trust_project_folder?: boolean };
   verify: { type: 'none' | 'ios-simulator' | 'web-screenshot' | 'command'; target: string | null; build_command: string | null };
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
   /** absent from an older server; the form sends back what it received */
@@ -1418,6 +1419,12 @@ export interface ChatWatch {
    *  repeats. Null or absent otherwise (an older server leaves them out). */
   next_at?: string | null;
   every_minutes?: number | null;
+  /** TER-1115: the concierge's line for the person (`note` comes blank: it is the concierge's own); what
+   *  already happened (the last event and when); a watched tab's state now. Absent from an older server. */
+  summary?: string | null;
+  last_event?: string | null;
+  last_fired_at?: string | null;
+  target_state?: string | null;
 }
 
 /**

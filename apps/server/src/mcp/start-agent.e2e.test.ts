@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { hashApiToken } from '../auth/api-tokens.js';
@@ -297,5 +298,35 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
     expect(flat).toContain('fake-cli prompt=[--no-alt-screen]');
     expect(flat).toContain(`fake-cli last=[${flatten(withLessonsReminder(prompt))}]`);
     expect(flat).toContain(`fake-cli cfg=${cfg}`);
+  }, 30_000);
+
+  it("TER-1117: a project just linked — the folder trust dialog is answered and the agent goes on to the prompt alone", async () => {
+    const { app, repos } = build(cwd);
+    const insert = vi.fn(async (e: Record<string, unknown>) => ({ id: 'ev1', created_at: '', ...e }));
+    Object.assign(repos, { automationEvents: { insert } });
+    // the real repository answers cwd null for a tab in the project's own folder
+    const create = vi.mocked(repos.tabs.create);
+    const plain = create.getMockImplementation()!;
+    create.mockImplementation(async (...a: Parameters<typeof plain>) => Object.assign(await plain(...a), { cwd: null }));
+    const recordEvent = vi.fn();
+    Object.assign(repos.tabs, { recordEvent });
+
+    // Claude Code in a folder it never saw: the dialog first (its real screen), the prompt only after Enter
+    const dialog = fileURLToPath(new URL('../monitor/fixtures/claude-screens/trust-2.1.289.txt', import.meta.url));
+    const claude = join(home, 'bin', 'claude');
+    writeFileSync(claude, `#!/bin/sh\ncat '${dialog}'\nread answer\necho "fake-claude trusted"\nprintf 'fake-claude answering=[%s]\\n' "$1"\n`);
+    try {
+      const out = payloadOf(await callTool(app, 'start_agent', { project_id: 'p1', account_id: 'a1', prompt: 'responda oi' }));
+      expect(await screenWith(app, out.tab_id, 'trust this folder')).toContain('Yes, I trust this folder');
+      // no one touches the tab: the server reads the screen right after the start and answers "Yes"
+      const flat = await screenWith(app, out.tab_id, 'fake-claude answering=');
+      expect(flat).toContain('fake-claude trusted');
+      expect(flat).toContain('fake-claude answering=[responda oi');
+      // in the feed, and the tab never reported a wait on the person
+      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: out.tab_id, tab_name: expect.any(String), folder: 'project' } }));
+      expect(recordEvent).not.toHaveBeenCalled();
+    } finally {
+      writeFileSync(claude, FAKE_CLI);
+    }
   }, 30_000);
 });

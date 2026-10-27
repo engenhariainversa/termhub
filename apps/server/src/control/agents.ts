@@ -20,6 +20,29 @@ import { automationAllowList, automationDenyList } from './automation-tools.js';
 import { AI_MEMORY_MCP_SERVER, aiMemoryForRun, aiMemoryMcpConfig, withAiMemoryHint, withAiMemoryServer } from '../memory/ai-memory-runs.js';
 import { aiMemoryRunPrepLine } from '@termhub/machine-ops';
 import type { ProjectAiMemory } from '../setup/schema.js';
+import { followLaunch } from '../monitor/folder-trust.js';
+import { watch } from './watches.js';
+
+const quiet = { info: () => undefined, warn: () => undefined };
+
+/** What the automatic watch of a `start_agent` tab tells the chat to do when it stops (TER-1117). */
+const START_WATCH_NOTE =
+  'Acompanhamento automático do agente que você iniciou com start_agent: ele parou (resposta, pergunta, permissão, confiança da pasta, login, erro ou fim). Leia read_last_answer (ou read_screen) e conte à pessoa o que ele fez ou do que precisa.';
+
+/**
+ * TER-1117: a tab `start_agent` opened from the chat is followed until its first stop, without the concierge
+ * having to remember a watch. Outside the chat (no conversation to wake), or at the chat's watch limit, there
+ * is none; never fails the start. Answers the watch's id.
+ */
+async function watchStartedTab(ctx: ControlContext, tabId: string): Promise<string | null> {
+  if (!ctx.token?.chat_conversation_id) return null;
+  try {
+    return (await watch(ctx, { kind: 'tab', tab_id: tabId, note: START_WATCH_NOTE })).watch.id;
+  } catch (err) {
+    ctx.log?.warn({ tabId, code: err instanceof ControlError ? err.code : 'unknown' }, 'start_agent: automatic watch not created');
+    return null;
+  }
+}
 
 export { AUTOMATION_DENIED_TOOLS, AUTOMATION_FORM_DENIED_TOOLS, AUTOMATION_MCP_DENIED_TOOLS, AUTOMATION_MCP_TOOLS, AUTOMATION_READ_TOOLS, automationAllowList, automationDenyList, gitRuleForms, branchFetchRules, branchPushRules, runBranchRules, safeAllowedTools, unsafeAllowedTool } from './automation-tools.js';
 
@@ -466,6 +489,8 @@ export interface StartAgentResult {
   model: string | null;
   /** set when the model is a full id an older CLI may not recognise */
   warning?: string;
+  /** TER-1117: the watch that wakes the chat at the tab's first stop (only when started from the chat) */
+  watch_id?: string;
   note: string;
 }
 
@@ -620,6 +645,9 @@ export async function startAgent(
   // which account runs this tab: a later swap must not pick it again (spec 2026-09-26 account swap);
   // best effort, the agent is already running
   await ctx.repos.tabs.setAgentFields(tab.tab_id, { ai_account_id: account.id }).catch(() => undefined);
+  // TER-1117: Claude's folder trust dialog is settled within seconds instead of the tab looking busy.
+  // An automatic run (`internal`) has its own follower for it.
+  if (!internal && account.provider === 'claude') followLaunch(ctx.repos, ctx.log ?? quiet, tab.tab_id, machine);
   if (task) {
     try {
       await attachTask(ctx, task.id, tab.tab_id);
@@ -627,6 +655,10 @@ export async function startAgent(
       throw tagged(new ControlError('TASK_LINK_FAILED', msg('A aba {{tab}} foi aberta e o agente iniciado, mas a tarefa não foi vinculada: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: tab.tab_id, reason: reason(e) })));
     }
   }
+  const watchId = internal ? null : await watchStartedTab(ctx, tab.tab_id);
+  const follow = watchId
+    ? `Esta aba já é acompanhada (watch ${watchId}): o chat é acordado na primeira parada do agente, sem outro watch. Use`
+    : 'Para saber quando ele terminar ou parar, use watch (kind tab) no chat — ou wait_for_state fora dele —, e';
 
   return {
     tab_id: tab.tab_id,
@@ -642,7 +674,8 @@ export async function startAgent(
     ...(model !== null && account.provider === 'claude' && !isAlias(model)
       ? { warning: `O modelo ${model} não é um apelido (${CLAUDE_MODEL_ALIAS_LIST}): um CLI mais antigo nesta máquina pode não reconhecê-lo. Se a aba mostrar erro de modelo, use um apelido no setup do projeto.` }
       : {}),
-    note: `O agente está subindo com o prompt. Para saber quando ele terminar ou parar, use watch (kind tab) no chat — ou wait_for_state fora dele —, e read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
+    ...(watchId ? { watch_id: watchId } : {}),
+    note: `O agente está subindo com o prompt. ${follow} read_last_answer para a resposta dele (read_screen só para o que está na tela). Perguntas e permissões chegam como cards no chat. ${mcp.note}${aiMemory ? ' A aba também tem o MCP ai_memory (a memória local do ai-memory nesta máquina).' : ''}${placeNote ? ` ${placeNote}` : ''}`,
   };
 }
 
@@ -771,6 +804,7 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
   await typeCommandLine(machine, target.tmux_session, line);
   await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
+  if (account.provider === 'claude') followLaunch(ctx.repos, ctx.log ?? quiet, target.tab_id, machine);
   ctx.log?.info({ tabId: target.tab_id, machineId: machine.id, provider: account.provider, newTab: target.tab_id !== tab.id }, 'tab chat: agent started');
   return { tab_id: target.tab_id, new_tab: target.tab_id !== tab.id, account: { id: account.id, label: account.label }, provider: account.provider, model: choice.model };
 }
