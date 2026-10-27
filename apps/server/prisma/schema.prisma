@@ -1394,6 +1394,8 @@ model ChatWatch {
   label          String
   /// what the concierge said to do when it happens, in its own words
   note           String
+  /// TER-1115: what the person reads of it, written by the concierge for them; never the note. null on older rows
+  summary        String?
   recurring      Boolean         @default(false)
   /// open | done | cancelled | expired | gone
   status         String          @default("open")
@@ -1402,6 +1404,8 @@ model ChatWatch {
   closedAt       DateTime?       @map("closed_at")
   lastFiredAt    DateTime?       @map("last_fired_at")
   fireCount      Int             @default(0) @map("fire_count")
+  /// TER-1115: the last event it caught (finished, merged…), for the chat's "terminou às 14:32"
+  lastEvent      String?         @map("last_event")
   fires          ChatWatchFire[]
 
   @@index([status, kind])

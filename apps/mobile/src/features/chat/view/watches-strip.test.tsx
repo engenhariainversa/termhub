@@ -24,18 +24,31 @@ describe('WatchesStrip (TER-1099)', () => {
     expect(screen.queryByTestId('watches-strip')).toBeNull();
   });
 
-  it('names the one watch folded; unfolded, each row says what it follows, until when, its note, and cancels it', async () => {
+  it('shows one watch on one row: the person\'s line, what happened, until when, and ✕; never the note', async () => {
     const onCancel = jest.fn();
-    const watches = [watch(), watch({ id: 'w2', kind: 'tab', label: 'api', events: ['finished', 'error'], recurring: true, note: 'Rodar os testes depois.' })];
-    const { rerender } = await render(<WatchesStrip watches={[watches[0]!]} onCancel={onCancel} now={NOW} />);
-    expect(screen.getByText('Acompanhando: PR #511 Mostrar assinaturas')).toBeTruthy();
-    await rerender(<WatchesStrip watches={watches} onCancel={onCancel} now={NOW} />);
-    await fireEvent.press(screen.getByRole('button', { name: 'Acompanhando (2)' }));
-    expect(screen.getByText(/^Quando for mergeado · até \d{2}:\d{2}$/)).toBeTruthy();
-    expect(screen.getByText(/^Quando terminar, der erro · Recorrente · até \d{2}:\d{2}$/)).toBeTruthy();
-    expect(screen.getByText('Rodar os testes depois.')).toBeTruthy();
-    expect(screen.getByText('Aba')).toBeTruthy();
-    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar acompanhamento de api' }));
+    const w = watch({ summary: 'Te aviso quando o PR #511 for mesclado', note: 'read_last_answer e notify', fire_count: 1, last_event: 'ci_failed', last_fired_at: new Date(2026, 9, 21, 8, 30).toISOString() });
+    await render(<WatchesStrip watches={[w]} onCancel={onCancel} now={NOW} />);
+    expect(screen.getByText('Te aviso quando o PR #511 for mesclado')).toBeTruthy();
+    expect(screen.getByText('CI falhou às 08:30 · até 18:00')).toBeTruthy();
+    expect(screen.queryByText(/read_last_answer/)).toBeNull();
+    // The detailed events only unfolded.
+    expect(screen.queryByText(/Quando for mergeado/)).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Te aviso quando o PR #511 for mesclado' }));
+    expect(screen.getByText('PR #511 Mostrar assinaturas · Quando for mergeado · Uma vez')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar acompanhamento de Te aviso quando o PR #511 for mesclado' }));
+    expect(onCancel).toHaveBeenCalledWith('w1');
+  });
+
+  it('folds several into "Acompanhando N coisas", unfolded on a press', async () => {
+    const onCancel = jest.fn();
+    const watches = [watch(), watch({ id: 'w2', kind: 'tab', label: 'api', events: ['finished', 'error'], recurring: true, summary: 'Te aviso quando a aba api parar', target_state: 'working' })];
+    await render(<WatchesStrip watches={watches} onCancel={onCancel} now={NOW} />);
+    expect(screen.queryByText('Te aviso quando a aba api parar')).toBeNull();
+    await fireEvent.press(screen.getByRole('button', { name: 'Acompanhando 2 coisas' }));
+    expect(screen.getByText('PR #511 Mostrar assinaturas: te aviso quando for mergeado')).toBeTruthy();
+    expect(screen.getByText('Te aviso quando a aba api parar')).toBeTruthy();
+    expect(screen.getByText(/^trabalhando agora · até 18:00$/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancelar acompanhamento de Te aviso quando a aba api parar' }));
     expect(onCancel).toHaveBeenCalledWith('w2');
   });
 });

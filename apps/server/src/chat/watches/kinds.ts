@@ -92,6 +92,8 @@ export const WATCH_LIMITS = {
   /** A recurring watch fires at most once in this window; what happens meanwhile is told at its end. */
   recurringCooldownMs: 10 * 60_000,
   noteMax: 500,
+  /** TER-1115: the person's line (`label` in `watch` and `schedule_wakeup`). */
+  labelMax: 120,
 } as const;
 
 /** Limits of `schedule_wakeup` (TER-1100 §5), on top of `WATCH_LIMITS.openPerScope`, which reminders count towards. */
