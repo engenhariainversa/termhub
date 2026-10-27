@@ -161,12 +161,16 @@ describe('gitRuleForms: the same git rule as `git -C <worktree>` and `--no-pager
     expect(automationDenyList(false)).toBe(AUTOMATION_DENIED_TOOLS);
   });
 
-  it('adds the forms of every git rule to the allow list, never a -C with a wildcard', () => {
+  it('adds the forms of every git rule but push to the allow list, never a -C with a wildcard', () => {
     const list = automationAllowList(DEFAULT_AUTOMATION_TOOLS, 'TER-903-card', { worktree: `${WT}/` });
     expect(list).toContain(`Bash(git -C ${WT} log:*)`);
     expect(list).toContain(`Bash(git -C ${WT} show:*)`);
-    expect(list).toContain(`Bash(git -C ${WT} push -u origin TER-903-card)`);
+    expect(list).toContain(`Bash(git -C ${WT} fetch origin TER-903-card)`);
     expect(list).toContain('Bash(git --no-pager diff:*)');
+    // TER-1111: the guard takes only the exact pushes, so the list offers no other form of them
+    expect(list).toContain('Bash(git push -u origin TER-903-card)');
+    expect(list.filter((r) => r.includes(' push '))).toEqual(branchPushRules('TER-903-card'));
+    expect(gitRuleForms('Bash(git push -u origin TER-903-card)', WT)).toEqual([]);
     expect(list.some((r) => /git (--no-pager )?-C [^ ]*\*/.test(r))).toBe(false);
     expect(new Set(list).size).toBe(list.length);
   });
