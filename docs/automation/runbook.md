@@ -619,6 +619,48 @@ sent it).
   conversation_id = …`. Pending ones older than 24 h are dropped (`stale`); rows go after 7 days. Logs
   carry ids, levels and counts, never the headline.
 
+## 9h. The project health watcher: stalled work, told without asking (TER-1121)
+
+A server job (`apps/server/src/health/`) looks at every active project every 5 minutes (the first sweep 3
+minutes after boot) and keeps one alert per sign of stalled work and subject (`project_health_alerts`):
+
+| Signal | Subject | Counts after | Who acts | Runs |
+| --- | --- | --- | --- | --- |
+| `pr_ready` green open PR, not a draft, not merged while the autonomy merges (with the merge executor's reason: base red, approval, store build…) | PR url | 120 min | person | automation on |
+| `base_red` base head red, or never finishing (a workflow queued with no runner) | base branch | 30 min | person | automation on |
+| `queue_stalled` tagged cards in A fazer, nothing running, nothing started (each card's reason) | queue | 60 min | concierge | automation on |
+| `tab_stuck` tab `working` with no hook event | tab | 30 min | concierge | every project |
+| `tab_waiting` tab on a question, a permission, the folder trust or a login | tab | 10 min | concierge | every project |
+| `card_orphan` card in Doing with no live tab, run, open PR or blocked run | card | 120 min | concierge | automation on |
+| `run_blocked` run escalated (`waiting` with a person's reason) or `blocked` | run | 60 min | person | automation on |
+| `machine_offline` agent machine offline holding a tab or a run of the project | machine | 15 min | person | every project |
+| `delivery_failed` newest merge of a repo whose deploy or release failed, nothing merged since | PR url + workflow | 30 min | person | automation on |
+| `agent_outdated` online agent below `MIN_AGENT_VERSION` | machine | 60 min | person | automation on |
+
+- **Episodes.** A sign is timed from when it started as far as the data tells (the tab's last event, the
+  last run's start, the machine's last contact, the card's last change), else from the first sweep that saw
+  it. Past its minutes the alert opens (`opened_at`); a sweep that no longer sees it resolves it
+  (`resolved_at`); seeing it again later is a new episode on the same row.
+- **Telling.** Each episode reaches the person once (claims `noticed_at` and `woken_at`, both colours):
+  a "person" sign becomes a concierge notice (`needs_you`, section 9g: the person's levels, quiet hours,
+  grouping and cap apply), and every open sign wakes the project's chat with the diagnosis, the ids and what
+  unblocks it. The concierge resolves what the person's rules allow and tells them about the rest; it does
+  not repeat a push already sent. In a project without automatic work nothing wakes the concierge (no AI
+  turn on the person's quota for tabs they drive): the panel and the push only. A wake that cannot start
+  (the chat's host is away) is retried after 5 minutes, doubling up to an hour.
+- **Base readings.** `base_red` reads what the merge executor last saw of the base head (in memory, kept
+  15 minutes): it is only known while a PR waits on the base, which is when it blocks something. A red
+  head is escalated by the merge executor itself (TER-1120: push and wake once per base head), so the
+  watcher only shows it on the panel; a head that never finishes (a run queued with no runner) is pushed and
+  woken by the watcher.
+- **Seeing them.** Progresso shows "Saúde do projeto" with the open alerts; the MCP tool
+  `get_project_health` answers them; the daily summary (section 7) has a "Parado:" line.
+- **Setup.** Setup → Saúde do projeto: the switch (on by default), each sign on or off and its minutes
+  (`health` in the project setup). Quiet hours and push levels are the person's notice settings.
+- **Checking one.** `SELECT signal, subject, since_at, opened_at, woken_at, noticed_at, resolved_at FROM
+  project_health_alerts WHERE project_id = …`. Logs carry ids and signal names only. Resolved rows go after
+  30 days.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
@@ -698,3 +740,8 @@ is updated anyway.
 TER-1086 (section 9c) gives every user the `share_file` tool: the concierge can show them their machines'
 files in the chat. Nothing leaves a machine without a card the person approves, a folder they trusted
 themselves, or an agent tab sharing from its own project folder.
+
+TER-1121 (section 9h) watches every project: in every project a tab stuck or waiting and an offline machine
+holding its work show in "Saúde do projeto", and an offline machine pushes `needs_you` by the person's own
+notice rules; with automatic work on, the other signs too, and the project's concierge is woken once per
+episode. On by default, per project, with each sign and its minutes in Setup → Saúde do projeto.

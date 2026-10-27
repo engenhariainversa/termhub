@@ -683,6 +683,31 @@ export interface ProjectSetupData {
   automation?: ProjectAutomation;
   /** TER-1019 (use_in_runs: TER-1020); absent from an older server */
   ai_memory?: { publish_rules: boolean; use_in_runs?: boolean };
+  /** TER-1121: the project health watcher; absent from an older server */
+  health?: ProjectHealthSetup;
+}
+
+/** TER-1121: the signs of stalled work the project's health watcher looks for. */
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated';
+
+export interface ProjectHealthSetup {
+  enabled: boolean;
+  signals: Record<HealthSignal, { enabled: boolean; minutes: number }>;
+}
+
+/** One open alert of the panel "Saúde do projeto" (GET /projects/:id/health), its text in the reader's language. */
+export interface HealthItem {
+  id: string;
+  signal: HealthSignal;
+  /** needs_you: only the person can act; concierge: the project's chat may resolve it */
+  level: 'needs_you' | 'concierge';
+  name: string;
+  text: string;
+  url: string | null;
+  subject: string;
+  since_at: string;
+  opened_at: string;
+  woken: boolean;
 }
 
 export interface ProjectSetup {

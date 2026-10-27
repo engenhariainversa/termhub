@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { machineLabel } from '../lib/machine-labels';
 import { AutomationSetup } from './AutomationSetup';
+import { HealthSetup } from './HealthSetup';
 import { ProjectAiCard } from './ProjectAiCard';
 import { tk, useTranslation } from '../i18n';
 import {
@@ -386,6 +387,8 @@ export function SetupForm({ project }: Props) {
       </Card>
 
       {data.automation && <AutomationSetup projectId={project.id} value={data.automation} onChange={(next) => patch('automation', next)} />}
+
+      {data.health && <HealthSetup value={data.health} onChange={(next) => patch('health', next)} />}
 
       {data.ai_memory && (
         <Card

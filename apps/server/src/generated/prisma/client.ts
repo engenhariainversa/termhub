@@ -482,6 +482,15 @@ export type UserNotification = Prisma.UserNotificationModel
  */
 export type AutomationSummary = Prisma.AutomationSummaryModel
 /**
+ * Model ProjectHealthAlert
+ * One sign of stalled work the project's health watcher saw (TER-1121): a green PR left unmerged, a red base,
+ * a stuck tab… One row per (project, signal, subject); an episode runs from `firstSeenAt` until the sign is
+ * gone (`resolvedAt`), and seeing it again later starts a new episode on the same row. `wokenAt` and
+ * `noticedAt` are claims: the chat is woken and the person pushed once per episode, whichever colour wins.
+ * Ids, URLs, states and reason codes only — never terminal content.
+ */
+export type ProjectHealthAlert = Prisma.ProjectHealthAlertModel
+/**
  * Model LegalDocumentVersion
  * A version of the Terms of Use or of the Privacy Policy (TER-742). Only `requires_acceptance` versions gate
  * the interactive clients; a relevant version that replaces another takes effect 30+ days after it is registered.

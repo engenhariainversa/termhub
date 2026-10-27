@@ -26,7 +26,7 @@ import { baseRedText, CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_BASE_RED, MERGE
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery, postEscalationLine } from './follower.js';
-import { clearMergeWait, noteMergeWait, type MergeWait } from './merge-wait.js';
+import { clearMergeWait, noteBaseReading, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
@@ -454,18 +454,23 @@ interface BaseReading {
  */
 async function baseState(c: PullCtx, baseBranch: string, headSha: string): Promise<BaseReading> {
   const sha = await c.deps.gh.branchSha(c.token, c.repo, baseBranch);
-  if (!sha) return { state: 'red', sha: null, red: null };
+  // TER-1121: every reading is kept for the health watcher, with the workflows behind it
+  const noted = (b: BaseReading, behind: WorkflowRun[] = []): BaseReading => {
+    noteBaseReading(c.project.id, { state: b.state, sha: b.sha, failing: behind.map((r) => r.name) });
+    return b;
+  };
+  if (!sha) return noted({ state: 'red', sha: null, red: null });
   const runs = latestPerWorkflow(await c.deps.ci.listRuns(c.token, c.repo, sha));
   await readPushOnly(c, sha, runs, headSha);
   const delivery = [c.setup.repo?.deploy_workflow ?? null, ...c.setup.automation.release_workflows].filter((w): w is string => !!w);
   const isDelivery = (r: WorkflowRun) => delivery.some((w) => matchesWorkflow(r, w));
-  if (runs.length === 0 || runs.some((r) => r.status !== 'completed')) return { state: 'pending', sha, red: null };
+  if (runs.length === 0 || runs.some((r) => r.status !== 'completed')) return noted({ state: 'pending', sha, red: null }, runs.filter((r) => r.status !== 'completed'));
   for (const r of runs) {
     if (!FAILED.has(r.conclusion ?? '') || (isDelivery(r) && r.conclusion === 'cancelled')) continue;
     if (r.conclusion === 'cancelled' && (await neverStarted(c, r, sha))) continue;
-    return { state: 'red', sha, red: r };
+    return noted({ state: 'red', sha, red: r }, [r]);
   }
-  return { state: 'green', sha, red: null };
+  return noted({ state: 'green', sha, red: null });
 }
 
 /**
