@@ -417,18 +417,20 @@ it('shows the open watches, takes the whole list from a watches event of this co
       <ChatPanel projectId="p1" />
     </MemoryRouter>,
   );
-  expect(await screen.findByText('PR #511 Login fix')).toBeInTheDocument();
+  expect(await screen.findByText(/PR #511 Login fix/)).toBeInTheDocument();
   // Another conversation's list is not this screen's.
   act(() => onEvent({ type: 'watches', conversation_id: 'c_other', watches: [] }));
-  expect(screen.getByText('PR #511 Login fix')).toBeInTheDocument();
-  act(() => onEvent({ type: 'watches', conversation_id: 'c_p1', watches: [watchRow({ id: 'w1' }), watchRow({ id: 'w2', kind: 'machine', label: 'jarvis', events: ['online'] })] }));
-  expect(screen.getByText('jarvis')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancelar PR #511 Login fix' }));
+  expect(screen.getByText(/PR #511 Login fix/)).toBeInTheDocument();
+  act(() => onEvent({ type: 'watches', conversation_id: 'c_p1', watches: [watchRow({ id: 'w1' }), watchRow({ id: 'w2', kind: 'machine', label: 'jarvis', events: ['online'], summary: 'Te aviso quando a jarvis voltar' })] }));
+  // Several fold into one line (TER-1115).
+  fireEvent.click(screen.getByRole('button', { name: /Acompanhando 2 coisas/ }));
+  expect(screen.getByText('Te aviso quando a jarvis voltar')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Cancelar PR #511 Login fix/ }));
   expect(cancelWatchMock).toHaveBeenCalledWith('w1');
-  await waitFor(() => expect(screen.queryByText('PR #511 Login fix')).toBeNull());
-  expect(screen.getByText('jarvis')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText(/PR #511 Login fix/)).toBeNull());
+  expect(screen.getByText('Te aviso quando a jarvis voltar')).toBeInTheDocument();
   act(() => onEvent({ type: 'watches', conversation_id: 'c_p1', watches: [] }));
-  expect(screen.queryByText('Acompanhando')).toBeNull();
+  expect(screen.queryByRole('region', { name: 'Acompanhando' })).toBeNull();
 });
 
 it('no link without an active grant', async () => {

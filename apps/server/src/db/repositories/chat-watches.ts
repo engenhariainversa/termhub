@@ -15,6 +15,8 @@ export interface ChatWatch {
   baseline: Record<string, unknown>;
   label: string;
   note: string;
+  /** TER-1115: what the person reads of it, the concierge's words for them; null on rows from before it. */
+  summary: string | null;
   recurring: boolean;
   status: WatchStatus;
   created_at: string;
@@ -22,6 +24,8 @@ export interface ChatWatch {
   closed_at: string | null;
   last_fired_at: string | null;
   fire_count: number;
+  /** TER-1115: the last event it caught (`finished`, `merged`…), null until it fires. */
+  last_event: string | null;
 }
 
 export interface NewChatWatch {
@@ -34,6 +38,7 @@ export interface NewChatWatch {
   baseline: Record<string, unknown>;
   label: string;
   note: string;
+  summary?: string | null;
   recurring: boolean;
   expires_at: Date;
 }
@@ -70,8 +75,8 @@ const map = (r: PrismaWatch): ChatWatch | null =>
     ? {
         id: r.id, user_id: r.userId, project_id: r.projectId, conversation_id: r.conversationId, kind: r.kind, target_id: r.targetId,
         params: r.params as unknown as WatchParams, baseline: (r.baseline ?? {}) as Record<string, unknown>, label: r.label, note: r.note,
-        recurring: r.recurring, status: r.status as WatchStatus, created_at: r.createdAt.toISOString(), expires_at: r.expiresAt.toISOString(),
-        closed_at: r.closedAt?.toISOString() ?? null, last_fired_at: r.lastFiredAt?.toISOString() ?? null, fire_count: r.fireCount,
+        summary: r.summary, recurring: r.recurring, status: r.status as WatchStatus, created_at: r.createdAt.toISOString(), expires_at: r.expiresAt.toISOString(),
+        closed_at: r.closedAt?.toISOString() ?? null, last_fired_at: r.lastFiredAt?.toISOString() ?? null, fire_count: r.fireCount, last_event: r.lastEvent,
       }
     : null;
 const mapKnown = (rows: PrismaWatch[]) => rows.flatMap((r) => { const m = map(r); return m ? [m] : []; });
@@ -91,7 +96,7 @@ export class ChatWatchesRepository {
     const row = await this.db.chatWatch.create({
       data: {
         id: newId(), userId: input.user_id, projectId: input.project_id, conversationId: input.conversation_id, kind: input.kind, targetId: input.target_id,
-        params: input.params as object, baseline: input.baseline as object, label: input.label, note: input.note, recurring: input.recurring,
+        params: input.params as object, baseline: input.baseline as object, label: input.label, note: input.note, summary: input.summary ?? null, recurring: input.recurring,
         createdAt: now, expiresAt: input.expires_at,
       },
     });
@@ -147,6 +152,7 @@ export class ChatWatchesRepository {
             baseline: firing.baseline as object,
             lastFiredAt: now,
             fireCount: { increment: firing.events.length },
+            lastEvent: firing.events[firing.events.length - 1]!.event,
             ...(firing.close ? { status: firing.close, closedAt: now } : {}),
           },
         });
