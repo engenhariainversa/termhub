@@ -166,15 +166,32 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     return { status: 200, body: { tabs: [...state.tabs.values()].map((t) => t.summary) } };
   });
 
+  // "Nova sessão" from a project (TER-1119): jarvis online with the mock accounts, hulk offline with none.
+  router.route('GET', '/api/m/v1/tabs/start-options', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    const projectId = ctx.query.project_id ?? '';
+    if (!state.projects.get(projectId)) throw new WireError(404, 'NOT_FOUND', 'Projeto não encontrado');
+    return {
+      status: 200,
+      body: {
+        machines: [
+          { id: 'm-jarvis', name: 'jarvis', online: true, choices: AGENT_CHOICES, suggested: AGENT_CHOICES[0]!.account_id, provider: 'claude' },
+          { id: 'm-hulk', name: 'hulk', online: false, choices: [], suggested: null, provider: 'claude' },
+        ],
+      },
+    };
+  });
+
   router.route('POST', '/api/m/v1/tabs', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
     const body = startSessionBody.parse(ctx.body);
     const project = state.projects.get(body.project_id);
     if (!project) throw new WireError(404, 'NOT_FOUND', 'Projeto não encontrado');
+    const cli = AGENT_CHOICES.find((c) => c.account_id === body.account_id)?.provider === 'chatgpt' ? 'codex' : 'claude';
     const id = `t-${randomId(6)}`;
     const at = new Date(ctx.now()).toISOString();
     state.tabs.set(id, {
-      summary: { id, name: 'claude', project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null, agent: 'claude' },
+      summary: { id, name: cli, project: { id: project.id, key: project.key, name: project.name }, machine: { id: 'm-jarvis', name: 'jarvis' }, state: 'working', background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, state_at: at, needs_you: false, activity: null, activity_verb: null, availability: 'ready', auto_ref: null, agent: cli },
       session: `s-${randomId(6)}`,
       items: [{ kind: 'user', id: `${id}-u0`, at, text: body.prompt, images: 0 }],
       mode: 'default',

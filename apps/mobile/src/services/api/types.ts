@@ -70,6 +70,7 @@ import type {
   TStartTabAgentBody,
   TStartTabAgentResponse,
   TTabAgentOptions,
+  TSessionStartOptions,
   TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
@@ -302,7 +303,10 @@ export interface MobileApi {
   fileRecent(auth: Auth, projectId: string): Promise<TFileRecentResponse>;
   /** The terminal tabs of the person's projects, with each one's state and availability. */
   tabs(auth: Auth): Promise<TTabsResponse>;
-  /** Starts Claude Code in a new tab of the project with `prompt` as its first message. */
+  /** The machines "Nova sessão" can start on in the project, online or not, with each one's accounts (TER-1119). */
+  sessionStartOptions(auth: Auth, projectId: string): Promise<TSessionStartOptions>;
+  /** Starts an agent in a new tab of the project with `prompt` as its first message: on `machine_id` with
+   *  `account_id` when given, else where and with what the project's accounts decide. */
   startSession(auth: Auth, body: TStartSessionBody): Promise<TStartSessionResponse>;
   /** The newest page of the conversation, or the one before `before` (an opaque cursor). */
   tabChat(auth: Auth, tabId: string, before?: string): Promise<TTabChatPage>;

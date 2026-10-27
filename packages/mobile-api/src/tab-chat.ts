@@ -70,6 +70,8 @@ export const TAB_MESSAGE_MAX_CHARS = 4000;
 export const startSessionBody = z.object({
   project_id: z.string().min(1).max(64),
   machine_id: z.string().min(1).max(64).optional(),
+  /** the account chosen in "Nova sessão" (TER-1119), on `machine_id`; absent = the project's rule picks */
+  account_id: z.string().min(1).max(64).optional(),
   prompt: z.string().min(1).max(TAB_MESSAGE_MAX_CHARS),
 });
 export type TStartSessionBody = z.infer<typeof startSessionBody>;
@@ -138,6 +140,21 @@ export const tabAgentOptions = z.object({
   provider: z.string().nullable().default(null),
 });
 export type TTabAgentOptions = z.infer<typeof tabAgentOptions>;
+
+/** One machine "Nova sessão" can start on (TER-1119): a machine linked to the project, whether it is online
+ *  now, and its accounts as `GET tabs/:id/agent` lists them for a tab there (exclusive accounts of other
+ *  projects left out). */
+export const sessionStartMachine = tabAgentOptions.extend({
+  id: z.string(),
+  name: z.string(),
+  online: z.boolean(),
+});
+export type TSessionStartMachine = z.infer<typeof sessionStartMachine>;
+
+/** `GET tabs/start-options?project_id=` (TER-1119): the project's machines, in the order they were linked. */
+export const sessionStartOptionsQuery = z.object({ project_id: z.string().min(1).max(64) });
+export const sessionStartOptions = z.object({ machines: z.array(sessionStartMachine) });
+export type TSessionStartOptions = z.infer<typeof sessionStartOptions>;
 
 /** `POST tabs/:id/agent` (TER-1094): no account = the suggested one (409 `ACCOUNT_CHOICE_REQUIRED` when there is none). */
 export const startTabAgentBody = z.object({ account_id: z.string().min(1).max(64).optional() });
