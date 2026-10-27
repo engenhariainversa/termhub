@@ -649,7 +649,10 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
   turn on the person's quota for tabs they drive): the panel and the push only. A wake that cannot start
   (the chat's host is away) is retried after 5 minutes, doubling up to an hour.
 - **Base readings.** `base_red` reads what the merge executor last saw of the base head (in memory, kept
-  15 minutes): it is only known while a PR waits on the base, which is when it blocks something.
+  15 minutes): it is only known while a PR waits on the base, which is when it blocks something. A red
+  head is escalated by the merge executor itself (TER-1120: push and wake once per base head), so the
+  watcher only shows it on the panel; a head that never finishes (a run queued with no runner) is pushed and
+  woken by the watcher.
 - **Seeing them.** Progresso shows "Saúde do projeto" with the open alerts; the MCP tool
   `get_project_health` answers them; the daily summary (section 7) has a "Parado:" line.
 - **Setup.** Setup → Saúde do projeto: the switch (on by default), each sign on or off and its minutes

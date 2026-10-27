@@ -480,5 +480,8 @@
   "O termhub percebe sozinho quando o trabalho para e avisa: um push quando só você pode destravar e o concierge do projeto acordado para resolver o resto. Abas e máquinas valem em todo projeto; o resto, só com o automático ligado. Horário de silêncio e níveis de push seguem os seus avisos do concierge.": "termhub notices on its own when work stalls and tells you: a push when only you can unblock it, and the project's concierge woken to resolve the rest. Tabs and machines count in every project; the rest only with automatic work on. Quiet hours and push levels follow your concierge notices.",
   "Vigiar a saúde do projeto": "Watch the project's health",
   "(com o automático)": "(with automatic work)",
-  "depois de": "after"
+  "depois de": "after",
+  "Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue": "Workflow {{workflow}} cancelled without a runner on the base branch; the merge queue goes on",
+  "sem nome": "unnamed",
+  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "These run on a push to the base branch and are not the deploy, a release workflow or a required check: {{list}}. If one publishes something, add it here; a failure of it on the base holds the merge queue."
 }

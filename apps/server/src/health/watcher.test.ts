@@ -161,4 +161,22 @@ describe('the watcher (TER-1121)', () => {
     expect(notices.map((n) => n.headline)).toEqual(['Máquina hulk offline com trabalho do projeto há 15 min']);
     expect(wake).not.toHaveBeenCalled();
   });
+
+  it('a red base is on the panel only (the merge executor tells it, TER-1120); a base that never finishes is told', async () => {
+    // the base has no start time of its own: it is timed from the first sweep that sees it
+    const red = setup((now) => empty(now, { base: { state: 'red', sha: 'abc1234', failing: ['CI'] } }));
+    await red.watcher.sweep();
+    red.tick(30);
+    await red.watcher.sweep();
+    expect(red.store.rows[0]).toMatchObject({ signal: 'base_red', opened_at: at(30).toISOString(), noticed_at: null, woken_at: null });
+    expect(red.notices).toEqual([]);
+    expect(red.wake).not.toHaveBeenCalled();
+
+    const stuck = setup((now) => empty(now, { base: { state: 'pending', sha: 'abc1234', failing: ['TestFlight'] } }));
+    await stuck.watcher.sweep();
+    stuck.tick(30);
+    await stuck.watcher.sweep();
+    expect(stuck.notices.map((n) => n.headline)).toEqual(['Branch base main com a CI sem terminar há 30 min: sem terminar: TestFlight']);
+    expect(stuck.wake).toHaveBeenCalledTimes(1);
+  });
 });

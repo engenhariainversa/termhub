@@ -56,6 +56,8 @@
   "O card não conseguiu começar depois de várias tentativas e saiu do automático; corrija a causa e marque o card de novo.": "La tarjeta no pudo empezar después de varios intentos y salió del modo automático; corrige la causa y vuelve a marcar la tarjeta.",
   "O agente saiu de novo depois de reiniciado; confira a aba.": "El agente volvió a salir después de reiniciarse; revisa la pestaña.",
   "O agente disse que travou e precisa de você.": "El agente dijo que está bloqueado y te necesita.",
+  "O agente travou numa aba cujo trabalho automático já tinha terminado; confira a aba.": "El agente se bloqueó en una pestaña cuyo trabajo automático ya había terminado; revisa la pestaña.",
+  "O trabalho automático desta aba já tinha terminado; nada foi alterado": "El trabajo automático de esta pestaña ya había terminado; no se cambió nada",
   "O agente parou numa decisão que o automático não toma sozinho (credenciais, deploy, lojas, dados de produção ou escopo maior que o card); responda na aba.": "El agente se detuvo en una decisión que el trabajo automático no toma solo (credenciales, deploy, tiendas, datos de producción o un alcance mayor que la tarjeta); responde en la pestaña.",
   "O agente parou numa decisão e o projeto pede para parar nelas; responda na aba.": "El agente se detuvo en una decisión y el proyecto pide detenerse en ellas; responde en la pestaña.",
   "Decidido sozinho: {{decisions}}": "Decidido solo: {{decisions}}",
@@ -173,5 +175,8 @@
   "{{n}} h": "{{n}} h",
   "{{n}} d": "{{n}} d",
   "{{n}} sinais de trabalho parado: {{first}}": "{{n}} señales de trabajo detenido: {{first}}",
-  "Parado: {{stalled}}": "Detenido: {{stalled}}"
+  "Parado: {{stalled}}": "Detenido: {{stalled}}",
+  "A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.": "La rama base está en rojo y detiene los PR listos; no se hace merge de nada hasta que esté en verde. Revisa la ejecución que falló.",
+  "A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.": "La rama base está en rojo en {{sha}} por «{{workflow}}» y detiene los PR listos; no se hace merge de nada hasta que esté en verde. Revisa la ejecución.",
+  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "El workflow «{{workflow}}» se canceló sin ejecutarse en {{sha}} (no tuvo runner); no se entregó nada y la cola de merge sigue: {{url}}"
 }

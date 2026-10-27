@@ -76,7 +76,10 @@ export function createHealthWatcher(deps: HealthWatcherDeps): HealthWatcher {
   /** Per project: when a failed wake may be tried again, and the pause after the next failure. */
   const retry = new Map<string, { at: number; pause: number }>();
 
-  async function tell(project: Project, owner: User, open: HealthAlert[], wake: boolean): Promise<void> {
+  async function tell(project: Project, owner: User, all: HealthAlert[], wake: boolean): Promise<void> {
+    // a sign another part of termhub already tells (a red base, TER-1120) stays on the panel only
+    const open = all.filter((a) => !a.detail.told_elsewhere);
+    if (!open.length) return;
     const at = now();
     const locale = localeOf(owner.locale);
     const conversation = (await deps.repos.chat.findLatestActiveForProject(project.id, owner.id)) ?? (await deps.repos.chat.getOrCreateForProject(owner.id, project.id));

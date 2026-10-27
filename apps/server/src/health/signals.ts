@@ -155,9 +155,14 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
     }
   }
 
-  // 2. the base branch's head red, or never settling (a workflow queued with no runner)
+  // 2. the base branch's head red, or never settling (a workflow queued with no runner). A red head that
+  // holds a ready PR is escalated by the merge executor itself (TER-1120, push and wake once per base head):
+  // the watcher shows it and stays quiet (`told_elsewhere`); a head that never settles is its own to tell.
   if (s.base && s.base.state !== 'green') {
-    add('base_red', s.base_branch, null, { label: s.base_branch, state: s.base.state, sha: s.base.sha ? s.base.sha.slice(0, 7) : null, failing: s.base.failing.slice(0, 5).join(', ') || null });
+    add('base_red', s.base_branch, null, {
+      label: s.base_branch, state: s.base.state, sha: s.base.sha ? s.base.sha.slice(0, 7) : null, failing: s.base.failing.slice(0, 5).join(', ') || null,
+      ...(s.base.state === 'red' ? { told_elsewhere: 1 } : {}),
+    });
   }
 
   // 3. cards waiting in A fazer and nothing running, nothing started for a while
