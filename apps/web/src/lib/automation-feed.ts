@@ -56,6 +56,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'github_wait':
       return t('{{ref}}: erro do GitHub; o termhub tenta de novo quando ele voltar', { ref });
     case 'trust_auto_accepted':
+      // TER-1117: answered in the project's own folder, outside any run (the server's line names the tab)
+      if (!e.task_id && e.reason_text) return e.reason_text;
       return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });

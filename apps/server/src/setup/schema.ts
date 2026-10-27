@@ -57,6 +57,8 @@ export const agentSchema = z.object({
   plugins: z.array(z.string().trim().min(1).max(100)).default(['superpowers']),
   model: z.string().trim().max(100).nullable().default(null),
   extra_args: z.string().trim().max(1000).nullable().default(null),
+  /** TER-1117: the server answers Claude Code's folder trust dialog in the project's linked folder */
+  trust_project_folder: z.boolean().default(true),
 });
 
 export const verifySchema = z.object({
