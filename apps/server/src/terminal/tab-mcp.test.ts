@@ -120,29 +120,28 @@ describe('removeTabMcp', () => {
 });
 
 describe('guardSupported (TER-993)', () => {
-  it('never for ssh or local (they do not run automatic work), for an agent only from 0.19.0', () => {
-    expect(GUARD_MIN_AGENT_VERSION).toBe('0.19.0');
+  it('never for ssh or local (they do not run automatic work), for an agent only from 0.36.0 (guard v3, TER-1111)', () => {
+    expect(GUARD_MIN_AGENT_VERSION).toBe('0.36.0');
     expect(guardSupported(machine('ssh'))).toBe(false);
     expect(guardSupported(machine('local'))).toBe(false);
-    expect(guardSupported(machine('agent', '0.18.0'))).toBe(false);
-    expect(guardSupported(machine('agent', '0.19.0'))).toBe(true);
+    expect(guardSupported(machine('agent', '0.35.0'))).toBe(false); // guard v2 cuts a command at its first quote
+    expect(guardSupported(machine('agent', '0.36.0'))).toBe(true);
     expect(guardSupported(machine('agent', null))).toBe(false);
-    info.mockReturnValue({ agent_version: '0.19.0' });
-    expect(guardSupported(machine('agent', '0.18.0'))).toBe(true);
-    info.mockReturnValue({ agent_version: '0.18.9' });
-    expect(guardSupported(machine('agent', '0.19.0'))).toBe(false);
+    info.mockReturnValue({ agent_version: '0.36.0' });
+    expect(guardSupported(machine('agent', '0.35.0'))).toBe(true);
+    info.mockReturnValue({ agent_version: '0.35.9' });
+    expect(guardSupported(machine('agent', '0.36.0'))).toBe(false);
   });
 });
 
 describe('multiRepoGuardSupported (spec 2026-10-07 multi-repo R18)', () => {
-  it('for an agent from 0.29.0 on, the connected version first; the plain guard gate is unchanged', () => {
+  it('for an agent from 0.29.0 on, the connected version first', () => {
     expect(MULTI_REPO_GUARD_MIN_AGENT_VERSION).toBe('0.29.0');
     expect(multiRepoGuardSupported(machine('ssh'))).toBe(false);
     expect(multiRepoGuardSupported(machine('local'))).toBe(false);
     expect(multiRepoGuardSupported(machine('agent', '0.28.1'))).toBe(false);
     expect(multiRepoGuardSupported(machine('agent', '0.29.0'))).toBe(true);
     expect(multiRepoGuardSupported(machine('agent', null))).toBe(false);
-    expect(guardSupported(machine('agent', '0.28.1'))).toBe(true);
     info.mockReturnValue({ agent_version: '0.28.1' });
     expect(multiRepoGuardSupported(machine('agent', '0.29.0'))).toBe(false);
   });
