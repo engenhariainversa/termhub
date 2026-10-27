@@ -439,6 +439,7 @@ export const TaskColumnScalarFieldEnum = {
   name: 'name',
   category: 'category',
   position: 'position',
+  waiting: 'waiting',
   createdAt: 'createdAt'
 } as const
 

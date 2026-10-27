@@ -320,6 +320,8 @@ export interface TaskColumn {
   name: string;
   category: ColumnCategory;
   position: number;
+  /** "aguardando" (TER-1134): its cards wait on a person or a third party; the health watcher and automatic work skip them. Absent from an older server. */
+  waiting?: boolean;
   created_at: string;
 }
 
@@ -708,6 +710,16 @@ export interface HealthItem {
   since_at: string;
   opened_at: string;
   woken: boolean;
+}
+
+/** A card of a waiting column ("esperando você", TER-1134), with what is missing when its description says. */
+export interface HealthWaitingCard {
+  task_id: string;
+  ref: string;
+  title: string;
+  column: string;
+  note: string | null;
+  since: string;
 }
 
 export interface ProjectSetup {

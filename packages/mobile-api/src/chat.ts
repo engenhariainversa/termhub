@@ -143,7 +143,7 @@ export function isFolderGrantable(action: { tool: string; args: unknown }): bool
 
 /** Mirrors the server's `BOARD_GRANT_TOOLS` (apps/server/src/chat/gate.ts); the server is the judge
  * and refuses a card whose project does not resolve. */
-export const BOARD_GRANT_TOOLS = ['create_task', 'add_subtasks', 'update_task', 'move_task'] as const;
+export const BOARD_GRANT_TOOLS = ['create_task', 'add_subtasks', 'update_task', 'move_task', 'create_column', 'update_column'] as const;
 export const isBoardGrantable = (action: { tool: string }): boolean => (BOARD_GRANT_TOOLS as readonly string[]).includes(action.tool);
 
 /** How "Liberar sem prazo: <ação> neste projeto" names each kind (spec 2026-09-28 TER-386 §6). */

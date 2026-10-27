@@ -12,6 +12,10 @@ const reason = (i: EligibilityInput) => {
 };
 
 describe('eligibilityOf', () => {
+  it('a card in a waiting column is never taken, whatever the column category (TER-1134)', () => {
+    expect(reason(input({ column_waiting: true }))).toBe('not_in_todo');
+    expect(eligibilityOf(input({ column_waiting: false }))).toEqual({ eligible: true });
+  });
   it('a tagged card that passes every check is eligible', () => {
     expect(eligibilityOf(input())).toEqual({ eligible: true });
   });

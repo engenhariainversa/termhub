@@ -23,5 +23,7 @@
   "Tire as subtarefas antes de mudar para bug ou spike": "Quita las subtareas antes de cambiar a bug o spike",
   "Uma subtarefa não pode ter subtarefas": "Una subtarea no puede tener subtareas",
   "Épico e subtarefa não mudam de tipo": "Las épicas y subtareas no cambian de tipo",
-  "Épico não encontrado": "Épica no encontrada"
+  "Épico não encontrado": "Épica no encontrada",
+  "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Cada tipo necesita al menos una columna que no sea de espera",
+  "A coluna do agente não pode ser uma coluna de espera": "La columna del agente no puede ser una columna de espera"
 }

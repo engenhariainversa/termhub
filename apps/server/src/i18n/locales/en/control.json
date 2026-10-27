@@ -165,5 +165,6 @@
   "Assinatura não encontrada nesta conversa: um aviso \"done\" só vale para algo que a pessoa pediu para acompanhar aqui. Sem isso, use fyi.": "Watch not found in this conversation: a \"done\" notice only counts for something the person asked to follow here. Without one, use fyi.",
   "Esta conversa já tem {{max}} avisos esperando para sair: escreva no chat sem notify.": "This conversation already has {{max}} notices waiting to go out: write in the chat without notify.",
   "stop_with só vale com every_minutes: é o fim de um resumo periódico.": "stop_with only works with every_minutes: it ends a periodic summary.",
-  "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with must be the id of an open watch of this conversation: the job the summary follows."
+  "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with must be the id of an open watch of this conversation: the job the summary follows.",
+  "Informe name, category, waiting ou position": "Give name, category, waiting or position"
 }

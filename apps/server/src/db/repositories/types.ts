@@ -286,6 +286,8 @@ export interface TaskColumn {
   name: string;
   category: ColumnCategory;
   position: number;
+  /** "aguardando" (TER-1134): its cards wait on a person or a third party; the health watcher and automatic work skip them */
+  waiting: boolean;
   created_at: string;
 }
 
@@ -517,6 +519,7 @@ export const mapTaskColumn = (c: PrismaTaskColumn): TaskColumn => ({
   name: c.name,
   category: c.category as ColumnCategory,
   position: c.position,
+  waiting: c.waiting,
   created_at: c.createdAt.toISOString(),
 });
 

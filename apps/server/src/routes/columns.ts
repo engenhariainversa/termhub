@@ -10,11 +10,12 @@ import { taskRules } from './tasks.js';
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const name = z.string().trim().min(1).max(COLUMN_NAME_MAX);
 const category = z.enum(['todo', 'doing', 'done']);
-const createBody = z.object({ name, category });
+const waiting = z.boolean();
+const createBody = z.object({ name, category, waiting: waiting.optional() });
 const patchBody = z
-  .object({ name, category })
+  .object({ name, category, waiting })
   .partial()
-  .refine((b) => b.name !== undefined || b.category !== undefined, { message: 'Informe name ou category' });
+  .refine((b) => b.name !== undefined || b.category !== undefined || b.waiting !== undefined, { message: 'Informe name, category ou waiting' });
 const moveBody = z.object({ position: z.number().int().min(0).max(MAX_COLUMNS) });
 const agentBody = z.object({ column_id: z.string().min(1).max(64).nullable() });
 
@@ -52,6 +53,7 @@ export async function columnRoutes(app: FastifyInstance, repos: Repositories) {
     const next = body.category;
     // category first: a refused re-categorization leaves the name untouched too
     if (next !== undefined) column = await taskRules(() => repos.taskColumns.setCategory(id, next));
+    if (body.waiting !== undefined) column = await taskRules(() => repos.taskColumns.setWaiting(id, body.waiting as boolean));
     if (body.name !== undefined) column = await repos.taskColumns.rename(id, body.name);
     if (!column) throw notFound('Coluna não encontrada');
     return { column };

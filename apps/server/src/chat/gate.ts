@@ -70,6 +70,9 @@ const writeTools = new Set([
   'add_subtasks',
   'update_task',
   'move_task',
+  // TER-1134: a board column added or changed (name, category, "aguardando", position); nothing is deleted
+  'create_column',
+  'update_column',
   'link_tab_task',
   'link_project_machine',
   'set_project_machine_cwd',
@@ -281,7 +284,7 @@ export const FILE_GRANT_BUDGET = 30;
  * on purpose: a board tool added later is not covered until someone decides it. `delete_task` is
  * irreversible and never here.
  */
-export const BOARD_GRANT_TOOLS: ReadonlySet<string> = new Set(['create_task', 'add_subtasks', 'update_task', 'move_task']);
+export const BOARD_GRANT_TOOLS: ReadonlySet<string> = new Set(['create_task', 'add_subtasks', 'update_task', 'move_task', 'create_column', 'update_column']);
 
 export const boardGrantable = (tool: string): boolean => BOARD_GRANT_TOOLS.has(tool);
 

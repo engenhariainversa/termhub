@@ -33,6 +33,22 @@ describe('ProjectHealthPanel (TER-1121)', () => {
     expect(screen.getByRole('link', { name: 'abrir aba' })).toHaveAttribute('href', '/projects/p1?tab=tab1');
   });
 
+  it('lists the cards of the waiting columns under "Esperando você", with what is missing (TER-1134)', async () => {
+    healthMock.mockResolvedValue({
+      enabled: true,
+      items: [],
+      waiting: [
+        { task_id: 't1', ref: 'TER-742', title: 'Contrato', column: 'Esperando validação', note: 'parecer do advogado', since: '2026-10-27T10:00:00Z' },
+        { task_id: 't2', ref: 'TER-901', title: 'iPhone', column: 'Esperando validação', note: null, since: '2026-10-27T10:00:00Z' },
+      ],
+    });
+    render(<MemoryRouter><ProjectHealthPanel projectId="p1" /></MemoryRouter>);
+    expect(await screen.findByRole('list', { name: 'Esperando você' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'TER-742' })).toHaveAttribute('href', '/project/TER-742');
+    expect(screen.getByText('parecer do advogado')).toBeInTheDocument();
+    expect(screen.getByText('na coluna Esperando validação')).toBeInTheDocument();
+  });
+
   it('shows nothing while the project is healthy, or when the server cannot tell', async () => {
     healthMock.mockResolvedValue({ enabled: true, items: [] });
     const { container } = render(<MemoryRouter><ProjectHealthPanel projectId="p1" /></MemoryRouter>);

@@ -8,7 +8,7 @@ import type { Project, Task, TaskWithSubtasks } from '../db/repositories/types.j
 import { Scoped } from '../auth/scope.js';
 import type { ControlContext } from './context.js';
 import { ControlError } from './context.js';
-import { addSubtasks, boardUrl, createTask, deleteTask, listTasks, moveTask, taskOut, updateTask } from './tasks.js';
+import { addSubtasks, boardUrl, createColumn, createTask, deleteTask, listTasks, moveTask, taskOut, updateColumn, updateTask } from './tasks.js';
 
 const project = (over: Partial<Project> & { id: string; owner_id: string }): Project => ({
   key: over.id.toUpperCase(), next_task_number: 1, name: over.id, status: 'active', description: null, last_terminal_at: null, created_at: '', ...over,
@@ -46,7 +46,21 @@ function ctx() {
       childIds: vi.fn(async () => [] as string[]),
       delete: vi.fn(async () => true),
     },
-    taskColumns: { list: vi.fn(async (pid: string) => columns.filter((c) => c.project_id === pid)) },
+    taskColumns: {
+      list: vi.fn(async (pid: string) => columns.filter((c) => c.project_id === pid)),
+      findById: vi.fn(async (id: string) => [...columns, { id: 'cx', project_id: 'px', name: 'Alheia', category: 'doing', position: 0, created_at: '' }].find((c) => c.id === id)),
+      create: vi.fn(async (pid: string, input: { name: string; category: string; waiting?: boolean }) => ({ id: 'c3', project_id: pid, position: 2, created_at: '', ...input, waiting: input.waiting ?? false })),
+      move: vi.fn(async (id: string, position: number) => {
+        const all = [...columns, { id: 'c3', project_id: 'p1', name: 'Esperando validação', category: 'doing', position: 2, waiting: true, created_at: '' }];
+        const moved = all.find((c) => c.id === id)!;
+        const rest = all.filter((c) => c.id !== id);
+        rest.splice(position, 0, moved);
+        return rest.map((c, i) => ({ ...c, position: i }));
+      }),
+      setWaiting: vi.fn(async (id: string, waiting: boolean) => ({ ...columns.find((c) => c.id === id)!, waiting })),
+      setCategory: vi.fn(),
+      rename: vi.fn(async (id: string, name: string) => ({ ...columns.find((c) => c.id === id)!, name })),
+    },
     tickets: { unlinkTask: vi.fn(async () => {}) },
     automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev1', created_at: '', ...e })) },
   };
@@ -311,5 +325,51 @@ describe('card fields, filters and move by column', () => {
     await expect(moveTask(c, { task_id: 'k2', column_id: 'c2', status: 'done' })).rejects.toEqual(one);
     await expect(moveTask(c, { task_id: 'k2' })).rejects.toEqual(one);
     expect(repos.tasks.move).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createColumn / updateColumn (TER-1134)', () => {
+  it('creates a waiting column at a position and answers the columns in order', async () => {
+    const { c, repos } = ctx();
+    const r = await createColumn(c, { project_id: 'p1', name: 'Esperando validação', category: 'doing', waiting: true, position: 2 });
+    expect(repos.taskColumns.create).toHaveBeenCalledWith('p1', { name: 'Esperando validação', category: 'doing', waiting: true });
+    expect(repos.taskColumns.move).toHaveBeenCalledWith('c3', 2);
+    expect(r.column).toEqual({ id: 'c3', name: 'Esperando validação', category: 'doing', waiting: true });
+    expect(r.columns.map((x) => x.id)).toEqual(['c1', 'c2', 'c3']);
+    expect(r.board_url).toBe(boardUrl('p1'));
+  });
+
+  it('appends without a position', async () => {
+    const { c, repos } = ctx();
+    await createColumn(c, { project_id: 'p1', name: 'QA', category: 'doing' });
+    expect(repos.taskColumns.move).not.toHaveBeenCalled();
+  });
+
+  it('404s a project of another user before creating anything', async () => {
+    const { c, repos } = ctx();
+    await expect(createColumn(c, { project_id: 'px', name: 'QA', category: 'doing' })).rejects.toThrow();
+    expect(repos.taskColumns.create).not.toHaveBeenCalled();
+  });
+
+  it('marks a column waiting and renames it', async () => {
+    const { c, repos } = ctx();
+    const r = await updateColumn(c, { column_id: 'c2', waiting: true, name: 'Esperando' });
+    expect(repos.taskColumns.setWaiting).toHaveBeenCalledWith('c2', true);
+    expect(repos.taskColumns.rename).toHaveBeenCalledWith('c2', 'Esperando');
+    expect(repos.taskColumns.setCategory).not.toHaveBeenCalled();
+    expect(r.column.id).toBe('c2');
+  });
+
+  it('turns a refused mark into a ControlError with its pt-BR message', async () => {
+    const { c, repos } = ctx();
+    repos.taskColumns.setWaiting.mockRejectedValueOnce(new TaskRuleError('COLUMN_LAST_ACTIVE'));
+    await expect(updateColumn(c, { column_id: 'c2', waiting: true })).rejects.toEqual(new ControlError('COLUMN_LAST_ACTIVE', 'Cada tipo precisa de ao menos uma coluna que não seja de espera'));
+  });
+
+  it('requires a change, and 404s a column of another user', async () => {
+    const { c, repos } = ctx();
+    await expect(updateColumn(c, { column_id: 'c2' })).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(updateColumn(c, { column_id: 'cx', waiting: true })).rejects.toThrow('Coluna não encontrada');
+    expect(repos.taskColumns.setWaiting).not.toHaveBeenCalled();
   });
 });

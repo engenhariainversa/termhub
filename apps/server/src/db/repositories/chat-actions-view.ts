@@ -169,6 +169,10 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return task ? `atualizar a tarefa ${named(task)}` : 'atualizar uma tarefa que não existe mais';
     case 'move_task':
       return task ? `mover a tarefa ${named(task)}` : 'mover uma tarefa que não existe mais';
+    case 'create_column':
+      return `criar a coluna "${asString(args.name)}"${args.waiting === true ? ' (aguardando)' : ''}`;
+    case 'update_column':
+      return args.waiting === true ? 'marcar a coluna como aguardando' : args.waiting === false ? 'tirar a marca aguardando da coluna' : 'mudar uma coluna do quadro';
     case 'delete_task':
       return task ? `apagar a tarefa ${named(task)}` : 'apagar uma tarefa que não existe mais';
     case 'link_tab_task':

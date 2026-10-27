@@ -52,7 +52,12 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
   }
 
   const lastOfCategory = (c: TaskColumn) => columns.filter((x) => x.category === c.category).length === 1;
-  const destination = (c: TaskColumn) => columns.find((x) => x.category === c.category && x.id !== c.id);
+  // TER-1134: each category keeps a column that is not waiting, where moves by status land
+  const lastActive = (c: TaskColumn) => !c.waiting && columns.filter((x) => x.category === c.category && !x.waiting).length === 1;
+  const destination = (c: TaskColumn) => {
+    const others = columns.filter((x) => x.category === c.category && x.id !== c.id);
+    return others.find((x) => !!x.waiting === !!c.waiting) ?? others[0];
+  };
   const moving = deleting ? (counts[deleting.id] ?? 0) : 0;
 
   const add = (e: FormEvent) => {
@@ -69,6 +74,9 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
       <p className="text-xs text-fg-dim">
         {t('O nome é seu; o tipo diz ao termhub o que a coluna significa. O board precisa de ao menos uma coluna de cada tipo e aceita até {{max}}.', { max: MAX_COLUMNS })}
       </p>
+      <p className="text-xs text-fg-dim">
+        {t('Marque "aguardando" numa coluna para cards que esperam uma pessoa ou terceiros: o automático não os pega, o vigia de saúde não alerta e eles aparecem em "Esperando você" com a linha "O que falta:" da descrição.')}
+      </p>
       {error && <p className="text-xs text-danger">{error}</p>}
       <ul className="space-y-2">
         {columns.map((c, i) => (
@@ -77,9 +85,12 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
             column={c}
             index={i}
             last={i === columns.length - 1}
-            locked={lastOfCategory(c)}
+            locked={lastOfCategory(c) || lastActive(c)}
+            onlyOfCategory={lastOfCategory(c)}
+            lastActive={lastActive(c)}
             onRename={(name) => void run(() => api.columns.update(c.id, { name }), t('Erro ao renomear a coluna'))}
             onCategory={(category) => void run(() => api.columns.update(c.id, { category }), t('Erro ao mudar o tipo da coluna'))}
+            onWaiting={(waiting) => void run(() => api.columns.update(c.id, { waiting }), t('Erro ao mudar a coluna'))}
             onMove={(position) => void run(() => api.columns.move(c.id, position), t('Erro ao mover a coluna'))}
             onDelete={() => setDeleting(c)}
           />
@@ -113,7 +124,7 @@ export function BoardColumnsSettings({ project }: { project: Project }) {
         >
           <option value="">{t('Automática (primeira Fazendo)')}</option>
           {columns
-            .filter((c) => c.category === 'doing')
+            .filter((c) => c.category === 'doing' && !c.waiting)
             .map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -152,15 +163,20 @@ interface RowProps {
   last: boolean;
   /** the only column of its category: its category cannot change and it cannot go */
   locked: boolean;
+  /** the only column of its category, of any kind */
+  onlyOfCategory: boolean;
+  /** the only column of its category that is not waiting: it cannot be marked waiting either */
+  lastActive: boolean;
   onRename: (name: string) => void;
   onCategory: (category: ColumnCategory) => void;
+  onWaiting: (waiting: boolean) => void;
   onMove: (position: number) => void;
   onDelete: () => void;
 }
 
-function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, onDelete }: RowProps) {
+function ColumnRow({ column, index, last, locked, onlyOfCategory, lastActive, onRename, onCategory, onWaiting, onMove, onDelete }: RowProps) {
   const { t } = useTranslation();
-  const lockedHint = t('O board precisa de ao menos uma coluna de cada tipo');
+  const lockedHint = lastActive && !onlyOfCategory ? t('Cada tipo precisa de ao menos uma coluna que não seja de espera') : t('O board precisa de ao menos uma coluna de cada tipo');
   const [name, setName] = useState(column.name);
   // Follows a rename from outside, adjusted while rendering: as an effect it ran a moment after the row
   // appeared and reset whatever had been typed in between (TER-911).
@@ -204,6 +220,10 @@ function ColumnRow({ column, index, last, locked, onRename, onCategory, onMove, 
           </option>
         ))}
       </select>
+      <label className="flex shrink-0 items-center gap-1 text-xs text-fg-dim" title={lastActive ? lockedHint : t('Cards que esperam uma pessoa ou terceiros')}>
+        <input type="checkbox" aria-label={t('Coluna {{name}} aguardando', { name: column.name })} checked={!!column.waiting} disabled={lastActive} onChange={(e) => onWaiting(e.target.checked)} />
+        {t('aguardando')}
+      </label>
       <button type="button" className="btn-ghost px-2" aria-label={t('Subir {{name}}', { name: column.name })} disabled={index === 0} onClick={() => onMove(index - 1)}>
         ↑
       </button>

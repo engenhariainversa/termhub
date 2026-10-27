@@ -483,5 +483,12 @@
   "depois de": "después de",
   "Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue": "Workflow {{workflow}} cancelado sin runner en la rama base; la cola de merge sigue",
   "sem nome": "sin nombre",
-  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "Se ejecutan con un push a la rama base y no son el deploy, un workflow de release ni un check obligatorio: {{list}}. Si alguno publica algo, inclúyelo aquí; un fallo suyo en la base detiene la cola de merge."
+  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "Se ejecutan con un push a la rama base y no son el deploy, un workflow de release ni un check obligatorio: {{list}}. Si alguno publica algo, inclúyelo aquí; un fallo suyo en la base detiene la cola de merge.",
+  "na coluna {{column}}": "en la columna {{column}}",
+  "Erro ao mudar a coluna": "No se pudo cambiar la columna",
+  "Marque \"aguardando\" numa coluna para cards que esperam uma pessoa ou terceiros: o automático não os pega, o vigia de saúde não alerta e eles aparecem em \"Esperando você\" com a linha \"O que falta:\" da descrição.": "Marca una columna como \"en espera\" para tarjetas que esperan a una persona o a terceros: el automático no las toma, el vigía de salud no alerta y aparecen en \"Esperándote\" con la línea \"O que falta:\" de la descripción.",
+  "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Cada tipo necesita al menos una columna que no sea de espera",
+  "Cards que esperam uma pessoa ou terceiros": "Tarjetas que esperan a una persona o a terceros",
+  "Coluna {{name}} aguardando": "Columna {{name}} en espera",
+  "aguardando": "en espera"
 }

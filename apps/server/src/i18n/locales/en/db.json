@@ -23,5 +23,7 @@
   "Tire as subtarefas antes de mudar para bug ou spike": "Remove the subtasks before changing to bug or spike",
   "Uma subtarefa não pode ter subtarefas": "A subtask cannot have subtasks",
   "Épico e subtarefa não mudam de tipo": "Epics and subtasks do not change type",
-  "Épico não encontrado": "Epic not found"
+  "Épico não encontrado": "Epic not found",
+  "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Each type needs at least one column that is not a waiting column",
+  "A coluna do agente não pode ser uma coluna de espera": "The agent's column cannot be a waiting column"
 }

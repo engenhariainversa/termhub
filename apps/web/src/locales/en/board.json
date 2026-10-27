@@ -483,5 +483,12 @@
   "depois de": "after",
   "Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue": "Workflow {{workflow}} cancelled without a runner on the base branch; the merge queue goes on",
   "sem nome": "unnamed",
-  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "These run on a push to the base branch and are not the deploy, a release workflow or a required check: {{list}}. If one publishes something, add it here; a failure of it on the base holds the merge queue."
+  "Rodam no push na branch base e não estão no deploy, nos workflows de release nem nos checks obrigatórios: {{list}}. Se algum publica algo, inclua-o aqui; uma falha dele na base segura a fila de merge.": "These run on a push to the base branch and are not the deploy, a release workflow or a required check: {{list}}. If one publishes something, add it here; a failure of it on the base holds the merge queue.",
+  "na coluna {{column}}": "in the {{column}} column",
+  "Erro ao mudar a coluna": "Could not change the column",
+  "Marque \"aguardando\" numa coluna para cards que esperam uma pessoa ou terceiros: o automático não os pega, o vigia de saúde não alerta e eles aparecem em \"Esperando você\" com a linha \"O que falta:\" da descrição.": "Mark a column \"waiting\" for cards that wait on a person or a third party: automatic work does not take them, the health watcher does not alert on them, and they show under \"Waiting for you\" with the \"O que falta:\" line of their description.",
+  "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Each type needs at least one column that is not a waiting column",
+  "Cards que esperam uma pessoa ou terceiros": "Cards that wait on a person or a third party",
+  "Coluna {{name}} aguardando": "Column {{name}} waiting",
+  "aguardando": "waiting"
 }
