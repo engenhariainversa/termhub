@@ -6,6 +6,7 @@ import { ControlError } from '../control/context.js';
 import type { Machine } from '../db/repositories/types.js';
 import { msg } from '../i18n/index.js';
 import type { GithubWriteClient } from '../integrations/github-write.js';
+import { readTicketLink } from '../integrations/ticket-link.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 
 const SLUG_MAX = 40;
@@ -46,9 +47,9 @@ export function isValidBranchName(name: string): boolean {
  * left dangling, so the name falls back to the bare ref. A pattern that still cannot give a valid
  * branch name is refused, never repaired silently.
  */
-function fill(pattern: string, ref: string, title: string): string {
+function fill(pattern: string, ref: string, ticket: string, title: string): string {
   const slug = slugOf(title);
-  let name = pattern.replaceAll('{ref}', ref).replaceAll('{ticket}', ref);
+  let name = pattern.replaceAll('{ref}', ref).replaceAll('{ticket_lower}', ticket.toLowerCase()).replaceAll('{ticket}', ticket);
   name = slug ? name.replaceAll('{slug}', slug) : name.replaceAll('{slug}', '').replace(/[-_./]+$/, '');
   if (!isValidBranchName(name)) {
     throw new ControlError('INVALID_BRANCH_PATTERN', msg('O padrão de branch {{pattern}} não gera um nome de branch válido para {{ref}}', { pattern, ref }));
@@ -58,12 +59,75 @@ function fill(pattern: string, ref: string, title: string): string {
 
 /** `automation.epic_branch_pattern` (`{ref}`, `{slug}`). */
 export function epicBranchName(pattern: string, epic: { ref: string; title: string }): string {
-  return fill(pattern, epic.ref, epic.title);
+  return fill(pattern, epic.ref, epic.ref, epic.title);
 }
 
-/** `repo.branch_pattern` (`{ticket}` is the card's ref, `{slug}`). */
-export function cardBranchName(pattern: string, card: { ref: string; title: string }): string {
-  return fill(pattern, card.ref, card.title);
+/** The key of the external ticket (Jira, Linear, GitHub) a card came from, or null (TER-1110). */
+export function ticketKeyOf(card: { external_ref: unknown }): string | null {
+  return readTicketLink(card.external_ref)?.key ?? null;
+}
+
+/** A ticket key as a branch part: a GitHub `owner/repo#12` is its number; a Jira or Linear key stays as it is. */
+export function ticketBranchPart(key: string): string {
+  const part = key.slice(key.lastIndexOf('#') + 1);
+  return part.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '');
+}
+
+/**
+ * `repo.branch_pattern`: `{ticket}` (and `{ticket_lower}`) is the external ticket's key when the card came
+ * from one, else the card's ref (TER-1110); `{ref}` is always the card's ref; `{slug}` the title's.
+ */
+export function cardBranchName(pattern: string, card: { ref: string; title: string; ticket?: string | null }): string {
+  const ticket = card.ticket ? ticketBranchPart(card.ticket) : '';
+  return fill(pattern, card.ref, ticket || card.ref, card.title);
+}
+
+/** "branch: feature/apps-337-x" on a line of its own, optionally a list item, in bold or in backticks. */
+const BRANCH_LINE = /^[ \t]*(?:[-*][ \t]+)?(?:\*\*|__)?branch(?:\*\*|__)?[ \t]*:[ \t]*(?:\*\*|__)?[ \t]*`?([^\s`*]+)`?/im;
+
+/**
+ * The branch a card's description asks for (TER-1110), or null. Only a name that looks like one (a slash,
+ * a dash, an underscore or a digit) counts, so a sentence starting with "Branch:" is not read as a name.
+ */
+export function explicitBranchOf(description: string | null): string | null {
+  const name = description ? BRANCH_LINE.exec(description)?.[1]?.replace(/[.,;:]+$/, '') : undefined;
+  return name && /[/_\-0-9]/.test(name) && isValidBranchName(name) ? name : null;
+}
+
+/** Whether a card may start under `repo.require_ticket`: it came from a ticket, or names its branch. */
+export function hasTicketOrBranch(card: { external_ref: unknown; description: string | null }): boolean {
+  return ticketKeyOf(card) !== null || explicitBranchOf(card.description) !== null;
+}
+
+/**
+ * The branch of a card's implementer run (TER-1110): the one its description asks for, else the repo's
+ * pattern. With `require_ticket`, a card with neither a ticket nor an explicit branch is refused instead of
+ * falling back to the termhub ref. The base branch is never a run's branch.
+ */
+export function implementerBranchOf(
+  card: { ref: string; title: string; description: string | null; external_ref: unknown },
+  repo: Pick<NonNullable<ProjectSetupData['repo']>, 'branch_pattern' | 'base_branch' | 'require_ticket'> | null,
+): string {
+  const explicit = explicitBranchOf(card.description);
+  if (explicit && explicit !== (repo?.base_branch ?? 'main')) return explicit;
+  const ticket = ticketKeyOf(card);
+  if (!ticket && repo?.require_ticket) {
+    throw new ControlError('TICKET_REQUIRED', msg('O projeto exige um ticket externo e o card {{ref}} não tem', { ref: card.ref }));
+  }
+  return cardBranchName(repo?.branch_pattern ?? '{ticket}-{slug}', { ref: card.ref, title: card.title, ticket });
+}
+
+/**
+ * What the agent is told about names (TER-1110), next to its branch: the ticket to cite in commits and in the
+ * PR title and, when the project requires a ticket, never the termhub ref on GitHub. Null when there is
+ * nothing to say.
+ */
+export function namingRule(card: { ref: string; external_ref: unknown }, repo: Pick<NonNullable<ProjectSetupData['repo']>, 'require_ticket'> | null): string | null {
+  const key = ticketKeyOf(card);
+  const cite = key ? `Este card vem do ticket ${key}: cite ${key} nos commits e no título do PR.` : null;
+  if (!repo?.require_ticket) return cite;
+  const never = `Nunca use a ref ${card.ref} do termhub em branch, commit, título ou descrição de PR, nem em nada no GitHub.`;
+  return cite ? `${cite} ${never}` : never;
 }
 
 /** Where a card's PR goes: the epic's branch when its epic is automatic (D8), else the repo's base branch. */
