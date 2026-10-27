@@ -10,6 +10,8 @@ export const MERGE_WAIT_TTL_MS = 3 * 60_000;
 export interface MergeWaitEntry {
   wait: MergeWait;
   sha: string | null;
+  /** What the text names besides the reason: the workflow that left the base red (TER-1120). */
+  detail?: string | null;
 }
 
 /**
@@ -18,8 +20,8 @@ export interface MergeWaitEntry {
  */
 const waits = new Map<string, MergeWaitEntry & { at: number }>();
 
-export function noteMergeWait(taskIds: string[], wait: MergeWait, now: Date, sha: string | null = null): void {
-  for (const id of taskIds) waits.set(id, { wait, sha, at: now.getTime() });
+export function noteMergeWait(taskIds: string[], wait: MergeWait, now: Date, sha: string | null = null, detail: string | null = null): void {
+  for (const id of taskIds) waits.set(id, { wait, sha, detail, at: now.getTime() });
 }
 
 export function clearMergeWait(taskIds: string[]): void {
@@ -33,7 +35,7 @@ export function mergeWaitEntryOf(taskId: string, now: Date = new Date()): MergeW
     waits.delete(taskId);
     return null;
   }
-  return { wait: w.wait, sha: w.sha };
+  return { wait: w.wait, sha: w.sha, detail: w.detail ?? null };
 }
 
 export function mergeWaitOf(taskId: string, now: Date = new Date()): MergeWait | null {
@@ -43,4 +45,33 @@ export function mergeWaitOf(taskId: string, now: Date = new Date()): MergeWait |
 /** Tests only. */
 export function resetMergeWaits(): void {
   waits.clear();
+}
+
+/** TER-1121: the base branch's head as the merge executor last read it, per project, for the health watcher. */
+export interface BaseReading {
+  state: 'green' | 'red' | 'pending';
+  sha: string | null;
+  /** the workflows failing (red) or not done yet (pending) on it, by name */
+  failing: string[];
+  at: number;
+}
+
+/** Kept this long: past it the executor stopped reading the base (no PR waits on it) and nothing is told. */
+export const BASE_READING_TTL_MS = 15 * 60_000;
+
+const bases = new Map<string, BaseReading>();
+
+export function noteBaseReading(projectId: string, reading: Omit<BaseReading, 'at'>, now: Date = new Date()): void {
+  bases.set(projectId, { ...reading, at: now.getTime() });
+}
+
+export function baseReadingOf(projectId: string, now: Date = new Date()): BaseReading | null {
+  const b = bases.get(projectId);
+  if (!b || now.getTime() - b.at > BASE_READING_TTL_MS) return null;
+  return b;
+}
+
+/** Tests only. */
+export function resetBaseReadings(): void {
+  bases.clear();
 }

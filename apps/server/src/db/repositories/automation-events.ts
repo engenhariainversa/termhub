@@ -49,7 +49,10 @@ export type AutomationEventKind =
   // TER-1025: a run that reported a GitHub error waits for GitHub ({ reason, attempt, tab_id }), and Claude's
   // trust question of a termhub worktree answered by the server ({ tab_id })
   | 'github_wait'
-  | 'trust_auto_accepted';
+  | 'trust_auto_accepted'
+  // TER-1120: a workflow on the base head cancelled before any job got a runner: delivered nothing, does not
+  // hold the merge queue ({ run_id, workflow, url, sha }), once per run
+  | 'workflow_no_runner';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

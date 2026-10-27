@@ -29,6 +29,8 @@ export type PullsPage = { notModified: true } | { notModified: false; etag: stri
 export interface GithubCiClient {
   listPulls(token: string, repo: string, etag: string | null): Promise<PullsPage>;
   listRuns(token: string, repo: string, headSha: string): Promise<WorkflowRun[]>;
+  /** Whether any workflow run of the repository was triggered by `event` (TER-1114: a repository with no CI on pull requests). */
+  hasRunsFor(token: string, repo: string, event: string): Promise<boolean>;
   /** The head commit of a branch; null when the branch is gone. */
   branchSha(token: string, repo: string, branch: string): Promise<string | null>;
   /** Whether `ancestor` is part of `descendant`'s history (or the same commit). */
@@ -49,6 +51,8 @@ export interface RunJob {
   status: string;
   conclusion: string | null;
   steps: Array<{ name: string; conclusion: string | null }>;
+  /** The runner that took it; null for a job that never got one (TER-1120: cancelled while queued). */
+  runner_name?: string | null;
 }
 
 export function failure(res: Response): GithubCiError {
@@ -97,7 +101,12 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
       const res = await get(token, `/repos/${repo}/actions/runs?head_sha=${encodeURIComponent(headSha)}&per_page=50`);
       if (!res.ok) throw failure(res);
       const body = (await res.json()) as { workflow_runs: WorkflowRun[] };
-      return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at, updated_at }) => ({ id, name, path, status, conclusion, html_url, created_at, updated_at }));
+      return body.workflow_runs.map(({ id, name, path, status, conclusion, html_url, created_at, updated_at, event }) => ({ id, name, path, status, conclusion, html_url, created_at, updated_at, event }));
+    },
+    async hasRunsFor(token, repo, event) {
+      const res = await get(token, `/repos/${repo}/actions/runs?event=${encodeURIComponent(event)}&per_page=1`);
+      if (!res.ok) throw failure(res);
+      return (((await res.json()) as { total_count?: number }).total_count ?? 0) > 0;
     },
     async branchSha(token, repo, branch) {
       const res = await get(token, `/repos/${repo}/git/ref/heads/${branch.split('/').map(encodeURIComponent).join('/')}`);
@@ -127,8 +136,8 @@ export function createGithubCiClient(fetchImpl: typeof fetch = fetch): GithubCiC
     async runJobs(token, repo, runId) {
       const res = await get(token, `/repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`);
       if (!res.ok) throw failure(res);
-      const body = (await res.json()) as { jobs?: Array<{ name: string; status: string; conclusion: string | null; steps?: Array<{ name: string; conclusion: string | null }> }> };
-      return (body.jobs ?? []).map((j) => ({ name: j.name, status: j.status, conclusion: j.conclusion, steps: (j.steps ?? []).map((s) => ({ name: s.name, conclusion: s.conclusion })) }));
+      const body = (await res.json()) as { jobs?: Array<{ name: string; status: string; conclusion: string | null; runner_name?: string | null; steps?: Array<{ name: string; conclusion: string | null }> }> };
+      return (body.jobs ?? []).map((j) => ({ name: j.name, status: j.status, conclusion: j.conclusion, runner_name: j.runner_name || null, steps: (j.steps ?? []).map((s) => ({ name: s.name, conclusion: s.conclusion })) }));
     },
     async rerunRun(token, repo, runId) {
       const res = await post(token, `/repos/${repo}/actions/runs/${runId}/rerun`);

@@ -16,7 +16,9 @@ import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMac
 import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
+import { projectHealth } from '../health/view.js';
 import { policyText } from '../automation/policy.js';
+import { needsPrCiWarning, NO_PR_CI_TEXT, projectPrCi } from '../automation/pr-ci.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
 import { DECISIONS_MAX } from '../automation/decisions-taken.js';
@@ -219,7 +221,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. A request typed into a tab whose automatic run already ended reopens automatic work on that card (same branch; termhub follows the tab again), unless the project's automation is off or paused. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       tab_id: id,
@@ -301,7 +303,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'start_agent',
-    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. To follow it, wait with wait_for_state (in one background subagent that ends at the first stop), then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own); for Claude prefer an alias (${CLAUDE_MODEL_ALIAS_LIST}: the CLI resolves it to the newest model of that family) over a full id. The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
+    description: `Open a tab in a project and start Claude Code (account provider claude) or Codex (chatgpt) there under the chosen account, with prompt (max ${PROMPT_MAX_CHARS} chars) as its first message; the session stays interactive and visible in the app. With task_id (needs the tasks:update permission) the task is linked to the tab and moved to the project's agent column (a project setting; default the first doing column) unless it already sits in a doing column; a subtask is marked doing. The prompt cannot start with "-" or contain control characters other than newlines. Called from the termhub chat, the tab is watched automatically (watch_id in the result): the chat is woken at the agent's first stop — an answer, a question, a permission, the folder trust dialog, a login, an error or the end — so do not add another watch; elsewhere, wait with wait_for_state (in one background subagent that ends at the first stop). Then read_last_answer; questions and approvals reach the person as chat cards. read_screen only shows what is on screen; send_input answers it otherwise. Gemini and Antigravity accounts are not supported yet. Pick the account with list_ai_accounts (default: true is the machine's own login). machine_id picks the linked machine (required when the project has several). A project whose setup lists AI accounts needs neither: account_id omitted = the first listed account with room on the machine (and, with several machines and no machine_id, that account's machine); model omitted = the project's default model for that CLI (else the CLI's own); for Claude prefer an alias (${CLAUDE_MODEL_ALIAS_LIST}: the CLI resolves it to the newest model of that family) over a full id. The result says which account and model were used; warning flags a full model id an older CLI may not know. ${START_AGENT_RESTRICTIONS_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       project_id: id,
@@ -339,14 +341,25 @@ export const TOOLS: ToolDef[] = [
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
   },
   {
+    name: 'get_project_health',
+    description:
+      "The project's open health alerts (TER-1121): stalled work termhub's watcher noticed on its own, oldest first. Each has its signal (pr_ready: a green PR left unmerged, with why it waits; base_red: the base branch red or never finishing; queue_stalled: automatic cards in todo and none started; tab_stuck: a tab working with no event; tab_waiting: a tab waiting on a question, a permission, the folder trust or a login; card_orphan: a card in doing with no tab nor run; run_blocked: a run escalated or blocked with no answer; machine_offline: a machine holding the project's work is offline; delivery_failed: the last merge's deploy or release failed; agent_outdated: a machine's agent below the minimum), level (needs_you = only the person can act; concierge = you may resolve it), the pt-BR text, a url when there is one, the subject's id (tab, card, run or machine), since when and whether the chat was already woken about it. An alert closes by itself once the sign is gone.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => projectHealth(ctx, (a as { project_id: string }).project_id),
+  },
+  {
     name: 'get_automation_policy',
     description:
-      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. Read it before opening a pull request, to know what happens after it.",
+      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. pr_ci says whether the repository runs any workflow on pull requests (present, absent, unknown); the text warns when it is absent at merge level or above, since termhub only merges a green CI. Read it before opening a pull request, to know what happens after it.",
     scope: 'read', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => {
       const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
-      return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
+      const prCi = await projectPrCi(ctx, (a as { project_id: string }).project_id);
+      const text = policyText(automation, repo?.deploy_workflow ?? null);
+      // TER-1114: at merge level or above, a repository with no CI on PRs never gets a PR merged
+      return { enabled: automation.enabled, autonomy: automation.autonomy, pr_ci: prCi, text: needsPrCiWarning(automation, prCi) ? `${text}\nAviso: ${NO_PR_CI_TEXT}` : text };
     },
   },
   {
@@ -646,7 +659,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'watch',
     description:
-      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). note: what to do when it happens, in your own words (≤500). hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
+      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). label: the one line the person sees in the chat for this watch, written for them in their language, plain and short (≤120, e.g. "Te aviso quando a aba OPM-568 (Abacate) parar") — no tool names nor instructions. note: what to do when it happens, in your own words (≤500); only you read it, the person never sees it. hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
@@ -660,6 +673,7 @@ export const TOOLS: ToolDef[] = [
       events: z.array(z.string().min(1).max(40)).min(1).max(12).optional(),
       to: taskStatus.optional(),
       workflow: z.string().trim().min(1).max(200).optional(),
+      label: z.string().trim().min(1).max(WATCH_LIMITS.labelMax),
       note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
       hours: z.number().positive().max(WATCH_LIMITS.maxHours).optional(),
       recurring: z.boolean().optional(),
@@ -669,7 +683,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'schedule_wakeup',
     description:
-      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. note: what to do then, in your own words (≤500). To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). For a periodic summary of a long job ("me manda um resumo a cada hora enquanto isso roda"): every_minutes plus stop_with = the watch_id of the watch on that job — the reminder stops by itself when that watch closes; send each summary with notify. At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
+      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. label: the one line the person sees in the chat for this reminder, written for them in their language, plain and short (≤120, e.g. "Conferir o build") — the time is shown next to it. note: what to do then, in your own words (≤500); only you read it. To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). For a periodic summary of a long job ("me manda um resumo a cada hora enquanto isso roda"): every_minutes plus stop_with = the watch_id of the watch on that job — the reminder stops by itself when that watch closes; send each summary with notify. At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
@@ -677,6 +691,7 @@ export const TOOLS: ToolDef[] = [
       in_minutes: z.number().int().min(1).max(WATCH_LIMITS.maxHours * 60).optional(),
       at: z.string().trim().min(16).max(40).optional(),
       at_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+      label: z.string().trim().min(1).max(WATCH_LIMITS.labelMax),
       note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
       every_minutes: z.number().int().min(REMINDER_LIMITS.minEveryMinutes).max(WATCH_LIMITS.maxHours * 60).optional(),
       times: z.number().int().min(1).max(REMINDER_LIMITS.maxTimes).optional(),
@@ -688,7 +703,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_watches',
-    description: "This chat's open watches (from watch) and reminders (from schedule_wakeup, kind reminder, with next_at and every_minutes): id, kind, target, events, your note, whether recurring, and until when. Only works in the termhub chat.",
+    description: "This chat's open watches (from watch) and reminders (from schedule_wakeup, kind reminder, with next_at and every_minutes): id, kind, target (label), events, summary (the line the person sees) and your note (only you see it), whether recurring, until when, and what already happened (fire_count, last_event, last_fired_at). Only works in the termhub chat.",
     scope: 'read',
     resource: 'chat',
     action: 'read',

@@ -382,6 +382,12 @@ export class AutomationRunsRepository {
     return (await this.db.automationRun.findMany({ where: { projectId, status: active }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
+  /** TER-1121: when the project's newest run started, any status; null when none ever did. */
+  async lastStartedAt(projectId: string): Promise<Date | null> {
+    const row = await this.db.automationRun.findFirst({ where: { projectId, startedAt: { not: null } }, orderBy: { startedAt: 'desc' }, select: { startedAt: true } });
+    return row?.startedAt ?? null;
+  }
+
   async countActive(projectId: string): Promise<number> {
     return this.db.automationRun.count({ where: { projectId, status: active } });
   }

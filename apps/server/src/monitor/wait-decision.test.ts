@@ -383,3 +383,29 @@ describe('decideWait — a turn that ended with a report (TER-972)', () => {
     expect(rearmOf(current({ state: 'working', seenAgeMs: 30_000 }), history, event({ kind: 'finished', name: 'Stop' }), outcome)).toBeNull();
   });
 });
+
+describe('decideWait — a compaction is no turn (TER-1133)', () => {
+  const compaction = event({ kind: 'working', name: 'SessionStart', compaction: true });
+
+  it('Claude Code compacting at its prompt leaves a tab whose turn ended where it was', () => {
+    for (const state of ['waiting_input', 'finished', 'blocked', 'auth_required', 'waiting_background', 'waiting_permission', 'error'] as const) {
+      expect(decideWait(current({ state, seen: true }), [row(state, 'Stop')], compaction)).toEqual({ action: 'drop', reason: 'compaction_at_rest' });
+    }
+  });
+
+  it('a compaction in the middle of a turn, or in a tab with no session, is recorded as before', () => {
+    expect(decideWait(current({ state: 'working' }), [row('working', 'UserPromptSubmit')], compaction)).toEqual(NEW);
+    expect(decideWait(current({ state: 'idle' }), [row('idle', 'SessionEnd')], compaction)).toEqual(NEW);
+    expect(decideWait(current(), [], compaction)).toEqual(NEW);
+  });
+
+  it('any other session start (a /clear, a resume) still puts the tab to work', () => {
+    expect(decideWait(current({ state: 'finished' }), [row('finished', 'Stop')], event({ kind: 'working', name: 'SessionStart' }))).toEqual(NEW);
+  });
+
+  it("the screen's reading of a tab stuck by an older compaction is born seen: the Stop already alerted", () => {
+    const stuck = [row('working', 'SessionStart', 60_000), row('waiting_input', 'Stop', 3_600_000)];
+    const restored = event({ name: 'ScreenCheck', continuesWait: true, keepsWaitText: true });
+    expect(decideWait(current({ state: 'working' }), stuck, restored)).toEqual(BORN);
+  });
+});

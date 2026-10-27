@@ -1,5 +1,5 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
-import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState } from './types';
+import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem } from './types';
 import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
@@ -528,11 +528,17 @@ export const api = {
   },
   automation: {
     queue: (projectId: string) => request<{ items: AutomationQueueItem[] }>('GET', `/projects/${projectId}/automation/queue`),
+    /** TER-1121: the project's open health alerts ("Saúde do projeto"). */
+    health: (projectId: string) => request<{ enabled: boolean; items: HealthItem[] }>('GET', `/projects/${projectId}/health`),
+    /** TER-1120: workflows a push to the base runs that the Setup names nowhere. */
+    workflows: (projectId: string) => request<{ unlisted: Array<{ name: string; path: string }> }>('GET', `/projects/${projectId}/automation/workflows`),
     /** Tokens and cost per card, epic and account; `from`/`to` are `YYYY-MM-DD` (open when absent). */
     usage: (projectId: string, range: { from?: string; to?: string } = {}) => {
       const q = new URLSearchParams(Object.entries(range).filter((e): e is [string, string] => typeof e[1] === 'string')).toString();
       return request<AutomationUsage>('GET', `/projects/${projectId}/automation/usage${q ? `?${q}` : ''}`);
     },
+    /** TER-1114: whether the project's repository runs any workflow on pull requests. */
+    prCi: (projectId: string) => request<{ state: 'present' | 'absent' | 'unknown' }>('GET', `/projects/${projectId}/automation/pr-ci`),
     promptDefaults: () => request<{ implementer: string; integrator: string; fixer: string }>('GET', '/automation/prompt-defaults'),
     pauseState: () => request<AutomationPauseState>('GET', '/automation/state'),
     /** `scope`: `all` ("Pausar tudo") or a project id. `interrupt` also asks to stop the tabs running now. */

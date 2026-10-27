@@ -60,6 +60,8 @@ import { startAutoAnswerSweeper } from './chat/auto-answer.js';
 import { wokenAnswerGuard } from './automation/answers.js';
 import { createWaker } from './chat/wake.js';
 import { startWatchEngine } from './chat/watches/engine.js';
+import { startTrustWake } from './chat/trust-wake.js';
+import { startHealthWatcher } from './health/watcher.js';
 import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
@@ -99,6 +101,7 @@ import { registerTerminalWs } from './terminal/ws.js';
 import { registerAgentWs } from './agent/ws.js';
 import { agents } from './agent/registry.js';
 import { startAutomation } from './automation/start.js';
+import { reopenRunInTab } from './automation/post-run.js';
 import { TranscriptionService } from './terminal/transcription.js';
 import { createUpgradeRouter } from './ws/router.js';
 import { createAccessLogRecorder, registerAccessLog, upgradeClientIp } from './access-log/recorder.js';
@@ -341,7 +344,13 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('terminals', (a) => fileRecentRoutes(a, repos), '/file-recent');
       await guarded('terminals', (a) => transcriptionRoutes(a, { transcriptions }), '/transcriptions');
       await guarded('terminals', (a) => monitorRoutes(a, repos), '/monitor');
-      await guarded('terminals', (a) => hooksRoutes(a, repos, { waker, onTabEvent: (tabId) => tabChat.poke(tabId) }), '/hooks');
+      await guarded('terminals', (a) => hooksRoutes(a, repos, {
+          waker,
+          onTabEvent: (tabId) => tabChat.poke(tabId),
+          // TER-1112: a guard block in a tab whose run ended wakes the chat; a request typed there reopens a run
+          postRunWaker: waker,
+          reopenRun: (tab) => reopenRunInTab({ repos, instance: automation.instance, lifecycle, log: fastify.log }, tab),
+        }), '/hooks');
       await guarded('ai_accounts', (a) => aiAccountRoutes(a, repos), '/ai-accounts');
       // "Refazer login" of an account (TER-1047); the app registers the same plugin.
       await guarded('ai_accounts', (a) => aiLoginRoutes(a, repos), '/ai-accounts');
@@ -373,7 +382,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   );
 
   // --- MCP endpoint for the global terminal (public route: a personal API token authenticates each call) ---
-  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes } }));
+  await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes }, postRunWaker: waker }));
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
   if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));
@@ -487,6 +496,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       },
     },
   });
+  // TER-1117: a tab stuck on the folder trust dialog wakes its project's chat without a watch of the concierge's.
+  const stopTrustWake = startTrustWake(repos, fastify.log, (tabId) => watches.engine.nudge('tab', tabId));
   // TER-1101: the concierge's notices outside the chat (`notify`). A notice leaves once its answer ends, by the
   // person's rules; both colours run it, the claim in the database picks one, and a draining colour sends none.
   const notices = startNoticeDispatcher({
@@ -502,6 +513,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
         if (e.type === 'run_finished') listener(e.user_id, e.conversation_id, e.message_id);
       }),
   });
+  // TER-1121: the project health watcher notices stalled work (a green PR left unmerged, a red base, a stuck tab…)
+  // and tells the person (a needs_you notice) and the project's chat once per episode; the claims pick one colour.
+  const stopHealth = startHealthWatcher({ repos, chat, log: fastify.log, active: () => !lifecycle.draining });
   // Sends due automatic answers (spec 2026-09-26 concierge memory §6); both colors run it, the claim picks one.
   // The woken chat's answer in an automatic tab meets the run's caps and cycle detector (TER-974).
   const stopAutoAnswerSweeper = startAutoAnswerSweeper(repos, fastify.log, undefined, wokenAnswerGuard({ repos, log: fastify.log }));
@@ -509,7 +523,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // the follower drives the tabs of this instance's runs (resumes, restarts, the PR fallback). Both colours
   // run it; the claim row picks one per card. It reads the same `lifecycle` the SIGTERM drain flips, so a
   // draining colour claims, types and takes over nothing.
-  const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) } });
+  const automation = startAutomation({ repos, lifecycle, log: fastify.log, follower: { wakeStopped: (i) => waker.wakeForStoppedTab(i) }, merge: { wakeBaseRed: (i) => waker.wakeForBaseRed(i) } });
   // The CI panel's poll, then the merge executor for projects with automation on (spec §10.1); approving a
   // merge card in the chat merges that PR once (F-19).
   const stopCiSync = startCiSyncScheduler(repos, fastify.log, undefined, { merge: (projectId) => automation.merge(projectId) });
@@ -537,6 +551,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     clearTimeout(onlineSweep);
     stopSync();
     watches.stop();
+    stopTrustWake();
+    stopHealth();
     notices.stop();
     stopCiSync();
     stopSummaries();

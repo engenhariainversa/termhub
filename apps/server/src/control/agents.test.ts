@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage, paneForeground } = vi.hoisted(() => ({
+const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage, paneForeground, followLaunch, watch } = vi.hoisted(() => ({
+  followLaunch: vi.fn(),
+  watch: vi.fn(),
   getAccountUsage: vi.fn(),
   paneForeground: vi.fn(),
   openTab: vi.fn(),
@@ -16,6 +18,8 @@ vi.mock('./terminals.js', () => ({ openTab }));
 // typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
 vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession, paneForeground, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../terminal/tab-mcp.js', async (orig) => ({ ...(await orig<typeof import('../terminal/tab-mcp.js')>()), installTabMcp, tabMcpSupported }));
+vi.mock('../monitor/folder-trust.js', () => ({ followLaunch }));
+vi.mock('./watches.js', () => ({ watch }));
 
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Project, Tab, Task } from '../db/repositories/types.js';
@@ -372,6 +376,31 @@ describe('startAgent', () => {
       account: { id: 'a1', label: 'pedrogoiania' }, model: null,
       note: `${NOTE} A aba abriu sem o MCP de memória: MCP_URL não configurado.`,
     });
+    // TER-1117: a Claude start has its screen read for the folder trust dialog; outside the chat, no watch
+    expect(followLaunch).toHaveBeenCalledWith(c.repos, c.log, 't9', expect.objectContaining({ id: 'm1' }));
+    expect(watch).not.toHaveBeenCalled();
+  });
+
+  it('TER-1117: from the chat, the tab is watched until its first stop, and the answer says so', async () => {
+    const { c } = ctx();
+    c.token = { ...c.token!, chat_conversation_id: 'conv1' } as never;
+    watch.mockResolvedValue({ watch: { id: 'w7' } });
+    const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(watch).toHaveBeenCalledWith(c, { kind: 'tab', tab_id: 't9', note: expect.stringContaining('start_agent') });
+    expect(r.watch_id).toBe('w7');
+    expect(r.note).toContain('Esta aba já é acompanhada (watch w7)');
+    // a watch that cannot be made (the chat's limit) never fails the start
+    watch.mockRejectedValue(new ControlError('WATCH_LIMIT', 'cheio'));
+    const again = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
+    expect(again.watch_id).toBeUndefined();
+    expect(again.note).toContain('use watch (kind tab)');
+  });
+
+  it('TER-1117: a Codex start or an automatic run (its follower answers) is not read for the trust dialog', async () => {
+    const { c } = ctx();
+    await startAgent(c, { project_id: 'p1', account_id: 'a2', prompt: 'write a spec' });
+    await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, { cwd: '/wt/TER-1' });
+    expect(followLaunch).not.toHaveBeenCalled();
   });
 
   describe('with MCP_URL set', () => {
@@ -1083,20 +1112,20 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     expect(continueLine('claude', null, { permission: auto, prompt: 'x', mcpTabId: null, guardTabId: 'abc' })).toContain(`--settings "$HOME"/'.termhub/tabs/abc/guard.json'`);
   });
 
-  it('a run on an agent without the guard (before 0.19.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
+  it('a run on an agent without the guard (before 0.36.0) is refused before its tab exists: "Atualize o agente" (TER-1005)', async () => {
     const { c } = ctx();
     const err = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'x' }, { cwd: WORKTREE, permission: { ...PERMISSION, worktree: WORKTREE } }).catch((e: unknown) => e);
     expect(err).toMatchObject({ code: 'GUARD_UNSUPPORTED' });
-    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.19\.0/);
+    expect((err as Error).message).toMatch(/^Atualize o agente de MacBook Pro M4 .*0\.36\.0/);
     expect(openTab).not.toHaveBeenCalled();
     expect(installTabMcp).not.toHaveBeenCalled();
     expect(sendTextToSession).not.toHaveBeenCalled();
   });
 
-  it('on agent 0.19.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
+  it('on agent 0.36.0, guard.json is written before the line that names it is typed (TER-1005)', async () => {
     const m1 = machines[0]!;
     const before = m1.agent_version;
-    m1.agent_version = '0.19.0';
+    m1.agent_version = '0.36.0';
     try {
       cfg.mcpUrl = MCP_URL;
       tabMcpSupported.mockReturnValue(true);
@@ -1341,7 +1370,7 @@ describe('ai-memory in the agents termhub starts (TER-1020)', () => {
   const m1 = machines[0]!;
   const before = { ...m1 };
   beforeEach(() => {
-    Object.assign(m1, { ai_memory_enabled: true, ai_memory_url: null, agent_version: '0.35.0' });
+    Object.assign(m1, { ai_memory_enabled: true, ai_memory_url: null, agent_version: '0.36.0' });
   });
   afterEach(() => {
     Object.assign(m1, before);

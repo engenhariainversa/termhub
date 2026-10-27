@@ -1,0 +1,24 @@
+  - Estado ao vivo só de abas: cards, PRs e máquinas mostram o último evento.
+  - Prints: os de antes e depois do web, com 1 e com vários watches, estão em
+    docs/screenshots/, como no TER-1108. Gerei renderizando os componentes reais
+    no Chrome headless. Não há prints do app, porque aqui não tem simulador nem
+    build Expo.
+
+✻ Worked for 16m 56s · done 5:27 PM
+  ⎿  Read
+     ../../../../../../tmp/claude-1000/-home-user--termhub-worktrees-lxj
+     lcaa8gd35-TER-1115/3b4bae2e-6f02-4a93-8bd8-6527589c33e1/scratchpad/pr.md
+     (55 lines)
+  ⎿  Read apps/web/src/components/chat/ChatWatches.tsx (84 lines)
+  ⎿  Read apps/mobile/src/features/chat/view/watches-strip.tsx (97 lines)
+  ⎿  Read apps/mobile/src/features/chat/model/watch-text.ts (221 lines)
+  ⎿  Read apps/web/src/components/chat/watch-text.ts (208 lines)
+
+● Compacted while idle, before the prompt cache expired · turn off with
+  "idleCompaction": false in settings.json
+                                        ✔ Update installed · Restart to update
+────────────────────────────────────────────────────────────────────────────────
+❯ acompanha o CI do PR #530
+────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 TER-1115 | ctx 0% (0/1000k) | $6.3990 (0 tok)
+  ⏵⏵ auto mode on (shift+tab to cycle) · PR #530

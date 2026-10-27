@@ -7,6 +7,7 @@ import { REASON_TEXT } from './eligibility.js';
 import { escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 import { MERGE_TOOL } from './merge.js';
 import { dayIn } from './usage.js';
+import { alertLine } from '../health/text.js';
 
 /** How often the timer looks for summaries that are due. */
 export const SUMMARY_TICK_MS = 5 * 60_000;
@@ -31,6 +32,8 @@ export interface SummaryContent {
   waiting: WaitingItem[];
   /** TER-1043: the decisions taken alone in the period, for the person to review ("REF: question → choice") */
   decisions?: WaitingItem[];
+  /** TER-1121: the health watcher's open alerts: what is stalled and why */
+  stalled?: WaitingItem[];
   /** estimated USD of the day; null = nothing priced */
   cost: number | null;
 }
@@ -55,6 +58,7 @@ export function summaryMessage(s: SummaryContent, locale: Locale): string {
     t(locale, 'Feitos: {{cards}} cards, {{merges}} merges, {{deploys}} deploys', { cards: s.cards, merges: s.merges, deploys: s.deploys }),
     ...(s.decisions?.length ? [t(locale, 'Decidido sozinho: {{decisions}}', { decisions: s.decisions.map((d) => d.label(locale)).join('; ') })] : []),
     t(locale, 'Esperando você: {{waiting}}', { waiting }),
+    ...(s.stalled?.length ? [t(locale, 'Parado: {{stalled}}', { stalled: s.stalled.map((x) => x.label(locale)).join('; ') })] : []),
     t(locale, 'Custo estimado do dia: {{cost}}', { cost: s.cost === null ? '—' : t(locale, 'US$ {{value}}', { value: s.cost.toFixed(2) }) }),
   ].join('\n');
 }
@@ -92,12 +96,13 @@ async function dueOwners(repos: Repositories): Promise<Map<string, { hour: numbe
 async function compose(repos: Repositories, ownerId: string, projectIds: string[], zone: string, day: string, now: Date): Promise<SummaryContent> {
   // the period since the previous summary (24 h before for the first); cost is per day, so the days it touches count whole
   const since = (await repos.automationSummaries.previousSentAt(ownerId, day)) ?? new Date(now.getTime() - 86_400_000);
-  const [activity, cost, parked, approvals, decided] = await Promise.all([
+  const [activity, cost, parked, approvals, decided, alerts] = await Promise.all([
     repos.automationSummaries.activity(projectIds, since, now),
     repos.automationSummaries.costOfDays(projectIds, dayIn(zone, since), day),
     repos.automationSummaries.parkedRuns(projectIds, SLOT_FREE_REASONS as string[]),
     repos.automationSummaries.pendingCards(ownerId, MERGE_TOOL, projectIds),
     repos.automationSummaries.decisions(projectIds, since, now),
+    repos.healthAlerts.listOpenByProjects(projectIds),
   ]);
   const taskIds = [...parked, ...decided].flatMap((p) => (p.task_id ? [p.task_id] : []));
   const tasks = new Map((await repos.tasks.findByIds([...new Set(taskIds)])).map((x) => [x.id, x]));
@@ -115,7 +120,8 @@ async function compose(repos: Repositories, ownerId: string, projectIds: string[
       return d.summary ? `${ref}: ${d.summary}` : t(locale, '{{ref}}: seguiu a própria recomendação', { ref });
     },
   }));
-  return { day, since, zone, ...activity, waiting, decisions, cost };
+  const stalled: WaitingItem[] = alerts.map((a) => ({ label: (locale: Locale) => alertLine(a, locale, now) }));
+  return { day, since, zone, ...activity, waiting, decisions, stalled, cost };
 }
 
 /**

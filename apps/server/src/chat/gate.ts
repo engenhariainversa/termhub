@@ -34,6 +34,7 @@ const readTools = new Set([
   'wait_for_state',
   'list_tasks',
   'list_automation_queue',
+  'get_project_health',
   'get_automation_policy',
   // a tab tool (agentic board F-8): reads the calling tab's own run card; the concierge never lists it
   'get_card',

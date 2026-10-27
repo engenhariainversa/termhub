@@ -465,6 +465,7 @@ export const ModelName = {
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
   AutomationSummary: 'AutomationSummary',
+  ProjectHealthAlert: 'ProjectHealthAlert',
   LegalDocumentVersion: 'LegalDocumentVersion',
   LegalAcceptance: 'LegalAcceptance',
   DataExport: 'DataExport',
@@ -487,7 +488,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -5523,6 +5524,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    ProjectHealthAlert: {
+      payload: Prisma.$ProjectHealthAlertPayload<ExtArgs>
+      fields: Prisma.ProjectHealthAlertFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ProjectHealthAlertFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ProjectHealthAlertFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        findFirst: {
+          args: Prisma.ProjectHealthAlertFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ProjectHealthAlertFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        findMany: {
+          args: Prisma.ProjectHealthAlertFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>[]
+        }
+        create: {
+          args: Prisma.ProjectHealthAlertCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        createMany: {
+          args: Prisma.ProjectHealthAlertCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ProjectHealthAlertCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>[]
+        }
+        delete: {
+          args: Prisma.ProjectHealthAlertDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        update: {
+          args: Prisma.ProjectHealthAlertUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        deleteMany: {
+          args: Prisma.ProjectHealthAlertDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ProjectHealthAlertUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ProjectHealthAlertUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>[]
+        }
+        upsert: {
+          args: Prisma.ProjectHealthAlertUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ProjectHealthAlertPayload>
+        }
+        aggregate: {
+          args: Prisma.ProjectHealthAlertAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateProjectHealthAlert>
+        }
+        groupBy: {
+          args: Prisma.ProjectHealthAlertGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProjectHealthAlertGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ProjectHealthAlertCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ProjectHealthAlertCountAggregateOutputType> | number
+        }
+      }
+    }
     LegalDocumentVersion: {
       payload: Prisma.$LegalDocumentVersionPayload<ExtArgs>
       fields: Prisma.LegalDocumentVersionFieldRefs
@@ -6865,13 +6940,15 @@ export const ChatWatchScalarFieldEnum = {
   baseline: 'baseline',
   label: 'label',
   note: 'note',
+  summary: 'summary',
   recurring: 'recurring',
   status: 'status',
   createdAt: 'createdAt',
   expiresAt: 'expiresAt',
   closedAt: 'closedAt',
   lastFiredAt: 'lastFiredAt',
-  fireCount: 'fireCount'
+  fireCount: 'fireCount',
+  lastEvent: 'lastEvent'
 } as const
 
 export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]
@@ -7238,6 +7315,25 @@ export const AutomationSummaryScalarFieldEnum = {
 } as const
 
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const ProjectHealthAlertScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  signal: 'signal',
+  subject: 'subject',
+  level: 'level',
+  detail: 'detail',
+  sinceAt: 'sinceAt',
+  firstSeenAt: 'firstSeenAt',
+  lastSeenAt: 'lastSeenAt',
+  openedAt: 'openedAt',
+  wokenAt: 'wokenAt',
+  noticedAt: 'noticedAt',
+  resolvedAt: 'resolvedAt'
+} as const
+
+export type ProjectHealthAlertScalarFieldEnum = (typeof ProjectHealthAlertScalarFieldEnum)[keyof typeof ProjectHealthAlertScalarFieldEnum]
 
 
 export const LegalDocumentVersionScalarFieldEnum = {
@@ -7853,6 +7949,7 @@ export type GlobalOmitConfig = {
   pushTicket?: Prisma.PushTicketOmit
   userNotification?: Prisma.UserNotificationOmit
   automationSummary?: Prisma.AutomationSummaryOmit
+  projectHealthAlert?: Prisma.ProjectHealthAlertOmit
   legalDocumentVersion?: Prisma.LegalDocumentVersionOmit
   legalAcceptance?: Prisma.LegalAcceptanceOmit
   dataExport?: Prisma.DataExportOmit

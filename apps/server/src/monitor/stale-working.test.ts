@@ -20,7 +20,7 @@ const QUESTION = ' ☐ Pet\nDo you prefer cats or dogs?\n❯ 1. Cats\n  2. Dogs\
 
 function setup(tabs: Tab[], screen: string, opts: { online?: boolean; machine?: Machine; pane?: 'shell' | 'busy' | 'dead' | null; answer?: { text: string; stale: boolean } | null } = {}) {
   const recordEvent = vi.fn(async (_id: string, ev: { kind: Tab['state'] }) => ({ tab: tab({ state: ev.kind }), event: {}, rearm: null }));
-  const readLastAnswer = vi.fn(async () => (opts.answer === undefined ? { text: 'Pronto.', at: AT, tool: 'claude', stale: false } : opts.answer));
+  const readLastAnswer = vi.fn(async () => (opts.answer === undefined ? { text: 'Pronto.', at: AT, tool: 'claude', stale: false } : opts.answer && { at: AT, tool: 'claude', ...opts.answer }));
   const repos = {
     tabs: { listStaleWorking: vi.fn(async () => tabs), listUnreported: vi.fn(async () => tabs), recordEvent, readLastAnswer },
     machines: { findById: vi.fn(async () => opts.machine ?? machine()) },
@@ -50,9 +50,9 @@ describe('sweepStaleWorking — a tab the hooks left working (TER-615)', () => {
     expect(repos.tabs.listStaleWorking).toHaveBeenCalledWith(new Date(now.getTime() - STALE_WORKING_MS));
   });
 
-  it('back at its prompt: waiting for input, only if nothing moved since the read, and it alerts', async () => {
+  it('back at its prompt after a turn whose Stop never came: waiting for input, only if nothing moved since the read, and it alerts', async () => {
     publish.mockClear();
-    const { repos, recordEvent, capture, deps } = setup([tab()], PROMPT);
+    const { repos, recordEvent, capture, deps } = setup([tab()], PROMPT, { answer: { text: 'Pronto.', stale: true } });
     const l = log();
     await sweepStaleWorking(repos, l as never, now, deps);
     expect(capture).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'th-t1', expect.any(Number));
@@ -112,6 +112,57 @@ describe('sweepStaleWorking — a tab the hooks left working (TER-615)', () => {
   });
 });
 
+describe('sweepStaleWorking — back to the turn end a compaction left (TER-1133)', () => {
+  const now = new Date(Date.parse(AT) + STALE_WORKING_MS + 1);
+  const COMPACTED = readFileSync(new URL('./fixtures/claude-screens/compacted-idle-2.1.txt', import.meta.url), 'utf8');
+
+  it('reads the screen Claude Code leaves after "Compacted while idle" as its prompt', async () => {
+    const { claudeScreenState } = await import('./screen-state.js');
+    expect(claudeScreenState(COMPACTED)).toBe('prompt');
+  });
+
+  it('a report with nothing after it: finished again, with the answer as its text, not a new alert', async () => {
+    publish.mockClear();
+    const answer = { text: 'Abri o PR #527 e reportei o card como feito.', stale: false };
+    const { repos, recordEvent, deps } = setup([tab()], COMPACTED, { answer });
+    const l = log();
+    await sweepStaleWorking(repos, l as never, now, deps);
+    expect(recordEvent).toHaveBeenCalledWith('t1', {
+      kind: 'finished',
+      tool: 'claude',
+      text: answer.text,
+      meta: { event: 'ScreenCheck', screen: 'prompt', restored: true },
+      continuesWait: true,
+      keepsWaitText: true,
+      ifStateAt: AT,
+    });
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(l.info).toHaveBeenCalledWith({ tabId: 't1', machineId: 'm1', kind: 'finished', recorded: true }, 'monitor: stale working tab back to its turn end');
+    expect(JSON.stringify(l.info.mock.calls)).not.toContain('PR #527');
+  });
+
+  it('an answer that asks something: a wait for input again', async () => {
+    const { repos, recordEvent, deps } = setup([tab()], COMPACTED, { answer: { text: 'Posso mesclar o PR?', stale: false } });
+    await sweepStaleWorking(repos, log() as never, now, deps);
+    expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'waiting_input', text: 'Posso mesclar o PR?', meta: expect.objectContaining({ restored: true }) }));
+  });
+
+  it("another tool's answer is not this Claude's turn: the plain screen reading", async () => {
+    const { repos, recordEvent, deps } = setup([tab()], COMPACTED, { answer: { text: 'Pronto.', stale: false, tool: 'codex' } as never });
+    await sweepStaleWorking(repos, log() as never, now, deps);
+    expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'waiting_input', text: null, meta: { event: 'ScreenCheck', screen: 'prompt' } }));
+  });
+
+  it('warns when the list is full: the newest stuck tabs would be left out', async () => {
+    const { STALE_WORKING_LIMIT } = await import('../db/repositories/tabs.js');
+    const many = Array.from({ length: STALE_WORKING_LIMIT }, (_, i) => tab({ id: `t${i}`, tmux_session: null }));
+    const { repos, deps } = setup(many, PROMPT);
+    const l = log();
+    await sweepStaleWorking(repos, l as never, now, deps);
+    expect(l.warn).toHaveBeenCalledWith({ count: STALE_WORKING_LIMIT }, 'monitor: stale working list is full');
+  });
+});
+
 describe('sweepStaleWorking — the agent exited without a hook (TER-643)', () => {
   const now = new Date(Date.parse(AT) + STALE_WORKING_MS + 1);
   const SHELL = 'pedrogoiania:~/termhub$ ';
@@ -155,7 +206,7 @@ describe('sweepStaleWorking — the agent exited without a hook (TER-643)', () =
     await sweepStaleWorking(codex.repos, log() as never, now, codex.deps);
     expect(codex.recordEvent).not.toHaveBeenCalled();
 
-    const claude = setup([tab()], PROMPT, { pane: null });
+    const claude = setup([tab()], PROMPT, { pane: null, answer: null });
     await sweepStaleWorking(claude.repos, log() as never, now, claude.deps);
     expect(claude.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'waiting_input' }));
     expect(claude.exited).not.toHaveBeenCalled();
@@ -220,6 +271,18 @@ describe('sweepStaleWorking / sweepUnreported — the trust dialog and the login
     const login = setup([unreported], LOGIN, { pane: 'busy' });
     await sweepUnreported(login.repos, log() as never, now, login.deps);
     expect(login.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'auth_required', ifStateIn: [null] }));
+  });
+
+  it("TER-1117: a Claude Code started by hand in the project's own folder has the dialog answered, not reported", async () => {
+    publish.mockClear();
+    const unreported = tab({ state: null, state_at: null, state_tool: null, cwd: null });
+    const s = setup([unreported], TRUST, { pane: 'busy' });
+    (s.repos as unknown as { projectSetup: unknown }).projectSetup = { get: vi.fn(async () => ({ data: { agent: { trust_project_folder: true } } })) };
+    const sendEnter = vi.fn(async () => {});
+    await sweepUnreported(s.repos, log() as never, now, { ...s.deps, trust: { capture: s.capture, sendEnter, now: () => 0 } });
+    expect(sendEnter).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), 'th-t1');
+    expect(s.recordEvent).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('a plain shell or an ordinary prompt stays unreported, and is read again only after the recheck delay', async () => {

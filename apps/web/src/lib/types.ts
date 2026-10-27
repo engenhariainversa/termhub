@@ -678,13 +678,39 @@ export interface ProjectSetupData {
   } | null;
   ticket_sources: TicketSource[];
   runner: { machine_id: string | null; cwd: string | null; setup_command: string | null; worktree: boolean };
-  agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null };
+  /** trust_project_folder: absent from an older server (TER-1117); on unless false */
+  agent: { command: string; plugins: string[]; model: string | null; extra_args: string | null; trust_project_folder?: boolean };
   verify: { type: 'none' | 'ios-simulator' | 'web-screenshot' | 'command'; target: string | null; build_command: string | null };
   approvals: Record<'spec' | 'plan' | 'pr' | 'merge' | 'tool_permissions' | 'questions', DecisionMode>;
   /** absent from an older server; the form sends back what it received */
   automation?: ProjectAutomation;
   /** TER-1019 (use_in_runs: TER-1020); absent from an older server */
   ai_memory?: { publish_rules: boolean; use_in_runs?: boolean };
+  /** TER-1121: the project health watcher; absent from an older server */
+  health?: ProjectHealthSetup;
+}
+
+/** TER-1121: the signs of stalled work the project's health watcher looks for. */
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated';
+
+export interface ProjectHealthSetup {
+  enabled: boolean;
+  signals: Record<HealthSignal, { enabled: boolean; minutes: number }>;
+}
+
+/** One open alert of the panel "Saúde do projeto" (GET /projects/:id/health), its text in the reader's language. */
+export interface HealthItem {
+  id: string;
+  signal: HealthSignal;
+  /** needs_you: only the person can act; concierge: the project's chat may resolve it */
+  level: 'needs_you' | 'concierge';
+  name: string;
+  text: string;
+  url: string | null;
+  subject: string;
+  since_at: string;
+  opened_at: string;
+  woken: boolean;
 }
 
 export interface ProjectSetup {
@@ -1421,6 +1447,12 @@ export interface ChatWatch {
    *  repeats. Null or absent otherwise (an older server leaves them out). */
   next_at?: string | null;
   every_minutes?: number | null;
+  /** TER-1115: the concierge's line for the person (`note` comes blank: it is the concierge's own); what
+   *  already happened (the last event and when); a watched tab's state now. Absent from an older server. */
+  summary?: string | null;
+  last_event?: string | null;
+  last_fired_at?: string | null;
+  target_state?: string | null;
 }
 
 /**

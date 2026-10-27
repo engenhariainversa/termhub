@@ -214,6 +214,8 @@ export const FEED_KINDS = [
   'run_cancelled', 'permission_auto_approved', 'guard_blocked',
   // TER-1025
   'deploy_retried', 'github_wait', 'trust_auto_accepted',
+  // TER-1120: a base workflow cancelled without a runner (the app's feed skips it until it has a line)
+  'workflow_no_runner',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
@@ -229,6 +231,8 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
+  // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
+  if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });
   if (e.kind === 'run_cancelled') {
     const reason = str(p.reason);
     return reason && CANCEL_TEXT[reason] ? t(locale, CANCEL_TEXT[reason]) : null;

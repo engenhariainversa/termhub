@@ -5,7 +5,7 @@ import { sendDueSummaries, summaryMessage } from './summary.js';
 
 const setup = (o: object) => setupSchema.parse({ automation: { enabled: true, ...o } });
 
-function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null; decisions?: Array<{ task_id: string | null; summary: string | null }> } = {}) {
+function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null; decisions?: Array<{ task_id: string | null; summary: string | null }>; stalled?: unknown[] } = {}) {
   const projects = o.projects ?? [{ id: 'p1', owner: 'u1', summary_hour: 9 }];
   const claimed = o.claimed ?? new Set<string>();
   const lines: string[] = [];
@@ -31,6 +31,7 @@ function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: 
       decisions: vi.fn(async () => o.decisions ?? []),
     },
     tasks: { findByIds: vi.fn(async () => [{ id: 't1', ref: 'TER-9' }]) },
+    healthAlerts: { listOpenByProjects: vi.fn(async () => o.stalled ?? []) },
     chat: {
       getOrCreateForUser: vi.fn(async () => ({ id: 'c1' })),
       addMessage: vi.fn(async (m: { text: string }) => (lines.push(m.text), { id: 'm', role: 'assistant', created_at: '', ...m })),
@@ -127,6 +128,13 @@ describe('daily summary (TER-894)', () => {
     const f = fakes({ decisions: [{ task_id: 't1', summary: 'Cor do botão? → Azul' }, { task_id: null, summary: null }] });
     await sendDueSummaries({ repos: f.repos, lifecycle: live }, new Date('2026-10-05T09:00:00Z'));
     expect(f.lines[0]).toContain('Decidido sozinho: TER-9: Cor do botão? → Azul; Um card: seguiu a própria recomendação');
+  });
+
+  it('lists what the health watcher sees stalled (TER-1121)', async () => {
+    const stalled = [{ signal: 'pr_ready', detail: { label: '#526', ref: 'TER-1', reason: 'merge_base_red' }, since_at: '2026-10-05T06:00:00Z' }];
+    const f = fakes({ stalled });
+    await sendDueSummaries({ repos: f.repos, lifecycle: live }, new Date('2026-10-05T09:00:00Z'));
+    expect(f.lines[0]).toContain('Parado: PR #526 (TER-1) verde e sem merge há 3 h: Branch base vermelha');
   });
 
   it('shows — when nothing was priced and "nada" when nothing waits; english on request', () => {

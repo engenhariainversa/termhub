@@ -65,7 +65,7 @@ describe('eligibilityOf', () => {
     expect(reason(input({ active_run: true }))).toBe('has_agent');
   });
   it('has pt-BR text for every reason', () => {
-    expect(REASON_TEXT.no_capable_machine).toBe('Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente');
+    expect(REASON_TEXT.no_capable_machine).toBe('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente');
     expect(REASON_TEXT.paused).toBe('Automático pausado');
   });
 });

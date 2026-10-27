@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { machineLabel } from '../lib/machine-labels';
 import { AutomationSetup } from './AutomationSetup';
+import { HealthSetup } from './HealthSetup';
 import { ProjectAiCard } from './ProjectAiCard';
 import { tk, useTranslation } from '../i18n';
 import {
@@ -331,6 +332,9 @@ export function SetupForm({ project }: Props) {
         <Row label={t('Argumentos extras')}>
           <input className="input font-mono" value={data.agent.extra_args ?? ''} onChange={(e) => patch('agent', { ...data.agent, extra_args: e.target.value || null })} /* i18n-ignore */ placeholder="--permission-mode acceptEdits" />
         </Row>
+        <Check checked={data.agent.trust_project_folder !== false} onChange={(v) => patch('agent', { ...data.agent, trust_project_folder: v })}>
+          {t('Confiar sozinho na pasta do projeto quando o Claude Code perguntar')}
+        </Check>
       </Card>
 
       <Card title={t('Verificação')} hint={t('Evidência anexada ao PR para você aprovar.')}>
@@ -388,7 +392,9 @@ export function SetupForm({ project }: Props) {
         </ul>
       </Card>
 
-      {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
+      {data.automation && <AutomationSetup projectId={project.id} value={data.automation} onChange={(next) => patch('automation', next)} />}
+
+      {data.health && <HealthSetup value={data.health} onChange={(next) => patch('health', next)} />}
 
       {data.ai_memory && (
         <Card

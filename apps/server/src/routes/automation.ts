@@ -9,6 +9,9 @@ import { listAutomationEvents } from '../automation/events.js';
 import { DEFAULT_FIXER_CI_TEXT, DEFAULT_FIXER_CONFLICT_TEXT, DEFAULT_IMPLEMENTER_TEXT, DEFAULT_INTEGRATOR_TEXT } from '../automation/prompts.js';
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { projectUsage } from '../automation/usage.js';
+import { projectHealth } from '../health/view.js';
+import { unlistedWorkflows } from '../automation/unlisted-workflows.js';
+import { projectPrCi } from '../automation/pr-ci.js';
 
 const id = z.string().min(1).max(64);
 const idParam = z.object({ id });
@@ -18,6 +21,11 @@ export async function projectAutomationRoutes(app: FastifyInstance, repos: Repos
   app.get('/:id/automation/queue', async (request) => {
     const { id } = idParam.parse(request.params);
     return { items: await automationQueue(controlContextForRequest(repos, request), id, requestLocale(request)) };
+  });
+  /** TER-1121: the project's open health alerts ("Saúde do projeto"): stalled work the watcher saw. */
+  app.get('/:id/health', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return projectHealth(controlContextForRequest(repos, request), id, requestLocale(request));
   });
 }
 
@@ -48,6 +56,18 @@ export async function projectAutomationEventRoutes(app: FastifyInstance, repos: 
     const { id } = idParam.parse(request.params);
     const q = usageQuery.parse(request.query);
     return projectUsage(controlContextForRequest(repos, request), id, q);
+  });
+  /** TER-1120: the workflows a push to the base runs that the Setup names nowhere (deploy, release, required checks). */
+  app.get('/:id/automation/workflows', async (request) => {
+    const { id } = idParam.parse(request.params);
+    const { project } = await controlContextForRequest(repos, request).scoped.project(id);
+    const setup = (await repos.projectSetup.get(project.id)).data;
+    return { unlisted: unlistedWorkflows(project.id, setup) };
+  });
+  /** TER-1114: whether the repository runs CI on pull requests, for the Setup's warning at merge level or above. */
+  app.get('/:id/automation/pr-ci', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return { state: await projectPrCi(controlContextForRequest(repos, request), id) };
   });
 }
 

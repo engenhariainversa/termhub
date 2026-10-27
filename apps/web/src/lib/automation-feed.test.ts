@@ -41,6 +41,13 @@ describe('feed lines for changes to automatic work (TER-975)', () => {
   });
 });
 
+describe('the folder trust dialog answered alone (TER-1025, TER-1117)', () => {
+  it("names the run's card, or shows the server's line for a tab in the project's own folder", () => {
+    expect(feedLine(ev({ kind: 'trust_auto_accepted' }))).toBe('TER-9: confiança da pasta confirmada sozinha');
+    expect(feedLine(ev({ kind: 'trust_auto_accepted', task_id: null, run_id: null, ref: null, reason_text: 'Aba api: pasta do projeto confiada sozinha' }))).toBe('Aba api: pasta do projeto confiada sozinha');
+  });
+});
+
 describe('auto-approved and guard-blocked lines (TER-993)', () => {
   it('names the tool, in pt-BR and en, and falls back without one', () => {
     expect(feedLine(ev({ kind: 'permission_auto_approved', tool: 'Bash' }))).toBe('TER-9: Bash liberado sozinho');
