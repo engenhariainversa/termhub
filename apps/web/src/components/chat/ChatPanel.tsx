@@ -596,6 +596,19 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       setAnsweringQuestionId(null);
     }
   }, []);
+  /** "Dispensar" (TER-1140): the card leaves the pending list; a card already closed comes back as it is. */
+  const dismissQuestion = useCallback(async (id: string) => {
+    setAnsweringQuestionId(id);
+    setQuestionErrors(({ [id]: _dropped, ...rest }) => rest);
+    try {
+      const { tab_question } = await api.dismissTabQuestion(id);
+      setTabQuestions((prev) => upsertTabQuestion(prev, tab_question));
+    } catch (e) {
+      setQuestionErrors((prev) => ({ ...prev, [id]: e instanceof ApiError ? e.message : i18n.t('Não foi possível dispensar') }));
+    } finally {
+      setAnsweringQuestionId(null);
+    }
+  }, []);
   /** Stable, so the permission card's effect runs once per question. */
   const loadTabQuestionScreen = useCallback(async (id: string) => api.tabQuestionScreen(id), []);
 
@@ -860,6 +873,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       onForget={forgetDecision}
       onCancelAutoAnswer={cancelAutoAnswer}
       onReply={startQuestionReply}
+      onDismiss={dismissQuestion}
     />
   );
   const cancelReply = useCallback(() => setReplyTo(null), []);

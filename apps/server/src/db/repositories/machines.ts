@@ -23,6 +23,7 @@ export interface MachineInput {
   claude_auto_swap?: boolean;
   ai_usage_query?: boolean;
   automation_allowed?: boolean;
+  idle_tab_close_hours?: number | null;
   ai_memory_enabled?: boolean;
   ai_memory_url?: string | null;
 }
@@ -173,6 +174,7 @@ export class MachinesRepository {
         claudeAutoSwap: next.claude_auto_swap ?? false,
         aiUsageQuery: next.ai_usage_query ?? true,
         automationAllowed: next.automation_allowed ?? true,
+        idleTabCloseHours: next.idle_tab_close_hours ?? null,
         aiMemoryEnabled: next.ai_memory_enabled ?? false,
         aiMemoryUrl: next.ai_memory_url ?? null,
         ...(patch.owner_id !== undefined ? { ownerId: patch.owner_id } : {}),

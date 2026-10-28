@@ -3,7 +3,7 @@ import { ControlError, type ControlContext } from '../control/context.js';
 import { readScreen } from '../control/screen.js';
 import { sendInput, sendKey } from '../control/terminals.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
-import { toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
+import { describeTabQuestions, toTabQuestionView, type TabQuestionView } from '../db/repositories/tab-questions-view.js';
 import { forbidden, HttpError, notFound } from '../lib/errors.js';
 import { recordAutoSamples, recordDecisions } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
@@ -230,4 +230,31 @@ export async function tabQuestionScreen(ctx: ControlContext, id: string, deps: {
   } catch (err) {
     throw asHttp(err);
   }
+}
+
+/**
+ * "Dispensar" on a question or permission card (TER-1140): the card leaves the pending list, closed as
+ * `dismissed` with who dismissed it; the tab is not touched, so no terminal grant is needed. For a card that
+ * no longer makes sense — its tab moved on in a way no hook told. Idempotent: a card already answered,
+ * closed or dismissed comes back as it is. 404 for another user's card or a suggestion (it has its own route).
+ */
+export async function dismissTabQuestion(ctx: ControlContext, id: string, deps: { log: Log }): Promise<TabQuestionView> {
+  const userId = ctx.scope.user.id;
+  const row = await ctx.repos.tabQuestions.findByIdForUser(id, userId);
+  if (!isQuestionRow(row)) throw notFound('Pergunta não encontrada');
+  const dismissed = await ctx.repos.tabQuestions.dismissQuestion(row.id, userId);
+  if (!dismissed) {
+    const now = (await ctx.repos.tabQuestions.findByIdForUser(row.id, userId)) ?? row;
+    const [view] = await describeTabQuestions(ctx.repos, [now], userId);
+    return view ?? toTabQuestionView(now, null);
+  }
+  deps.log.info({ tabQuestionId: row.id, tabId: row.tab_id, kind: row.kind }, 'tab question dismissed');
+  // The row is dismissed: announcing it is best effort and can no longer turn the dismiss into an error.
+  try {
+    const [view] = await publishTabQuestions(ctx.repos, 'tab_question_closed', [dismissed]);
+    if (view) return view;
+  } catch (err) {
+    deps.log.warn({ tabQuestionId: row.id, tabId: row.tab_id, code: codeOf(err, 'PUBLISH_FAILED') }, 'tab question dismiss not announced');
+  }
+  return toTabQuestionView(dismissed, null);
 }

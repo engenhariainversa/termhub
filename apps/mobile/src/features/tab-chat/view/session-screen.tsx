@@ -117,7 +117,7 @@ export function SessionView({ tabId }: { tabId: string }) {
   const startAgentError = store((s) => s.startAgentError);
   const agentStarted = store((s) => s.agentStarted);
   const startedWith = store((s) => s.startedWith);
-  const { send, act, installHooks, startAgent, loadEarlier, answerTabQuestion, cancelAutoAnswer, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
+  const { send, act, installHooks, startAgent, loadEarlier, answerTabQuestion, cancelAutoAnswer, dismissTabQuestion, loadTabQuestionScreen, sendTabSuggestion, dismissTabSuggestion, uploadFile, loadScreen } = store.getState();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
@@ -151,6 +151,7 @@ export function SessionView({ tabId }: { tabId: string }) {
 
   const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
   const onCancelAutoAnswer = useCallback((id: string) => void cancelAutoAnswer(id), [cancelAutoAnswer]);
+  const onDismissQuestion = useCallback((id: string) => void dismissTabQuestion(id), [dismissTabQuestion]);
   const onSendSuggestion = useCallback((id: string, text: string) => void sendTabSuggestion(id, text), [sendTabSuggestion]);
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
 
@@ -166,6 +167,7 @@ export function SessionView({ tabId }: { tabId: string }) {
             onAnswer={onAnswer}
             loadScreen={loadTabQuestionScreen}
             onCancelAutoAnswer={onCancelAutoAnswer}
+            onDismiss={onDismissQuestion}
           />
         );
       if (item.kind === 'suggestion')
@@ -187,7 +189,7 @@ export function SessionView({ tabId }: { tabId: string }) {
         </AppText>
       );
     },
-    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen, tabId, agent],
+    [answeringQuestionIds, questionErrors, busySuggestionIds, suggestionErrors, onAnswer, onCancelAutoAnswer, onDismissQuestion, onSendSuggestion, onDismissSuggestion, loadTabQuestionScreen, tabId, agent],
   );
 
   // The composer's chips: the file is saved on the tab's machine; its path is sent as a line of the text.

@@ -306,6 +306,30 @@ export class TabQuestionsRepository {
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: LIST_OPEN_CHOICES_MAX,
     });
+    // a card whose tab is gone waits for the sweep to close it (TER-1140): nobody can answer it any more
+    const live = await this.liveTabIds(rows.map((r) => r.tabId));
+    return rows.filter((r) => live.has(r.tabId)).map(mapQuestion);
+  }
+
+  /** Which of these tabs still have a row. */
+  private async liveTabIds(tabIds: string[]): Promise<Set<string>> {
+    const ids = [...new Set(tabIds)];
+    if (ids.length === 0) return new Set();
+    const tabs = await this.db.tab.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    return new Set(tabs.map((t) => t.id));
+  }
+
+  /**
+   * Open questions and permission prompts (never a suggestion) created before `before`, oldest first, at most
+   * `limit`: what the stuck-card sweep (TER-1140) checks against its tab, its tmux session and its pane.
+   */
+  async listOpenQuestionsBefore(before: Date, limit: number): Promise<TabQuestion[]> {
+    const rows = await this.db.tabQuestion.findMany({
+      where: { status: 'open', kind: { not: 'suggestion' }, createdAt: { lt: before } },
+      include: withOwner,
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
     return rows.map(mapQuestion);
   }
 
@@ -547,6 +571,19 @@ export class TabQuestionsRepository {
   }
 
   /**
+   * "Dispensar" on a question or permission card (TER-1140): `open → dismissed`, conditionally, for this
+   * user's card, recording who dismissed it (`answered_by`, with no `answer`). The tab is not touched: a
+   * question still on its screen waits there. A countdown on it can no longer be sent (`claim` needs `open`).
+   */
+  async dismissQuestion(id: string, userId: string, now = new Date()): Promise<TabQuestion | undefined> {
+    const { count } = await this.db.tabQuestion.updateMany({
+      where: { id, kind: { not: 'suggestion' }, status: 'open', conversation: { userId } },
+      data: { status: 'dismissed', answeredBy: userId, closedAt: now },
+    });
+    return count === 0 ? undefined : this.findByIdForUser(id, userId);
+  }
+
+  /**
    * `open → status`, for this one row only and conditionally: the answer's live check found the tab
    * no longer showing it. Never the tab's other rows (a newer question may already be open), and a
    * claim or close that got there first matches nothing.
@@ -650,9 +687,11 @@ export class TabQuestionsRepository {
    */
   async surfaceOpen(conversationId: string, now = new Date()): Promise<TabQuestion[]> {
     const where = { conversationId, status: 'open', kind: { not: 'suggestion' } };
-    const rows = await this.db.tabQuestion.findMany({ where, select: { id: true } });
-    if (rows.length === 0) return [];
-    const ids = rows.map((r) => r.id);
+    const rows = await this.db.tabQuestion.findMany({ where, select: { id: true, tabId: true } });
+    // a card whose tab is gone is not brought back (TER-1140): the sweep closes it
+    const live = await this.liveTabIds(rows.map((r) => r.tabId));
+    const ids = rows.filter((r) => live.has(r.tabId)).map((r) => r.id);
+    if (ids.length === 0) return [];
     await this.db.tabQuestion.updateMany({ where: { ...where, id: { in: ids } }, data: { surfacedAt: now } });
     const moved = await this.db.tabQuestion.findMany({ where: { id: { in: ids }, status: 'open', surfacedAt: now }, include: withOwner, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] });
     return moved.map(mapQuestion);

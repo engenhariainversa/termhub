@@ -28,10 +28,12 @@ export type AggregateMachine = {
 
 export type MachineAvgAggregateOutputType = {
   sshPort: number | null
+  idleTabCloseHours: number | null
 }
 
 export type MachineSumAggregateOutputType = {
   sshPort: number | null
+  idleTabCloseHours: number | null
 }
 
 export type MachineMinAggregateOutputType = {
@@ -57,6 +59,7 @@ export type MachineMinAggregateOutputType = {
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
   automationAllowed: boolean | null
+  idleTabCloseHours: number | null
   aiMemoryEnabled: boolean | null
   aiMemoryUrl: string | null
   permissionHint: boolean | null
@@ -88,6 +91,7 @@ export type MachineMaxAggregateOutputType = {
   claudeAutoSwap: boolean | null
   aiUsageQuery: boolean | null
   automationAllowed: boolean | null
+  idleTabCloseHours: number | null
   aiMemoryEnabled: boolean | null
   aiMemoryUrl: string | null
   permissionHint: boolean | null
@@ -121,6 +125,7 @@ export type MachineCountAggregateOutputType = {
   claudeAutoSwap: number
   aiUsageQuery: number
   automationAllowed: number
+  idleTabCloseHours: number
   aiMemoryEnabled: number
   aiMemoryUrl: number
   permissionHint: number
@@ -133,10 +138,12 @@ export type MachineCountAggregateOutputType = {
 
 export type MachineAvgAggregateInputType = {
   sshPort?: true
+  idleTabCloseHours?: true
 }
 
 export type MachineSumAggregateInputType = {
   sshPort?: true
+  idleTabCloseHours?: true
 }
 
 export type MachineMinAggregateInputType = {
@@ -162,6 +169,7 @@ export type MachineMinAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  idleTabCloseHours?: true
   aiMemoryEnabled?: true
   aiMemoryUrl?: true
   permissionHint?: true
@@ -193,6 +201,7 @@ export type MachineMaxAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  idleTabCloseHours?: true
   aiMemoryEnabled?: true
   aiMemoryUrl?: true
   permissionHint?: true
@@ -226,6 +235,7 @@ export type MachineCountAggregateInputType = {
   claudeAutoSwap?: true
   aiUsageQuery?: true
   automationAllowed?: true
+  idleTabCloseHours?: true
   aiMemoryEnabled?: true
   aiMemoryUrl?: true
   permissionHint?: true
@@ -346,6 +356,7 @@ export type MachineGroupByOutputType = {
   claudeAutoSwap: boolean
   aiUsageQuery: boolean
   automationAllowed: boolean
+  idleTabCloseHours: number | null
   aiMemoryEnabled: boolean
   aiMemoryUrl: string | null
   permissionHint: boolean
@@ -402,6 +413,7 @@ export type MachineWhereInput = {
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  idleTabCloseHours?: Prisma.IntNullableFilter<"Machine"> | number | null
   aiMemoryEnabled?: Prisma.BoolFilter<"Machine"> | boolean
   aiMemoryUrl?: Prisma.StringNullableFilter<"Machine"> | string | null
   permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
@@ -445,6 +457,7 @@ export type MachineOrderByWithRelationInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrderInput | Prisma.SortOrder
   aiMemoryEnabled?: Prisma.SortOrder
   aiMemoryUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   permissionHint?: Prisma.SortOrder
@@ -491,6 +504,7 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  idleTabCloseHours?: Prisma.IntNullableFilter<"Machine"> | number | null
   aiMemoryEnabled?: Prisma.BoolFilter<"Machine"> | boolean
   aiMemoryUrl?: Prisma.StringNullableFilter<"Machine"> | string | null
   permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
@@ -534,6 +548,7 @@ export type MachineOrderByWithAggregationInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrderInput | Prisma.SortOrder
   aiMemoryEnabled?: Prisma.SortOrder
   aiMemoryUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   permissionHint?: Prisma.SortOrder
@@ -575,6 +590,7 @@ export type MachineScalarWhereWithAggregatesInput = {
   claudeAutoSwap?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
+  idleTabCloseHours?: Prisma.IntNullableWithAggregatesFilter<"Machine"> | number | null
   aiMemoryEnabled?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
   aiMemoryUrl?: Prisma.StringNullableWithAggregatesFilter<"Machine"> | string | null
   permissionHint?: Prisma.BoolWithAggregatesFilter<"Machine"> | boolean
@@ -608,6 +624,7 @@ export type MachineCreateInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -650,6 +667,7 @@ export type MachineUncheckedCreateInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -692,6 +710,7 @@ export type MachineUpdateInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -734,6 +753,7 @@ export type MachineUncheckedUpdateInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -776,6 +796,7 @@ export type MachineCreateManyInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -809,6 +830,7 @@ export type MachineUpdateManyMutationInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -841,6 +863,7 @@ export type MachineUncheckedUpdateManyInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -884,6 +907,7 @@ export type MachineCountOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrder
   aiMemoryEnabled?: Prisma.SortOrder
   aiMemoryUrl?: Prisma.SortOrder
   permissionHint?: Prisma.SortOrder
@@ -894,6 +918,7 @@ export type MachineCountOrderByAggregateInput = {
 
 export type MachineAvgOrderByAggregateInput = {
   sshPort?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrder
 }
 
 export type MachineMaxOrderByAggregateInput = {
@@ -919,6 +944,7 @@ export type MachineMaxOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrder
   aiMemoryEnabled?: Prisma.SortOrder
   aiMemoryUrl?: Prisma.SortOrder
   permissionHint?: Prisma.SortOrder
@@ -950,6 +976,7 @@ export type MachineMinOrderByAggregateInput = {
   claudeAutoSwap?: Prisma.SortOrder
   aiUsageQuery?: Prisma.SortOrder
   automationAllowed?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrder
   aiMemoryEnabled?: Prisma.SortOrder
   aiMemoryUrl?: Prisma.SortOrder
   permissionHint?: Prisma.SortOrder
@@ -960,6 +987,7 @@ export type MachineMinOrderByAggregateInput = {
 
 export type MachineSumOrderByAggregateInput = {
   sshPort?: Prisma.SortOrder
+  idleTabCloseHours?: Prisma.SortOrder
 }
 
 export type MachineScalarRelationFilter = {
@@ -1171,6 +1199,7 @@ export type MachineCreateWithoutOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1212,6 +1241,7 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1282,6 +1312,7 @@ export type MachineScalarWhereInput = {
   claudeAutoSwap?: Prisma.BoolFilter<"Machine"> | boolean
   aiUsageQuery?: Prisma.BoolFilter<"Machine"> | boolean
   automationAllowed?: Prisma.BoolFilter<"Machine"> | boolean
+  idleTabCloseHours?: Prisma.IntNullableFilter<"Machine"> | number | null
   aiMemoryEnabled?: Prisma.BoolFilter<"Machine"> | boolean
   aiMemoryUrl?: Prisma.StringNullableFilter<"Machine"> | string | null
   permissionHint?: Prisma.BoolFilter<"Machine"> | boolean
@@ -1315,6 +1346,7 @@ export type MachineCreateWithoutProjectLinksInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1356,6 +1388,7 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1413,6 +1446,7 @@ export type MachineUpdateWithoutProjectLinksInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1454,6 +1488,7 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1495,6 +1530,7 @@ export type MachineCreateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1536,6 +1572,7 @@ export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1593,6 +1630,7 @@ export type MachineUpdateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1634,6 +1672,7 @@ export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1675,6 +1714,7 @@ export type MachineCreateWithoutTabsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1716,6 +1756,7 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1773,6 +1814,7 @@ export type MachineUpdateWithoutTabsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1814,6 +1856,7 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1855,6 +1898,7 @@ export type MachineCreateWithoutHookInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1896,6 +1940,7 @@ export type MachineUncheckedCreateWithoutHookInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -1953,6 +1998,7 @@ export type MachineUpdateWithoutHookInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1994,6 +2040,7 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2035,6 +2082,7 @@ export type MachineCreateWithoutAiMemoryPagesInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2076,6 +2124,7 @@ export type MachineUncheckedCreateWithoutAiMemoryPagesInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2133,6 +2182,7 @@ export type MachineUpdateWithoutAiMemoryPagesInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2174,6 +2224,7 @@ export type MachineUncheckedUpdateWithoutAiMemoryPagesInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2215,6 +2266,7 @@ export type MachineCreateWithoutAiAccountsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2256,6 +2308,7 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2313,6 +2366,7 @@ export type MachineUpdateWithoutAiAccountsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2354,6 +2408,7 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2395,6 +2450,7 @@ export type MachineCreateWithoutUploadsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2436,6 +2492,7 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2493,6 +2550,7 @@ export type MachineUpdateWithoutUploadsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2534,6 +2592,7 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2575,6 +2634,7 @@ export type MachineCreateWithoutChatConversationsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2616,6 +2676,7 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2673,6 +2734,7 @@ export type MachineUpdateWithoutChatConversationsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2714,6 +2776,7 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2755,6 +2818,7 @@ export type MachineCreateWithoutChatFileGrantsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2796,6 +2860,7 @@ export type MachineUncheckedCreateWithoutChatFileGrantsInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2853,6 +2918,7 @@ export type MachineUpdateWithoutChatFileGrantsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2894,6 +2960,7 @@ export type MachineUncheckedUpdateWithoutChatFileGrantsInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2935,6 +3002,7 @@ export type MachineCreateManyOwnerInput = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: number | null
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: string | null
   permissionHint?: boolean
@@ -2967,6 +3035,7 @@ export type MachineUpdateWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3008,6 +3077,7 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3049,6 +3119,7 @@ export type MachineUncheckedUpdateManyWithoutOwnerInput = {
   claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
   automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
   aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3175,6 +3246,7 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: boolean
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: boolean
   permissionHint?: boolean
@@ -3219,6 +3291,7 @@ export type MachineSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exten
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: boolean
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: boolean
   permissionHint?: boolean
@@ -3253,6 +3326,7 @@ export type MachineSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exten
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: boolean
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: boolean
   permissionHint?: boolean
@@ -3287,6 +3361,7 @@ export type MachineSelectScalar = {
   claudeAutoSwap?: boolean
   aiUsageQuery?: boolean
   automationAllowed?: boolean
+  idleTabCloseHours?: boolean
   aiMemoryEnabled?: boolean
   aiMemoryUrl?: boolean
   permissionHint?: boolean
@@ -3295,7 +3370,7 @@ export type MachineSelectScalar = {
   createdAt?: boolean
 }
 
-export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "aiMemoryEnabled" | "aiMemoryUrl" | "permissionHint" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
+export type MachineOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "name" | "subtitle" | "host" | "sshUser" | "sshPort" | "type" | "os" | "capabilities" | "checkedAt" | "agentTokenHash" | "agentTokenCreatedAt" | "agentPairingHash" | "agentPairingExpiresAt" | "agentPublicKey" | "agentPairedAt" | "agentVersion" | "agentLastSeenAt" | "network" | "networkUpdatedAt" | "agentAutoUpdate" | "claudeAutoSwap" | "aiUsageQuery" | "automationAllowed" | "idleTabCloseHours" | "aiMemoryEnabled" | "aiMemoryUrl" | "permissionHint" | "isLocal" | "ownerId" | "createdAt", ExtArgs["result"]["machine"]>
 export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.Machine$ownerArgs<ExtArgs>
   projectLinks?: boolean | Prisma.Machine$projectLinksArgs<ExtArgs>
@@ -3396,6 +3471,11 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
      */
     automationAllowed: boolean
+    /**
+     * TER-1138: agent tabs idle or finished for this many hours are closed by themselves (monitor/idle-tabs.ts).
+     * Opt-in per machine: null = never.
+     */
+    idleTabCloseHours: number | null
     /**
      * TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
      */
@@ -3877,6 +3957,7 @@ export interface MachineFieldRefs {
   readonly claudeAutoSwap: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly aiUsageQuery: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly automationAllowed: Prisma.FieldRef<"Machine", 'Boolean'>
+  readonly idleTabCloseHours: Prisma.FieldRef<"Machine", 'Int'>
   readonly aiMemoryEnabled: Prisma.FieldRef<"Machine", 'Boolean'>
   readonly aiMemoryUrl: Prisma.FieldRef<"Machine", 'String'>
   readonly permissionHint: Prisma.FieldRef<"Machine", 'Boolean'>

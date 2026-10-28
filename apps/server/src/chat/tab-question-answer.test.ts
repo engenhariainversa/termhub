@@ -18,7 +18,7 @@ vi.mock('../control/terminals.js', async (orig) => ({
 }));
 vi.mock('../control/screen.js', async (orig) => ({ ...(await orig<typeof import('../control/screen.js')>()), readScreen: (...a: unknown[]) => readScreen(a[0], a[1] as never, a[2] as never) }));
 
-const { answerTabQuestion, DIALOG_FOOTER, lastNonBlankLines, permissionDialogVisible, promptVisible, requirePinFor, tabQuestionScreen } = await import('./tab-question-answer.js');
+const { answerTabQuestion, dismissTabQuestion, DIALOG_FOOTER, lastNonBlankLines, permissionDialogVisible, promptVisible, requirePinFor, tabQuestionScreen } = await import('./tab-question-answer.js');
 
 const fx = (name: string) => readFileSync(join(import.meta.dirname, 'fixtures/tab-questions', name), 'utf8');
 const codexFx = (name: string) => readFileSync(join(import.meta.dirname, 'fixtures', name), 'utf8');
@@ -41,6 +41,7 @@ function ctxFor(current: TabQuestion | undefined, opts: { latest?: TabQuestion |
     cancelAutoAnswer: vi.fn(async () => (current?.auto_answer ? { ...current, auto_answer: { ...current.auto_answer, status: 'cancelled' as const, decided_by: 'u1' } } : undefined)),
     markFailed: vi.fn(async (_id: string, code: string) => (current ? { ...current, status: 'failed' as const, error_code: code } : undefined)),
     closeOne: vi.fn(async (_id: string, status: 'answered_in_tab' | 'expired') => (current ? { ...current, status, closed_at: '2026-09-25T12:01:00.000Z' } : undefined)),
+    dismissQuestion: vi.fn(async (_id: string, userId: string) => (current?.status === 'open' ? { ...current, status: 'dismissed' as const, answered_by: userId, closed_at: '2026-10-28T12:00:00.000Z' } : undefined)),
     expireOne: vi.fn(async (_id: string) => (current && current.closed_at === null ? { ...current, status: current.status === 'open' ? ('expired' as const) : current.status, closed_at: '2026-09-26T12:02:00.000Z' } : undefined)),
   };
   const scoped = {
@@ -643,5 +644,30 @@ describe('a dead card (spec 2026-09-26 §4.7)', () => {
     const l = log();
     await rejects(answerTabQuestion(ctx, 'q1', body, { log: l }), 404, 'NOT_FOUND');
     expect(l.warn).toHaveBeenCalledWith({ tabQuestionId: 'q1', tabId: 't1', code: 'CLOSE_FAILED' }, 'dead tab question not closed');
+  });
+});
+
+describe('dismissTabQuestion — "Dispensar" on a question or permission card (TER-1140)', () => {
+  it('closes the open card as dismissed, records who, goes out expired + DISMISSED and never touches the tab', async () => {
+    const { ctx, tabQuestions, scoped } = ctxFor(permission());
+    const l = log();
+    const view = await dismissTabQuestion(ctx, 'q2', { log: l });
+    expect(tabQuestions.dismissQuestion).toHaveBeenCalledWith('q2', 'u1');
+    expect(view).toMatchObject({ id: 'q2', status: 'expired', error_code: 'DISMISSED', tab_name: 'api' });
+    expect(events).toEqual([expect.objectContaining({ type: 'tab_question_closed', user_id: 'u1', question: expect.objectContaining({ id: 'q2', status: 'expired', error_code: 'DISMISSED' }) })]);
+    expect(scoped.tab).not.toHaveBeenCalled();
+    expect(sendKey).not.toHaveBeenCalled();
+    expect(l.info).toHaveBeenCalledWith({ tabQuestionId: 'q2', tabId: 't1', kind: 'permission' }, 'tab question dismissed');
+  });
+
+  it('a card already closed comes back as it is, with nothing announced', async () => {
+    const { ctx } = ctxFor(row({ status: 'answered_in_tab', closed_at: '2026-10-28T11:00:00.000Z' }));
+    await expect(dismissTabQuestion(ctx, 'q1', { log: log() })).resolves.toMatchObject({ id: 'q1', status: 'answered_in_tab' });
+    expect(events).toEqual([]);
+  });
+
+  it("404 for another user's card, an unknown one or a suggestion", async () => {
+    await expect(dismissTabQuestion(ctxFor(undefined).ctx, 'nope', { log: log() })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(dismissTabQuestion(ctxFor(row({ kind: 'suggestion' })).ctx, 'q1', { log: log() })).rejects.toMatchObject({ statusCode: 404 });
   });
 });

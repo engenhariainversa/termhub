@@ -206,6 +206,10 @@ export const tabQuestionAnswerBody = z.union([
  * the pre-selection; 404 for a card not the user's, 409 `NOT_SCHEDULED` when no countdown runs. "Responder
  * agora" is the ordinary answer route, which cancels the countdown itself. */
 export const tabQuestionAutoAnswerCancelResponse = z.object({ tab_question: tabQuestionSchema });
+/** `POST chat/tab-questions/:id/dismiss` (no body, TER-1140): "Dispensar" takes a card off the pending list;
+ * the tab is not touched. The card comes back `expired` with `error_code: 'DISMISSED'`; one already closed
+ * comes back as it is. 404 for a card not the user's. */
+export const tabQuestionDismissResponse = z.object({ tab_question: tabQuestionSchema });
 /** `GET chat/tab-questions/:id/screen`: the last lines of the tab, live, for a permission card. */
 /** An option of the permission dialog on screen (TER-995): one button each on the card. */
 export const permissionOptionSchema = z.object({

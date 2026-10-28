@@ -387,5 +387,12 @@
   "Repete até o fim do prazo": "Se repite hasta el final del plazo",
   "Uma vez": "Una vez",
   "Acompanhando {{count}} coisas_one": "Siguiendo {{count}} cosa",
-  "Acompanhando {{count}} coisas_other": "Siguiendo {{count}} cosas"
+  "Acompanhando {{count}} coisas_other": "Siguiendo {{count}} cosas",
+  "Dispensada": "Descartada",
+  "dispensada": "descartada",
+  "Encerrada — a aba foi fechada": "Cerrada — la pestaña se cerró",
+  "encerrada, a aba foi fechada": "cerrada, la pestaña se cerró",
+  "Dispensar este card?": "¿Descartar esta tarjeta?",
+  "Sim, dispensar": "Sí, descartar",
+  "Não": "No"
 }

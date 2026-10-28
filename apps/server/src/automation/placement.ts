@@ -11,6 +11,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Project, ProjectMachine } from '../db/repositories/types.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import type { IneligibleReason } from './eligibility.js';
+import type { RoomReading } from './machine-room.js';
 
 /** Why an eligible card found no place this tick (spec §8 step 3). Not an error and not an event. */
 export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline' | 'no_room' | 'automation_not_allowed';
@@ -25,9 +26,10 @@ export interface PlacementDeps {
   usage: (accountId: string) => Promise<number | null>;
   /**
    * R6: whether the machine has room for one more run (memory, disk under `worktrees_dir`, load; a failed
-   * reading = no room). Without it no room check is made (tests); the app wires the real one.
+   * reading = no room). Without it no room check is made (tests); the app wires the real one, which says what it
+   * read (TER-1138); a bare boolean is a check without a reading.
    */
-  room?: (machine: Machine, link: ProjectMachine, setup: ProjectSetupData) => Promise<boolean>;
+  room?: (machine: Machine, link: ProjectMachine, setup: ProjectSetupData) => Promise<RoomReading | boolean>;
 }
 
 /** R6: what this tick already started. At most one start per machine and per account per tick. */
@@ -49,7 +51,7 @@ export type AccountVerdict = 'not_listed' | 'exclusive' | 'exhausted' | 'busy' |
 export interface PlaceDetail {
   /** how many accounts the project's list has (0 = none chosen in the Setup) */
   listed: number;
-  machines: Array<{ id: string; name: string; why: MachineVerdict }>;
+  machines: Array<{ id: string; name: string; why: MachineVerdict; room?: RoomReading; tabs?: number }>;
   accounts: Array<{ id: string; label: string; machine: string; why: AccountVerdict; peak?: number }>;
 }
 
@@ -124,7 +126,7 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
   for (const a of listed) if (a.provider === 'claude' && nameOf.has(a.machine_id) && !inList.has(a.id)) left(a, usableIn(a, project.id) ? 'not_listed' : 'exclusive');
   let taken = false;
   let crowded = false;
-  const roomOf = new Map<string, Promise<boolean>>();
+  const roomOf = new Map<string, Promise<RoomReading | boolean>>();
   for (const account of candidates) {
     if (exhausted.has(account.id)) {
       left(account, 'exhausted');
@@ -143,9 +145,14 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
     const place = ready.find(({ machine }) => machine.id === account.machine_id)!;
     if (deps.room) {
       if (!roomOf.has(place.machine.id)) roomOf.set(place.machine.id, deps.room(place.machine, place.link, setup));
-      if (!(await roomOf.get(place.machine.id))) {
+      const room = await roomOf.get(place.machine.id)!;
+      if (room === false || (room !== true && !room.ok)) {
         crowded = true;
-        if (!detail.machines.some((m) => m.id === place.machine.id)) detail.machines.push({ id: place.machine.id, name: place.machine.name, why: 'no_room' });
+        if (!detail.machines.some((m) => m.id === place.machine.id)) {
+          // TER-1138: which limit, by how much, and how many tabs the machine holds (the usual way out is closing idle ones)
+          const tabs = room === false ? undefined : (await repos.tabs.listByMachine(place.machine.id)).length;
+          detail.machines.push({ id: place.machine.id, name: place.machine.name, why: 'no_room', ...(room === false ? {} : { room, tabs }) });
+        }
         left(account, 'machine_no_room');
         continue;
       }

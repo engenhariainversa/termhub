@@ -65,8 +65,16 @@ export async function describeTabQuestions(repos: Pick<Repositories, 'tabs' | 'c
   return rows.map((r, i) => toTabQuestionView(r, nameOf.get(r.tab_id) ?? null, autos[i] ?? null));
 }
 
+/**
+ * `error_code` of a question or permission card the person dismissed (TER-1140). The row says `dismissed`;
+ * the wire says `expired` with this code, because installed apps parse a question's status against an enum
+ * without `dismissed` (only a suggestion has it) and would drop the whole list.
+ */
+export const DISMISSED_CODE = 'DISMISSED';
+
 /** One row as a view, with the tab's name already resolved by the caller. */
 export function toTabQuestionView(r: TabQuestion, tabName: string | null, autoDecision: AutoDecisionView | null = null): TabQuestionView {
+  if (r.kind !== 'suggestion' && r.status === 'dismissed') return toTabQuestionView({ ...r, status: 'expired', error_code: DISMISSED_CODE }, tabName, autoDecision);
   return {
     id: r.id,
     tab_id: r.tab_id,

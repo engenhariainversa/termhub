@@ -26,6 +26,7 @@ import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved, publishTabsRemoved } from '../monitor/tab-events.js';
 import { msg, tk } from '../i18n/index.js';
 import { recordMachineSwitch } from '../automation/setup-tools.js';
+import { IDLE_TAB_CLOSE_MAX_HOURS, IDLE_TAB_CLOSE_MIN_HOURS } from '../monitor/idle-tabs.js';
 import { audit } from '../auth/audit.js';
 import { aiMemoryState } from '../memory/ai-memory.js';
 
@@ -64,6 +65,8 @@ const machineBody = z
     claude_auto_swap: z.boolean().optional(),
     ai_usage_query: z.boolean().optional(),
     automation_allowed: z.boolean().optional(),
+    // TER-1138: from 2 h (a lunch break is not "idle for long") to 30 days; null = off
+    idle_tab_close_hours: z.number().int().min(IDLE_TAB_CLOSE_MIN_HOURS).max(IDLE_TAB_CLOSE_MAX_HOURS).nullable().optional(),
     ai_memory_enabled: z.boolean().optional(),
     ai_memory_url: z.string().trim().max(200).nullable().optional(),
   })

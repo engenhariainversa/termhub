@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import { belowMinimum, isOutdated, latestAgentVersion } from '../agent/latest-version.js';
 import { MIN_AGENT_VERSION } from '../agent/min-version.js';
+import { lastRoomOf, type RoomReading } from '../automation/machine-room.js';
 import type { Machine, MachineType, Tab, TabKind, TabState } from '../db/repositories/types.js';
 import { listTmuxSessions } from '../terminal/machine-exec.js';
 import { parseRef } from '../db/repositories/task-rules.js';
@@ -27,6 +28,10 @@ export interface MachineSummary {
   update_available?: boolean;
   /** older than the server's minimum: it is updated once idle, switch or not */
   below_min_version?: boolean;
+  /** TER-1138: the last room check for automatic work (memory, disk under the worktrees, load and the limit hit); null = none yet */
+  room?: RoomReading | null;
+  /** TER-1138: idle tabs are closed after this many hours on this machine; null = off */
+  idle_tab_close_hours?: number | null;
 }
 
 function online(m: Machine): boolean | null {
@@ -40,7 +45,14 @@ function summary(m: Machine): MachineSummary {
   if (m.type !== 'agent') return base;
   const live = agents.info(m.id)?.agent_version;
   const agent_version = live ?? m.agent_version;
-  return { ...base, agent_version, update_available: !!live && isOutdated(live, latestAgentVersion()), below_min_version: belowMinimum(agent_version) };
+  return {
+    ...base,
+    agent_version,
+    update_available: !!live && isOutdated(live, latestAgentVersion()),
+    below_min_version: belowMinimum(agent_version),
+    room: lastRoomOf(m.id),
+    idle_tab_close_hours: m.idle_tab_close_hours,
+  };
 }
 
 export async function listMachines(ctx: ControlContext): Promise<{ machines: MachineSummary[]; latest_agent_version: string | null; min_agent_version: string }> {

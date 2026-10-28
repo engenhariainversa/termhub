@@ -11,7 +11,7 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { activeWatches, cancelWatchRow, forScreen } from '../chat/watches/view.js';
-import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
+import { answerTabQuestion, dismissTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
@@ -453,6 +453,12 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
   app.post('/tab-questions/:id/auto-answer/cancel', { config: { action: 'create' } }, async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
     return { tab_question: await cancelAutoAnswer(controlContextFor(repos, request.scope.user), id) };
+  });
+
+  /** "Dispensar" (TER-1140): the card leaves the pending list, the tab is not touched. `create`, like answering. */
+  app.post('/tab-questions/:id/dismiss', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_question: await dismissTabQuestion(controlContextFor(repos, request.scope.user), id, { log: request.log }) };
   });
 
   /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */

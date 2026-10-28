@@ -67,6 +67,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       if (!e.reason_text) return null;
       return e.until ? t('{{what}}; grava às {{time}}', { what: e.reason_text, time: formatTime(e.until) }) : e.reason_text;
     case 'memory_dropped':
+    // TER-1138: the server's line names the tab, the machine and why
+    case 'tab_auto_closed':
       return e.reason_text;
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
