@@ -416,6 +416,8 @@ export const api = {
    *  answer stays as the pre-selection. 409 `NOT_SCHEDULED` when no countdown is running. */
   cancelAutoAnswer: (id: string) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/auto-answer/cancel`, {}),
   /** The last lines of the tab, live, for a permission card; 409 once the question is closed. */
+  /** "Dispensar" (TER-1140): the card leaves the pending list, the tab is not touched. */
+  dismissTabQuestion: (id: string) => request<{ tab_question: TabQuestion }>('POST', `/chat/tab-questions/${encodeURIComponent(id)}/dismiss`, {}),
   tabQuestionScreen: (id: string) => request<TabQuestionScreen>('GET', `/chat/tab-questions/${encodeURIComponent(id)}/screen`),
   /** Sends a tab's suggestion, as edited (409 `TAB_PROMPT_CHANGED` when the tab's prompt changed). */
   sendTabSuggestion: (id: string, text: string) => request<{ tab_suggestion: TabSuggestion }>('POST', `/chat/tab-suggestions/${encodeURIComponent(id)}/send`, { text }),

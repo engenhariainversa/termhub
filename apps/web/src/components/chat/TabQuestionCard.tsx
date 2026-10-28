@@ -39,6 +39,9 @@ export interface TabQuestionCardProps {
   onCancelAutoAnswer?: (id: string) => void;
   /** "Responder no chat" (TER-849): quotes this card in the composer, where "Responder" answers the tab. */
   onReply?: (question: TabQuestion) => void;
+  /** "Dispensar" (TER-1140): takes the card out of the pending list after a light confirmation; the tab is not
+   *  touched. Fire-and-forget like `onAnswer`. */
+  onDismiss?: (id: string) => void;
 }
 
 /**
@@ -91,9 +94,10 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionC
         </div>
       )}
       {question.kind === 'choice' ? <ChoiceBody {...props} question={question} /> : <PermissionBody {...props} question={question} />}
-      {props.onReply && (
-        <div className="mt-1 flex justify-end">
-          <ChatReplyButton label={t('Responder no chat')} onClick={() => props.onReply?.(question)} />
+      {(props.onReply || (!settled && props.onDismiss)) && (
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2">
+          {!settled && props.onDismiss && <DismissControl id={question.id} disabled={props.answering} onDismiss={props.onDismiss} />}
+          {props.onReply && <ChatReplyButton label={t('Responder no chat')} onClick={() => props.onReply?.(question)} />}
         </div>
       )}
       {/* TER-641: the countdown decides (or decided) this card by itself, from memory. */}
@@ -103,6 +107,30 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: TabQuestionC
     </li>
   );
 });
+
+/** "Dispensar", then "Dispensar este card?" with yes/no in its place: a light confirmation, no dialog (TER-1140). */
+function DismissControl({ id, disabled, onDismiss }: { id: string; disabled: boolean; onDismiss: (id: string) => void }) {
+  const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <button type="button" className="text-xs text-fg-dim underline hover:text-fg" disabled={disabled} title={t('Tira este card da lista de pendências. A aba não é tocada.')} onClick={() => setConfirming(true)}>
+        {t('Dispensar')}
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2 text-xs text-fg-muted">
+      {t('Dispensar este card?')}
+      <button type="button" className="btn-ghost text-xs" disabled={disabled} onClick={() => onDismiss(id)}>
+        {t('Sim, dispensar')}
+      </button>
+      <button type="button" className="text-xs text-fg-dim underline hover:text-fg" onClick={() => setConfirming(false)}>
+        {t('Não')}
+      </button>
+    </span>
+  );
+}
 
 function ChoiceBody({ question, answering, onAnswer, onForget, onCancelAutoAnswer }: TabQuestionCardProps & { question: TabQuestionChoice }) {
   const { t } = useTranslation();

@@ -14,7 +14,7 @@ import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-quest
 import { controlContextFor } from '../control/context.js';
 import { activeWatches, cancelWatchRow, forScreen } from '../chat/watches/view.js';
 import { pingAllWatches, pingWatch } from '../chat/watches/ping.js';
-import { answerTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
+import { answerTabQuestion, dismissTabQuestion, requirePinFor, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
 import { permissionsOf } from '../auth/permissions.js';
@@ -512,6 +512,12 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.post('/tab-questions/:id/auto-answer/cancel', { config: { action: 'create' } }, async (request) => {
     const { id } = tabQuestionIdParam.parse(request.params);
     return { tab_question: await cancelAutoAnswer(controlContextFor(repos, request.scope.user), id) };
+  });
+
+  /** "Dispensar" from the phone (TER-1140): the card leaves the pending list, the tab is not touched. */
+  app.post('/tab-questions/:id/dismiss', { config: { action: 'create' } }, async (request) => {
+    const { id } = tabQuestionIdParam.parse(request.params);
+    return { tab_question: await dismissTabQuestion(controlContextFor(repos, request.scope.user), id, { log: request.log }) };
   });
 
   /** The live excerpt a permission card shows (spec §6.1): read now, never stored nor logged. */

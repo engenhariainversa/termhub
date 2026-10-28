@@ -58,6 +58,7 @@ import {
   sendAccepted,
   tabLimitAnswerResponse,
   tabQuestionAutoAnswerCancelResponse,
+  tabQuestionDismissResponse,
   tabQuestionScreenResponse,
   sessionStartOptions,
   startSessionResponse,
@@ -348,6 +349,8 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       empty('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/answer`, { token: a.accessToken, body }),
     cancelAutoAnswer: (a: Auth, id: string) =>
       call('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/auto-answer/cancel`, tabQuestionAutoAnswerCancelResponse, { token: a.accessToken, body: {} }),
+    dismissTabQuestion: (a: Auth, id: string) =>
+      call('POST', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/dismiss`, tabQuestionDismissResponse, { token: a.accessToken, body: {} }),
     tabQuestionScreen: (a: Auth, id: string) =>
       call('GET', `/api/m/v1/chat/tab-questions/${encodeURIComponent(id)}/screen`, tabQuestionScreenResponse, { token: a.accessToken }),
     sendTabSuggestion: (a: Auth, id: string, body: TTabSuggestionSendBody) =>

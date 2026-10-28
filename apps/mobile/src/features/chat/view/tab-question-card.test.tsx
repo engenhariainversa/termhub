@@ -494,3 +494,22 @@ describe('TabQuestionCard: a settled card folds into a compact line (TER-1108)',
     expect(screen.getByRole('button', { name: 'Decisão automática' })).toBeTruthy();
   });
 });
+
+describe('TabQuestionCard: "Dispensar" (TER-1140)', () => {
+  const PERMISSION = { ...BASE_QUESTION, kind: 'permission', payload: { tool_name: 'Bash' }, answer: null } as TabQuestion;
+
+  it('asks a light confirmation before taking the card off the pending list', async () => {
+    const onDismiss = jest.fn();
+    await render(<TabQuestionCard question={{ ...PERMISSION, id: 'dismiss-1' } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onDismiss={onDismiss} />);
+    await fireEvent.press(screen.getByRole('button', { name: 'Dispensar' }));
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.getByText('Dispensar este card?')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Sim, dispensar' }));
+    expect(onDismiss).toHaveBeenCalledWith('dismiss-1');
+  });
+
+  it('a settled card has no "Dispensar"', async () => {
+    await render(<TabQuestionCard question={{ ...PERMISSION, id: 'dismiss-2', status: 'answered_in_tab' } as TabQuestion} busy={false} onAnswer={jest.fn()} loadScreen={async () => null} onDismiss={jest.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
+  });
+});

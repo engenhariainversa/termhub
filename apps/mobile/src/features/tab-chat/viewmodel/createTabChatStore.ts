@@ -96,6 +96,8 @@ export interface TabChatState {
   noteQuestionEvent(e: TChatEvent): void;
   answerTabQuestion(questionId: string, body: TTabQuestionAnswerBody): Promise<void>;
   cancelAutoAnswer(questionId: string): Promise<void>;
+  /** "Dispensar" (TER-1140): takes the card off the pending list; the tab is not touched. */
+  dismissTabQuestion(questionId: string): Promise<void>;
   loadTabQuestionScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
   sendTabSuggestion(suggestionId: string, text: string): Promise<void>;
   dismissTabSuggestion(suggestionId: string): Promise<void>;
@@ -493,6 +495,21 @@ export function createTabChatStore(deps: TabChatDeps) {
           if (handled(gen, e)) return;
           const text = isApiError(e, 'NOT_SCHEDULED') ? CHAT_MSG.autoAnswerAlreadySent : isApiError(e) ? e.message : CHAT_MSG.network;
           set((s) => ({ questionErrors: { ...s.questionErrors, [questionId]: text } }));
+        } finally {
+          if (gen === generation) set((s) => ({ answeringQuestionIds: s.answeringQuestionIds.filter((id) => id !== questionId) }));
+        }
+      },
+
+      async dismissTabQuestion(questionId) {
+        if (get().answeringQuestionIds.includes(questionId)) return;
+        const gen = generation;
+        set((s) => ({ answeringQuestionIds: [...s.answeringQuestionIds, questionId], questionErrors: without(s.questionErrors, questionId) }));
+        try {
+          const { tab_question } = await api.dismissTabQuestion(session().auth(), questionId);
+          if (gen === generation) set((s) => ({ questions: upsertTabQuestion(s.questions, tab_question) }));
+        } catch (e) {
+          if (handled(gen, e)) return;
+          set((s) => ({ questionErrors: { ...s.questionErrors, [questionId]: isApiError(e) ? e.message : CHAT_MSG.network } }));
         } finally {
           if (gen === generation) set((s) => ({ answeringQuestionIds: s.answeringQuestionIds.filter((id) => id !== questionId) }));
         }

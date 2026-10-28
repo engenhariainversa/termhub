@@ -665,7 +665,8 @@ describe('Conversa', () => {
   it.each([
     [{ ...OPEN_CHOICE, id: 'closed-0', status: 'answered', answer: { answers: [{ selected: [1] }] } } as TTabQuestion, '«api» · Qual banco usamos nos testes? · respondida', ['Qual banco usamos nos testes? → SQLite', 'Respondida']],
     [{ ...OPEN_PERMISSION, id: 'closed-1', status: 'answered_in_tab' } as TTabQuestion, '«api» · Bash · respondida na aba', ['Respondida na aba']],
-    [{ ...OPEN_PERMISSION, id: 'closed-2', status: 'expired' } as TTabQuestion, '«api» · Bash · expirada', ['Expirada']],
+    [{ ...OPEN_PERMISSION, id: 'closed-2', status: 'expired' } as TTabQuestion, '«api» · Bash · encerrada, a aba foi fechada', ['Encerrada — a aba foi fechada']],
+    [{ ...OPEN_PERMISSION, id: 'closed-4', status: 'expired', error_code: 'DISMISSED' } as TTabQuestion, '«api» · Bash · dispensada', ['Dispensada']],
     [{ ...OPEN_PERMISSION, id: 'closed-3', status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as TTabQuestion, '«api» · Bash · falhou', ['Permitido', 'Falhou — a máquina está offline']],
   ])('a closed tab question is one compact line, read-only, and opens to say how it ended (%#)', async (q, line, texts) => {
     serveQuestions([q]);

@@ -390,5 +390,12 @@
   "Acompanhando {{count}} coisas_other": "Siguiendo {{count}} cosas",
   "Perguntar o status de {{label}} agora": "Preguntar el estado de {{label}} ahora",
   "Perguntar o status de tudo agora": "Preguntar el estado de todo ahora",
-  "status pedido às {{time}}": "estado pedido a las {{time}}"
+  "status pedido às {{time}}": "estado pedido a las {{time}}",
+  "Dispensada": "Descartada",
+  "dispensada": "descartada",
+  "Encerrada — a aba foi fechada": "Cerrada — la pestaña se cerró",
+  "encerrada, a aba foi fechada": "cerrada, la pestaña se cerró",
+  "Dispensar este card?": "¿Descartar esta tarjeta?",
+  "Sim, dispensar": "Sí, descartar",
+  "Não": "No"
 }

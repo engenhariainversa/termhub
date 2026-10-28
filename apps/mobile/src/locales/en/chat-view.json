@@ -390,5 +390,12 @@
   "Acompanhando {{count}} coisas_other": "Watching {{count}} things",
   "Perguntar o status de {{label}} agora": "Ask for the status of {{label}} now",
   "Perguntar o status de tudo agora": "Ask for the status of everything now",
-  "status pedido às {{time}}": "status asked at {{time}}"
+  "status pedido às {{time}}": "status asked at {{time}}",
+  "Dispensada": "Dismissed",
+  "dispensada": "dismissed",
+  "Encerrada — a aba foi fechada": "Closed — the tab was closed",
+  "encerrada, a aba foi fechada": "closed, the tab was closed",
+  "Dispensar este card?": "Dismiss this card?",
+  "Sim, dispensar": "Yes, dismiss",
+  "Não": "No"
 }

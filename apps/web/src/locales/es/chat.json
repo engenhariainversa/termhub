@@ -584,7 +584,6 @@
   "permitida": "permitida",
   "negada": "denegada",
   "respondida": "respondida",
-  "expirada": "expirada",
   "{{count}} permissões_one": "{{count}} solicitud de permiso",
   "{{count}} permissões_other": "{{count}} solicitudes de permiso",
   "{{count}} perguntas_one": "{{count}} pregunta",
@@ -660,5 +659,11 @@
   "Perguntar o status de tudo agora": "Preguntar el estado de todo ahora",
   "Perguntar o status de tudo": "Preguntar el estado de todo",
   "Não foi possível pedir o status": "No se pudo pedir el estado",
-  "status pedido às {{time}}": "estado pedido a las {{time}}"
+  "status pedido às {{time}}": "estado pedido a las {{time}}",
+  "dispensada": "descartada",
+  "Encerrada — a aba foi fechada": "Cerrada — la pestaña se cerró",
+  "encerrada, a aba foi fechada": "cerrada, la pestaña se cerró",
+  "Dispensar este card?": "¿Descartar esta tarjeta?",
+  "Sim, dispensar": "Sí, descartar",
+  "Tira este card da lista de pendências. A aba não é tocada.": "Quita esta tarjeta de la lista de pendientes. La pestaña no se toca."
 }

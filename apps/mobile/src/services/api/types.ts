@@ -74,6 +74,7 @@ import type {
   TTabsResponse,
   TTabQuestionAnswerBody,
   TTabQuestionAutoAnswerCancelResponse,
+  TTabQuestionDismissResponse,
   TTabLimit,
   TTabQuestionScreenResponse,
   TTabSuggestionSendBody,
@@ -160,6 +161,8 @@ export interface MobileApi {
    * answer stays on the card as its own pre-selection. No PIN. 404 for another user's card, 409
    * `NOT_SCHEDULED` when no countdown runs (already sent, failed, cancelled, or never scheduled). */
   cancelAutoAnswer(auth: Auth, questionId: string): Promise<TTabQuestionAutoAnswerCancelResponse>;
+  /** "Dispensar" (TER-1140): takes the card off the pending list, the tab is not touched. No PIN. */
+  dismissTabQuestion(auth: Auth, questionId: string): Promise<TTabQuestionDismissResponse>;
   /** The tab's last lines, live, for a permission card; 409 once the question is closed. */
   tabQuestionScreen(auth: Auth, questionId: string): Promise<TTabQuestionScreenResponse>;
   /** Sends a tab's suggestion, as edited — no PIN. 409 `TAB_PROMPT_CHANGED` when the tab's prompt changed, 404 unknown. */

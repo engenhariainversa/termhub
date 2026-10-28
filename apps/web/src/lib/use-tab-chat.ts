@@ -106,6 +106,8 @@ export interface TabChat extends TabChatData {
   questionErrors: Record<string, string>;
   answerQuestion(id: string, body: TabQuestionAnswer): void;
   cancelAutoAnswer(id: string): void;
+  /** "Dispensar" (TER-1140): the card leaves the pending list, the tab is not touched. */
+  dismissQuestion(id: string): void;
   busySuggestionId: string | null;
   suggestionErrors: Record<string, string>;
   sendSuggestion(id: string, text: string): void;
@@ -332,6 +334,7 @@ export function useTabChat(tabId: string, enabled: boolean): TabChat {
     (id: string) => void onQuestion(id, () => api.cancelAutoAnswer(id), i18n.t('Não foi possível cancelar'), { code: 'NOT_SCHEDULED', text: i18n.t('A resposta automática já foi enviada.') }),
     [onQuestion],
   );
+  const dismissQuestion = useCallback((id: string) => void onQuestion(id, () => api.dismissTabQuestion(id), i18n.t('Não foi possível dispensar')), [onQuestion]);
 
   const [busySuggestionId, setBusySuggestionId] = useState<string | null>(null);
   const [suggestionErrors, setSuggestionErrors] = useState<Record<string, string>>({});
@@ -364,6 +367,7 @@ export function useTabChat(tabId: string, enabled: boolean): TabChat {
     questionErrors,
     answerQuestion,
     cancelAutoAnswer,
+    dismissQuestion,
     busySuggestionId,
     suggestionErrors,
     sendSuggestion,

@@ -584,7 +584,6 @@
   "permitida": "allowed",
   "negada": "denied",
   "respondida": "answered",
-  "expirada": "expired",
   "{{count}} permissões_one": "{{count}} permission",
   "{{count}} permissões_other": "{{count}} permissions",
   "{{count}} perguntas_one": "{{count}} question",
@@ -660,5 +659,11 @@
   "Perguntar o status de tudo agora": "Ask for the status of everything now",
   "Perguntar o status de tudo": "Ask for the status of everything",
   "Não foi possível pedir o status": "Could not ask for the status",
-  "status pedido às {{time}}": "status asked at {{time}}"
+  "status pedido às {{time}}": "status asked at {{time}}",
+  "dispensada": "dismissed",
+  "Encerrada — a aba foi fechada": "Closed — the tab was closed",
+  "encerrada, a aba foi fechada": "closed, the tab was closed",
+  "Dispensar este card?": "Dismiss this card?",
+  "Sim, dispensar": "Yes, dismiss",
+  "Tira este card da lista de pendências. A aba não é tocada.": "Takes this card off the pending list. The tab is not touched."
 }

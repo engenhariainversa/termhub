@@ -71,6 +71,7 @@ import { startMemoryQueueFlusher } from './memory/quota.js';
 import { startAiMemoryRulesSweeper } from './memory/ai-memory-sync.js';
 import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
+import { startStuckTabQuestionSweeper } from './chat/stuck-tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
@@ -437,6 +438,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),
   // and one left waiting on background work that never reports ends after a timeout (TER-1053).
   const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
+  // Question cards no tab can answer any more — its session died or its agent exited with no hook (TER-1140)
+  const stopStuckTabQuestions = startStuckTabQuestionSweeper(repos, fastify.log);
   // TER-1138: agent tabs at rest for long are closed on the machines that opted in (Máquinas → Fechar abas paradas)
   const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
@@ -567,6 +570,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();
     stopStaleWorking();
+    stopStuckTabQuestions();
     stopIdleTabs();
     stopDecisionSweeper();
     stopMemorySweeper();

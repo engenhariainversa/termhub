@@ -160,6 +160,8 @@ export interface ChatState {
    * the store; 409 `NOT_SCHEDULED` (the countdown already sent, or someone else cancelled it first)
    * reads as its own sentence, in the card like `answerTabQuestion`'s own failures. */
   cancelAutoAnswer(questionId: string): Promise<void>;
+  /** "Dispensar" (TER-1140): takes the card off the pending list; the tab is not touched. A failure shows in its card. */
+  dismissTabQuestion(questionId: string): Promise<void>;
   /** The tab's live excerpt for a permission card; null when it cannot be read (closed, offline). */
   /** The excerpt and the dialog's options (TER-995); null once the card's tab moved on. */
   loadTabQuestionScreen(questionId: string): Promise<TTabQuestionScreenResponse | null>;
@@ -936,6 +938,24 @@ export function createChatStore(deps: ChatDeps) {
             } catch (e) {
               if (gen !== generation || isLocked(e) || session().handleApiError(e)) return;
               const text = isApiError(e, 'NOT_SCHEDULED') ? CHAT_MSG.autoAnswerAlreadySent : isApiError(e) ? e.message : CHAT_MSG.network;
+              set((s) => ({ questionErrors: { ...s.questionErrors, [questionId]: text } }));
+            } finally {
+              if (gen === generation) set((s) => ({ answeringQuestionIds: s.answeringQuestionIds.filter((id) => id !== questionId) }));
+            }
+          },
+
+          async dismissTabQuestion(questionId) {
+            const projectId = get().activeProject;
+            if (projectId === undefined || get().answeringQuestionIds.includes(questionId)) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            set((s) => ({ answeringQuestionIds: [...s.answeringQuestionIds, questionId], questionErrors: without(s.questionErrors, questionId) }));
+            try {
+              const { tab_question } = await api.dismissTabQuestion(session().auth(), questionId);
+              if (gen === generation) patchSlot(key, (slot) => ({ tabQuestions: upsertTabQuestion(slot.tabQuestions, tab_question) }));
+            } catch (e) {
+              if (gen !== generation || isLocked(e) || session().handleApiError(e)) return;
+              const text = isApiError(e) ? e.message : CHAT_MSG.network;
               set((s) => ({ questionErrors: { ...s.questionErrors, [questionId]: text } }));
             } finally {
               if (gen === generation) set((s) => ({ answeringQuestionIds: s.answeringQuestionIds.filter((id) => id !== questionId) }));
