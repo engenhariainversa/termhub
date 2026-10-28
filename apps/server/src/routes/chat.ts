@@ -10,6 +10,7 @@ import { describeActions } from '../db/repositories/chat-actions-view.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { controlContextFor } from '../control/context.js';
 import { activeWatches, cancelWatchRow, forScreen } from '../chat/watches/view.js';
+import { pingAllWatches, pingWatch } from '../chat/watches/ping.js';
 import { answerTabQuestion, tabQuestionScreen } from '../chat/tab-question-answer.js';
 import { cancelAutoAnswer } from '../chat/auto-answer.js';
 import { dismissTabSuggestion, sendTabSuggestion } from '../chat/tab-suggestion-send.js';
@@ -426,6 +427,19 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const watch = await cancelWatchRow(repos, request.scope.user.id, id);
     if (!watch) throw notFound('Assinatura não encontrada');
     return { watch: forScreen(watch) };
+  });
+
+  /** "Perguntar o status agora" on a watch (TER-1141): wakes the concierge with what it follows; the watch stays open.
+   *  `create`, like cancelling; 404 unknown, another user's or closed; 429 `PING_TOO_SOON` within 30 s. Answers the scope's list. */
+  app.post('/watches/:id/ping', { config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    return { watches: await pingWatch({ repos, chat: deps.service }, request.scope.user, id) };
+  });
+
+  /** "Status de tudo" on the folded strip (TER-1141): one wake for every open watch of the scope. */
+  app.post('/watches/ping', { config: { action: 'create' } }, async (request) => {
+    const { project } = scopeQuery.parse(request.query);
+    return { watches: await pingAllWatches({ repos, chat: deps.service }, request.scope.user, project ?? null) };
   });
 
   app.delete('/grants/:id', { config: { action: 'create' } }, async (request) => {

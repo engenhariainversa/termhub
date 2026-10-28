@@ -96,5 +96,6 @@
   "Tipo de arquivo não compartilhável: só imagens (png, jpg, gif, webp), PDF, Word, Excel, áudio, vídeo e texto": "File type cannot be shared: only images (png, jpg, gif, webp), PDF, Word, Excel, audio, video and text",
   "Uma aba de agente só compartilha arquivos da própria máquina": "An agent tab only shares files from its own machine",
   "A decisão usada expirou ou não vale aqui": "The decision used expired or does not apply here",
-  "A decisão usada foi substituída": "The decision used was replaced"
+  "A decisão usada foi substituída": "The decision used was replaced",
+  "Você pediu o status há pouco. Espere {{seconds}} s e tente de novo.": "You asked for the status a moment ago. Wait {{seconds}} s and try again."
 }

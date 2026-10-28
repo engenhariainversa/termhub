@@ -7026,7 +7026,8 @@ export const ChatWatchScalarFieldEnum = {
   closedAt: 'closedAt',
   lastFiredAt: 'lastFiredAt',
   fireCount: 'fireCount',
-  lastEvent: 'lastEvent'
+  lastEvent: 'lastEvent',
+  lastPingedAt: 'lastPingedAt'
 } as const
 
 export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]

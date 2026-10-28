@@ -178,6 +178,10 @@ export interface MobileApi {
    * takes something away. Answers the watch as it ended; the scope's `watches` event follows. 404 unknown,
    * another user's or already closed. */
   cancelWatch(auth: Auth, watchId: string): Promise<TWatchView>;
+  /** "Perguntar o status agora" (TER-1141) — no PIN: wakes the concierge to say how the watch stands; it
+   * stays open. `watchId` null is "status de tudo" for `projectId`'s scope. Answers the scope's watches.
+   * 404 unknown or closed; 429 `PING_TOO_SOON` within 30 s. */
+  pingWatch(auth: Auth, watchId: string | null, projectId: string | null): Promise<TWatchView[]>;
 
   // the project's AI accounts and models (spec 2026-09-30 project AI accounts §8)
   /** The project's accounts (ids, priority order) and default models, with every account its linked

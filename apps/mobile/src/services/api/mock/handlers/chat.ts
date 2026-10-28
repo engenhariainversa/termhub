@@ -1365,6 +1365,31 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { watch: watchView(watch) } };
   });
 
+  /** "Perguntar o status agora" (TER-1141): marks the ping, like the server; 429 within 30 s. The mock has no
+   * concierge to wake: only the "status pedido às…" changes. */
+  const pingOne = (watch: MockWatch, now: number): boolean => {
+    if (watch.last_pinged_at && Date.parse(watch.last_pinged_at) > now - 30_000) return false;
+    watch.last_pinged_at = new Date(now).toISOString();
+    return true;
+  };
+  router.route('POST', '/api/m/v1/chat/watches/:id/ping', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const watch = state.watches.find((w) => w.id === ctx.params.id && !w.closed);
+    if (!watch) throw new WireError(404, 'NOT_FOUND', 'Assinatura não encontrada');
+    if (!pingOne(watch, ctx.now())) throw new WireError(429, 'PING_TOO_SOON', 'Você pediu o status há pouco. Espere 30 s e tente de novo.');
+    publishWatches(state, watch.project_id);
+    return { status: 200, body: { watches: openWatchesFor(state, watch.project_id) } };
+  });
+  router.route('POST', '/api/m/v1/chat/watches/ping', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const projectId = ctx.query.project ?? null;
+    const open = state.watches.filter((w) => !w.closed && w.project_id === projectId);
+    if (open.length === 0) throw new WireError(404, 'NOT_FOUND', 'Assinatura não encontrada');
+    if (open.filter((w) => pingOne(w, ctx.now())).length === 0) throw new WireError(429, 'PING_TOO_SOON', 'Você pediu o status há pouco. Espere 30 s e tente de novo.');
+    publishWatches(state, projectId);
+    return { status: 200, body: { watches: openWatchesFor(state, projectId) } };
+  });
+
   // --- "Memória do chat" (spec 2026-09-26 §4.6/§5.2) --------------------------------------------
 
   router.route('GET', '/api/m/v1/chat/decisions', (ctx) => {

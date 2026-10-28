@@ -158,6 +158,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
   const limitErrors = useChatStore((s) => s.limitErrors);
   const answerTabLimit = useChatStore((s) => s.answerTabLimit);
   const cancelWatch = useChatStore((s) => s.cancelWatch);
+  const pingWatch = useChatStore((s) => s.pingWatch);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
   const [separate, setSeparate] = useState(false);
 
@@ -224,6 +225,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
   const onAnswerLimit = useCallback((id: string, accountId: string | null) => void answerTabLimit(id, accountId), [answerTabLimit]);
   const onCancelWatch = useCallback((id: string) => void cancelWatch(id), [cancelWatch]);
+  const onPingWatch = useCallback((id: string | null) => void pingWatch(id), [pingWatch]);
   // "Propor de novo" (TER-477): a plain chat message; the concierge proposes a fresh card through the gate.
   const onRepropose = useCallback((action: ChatAction) => void send(t('Proponha de novo: {{summary}}', { summary: action.summary })), [send, t]);
   const onApproveWrites = useCallback((ids: string[]) => void decideMany(ids.map((id) => ({ id, decision: 'approve' as const }))), [decideMany]);
@@ -518,7 +520,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
         <View testID="conversation-composer-column" style={READABLE_COLUMN}>
           {/* What waits on the person, however far up the thread (TER-477); hidden while nothing does. */}
           {/* What the concierge keeps an eye on for this chat (TER-1099); hidden while nothing. */}
-          <WatchesStrip watches={watches} onCancel={onCancelWatch} />
+          <WatchesStrip watches={watches} onCancel={onCancelWatch} onPing={onPingWatch} />
           <PendingBar entries={timeline} deciding={decidingId !== null} onJump={onJump} onApprove={onApproveWrites} />
           <Composer sending={sending} onSend={onSend} replyTo={replyTo} onCancelReply={cancelReply} uploadAttachment={uploadAttachment} deleteAttachment={deleteAttachment} attachmentStatuses={attachmentStatuses} inbox={activeProject === undefined ? undefined : inboxKey(activeProject)} />
         </View>

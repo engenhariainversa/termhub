@@ -108,3 +108,27 @@ it('says the validity the human way: today, tomorrow, or a date', () => {
   expect(watchUntilLabel({ expires_at: new Date(2026, 9, 23, 16, 0).toISOString() }, now)).toBe('até amanhã 16:00');
   expect(watchUntilLabel({ expires_at: new Date(2026, 9, 25, 9, 5).toISOString() }, now)).toMatch(/^até 25\/10.*09:05$/);
 });
+
+it('TER-1141: a ping beside ✕ asks the status of that watch, and the line says when it was asked', () => {
+  const onPing = vi.fn();
+  const pinged = { ...tabWatch, last_pinged_at: new Date(2026, 9, 22, 13, 50).toISOString() };
+  render(<ChatWatches watches={[pinged]} cancelingId={null} errors={{}} onCancel={vi.fn()} onPing={onPing} now={now} />);
+  expect(screen.getByText(/status pedido às 13:50/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Perguntar o status de Te aviso quando a aba OPM-568 (Abacate) parar agora' }));
+  expect(onPing).toHaveBeenCalledWith('w2');
+});
+
+it('TER-1141: the folded strip has "status de tudo", disabled while it is in flight, and shows its error', () => {
+  const onPingAll = vi.fn();
+  const { rerender } = render(<ChatWatches watches={[watch('w1'), tabWatch]} cancelingId={null} errors={{}} onCancel={vi.fn()} onPing={vi.fn()} onPingAll={onPingAll} now={now} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Perguntar o status de tudo agora' }));
+  expect(onPingAll).toHaveBeenCalledTimes(1);
+  rerender(<ChatWatches watches={[watch('w1'), tabWatch]} cancelingId={null} errors={{ all: 'Espere' }} onCancel={vi.fn()} onPing={vi.fn()} onPingAll={onPingAll} pingingId="all" now={now} />);
+  expect(screen.getByRole('button', { name: 'Perguntar o status de tudo agora' })).toBeDisabled();
+  expect(screen.getByText('Espere')).toBeInTheDocument();
+});
+
+it('TER-1141: no ping button without onPing (an older caller)', () => {
+  render(<ChatWatches watches={[tabWatch]} cancelingId={null} errors={{}} onCancel={vi.fn()} now={now} />);
+  expect(screen.queryByRole('button', { name: /Perguntar o status/ })).not.toBeInTheDocument();
+});

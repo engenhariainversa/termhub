@@ -101,8 +101,8 @@ const samples: { [K in ChatEvent['type']]: Extract<ChatEvent, { type: K }> } = {
   watches: {
     type: 'watches',
     ...base,
-    watches: [{ id: 'w1', kind: 'pr', target_id: 'task1', label: 'PRs de TER-12 Login', events: ['merged'], recurring: false, note: '', summary: 'Te aviso quando o PR for mesclado', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-22T12:00:00.000Z', fire_count: 0, last_event: null, last_fired_at: null, target_state: null, next_at: null, every_minutes: null },
-      { id: 'w2', kind: 'reminder', target_id: null, label: 'Conferir o build', events: ['due'], recurring: true, note: '', summary: null, created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-21T15:00:00.000Z', fire_count: 1, last_event: 'due', last_fired_at: '2026-10-21T12:10:00.000Z', target_state: null, next_at: '2026-10-21T12:20:00.000Z', every_minutes: 10 }],
+    watches: [{ id: 'w1', kind: 'pr', target_id: 'task1', label: 'PRs de TER-12 Login', events: ['merged'], recurring: false, note: '', summary: 'Te aviso quando o PR for mesclado', created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-22T12:00:00.000Z', fire_count: 0, last_event: null, last_fired_at: null, last_pinged_at: '2026-10-21T13:00:00.000Z', target_state: null, next_at: null, every_minutes: null },
+      { id: 'w2', kind: 'reminder', target_id: null, label: 'Conferir o build', events: ['due'], recurring: true, note: '', summary: null, created_at: '2026-10-21T12:00:00.000Z', expires_at: '2026-10-21T15:00:00.000Z', fire_count: 1, last_event: 'due', last_fired_at: '2026-10-21T12:10:00.000Z', last_pinged_at: null, target_state: null, next_at: '2026-10-21T12:20:00.000Z', every_minutes: 10 }],
   },
   concierge_notice: { type: 'concierge_notice', ...base, project_id: 'p1', message_id: 'm1', level: 'done', headline: 'Build pronto', count: 2 },
   attachment_status: {

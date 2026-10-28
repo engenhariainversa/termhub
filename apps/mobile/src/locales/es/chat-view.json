@@ -387,5 +387,8 @@
   "Repete até o fim do prazo": "Se repite hasta el final del plazo",
   "Uma vez": "Una vez",
   "Acompanhando {{count}} coisas_one": "Siguiendo {{count}} cosa",
-  "Acompanhando {{count}} coisas_other": "Siguiendo {{count}} cosas"
+  "Acompanhando {{count}} coisas_other": "Siguiendo {{count}} cosas",
+  "Perguntar o status de {{label}} agora": "Preguntar el estado de {{label}} ahora",
+  "Perguntar o status de tudo agora": "Preguntar el estado de todo ahora",
+  "status pedido às {{time}}": "estado pedido a las {{time}}"
 }

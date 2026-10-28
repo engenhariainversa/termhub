@@ -392,6 +392,10 @@ export const api = {
   revokeChatGrant: (id: string) => request<{ grant: ChatGrant }>('DELETE', `/chat/grants/${encodeURIComponent(id)}`),
   /** "Cancelar" on a watch (TER-1099): 404 unknown, not yours or already closed. */
   cancelChatWatch: (id: string) => request<{ watch: ChatWatch }>('DELETE', `/chat/watches/${encodeURIComponent(id)}`),
+  /** "Perguntar o status agora" (TER-1141): wakes the concierge, the watch stays. 404 unknown or closed, 429 `PING_TOO_SOON`. */
+  pingChatWatch: (id: string) => request<{ watches: ChatWatch[] }>('POST', `/chat/watches/${encodeURIComponent(id)}/ping`),
+  /** "Status de tudo" (TER-1141): one wake for every open watch of the scope. */
+  pingChatWatches: (projectId: string | null) => request<{ watches: ChatWatch[] }>('POST', projectId ? `/chat/watches/ping?project=${encodeURIComponent(projectId)}` : '/chat/watches/ping'),
   /** "Permissões do chat": the grants in force, or the paged history (`state: 'ended'` also covers
    *  expired/revoked). `kinds=all_standing` always: tab, project and standing grants together. */
   listChatGrants: (q: { state: 'active' | 'ended'; cursor?: string | null }) =>

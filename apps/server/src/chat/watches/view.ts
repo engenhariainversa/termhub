@@ -30,6 +30,8 @@ export interface WatchView {
   /** TER-1115: the last event it caught and when; null until it fires. */
   last_event: string | null;
   last_fired_at: string | null;
+  /** TER-1141: when the person last asked the concierge for its status ("status pedido às 14:32"). */
+  last_pinged_at: string | null;
   /** TER-1115, tabs only (null otherwise): the tab's state now (`working`, `finished`…), for "trabalhando agora". */
   target_state: TabState | null;
   /** TER-1100, reminders only (null otherwise): when it is due next, and every how many minutes it repeats. */
@@ -51,6 +53,7 @@ export const watchView = (w: ChatWatch): WatchView => ({
   fire_count: w.fire_count,
   last_event: w.last_event,
   last_fired_at: w.last_fired_at,
+  last_pinged_at: w.last_pinged_at,
   target_state: null,
   next_at: w.kind === 'reminder' && typeof w.baseline.next === 'string' ? w.baseline.next : null,
   every_minutes: w.kind === 'reminder' ? (w.params.every_minutes ?? null) : null,
