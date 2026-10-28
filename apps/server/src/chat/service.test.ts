@@ -21,6 +21,7 @@ import { HttpError } from '../lib/errors.js';
 import type { SubagentStatus } from './stream.js';
 import { ChatService, CANCEL_TIMEOUT_MS, purgeExpiredActions, scrubSecretArgs, type RunnerClient, type RunnerInput } from './service.js';
 import { RESUME_WINDOW_MS, STALE_MS } from './resume.js';
+import { clearLimited } from './host.js';
 import { ORCHESTRATOR_PROMPT, streamedSystemPrompt } from './concierge-prompt.js';
 import { messageRefLine } from './message-ref.js';
 import { recalledOrigin, type ClientSignals } from './client-origin.js';
@@ -3964,6 +3965,7 @@ describe('usage limit (TER-588)', () => {
   beforeEach(() => {
     getAccountUsage.mockResolvedValue(usage(10));
     linkClaudeSession.mockResolvedValue('linked');
+    clearLimited();
   });
 
   it('one-shot: answers on another account of the machine, resuming the session there, and says so', async () => {
@@ -3975,7 +3977,7 @@ describe('usage limit (TER-588)', () => {
     const final = await built.service.send(user, 'oi');
     off();
     expect(final).toMatchObject({ text: 'oi!', error_code: null });
-    expect(built.chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: { kind: 'account_swap', from: null, to: 'Trabalho', resets_at: RESETS } }));
+    expect(built.chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: { kind: 'account_swap', from: null, to: 'Trabalho · jarvis', resets_at: RESETS } }));
     expect(built.inputs()).toHaveLength(2);
     expect(built.inputs()[1]).toMatchObject({ config_dir: '~/.claude-work', resume: true, session_id: built.inputs()[0].session_id });
     expect(linkClaudeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), { transcriptPath: `/home/u/.claude/projects/-srv/${built.inputs()[0].session_id}.jsonl`, sessionId: built.inputs()[0].session_id, configDir: '~/.claude-work' });
@@ -4031,6 +4033,52 @@ describe('usage limit (TER-588)', () => {
     // the project conversation keeps the account that answered; the account-wide host is untouched
     expect(built.chat.setRunAccount).toHaveBeenCalledWith('c_p1', 'acc_w');
     expect(built.chat.setHost).not.toHaveBeenCalled();
+  });
+
+  // TER-1144: the Opa Pingou chat said "No other Claude account on this machine" while the project listed
+  // accounts with room on other machines.
+  const hulk = (over: Record<string, unknown> = {}) => ({ ...jarvis(), id: 'm2', name: 'hulk', ...over });
+  const onHulk = { id: 'acc_h', provider: 'claude', machine_id: 'm2', config_dir: null, label: 'Claude' };
+  const onJarvis = { id: 'acc_j', provider: 'claude', machine_id: 'm1', config_dir: '~/.claude-j', label: 'Claude' };
+  const linkedBoth = (built: ReturnType<typeof build>) =>
+    vi.mocked(built.repos.projectMachines.listByProject).mockImplementation(async () => [{ machine_id: 'm1', cwd: '/srv/app' }, { machine_id: 'm2', cwd: '/srv/app' }]);
+
+  it("project chat (TER-1144): runs on the project's first account, on its own machine, not on the account-wide host's", async () => {
+    const built = build([delta('oi!'), done(SID)], { host: { machines: [jarvis(), hulk()] }, accounts: [onJarvis, onHulk], projectAi: { accounts: ['acc_h', 'acc_j'] } });
+    linkedBoth(built);
+    built.conversation.machine_id = 'm1';
+    expect(await built.service.send(user, 'oi', { projectId: 'p1' })).toMatchObject({ text: 'oi!', error_code: null });
+    expect(built.hosted).toEqual(['m2']);
+    expect(built.inputs()[0]).toMatchObject({ config_dir: null });
+  });
+
+  it('project chat (TER-1144): with no account left on its machine, the turn goes on the next account of the project on another machine, and the next message starts there', async () => {
+    const built = build([], { host: { machines: [jarvis(), hulk()] }, accounts: [onJarvis, onHulk], projectAi: { accounts: ['acc_j', 'acc_h'] } });
+    linkedBoth(built);
+    built.conversation.machine_id = 'm1';
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield* limitFrames; } }));
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield delta('oi!'); yield done(SID); } }));
+    const final = await built.service.send(user, 'oi', { projectId: 'p1' });
+    expect(final).toMatchObject({ text: 'oi!', error_code: null });
+    expect(built.hosted).toEqual(['m1', 'm2']);
+    expect(built.inputs()[1]).toMatchObject({ config_dir: null, resume: false });
+    expect(built.inputs()[1].session_id).not.toBe(built.inputs()[0].session_id);
+    // the notice names the account with its machine: every one of them is called "Claude"
+    expect(built.chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: { kind: 'account_swap', from: 'Claude · jarvis', to: 'Claude · hulk', resets_at: RESETS } }));
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield delta('de novo'); yield done(SID); } }));
+    await built.service.send(user, 'de novo', { projectId: 'p1' });
+    expect(built.hosted).toEqual(['m1', 'm2', 'm2']);
+  });
+
+  it('project chat (TER-1144): another machine that is offline is skipped, and the limit is told once with the right account', async () => {
+    const built = build([], { host: { machines: [jarvis(), hulk()] }, accounts: [onJarvis, onHulk], projectAi: { accounts: ['acc_j', 'acc_h'] } });
+    linkedBoth(built);
+    vi.mocked(built.agents.capabilities).mockImplementation((id: string) => (id === 'm1' ? ['pty', 'claude', 'claude.system_prompt'] : null));
+    vi.mocked(built.runner.run).mockImplementation(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield* limitFrames; } }));
+    const final = await built.service.send(user, 'oi', { projectId: 'p1' });
+    expect(final).toMatchObject({ error_code: 'USAGE_LIMIT' });
+    expect(built.hosted).toEqual(['m1']);
+    expect(built.chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: expect.objectContaining({ kind: 'usage_limit', account: 'Claude · jarvis' }) }));
   });
 
   it('account-wide chat (TER-589): never keeps the account that took over', async () => {
@@ -4148,7 +4196,7 @@ describe('usage limit (TER-588)', () => {
     second.end();
     const final = await started.done;
     expect(final).toMatchObject({ text: 'oi!', error_code: null });
-    expect(chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: { kind: 'account_swap', from: null, to: 'Trabalho', resets_at: RESETS } }));
+    expect(chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: { kind: 'account_swap', from: null, to: 'Trabalho · jarvis', resets_at: RESETS } }));
   });
 
   it('streamed: every account tried once, then the limit is stored', async () => {

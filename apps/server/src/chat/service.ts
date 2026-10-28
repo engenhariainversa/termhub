@@ -13,7 +13,7 @@ import type { Machine, User } from '../db/repositories/types.js';
 import { HttpError, notFound } from '../lib/errors.js';
 import { currentRulesBlock } from '../memory/current-rules.js';
 import { newId } from '../lib/ids.js';
-import { fallbackShortfall, pickFallback, type FallbackPick } from './account-fallback.js';
+import { fallbackShortfall, pickFallback, pickProjectElsewhere, type FallbackPick } from './account-fallback.js';
 import { attachmentContext, isTranscribed } from './attachments/context.js';
 import { chatBus } from './bus.js';
 import { replyContext, type ReplyTarget } from './reply-context.js';
@@ -23,7 +23,7 @@ import { forgetOrigin, originLine, rememberOrigin, sameNetworkAs, type ClientOri
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
-import { exclusiveConflict, hostFailure, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { exclusiveConflict, hostFailure, machineReady, markLimited, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
 import { COMMAND_RULE_BUDGET, DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretArgs, SECRET_ARGS, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { formatWords } from './command-rules.js';
@@ -55,9 +55,12 @@ interface RunAccount {
 /** A `lost` account runs on the default login (see `accountFor`), so it is that one here too. */
 const runAccountOf = (host: RunHost): RunAccount => ({
   id: host.account.kind === 'chosen' ? host.account.id : null,
-  label: host.account.kind === 'chosen' ? host.account.label : null,
+  label: host.account.kind === 'chosen' ? accountName(host.account.label, host.machine) : null,
   configDir: host.configDir,
 });
+
+/** An account as a notice names it (TER-1144): its label and its machine, since labels repeat ("Claude"). */
+const accountName = (label: string, machine: Pick<Machine, 'name'>): string => `${label} · ${machine.name}`;
 
 /**
  * Where a turn that hit the usage limit goes on (TER-588): another account the run has not tried yet, or
@@ -78,14 +81,18 @@ class LimitFallback {
   /** The run is on the project's account list (TER-589): the account that takes over becomes the project chat's own. */
   private readonly projectRun: boolean;
 
+  /** The machine the run is on: another one once the turn moved to an account of another machine (TER-1144). */
+  machine: Machine;
+
   constructor(
-    private repos: Pick<Repositories, 'aiAccounts' | 'chat'> & Partial<Pick<Repositories, 'projectSetup' | 'projectMachines'>>,
-    private machine: Machine,
+    private repos: Pick<Repositories, 'aiAccounts' | 'chat' | 'machines'> & Partial<Pick<Repositories, 'projectSetup' | 'projectMachines'>>,
     private projectId: string | null,
     private conversationId: string,
     host: RunHost,
     model: string | null,
+    private elsewhere: { userId: string; ready: (machine: Machine) => boolean },
   ) {
+    this.machine = host.machine;
     this.account = runAccountOf(host);
     this.model = model;
     if (this.account.id) this.tried.add(this.account.id);
@@ -96,9 +103,12 @@ class LimitFallback {
   async next(limit: { resets_at: string | null }, session: { dir: string | null; id: string | null; model: string | null }): Promise<{ pick: FallbackPick; notice: ChatNotice } | { pick: null; notice: ChatNotice }> {
     this.first ??= { label: this.account.label, resets_at: limit.resets_at };
     this.model ??= session.model;
+    // TER-1144: the next message of this project chat starts on the next account of the project's order
+    if (this.projectRun && this.account.id) markLimited(this.account.id, limit.resets_at);
     // The same opt-in as the tabs' automatic swap (TER-55): an account of the machine is used for
-    // someone else's quota only when its owner asked for that.
-    if (!this.machine.claude_auto_swap) {
+    // someone else's quota only when its owner asked for that. A project's own list of accounts is that
+    // ask, for its chat (TER-1144).
+    if (!this.machine.claude_auto_swap && !this.projectRun) {
       const fallback = (await fallbackShortfall(this.repos, this.machine, this.account.id).catch(() => 'none_free' as const)) === 'no_other_account' ? 'no_other_account' : 'auto_swap_off';
       return { pick: null, notice: { kind: 'usage_limit', account: this.first.label, resets_at: this.first.resets_at, fallback } };
     }
@@ -108,13 +118,23 @@ class LimitFallback {
     } catch (err) {
       console.error('chat: account fallback failed', { conversation_id: this.conversationId, error: failureLabel(err) });
     }
+    // TER-1144: none left on this machine — the project's next account on another machine that is online
+    if (!pick && this.projectRun && this.projectId !== null && this.repos.projectSetup && this.repos.projectMachines) {
+      const repos = { ...this.repos, projectSetup: this.repos.projectSetup, projectMachines: this.repos.projectMachines };
+      try {
+        pick = await pickProjectElsewhere(repos, { userId: this.elsewhere.userId, projectId: this.projectId, machineId: this.machine.id, tried: this.tried, model: this.model, ready: this.elsewhere.ready });
+      } catch (err) {
+        console.error('chat: account fallback failed', { conversation_id: this.conversationId, error: failureLabel(err) });
+      }
+    }
     if (pick) {
-      console.info('chat: usage limit, answering on another account', { conversation_id: this.conversationId, machine_id: this.machine.id, from: this.account.id, to: pick.account.id, resume: pick.resume });
-      this.account = { id: pick.account.id, label: pick.account.label, configDir: pick.account.config_dir };
+      console.info('chat: usage limit, answering on another account', { conversation_id: this.conversationId, machine_id: this.machine.id, from: this.account.id, to: pick.account.id, to_machine: pick.machine?.id ?? this.machine.id, resume: pick.resume });
+      if (pick.machine) this.machine = pick.machine;
+      this.account = { id: pick.account.id, label: accountName(pick.account.label, this.machine), configDir: pick.account.config_dir };
       // TER-589: `pick.account` answers from here on. In a project chat running on the project's list it
       // becomes that chat's account, so the next message starts there instead of on the limited one.
       if (this.projectRun) await this.repos.chat.setRunAccount(this.conversationId, pick.account.id).catch((err) => console.error('chat: could not keep the project account', { conversation_id: this.conversationId, error: failureLabel(err) }));
-      return { pick, notice: { kind: 'account_swap', from: this.first.label, to: pick.account.label, resets_at: this.first.resets_at } };
+      return { pick, notice: { kind: 'account_swap', from: this.first.label, to: accountName(pick.account.label, this.machine), resets_at: this.first.resets_at } };
     }
     const fallback = await fallbackShortfall(this.repos, this.machine, this.account.id).catch(() => 'none_free' as const);
     console.info('chat: usage limit, no account to fall back to', { conversation_id: this.conversationId, machine_id: this.machine.id, account: this.account.id, fallback });
@@ -1583,8 +1603,12 @@ export class ChatService {
       // never move a host the user chose; after the lock, so it only ever records a run that happens.
       // The host belongs to the account-wide conversation, which is not necessarily this one: a project
       // chat pins the row `resolveHost` read, never its own (which has no host to speak of).
-      const hostConversation = conversation.project_id === null ? conversation : await this.deps.repos.chat.getOrCreateForUser(user.id);
-      await this.deps.repos.chat.pinHostMachine(hostConversation.id, host.machine.id);
+      // A project chat on the project's own accounts may run on another machine than that host
+      // (TER-1144): it pins nothing.
+      if (!(host.account.kind === 'chosen' && host.account.via === 'project')) {
+        const hostConversation = conversation.project_id === null ? conversation : await this.deps.repos.chat.getOrCreateForUser(user.id);
+        await this.deps.repos.chat.pinHostMachine(hostConversation.id, host.machine.id);
+      }
 
       // A row another instance released (or left stale) for this conversation is taken over here, not
       // overwritten by this run's own row: its open turns and the server note go first.
@@ -1665,9 +1689,11 @@ export class ChatService {
       /** The model the CLI's `init` said the run is on (TER-837). */
       let runModel: string | null = null;
       let notice: ChatNotice | undefined;
+      /** The runner of the machine the turn is on: another one once it moved machines (TER-1144). */
+      let current = runner;
 
       const consume = async (run: RunnerInput) => {
-        for await (const line of runner.run(run)) {
+        for await (const line of current.run(run)) {
           const frame = parseFrame(line);
           if (!frame) continue;
           if (frame.type === 'text') {
@@ -1735,7 +1761,10 @@ export class ChatService {
 
       if (token !== undefined) {
         // the conversation's own model, else the project's default (TER-589), as "Modelos do concierge" allows (TER-1145)
-        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, host.model ?? null);
+        const fallback = new LimitFallback(this.deps.repos, conversation.project_id, conversation.id, host, host.model ?? null, {
+          userId: user.id,
+          ready: (m) => machineReady(this.deps.agents, m.id, conversation.project_id === null ? undefined : CAPABILITY_CLAUDE_SYSTEM_PROMPT),
+        });
         let input: RunnerInput = {
           session_id: conversation.cli_session_id ?? randomUUID(),
           resume: conversation.cli_session_id !== null,
@@ -1791,6 +1820,7 @@ export class ChatService {
             const next = await fallback.next(limit ?? { resets_at: null }, { dir: sessionDir, id: input.session_id, model: runModel });
             notice = next.notice;
             if (!next.pick) break;
+            if (next.pick.machine) current = this.deps.runnerFor(next.pick.machine.id);
             startOver();
             if (!next.pick.resume) {
               freshTried = true;
@@ -1903,7 +1933,13 @@ export class ChatService {
         return;
       }
       // the conversation's own model, else the project's default (TER-589), as "Modelos do concierge" allows (TER-1145)
-      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, host.model ?? null);
+      // A streamed run only moves to a machine whose agent streams too (TER-1144).
+      const fallback = new LimitFallback(this.deps.repos, conversation.project_id, conversation.id, host, host.model ?? null, {
+        userId: user.id,
+        ready: (m) => machineReady(this.deps.agents, m.id, CAPABILITY_CLAUDE_STREAM_INPUT) && (conversation.project_id === null || machineReady(this.deps.agents, m.id, CAPABILITY_CLAUDE_SYSTEM_PROMPT)),
+      });
+      /** The runner of the machine the run is on: another one once it moved machines (TER-1144). */
+      let current = runner;
       /** A missing session is retried on a fresh one once — and never after a swap started one fresh. */
       let freshTried = false;
       for (;;) {
@@ -1921,7 +1957,7 @@ export class ChatService {
         };
         let outcome: { code: ChatErrorCode; missingSession: boolean; limit: { resets_at: string | null } | null };
         try {
-          outcome = await live.consume(runner.run(input));
+          outcome = await live.consume(current.run(input));
         } catch (e) {
           if (isSetupFailure(e) && live.endedTurns === 0) {
             await live.abandon(e);
@@ -1948,6 +1984,7 @@ export class ChatService {
             await live.failOpen('USAGE_LIMIT', next.notice);
             return;
           }
+          if (next.pick.machine) current = this.deps.runnerFor(next.pick.machine.id);
           await live.retryElsewhere({ fresh: !next.pick.resume, notice: next.notice });
           if (!next.pick.resume) freshTried = true;
           continue;

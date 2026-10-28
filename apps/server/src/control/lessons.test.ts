@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import { NoteTooLargeError } from '../db/repositories/notes.js';
@@ -75,6 +75,10 @@ describe('recordLesson', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
 
   it('checks project_id through ctx.scoped.project: a foreign project 404s with nothing written', async () => {
     const { ctx, calls } = ctxFor();
@@ -119,9 +123,8 @@ describe('recordLesson', () => {
   });
 
   it('queues the 41st lesson of the project within an hour: nothing appended, the answer and the feed say when (TER-1137)', async () => {
-    // The window's writes are stamped 10:15 UTC: the clock has to sit inside that hour, or the slot is now.
+    // the window's writes are at 10:15 UTC: the clock is pinned inside that hour, or the test ages out
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-28T10:30:00Z') });
-    onTestFinished(() => vi.useRealTimers());
     const { ctx, calls } = ctxFor({ count: LESSONS_PER_PROJECT_HOUR });
     const r = await recordLesson(ctx, { ...validInput, tab_id: 't1' }, { embedder: null, log: console });
     expect(calls.appendBlock).not.toHaveBeenCalled();

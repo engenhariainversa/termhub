@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
 import type { MemoryHit, MemoryFilter, NewMemoryItem } from '../db/repositories/memory-items.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
@@ -493,6 +493,10 @@ function ctxForNotes(setup: NotesSetup = {}) {
 }
 
 describe('recordDecision', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('writes a note via indexNote, owned by ctx.scope.user.id, with question/decision/reason/sources folded into title/text', async () => {
     const { ctx, calls } = ctxForNotes();
     const r = await recordDecision(ctx, { question: 'Usa X?', decision: 'Sim', reason: 'porque sim' }, { embedder: null });
@@ -539,9 +543,8 @@ describe('recordDecision', () => {
   });
 
   it('queues the 61st note of the hour from the same origin: nothing written now, the answer says when (TER-1137)', async () => {
-    // The window's writes are stamped 10:15 UTC: the clock has to sit inside that hour, or the slot is now.
+    // the window's writes are at 10:15 UTC: the clock is pinned inside that hour, or the test ages out
     vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-28T10:30:00Z') });
-    onTestFinished(() => vi.useRealTimers());
     const { ctx, calls } = ctxForNotes({ count: 60, timeZone: 'America/Sao_Paulo' });
     const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
     expect(calls.upsertMany).not.toHaveBeenCalled();

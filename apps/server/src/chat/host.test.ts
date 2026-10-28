@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { normalizeSetup } from '../setup/schema.js';
 import type { AiAccount, Machine, User } from '../db/repositories/types.js';
-import { resolveHost, type HostChoice, type HostContext } from './host.js';
+import { clearLimited, markLimited, resolveHost, type HostChoice, type HostContext } from './host.js';
 
 const user = { id: 'u1', email: 'p@test' } as unknown as User;
 
@@ -319,15 +319,19 @@ describe('a project chat with the project setup (TER-589)', () => {
   let unlinked = false;
   beforeEach(() => {
     unlinked = false;
+    clearLimited();
   });
   const m1 = machine('m1', 'jarvis');
   const accs = [account('a1', 'm1', null, { label: 'pessoal' }), account('a2', 'm1', '~/.claude-2', { label: 'trabalho' }), account('b1', 'm2', null), account('c1', 'm1', null, { provider: 'chatgpt' })];
-  const withSetup = (ai: unknown, conversation: { ai_account_id?: string | null } = {}) => {
-    const built = build({ machines: [m1], accounts: accs, conversation });
+  const withSetup = (ai: unknown, conversation: { ai_account_id?: string | null } = {}, machines: Machine[] = [m1], online?: Record<string, { capabilities: string[]; agent_version: string }>) => {
+    const built = build({ machines, accounts: accs, conversation: { machine_id: 'm1', ...conversation }, online });
     Object.assign(built.repos, {
       projectSetup: { get: vi.fn(async () => ({ data: normalizeSetup({ ai }, 2) })) },
       aiAccounts: { ...built.repos.aiAccounts, list: vi.fn(async () => accs) },
-      projectMachines: { find: vi.fn(async (_p: string, m: string) => (unlinked ? undefined : { machine_id: m })) },
+      projectMachines: {
+        find: vi.fn(async (_p: string, m: string) => (unlinked ? undefined : { machine_id: m })),
+        listByProject: vi.fn(async () => (unlinked ? [] : machines.map((m) => ({ machine_id: m.id })))),
+      },
     });
     return built;
   };
@@ -339,12 +343,29 @@ describe('a project chat with the project setup (TER-589)', () => {
     });
   });
 
-  it('keeps the account the project chat last answered on while it is listed', async () => {
+  it("follows the project's order, not the account it last answered on (TER-1144)", async () => {
     const { ctx } = withSetup({ accounts: ['a2', 'a1'] });
-    const choice = await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'a1' } });
-    expect(choice).toMatchObject({ configDir: null, account: { kind: 'chosen', id: 'a1', via: 'project' }, model: null });
-    const unlisted = await resolveHost(withSetup({ accounts: ['a2'] }).ctx, user, { project: { id: 'p1', accountId: 'a1' } });
-    expect(unlisted).toMatchObject({ account: { id: 'a2' } });
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'a1' } })).toMatchObject({ account: { kind: 'chosen', id: 'a2', via: 'project' }, model: null });
+  });
+
+  it('skips an account that just met its usage limit; with all of them limited, keeps the last one (TER-1144)', async () => {
+    const { ctx } = withSetup({ accounts: ['a2', 'a1'] });
+    markLimited('a2', null);
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'a2' } })).toMatchObject({ account: { id: 'a1' } });
+    markLimited('a1', new Date(Date.now() + 60_000).toISOString());
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'a1' } })).toMatchObject({ account: { id: 'a1' } });
+  });
+
+  it("runs on the machine of the project's first account, not on the account-wide host (TER-1144)", async () => {
+    const m2 = machine('m2', 'hulk');
+    const { ctx } = withSetup({ accounts: ['b1', 'a2'] }, {}, [m1, m2]);
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ kind: 'ready', machine: m2, configDir: null, account: { id: 'b1', via: 'project' } });
+  });
+
+  it('skips the accounts of a machine that is offline (TER-1144)', async () => {
+    const m2 = machine('m2', 'hulk');
+    const { ctx } = withSetup({ accounts: ['b1', 'a2'] }, {}, [m1, m2], { m1: { capabilities: ['claude'], agent_version: '0.5.0' } });
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ machine: m1, account: { id: 'a2' } });
   });
 
   it("keeps the person's own pick when the project lists no account on the host, with the project's model", async () => {
