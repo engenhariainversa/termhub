@@ -1467,6 +1467,8 @@ export interface ChatWatch {
   last_event?: string | null;
   last_fired_at?: string | null;
   target_state?: string | null;
+  /** TER-1141: when the person last asked the concierge for its status. Absent from an older server. */
+  last_pinged_at?: string | null;
 }
 
 /**

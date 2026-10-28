@@ -55,6 +55,7 @@ export type ChatWatchMinAggregateOutputType = {
   lastFiredAt: Date | null
   fireCount: number | null
   lastEvent: string | null
+  lastPingedAt: Date | null
 }
 
 export type ChatWatchMaxAggregateOutputType = {
@@ -75,6 +76,7 @@ export type ChatWatchMaxAggregateOutputType = {
   lastFiredAt: Date | null
   fireCount: number | null
   lastEvent: string | null
+  lastPingedAt: Date | null
 }
 
 export type ChatWatchCountAggregateOutputType = {
@@ -97,6 +99,7 @@ export type ChatWatchCountAggregateOutputType = {
   lastFiredAt: number
   fireCount: number
   lastEvent: number
+  lastPingedAt: number
   _all: number
 }
 
@@ -127,6 +130,7 @@ export type ChatWatchMinAggregateInputType = {
   lastFiredAt?: true
   fireCount?: true
   lastEvent?: true
+  lastPingedAt?: true
 }
 
 export type ChatWatchMaxAggregateInputType = {
@@ -147,6 +151,7 @@ export type ChatWatchMaxAggregateInputType = {
   lastFiredAt?: true
   fireCount?: true
   lastEvent?: true
+  lastPingedAt?: true
 }
 
 export type ChatWatchCountAggregateInputType = {
@@ -169,6 +174,7 @@ export type ChatWatchCountAggregateInputType = {
   lastFiredAt?: true
   fireCount?: true
   lastEvent?: true
+  lastPingedAt?: true
   _all?: true
 }
 
@@ -278,6 +284,7 @@ export type ChatWatchGroupByOutputType = {
   lastFiredAt: Date | null
   fireCount: number
   lastEvent: string | null
+  lastPingedAt: Date | null
   _count: ChatWatchCountAggregateOutputType | null
   _avg: ChatWatchAvgAggregateOutputType | null
   _sum: ChatWatchSumAggregateOutputType | null
@@ -323,6 +330,7 @@ export type ChatWatchWhereInput = {
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
   lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
+  lastPingedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   fires?: Prisma.ChatWatchFireListRelationFilter
@@ -348,6 +356,7 @@ export type ChatWatchOrderByWithRelationInput = {
   lastFiredAt?: Prisma.SortOrderInput | Prisma.SortOrder
   fireCount?: Prisma.SortOrder
   lastEvent?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastPingedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   project?: Prisma.ProjectOrderByWithRelationInput
   fires?: Prisma.ChatWatchFireOrderByRelationAggregateInput
@@ -376,6 +385,7 @@ export type ChatWatchWhereUniqueInput = Prisma.AtLeast<{
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
   lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
+  lastPingedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   project?: Prisma.XOR<Prisma.ProjectNullableScalarRelationFilter, Prisma.ProjectWhereInput> | null
   fires?: Prisma.ChatWatchFireListRelationFilter
@@ -401,6 +411,7 @@ export type ChatWatchOrderByWithAggregationInput = {
   lastFiredAt?: Prisma.SortOrderInput | Prisma.SortOrder
   fireCount?: Prisma.SortOrder
   lastEvent?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastPingedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   _count?: Prisma.ChatWatchCountOrderByAggregateInput
   _avg?: Prisma.ChatWatchAvgOrderByAggregateInput
   _max?: Prisma.ChatWatchMaxOrderByAggregateInput
@@ -431,6 +442,7 @@ export type ChatWatchScalarWhereWithAggregatesInput = {
   lastFiredAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntWithAggregatesFilter<"ChatWatch"> | number
   lastEvent?: Prisma.StringNullableWithAggregatesFilter<"ChatWatch"> | string | null
+  lastPingedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"ChatWatch"> | Date | string | null
 }
 
 export type ChatWatchCreateInput = {
@@ -451,6 +463,7 @@ export type ChatWatchCreateInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
@@ -476,6 +489,7 @@ export type ChatWatchUncheckedCreateInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -497,6 +511,7 @@ export type ChatWatchUpdateInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
@@ -522,6 +537,7 @@ export type ChatWatchUncheckedUpdateInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -545,6 +561,7 @@ export type ChatWatchCreateManyInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
 }
 
 export type ChatWatchUpdateManyMutationInput = {
@@ -565,6 +582,7 @@ export type ChatWatchUpdateManyMutationInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type ChatWatchUncheckedUpdateManyInput = {
@@ -587,6 +605,7 @@ export type ChatWatchUncheckedUpdateManyInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type ChatWatchListRelationFilter = {
@@ -619,6 +638,7 @@ export type ChatWatchCountOrderByAggregateInput = {
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
   lastEvent?: Prisma.SortOrder
+  lastPingedAt?: Prisma.SortOrder
 }
 
 export type ChatWatchAvgOrderByAggregateInput = {
@@ -643,6 +663,7 @@ export type ChatWatchMaxOrderByAggregateInput = {
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
   lastEvent?: Prisma.SortOrder
+  lastPingedAt?: Prisma.SortOrder
 }
 
 export type ChatWatchMinOrderByAggregateInput = {
@@ -663,6 +684,7 @@ export type ChatWatchMinOrderByAggregateInput = {
   lastFiredAt?: Prisma.SortOrder
   fireCount?: Prisma.SortOrder
   lastEvent?: Prisma.SortOrder
+  lastPingedAt?: Prisma.SortOrder
 }
 
 export type ChatWatchSumOrderByAggregateInput = {
@@ -790,6 +812,7 @@ export type ChatWatchCreateWithoutUserInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
 }
@@ -813,6 +836,7 @@ export type ChatWatchUncheckedCreateWithoutUserInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -865,6 +889,7 @@ export type ChatWatchScalarWhereInput = {
   lastFiredAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
   fireCount?: Prisma.IntFilter<"ChatWatch"> | number
   lastEvent?: Prisma.StringNullableFilter<"ChatWatch"> | string | null
+  lastPingedAt?: Prisma.DateTimeNullableFilter<"ChatWatch"> | Date | string | null
 }
 
 export type ChatWatchCreateWithoutProjectInput = {
@@ -885,6 +910,7 @@ export type ChatWatchCreateWithoutProjectInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   fires?: Prisma.ChatWatchFireCreateNestedManyWithoutWatchInput
 }
@@ -908,6 +934,7 @@ export type ChatWatchUncheckedCreateWithoutProjectInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedCreateNestedManyWithoutWatchInput
 }
 
@@ -955,6 +982,7 @@ export type ChatWatchCreateWithoutFiresInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
   user: Prisma.UserCreateNestedOneWithoutChatWatchesInput
   project?: Prisma.ProjectCreateNestedOneWithoutChatWatchesInput
 }
@@ -979,6 +1007,7 @@ export type ChatWatchUncheckedCreateWithoutFiresInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
 }
 
 export type ChatWatchCreateOrConnectWithoutFiresInput = {
@@ -1015,6 +1044,7 @@ export type ChatWatchUpdateWithoutFiresInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
 }
@@ -1039,6 +1069,7 @@ export type ChatWatchUncheckedUpdateWithoutFiresInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type ChatWatchCreateManyUserInput = {
@@ -1060,6 +1091,7 @@ export type ChatWatchCreateManyUserInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
 }
 
 export type ChatWatchUpdateWithoutUserInput = {
@@ -1080,6 +1112,7 @@ export type ChatWatchUpdateWithoutUserInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   project?: Prisma.ProjectUpdateOneWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
 }
@@ -1103,6 +1136,7 @@ export type ChatWatchUncheckedUpdateWithoutUserInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -1125,6 +1159,7 @@ export type ChatWatchUncheckedUpdateManyWithoutUserInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 export type ChatWatchCreateManyProjectInput = {
@@ -1146,6 +1181,7 @@ export type ChatWatchCreateManyProjectInput = {
   lastFiredAt?: Date | string | null
   fireCount?: number
   lastEvent?: string | null
+  lastPingedAt?: Date | string | null
 }
 
 export type ChatWatchUpdateWithoutProjectInput = {
@@ -1166,6 +1202,7 @@ export type ChatWatchUpdateWithoutProjectInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutChatWatchesNestedInput
   fires?: Prisma.ChatWatchFireUpdateManyWithoutWatchNestedInput
 }
@@ -1189,6 +1226,7 @@ export type ChatWatchUncheckedUpdateWithoutProjectInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fires?: Prisma.ChatWatchFireUncheckedUpdateManyWithoutWatchNestedInput
 }
 
@@ -1211,6 +1249,7 @@ export type ChatWatchUncheckedUpdateManyWithoutProjectInput = {
   lastFiredAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   fireCount?: Prisma.IntFieldUpdateOperationsInput | number
   lastEvent?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastPingedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
 }
 
 
@@ -1264,6 +1303,7 @@ export type ChatWatchSelect<ExtArgs extends runtime.Types.Extensions.InternalArg
   lastFiredAt?: boolean
   fireCount?: boolean
   lastEvent?: boolean
+  lastPingedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
   fires?: boolean | Prisma.ChatWatch$firesArgs<ExtArgs>
@@ -1290,6 +1330,7 @@ export type ChatWatchSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ext
   lastFiredAt?: boolean
   fireCount?: boolean
   lastEvent?: boolean
+  lastPingedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
 }, ExtArgs["result"]["chatWatch"]>
@@ -1314,6 +1355,7 @@ export type ChatWatchSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ext
   lastFiredAt?: boolean
   fireCount?: boolean
   lastEvent?: boolean
+  lastPingedAt?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
 }, ExtArgs["result"]["chatWatch"]>
@@ -1338,9 +1380,10 @@ export type ChatWatchSelectScalar = {
   lastFiredAt?: boolean
   fireCount?: boolean
   lastEvent?: boolean
+  lastPingedAt?: boolean
 }
 
-export type ChatWatchOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "kind" | "targetId" | "params" | "baseline" | "label" | "note" | "summary" | "recurring" | "status" | "createdAt" | "expiresAt" | "closedAt" | "lastFiredAt" | "fireCount" | "lastEvent", ExtArgs["result"]["chatWatch"]>
+export type ChatWatchOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "projectId" | "conversationId" | "kind" | "targetId" | "params" | "baseline" | "label" | "note" | "summary" | "recurring" | "status" | "createdAt" | "expiresAt" | "closedAt" | "lastFiredAt" | "fireCount" | "lastEvent" | "lastPingedAt", ExtArgs["result"]["chatWatch"]>
 export type ChatWatchInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.ChatWatch$projectArgs<ExtArgs>
@@ -1416,6 +1459,10 @@ export type $ChatWatchPayload<ExtArgs extends runtime.Types.Extensions.InternalA
      * TER-1115: the last event it caught (finished, merged…), for the chat's "terminou às 14:32"
      */
     lastEvent: string | null
+    /**
+     * TER-1141: when the person last asked the concierge for its status from the chat ("ping")
+     */
+    lastPingedAt: Date | null
   }, ExtArgs["result"]["chatWatch"]>
   composites: {}
 }
@@ -1861,6 +1908,7 @@ export interface ChatWatchFieldRefs {
   readonly lastFiredAt: Prisma.FieldRef<"ChatWatch", 'DateTime'>
   readonly fireCount: Prisma.FieldRef<"ChatWatch", 'Int'>
   readonly lastEvent: Prisma.FieldRef<"ChatWatch", 'String'>
+  readonly lastPingedAt: Prisma.FieldRef<"ChatWatch", 'DateTime'>
 }
     
 

@@ -331,6 +331,8 @@ export const watchViewSchema = z.object({
   last_event: z.string().nullable().optional(),
   last_fired_at: z.string().nullable().optional(),
   target_state: z.string().nullable().optional(),
+  /** TER-1141: when the person last asked the concierge for its status ("ping"). Optional: an older server leaves it out. */
+  last_pinged_at: z.string().nullable().optional(),
 });
 export type TWatchView = z.infer<typeof watchViewSchema>;
 

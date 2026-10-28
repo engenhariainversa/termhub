@@ -95,4 +95,19 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatWatchesRepository (Po
     expect(await repo.purgeClosedBefore(new Date(Date.now() + 1000))).toBeGreaterThanOrEqual(2);
     expect(await repo.findById(open.id)).toBeNull();
   });
+
+  it('TER-1141: pings an open watch of its owner once per gap, two at once pass once, and unping gives it back', async () => {
+    const w = await repo.create(input(), t0);
+    const [a, b] = await Promise.all([repo.ping(w.id, userId, 30_000, t0), repo.ping(w.id, userId, 30_000, t0)]);
+    expect([a, b].filter(Boolean)).toHaveLength(1);
+    expect((await repo.findById(w.id))?.last_pinged_at).toBe(t0.toISOString());
+    expect(await repo.ping(w.id, userId, 30_000, new Date(t0.getTime() + 10_000))).toBeNull();
+    expect(await repo.ping(w.id, otherUserId, 30_000, new Date(t0.getTime() + 60_000))).toBeNull();
+    const later = new Date(t0.getTime() + 30_000);
+    expect((await repo.ping(w.id, userId, 30_000, later))?.last_pinged_at).toBe(t0.toISOString());
+    await repo.unping(w.id, later, t0.toISOString());
+    expect(await repo.findById(w.id)).toMatchObject({ status: 'open', last_pinged_at: t0.toISOString() });
+    await repo.cancel(w.id, userId, t0);
+    expect(await repo.ping(w.id, userId, 30_000, new Date(t0.getTime() + 120_000))).toBeNull();
+  });
 });

@@ -149,6 +149,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    *  replaced whole by each `watches` event. */
   const [watches, setWatches] = useState<ChatWatch[]>([]);
   const [cancelingWatchId, setCancelingWatchId] = useState<string | null>(null);
+  const [pingingWatchId, setPingingWatchId] = useState<string | null>(null);
   const [watchErrors, setWatchErrors] = useState<Record<string, string>>({});
   /** The tabs' questions of this conversation (spec 2026-09-25 §6.2), from `GET /api/chat` and the three events. */
   const [tabQuestions, setTabQuestions] = useState<TabQuestion[]>([]);
@@ -564,6 +565,27 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   }, []);
   const onCancelWatch = useCallback((id: string) => void cancelWatch(id), [cancelWatch]);
+
+  /** "Perguntar o status agora" (TER-1141): one watch, or `'all'` for "status de tudo". The concierge answers
+   *  in the conversation; the list comes back with "status pedido às…". 404 on one watch: it is gone. */
+  const pingWatch = useCallback(
+    async (id: string) => {
+      setPingingWatchId(id);
+      setWatchErrors(({ [id]: _dropped, ...rest }) => rest);
+      try {
+        const { watches: next } = id === 'all' ? await api.pingChatWatches(projectId) : await api.pingChatWatch(id);
+        setWatches(next);
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404 && id !== 'all') setWatches((prev) => prev.filter((w) => w.id !== id));
+        else setWatchErrors((prev) => ({ ...prev, [id]: e instanceof ApiError ? e.message : i18n.t('Não foi possível pedir o status') }));
+      } finally {
+        setPingingWatchId(null);
+      }
+    },
+    [projectId],
+  );
+  const onPingWatch = useCallback((id: string) => void pingWatch(id), [pingWatch]);
+  const onPingAllWatches = useCallback(() => void pingWatch('all'), [pingWatch]);
 
   /** A click on a tab question's card is the answer: no confirmation, no model turn. */
   const answerQuestion = useCallback(async (id: string, body: TabQuestionAnswer) => {
@@ -1186,7 +1208,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       </ChatThread>
       {/* What waits on the person, however far up it sits (TER-477): hidden while nothing does. */}
       {/* What the concierge keeps an eye on for this conversation (TER-1099): hidden while nothing. */}
-      <ChatWatches watches={watches} cancelingId={cancelingWatchId} errors={watchErrors} onCancel={onCancelWatch} />
+      <ChatWatches watches={watches} cancelingId={cancelingWatchId} errors={watchErrors} onCancel={onCancelWatch} pingingId={pingingWatchId} onPing={onPingWatch} onPingAll={onPingAllWatches} />
       <ChatPendingBar entries={timeline} batchDeciding={batchDeciding} onApprove={approveReversible} onLocate={unstick} />
       {/* A host that cannot run the message is why the box refuses, and the box says so. The send and
        *  decision errors go in its status line too: a line that mounts above the thread shifts it.

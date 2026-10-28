@@ -169,6 +169,9 @@ export const cancelSubagentResponse = z.object({ subagent: subagentViewSchema })
 /** `DELETE chat/watches/:id`'s payload (TER-1099): the watch as it ended. */
 export const cancelWatchResponse = z.object({ watch: watchViewSchema });
 
+/** `POST chat/watches/:id/ping` and `POST chat/watches/ping` (TER-1141): the scope's watches after the ping. */
+export const pingWatchResponse = z.object({ watches: z.array(watchViewSchema) });
+
 /** `GET me` (P§6). */
 export const meResponse = z.object({
   user: z.object({ id: z.string(), email: z.string(), name: z.string() }),

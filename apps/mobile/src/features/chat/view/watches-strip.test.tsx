@@ -51,4 +51,22 @@ describe('WatchesStrip (TER-1099)', () => {
     await fireEvent.press(screen.getByRole('button', { name: 'Cancelar acompanhamento de Te aviso quando a aba api parar' }));
     expect(onCancel).toHaveBeenCalledWith('w2');
   });
+
+  it('TER-1141: a ping beside ✕ asks the status of that watch, and the row says when it was asked', async () => {
+    const onPing = jest.fn();
+    const w = watch({ summary: 'Te aviso quando o PR #511 for mesclado', last_pinged_at: new Date(2026, 9, 21, 8, 50).toISOString() });
+    await render(<WatchesStrip watches={[w]} onCancel={jest.fn()} onPing={onPing} now={NOW} />);
+    expect(screen.getByText('status pedido às 08:50 · até 18:00')).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Perguntar o status de Te aviso quando o PR #511 for mesclado agora' }));
+    expect(onPing).toHaveBeenCalledWith('w1');
+  });
+
+  it('TER-1141: the folded strip asks the status of everything; no ping without onPing', async () => {
+    const onPing = jest.fn();
+    const { rerender } = await render(<WatchesStrip watches={[watch(), watch({ id: 'w2' })]} onCancel={jest.fn()} onPing={onPing} now={NOW} />);
+    await fireEvent.press(screen.getByTestId('watches-ping-all'));
+    expect(onPing).toHaveBeenCalledWith(null);
+    await rerender(<WatchesStrip watches={[watch()]} onCancel={jest.fn()} now={NOW} />);
+    expect(screen.queryByTestId('watch-ping-w1')).toBeNull();
+  });
 });

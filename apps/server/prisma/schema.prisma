@@ -1421,6 +1421,8 @@ model ChatWatch {
   fireCount      Int             @default(0) @map("fire_count")
   /// TER-1115: the last event it caught (finished, merged…), for the chat's "terminou às 14:32"
   lastEvent      String?         @map("last_event")
+  /// TER-1141: when the person last asked the concierge for its status from the chat ("ping")
+  lastPingedAt   DateTime?       @map("last_pinged_at")
   fires          ChatWatchFire[]
 
   @@index([status, kind])

@@ -26,6 +26,8 @@ export interface ChatWatch {
   fire_count: number;
   /** TER-1115: the last event it caught (`finished`, `merged`…), null until it fires. */
   last_event: string | null;
+  /** TER-1141: when the person last asked for its status from the chat; null until then. */
+  last_pinged_at: string | null;
 }
 
 export interface NewChatWatch {
@@ -77,6 +79,7 @@ const map = (r: PrismaWatch): ChatWatch | null =>
         params: r.params as unknown as WatchParams, baseline: (r.baseline ?? {}) as Record<string, unknown>, label: r.label, note: r.note,
         summary: r.summary, recurring: r.recurring, status: r.status as WatchStatus, created_at: r.createdAt.toISOString(), expires_at: r.expiresAt.toISOString(),
         closed_at: r.closedAt?.toISOString() ?? null, last_fired_at: r.lastFiredAt?.toISOString() ?? null, fire_count: r.fireCount, last_event: r.lastEvent,
+        last_pinged_at: r.lastPingedAt?.toISOString() ?? null,
       }
     : null;
 const mapKnown = (rows: PrismaWatch[]) => rows.flatMap((r) => { const m = map(r); return m ? [m] : []; });
@@ -133,6 +136,26 @@ export class ChatWatchesRepository {
     const { count } = await this.db.chatWatch.updateMany({ where: { id, userId, status: 'open' }, data: { status: 'cancelled', closedAt: now } });
     if (count === 0) return null;
     return this.findById(id);
+  }
+
+  /**
+   * TER-1141: marks a "ping" on one open watch of this user, unless it had one less than `gapMs` ago — the
+   * row decides, so two clicks (or two colours) never both pass. Answers the watch as it was before (its
+   * previous `last_pinged_at`, for `unping`), or null when it is not theirs, not open, or pinged too recently.
+   */
+  async ping(id: string, userId: string, gapMs: number, now = new Date()): Promise<ChatWatch | null> {
+    const before = await this.findById(id);
+    if (!before || before.user_id !== userId || before.status !== 'open') return null;
+    const { count } = await this.db.chatWatch.updateMany({
+      where: { id, userId, status: 'open', OR: [{ lastPingedAt: null }, { lastPingedAt: { lte: new Date(now.getTime() - gapMs) } }] },
+      data: { lastPingedAt: now },
+    });
+    return count === 1 ? before : null;
+  }
+
+  /** Puts back the `last_pinged_at` a ping replaced, when the wake it was for could not start. */
+  async unping(id: string, pingedAt: Date, previous: string | null): Promise<void> {
+    await this.db.chatWatch.updateMany({ where: { id, lastPingedAt: pingedAt }, data: { lastPingedAt: previous ? new Date(previous) : null } });
   }
 
   /**

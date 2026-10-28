@@ -1897,6 +1897,37 @@ describe('watches ("Acompanhando", TER-1099)', () => {
     expect(chat.getState().error).toBeNull();
   });
 
+  it('TER-1141: pingWatch replaces the list with the server\'s (status pedido) and a refusal shows in the banner', async () => {
+    const { chat, api, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    handlers().onEvent(watchesEvent('c-termhub', [watch(), watch({ id: 'w2' })]));
+    const spy = jest.spyOn(api, 'pingWatch').mockResolvedValueOnce([watch({ last_pinged_at: '2026-10-28T12:00:00.000Z' }), watch({ id: 'w2' })]);
+    await chat.getState().pingWatch('w1');
+    expect(spy).toHaveBeenCalledWith(expect.anything(), 'w1', 'p-termhub');
+    expect(slot(chat, 'p-termhub').watches[0]!.last_pinged_at).toBe('2026-10-28T12:00:00.000Z');
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w2']);
+
+    jest.spyOn(api, 'pingWatch').mockRejectedValueOnce(new ApiError(429, 'PING_TOO_SOON', 'Você pediu o status há pouco.'));
+    await chat.getState().pingWatch(null);
+    expect(chat.getState().error).toBe('Você pediu o status há pouco.');
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1', 'w2']);
+
+    jest.spyOn(api, 'pingWatch').mockRejectedValueOnce(new ApiError(404, 'NOT_FOUND', 'Assinatura não encontrada'));
+    await chat.getState().pingWatch('w2');
+    expect(slot(chat, 'p-termhub').watches.map((w) => w.id)).toEqual(['w1']);
+  });
+
+  it('TER-1141: the mock pings once per 30 s', async () => {
+    const { chat, api, store } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    await chat.getState().send('me avise quando o PR mergear');
+    await jest.advanceTimersByTimeAsync(5000);
+    const [w] = slot(chat, 'p-termhub').watches;
+    const list = await api.pingWatch(store.getState().auth(), w!.id, 'p-termhub');
+    expect(list[0]!.last_pinged_at).toEqual(expect.any(String));
+    await expect(api.pingWatch(store.getState().auth(), null, 'p-termhub')).rejects.toMatchObject({ status: 429 });
+  });
+
   it('a failed cancel does not bring back a row a newer list no longer has', async () => {
     const { chat, api, handlers } = await setup();
     await openAndConnect(chat, 'p-termhub');

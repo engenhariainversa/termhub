@@ -20,7 +20,7 @@ class FakeWatches {
   constructor(private clock: () => Date) {}
 
   async create(input: NewChatWatch, now = this.clock()): Promise<ChatWatch> {
-    const w: ChatWatch = { id: `w${++this.n}`, ...input, summary: input.summary ?? null, last_event: null, expires_at: input.expires_at.toISOString(), status: 'open', created_at: now.toISOString(), closed_at: null, last_fired_at: null, fire_count: 0 };
+    const w: ChatWatch = { id: `w${++this.n}`, ...input, summary: input.summary ?? null, last_event: null, expires_at: input.expires_at.toISOString(), status: 'open', created_at: now.toISOString(), closed_at: null, last_fired_at: null, fire_count: 0, last_pinged_at: null };
     this.watches.set(w.id, w);
     return { ...w };
   }

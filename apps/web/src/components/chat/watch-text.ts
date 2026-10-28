@@ -188,6 +188,9 @@ export function watchStatus(w: ChatWatch, now = new Date()): string {
     parts.push(i18n.t('{{what}} às {{time}}', { what: what ? i18n.t(what) : w.last_event, time: whenLabel(fired, now) }));
   }
   if (w.fire_count > 1) parts.push(i18n.t('avisou {{n}}×', { n: w.fire_count }));
+  // TER-1141: the person asked the concierge how it stands.
+  const pinged = dateOf(w.last_pinged_at);
+  if (pinged) parts.push(i18n.t('status pedido às {{time}}', { time: whenLabel(pinged, now) }));
   if (w.kind === 'reminder') {
     if (w.every_minutes) parts.push(i18n.t('a cada {{n}} min', { n: w.every_minutes }));
     if (w.recurring) parts.push(watchUntilLabel(w, now));

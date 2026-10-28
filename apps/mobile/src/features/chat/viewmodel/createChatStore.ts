@@ -178,6 +178,10 @@ export interface ChatState {
   /** "Cancelar" on a watch of the "Acompanhando" strip (TER-1099) — no PIN. The row goes at once; a
    * failure puts it back with the banner, unless the list changed meanwhile. One already gone (404) stays gone. */
   cancelWatch(watchId: string): Promise<void>;
+  /** "Perguntar o status agora" (TER-1141) — no PIN: wakes the concierge to say how the watch stands, and the
+   * list comes back with "status pedido às…". `null` is "status de tudo". A refusal (30 s not past) shows in
+   * the banner; a watch already gone (404) leaves the strip. */
+  pingWatch(watchId: string | null): Promise<void>;
   /** "Esquecer esta decisão" on a tab question's suggestion line (chat decision memory spec
    * 2026-09-26 §5.1): the card itself clears its own pre-selection regardless of the outcome, so a
    * session-ending error is the only thing worth reacting to here. */
@@ -1025,6 +1029,27 @@ export function createChatStore(deps: ChatDeps) {
               // list is newer than the row this tap took away.
               const { watch, index } = removed;
               if ((watchLists.get(key) ?? 0) === listSeq) patchSlot(key, (slot) => (slot.watches.some((w) => w.id === watch.id) ? {} : { watches: [...slot.watches.slice(0, index), watch, ...slot.watches.slice(index)] }));
+              fail(gen, e);
+            }
+          },
+
+          async pingWatch(watchId) {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return;
+            const key = keyOf(projectId);
+            const gen = generation;
+            set({ error: null });
+            try {
+              const watches = await api.pingWatch(session().auth(), watchId, projectId);
+              if (gen !== generation) return;
+              watchListArrived(key);
+              patchSlot(key, () => ({ watches }));
+            } catch (e) {
+              if (gen !== generation) return;
+              if (watchId && isApiError(e) && e.status === 404) {
+                patchSlot(key, (slot) => ({ watches: slot.watches.filter((w) => w.id !== watchId) }));
+                return;
+              }
               fail(gen, e);
             }
           },
