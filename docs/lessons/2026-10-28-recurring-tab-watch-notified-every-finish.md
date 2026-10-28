@@ -3,7 +3,7 @@ symptom: "chat watch shows \"notified 24×\": a recurring tab watch woke the cha
 tags: [chat, watches, concierge, tab-state]
 evidence: fixed
 card: TER-1144
-pr: TBD
+pr: https://github.com/engenhariainversa/termhub/pull/548
 agent: claude
 date: 2026-10-28
 ---
