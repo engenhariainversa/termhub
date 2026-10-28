@@ -7,7 +7,7 @@ import { useTranslation } from '@/i18n';
 import type { SchemeName } from '@/theme/tokens';
 import { AppText, Button, useSchemeName } from '@/ui';
 import { failureSentence } from '../model/copy';
-import { limitSentence, swapSentence } from '../model/notice';
+import { limitRepeatSentence, limitSentence, swapSentence } from '../model/notice';
 import { splitSettled } from '../model/markdown-split';
 import type { ChatMessage } from '../model/types';
 import { isWebUrl } from '../model/links';
@@ -32,6 +32,8 @@ type Props = {
   /** Where a Markdown path in the answer is looked for (spec 2026-10-04 file preview): the chat's project
    *  or the session's tab. Absent: paths stay plain text. */
   fileContext?: { projectId?: string | null; tabId?: string | null };
+  /** The answer before this one stopped on the same usage limit: the line is said in short (TER-1144). */
+  limitRepeat?: boolean;
 };
 
 /** A tap on a link of the answer: a Markdown path opens its preview; an http(s) URL, the system's browser. */
@@ -52,7 +54,7 @@ const SettledMarkdown = memo(function SettledMarkdown({ text, scheme, onLink }: 
  * row's props: a delta re-renders only the bubble it streams into, and inside it only the tail after
  * the last blank line is re-parsed (`splitSettled`); the settled prefix keeps its parsed tree. When
  * the final text lands the whole body renders once — the same markdown, so nothing reflows. */
-export const MessageBubble = memo(function MessageBubble({ message, streamed, started, onRetry, onOpenReply, highlighted = false, fileContext }: Props) {
+export const MessageBubble = memo(function MessageBubble({ message, streamed, started, onRetry, onOpenReply, highlighted = false, fileContext, limitRepeat = false }: Props) {
   const { t } = useTranslation();
   const scheme = useSchemeName();
   const projectId = fileContext?.projectId ?? null;
@@ -112,7 +114,7 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
       {/* A file the assistant published from a machine (TER-1086): preview and "Baixar", on the answer's own surface. */}
       {message.attachments && message.attachments.length > 0 ? <MessageAttachments attachments={message.attachments} tone="surface" /> : null}
       {message.error_code !== null ? (
-        <Text className="text-sm text-app-danger">{message.error_code === 'USAGE_LIMIT' ? limitSentence(message.notice) : failureSentence(message.error_code)}</Text>
+        <Text className="text-sm text-app-danger">{message.error_code === 'USAGE_LIMIT' ? (limitRepeat ? limitRepeatSentence(message.notice) : limitSentence(message.notice, undefined, undefined, projectId !== null)) : failureSentence(message.error_code)}</Text>
       ) : !body && started ? (
         <AppText variant="muted">{t('pensando…')}</AppText>
       ) : !body ? (

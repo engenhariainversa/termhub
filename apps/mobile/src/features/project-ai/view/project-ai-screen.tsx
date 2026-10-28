@@ -7,6 +7,7 @@ import { AppText, Banner, Button, Screen } from '@/ui';
 import {
   accountLabel,
   addAccount,
+  chatMachinesOf,
   CLAUDE_ALIASES,
   modelError,
   modelWarning,
@@ -15,6 +16,7 @@ import {
   PROVIDER_LABEL,
   providersOf,
   removeAccount,
+  setChatMachine,
   setModel,
   type ModelDraft,
   type Provider,
@@ -139,6 +141,18 @@ export function ProjectAiView({ projectId }: { projectId: string }) {
                     <Switch accessibilityLabel={t('Incluir {{name}}', { name: o.label })} value={false} onValueChange={(on) => (on ? edit((d) => addAccount(d, o.id)) : undefined)} />
                   </View>
                 ))}
+              </View>
+            ) : null}
+            {chatMachinesOf(draft, available).length > 0 ? (
+              <View className="gap-2">
+                <AppText variant="label">{t('Máquina do concierge')}</AppText>
+                <View className="flex-row flex-wrap gap-2">
+                  <Choice label={t('Automática')} selected={draft.chatMachineId === null} onPress={() => edit((d) => setChatMachine(d, null))} />
+                  {chatMachinesOf(draft, available).map((m) => (
+                    <Choice key={m.id} label={m.name} selected={draft.chatMachineId === m.id} onPress={() => edit((d) => setChatMachine(d, m.id))} />
+                  ))}
+                </View>
+                <AppText variant="muted">{t('O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.')}</AppText>
               </View>
             ) : null}
             {providersOf(available).map((provider) => (

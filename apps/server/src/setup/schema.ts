@@ -97,6 +97,10 @@ export const aiSchema = z
   .object({
     accounts: z.array(z.string().min(1).max(64)).max(20).default([]),
     models: z.object({ claude: modelSchema, chatgpt: modelSchema }).default({}),
+    /** TER-1144: the machine the project chat (concierge) runs on, with its listed accounts in order. null =
+     *  automatic: the first listed account with room, on any machine. A machine that is offline or has no
+     *  listed account with room also falls back to automatic. */
+    chat_machine_id: z.string().min(1).max(64).nullable().default(null),
   })
   .superRefine((d, ctx) => {
     if (new Set(d.accounts).size !== d.accounts.length) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['accounts'], message: 'Conta repetida' });

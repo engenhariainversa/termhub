@@ -71,6 +71,8 @@ export function ProjectAiCard({ project }: { project: Project }) {
   const providersHere = PROVIDERS.filter((p) => available.some((a) => a.provider === p.key));
   const invalid = PROVIDERS.some((p) => ai.models[p.key] !== null && !MODEL_RE.test(ai.models[p.key] ?? ''));
   const dirty = !sameAi(ai, saved);
+  // TER-1144: the machines with a Claude account of the project, where its chat may be pinned (the saved one stays listed)
+  const chatMachines = [...new Map(available.filter((a) => a.provider === 'claude' && (included.includes(a.id) || a.machine_id === ai.chat_machine_id)).map((a) => [a.machine_id, { id: a.machine_id, name: a.machine_name }])).values()];
 
   const save = async () => {
     setBusy(true);
@@ -153,6 +155,30 @@ export function ProjectAiCard({ project }: { project: Project }) {
           )}
           <p className="text-xs text-fg-dim">
             {t('A primeira conta com limite livre inicia os agentes e o chat do projeto; quando ela bate o limite, a troca vai para a próxima da lista.')}
+          </p>
+        </div>
+      )}
+
+      {chatMachines.length > 0 && (
+        <div>
+          <label className="label" htmlFor="chat-machine">
+            {t('Máquina do concierge')}
+          </label>
+          <select
+            id="chat-machine"
+            className="input"
+            value={ai.chat_machine_id ?? ''}
+            onChange={(e) => setAi({ ...ai, chat_machine_id: e.target.value === '' ? null : e.target.value })}
+          >
+            <option value="">{t('Automática (a primeira conta com limite livre, em qualquer máquina)')}</option>
+            {chatMachines.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-fg-dim">
+            {t('O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.')}
           </p>
         </div>
       )}

@@ -492,5 +492,8 @@
   "Cards que esperam uma pessoa ou terceiros": "Tarjetas que esperan a una persona o a terceros",
   "Coluna {{name}} aguardando": "Columna {{name}} en espera",
   "aguardando": "en espera",
-  "{{what}}; grava às {{time}}": "{{what}}; se guarda a las {{time}}"
+  "{{what}}; grava às {{time}}": "{{what}}; se guarda a las {{time}}",
+  "Máquina do concierge": "Máquina del concierge",
+  "Automática (a primeira conta com limite livre, em qualquer máquina)": "Automática (la primera cuenta con límite disponible, en cualquier máquina)",
+  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "El chat del proyecto corre en esta máquina, con sus cuentas en el orden de arriba. Si está offline o sin cuenta con límite disponible, vuelve a la automática."
 }

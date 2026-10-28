@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n';
 import type { TProjectAiOption } from '@/services/api/contract';
-import { accountLabel, addAccount, canSave, draftFrom, modelError, modelValid, modelWarning, moveAccount, payload, PROJECT_AI_MSG, providersOf, removeAccount, setModel } from './project-ai';
+import { accountLabel, addAccount, canSave, chatMachinesOf, draftFrom, modelError, modelValid, modelWarning, moveAccount, payload, PROJECT_AI_MSG, providersOf, removeAccount, sameAi, setChatMachine, setModel } from './project-ai';
 
 const AVAILABLE: TProjectAiOption[] = [
   { id: 'a1', label: 'Pessoal', provider: 'claude', machine_id: 'm1', machine_name: 'jarvis', default: true },
@@ -113,5 +113,22 @@ describe('canSave', () => {
   it('does not count a saved account the project can no longer list as a change', () => {
     const withGone = { ...saved, accounts: ['gone', 'a1'] };
     expect(canSave(draftFrom(withGone, AVAILABLE), withGone, AVAILABLE)).toBe(false);
+  });
+});
+
+describe('concierge machine (TER-1144)', () => {
+  const opts = [
+    { id: 'a1', label: 'Claude', provider: 'claude', machine_id: 'm1', machine_name: 'jarvis', default: true },
+    { id: 'a2', label: 'Claude', provider: 'claude', machine_id: 'm2', machine_name: 'hulk', default: true },
+    { id: 'c1', label: 'Codex', provider: 'chatgpt', machine_id: 'm3', machine_name: 'stark', default: true },
+  ] as const;
+
+  it('offers the machines of the listed Claude accounts and saves the choice', () => {
+    const draft = draftFrom({ accounts: ['a1', 'c1'], models: { claude: null, chatgpt: null } }, opts as never);
+    expect(draft.chatMachineId).toBeNull();
+    expect(chatMachinesOf(draft, opts as never)).toEqual([{ id: 'm1', name: 'jarvis' }]);
+    const picked = setChatMachine(draft, 'm1');
+    expect(payload(picked, opts as never)).toMatchObject({ chat_machine_id: 'm1' });
+    expect(sameAi(payload(picked, opts as never), { accounts: ['a1', 'c1'], models: { claude: null, chatgpt: null } })).toBe(false);
   });
 });
