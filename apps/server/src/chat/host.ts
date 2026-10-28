@@ -1,5 +1,5 @@
 import { CAPABILITY_CLAUDE } from '@termhub/agent-protocol';
-import { projectAccountsOn } from '../ai/project-accounts.js';
+import { loadProjectAi, projectAccountsOn } from '../ai/project-accounts.js';
 import { loginOf, usableIn } from '../ai/exclusive.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, User } from '../db/repositories/types.js';
@@ -118,6 +118,13 @@ export async function resolveHost(
   // (`undefined`), the run conversation is the account-wide one itself.
   const runSessionId = opts.runSessionId !== undefined ? opts.runSessionId : conversation.cli_session_id;
   const sessionAtStake = chosen === undefined && runSessionId !== null;
+
+  // TER-1144: a project that lists Claude accounts runs its chat on them, in its order, on whichever of
+  // their machines is online — not only on the account-wide chat's machine.
+  if (opts.project && ctx.repos.projectSetup && ctx.repos.projectMachines) {
+    const own = await projectChoice(ctx, user, candidates, opts.project, opts.requires, opts.wait);
+    if (own) return { kind: 'ready', sessionAtStake, ...own };
+  }
   // A chosen machine that is gone (deleted, or no longer this user's) behaves exactly as if nothing
   // had ever been chosen: with one machine there is nothing to ask, with several the user picks.
   const machine = chosen ?? (candidates.length === 1 ? candidates[0] : undefined);
@@ -176,6 +183,89 @@ export async function resolveHost(
  * comes back as `lost`, so the screen can say the chosen account is not the one running — the silent
  * half of this fallback was the whole complaint.
  */
+/**
+ * Accounts a project chat met the usage limit on (TER-1144), with when they are worth trying again: the
+ * next message starts on the next account of the project's order instead of hitting the same limit.
+ * In-process: a deploy forgets it, and the first message after one meets the limit and moves on again.
+ */
+const limitedUntil = new Map<string, number>();
+/** How long an account whose limit came without a reset time is left aside. */
+const LIMITED_FALLBACK_MS = 15 * 60_000;
+
+export function markLimited(accountId: string, resetsAt: string | null, now = Date.now()): void {
+  const at = resetsAt ? Date.parse(resetsAt) : NaN;
+  limitedUntil.set(accountId, Number.isFinite(at) && at > now ? at : now + LIMITED_FALLBACK_MS);
+}
+
+export function isLimited(accountId: string, now = Date.now()): boolean {
+  const until = limitedUntil.get(accountId);
+  if (until === undefined) return false;
+  if (until > now) return true;
+  limitedUntil.delete(accountId);
+  return false;
+}
+
+/** Tests only. */
+export function clearLimited(): void {
+  limitedUntil.clear();
+}
+
+/** Whether a machine's agent can run a chat now: connected, and saying it runs Claude (and `requires`). */
+export function machineReady(agents: Pick<HostAgents, 'capabilities'>, machineId: string, requires?: string): boolean {
+  const capabilities = agents.capabilities(machineId);
+  return capabilities !== null && capabilities.includes(CAPABILITY_CLAUDE) && (!requires || capabilities.includes(requires));
+}
+
+/**
+ * The project's Claude accounts on the user's agent machines linked to the project, in the project's
+ * order (TER-1144): ids that name no account, accounts of another provider, of a machine not linked or
+ * not the user's, and accounts exclusive to another project are left out.
+ */
+export async function projectChatAccounts(
+  repos: Pick<Repositories, 'aiAccounts' | 'projectSetup' | 'projectMachines'>,
+  userId: string,
+  projectId: string,
+  machines: Machine[],
+): Promise<{ accounts: { account: AiAccount; machine: Machine }[]; model: string | null }> {
+  const [{ ai, accounts }, links] = await Promise.all([loadProjectAi(repos, projectId, userId), repos.projectMachines.listByProject(projectId)]);
+  const linked = new Set(links.map((l) => l.machine_id));
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const listed: { account: AiAccount; machine: Machine }[] = [];
+  for (const id of ai.accounts) {
+    const account = byId.get(id);
+    const machine = account && machines.find((m) => m.id === account.machine_id && m.type === 'agent');
+    if (account && machine && account.provider === 'claude' && linked.has(machine.id) && usableIn(account, projectId)) listed.push({ account, machine });
+  }
+  return { accounts: listed, model: ai.models.claude };
+}
+
+/**
+ * The account a project chat runs on (TER-1144): the first of the project's accounts whose machine is
+ * ready and that has not just met its usage limit; when all of them did, the one the chat last answered
+ * on, else the first ready. null when the project lists none or none of their machines is online: the
+ * account-wide host decides, as before.
+ */
+async function projectChoice(
+  ctx: HostContext,
+  user: User,
+  machines: Machine[],
+  project: { id: string; accountId: string | null },
+  requires: string | undefined,
+  wait: boolean | 'handover' | undefined,
+): Promise<{ machine: Machine; configDir: string | null; account: HostAccount; model: string | null } | null> {
+  const repos = { ...ctx.repos, projectSetup: ctx.repos.projectSetup!, projectMachines: ctx.repos.projectMachines! };
+  const { accounts, model } = await projectChatAccounts(repos, user.id, project.id, machines);
+  if (accounts.length === 0) return null;
+  if (wait) {
+    const distinct = [...new Map(accounts.map((a) => [a.machine.id, a.machine])).values()];
+    await Promise.all(distinct.map((m) => (wait === 'handover' ? ctx.agents.awaitHandover(m) : ctx.agents.awaitAgent(m))));
+  }
+  const ready = accounts.filter((a) => machineReady(ctx.agents, a.machine.id, requires));
+  const pick = ready.find((a) => !isLimited(a.account.id)) ?? ready.find((a) => a.account.id === project.accountId) ?? ready[0];
+  if (!pick) return null;
+  return { machine: pick.machine, configDir: pick.account.config_dir, account: { kind: 'chosen', id: pick.account.id, label: pick.account.label, via: 'project' }, model };
+}
+
 async function accountFor(ctx: HostContext, accountId: string | null, machine: Machine): Promise<{ configDir: string | null; account: HostAccount }> {
   if (accountId === null) return { configDir: null, account: { kind: 'default' } };
   const account = await ctx.repos.aiAccounts.findById(accountId);

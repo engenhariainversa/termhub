@@ -1,6 +1,7 @@
 import { linkClaudeSession } from '../ai/claude-session.js';
 import { getAccountUsage, type AiAccountUsage } from '../ai/index.js';
-import { rankCandidates } from '../control/account-swap.js';
+import { peakUtilization, rankCandidates, SWAP_MAX_UTILIZATION } from '../control/account-swap.js';
+import { isLimited, projectChatAccounts } from './host.js';
 import { projectAccountsOn } from '../ai/project-accounts.js';
 import { usableIn } from '../ai/exclusive.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -78,6 +79,30 @@ export interface FallbackPick {
   account: AiAccount;
   /** Resume the conversation's session there (false: a fresh session). */
   resume: boolean;
+  /** Set when the account is on another machine than the run's (TER-1144): the turn goes there, fresh. */
+  machine?: Machine;
+}
+
+/**
+ * A project chat whose machine has no account left (TER-1144): the next of the project's accounts, in
+ * the project's order, on another of its machines that is ready (`ready`), not tried in this run, not
+ * known to be at its limit and with room on a fresh reading (an unknown reading is tried). The session
+ * cannot follow it to another machine, so the turn starts a fresh one there.
+ */
+export async function pickProjectElsewhere(
+  repos: Pick<Repositories, 'aiAccounts' | 'machines' | 'projectSetup' | 'projectMachines'>,
+  input: { userId: string; projectId: string; machineId: string; tried: Set<string>; model: string | null; ready: (machine: Machine) => boolean },
+): Promise<FallbackPick | null> {
+  const machines = await repos.machines.list(input.userId);
+  const { accounts } = await projectChatAccounts(repos, input.userId, input.projectId, machines);
+  for (const { account, machine } of accounts) {
+    if (machine.id === input.machineId || input.tried.has(account.id) || isLimited(account.id) || !input.ready(machine)) continue;
+    input.tried.add(account.id);
+    const peak = peakUtilization(await getAccountUsage(account, machine, true), input.model);
+    if (peak !== null && peak >= SWAP_MAX_UTILIZATION) continue;
+    return { account, resume: false, machine };
+  }
+  return null;
 }
 
 /**
