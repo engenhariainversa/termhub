@@ -34,7 +34,8 @@ it('states in pt-BR', () => {
   expect(statusLabel(choice())).toBe('');
   expect(statusLabel(choice({ status: 'answered' }))).toBe('Respondida');
   expect(statusLabel(choice({ status: 'answered_in_tab' }))).toBe('Respondida na aba');
-  expect(statusLabel(choice({ status: 'expired' }))).toBe('Expirada');
+  expect(statusLabel(choice({ status: 'expired' }))).toBe('Encerrada — a aba foi fechada');
+  expect(statusLabel(choice({ status: 'expired', error_code: 'DISMISSED' }))).toBe('Dispensada');
   expect(statusLabel(choice({ status: 'failed', error_code: 'MACHINE_OFFLINE' }))).toBe('Falhou — a máquina está offline');
   expect(statusLabel(choice({ status: 'failed', error_code: 'WHATEVER' }))).toBe('Falhou — não foi possível digitar na aba');
 });
@@ -160,7 +161,8 @@ describe('compact line of a settled card (TER-1108)', () => {
     expect(compactQuestionLine(permission({ status: 'answered_in_tab', tab_name: 'codex · ChatGPT' }))).toBe('«codex · ChatGPT» · Bash · respondida na aba');
     expect(compactQuestionLine(permission({ status: 'answered', answer: { allow: true } }))).toBe('«api» · Bash · permitida');
     expect(compactQuestionLine(permission({ status: 'answered', answer: { allow: false, text: 'não' } }))).toBe('«api» · Bash · negada');
-    expect(compactQuestionLine(permission({ status: 'expired' }))).toBe('«api» · Bash · expirada');
+    expect(compactQuestionLine(permission({ status: 'expired' }))).toBe('«api» · Bash · encerrada, a aba foi fechada');
+    expect(compactQuestionLine(permission({ status: 'expired', error_code: 'DISMISSED' }))).toBe('«api» · Bash · dispensada');
     expect(compactQuestionLine(permission({ status: 'failed', error_code: 'MACHINE_OFFLINE' }))).toBe('«api» · Bash · falhou');
   });
   it('a choice card shows its first question, cut, and counts the others; a gone tab reads as "Uma aba"', () => {

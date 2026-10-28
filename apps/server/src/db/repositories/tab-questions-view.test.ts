@@ -12,6 +12,11 @@ it('never puts the permission queue mark on the wire; a failure code still trave
   expect(toTabQuestionView(row({ status: 'failed', error_code: 'MACHINE_OFFLINE' }), 'api').error_code).toBe('MACHINE_OFFLINE');
 });
 
+it('a dismissed question goes out expired with DISMISSED, the enum installed apps know; a dismissed suggestion stays dismissed (TER-1140)', () => {
+  expect(toTabQuestionView(row({ status: 'dismissed', answered_by: 'u1' }), 'api')).toMatchObject({ status: 'expired', error_code: 'DISMISSED' });
+  expect(toTabQuestionView(row({ kind: 'suggestion', payload: { text: 'x' }, status: 'dismissed' }), 'api')).toMatchObject({ status: 'dismissed', error_code: null });
+});
+
 it('a suggestion always carries context on the wire: null for a row stored before TER-96', () => {
   const s = row({ kind: 'suggestion', payload: { text: 'commit it' }, status: 'open', closed_at: null });
   expect(toTabQuestionView(s, 'api').payload).toEqual({ text: 'commit it', context: null });

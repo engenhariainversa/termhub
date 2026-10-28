@@ -148,6 +148,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
   const questionErrors = useChatStore((s) => s.questionErrors);
   const answerTabQuestion = useChatStore((s) => s.answerTabQuestion);
   const cancelAutoAnswer = useChatStore((s) => s.cancelAutoAnswer);
+  const dismissTabQuestion = useChatStore((s) => s.dismissTabQuestion);
   const loadTabQuestionScreen = useChatStore((s) => s.loadTabQuestionScreen);
   const busySuggestionIds = useChatStore((s) => s.busySuggestionIds);
   const suggestionErrors = useChatStore((s) => s.suggestionErrors);
@@ -219,6 +220,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
   const onRevoke = useCallback((grantId: string) => void revokeGrant(grantId), [revokeGrant]);
   const onAnswer = useCallback((id: string, body: TTabQuestionAnswerBody) => void answerTabQuestion(id, body), [answerTabQuestion]);
   const onCancelAutoAnswer = useCallback((id: string) => void cancelAutoAnswer(id), [cancelAutoAnswer]);
+  const onDismissQuestion = useCallback((id: string) => void dismissTabQuestion(id), [dismissTabQuestion]);
   const onForget = useCallback((decisionId: string) => forgetDecision(decisionId), [forgetDecision]);
   const onSendSuggestion = useCallback((id: string, text: string) => void sendTabSuggestion(id, text), [sendTabSuggestion]);
   const onDismissSuggestion = useCallback((id: string) => void dismissTabSuggestion(id), [dismissTabSuggestion]);
@@ -360,10 +362,11 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
           loadScreen={loadTabQuestionScreen}
           onForget={onForget}
           onCancelAutoAnswer={onCancelAutoAnswer}
+          onDismiss={onDismissQuestion}
         />
       </SwipeToReply>
     ),
-    [onReplyCard, answeringQuestionIds, questionErrors, onAnswer, loadTabQuestionScreen, onForget, onCancelAutoAnswer],
+    [onReplyCard, answeringQuestionIds, questionErrors, onAnswer, loadTabQuestionScreen, onForget, onCancelAutoAnswer, onDismissQuestion],
   );
   const renderItem = useCallback(
     ({ item }: { item: ChatEntry }) =>
