@@ -29,6 +29,7 @@ First written for TER-1122 (2026-10-27) from a read of the code on `main` plus t
 | Agent exited → resume card | ✅ | ✅ `codex resume --last` | ❌ never seen; the line would be `claude --continue` | ❌ | `chat/agent-exited.ts` | TER-1126 (Cursor) |
 | Account swap and usage-limit resume | ✅ | ❌ no limit detection | ❌ | ❌ | `control/account-swap.ts`, `monitor/state.ts` `isRateLimit` | TER-1128 (Codex) |
 | Token metering on the board | ✅ | ⚠️ shows "—" | ❌ | ❌ | `automation/usage.ts` | TER-1128 (Codex) |
+| Idle tabs closed by themselves (TER-1138) | ✅ state from hooks + screen at its prompt | ✅ state from hooks (trusted), last hook a turn end | ⚠️ state from hooks only, no screen check | ❌ reports no state, so never closed | `monitor/idle-tabs.ts` | TER-1124 (Gemini) |
 | Suggested next prompt / permission mode toggle | ✅ | ⚠️ reply card instead; no mode toggle | ❌ | ❌ | `chat/tab-suggestions.ts`, `routes/m-tabs.ts` | |
 
 Antigravity (`agy`) is like Gemini, minus the trust dialog (its screen has no rule yet): accounts and usage only.

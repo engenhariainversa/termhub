@@ -254,6 +254,9 @@ model Machine {
   aiUsageQuery          Boolean            @default(true) @map("ai_usage_query")
   /// R6 (TER-969): the dispatcher places automatic runs only on machines that accept them
   automationAllowed     Boolean            @default(true) @map("automation_allowed")
+  /// TER-1138: agent tabs idle or finished for this many hours are closed by themselves (monitor/idle-tabs.ts).
+  /// Opt-in per machine: null = never.
+  idleTabCloseHours     Int?               @map("idle_tab_close_hours")
   /// TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
   aiMemoryEnabled       Boolean            @default(false) @map("ai_memory_enabled")
   /// Its local server, loopback or private network only (null = http://127.0.0.1:49374)
