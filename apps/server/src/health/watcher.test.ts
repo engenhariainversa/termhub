@@ -29,6 +29,10 @@ function memoryStore() {
       else Object.assign(r, { level: a.level, detail: a.detail, last_seen_at: iso(now), ...(a.since ? { since_at: iso(a.since) } : {}) });
       return { ...r };
     },
+    async note(id: string, detail: HealthAlert['detail']) {
+      const r = rows.find((x) => x.id === id && !x.resolved_at);
+      if (r) r.detail = detail;
+    },
     async open(id: string, now: Date) {
       const r = rows.find((x) => x.id === id && !x.opened_at && !x.resolved_at);
       if (r) r.opened_at = iso(now);
@@ -73,6 +77,15 @@ describe('reconcile (TER-1121)', () => {
     // merged: the sign is gone
     expect(await reconcile(store, 'p', empty(at(135)), config)).toEqual([]);
     expect(store.rows[0].resolved_at).toBe(at(135).toISOString());
+  });
+
+  it('TER-1136: a ready PR held by a person\'s card opens at once, with the cards, and is told elsewhere', async () => {
+    const store = memoryStore();
+    const config = healthSchema.parse({});
+    const held = { ...readyPr, wait: 'merge_person_card', wait_detail: 'PST-3' };
+    const open = await reconcile(store, 'p', empty(at(0), { prs: [held] }), config);
+    expect(open.map((a) => [a.signal, a.opened_at])).toEqual([['pr_ready', at(0).toISOString()]]);
+    expect(open[0]!.detail).toMatchObject({ reason: 'merge_person_card', cards: 'PST-3', told_elsewhere: 1 });
   });
 
   it('seeing it again after it was resolved is a new episode, measured from then', async () => {
@@ -154,12 +167,65 @@ describe('the watcher (TER-1121)', () => {
   });
 
   it('without automatic work a light sign reaches the panel and, when it needs the person, the push — no concierge turn', async () => {
-    const machines = [{ id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: t0, agent_version: '0.30.0', has_work: true }];
+    const machines = [{ id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: t0, agent_version: '0.30.0', active_run: true }];
     const { watcher, notices, wake, tick } = setup((now) => empty(now, { automation: false, machines }));
     tick(15);
     await watcher.sweep();
     expect(notices.map((n) => n.headline)).toEqual(['Máquina hulk offline com trabalho do projeto há 15 min']);
     expect(wake).not.toHaveBeenCalled();
+  });
+
+  describe('a machine that drops and comes back (TER-1135)', () => {
+    const hulk = (lastSeen: Date) => ({ id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: lastSeen, agent_version: '0.30.0', active_run: true });
+    /** The machine offline from each `[from, to)` window, its last sighting the window's start; online otherwise. */
+    const flicker = (drops: [number, number][]) => (now: Date) => {
+      const drop = drops.find(([from, to]) => now >= at(from) && now < at(to));
+      return empty(now, { automation: false, machines: drop ? [hulk(at(drop[0]))] : [] });
+    };
+
+    it('oscillating: one alert, one push, counted, timed from the first drop', async () => {
+      const { watcher, store, notices, tick } = setup(flicker([[0, 20], [25, 45], [50, 80]]));
+      for (const min of [0, 15, 20, 25, 30, 40, 45, 50, 55, 60, 70]) {
+        tick(min);
+        await watcher.sweep();
+      }
+      expect(store.rows).toHaveLength(1);
+      expect(store.rows[0]).toMatchObject({ resolved_at: null, opened_at: at(15).toISOString(), since_at: t0.toISOString() });
+      expect(store.rows[0].detail).toEqual({ label: 'hulk', flaps: 2 });
+      expect(notices).toHaveLength(1);
+    });
+
+    it('back for good: the alert waits out the grace, then resolves; a later drop is a new episode', async () => {
+      const { watcher, store, notices, tick } = setup(flicker([[0, 20], [200, 300]]));
+      for (const min of [0, 15, 20, 30]) {
+        tick(min);
+        await watcher.sweep();
+      }
+      expect(store.rows[0]).toMatchObject({ resolved_at: null, detail: { label: 'hulk', back_at: at(20).toISOString() } });
+      tick(79);
+      await watcher.sweep();
+      expect(store.rows[0].resolved_at).toBeNull();
+      tick(80);
+      await watcher.sweep();
+      expect(store.rows[0].resolved_at).toBe(at(80).toISOString());
+      for (const min of [200, 215]) {
+        tick(min);
+        await watcher.sweep();
+      }
+      expect(store.rows[0]).toMatchObject({ resolved_at: null, opened_at: at(215).toISOString(), detail: { label: 'hulk' } });
+      expect(notices).toHaveLength(2);
+    });
+
+    it('holding only tabs stuck for days: no machine alert', async () => {
+      const tabs = [{ id: 'TER-742', name: 'TER-742', state: 'working', state_at: at(-3 * 24 * 60), machine_id: 'm', run: false }];
+      const { watcher, store, notices, tick } = setup((now) => empty(now, { automation: false, tabs, machines: [{ ...hulk(t0), active_run: false }] }));
+      for (const min of [0, 30]) {
+        tick(min);
+        await watcher.sweep();
+      }
+      expect(store.rows.map((r) => r.signal)).toEqual(['tab_stuck']);
+      expect(notices).toEqual([]);
+    });
   });
 
   it('a red base is on the panel only (the merge executor tells it, TER-1120); a base that never finishes is told', async () => {

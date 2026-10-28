@@ -68,6 +68,8 @@ export function describeFire(w: Pick<ChatWatch, 'kind' | 'label'>, f: Pick<ChatW
         }
         case 'ci_passed':
           return `${pr} passou no CI.`;
+        case 'merge_blocked':
+          return `${pr} não vai ser mesclado pelo termhub sozinho (motivo ${s(p.reason)}, head ${s(p.head_sha).slice(0, 7)}); list_automation_queue e list_automation_events dizem o que falta, e a pessoa decide.`;
         case 'deploy_ok':
           return `${pr} teve o deploy concluído${p.deploy_url ? ` (${s(p.deploy_url)})` : ''}.`;
         case 'deploy_failed':

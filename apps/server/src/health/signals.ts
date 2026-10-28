@@ -21,7 +21,12 @@ export interface Observation {
   /** when the sign started, as far as the snapshot tells; null = from the first time the watcher saw it */
   since: Date | null;
   detail: HealthDetail;
+  /** opens at once, whatever its minutes: the wait is a person's by policy, not by time (TER-1136) */
+  now?: boolean;
 }
+
+/** Merge waits only a person ends, which the merge executor already pushed and woke the chat about (TER-1136). */
+export const PERSON_WAITS: readonly string[] = ['merge_person_card'];
 
 /** Signs that run on every project: a person's own tabs and machines stall too. The rest need automation on. */
 export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline'];
@@ -61,6 +66,8 @@ export interface SnapshotPr {
   release_runs: { workflow: string; state: string; url: string | null }[];
   /** why the merge executor holds it (a `merge_*` reason), when it does */
   wait: string | null;
+  /** what the wait names besides its reason (the cards a held PR depends on, TER-1136); absent = nothing */
+  wait_detail?: string | null;
 }
 
 export interface SnapshotTab {
@@ -103,8 +110,8 @@ export interface SnapshotMachine {
   online: boolean;
   last_seen_at: Date | null;
   agent_version: string | null;
-  /** a tab of this project, or an active run, sits on it */
-  has_work: boolean;
+  /** an active run of this project sits on it (its tabs are in `HealthSnapshot.tabs`) */
+  active_run: boolean;
 }
 
 export interface SnapshotQueued {
@@ -143,15 +150,22 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   if (!config.enabled) return [];
   const out: Observation[] = [];
   const on = (signal: HealthSignal) => config.signals[signal].enabled && (s.automation || LIGHT_SIGNALS.includes(signal));
-  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail) => {
-    if (on(signal)) out.push({ signal, subject, level: LEVEL_OF[signal], since, detail });
+  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail, now = false) => {
+    if (on(signal)) out.push({ signal, subject, level: LEVEL_OF[signal], since, detail, ...(now ? { now } : {}) });
   };
 
-  // 1. a green PR, not a draft, still open while the autonomy lets termhub merge it
+  // 1. a green PR, not a draft, still open while the autonomy lets termhub merge it. One held by policy for
+  // a person (TER-1136) opens at once: waiting longer tells nothing more. The executor already pushed and woke
+  // the chat about it, so the watcher shows it and stays quiet (`told_elsewhere`), as for a red base.
   if (mergesAlone(s.autonomy)) {
     for (const pr of s.prs) {
       if (pr.state !== 'open' || pr.draft || pr.ci_state !== 'passed') continue;
-      add('pr_ready', pr.url, null, { label: `#${pr.number}`, url: pr.url, ref: pr.task_ref, title: pr.title, reason: pr.wait });
+      const person = !!pr.wait && PERSON_WAITS.includes(pr.wait);
+      add('pr_ready', pr.url, null, {
+        label: `#${pr.number}`, url: pr.url, ref: pr.task_ref, title: pr.title, reason: pr.wait,
+        ...(pr.wait_detail ? { cards: pr.wait_detail } : {}),
+        ...(person ? { told_elsewhere: 1 } : {}),
+      }, person);
     }
   }
 
@@ -197,7 +211,7 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // 7. an agent machine offline while it holds this project's work; 9. one below the minimum agent
   for (const m of s.machines) {
     if (!m.agent) continue;
-    if (!m.online && m.has_work) add('machine_offline', m.id, m.last_seen_at, { label: m.name });
+    if (!m.online && holdsWork(s, m, config)) add('machine_offline', m.id, m.last_seen_at, { label: m.name });
     if (m.online && m.agent_version && !versionAtLeast(m.agent_version, s.min_agent_version)) add('agent_outdated', m.id, null, { label: m.name, version: m.agent_version, min: s.min_agent_version });
   }
 
@@ -216,6 +230,24 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   }
   return out;
 }
+
+/**
+ * TER-1135: what counts as the project's work on a machine — an active run, or a tab with an event shortly
+ * before the machine was last seen (within the `tab_stuck` minutes). A tab sitting in "trabalhando" with no
+ * event for days is not work but its own sign (`tab_stuck`), and must not keep a machine alert alive.
+ */
+export function holdsWork(s: HealthSnapshot, m: SnapshotMachine, config: ProjectHealth): boolean {
+  if (m.active_run) return true;
+  const from = (m.last_seen_at ?? s.now).getTime() - config.signals.tab_stuck.minutes * 60_000;
+  return s.tabs.some((t) => t.machine_id === m.id && !!t.state_at && t.state_at.getTime() >= from);
+}
+
+/**
+ * TER-1135: signs whose subject flickers — a machine on a shaky Wi-Fi or going to sleep drops and comes back.
+ * Gone from the snapshot, such an alert stays for this long before it resolves; seen again meanwhile, it is
+ * the same episode (no new push, no new wake) and its `flaps` count goes up.
+ */
+export const FLAP_GRACE_MS: Partial<Record<HealthSignal, number>> = { machine_offline: 60 * 60_000 };
 
 /** Whether an observed sign has lasted past its minutes. `since` falls back to the alert's first sighting. */
 export function isDue(signal: HealthSignal, config: ProjectHealth, since: Date, now: Date): boolean {

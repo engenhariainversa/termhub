@@ -225,11 +225,12 @@ const CANCEL_TEXT: Record<string, string> = {
 };
 
 /** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
- *  over (TER-1049) or a cancel's (TER-974). */
+ *  over (TER-1049), a cancel's (TER-974) or a card untagged because its ticket already had work (TER-1110). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
   if (e.kind === 'escalated') return escalationEventText(p, locale);
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
+  if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
   if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });
   if (e.kind === 'run_cancelled') {

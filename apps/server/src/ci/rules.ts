@@ -26,6 +26,30 @@ export function refsIn(texts: Array<string | null>, key: string): number[] {
   return [...found];
 }
 
+/**
+ * TER-1136: the words that make a ref in a PR's title or body a link and not a passing mention — a
+ * dependency ("Depende de: TER-12", "Blocked by TER-12") or a card the PR closes ("Closes TER-12", "Fecha
+ * TER-12"). Matched as whole words, any case, optionally followed by `:` and markdown emphasis.
+ */
+const LINK_WORDS = [
+  'depends on', 'depende de', 'depende do', 'depende da', 'blocked by', 'bloqueado por', 'bloqueada por', 'requires', 'requer',
+  'closes', 'close', 'closed', 'fixes', 'fix', 'fixed', 'resolves', 'resolve', 'resolved', 'fecha', 'corrige',
+];
+
+/**
+ * Card numbers of `key` refs a PR's title and body name as a link (TER-1136): each ref of a list that follows
+ * one of `LINK_WORDS` ("Depende de: TER-1, TER-2 e TER-3"). A ref anywhere else is only cited.
+ */
+export function linkedRefsIn(texts: Array<string | null>, key: string): number[] {
+  const words = LINK_WORDS.map((w) => w.replace(/ /g, '\\s+')).join('|');
+  const ref = `${key}-\\d+(?!\\d)`;
+  const list = new RegExp(`(?<![A-Za-z0-9])(?:${words})(?![A-Za-z0-9])[\\s*_:]*((?<![A-Za-z0-9])${ref}(?:(?:[\\s*_,;&/]|\\b(?:e|and)\\b)+${ref})*)`, 'gi');
+  const one = new RegExp(`${key}-(\\d+)(?!\\d)`, 'gi');
+  const found = new Set<number>();
+  for (const text of texts) for (const m of (text ?? '').matchAll(list)) for (const r of m[1]!.matchAll(one)) found.add(Number(r[1]));
+  return [...found];
+}
+
 /** A re-run is a newer run of the same workflow file: only the latest one counts. */
 export function latestPerWorkflow(runs: WorkflowRun[]): WorkflowRun[] {
   const byPath = new Map<string, WorkflowRun>();

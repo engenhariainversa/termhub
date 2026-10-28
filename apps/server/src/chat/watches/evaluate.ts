@@ -43,7 +43,7 @@ export interface WatchProbe {
   tab(id: string): Promise<ProbeTab | null>;
   tabEventsAfter(tabId: string, after: Date, kinds: readonly TabState[]): Promise<{ id: string; kind: TabState; created_at: string }[]>;
   task(id: string): Promise<ProbeTask | null>;
-  pullRequests(watch: Pick<ChatWatch, 'user_id' | 'target_id' | 'params'>): Promise<TaskPullRequest[]>;
+  pullRequests(watch: Pick<ChatWatch, 'user_id' | 'target_id' | 'params'>): Promise<ProbePr[]>;
   machine(id: string): Promise<ProbeMachine | null>;
   latestAgentVersion(): Promise<string | null>;
 }
@@ -66,6 +66,12 @@ type Watch = Pick<ChatWatch, 'id' | 'user_id' | 'kind' | 'target_id' | 'params' 
 const wants = (w: Watch, event: string) => w.params.events.includes(event);
 const done = (w: Watch): WatchStatus | null => (w.recurring ? null : 'done');
 
+/**
+ * A PR row as the probe reads it: `merge_blocked` (TER-1136) is why termhub's merge executor will not merge its
+ * open head by itself (`merge_person_card`, `merge_no_ci`, `merge_needs_approval`), null when it said nothing.
+ */
+export type ProbePr = TaskPullRequest & { merge_blocked?: string | null };
+
 /** What a PR's baseline keeps of it: enough to tell each of its events from the previous state. */
 export interface PrSnap {
   state: string;
@@ -74,22 +80,30 @@ export interface PrSnap {
   deploy_state: CiState;
   merge_sha: string | null;
   releases: Record<string, CiState>;
+  /** the head's merge block, as `<reason>@<sha>`; absent in baselines written before TER-1136 */
+  blocked?: string | null;
 }
-export const prSnap = (p: TaskPullRequest): PrSnap => ({
+const blockOf = (p: ProbePr): string | null => (p.merge_blocked ? `${p.merge_blocked}@${p.head_sha}` : null);
+export const prSnap = (p: ProbePr): PrSnap => ({
   state: p.state,
   ci_state: p.ci_state,
   head_sha: p.head_sha,
   deploy_state: p.deploy_state,
   merge_sha: p.merge_commit_sha,
   releases: Object.fromEntries(p.release_runs.map((r) => [r.workflow, r.state])),
+  ...(p.merge_blocked ? { blocked: blockOf(p) } : {}),
 });
-/** One row per PR (a PR naming several cards has one row each). */
-const byUrl = (rows: TaskPullRequest[]): Map<string, TaskPullRequest> => {
-  const out = new Map<string, TaskPullRequest>();
-  for (const r of rows) if (!out.has(r.url)) out.set(r.url, r);
+/** One row per PR (a PR naming several cards has one row each); the merge block of any of them counts. */
+const byUrl = (rows: ProbePr[]): Map<string, ProbePr> => {
+  const out = new Map<string, ProbePr>();
+  for (const r of rows) {
+    const seen = out.get(r.url);
+    if (!seen) out.set(r.url, r);
+    else if (!seen.merge_blocked && r.merge_blocked) out.set(r.url, { ...seen, merge_blocked: r.merge_blocked });
+  }
   return out;
 };
-export const prBaseline = (rows: TaskPullRequest[]): Record<string, unknown> => ({ prs: Object.fromEntries([...byUrl(rows)].map(([url, p]) => [url, prSnap(p)])) });
+export const prBaseline = (rows: ProbePr[]): Record<string, unknown> => ({ prs: Object.fromEntries([...byUrl(rows)].map(([url, p]) => [url, prSnap(p)])) });
 
 /** The baseline a new watch starts from: the target's state now. */
 export async function initialBaseline(probe: WatchProbe, w: Pick<ChatWatch, 'user_id' | 'kind' | 'target_id' | 'params'>, now: Date): Promise<Record<string, unknown>> {
@@ -184,6 +198,9 @@ async function evaluatePr(probe: WatchProbe, w: Watch): Promise<Evaluation | nul
     const sameSha = prev?.head_sha === p.head_sha;
     if (p.ci_state === 'failed' && !(sameSha && prev?.ci_state === 'failed')) add('ci_failed', `ci_failed:${p.head_sha}`, { head_sha: p.head_sha, failing: p.ci_summary.failing });
     if (p.ci_state === 'passed' && !(sameSha && prev?.ci_state === 'passed')) add('ci_passed', `ci_passed:${p.head_sha}`, { head_sha: p.head_sha });
+    // TER-1136: termhub will not merge this head by itself; once per head and reason
+    const blocked = blockOf(p);
+    if (p.state === 'open' && blocked && blocked !== prev?.blocked) add('merge_blocked', `merge_blocked:${blocked}`, { head_sha: p.head_sha, reason: p.merge_blocked });
     const sha = p.merge_commit_sha ?? p.head_sha;
     if (p.deploy_state === 'passed' && prev?.deploy_state !== 'passed') add('deploy_ok', `deploy_ok:${sha}`, { deploy_url: p.deploy_url });
     if (p.deploy_state === 'failed' && prev?.deploy_state !== 'failed') add('deploy_failed', `deploy_failed:${sha}`, { deploy_url: p.deploy_url });

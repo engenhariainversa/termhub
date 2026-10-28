@@ -106,7 +106,7 @@ describe('watch', () => {
     await expect(watch(ctxWith(), { kind: 'pr', pr_url: 'https://example.com/x', note: 'x' }, probe)).rejects.toMatchObject({ code: 'INVALID_WATCH' });
     listByUrlForOwner.mockResolvedValue([{ number: 9, title: 'Fix' }]);
     await watch(ctxWith(), { kind: 'pr', pr_url: 'https://github.com/o/r/pull/9', note: 'x' }, probe);
-    expect(create.mock.calls[0][0]).toMatchObject({ target_id: null, label: 'PR #9 Fix', params: { pr_url: 'https://github.com/o/r/pull/9', events: ['merged', 'closed', 'ci_failed'] } });
+    expect(create.mock.calls[0][0]).toMatchObject({ target_id: null, label: 'PR #9 Fix', params: { pr_url: 'https://github.com/o/r/pull/9', events: ['merged', 'closed', 'ci_failed', 'merge_blocked'] } });
   });
 
   it('an agent release needs a version and starts from the one on npm', async () => {

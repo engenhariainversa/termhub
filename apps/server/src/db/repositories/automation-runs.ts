@@ -343,6 +343,17 @@ export class AutomationRunsRepository {
     return rows.map((r) => r.status as RunStatus);
   }
 
+  /** The card whose implementer run worked on `branch` most recently (TER-1110: a PR whose branch is a
+   *  ticket key, with no card ref in it, still belongs to that card), or null. */
+  async taskOfBranch(projectId: string, branch: string): Promise<string | null> {
+    const row = await this.db.automationRun.findFirst({
+      where: { projectId, branch, role: 'implementer', taskId: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      select: { taskId: true },
+    });
+    return row?.taskId ?? null;
+  }
+
   /** The branches the card's runs worked on: the only PR heads the merge executor merges for it. A run has
    *  no repository of its own yet, so these are branches of the project's repository: read them through
    *  `runBranchOf`, which pairs them with it (spec 2026-10-07 multi-repo R14). */

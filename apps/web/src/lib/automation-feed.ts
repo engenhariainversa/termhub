@@ -101,7 +101,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'tagged':
       return t('{{ref}}: marcado como automático', { ref });
     case 'untagged':
-      return t('{{ref}}: tirado do automático', { ref });
+      // TER-1110: the dispatcher found work already going on for the card's ticket
+      return e.reason_text ? t('{{ref}}: tirado do automático — {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: tirado do automático', { ref });
     case 'machine_opt_in':
       return e.machine ? t('{{machine}} passou a aceitar trabalho automático', { machine: e.machine }) : t('Uma máquina passou a aceitar trabalho automático');
     case 'machine_opt_out':

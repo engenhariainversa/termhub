@@ -662,7 +662,10 @@ export interface ProjectSetupData {
     integration_id: string | null;
     full_name: string | null;
     base_branch: string;
+    /** {ticket} (the external ticket's key, else the card's ref), {ticket_lower}, {ref}, {slug} */
     branch_pattern: string;
+    /** TER-1110: automatic work only on cards with an external ticket, never the termhub ref on GitHub */
+    require_ticket: boolean;
     draft_pr: boolean;
     deploy_workflow: string | null;
   } | null;

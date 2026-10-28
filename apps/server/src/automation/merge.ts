@@ -18,7 +18,7 @@ import type { GithubWriteClient } from '../integrations/github-write.js';
 import { currentRulesBlock } from '../memory/current-rules.js';
 import { RATE_LIMIT_TEXT } from '../monitor/state.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import { epicBranchName, targetOf } from './branches.js';
+import { epicBranchName, namingRule, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
@@ -64,6 +64,8 @@ export interface MergeDeps {
   seen?: Map<string, string>;
   /** TER-1120: wakes the project's chat once a red base escalated. Left out: the event, the push and the line only. */
   wakeBaseRed?: (i: BaseRedWake) => Promise<boolean>;
+  /** TER-1136: wakes the project's chat once a green PR is held by a person's card (once per PR head). */
+  wakeHeld?: (i: HeldWake) => Promise<boolean>;
   /** Since when each project's base head holds a ready PR red (`<project>` → head and ms). Per process. */
   redSince?: Map<string, RedBase>;
   /** Runs read as cancelled before any job got a runner (`<repo>#<run id>` → whether it never started). Per process. */
@@ -84,6 +86,17 @@ export interface BaseRedWake {
   baseSha: string;
   workflow: string | null;
   runUrl: string | null;
+}
+
+/** What the chat is told when a green PR waits on a person's card (TER-1136): ids, refs, the cards' titles and URLs. */
+export interface HeldWake {
+  ownerId: string;
+  projectId: string;
+  cardRef: string;
+  pr: number;
+  prUrl: string;
+  /** the manual cards, not done, the PR depends on */
+  cards: { id: string; ref: string; title: string }[];
 }
 
 const defaultSeen = new Map<string, string>();
@@ -203,8 +216,10 @@ async function candidateOf(
   if (row.base_ref !== baseBranch && row.base_ref !== epicBranch) return null;
   // a head named like the base or the epic branch is never a card's own branch
   if (row.head_ref === baseBranch || row.head_ref === epicBranch) return null;
-  // a PR that cites a card a person still works on is merged by a person
-  const people = tasks.filter((t) => !t.auto && t.status !== 'done');
+  // a PR linked to a card a person still works on is merged by a person; one that only cites it in passing
+  // ("o visual final vem do PST-3") is not held (TER-1136)
+  const mentionOnly = new Set(rows.filter((r) => r.mention_only).map((r) => r.task_id));
+  const people = tasks.filter((t) => !t.auto && t.status !== 'done' && !mentionOnly.has(t.id));
   if (people.length > 0) return { held: { primary, people, row } };
   return { ...base, rows, tasks: [primary], primary, epicBranch, baseBranch };
 }
@@ -213,13 +228,20 @@ async function candidateOf(
  * Tells why an automatic card's PR is not merged (TER-1004): the queue shows it on every pass, and once the
  * PR is green the feed (with a push and a chat line) says it once per PR head.
  */
-async function onHeld(deps: MergeDeps, projectId: string, { primary, people, row }: HeldPull['held']): Promise<void> {
+async function onHeld(deps: MergeDeps, project: Project & { owner_id: string }, { primary, people, row }: HeldPull['held']): Promise<void> {
   const { repos } = deps;
-  noteMergeWait([primary.id], 'merge_person_card', now(deps));
+  const log = deps.log ?? noopLog;
+  const cards = people.map((t) => t.ref).join(', ');
+  noteMergeWait([primary.id], 'merge_person_card', now(deps), row.head_sha, cards);
   if (row.ci_state !== 'passed') return;
   if (await repos.automationEvents.findOnce(primary.id, 'escalated', { reason: MERGE_PERSON_CARD, pr: row.number, sha: row.head_sha })) return;
-  const cards = people.map((t) => t.ref).join(', ');
-  await escalateDelivery(repos, { project_id: projectId, task_id: primary.id }, MERGE_PERSON_CARD, deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, cards });
+  await escalateDelivery(repos, { project_id: project.id, task_id: primary.id }, MERGE_PERSON_CARD, log, { pr: row.number, url: row.url, sha: row.head_sha, cards });
+  // TER-1136: the push and the line alone went unseen; the chat tells the person what they can do
+  if (!deps.wakeHeld) return;
+  const woke = await deps
+    .wakeHeld({ ownerId: project.owner_id, projectId: project.id, cardRef: primary.ref, pr: row.number, prUrl: row.url, cards: people.map((t) => ({ id: t.id, ref: t.ref, title: t.title })) })
+    .catch(() => false);
+  log.info({ projectId: project.id, pr: row.number, woke }, 'automation: chat woken for a PR held by a person\'s card');
 }
 
 const isHeld = (c: PullCtx | HeldPull | null): c is HeldPull => !!c && 'held' in c;
@@ -288,7 +310,7 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
     const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
     if (!c) continue;
     if (isHeld(c)) {
-      await onHeld(deps, projectId, c.held).catch((e: unknown) => log.warn({ projectId, pr: rows[0]!.number, code: codeOf(e) }, 'automation: held PR not reported'));
+      await onHeld(deps, owned, c.held).catch((e: unknown) => log.warn({ projectId, pr: rows[0]!.number, code: codeOf(e) }, 'automation: held PR not reported'));
       continue;
     }
     try {
@@ -575,7 +597,7 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
+  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, naming: namingRule(task, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
   // TER-1051: the card's open tab is busy or in use; the next sync asks again
@@ -731,7 +753,7 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
 async function startCiFixer(c: PullCtx, row: TaskPullRequest, trigger: string): Promise<TriggeredStart> {
   const base = row.base_ref ?? c.baseBranch;
   const rules = await currentRulesBlock(c.deps.repos, c.project.owner_id, c.project.id);
-  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
+  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, naming: namingRule(c.primary, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
   return c.deps.startFixer({ projectId: c.project.id, taskId: c.primary.id, role: 'fixer', triggerSha: trigger, branch: row.head_ref, base, prompt });
 }
 

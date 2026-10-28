@@ -29,6 +29,16 @@ describe('feed lines for changes to automatic work (TER-975)', () => {
     expect(feedLine(ev({ kind: 'untagged' }))).toBe('TER-9: removed from automatic work');
     expect(feedLine(ev({ kind: 'machine_opt_out' }))).toBe('jarvis no longer accepts automatic work');
   });
+
+  it('says why a card left automatic work when its ticket already had work going on (TER-1110)', async () => {
+    expect(feedLine(ev({ kind: 'untagged', reason_text: 'Já há trabalho em andamento neste ticket: o PR #1060 (feature/x)' }))).toBe(
+      'TER-9: tirado do automático — Já há trabalho em andamento neste ticket: o PR #1060 (feature/x)',
+    );
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'untagged', reason_text: 'This ticket already has work in progress: PR #1060 (feature/x)' }))).toBe(
+      'TER-9: removed from automatic work — This ticket already has work in progress: PR #1060 (feature/x)',
+    );
+  });
 });
 
 describe('the folder trust dialog answered alone (TER-1025, TER-1117)', () => {

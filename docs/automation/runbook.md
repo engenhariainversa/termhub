@@ -155,6 +155,41 @@ Notes:
 - Setting `release_workflows` makes the base branch count as "pending" while those workflows run, so merges
   go one delivery at a time.
 
+### Branch names and external tickets (TER-1110)
+
+The repository's "Padrão da branch" (`repo.branch_pattern`, default `{ticket}-{slug}`) takes:
+
+| Placeholder | Becomes |
+| --- | --- |
+| `{ticket}` | the key of the card's external ticket (Jira `APPS-337`, Linear `ENG-12`, the number of a GitHub issue), or the card's ref (`TER-9`) when it has none |
+| `{ticket_lower}` | the same, in lower case (`apps-337`) |
+| `{ref}` | always the card's ref |
+| `{slug}` | the title, ASCII and dashed, at most 40 characters |
+
+- A line `branch: <name>` (also `**Branch:** \`<name>\``, or as a list item) at the start of a line of the
+  card's description wins over the pattern. Only a name with a slash, a dash, an underscore or a digit counts,
+  and never the base branch.
+- "Exigir ticket externo" (`repo.require_ticket`, off by default) is for a client whose GitHub only accepts
+  branches named after their own tracker, e.g. `feature/{ticket_lower}-{slug}`: a card with neither an
+  external ticket nor an explicit branch stays in the queue as "O projeto exige um ticket externo…" instead
+  of starting on a branch with the termhub ref, and the agent is told never to put the termhub ref on GitHub
+  (branch, commits, PR title or body). Its PR is still followed: a PR that names no card is linked to the card
+  whose run works on its branch.
+- The agent's prompt (implementer and CI/conflict fixer) cites the ticket key for commits and the PR title.
+  The push the tab may send without asking is only to its own branch, so a wrong name asks for approval.
+
+### Work already going on for a ticket (TER-1110)
+
+Before a card starts, the dispatcher looks for work on its ref or its ticket's key that the card's own runs
+did not start: a tab of the project whose name or folder names it, an open PR whose branch or title names it,
+or a branch on GitHub that names it (whole words: `apps-337` does not match `apps-3370`). If it finds one, it
+does not start: the card is untagged and the feed says "tirado do automático — Já há trabalho em andamento
+neste ticket: …". Link the tab to the card (`link_tab_task`) and follow it by hand, or close that work and tag
+the card again. A GitHub error only skips the GitHub part of the check.
+
+A card created already tagged waits 2 minutes before it is taken ("Card recém-criado…" in the queue), so the
+chat can link a tab that already works on the ticket first. The concierge creates such a card without the tag.
+
 ## 4a. Doing it from the chat (MCP)
 
 The chat's assistant (and any MCP client with the `terminals` scope and the matching permission) can do
@@ -277,8 +312,13 @@ open any PR you want a second look at.
 
 A PR belongs to the automatic card whose run worked on its head branch. Other cards it cites in its title
 or body are only references (TER-1004): the merge does not move them to done, and deploys and releases are
-reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
-(`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
+reported on the PR's own card. Only a card the PR is linked to can hold its merge (TER-1136): one named in its
+head branch, or in its title or body right after a link word (`Depende de:`, `Depends on`, `Blocked by`,
+`Bloqueado por`, `Requires`, `Closes`, `Fixes`, `Resolves`, `Fecha`, `Corrige`). A card only cited in passing
+("o visual final vem do TER-3") still shows the PR but never holds it (`task_pull_requests.mention_only`). A
+linked manual card that is not done yet holds the merge for a person (`merge_person_card` in the queue with the
+cards, and, once the PR is green, an escalation once per head: push, chat line, a wake of the project chat with
+the ways out, an immediate `pr_ready` health alert and a `merge_blocked` event on `pr` watches); a done one does not.
 
 ## 7a. Decisions automatic work takes alone (TER-1043)
 
@@ -338,7 +378,7 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `decision_needed` | Stopped on a question and the project has "Parar em decisões de produto" on | Answer in the tab |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
-| `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
+| `merge_person_card` | The PR is green but depends on a manual card that is not done (refs in `cards`) | Merge it by hand, mark that card automatic or finish it, or remove the link word (`Depende de`, `Closes`…) from the PR text; the next pass merges it |
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |
@@ -633,7 +673,7 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
 | `tab_waiting` tab on a question, a permission, the folder trust or a login | tab | 10 min | concierge | every project |
 | `card_orphan` card in Doing with no live tab, run, open PR or blocked run (a card in an "aguardando" column is never one, TER-1134) | card | 120 min | concierge | automation on |
 | `run_blocked` run escalated (`waiting` with a person's reason) or `blocked` | run | 60 min | person | automation on |
-| `machine_offline` agent machine offline holding a tab or a run of the project | machine | 15 min | person | every project |
+| `machine_offline` agent machine offline holding an active run of the project, or a tab with an event within the `tab_stuck` minutes before its last contact (TER-1135) | machine | 15 min | person | every project |
 | `delivery_failed` newest merge of a repo whose deploy or release failed, nothing merged since | PR url + workflow | 30 min | person | automation on |
 | `agent_outdated` online agent below `MIN_AGENT_VERSION` | machine | 60 min | person | automation on |
 
@@ -641,6 +681,10 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
   last run's start, the machine's last contact, the card's last change), else from the first sweep that saw
   it. Past its minutes the alert opens (`opened_at`); a sweep that no longer sees it resolves it
   (`resolved_at`); seeing it again later is a new episode on the same row.
+- **Flickering machines (TER-1135).** A machine on shaky Wi-Fi or going to sleep drops and comes back. Once
+  `machine_offline` is no longer seen, its alert keeps running for an hour (`FLAP_GRACE_MS`, `back_at` in
+  its detail) before it resolves; a drop within that hour is the same episode, timed from its first drop,
+  with no new push or wake, and `flaps` in the detail counts the drops ("caiu de novo 2x" on the panel).
 - **Telling.** Each episode reaches the person once (claims `noticed_at` and `woken_at`, both colours):
   a "person" sign becomes a concierge notice (`needs_you`, section 9g: the person's levels, quiet hours,
   grouping and cap apply), and every open sign wakes the project's chat with the diagnosis, the ids and what
@@ -740,6 +784,13 @@ is updated anyway.
 TER-1086 (section 9c) gives every user the `share_file` tool: the concierge can show them their machines'
 files in the chat. Nothing leaves a machine without a card the person approves, a folder they trusted
 themselves, or an agent tab sharing from its own project folder.
+
+TER-1110 (section 4, "Branch names and external tickets") changes every project with automation on whose
+cards come from an external ticket: their branches now carry the ticket's key instead of the termhub ref
+(`{ticket}` in the default pattern), and the agent is told to cite that key. Every project with automation on
+also gets the 2-minute wait for cards created already tagged, and a card whose ref or ticket already has a
+tab, an open PR or a branch is untagged instead of getting a second agent. "Exigir ticket externo" is opt-in
+per project.
 
 TER-1121 (section 9h) watches every project: in every project a tab stuck or waiting and an offline machine
 holding its work show in "Saúde do projeto", and an offline machine pushes `needs_you` by the person's own

@@ -99,7 +99,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [DEPLOY_FAILED_NOT_PAUSED]: tk('O deploy falhou depois do merge e o automático do projeto não pôde ser pausado; pause o projeto e confira o deploy.'),
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CI_CAP]: tk('O CI do PR continua falhando depois das tentativas de correção; confira o PR.'),
-  [MERGE_PERSON_CARD]: tk('O PR está verde, mas cita um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão ou tire a citação do PR.'),
+  [MERGE_PERSON_CARD]: tk('O PR está verde, mas depende de um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque o card como automático ou tire o vínculo («Depende de», «Closes») do PR.'),
   [MERGE_NO_CI]: tk('O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
   [MERGE_BASE_RED]: tk('A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.'),
@@ -130,6 +130,7 @@ export function escalationEventText(payload: Record<string, unknown>, locale: Lo
   const sha = typeof payload.sha === 'string' && payload.sha ? payload.sha.slice(0, 7) : null;
   const cause = typeof payload.cause === 'string' ? payload.cause : '';
   if (reason === MERGE_BASE_RED) return baseRedText(payload, locale);
+  if (reason === MERGE_PERSON_CARD) return personCardText(payload, locale);
   if (reason !== CONFLICT_CAP || !sha) return escalationReasonText(reason, locale);
   return t(locale, CONFLICT_TEXT[cause] ?? CONFLICT_TEXT['']!, { sha });
 }
@@ -140,6 +141,14 @@ export function baseRedText(payload: Record<string, unknown>, locale: Locale = D
   const workflow = typeof payload.workflow === 'string' && payload.workflow ? payload.workflow : null;
   if (!sha || !workflow) return escalationReasonText(MERGE_BASE_RED, locale);
   return t(locale, 'A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.', { sha, workflow });
+}
+
+/** A PR held by a person's card (TER-1136) names the PR and the cards it depends on, when it knows them. */
+export function personCardText(payload: Record<string, unknown>, locale: Locale = DEFAULT_LOCALE): string {
+  const pr = typeof payload.pr === 'number' ? payload.pr : null;
+  const cards = typeof payload.cards === 'string' && payload.cards ? payload.cards : null;
+  if (pr === null || !cards) return escalationReasonText(MERGE_PERSON_CARD, locale);
+  return t(locale, 'O PR #{{pr}} está verde, mas depende de {{cards}}, card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque {{cards}} como automático ou tire o vínculo («Depende de», «Closes») do PR.', { pr, cards });
 }
 
 /** `escalationText`, or the generic text for a reason with none. */

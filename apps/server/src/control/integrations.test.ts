@@ -190,7 +190,7 @@ describe('setProjectRepo', () => {
     setups.set('p1', before);
     const r = await setProjectRepo(ctxFor(), { ...base, deploy_workflow: 'deploy.yml', base_branch: 'develop' });
     const saved = setups.get('p1')!;
-    expect(saved.repo).toEqual({ integration_id: 'g1', full_name: 'acme/api', base_branch: 'develop', branch_pattern: 'feat/{ticket}', draft_pr: false, deploy_workflow: 'deploy.yml' });
+    expect(saved.repo).toEqual({ integration_id: 'g1', full_name: 'acme/api', base_branch: 'develop', branch_pattern: 'feat/{ticket}', require_ticket: false, draft_pr: false, deploy_workflow: 'deploy.yml' });
     for (const k of ['ticket_sources', 'runner', 'agent', 'verify', 'approvals'] as const) expect(saved[k]).toEqual(before[k]);
     expect(setupSchema.safeParse(saved).success).toBe(true);
     expect(r.repo).toEqual(saved.repo);

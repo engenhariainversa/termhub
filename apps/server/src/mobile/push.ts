@@ -11,7 +11,7 @@ import { HttpError } from '../lib/errors.js';
 import { monitorBus, type TabStateChange } from '../monitor/bus.js';
 import { aiLoginExpiringText, aiLoginRequiredText,automationEscalationText, automationReleaseText, conciergeNoticeText, confirmationText, deviceRequestText, replyText, tabAuthRequiredText, tabFinishedText, tabTrustPromptText, tabQuestionText, type PushContext, type PushText } from './push-text.js';
 import { automationBus, type PublishedAutomationEvent } from '../automation/events.js';
-import { escalationReasonText } from '../automation/escalation-text.js';
+import { escalationEventText } from '../automation/escalation-text.js';
 import { heldQuestion } from '../automation/question-hold.js';
 import { SlidingWindow } from './rate-limit.js';
 import type { MobileSocketRegistry } from './revocation.js';
@@ -597,7 +597,8 @@ export class MobilePushService {
     await this.deliver(
       e.owner_id,
       'confirmation',
-      (locale) => automationEscalationText(ctx, ref ?? t(locale, 'Um card'), escalationReasonText(reason, locale), locale),
+      // the event's own text: a held PR names itself and the cards it depends on (TER-1136)
+      (locale) => automationEscalationText(ctx, ref ?? t(locale, 'Um card'), escalationEventText(e.payload, locale), locale),
       data,
       await repos.devices.listActiveWithPush(e.owner_id),
       `escalation:${key}`,

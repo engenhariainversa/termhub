@@ -53,6 +53,7 @@ export type TaskPullRequestMinAggregateOutputType = {
   ciState: string | null
   deployState: string | null
   deployUrl: string | null
+  mentionOnly: boolean | null
   syncedAt: Date | null
 }
 
@@ -75,6 +76,7 @@ export type TaskPullRequestMaxAggregateOutputType = {
   ciState: string | null
   deployState: string | null
   deployUrl: string | null
+  mentionOnly: boolean | null
   syncedAt: Date | null
 }
 
@@ -99,6 +101,7 @@ export type TaskPullRequestCountAggregateOutputType = {
   deployState: number
   deployUrl: number
   releaseRuns: number
+  mentionOnly: number
   syncedAt: number
   _all: number
 }
@@ -131,6 +134,7 @@ export type TaskPullRequestMinAggregateInputType = {
   ciState?: true
   deployState?: true
   deployUrl?: true
+  mentionOnly?: true
   syncedAt?: true
 }
 
@@ -153,6 +157,7 @@ export type TaskPullRequestMaxAggregateInputType = {
   ciState?: true
   deployState?: true
   deployUrl?: true
+  mentionOnly?: true
   syncedAt?: true
 }
 
@@ -177,6 +182,7 @@ export type TaskPullRequestCountAggregateInputType = {
   deployState?: true
   deployUrl?: true
   releaseRuns?: true
+  mentionOnly?: true
   syncedAt?: true
   _all?: true
 }
@@ -288,6 +294,7 @@ export type TaskPullRequestGroupByOutputType = {
   deployState: string
   deployUrl: string | null
   releaseRuns: runtime.JsonValue
+  mentionOnly: boolean
   syncedAt: Date
   _count: TaskPullRequestCountAggregateOutputType | null
   _avg: TaskPullRequestAvgAggregateOutputType | null
@@ -335,6 +342,7 @@ export type TaskPullRequestWhereInput = {
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
   deployUrl?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   releaseRuns?: Prisma.JsonFilter<"TaskPullRequest">
+  mentionOnly?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   syncedAt?: Prisma.DateTimeFilter<"TaskPullRequest"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   task?: Prisma.XOR<Prisma.TaskScalarRelationFilter, Prisma.TaskWhereInput>
@@ -361,6 +369,7 @@ export type TaskPullRequestOrderByWithRelationInput = {
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   releaseRuns?: Prisma.SortOrder
+  mentionOnly?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   task?: Prisma.TaskOrderByWithRelationInput
@@ -391,6 +400,7 @@ export type TaskPullRequestWhereUniqueInput = Prisma.AtLeast<{
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
   deployUrl?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   releaseRuns?: Prisma.JsonFilter<"TaskPullRequest">
+  mentionOnly?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   syncedAt?: Prisma.DateTimeFilter<"TaskPullRequest"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   task?: Prisma.XOR<Prisma.TaskScalarRelationFilter, Prisma.TaskWhereInput>
@@ -417,6 +427,7 @@ export type TaskPullRequestOrderByWithAggregationInput = {
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrderInput | Prisma.SortOrder
   releaseRuns?: Prisma.SortOrder
+  mentionOnly?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
   _count?: Prisma.TaskPullRequestCountOrderByAggregateInput
   _avg?: Prisma.TaskPullRequestAvgOrderByAggregateInput
@@ -449,6 +460,7 @@ export type TaskPullRequestScalarWhereWithAggregatesInput = {
   deployState?: Prisma.StringWithAggregatesFilter<"TaskPullRequest"> | string
   deployUrl?: Prisma.StringNullableWithAggregatesFilter<"TaskPullRequest"> | string | null
   releaseRuns?: Prisma.JsonWithAggregatesFilter<"TaskPullRequest">
+  mentionOnly?: Prisma.BoolWithAggregatesFilter<"TaskPullRequest"> | boolean
   syncedAt?: Prisma.DateTimeWithAggregatesFilter<"TaskPullRequest"> | Date | string
 }
 
@@ -471,6 +483,7 @@ export type TaskPullRequestCreateInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutPullRequestsInput
   task: Prisma.TaskCreateNestedOneWithoutPullRequestsInput
@@ -497,6 +510,7 @@ export type TaskPullRequestUncheckedCreateInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -519,6 +533,7 @@ export type TaskPullRequestUpdateInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutPullRequestsNestedInput
   task?: Prisma.TaskUpdateOneRequiredWithoutPullRequestsNestedInput
@@ -545,6 +560,7 @@ export type TaskPullRequestUncheckedUpdateInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -569,6 +585,7 @@ export type TaskPullRequestCreateManyInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -591,6 +608,7 @@ export type TaskPullRequestUpdateManyMutationInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -615,6 +633,7 @@ export type TaskPullRequestUncheckedUpdateManyInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -655,6 +674,7 @@ export type TaskPullRequestCountOrderByAggregateInput = {
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrder
   releaseRuns?: Prisma.SortOrder
+  mentionOnly?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
 }
 
@@ -681,6 +701,7 @@ export type TaskPullRequestMaxOrderByAggregateInput = {
   ciState?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrder
+  mentionOnly?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
 }
 
@@ -703,6 +724,7 @@ export type TaskPullRequestMinOrderByAggregateInput = {
   ciState?: Prisma.SortOrder
   deployState?: Prisma.SortOrder
   deployUrl?: Prisma.SortOrder
+  mentionOnly?: Prisma.SortOrder
   syncedAt?: Prisma.SortOrder
 }
 
@@ -813,6 +835,7 @@ export type TaskPullRequestCreateWithoutProjectInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
   task: Prisma.TaskCreateNestedOneWithoutPullRequestsInput
 }
@@ -837,6 +860,7 @@ export type TaskPullRequestUncheckedCreateWithoutProjectInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -890,6 +914,7 @@ export type TaskPullRequestScalarWhereInput = {
   deployState?: Prisma.StringFilter<"TaskPullRequest"> | string
   deployUrl?: Prisma.StringNullableFilter<"TaskPullRequest"> | string | null
   releaseRuns?: Prisma.JsonFilter<"TaskPullRequest">
+  mentionOnly?: Prisma.BoolFilter<"TaskPullRequest"> | boolean
   syncedAt?: Prisma.DateTimeFilter<"TaskPullRequest"> | Date | string
 }
 
@@ -912,6 +937,7 @@ export type TaskPullRequestCreateWithoutTaskInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutPullRequestsInput
 }
@@ -936,6 +962,7 @@ export type TaskPullRequestUncheckedCreateWithoutTaskInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -985,6 +1012,7 @@ export type TaskPullRequestCreateManyProjectInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -1007,6 +1035,7 @@ export type TaskPullRequestUpdateWithoutProjectInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   task?: Prisma.TaskUpdateOneRequiredWithoutPullRequestsNestedInput
 }
@@ -1031,6 +1060,7 @@ export type TaskPullRequestUncheckedUpdateWithoutProjectInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1054,6 +1084,7 @@ export type TaskPullRequestUncheckedUpdateManyWithoutProjectInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1077,6 +1108,7 @@ export type TaskPullRequestCreateManyTaskInput = {
   deployState?: string
   deployUrl?: string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: boolean
   syncedAt?: Date | string
 }
 
@@ -1099,6 +1131,7 @@ export type TaskPullRequestUpdateWithoutTaskInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutPullRequestsNestedInput
 }
@@ -1123,6 +1156,7 @@ export type TaskPullRequestUncheckedUpdateWithoutTaskInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1146,6 +1180,7 @@ export type TaskPullRequestUncheckedUpdateManyWithoutTaskInput = {
   deployState?: Prisma.StringFieldUpdateOperationsInput | string
   deployUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   releaseRuns?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  mentionOnly?: Prisma.BoolFieldUpdateOperationsInput | boolean
   syncedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1172,6 +1207,7 @@ export type TaskPullRequestSelect<ExtArgs extends runtime.Types.Extensions.Inter
   deployState?: boolean
   deployUrl?: boolean
   releaseRuns?: boolean
+  mentionOnly?: boolean
   syncedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.TaskDefaultArgs<ExtArgs>
@@ -1198,6 +1234,7 @@ export type TaskPullRequestSelectCreateManyAndReturn<ExtArgs extends runtime.Typ
   deployState?: boolean
   deployUrl?: boolean
   releaseRuns?: boolean
+  mentionOnly?: boolean
   syncedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.TaskDefaultArgs<ExtArgs>
@@ -1224,6 +1261,7 @@ export type TaskPullRequestSelectUpdateManyAndReturn<ExtArgs extends runtime.Typ
   deployState?: boolean
   deployUrl?: boolean
   releaseRuns?: boolean
+  mentionOnly?: boolean
   syncedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.TaskDefaultArgs<ExtArgs>
@@ -1250,10 +1288,11 @@ export type TaskPullRequestSelectScalar = {
   deployState?: boolean
   deployUrl?: boolean
   releaseRuns?: boolean
+  mentionOnly?: boolean
   syncedAt?: boolean
 }
 
-export type TaskPullRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "repo" | "number" | "url" | "title" | "headRef" | "headSha" | "state" | "draft" | "mergedAt" | "mergeCommitSha" | "baseRef" | "changedLevel" | "ciState" | "ciSummary" | "deployState" | "deployUrl" | "releaseRuns" | "syncedAt", ExtArgs["result"]["taskPullRequest"]>
+export type TaskPullRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "taskId" | "repo" | "number" | "url" | "title" | "headRef" | "headSha" | "state" | "draft" | "mergedAt" | "mergeCommitSha" | "baseRef" | "changedLevel" | "ciState" | "ciSummary" | "deployState" | "deployUrl" | "releaseRuns" | "mentionOnly" | "syncedAt", ExtArgs["result"]["taskPullRequest"]>
 export type TaskPullRequestInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.TaskDefaultArgs<ExtArgs>
@@ -1318,6 +1357,11 @@ export type $TaskPullRequestPayload<ExtArgs extends runtime.Types.Extensions.Int
      * [{ workflow, state: none|running|passed|failed, url, version }] — the setup's release_workflows on merge_commit_sha
      */
     releaseRuns: runtime.JsonValue
+    /**
+     * TER-1136: the PR only cites this card in passing (its title or body, with no "Depende de"/"Closes"
+     * before the ref): shown on the card, but it never holds the merge for a person
+     */
+    mentionOnly: boolean
     syncedAt: Date
   }, ExtArgs["result"]["taskPullRequest"]>
   composites: {}
@@ -1764,6 +1808,7 @@ export interface TaskPullRequestFieldRefs {
   readonly deployState: Prisma.FieldRef<"TaskPullRequest", 'String'>
   readonly deployUrl: Prisma.FieldRef<"TaskPullRequest", 'String'>
   readonly releaseRuns: Prisma.FieldRef<"TaskPullRequest", 'Json'>
+  readonly mentionOnly: Prisma.FieldRef<"TaskPullRequest", 'Boolean'>
   readonly syncedAt: Prisma.FieldRef<"TaskPullRequest", 'DateTime'>
 }
     

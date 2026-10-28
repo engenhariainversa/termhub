@@ -11,6 +11,10 @@ export type IneligibleReason =
   | 'has_agent'
   | 'no_capable_machine'
   | 'repo_missing'
+  // TER-1110: the project requires an external ticket and the card has none (nor an explicit branch)
+  | 'no_ticket'
+  // TER-1110: a card created a moment ago waits, so a tab already working on its ticket can be linked first
+  | 'just_created'
   // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
   | 'no_account'
   | 'machine_offline'
@@ -46,6 +50,8 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   has_agent: tk('Já tem um agente'),
   no_capable_machine: tk('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente'),
   repo_missing: tk('Repositório não configurado no Setup'),
+  no_ticket: tk('O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum'),
+  just_created: tk('Card recém-criado; o automático começa em até 2 min'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
   no_room: tk('Máquina sem folga (memória/disco/carga)'),
@@ -60,11 +66,17 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   merge_no_write: tk('Integração do GitHub sem permissão de escrita'),
   merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
   merge_ci_cap: tk('CI vermelho depois das tentativas de correção'),
-  merge_person_card: tk('O PR cita um card manual que não está em Feito; uma pessoa mescla'),
+  merge_person_card: tk('O PR depende de um card manual que não está em Feito; uma pessoa mescla'),
   merge_no_ci: tk('PR sem CI; o termhub não mescla sem CI verde'),
   merge_github_down: tk('GitHub instável; a correção do CI é pedida de novo quando ele voltar'),
   merge_fix_waits_for_tab: tk('A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra'),
 };
+
+/**
+ * TER-1110: how long a card created already tagged waits before the dispatcher takes it, so the chat can link a
+ * tab that already works on the same ticket (`link_tab_task`) instead of a second agent starting on it.
+ */
+export const NEW_CARD_GRACE_MS = 2 * 60_000;
 
 export interface EligibilityInput {
   card: {
@@ -80,8 +92,12 @@ export interface EligibilityInput {
     /** a linked tab that still exists */
     tab_alive: boolean;
     active_run: boolean;
+    /** came from an external ticket, or its description names its branch (`hasTicketOrBranch`) */
+    has_ticket: boolean;
+    /** created less than `NEW_CARD_GRACE_MS` ago */
+    just_created: boolean;
   };
-  project: { automation: ProjectAutomation; paused: boolean; repo_ready: boolean; capable_machines: number };
+  project: { automation: ProjectAutomation; paused: boolean; repo_ready: boolean; capable_machines: number; require_ticket: boolean };
 }
 
 export type Eligibility = { eligible: true } | { eligible: false; reason: IneligibleReason };
@@ -102,5 +118,7 @@ export function eligibilityOf({ card, project }: EligibilityInput): Eligibility 
   if (card.active_run || card.tab_alive) return no('has_agent');
   if (project.capable_machines === 0) return no('no_capable_machine');
   if (!project.repo_ready) return no('repo_missing');
+  if (project.require_ticket && !card.has_ticket) return no('no_ticket');
+  if (card.just_created) return no('just_created');
   return { eligible: true };
 }

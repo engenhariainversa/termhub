@@ -5,7 +5,7 @@
  */
 import { agents } from '../agent/registry.js';
 import { MIN_AGENT_VERSION } from '../agent/min-version.js';
-import { baseReadingOf, mergeWaitOf } from '../automation/merge-wait.js';
+import { baseReadingOf, mergeWaitEntryOf } from '../automation/merge-wait.js';
 import { isPaused } from '../automation/pause.js';
 import { automationQueue } from '../automation/queue.js';
 import { controlContextFor } from '../control/context.js';
@@ -43,11 +43,18 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
   const auto = new Set(tasks.filter((t) => t.auto).map((t) => t.id));
   for (const r of prRows) {
     // termhub merges only the PRs of cards tagged automático: a manual card's PR is the person's to merge
-    if (prs.has(r.url) || !auto.has(r.task_id)) continue;
+    if (!auto.has(r.task_id)) continue;
+    // the executor notes its wait on the PR's own card, which may not be the first automatic row of the PR
+    const wait = mergeWaitEntryOf(r.task_id, now);
+    const seen = prs.get(r.url);
+    if (seen) {
+      if (!seen.wait && wait) Object.assign(seen, { task_ref: refOf.get(r.task_id) ?? seen.task_ref, wait: wait.wait, wait_detail: wait.detail ?? null });
+      continue;
+    }
     prs.set(r.url, {
       url: r.url, repo: r.repo, number: r.number, title: r.title, task_ref: refOf.get(r.task_id) ?? '', state: r.state, draft: r.draft,
       ci_state: r.ci_state, base_ref: r.base_ref, merged_at: r.merged_at, deploy_state: r.deploy_state, deploy_url: r.deploy_url,
-      release_runs: r.release_runs.map((x) => ({ workflow: x.workflow, state: x.state, url: x.url })), wait: mergeWaitOf(r.task_id, now),
+      release_runs: r.release_runs.map((x) => ({ workflow: x.workflow, state: x.state, url: x.url })), wait: wait?.wait ?? null, wait_detail: wait?.detail ?? null,
     });
   }
   const openPrTasks = new Set(prRows.filter((r) => r.state === 'open').map((r) => r.task_id));
@@ -82,7 +89,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     machines.push({
       id: m.id, name: m.name, agent: m.type === 'agent', online, last_seen_at: date(m.agent_last_seen_at),
       agent_version: (online ? agents.info(m.id)?.agent_version : null) ?? m.agent_version,
-      has_work: tabs.some((t) => t.machine_id === m.id) || active.some((r) => r.machine_id === m.id),
+      active_run: active.some((r) => r.machine_id === m.id),
     });
   }
 

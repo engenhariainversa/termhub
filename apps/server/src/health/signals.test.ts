@@ -66,11 +66,24 @@ describe('observe (TER-1121)', () => {
   });
 
   it('machines: offline with work, and an online agent below the minimum', () => {
-    const m = { id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: ago(20), agent_version: '0.30.0', has_work: true };
+    const m = { id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: ago(20), agent_version: '0.30.0', active_run: true };
     expect(observe(snap({ machines: [m] }), config()).map((o) => [o.signal, o.since])).toEqual([['machine_offline', ago(20)]]);
-    expect(signals(snap({ machines: [{ ...m, has_work: false }] }))).toEqual([]);
+    expect(signals(snap({ machines: [{ ...m, active_run: false }] }))).toEqual([]);
     expect(signals(snap({ machines: [{ ...m, online: true, agent_version: '0.26.1' }] }))).toEqual(['agent_outdated:m']);
     expect(signals(snap({ machines: [{ ...m, agent: false }] }))).toEqual([]);
+  });
+
+  it('only recent tab activity or an active run is work on an offline machine; tabs stuck for days are not (TER-1135)', () => {
+    const m = { id: 'm', name: 'capitão américa', agent: true, online: false, last_seen_at: ago(20), agent_version: '0.30.0', active_run: false };
+    const tab = (id: string, stateAt: Date, machine = 'm') => ({ id, name: id, state: 'working', state_at: stateAt, machine_id: machine, run: false });
+    // TER-742 and TER-368: "trabalhando" with no event for days — their own sign, not the machine's work
+    const stuck = [tab('TER-742', ago(3 * 24 * 60)), tab('TER-368', ago(2 * 24 * 60))];
+    expect(signals(snap({ machines: [m], tabs: stuck }))).toEqual(['tab_stuck:TER-742', 'tab_stuck:TER-368']);
+    // a tab busy shortly before the machine dropped is work, measured from its last sighting
+    expect(signals(snap({ machines: [m], tabs: [tab('a', ago(45))] }))).toContain('machine_offline:m');
+    expect(signals(snap({ machines: [m], tabs: [tab('a', ago(55))] }))).not.toContain('machine_offline:m');
+    // another machine's tab is not this one's work
+    expect(signals(snap({ machines: [m], tabs: [tab('a', ago(21), 'other')] }))).not.toContain('machine_offline:m');
   });
 
   it('the newest merge of a repo with a failed deploy or release; a later merge takes over', () => {
@@ -85,7 +98,7 @@ describe('observe (TER-1121)', () => {
       automation: false,
       prs: [pr()],
       tabs: [{ id: 'a', name: 'a', state: 'working', state_at: ago(40), machine_id: 'm', run: false }],
-      machines: [{ id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: ago(20), agent_version: '0.30.0', has_work: true }],
+      machines: [{ id: 'm', name: 'hulk', agent: true, online: false, last_seen_at: ago(20), agent_version: '0.30.0', active_run: true }],
     });
     expect(signals(s)).toEqual(['tab_stuck:a', 'machine_offline:m']);
     const c = config();
