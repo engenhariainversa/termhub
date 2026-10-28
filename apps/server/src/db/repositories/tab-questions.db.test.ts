@@ -18,7 +18,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
   let conversationId: string;
   const machineId = newId();
   /** Real tab rows (the suggestion rule reads the tab), keyed by the short names the tests use. */
-  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9', 'tq1', 'tx1', 'thq'].map((k) => [k, newId()]));
+  const tabIds: Record<string, string> = Object.fromEntries(['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'ts9', 'tq1', 'tx1', 'thq', 'tsurf1', 'lq1', 'lq4', 'dq1', 'dq2'].map((k) => [k, newId()]));
   const tid = (k: string) => tabIds[k] ?? k;
 
   beforeAll(async () => {
@@ -34,7 +34,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
     conversationId = (await chat.getOrCreateForProject(userId, projectId)).id;
     // A suggestion opens only on a real tab that waits for input: these are the tabs the suggestion tests use.
     await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId: userId } });
-    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'tq1', 'tx1', 'thq'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
+    await db.tab.createMany({ data: ['ts1', 'ts2', 'ts4', 'ts5', 'ts7', 'ts8', 'tq1', 'tx1', 'thq', 'tsurf1', 'lq1', 'lq4', 'dq1', 'dq2'].map((id) => ({ id: tabIds[id]!, projectId, machineId, name: id, state: 'waiting_input' as const })) });
     await db.tab.create({ data: { id: tabIds.ts9!, projectId, machineId, name: 'ts9', state: 'working' } });
   });
 
@@ -786,7 +786,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
       const { question: openPerm } = await openPermission('lq2', 'Bash');
       const { question: answered } = await open('lq3');
       await repo.claim(answered.id, userId, { answers: [{ selected: [0] }] });
-      const { question: otherProjectChoice } = await repo.open({ tab_id: 'lq4', project_id: project2, conversation_id: conversation2, kind: 'choice', payload, tool_use_id: null, agent_id: null });
+      const { question: otherProjectChoice } = await repo.open({ tab_id: tid('lq4'), project_id: project2, conversation_id: conversation2, kind: 'choice', payload, tool_use_id: null, agent_id: null });
 
       const mine = await repo.listOpenChoicesForUser(userId);
       const ids = mine.map((q) => q.id);
@@ -817,7 +817,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
       const conv = (await chat.getOrCreateForProject(lonely, project3)).id;
       const base = Date.parse('2026-09-26T00:00:00.000Z');
       const ids = Array.from({ length: LIST_OPEN_CHOICES_MAX + 2 }, () => newId());
-      await db.tabQuestion.createMany({ data: ids.map((id, i) => ({ id, tabId: `lm${i}`, projectId: project3, conversationId: conv, kind: 'choice', payload, status: 'open', createdAt: new Date(base + i * 1000) })) });
+      const tabs = ids.map(() => newId());
+      await db.tab.createMany({ data: tabs.map((id) => ({ id, projectId: project3, machineId, name: 'lm' })) });
+      await db.tabQuestion.createMany({ data: ids.map((id, i) => ({ id, tabId: tabs[i]!, projectId: project3, conversationId: conv, kind: 'choice', payload, status: 'open', createdAt: new Date(base + i * 1000) })) });
       const listed = await repo.listOpenChoicesForUser(lonely);
       expect(listed).toHaveLength(LIST_OPEN_CHOICES_MAX);
       expect(listed.map((q) => q.id)).toEqual(ids.slice(2).reverse());
@@ -825,6 +827,43 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TabQuestionsRepository (P
       await db.project.deleteMany({ where: { id: project3 } });
       await db.user.deleteMany({ where: { id: lonely } });
     }
+  });
+
+  it('listOpenChoicesForUser and surfaceOpen leave out a card whose tab row is gone (TER-1140)', async () => {
+    const { question: live } = await open('dq1');
+    const { question: orphan } = await open(newId());
+    expect((await repo.listOpenChoicesForUser(userId, projectId)).map((q) => q.id)).toEqual(expect.arrayContaining([live.id]));
+    expect((await repo.listOpenChoicesForUser(userId, projectId)).map((q) => q.id)).not.toContain(orphan.id);
+    const surfaced = (await repo.surfaceOpen(conversationId, new Date('2031-01-01T00:00:00.000Z'))).map((q) => q.id);
+    expect(surfaced).toContain(live.id);
+    expect(surfaced).not.toContain(orphan.id);
+    await repo.closeOne(live.id, 'answered_in_tab');
+    await repo.closeOne(orphan.id, 'expired');
+  });
+
+  it('dismissQuestion: only an open question or permission of its owner, once, recording who — never a suggestion (TER-1140)', async () => {
+    const { question } = await open('dq2');
+    expect(await repo.dismissQuestion(question.id, otherUserId)).toBeUndefined();
+    const at = new Date('2026-10-28T12:00:00.000Z');
+    expect(await repo.dismissQuestion(question.id, userId, at)).toMatchObject({ id: question.id, status: 'dismissed', answered_by: userId, answer: null, closed_at: at.toISOString() });
+    expect(await repo.dismissQuestion(question.id, userId)).toBeUndefined();
+    expect(await repo.hasOpenQuestion(tid('dq2'))).toBe(false);
+    const suggestion = await db.tabQuestion.create({ data: { id: newId(), tabId: tid('dq2'), projectId, conversationId, kind: 'suggestion', payload: { text: 'x' }, status: 'open' } });
+    expect(await repo.dismissQuestion(suggestion.id, userId)).toBeUndefined();
+    await db.tabQuestion.delete({ where: { id: suggestion.id } });
+  });
+
+  it('listOpenQuestionsBefore: open questions and permissions older than the cut, oldest first — never a suggestion nor a closed card (TER-1140)', async () => {
+    const tabId = newId();
+    const freshTab = newId();
+    const old = (await open(tabId, new Date('2020-01-01T00:00:00.000Z'))).question;
+    const fresh = (await openPermission(freshTab, 'Bash')).question!;
+    const listed = (await repo.listOpenQuestionsBefore(new Date('2020-01-02T00:00:00.000Z'), 500)).map((q) => q.id);
+    expect(listed).toContain(old.id);
+    expect(listed).not.toContain(fresh.id);
+    expect((await repo.listOpenQuestionsBefore(new Date('2020-01-02T00:00:00.000Z'), 500)).every((q) => q.kind !== 'suggestion' && q.status === 'open')).toBe(true);
+    await repo.closeForTab(tabId, 'answered_in_tab');
+    await repo.closeForTab(freshTab, 'answered_in_tab');
   });
 
   // Last on purpose: the sweep closes every orphan row of the database.

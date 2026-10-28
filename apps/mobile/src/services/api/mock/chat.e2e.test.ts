@@ -830,6 +830,27 @@ it('cancelAutoAnswer is 404 for an unknown question and 409 NOT_SCHEDULED for a 
   collected.close();
 });
 
+it('dismissTabQuestion closes the card as expired + DISMISSED, says so on the socket, and is idempotent (TER-1140)', async () => {
+  const clock = { value: START };
+  const { api, auth } = await enrol(clock);
+  const collected = collectEvents(api, auth);
+  await jest.advanceTimersByTimeAsync(0);
+
+  await api.sendMessage(auth, { text: 'tem alguma pergunta pendente?', project_id: 'p-termhub' });
+  await jest.advanceTimersByTimeAsync(5000);
+  const opened = collected.events.find((e): e is Extract<TChatEvent, { type: 'tab_question' }> => e.type === 'tab_question');
+  const id = opened!.question.id;
+
+  await expect(api.dismissTabQuestion(auth, 'nope')).rejects.toMatchObject({ status: 404 });
+  const { tab_question } = await api.dismissTabQuestion(auth, id);
+  expect(tab_question).toMatchObject({ id, status: 'expired', error_code: 'DISMISSED' });
+  await jest.advanceTimersByTimeAsync(0);
+  expect(collected.events.some((e) => e.type === 'tab_question_closed' && e.question.id === id)).toBe(true);
+  await expect(api.dismissTabQuestion(auth, id)).resolves.toMatchObject({ tab_question: { id, status: 'expired' } });
+
+  collected.close();
+});
+
 it('a message containing permissão raises a permission question for Bash', async () => {
   const clock = { value: START };
   const { api, auth } = await enrol(clock);

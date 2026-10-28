@@ -38,6 +38,9 @@ type Props = {
    *  `error` (409 `NOT_SCHEDULED` — the countdown already sent — gets its own sentence). Omitted on a
    *  permission card, which never carries a countdown. */
   onCancelAutoAnswer?(questionId: string): void;
+  /** "Dispensar" (TER-1140): takes the card off the pending list after a light confirmation; the tab is not
+   *  touched. Fire-and-forget like `onAnswer`. */
+  onDismiss?(questionId: string): void;
 };
 type Choice = Extract<TabQuestion, { kind: 'choice' }>;
 type Permission = Extract<TabQuestion, { kind: 'permission' }>;
@@ -95,10 +98,31 @@ export const TabQuestionCard = memo(function TabQuestionCard(props: Props) {
       {/* TER-641: the countdown decides (or decided) this card by itself, from memory. */}
       {question.auto_decision ? <AutoDecisionBadge decision={question.auto_decision} /> : null}
       {question.status !== 'open' ? <AppText variant="muted">{statusLabel(question)}</AppText> : null}
+      {!settled && props.onDismiss ? <DismissControl id={question.id} busy={props.busy} onDismiss={props.onDismiss} /> : null}
       {props.error ? <AppText className="text-app-danger">{props.error}</AppText> : null}
     </View>
   );
 });
+
+/** "Dispensar", then "Dispensar este card?" with yes/no in its place: a light confirmation, no dialog (TER-1140). */
+function DismissControl({ id, busy, onDismiss }: { id: string; busy: boolean; onDismiss(id: string): void }) {
+  const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
+  if (!confirming) {
+    return (
+      <View className="flex-row justify-end">
+        <Button label={t('Dispensar')} variant="ghost" disabled={busy} onPress={() => setConfirming(true)} />
+      </View>
+    );
+  }
+  return (
+    <View className="flex-row flex-wrap items-center justify-end gap-2">
+      <AppText variant="muted">{t('Dispensar este card?')}</AppText>
+      <Button label={t('Sim, dispensar')} variant="secondary" disabled={busy} onPress={() => onDismiss(id)} />
+      <Button label={t('Não')} variant="ghost" onPress={() => setConfirming(false)} />
+    </View>
+  );
+}
 
 function ChoiceBody({ question, busy, onAnswer, onForget, onCancelAutoAnswer }: Props & { question: Choice }) {
   const { t } = useTranslation();

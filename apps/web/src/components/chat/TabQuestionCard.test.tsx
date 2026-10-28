@@ -98,7 +98,8 @@ it('disables every answer while one is in flight', () => {
 it.each([
   [choice({ id: 'closed-0', status: 'answered', answer: { answers: [{ selected: [1] }, { selected: [0] }] } } as Partial<TabQuestion>), ['What is your favorite color? → Green', 'Respondida']],
   [choice({ id: 'closed-1', status: 'answered_in_tab' }), ['Respondida na aba']],
-  [permission({ id: 'closed-2', status: 'expired' }), ['Expirada']],
+  [permission({ id: 'closed-2', status: 'expired' }), ['Encerrada — a aba foi fechada']],
+  [choice({ id: 'closed-4', status: 'expired', error_code: 'DISMISSED' }), ['Dispensada']],
   [permission({ id: 'closed-3', status: 'failed', error_code: 'MACHINE_OFFLINE', answer: { allow: true } } as Partial<TabQuestion>), ['Permitido', 'Falhou — a máquina está offline']],
 ])('a closed card is read-only and says how it ended (%#)', (q, texts) => {
   render(<TabQuestionCard question={q} answering={false} onAnswer={vi.fn()} loadScreen={vi.fn(async () => ({ text: 'x' }))} />);
@@ -106,6 +107,25 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
   for (const t of texts) expect(screen.getByText(t)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Responder|Permitir/ })).toBeNull();
+});
+
+it('"Dispensar" asks a light confirmation before taking the card off the pending list (TER-1140)', () => {
+  const onDismiss = vi.fn();
+  render(<TabQuestionCard question={permission()} answering={false} onAnswer={vi.fn()} onDismiss={onDismiss} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Dispensar' }));
+  expect(onDismiss).not.toHaveBeenCalled();
+  expect(screen.getByText('Dispensar este card?')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Não' }));
+  expect(screen.queryByText('Dispensar este card?')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Dispensar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Sim, dispensar' }));
+  expect(onDismiss).toHaveBeenCalledWith('q2');
+});
+
+it('a settled card has no "Dispensar"', () => {
+  render(<TabQuestionCard question={choice({ status: 'answered_in_tab' })} answering={false} onAnswer={vi.fn()} onDismiss={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Ver detalhes' }));
+  expect(screen.queryByRole('button', { name: 'Dispensar' })).toBeNull();
 });
 
 it('shows the error it is given', () => {

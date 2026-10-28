@@ -584,7 +584,6 @@
   "permitida": "allowed",
   "negada": "denied",
   "respondida": "answered",
-  "expirada": "expired",
   "{{count}} permissões_one": "{{count}} permission",
   "{{count}} permissões_other": "{{count}} permissions",
   "{{count}} perguntas_one": "{{count}} question",
@@ -654,5 +653,11 @@
   "versão publicada": "version published",
   "{{what}} às {{time}}": "{{what}} at {{time}}",
   "criar coluna": "create column",
-  "mudar coluna": "change column"
+  "mudar coluna": "change column",
+  "dispensada": "dismissed",
+  "Encerrada — a aba foi fechada": "Closed — the tab was closed",
+  "encerrada, a aba foi fechada": "closed, the tab was closed",
+  "Dispensar este card?": "Dismiss this card?",
+  "Sim, dispensar": "Yes, dismiss",
+  "Tira este card da lista de pendências. A aba não é tocada.": "Takes this card off the pending list. The tab is not touched."
 }

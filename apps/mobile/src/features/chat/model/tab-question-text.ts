@@ -125,6 +125,10 @@ export const permissionTitle = (q: TabQuestionPermission): string =>
     ? t('{{tab}} pede permissão (o Codex)', { tab: tabLabel(q) })
     : t('{{tab}} pede permissão para usar «{{tool}}»', { tab: tabLabel(q), tool: q.payload.tool_name });
 
+/** `error_code` of a card the person dismissed (TER-1140): the wire says `expired` with it, so older apps keep parsing. */
+export const DISMISSED_CODE = 'DISMISSED';
+const dismissed = (q: TabQuestion): boolean => q.status === 'expired' && q.error_code === DISMISSED_CODE;
+
 export function statusLabel(q: TabQuestion): string {
   switch (q.status) {
     case 'open':
@@ -134,7 +138,8 @@ export function statusLabel(q: TabQuestion): string {
     case 'answered_in_tab':
       return t('Respondida na aba');
     case 'expired':
-      return t('Expirada');
+      // closed by the tab itself: removed, its session gone or its agent exited (TER-1140)
+      return dismissed(q) ? t('Dispensada') : t('Encerrada — a aba foi fechada');
     case 'failed':
       return t('Falhou — {{reason}}', { reason: t(FAILURE_TEXT[q.error_code ?? ''] ?? tk('não foi possível digitar na aba')) });
   }
@@ -155,7 +160,7 @@ export function compactQuestionOutcome(q: TabQuestion): string {
       if (q.kind === 'permission' && q.answer) return q.answer.allow ? t('permitida') : t('negada');
       return t('respondida');
     case 'expired':
-      return t('expirada');
+      return dismissed(q) ? t('dispensada') : t('encerrada, a aba foi fechada');
     case 'failed':
       return t('falhou');
   }

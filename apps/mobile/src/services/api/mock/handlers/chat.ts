@@ -1264,6 +1264,19 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { tab_question: view } };
   });
 
+  /** "Dispensar" (TER-1140): idempotent — a card that is not open any more comes back as it is. Like the
+   * server, a dismissed card goes out `expired` with `error_code: 'DISMISSED'`. */
+  router.route('POST', '/api/m/v1/chat/tab-questions/:id/dismiss', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const question = state.tabQuestions.find((q) => q.id === ctx.params.id);
+    if (!question) throw new WireError(404, 'NOT_FOUND', 'Pergunta não encontrada');
+    if (question.status === 'open') {
+      Object.assign(question, { status: 'expired', error_code: 'DISMISSED', closed_at: new Date(ctx.now()).toISOString() });
+      broadcast(state, { type: 'tab_question_closed', user_id: USER_ID, conversation_id: question.conversation_id, question: tabQuestionView(question) });
+    }
+    return { status: 200, body: { tab_question: tabQuestionView(question) } };
+  });
+
   router.route('GET', '/api/m/v1/chat/tab-questions/:id/screen', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     const question = state.tabQuestions.find((q) => q.id === ctx.params.id);

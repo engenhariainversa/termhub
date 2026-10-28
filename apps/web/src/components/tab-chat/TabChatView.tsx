@@ -246,6 +246,7 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
                       onAnswer={chat.answerQuestion}
                       loadScreen={loadQuestionScreen}
                       onCancelAutoAnswer={chat.cancelAutoAnswer}
+                      onDismiss={chat.dismissQuestion}
                     />
                   ))}
                   {openSuggestions.map((s) => (
