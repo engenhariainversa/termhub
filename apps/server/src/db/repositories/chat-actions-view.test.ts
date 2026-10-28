@@ -813,6 +813,15 @@ it('spells out what a set_automation_policy card turns on or widens, with the le
   expect(b.summary).toBe('mudar o Setup do trabalho automático (caminhos de release: `apps/agent/package.json`; checks obrigatórios: nenhum; máximo em paralelo: sem limite) no projeto reactivando');
 });
 
+it('spells out what a set_project_ai_setup card changes (TER-1147)', async () => {
+  const repos = fakeRepos();
+  const call = action({ tool: 'set_project_ai_setup', args: { project_id: 'p1', remove: ['a1'], add: ['a2', 'a3'], prefer_machine_id: 'm1', models: { claude: 'sonnet', chatgpt: null }, confirm: true }, project_id: 'p1' });
+  const [card] = await describeActions(repos, [call], OWNER);
+  expect(card.summary).toBe(
+    'mudar as contas de IA e o modelo do projeto (tirar 1 conta; adicionar 2 contas; as contas de uma máquina primeiro (o chat do projeto passa a rodar nela); modelo do Claude: `sonnet`; modelo do Codex: o padrão do CLI) no projeto reactivando',
+  );
+});
+
 it('names the machine on a set_machine_automation card (TER-975)', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'set_machine_automation', args: { machine_id: 'm1', accept: true }, machine_id: 'm1' })], OWNER);

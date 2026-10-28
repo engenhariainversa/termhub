@@ -236,6 +236,15 @@ it('classifies list_tab_questions as read (TER-627): it only lists the tabs\' qu
   expect(actionClass('list_tab_questions', {})).toBe('read');
 });
 
+it('the project AI Setup (TER-1147): reading and previewing are reads, confirm asks a card, unstick runs at once', () => {
+  expect(actionClass('get_project_ai_setup', { project_id: 'p1' })).toBe('read');
+  expect(actionClass('set_project_ai_setup', { project_id: 'p1', remove: ['a1'] })).toBe('read');
+  expect(actionClass('set_project_ai_setup', { project_id: 'p1', remove: ['a1'], confirm: true })).toBe('write');
+  expect(defaultKindOf('set_project_ai_setup', { project_id: 'p1', confirm: true })).toBeNull();
+  expect(standingKindOf('set_project_ai_setup', { project_id: 'p1', confirm: true })).toBeNull();
+  expect(actionClass('unstick_project_chat', { project_id: 'p1' })).toBe('self_mediated');
+});
+
 describe('defaultKindOf (TER-627)', () => {
   it.each([
     ['open_tab', { project_id: 'p1' }, 'open_tab'],
@@ -268,7 +277,7 @@ describe('defaultKindOf (TER-627)', () => {
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
     // report_card is a tab tool (agentic board F-8): only a tab with an active run lists it, never the concierge;
     // unclassified, it would ask like any unknown tool
-    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot']);
+    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot', 'set_project_ai_setup']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },

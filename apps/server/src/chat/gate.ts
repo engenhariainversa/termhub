@@ -19,7 +19,10 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // or changed on the board, and the person sees every open watch in the chat and can cancel it there.
 // schedule_wakeup (TER-1100) is the same: a reminder is a watch on the clock. notify (TER-1101) only tells the
 // person themself, by the rules they set (levels, quiet hours, grouping, a cap per hour).
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify']);
+// unstick_project_chat (TER-1147) only reads the usage of the project's accounts again and starts the chat's
+// next message on the first of the order the person set with room: nothing is typed or run on a machine, no
+// account outside that order is picked, and the person asked for it to get the chat going without a click.
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'unstick_project_chat']);
 
 // Tools classified by reversibility
 const readTools = new Set([
@@ -59,6 +62,8 @@ const readTools = new Set([
   'get_client_context',
   // TER-1099: the chat's own open watches; nothing is changed.
   'list_watches',
+  // TER-1147: the project's AI accounts, their usage and who answers its chat; nothing is changed.
+  'get_project_ai_setup',
 ]);
 
 const writeTools = new Set([
@@ -186,6 +191,12 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   // The machine's "Aceita trabalho automático": refusing is a brake, accepting asks the person.
   if (tool === 'set_machine_automation') {
     return (args as { accept?: unknown } | undefined)?.accept === false ? 'self_mediated' : 'write';
+  }
+
+  // TER-1147: without confirm: true the project's AI Setup is only previewed (before and after, nothing
+  // saved); with it the accounts or the model change, always on the person's card (no grant or default).
+  if (tool === 'set_project_ai_setup') {
+    return (args as { confirm?: unknown } | undefined)?.confirm === true ? 'write' : 'read';
   }
 
   // unlink_project_machine only closes tabs (irreversible) when confirm: true; otherwise it either

@@ -205,6 +205,16 @@ export function isLimited(accountId: string, now = Date.now()): boolean {
   return false;
 }
 
+/** Until when the account is left aside (ISO), or null when it is not (TER-1147: `get_project_ai_setup`). */
+export function limitedUntilOf(accountId: string, now = Date.now()): string | null {
+  return isLimited(accountId, now) ? new Date(limitedUntil.get(accountId)!).toISOString() : null;
+}
+
+/** Forgets the limit marks of these accounts (TER-1147: `unstick_project_chat` reads them again). */
+export function forgetLimited(accountIds: Iterable<string>): void {
+  for (const id of accountIds) limitedUntil.delete(id);
+}
+
 /** Tests only. */
 export function clearLimited(): void {
   limitedUntil.clear();
@@ -240,6 +250,27 @@ export async function projectChatAccounts(
 }
 
 /**
+ * Why `projectPick` chose its account (TER-1147, for `get_project_ai_setup`): the first ready one not at
+ * its limit, the one the chat last answered on when all are, the first ready otherwise; `none_ready` when
+ * no listed account's machine can run the chat now.
+ */
+export type ProjectPickReason = 'first_with_room' | 'all_limited_last' | 'all_limited_first' | 'none_ready';
+
+/** `projectChoice`'s pick, without waiting on agents: the order, the machines that are ready, the limit marks. */
+export function projectPick<T extends { account: AiAccount; machine: Machine }>(
+  accounts: T[],
+  ready: (machine: Machine) => boolean,
+  lastAccountId: string | null,
+): { pick: T | undefined; reason: ProjectPickReason } {
+  const usable = accounts.filter((a) => ready(a.machine));
+  const free = usable.find((a) => !isLimited(a.account.id));
+  if (free) return { pick: free, reason: 'first_with_room' };
+  const last = usable.find((a) => a.account.id === lastAccountId);
+  if (last) return { pick: last, reason: 'all_limited_last' };
+  return usable[0] ? { pick: usable[0], reason: 'all_limited_first' } : { pick: undefined, reason: 'none_ready' };
+}
+
+/**
  * The account a project chat runs on (TER-1144): the first of the project's accounts whose machine is
  * ready and that has not just met its usage limit; when all of them did, the one the chat last answered
  * on, else the first ready. null when the project lists none or none of their machines is online: the
@@ -260,8 +291,7 @@ async function projectChoice(
     const distinct = [...new Map(accounts.map((a) => [a.machine.id, a.machine])).values()];
     await Promise.all(distinct.map((m) => (wait === 'handover' ? ctx.agents.awaitHandover(m) : ctx.agents.awaitAgent(m))));
   }
-  const ready = accounts.filter((a) => machineReady(ctx.agents, a.machine.id, requires));
-  const pick = ready.find((a) => !isLimited(a.account.id)) ?? ready.find((a) => a.account.id === project.accountId) ?? ready[0];
+  const { pick } = projectPick(accounts, (m) => machineReady(ctx.agents, m.id, requires), project.accountId);
   if (!pick) return null;
   return { machine: pick.machine, configDir: pick.account.config_dir, account: { kind: 'chosen', id: pick.account.id, label: pick.account.label, via: 'project' }, model };
 }

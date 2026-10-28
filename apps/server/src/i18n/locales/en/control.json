@@ -166,5 +166,8 @@
   "Esta conversa já tem {{max}} avisos esperando para sair: escreva no chat sem notify.": "This conversation already has {{max}} notices waiting to go out: write in the chat without notify.",
   "stop_with só vale com every_minutes: é o fim de um resumo periódico.": "stop_with only works with every_minutes: it ends a periodic summary.",
   "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with must be the id of an open watch of this conversation: the job the summary follows.",
-  "Informe name, category, waiting ou position": "Give name, category, waiting or position"
+  "Informe name, category, waiting ou position": "Give name, category, waiting or position",
+  "Só a pessoa ou o concierge mudam as contas de IA de um projeto, nunca um agente numa aba": "Only the person or the concierge changes a project's AI accounts, never an agent in a tab",
+  "A máquina {{machine}} não está ligada ao projeto": "The machine {{machine}} is not linked to the project",
+  "Mudar as contas de IA ou o modelo de um projeto precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Changing a project's AI accounts or model needs the person's confirmation in the chat. Nothing was changed: propose the call again."
 }
