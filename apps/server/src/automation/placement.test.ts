@@ -232,6 +232,17 @@ describe('placeRun detail (TER-985)', () => {
       detail: { machines: [{ id: 'm1', why: 'no_room' }], accounts: [{ id: 'a1', why: 'machine_no_room' }, { id: 'a2', why: 'machine_no_room' }] },
     });
   });
+
+  it('TER-1138: a crowded machine carries what was read and how many tabs it holds', async () => {
+    reg.online.set('m1', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });
+    (repos as unknown as { tabs: unknown }).tabs = { listByMachine: async () => [{}, {}, {}] };
+    const room = { ok: false, limit: 'memory' as const, mem_available_kb: 2 * 1024 * 1024, disk_free_kb: 90 * 1024 * 1024, disk_mount: '/', load1: 2, ncpu: 8, at: '2026-10-28T10:00:00.000Z' };
+    const p = await placeRun({ repos, now: () => new Date(), usage: async () => 0, room: async () => room }, project, setup(['a1']));
+    expect(p).toMatchObject({ waiting: 'no_room', detail: { machines: [{ id: 'm1', why: 'no_room', room, tabs: 3 }] } });
+    // a reading with room places the run
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0, room: async () => ({ ...room, ok: true, limit: null }) }, project, setup(['a1']))).toMatchObject({ machine: { id: 'm1' } });
+  });
 });
 
 describe('waiting reasons', () => {

@@ -120,6 +120,8 @@ export interface Machine {
   ai_usage_query: boolean;
   /** R6: false = the dispatcher never places automatic runs here */
   automation_allowed: boolean;
+  /** TER-1138: idle agent tabs are closed after this many hours (monitor/idle-tabs.ts); null = never (the default) */
+  idle_tab_close_hours: number | null;
   /** TER-1018: "Usar ai-memory nesta máquina" (opt-in, off by default) */
   ai_memory_enabled: boolean;
   /** its local server (loopback/private origin); null = AI_MEMORY_DEFAULT_URL */
@@ -400,6 +402,7 @@ export const mapMachine = (m: PrismaMachine & { owner?: { name: string } | null 
   claude_auto_swap: m.claudeAutoSwap,
   ai_usage_query: m.aiUsageQuery,
   automation_allowed: m.automationAllowed,
+  idle_tab_close_hours: m.idleTabCloseHours ?? null,
   ai_memory_enabled: m.aiMemoryEnabled,
   ai_memory_url: m.aiMemoryUrl ?? null,
   permission_hint: m.permissionHint,

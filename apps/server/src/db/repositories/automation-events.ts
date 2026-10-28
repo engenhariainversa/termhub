@@ -33,6 +33,8 @@ export type AutomationEventKind =
   | 'budget_warning'
   | 'ci_fix_requested'
   | 'worktree_cleanup'
+  // TER-1138: an agent tab at rest closed by itself ({ tab_id, tab, machine_id, machine, tool, state, reason: idle | no_room, hours, session_id })
+  | 'tab_auto_closed'
   // TER-975: changes to what automatic work may do, by the chat, an MCP client, the web or the app
   | 'automation_on'
   | 'automation_off'

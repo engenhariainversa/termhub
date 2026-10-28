@@ -44,6 +44,7 @@ import { loadPublicIdKey, setPublicIdKey } from './public/public-id.js';
 import { hooksRoutes } from './routes/hooks.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { startStaleWorkingSweeper } from './monitor/stale-working.js';
+import { startIdleTabsSweeper } from './monitor/idle-tabs.js';
 import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
@@ -436,6 +437,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   // Claude tabs the hooks left working with nothing since: their screen says what they wait for (TER-615),
   // and one left waiting on background work that never reports ends after a timeout (TER-1053).
   const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
+  // TER-1138: agent tabs at rest for long are closed on the machines that opted in (Máquinas → Fechar abas paradas)
+  const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -564,6 +567,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();
     stopStaleWorking();
+    stopIdleTabs();
     stopDecisionSweeper();
     stopMemorySweeper();
     stopMemoryQueue();
