@@ -1,3 +1,4 @@
+import type { FastifyBaseLogger } from 'fastify';
 import { containsSecret } from '../lessons/secrets.js';
 import { renderLessonBlock, type LessonInput } from '../lessons/note.js';
 import { NoteTooLargeError } from '../db/repositories/notes.js';
@@ -8,12 +9,7 @@ import { indexProjectNote } from '../memory/note.js';
 import { newId } from '../lib/ids.js';
 import { ControlError, type ControlContext } from './context.js';
 import { msg, tk } from '../i18n/index.js';
-
-/** `record_lesson`'s own cap (spec 2026-09-27 failure lessons D10): the same idea as TER-95's
- *  `NOTES_PER_HOUR` — a runaway loop, or an injection that got the concierge to call the tool
- *  repeatedly, cannot flood a project's note past this many lessons per hour. */
-export const LESSONS_PER_HOUR = 20;
-const LESSONS_WINDOW_MS = 60 * 60 * 1000;
+import { admit, localClock, memoryEvent, MEMORY_QUEUE_MAX, type QueuedLesson } from '../memory/quota.js';
 
 /** How many of the project's most recent lessons `recordLesson` scans (newest first) for the one it
  *  just wrote: comfortably more than one caller could add in the instant between the append and this
@@ -21,7 +17,7 @@ const LESSONS_WINDOW_MS = 60 * 60 * 1000;
 const LESSON_LOOKUP_LIMIT = 20;
 
 const LESSON_SECRET_MSG = tk('A lição parece conter um segredo (token ou chave); tire-o e tente de novo');
-const LESSONS_RATE_LIMITED_MSG = tk('Limite de 20 lições por hora atingido; tente mais tarde');
+const LESSONS_QUEUE_FULL_MSG = tk('A fila de lições deste projeto está cheia ({{max}}); nada foi gravado');
 const NOTE_FULL_MSG = tk('A anotação do projeto chegou ao limite de 200 000 caracteres');
 
 export interface RecordLessonInput {
@@ -46,9 +42,11 @@ export interface RecordLessonInput {
  * `ctx.scoped.tab` (404 the same way) and must belong to the same project (`TAB_OTHER_PROJECT` —
  * a lesson tagged with a tab from elsewhere would point the "Abrir origem" link at the wrong project's
  * terminal); every free-text field, plus `card`/`pr`, must not look like a secret (`containsSecret`,
- * `LESSON_SECRET`) — checked before any write, exactly like TER-95's source verification; the caller's
- * own hourly cap (`LESSONS_PER_HOUR`, `memoryItems.countNoteLessonsSince`), checked last among the pure
- * checks since it is closest to the write itself. The note's own size cap (`NOTE_MAX`, surfaced here as
+ * `LESSON_SECRET`) — checked before any write, exactly like TER-95's source verification; the project's
+ * hourly quota (TER-1137, `admit`: `LESSONS_PER_PROJECT_HOUR` per project, under an owner cap that grows
+ * with the projects at work), checked last among the pure checks since it is closest to the write itself.
+ * Over it nothing is refused: the lesson (its id already minted) goes to the memory queue, is appended once
+ * the window has room, and the answer says when (`queued: true`, `ref: null`). Only a full queue refuses. The note's own size cap (`NOTE_MAX`, surfaced here as
  * `NoteTooLargeError` from `notes.appendBlock`) can only be known once the append is attempted, so it
  * is the very last thing that can fail.
  *
@@ -61,7 +59,9 @@ export interface RecordLessonInput {
  * the note, so this still succeeds, just with `ref: null` rather than failing a call whose visible
  * effect (the note block) already happened.
  */
-export async function recordLesson(ctx: ControlContext, a: RecordLessonInput, deps?: MemoryDeps): Promise<{ lesson_id: string; ref: string | null }> {
+export type RecordLessonResult = { lesson_id: string; ref: string | null } | { lesson_id: string; ref: null; queued: true; write_at: string; message: string };
+
+export async function recordLesson(ctx: ControlContext, a: RecordLessonInput, deps?: MemoryDeps): Promise<RecordLessonResult> {
   const { project } = await ctx.scoped.project(a.project_id);
 
   let tabId: string | null = null;
@@ -74,11 +74,25 @@ export async function recordLesson(ctx: ControlContext, a: RecordLessonInput, de
   if (containsSecret([a.symptom, a.cause, a.fix, a.card ?? '', a.pr ?? ''])) throw new ControlError('LESSON_SECRET', LESSON_SECRET_MSG);
 
   const ownerId = ctx.scope.user.id;
-  const count = await ctx.repos.memoryItems.countNoteLessonsSince(ownerId, new Date(Date.now() - LESSONS_WINDOW_MS));
-  if (count >= LESSONS_PER_HOUR) throw new ControlError('LESSONS_RATE_LIMITED', LESSONS_RATE_LIMITED_MSG);
-
   const lessonId = newId();
   const input: LessonInput = { symptom: a.symptom, cause: a.cause, fix: a.fix, evidence: a.evidence ?? 'fixed', card: a.card, pr: a.pr };
+  const log: Pick<FastifyBaseLogger, 'info' | 'warn'> = deps?.log ?? ctx.log ?? console;
+
+  const bucket = { ownerId, projectId: project.id, what: 'lesson' as const, writtenBy: null };
+  const admission = await admit(ctx.repos, bucket);
+  if (!admission.ok) {
+    if (admission.full) {
+      log.warn({ projectId: project.id }, 'memory queue: lesson dropped, the queue is full');
+      await memoryEvent(ctx.repos, project.id, 'memory_dropped', { what: 'lesson', by: null, count: 1, reason: 'queue_full' });
+      throw new ControlError('LESSONS_QUEUE_FULL', msg(LESSONS_QUEUE_FULL_MSG, { max: MEMORY_QUEUE_MAX }));
+    }
+    const queued: QueuedLesson = { lesson_id: lessonId, tab_id: tabId, input };
+    const row = await ctx.repos.memoryWriteQueue.enqueue(bucket, queued);
+    log.info({ queueId: row.id, projectId: project.id, at: admission.at.toISOString() }, 'memory queue: lesson queued');
+    await memoryEvent(ctx.repos, project.id, 'memory_queued', { what: 'lesson', by: null, count: 1, until: admission.at });
+    return { lesson_id: lessonId, ref: null, queued: true, write_at: admission.at.toISOString(), message: `Na fila: grava às ${await localClock(ctx.repos, ownerId, admission.at)}` };
+  }
+
   try {
     // The block's `at` is taken under the note's row lock (`appendBlock`), never before it (spec D9).
     await ctx.repos.notes.appendBlock(project.id, (at) => renderLessonBlock(lessonId, at, tabId, input));
@@ -89,8 +103,7 @@ export async function recordLesson(ctx: ControlContext, a: RecordLessonInput, de
 
   // The MCP path passes no `deps`: the request's logger (`ctx.log`) and the default embedder, like the
   // notes route; `console` only for a context built without one (a script, a test).
-  const { embedder, log } = deps ?? { embedder: defaultEmbedder(), log: ctx.log ?? console };
-  await indexProjectNote(ctx.repos, project.id, { embedder, log });
+  await indexProjectNote(ctx.repos, project.id, { embedder: deps?.embedder !== undefined ? deps.embedder : defaultEmbedder(), log });
 
   const sourceId = `note:${project.id}:${lessonId}`;
   const { items } = await ctx.repos.memoryItems.listLessons(ownerId, { projectId: project.id, limit: LESSON_LOOKUP_LIMIT });

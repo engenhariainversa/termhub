@@ -101,7 +101,14 @@ export interface NewMemoryItem {
   expires_at?: Date | null;
   /** The ref a `record_decision` note replaces (TER-1015). Written on insert only: a re-upsert keeps it. */
   supersedes?: string | null;
+  /** Who a note came from, for its hourly quota (TER-1137). Written on insert only, like `supersedes`. */
+  written_by?: NoteWrittenBy | null;
 }
+
+/** Who a note came from (TER-1137): the person (said in the chat), the concierge on its own, or an agent
+ *  (a tab's `record_decision`, a run's `report_card` decisions). Each has its own hourly quota per project. */
+export const NOTE_WRITTEN_BY = ['person', 'assistant', 'agent'] as const;
+export type NoteWrittenBy = (typeof NOTE_WRITTEN_BY)[number];
 
 export interface MemoryHit extends MemoryItem {
   similarity: number | null;
@@ -257,8 +264,8 @@ async function upsertIn(tx: RawClient, items: NewMemoryItem[]): Promise<MemoryIt
     const hash = contentHash(it.title, it.text);
     const meta = it.meta ? JSON.stringify(it.meta) : null;
     const [row] = await tx.$queryRaw<(RawItem & { needs_embedding: boolean })[]>`
-      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","scope","conversation_id","expires_at","supersedes","source_at","updated_at")
-      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.scope ?? null}, ${it.conversation_id ?? null}, ${it.expires_at ?? null}, ${it.supersedes ?? null}, ${it.source_at}, now())
+      INSERT INTO "memory_items" ("id","owner_id","project_id","kind","source_id","chunk_index","title","text","trust","content_hash","source_hash","meta","scope","conversation_id","expires_at","supersedes","written_by","source_at","updated_at")
+      VALUES (${it.id ?? newId()}, ${it.owner_id}, ${it.project_id}, ${it.kind}, ${it.source_id}, ${it.chunk_index}, ${it.title}, ${it.text}, ${it.trust}, ${hash}, ${it.source_hash ?? null}, ${meta}::jsonb, ${it.scope ?? null}, ${it.conversation_id ?? null}, ${it.expires_at ?? null}, ${it.supersedes ?? null}, ${it.written_by ?? null}, ${it.source_at}, now())
       ON CONFLICT ("kind","source_id","chunk_index") DO UPDATE SET
         "title" = EXCLUDED."title", "text" = EXCLUDED."text", "trust" = EXCLUDED."trust", "owner_id" = EXCLUDED."owner_id", "project_id" = EXCLUDED."project_id",
         "source_at" = EXCLUDED."source_at", "updated_at" = now(), "content_hash" = EXCLUDED."content_hash", "source_hash" = EXCLUDED."source_hash", "meta" = EXCLUDED."meta",
@@ -481,6 +488,34 @@ export class MemoryItemsRepository {
 
   countNotesSince(ownerId: string, since: Date): Promise<number> {
     return this.db.memoryItem.count({ where: { ownerId, kind: 'note', createdAt: { gte: since } } });
+  }
+
+  /**
+   * One quota bucket's writes since `since` (TER-1137), oldest first, at most `limit` creation times:
+   * `note` = this owner's notes of exactly this project (null = account-wide) from `writtenBy` (a note
+   * from before the column counts as `assistant`); `lesson` = this owner's note-origin lessons (chunk 0)
+   * of this project. The caller counts them and reads when the window frees its next slot.
+   */
+  async bucketWritesSince(b: { ownerId: string; projectId: string | null; what: 'note' | 'lesson'; writtenBy: NoteWrittenBy | null }, since: Date, limit: number): Promise<Date[]> {
+    const rows =
+      b.what === 'note'
+        ? await this.db.$queryRaw<{ created_at: Date }[]>`
+            SELECT "created_at" FROM "memory_items"
+            WHERE "owner_id" = ${b.ownerId} AND "kind" = 'note' AND "project_id" IS NOT DISTINCT FROM ${b.projectId}::text
+              AND COALESCE("written_by", 'assistant') = ${b.writtenBy ?? 'assistant'} AND "created_at" >= ${since}
+            ORDER BY "created_at" LIMIT ${limit}`
+        : await this.db.$queryRaw<{ created_at: Date }[]>`
+            SELECT "created_at" FROM "memory_items"
+            WHERE "owner_id" = ${b.ownerId} AND "kind" = 'lesson' AND "chunk_index" = 0 AND "meta"->>'origin' = 'note'
+              AND "project_id" IS NOT DISTINCT FROM ${b.projectId}::text AND "created_at" >= ${since}
+            ORDER BY "created_at" LIMIT ${limit}`;
+    return rows.map((r) => r.created_at);
+  }
+
+  /** The owner's global hourly cap (TER-1137): every note since `since` except the person's own, which the
+   *  global cap never holds back. */
+  countAgentNotesSince(ownerId: string, since: Date): Promise<number> {
+    return this.db.memoryItem.count({ where: { ownerId, kind: 'note', createdAt: { gte: since }, OR: [{ writtenBy: null }, { writtenBy: { not: 'person' } }] } });
   }
 
   /** "Anotações do concierge" (spec D12): newest first, keyset cursor over `(created_at, id)`; `q`

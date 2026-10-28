@@ -1,8 +1,8 @@
 import { defaultEmbedder, type Embedder } from '../chat/embeddings.js';
-import { NOTES_PER_HOUR } from '../control/memory.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { indexNote, noteItem, type MemoryDeps } from '../memory/index-items.js';
+import { admit, memoryEvent, type Admission } from '../memory/quota.js';
 import { recordEvent } from './events.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -33,7 +33,9 @@ export function decisionSummary(d: Pick<TakenDecision, 'question' | 'choice'>): 
  * and the daily summary as `decided_by_recommendation` (`via: 'agent'`, with its summary — the agent's own
  * words for the person, like `report_card`'s reason, never the tab's screen) and becomes a memory note (trust
  * `derived`, the project owner's, citing the card) that `search_memory` finds as a precedent next time. Notes
- * stop at the owner's NOTES_PER_HOUR. Best effort: a failed write is logged by id and never fails the report.
+ * are the agents' (`written_by: agent`) and take the project's agent quota (TER-1137, `admit`); over it they
+ * wait in the memory queue, in order, and the feed says so once (`memory_queued`) — only a full queue drops
+ * one (`memory_dropped`). Best effort: a failed write is logged by id and never fails the report.
  */
 export async function recordTakenDecisions(
   repos: Repositories,
@@ -46,26 +48,43 @@ export async function recordTakenDecisions(
   try {
     const [project, task] = await Promise.all([repos.projects.findById(run.project_id), run.task_id ? repos.tasks.findById(run.task_id) : undefined]);
     const ownerId = project?.owner_id ?? null;
-    const now = deps.now?.() ?? new Date();
-    let room = ownerId ? NOTES_PER_HOUR - (await repos.memoryItems.countNotesSince(ownerId, new Date(now.getTime() - 3_600_000))) : 0;
     const embedder = deps.embedder !== undefined ? deps.embedder : defaultEmbedder();
+    const bucket = ownerId ? { ownerId, projectId: run.project_id, what: 'note' as const, writtenBy: 'agent' as const } : null;
+    let queued = 0;
+    let dropped = 0;
+    let until: Date | undefined;
     for (const d of decisions.slice(0, DECISIONS_MAX)) {
       await recordEvent(repos, { project_id: run.project_id, task_id: run.task_id, run_id: run.id, kind: 'decided_by_recommendation', payload: { via: 'agent', tab_id: run.tab_id, summary: decisionSummary(d) } });
       recorded++;
-      if (!ownerId || room <= 0) continue;
-      room--;
-      await indexNote(
-        repos,
-        noteItem({
-          owner_id: ownerId,
-          project_id: run.project_id,
-          question: task ? `${task.ref}: ${d.question}` : d.question,
-          decision: d.options ? `${d.choice} (opções: ${d.options})` : d.choice,
-          reason: d.reason,
-          sources: run.task_id ? [`task:${run.task_id}`] : [],
-        }),
-        { embedder, log: deps.log as unknown as MemoryDeps['log'] },
-      );
+      if (!ownerId || !bucket) continue;
+      const item = noteItem({
+        owner_id: ownerId,
+        project_id: run.project_id,
+        question: task ? `${task.ref}: ${d.question}` : d.question,
+        decision: d.options ? `${d.choice} (opções: ${d.options})` : d.choice,
+        reason: d.reason,
+        sources: run.task_id ? [`task:${run.task_id}`] : [],
+        written_by: 'agent',
+      });
+      const admission: Admission = await admit(repos, bucket, deps.now?.() ?? new Date());
+      if (admission.ok) {
+        await indexNote(repos, item, { embedder, log: deps.log as unknown as MemoryDeps['log'] });
+      } else if (admission.full) {
+        dropped++;
+      } else {
+        await repos.memoryWriteQueue.enqueue(bucket, { item });
+        queued++;
+        until = admission.at;
+      }
+    }
+    const ids = { task_id: run.task_id, run_id: run.id };
+    if (queued > 0) {
+      deps.log.info({ runId: run.id, queued, at: until?.toISOString() ?? null }, 'memory queue: decisions queued');
+      await memoryEvent(repos, run.project_id, 'memory_queued', { what: 'note', by: 'agent', count: queued, until, ...ids });
+    }
+    if (dropped > 0) {
+      deps.log.warn({ runId: run.id, dropped }, 'memory queue: decisions dropped, the queue is full');
+      await memoryEvent(repos, run.project_id, 'memory_dropped', { what: 'note', by: 'agent', count: dropped, reason: 'queue_full', ...ids });
     }
   } catch (e) {
     const code = (e as { code?: unknown })?.code;

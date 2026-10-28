@@ -491,5 +491,6 @@
   "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Cada tipo necesita al menos una columna que no sea de espera",
   "Cards que esperam uma pessoa ou terceiros": "Tarjetas que esperan a una persona o a terceros",
   "Coluna {{name}} aguardando": "Columna {{name}} en espera",
-  "aguardando": "en espera"
+  "aguardando": "en espera",
+  "{{what}}; grava às {{time}}": "{{what}}; se guarda a las {{time}}"
 }

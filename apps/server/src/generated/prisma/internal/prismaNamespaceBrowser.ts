@@ -106,6 +106,7 @@ export const ModelName = {
   ChatFocus: 'ChatFocus',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
+  MemoryWriteQueue: 'MemoryWriteQueue',
   MemoryRule: 'MemoryRule',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
@@ -1103,12 +1104,26 @@ export const MemoryItemScalarFieldEnum = {
   wrongAt: 'wrongAt',
   supersededAt: 'supersededAt',
   supersedes: 'supersedes',
+  writtenBy: 'writtenBy',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type MemoryItemScalarFieldEnum = (typeof MemoryItemScalarFieldEnum)[keyof typeof MemoryItemScalarFieldEnum]
+
+
+export const MemoryWriteQueueScalarFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  projectId: 'projectId',
+  what: 'what',
+  writtenBy: 'writtenBy',
+  payload: 'payload',
+  createdAt: 'createdAt'
+} as const
+
+export type MemoryWriteQueueScalarFieldEnum = (typeof MemoryWriteQueueScalarFieldEnum)[keyof typeof MemoryWriteQueueScalarFieldEnum]
 
 
 export const MemoryRuleScalarFieldEnum = {

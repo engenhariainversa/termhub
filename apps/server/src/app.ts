@@ -66,6 +66,7 @@ import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
 import { startMemorySweeper } from './memory/sweeper.js';
+import { startMemoryQueueFlusher } from './memory/quota.js';
 import { startAiMemoryRulesSweeper } from './memory/ai-memory-sync.js';
 import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
@@ -439,6 +440,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
   const stopMemorySweeper = startMemorySweeper(repos, fastify.log);
+  // TER-1137: memory writes over their hourly quota, written once their window has room
+  const stopMemoryQueue = startMemoryQueueFlusher(repos, fastify.log);
   const stopAiMemoryRules = startAiMemoryRulesSweeper(repos, fastify.log);
   // Live concierge runs survive a restart or a deploy (spec 2026-09-26 panel §3): this instance proves
   // its own are alive, picks up those another instance released or left stale (once shortly after
@@ -563,6 +566,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopStaleWorking();
     stopDecisionSweeper();
     stopMemorySweeper();
+    stopMemoryQueue();
     stopAiMemoryRules();
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();

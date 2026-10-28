@@ -62,6 +62,12 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'workflow_no_runner':
       // TER-1120: delivered nothing and does not hold the merge queue
       return t('Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue', { workflow: e.workflow ?? t('sem nome') });
+    case 'memory_queued':
+      // TER-1137: the server's line says what and how many; the time is when the queue writes it
+      if (!e.reason_text) return null;
+      return e.until ? t('{{what}}; grava às {{time}}', { what: e.reason_text, time: formatTime(e.until) }) : e.reason_text;
+    case 'memory_dropped':
+      return e.reason_text;
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':

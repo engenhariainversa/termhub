@@ -10,7 +10,8 @@ import { Scoped } from '../auth/scope.js';
 import { HttpError } from '../lib/errors.js';
 import type { ControlContext } from './context.js';
 import { ControlError } from './context.js';
-import { MEMORY_NOTE, MEMORY_REF, answerTabQuestionTool, listTabQuestions, parseRef, recordDecision, searchMemory } from './memory.js';
+import { MEMORY_NOTE, MEMORY_REF, QUEUED_NOTE, answerTabQuestionTool, listTabQuestions, parseRef, recordDecision, searchMemory } from './memory.js';
+import { MEMORY_QUEUE_MAX } from '../memory/quota.js';
 import { publishTabQuestions } from '../chat/tab-questions.js';
 import { automaticRunOfTab } from '../automation/pause.js';
 import { recordEvent } from '../automation/events.js';
@@ -434,7 +435,10 @@ interface NotesSetup {
   timeZone?: string;
   /** The concierge token's conversation, when the call comes from the chat. */
   conversation?: string;
-  count?: number;
+  /** Notes already in the call's quota bucket this hour (TER-1137), per origin when a map. */
+  count?: number | Partial<Record<'person' | 'assistant' | 'agent', number>>;
+  /** Writes already waiting in the bucket's queue. */
+  queued?: number;
   decisions?: ChatDecision[];
   items?: MemoryHit[];
   user?: string;
@@ -462,12 +466,22 @@ function ctxForNotes(setup: NotesSetup = {}) {
       updated_at: '2026-09-26T00:00:00.000Z',
     })),
   );
-  const countNotesSince = vi.fn(async () => setup.count ?? 0);
+  const inBucket = (by: string | null) => (typeof setup.count === 'number' ? setup.count : (setup.count?.[(by ?? 'assistant') as 'assistant'] ?? 0));
+  const bucketWritesSince = vi.fn(async (b: { writtenBy: string | null }, _since: Date, limit: number) =>
+    Array.from({ length: Math.min(limit, inBucket(b.writtenBy)) }, () => new Date('2026-10-28T10:15:00Z')),
+  );
+  const countAgentNotesSince = vi.fn(async () => 0);
+  const memoryWriteQueue = {
+    count: vi.fn(async () => setup.queued ?? 0),
+    enqueue: vi.fn(async (b: object, payload: object) => ({ ...b, id: 'q1', payload, createdAt: new Date() })),
+    activeProjectCount: vi.fn(async () => 0),
+  };
   const findManyForOwner = vi.fn(async (ids: string[]) => (setup.items ?? []).filter((it) => ids.includes(it.id)));
   const findManyForUser = vi.fn(async (ids: string[]) => (setup.decisions ?? []).filter((d) => ids.includes(d.id)));
   const repos = {
     projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) },
-    memoryItems: { upsertMany, countNotesSince, findManyForOwner },
+    memoryItems: { upsertMany, bucketWritesSince, countAgentNotesSince, findManyForOwner },
+    memoryWriteQueue,
     chatDecisions: { findManyForUser },
     users: { timeZone: vi.fn(async () => setup.timeZone ?? null) },
   } as unknown as Repositories;
@@ -475,7 +489,7 @@ function ctxForNotes(setup: NotesSetup = {}) {
   const scope = { user: { id: user } as never, viewAs: { kind: 'self' as const }, ownerId: user, createAs: user };
   const ctx: ControlContext = { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
   if (setup.conversation) ctx.token = { id: 'tok', scopes: ['memory'], gated: true, chat_conversation_id: setup.conversation };
-  return { ctx, calls: { upsertMany, countNotesSince, findManyForOwner, findManyForUser } };
+  return { ctx, calls: { upsertMany, bucketWritesSince, findManyForOwner, findManyForUser, memoryWriteQueue } };
 }
 
 describe('recordDecision', () => {
@@ -524,16 +538,52 @@ describe('recordDecision', () => {
     expect(calls.upsertMany).toHaveBeenCalledTimes(1);
   });
 
-  it('refuses the 31st note within an hour, and writes nothing', async () => {
-    const { ctx, calls } = ctxForNotes({ count: 30 });
-    await expect(recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null })).rejects.toMatchObject({ code: 'NOTES_RATE_LIMITED' });
+  it('queues the 61st note of the hour from the same origin: nothing written now, the answer says when (TER-1137)', async () => {
+    const { ctx, calls } = ctxForNotes({ count: 60, timeZone: 'America/Sao_Paulo' });
+    const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
+    expect(calls.upsertMany).not.toHaveBeenCalled();
+    // the oldest note of the window (10:15 UTC) leaves it at 11:15 UTC = 08:15 in São Paulo
+    expect(r).toMatchObject({ recorded: false, queued: true, queue_id: 'q1', write_at: '2026-10-28T11:15:00.000Z', message: 'Na fila: grava às 08:15', note: QUEUED_NOTE });
+    const [bucket, payload] = calls.memoryWriteQueue.enqueue.mock.calls[0]! as [object, { item: NewMemoryItem }];
+    expect(bucket).toEqual({ ownerId: 'u1', projectId: null, what: 'note', writtenBy: 'assistant' });
+    expect(payload.item).toMatchObject({ kind: 'note', title: 'q', written_by: 'assistant' });
+  });
+
+  it('allows the 60th note in the hour', async () => {
+    const { ctx, calls } = ctxForNotes({ count: 59 });
+    await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
+    expect(calls.upsertMany).toHaveBeenCalledTimes(1);
+    expect(calls.memoryWriteQueue.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("a note the person said is never held back by the agents' or the assistant's notes", async () => {
+    const { ctx, calls } = ctxForNotes({ count: { assistant: 60, agent: 60 } });
+    const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r', said_by: 'person' }, { embedder: null });
+    expect(r).toMatchObject({ recorded: true });
+    const [written] = calls.upsertMany.mock.calls[0]![0] as NewMemoryItem[];
+    expect(written.written_by).toBe('person');
+  });
+
+  it('with room but notes of the same bucket already waiting, queues behind them to keep the order', async () => {
+    const { ctx, calls } = ctxForNotes({ count: 3, queued: 2 });
+    const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
+    expect(r).toMatchObject({ recorded: false, queued: true });
     expect(calls.upsertMany).not.toHaveBeenCalled();
   });
 
-  it('allows the 30th note in the hour', async () => {
-    const { ctx, calls } = ctxForNotes({ count: 29 });
-    await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
-    expect(calls.upsertMany).toHaveBeenCalledTimes(1);
+  it('an agent tab token always writes as the agent, whatever said_by says', async () => {
+    const { ctx, calls } = ctxForNotes();
+    ctx.token = { id: 'tok', scopes: ['memory'], tab: { id: 't1', project_id: 'p1' } };
+    await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r', said_by: 'person' }, { embedder: null });
+    const [written] = calls.upsertMany.mock.calls[0]![0] as NewMemoryItem[];
+    expect(written.written_by).toBe('agent');
+  });
+
+  it('a full queue refuses the note with NOTES_QUEUE_FULL, nothing written', async () => {
+    const { ctx, calls } = ctxForNotes({ count: 60, queued: MEMORY_QUEUE_MAX });
+    await expect(recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null })).rejects.toMatchObject({ code: 'NOTES_QUEUE_FULL' });
+    expect(calls.upsertMany).not.toHaveBeenCalled();
+    expect(calls.memoryWriteQueue.enqueue).not.toHaveBeenCalled();
   });
 
   it('with no embedder, records without the conflict check and says so', async () => {
@@ -584,7 +634,8 @@ function memoryStore(opts: { decisions?: ChatDecision[]; decisionVectors?: Recor
     source_at: '2026-10-03T12:00:00.000Z',
   });
   const memoryItems = {
-    countNotesSince: vi.fn(async () => 0),
+    bucketWritesSince: vi.fn(async () => []),
+    countAgentNotesSince: vi.fn(async () => 0),
     findManyForOwner: vi.fn(async (ids: string[], ownerId: string) => notes.filter((n) => ids.includes(n.item.id) && n.item.owner_id === ownerId).map((n) => n.item)),
     upsertMany: vi.fn(async (items: NewMemoryItem[]) => items.map((it) => (notes.push({ item: toItem(it), vector: null }), notes[notes.length - 1]!.item))),
     insertNoteSuperseding: vi.fn(async (it: NewMemoryItem, target: { kind: 'note' | 'decision'; id: string }) => {
@@ -619,7 +670,8 @@ function memoryStore(opts: { decisions?: ChatDecision[]; decisionVectors?: Recor
     ),
   };
   const projects = [project({ id: 'p1' }), project({ id: 'p2' })];
-  const repos = { projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) }, memoryItems, chatDecisions } as unknown as Repositories;
+  const memoryWriteQueue = { count: vi.fn(async () => 0), activeProjectCount: vi.fn(async () => 0) };
+  const repos = { projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) }, memoryItems, memoryWriteQueue, chatDecisions } as unknown as Repositories;
   const scope = { user: { id: 'u1' } as never, viewAs: { kind: 'self' as const }, ownerId: 'u1', createAs: 'u1' };
   const ctx: ControlContext = { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
   const current = () => notes.filter((n) => !n.item.superseded_at).map((n) => n.item);

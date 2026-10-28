@@ -46,6 +46,8 @@ function world(o: {
   newerRun?: Partial<AutomationRun>;
   /** the project's "Parar em decisões de produto" (TER-1043) */
   stopOnDecisions?: boolean;
+  /** agent notes already waiting in the project's memory queue (TER-1137) */
+  memoryQueued?: number;
 } = {}) {
   const runId = `run${++seq}`;
   const run: AutomationRun = {
@@ -110,9 +112,11 @@ function world(o: {
       payloadsForRun: vi.fn(async (_id: string, kind: string) => events.filter((e) => e.kind === kind).map((e) => e.payload ?? {})),
     },
     memoryItems: {
-      countNotesSince: vi.fn(async () => 0),
+      bucketWritesSince: vi.fn(async () => []),
+      countAgentNotesSince: vi.fn(async () => 0),
       upsertMany: vi.fn(async (items: Array<Record<string, unknown>>) => items.map((i) => ({ ...i, created_at: new Date() }))),
     },
+    memoryWriteQueue: { count: vi.fn(async () => o.memoryQueued ?? 0), enqueue: vi.fn(async () => ({ id: 'q1' })), activeProjectCount: vi.fn(async () => 1) },
     chat: {
       findLatestActiveForProject: vi.fn(async () => (o.conversation === undefined ? { id: 'cp' } : (o.conversation ?? undefined))),
       getOrCreateForProject: vi.fn(async () => ({ id: 'c-new' })),
@@ -692,6 +696,24 @@ describe('a stop on a question: automatic work decides by itself (TER-1043)', ()
     const notes = (w.repos.memoryItems.upsertMany as ReturnType<typeof vi.fn>).mock.calls.flatMap((c) => c[0] as Array<Record<string, unknown>>);
     expect(notes).toEqual([expect.objectContaining({ owner_id: 'u1', project_id: 'p1', kind: 'note', trust: 'derived', title: 'TER-1: Guardar o resumo onde?' })]);
     expect(String(notes[0]!.text)).toContain('Fontes: task:t1');
+    expect(notes[0]!.written_by).toBe('agent');
+  });
+
+  it('decisions over the agent quota go to the memory queue, never dropped, and the feed says so once (TER-1137)', async () => {
+    const w = world({ memoryQueued: 3 });
+    await reportCard(tabCtx(w.repos), {
+      status: 'done',
+      pr_url: 'https://github.com/o/r/pull/3',
+      decisions: [
+        { question: 'A?', choice: 'a', reason: 'r' },
+        { question: 'B?', choice: 'b', reason: 'r' },
+      ],
+    });
+    expect(w.repos.memoryItems.upsertMany).not.toHaveBeenCalled();
+    expect(w.repos.memoryWriteQueue.enqueue).toHaveBeenCalledTimes(2);
+    expect((w.repos.memoryWriteQueue.enqueue as ReturnType<typeof vi.fn>).mock.calls[0]![0]).toEqual({ ownerId: 'u1', projectId: 'p1', what: 'note', writtenBy: 'agent' });
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened', 'decided_by_recommendation', 'decided_by_recommendation', 'memory_queued']);
+    expect(w.events[4]!.payload).toMatchObject({ what: 'note', by: 'agent', count: 2 });
   });
 });
 
