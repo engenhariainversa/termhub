@@ -591,7 +591,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'record_decision',
     description:
-      'Record in your memory a decision taken in this conversation (the person said it, or you decided it from a precedent): the question, the decision, the reason and, optionally, the refs from search_memory it was based on. It shows on the person\'s "Memória do chat" screen, where they can forget it. A note is never enough on its own to answer a tab automatically. Max 30 per hour. scope says where it holds: "conversation" (only this chat conversation), "project" (only project_id, which it needs) or "user" (everywhere); left out, "project" with a project_id and "user" without. For a temporary decision set when it stops holding: expires_at (ISO 8601 with offset) or expires_at_time ("HH:MM", the next time the person\'s clock reads it, in their time zone — e.g. "durante a noite" said in the evening → "08:00"). The result gives the stored scope and expires_at: tell the person. When it looks like a note or decision already recorded for the same project (or account-wide), nothing is written: the answer has recorded: false and the conflicts — ask the person whether the new decision replaces the old one, then call again with supersedes set to that ref (the old one stops counting), or with keep_both: true when both stand.',
+      'Record in your memory a decision taken in this conversation (the person said it, or you decided it from a precedent): the question, the decision, the reason and, optionally, the refs from search_memory it was based on. It shows on the person\'s "Memória do chat" screen, where they can forget it. A note is never enough on its own to answer a tab automatically. said_by: "person" when the person said the decision in the chat, "assistant" (default) when you decided it alone; from an agent tab it is always the agent\'s. Each project takes 60 notes per hour from each origin (the person\'s never wait on the agents\'); over that nothing is lost: the answer has queued: true and write_at, the note is written by itself at that time, and you tell the person in one line ("anotado; grava às HH:MM"). scope says where it holds: "conversation" (only this chat conversation), "project" (only project_id, which it needs) or "user" (everywhere); left out, "project" with a project_id and "user" without. For a temporary decision set when it stops holding: expires_at (ISO 8601 with offset) or expires_at_time ("HH:MM", the next time the person\'s clock reads it, in their time zone — e.g. "durante a noite" said in the evening → "08:00"). The result gives the stored scope and expires_at: tell the person. When it looks like a note or decision already recorded for the same project (or account-wide), nothing is written: the answer has recorded: false and the conflicts — ask the person whether the new decision replaces the old one, then call again with supersedes set to that ref (the old one stops counting), or with keep_both: true when both stand.',
     scope: 'memory',
     resource: 'chat',
     action: 'create',
@@ -606,13 +606,14 @@ export const TOOLS: ToolDef[] = [
       expires_at_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
       supersedes: z.string().regex(MEMORY_REF).optional(),
       keep_both: z.boolean().optional(),
+      said_by: z.enum(['person', 'assistant']).optional(),
     },
     run: (ctx, a) => recordDecision(ctx, a as Parameters<typeof recordDecision>[1]),
   },
   {
     name: 'record_lesson',
     description:
-      'Record a failure lesson in the project note: the error symptom (its literal signature), the cause and the fix, with evidence (observed, fixed or confirmed) and optionally the card ref and PR. Use it after fixing an error that was not obvious, so the next agent on any machine finds it with search_memory (kinds ["lesson"]). If you can commit to the repository, prefer a docs/lessons/*.md file in the same PR (format in docs/lessons/README.md). Never include secrets, tokens or customer data. The lesson stays unverified until the person verifies it. Max 20 per hour.',
+      'Record a failure lesson in the project note: the error symptom (its literal signature), the cause and the fix, with evidence (observed, fixed or confirmed) and optionally the card ref and PR. Use it after fixing an error that was not obvious, so the next agent on any machine finds it with search_memory (kinds ["lesson"]). If you can commit to the repository, prefer a docs/lessons/*.md file in the same PR (format in docs/lessons/README.md). Never include secrets, tokens or customer data. The lesson stays unverified until the person verifies it. Each project takes 40 lessons per hour; over that the lesson is queued, not lost: the answer has queued: true and write_at, and it is written by itself at that time.',
     scope: 'memory', resource: 'notes', action: 'update',
     input: {
       project_id: id,

@@ -20,7 +20,7 @@ it('tells the concierge to consult memory, decide alone with precedent, and reco
 
 // TER-1014: a decision has a scope and may expire; the concierge asks when the sentence leaves it unclear.
 it('tells the concierge to record a decision with its scope and validity, asking when unclear', () => {
-  expect(ORCHESTRATOR_PROMPT).toMatch(/record_decision, with its scope and validity \(ask if unclear: "por hoje", "durante a noite"\)/);
+  expect(ORCHESTRATOR_PROMPT).toMatch(/record_decision, said_by "person", with its scope and validity \(ask if unclear: "por hoje", "durante a noite"\)/);
 });
 
 // TER-641: a send on a precedent cites it, so the chat marks it "Decisão automática".

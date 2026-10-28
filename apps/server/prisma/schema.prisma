@@ -100,6 +100,7 @@ model User {
   memoryItems             MemoryItem[]
   verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
   memoryRules             MemoryRule[]
+  memoryWriteQueue        MemoryWriteQueue[]
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
   chatWatches             ChatWatch[]
@@ -324,6 +325,7 @@ model Project {
   groupItems          ProjectGroupItem[]
   memoryItems         MemoryItem[]
   memoryRules         MemoryRule[]
+  memoryWriteQueue    MemoryWriteQueue[]
   agentColumn         TaskColumn?         @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
   columns             TaskColumn[]        @relation("ProjectColumns")
@@ -1693,6 +1695,9 @@ model MemoryItem {
   supersededAt   DateTime?                   @map("superseded_at")
   /// The ref (`note:<id>` / `decision:<id>`) of the row this one replaces (TER-1013 / TER-1015).
   supersedes     String?                     @map("supersedes")
+  /// Who a note came from (TER-1137), for its hourly quota: person | assistant | agent. Null for every
+  /// other kind, and for a note written before it (counted as `assistant`).
+  writtenBy      String?                     @map("written_by")
   sourceAt       DateTime                    @map("source_at")
   createdAt      DateTime                    @default(now()) @map("created_at")
   updatedAt      DateTime                    @updatedAt @map("updated_at")
@@ -1701,6 +1706,28 @@ model MemoryItem {
   @@index([ownerId, kind])
   @@index([ownerId, projectId])
   @@map("memory_items")
+}
+
+/// A memory write over its hourly quota, waiting for room (TER-1137): a `record_decision` note, a
+/// `report_card` decision or a `record_lesson` lesson. The flusher writes them in order, the person's
+/// first, once their project's window has room again; nothing is dropped unless the queue is full.
+model MemoryWriteQueue {
+  id        String   @id
+  ownerId   String   @map("owner_id")
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /// Null = an account-wide note.
+  projectId String?  @map("project_id")
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// note | lesson
+  what      String
+  /// A note's origin: person | assistant | agent. Null for a lesson.
+  writtenBy String?  @map("written_by")
+  /// What to write: the note item (and the ref it replaces), or the lesson's id, tab and fields.
+  payload   Json
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([ownerId, projectId, what, writtenBy, createdAt], map: "memory_write_queue_bucket_idx")
+  @@map("memory_write_queue")
 }
 
 /// A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that

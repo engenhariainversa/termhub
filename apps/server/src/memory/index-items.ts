@@ -3,7 +3,7 @@ import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { DecisionScope } from '../db/repositories/decision-scope.js';
-import type { MemoryItem, NewMemoryItem } from '../db/repositories/memory-items.js';
+import type { MemoryItem, NewMemoryItem, NoteWrittenBy } from '../db/repositories/memory-items.js';
 import { EMBED_TIMEOUT_MS, memoryCode, withTimeout, type Embedder } from '../chat/embeddings.js';
 import { newId } from '../lib/ids.js';
 import { cleanMemoryText, ITEM_TEXT_MAX, memoryText } from './text.js';
@@ -247,6 +247,8 @@ export function noteItem(note: {
   scope?: DecisionScope;
   conversation_id?: string | null;
   expires_at?: Date | null;
+  /** TER-1137: who it came from, for its hourly quota. */
+  written_by?: NoteWrittenBy;
 }): NewMemoryItem {
   const id = newId();
   return {
@@ -262,6 +264,7 @@ export function noteItem(note: {
     scope: note.scope ?? null,
     conversation_id: note.conversation_id ?? null,
     expires_at: note.expires_at ?? null,
+    written_by: note.written_by ?? null,
     source_at: new Date(),
   };
 }

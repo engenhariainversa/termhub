@@ -152,6 +152,26 @@ refs). Writes a `note` item (`title` = question, `text` = `"Decisão: …\nMotiv
 trust `derived`). Returns `{ ref }`. Max 30 notes per user per hour (a runaway loop, or an injection,
 cannot flood the memory).
 
+**Changed by TER-1137 (2026-10-28).** The single 30/h bucket per user ran out once automatic work in
+several projects wrote its `report_card` decisions into it (TER-1043), and a decision the person said in
+the chat ("Expo 58 on hold") was refused. The flood guard stays, with a different shape:
+
+- **Per project and per origin:** 60 notes per hour for each `(owner, project, written_by)`, where
+  `written_by` is `person` (the concierge's `said_by: "person"`), `assistant` (the concierge alone, the
+  default) or `agent` (an agent tab's token, and the decisions of `report_card`). Account-wide notes are
+  one more bucket (project null). A note the person said never waits on the agents' notes.
+- **Global cap that grows with the projects at work:** the notes of one owner that are not the
+  person's are capped at `max(300, 60 × projects with an automatic run or a tab reporting a state in the
+  last hour)` — 15 active projects take 900/h without being held back. Notes do not make a project
+  "active", so writing into many projects does not raise the cap it is checked against.
+- **Queue instead of refusal:** over the quota the note goes to `memory_write_queue` and a flusher (every
+  minute) writes it once the window has room, in order and the person's first. The tool answers
+  `recorded: false, queued: true, write_at` and "Na fila: grava às HH:MM" (the person's clock), and the
+  project feed gets a `memory_queued` line. Only a full queue (200 per bucket) refuses
+  (`NOTES_QUEUE_FULL`) and records `memory_dropped`; the old silent drop of `report_card` notes is gone.
+- `record_lesson` follows the same rules with 40 lessons per hour per project (20 → 40, the same ×2 as
+  notes) and a floor of 200 for the global cap.
+
 ### 5.3 `list_tab_questions` (scope `read`, grant `terminals:read`)
 
 Input: `project_id?`. The requesting user's **open** `choice` cards: `{ id, tab: { id, name },

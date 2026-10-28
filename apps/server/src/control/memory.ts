@@ -1,7 +1,8 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
 import { holdsAt, inferScope, isExpired, type DecisionPlace, type DecisionScope } from '../db/repositories/decision-scope.js';
-import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust, NewMemoryItem } from '../db/repositories/memory-items.js';
+import type { MemoryFilter, MemoryHit, MemoryItem, MemoryKind, MemoryTrust, NewMemoryItem, NoteWrittenBy } from '../db/repositories/memory-items.js';
+import { admit, localClock, memoryEvent, MEMORY_QUEUE_MAX } from '../memory/quota.js';
 import { checkChoiceAnswer, choiceAnswerBody, type ChoiceAnswer, type ChoicePayload } from '../chat/tab-question-payload.js';
 import { autoAnswerAllowed, blocklistParts, decisionBacks, noteBacks, scheduleAutoAnswer, type Downgrade } from '../chat/auto-answer.js';
 import { bandOf, thresholdsFor, type AutoBand } from '../chat/auto-thresholds.js';
@@ -286,10 +287,12 @@ function tabSearch<T extends { project_id?: string; kinds?: MemoryRefKind[] }>(p
   return { ...a, project_id: projectId, kinds };
 }
 
-/** `record_decision`'s own cap (spec D12/§5.2): a runaway loop, or an injection that got the
- *  concierge to call the tool repeatedly, cannot flood the memory past this many notes per hour. */
-export const NOTES_PER_HOUR = 30;
-const NOTES_WINDOW_MS = 60 * 60 * 1000;
+/** Who a `record_decision` note came from (TER-1137): an agent tab's token is always `agent`; the
+ *  concierge says whether the person said it (`person`) or it decided alone (`assistant`, the default). */
+function noteWrittenBy(ctx: ControlContext, saidBy: 'person' | 'assistant' | undefined): NoteWrittenBy {
+  if (ctx.token?.tab) return 'agent';
+  return saidBy ?? 'assistant';
+}
 
 /**
  * `sources` re-checked against the caller's own memory (spec D12, D16): every ref must parse
@@ -369,8 +372,10 @@ async function expiryOf(ctx: ControlContext, a: { expires_at?: string; expires_a
  * `project_id`, when given, is checked through `ctx.scoped.project` first — a foreign or missing
  * project 404s with nothing written. `sources` are re-verified (`verifySources`) before anything is
  * written: an unknown ref refuses the whole call rather than silently dropping the citation. The rate
- * limit (`NOTES_PER_HOUR`) is checked right before the write, since it is the gate on the write
- * itself rather than on the input's shape.
+ * quota (TER-1137, `admit`: 60 notes per hour per project and per origin — `said_by` —, under an owner
+ * cap that grows with the projects at work) is checked right before the write, after the conflict check:
+ * over it, nothing is refused — the note goes to the queue (`memory_write_queue`), is written once the
+ * window has room, and the answer says when (`queued: true`). Only a full queue refuses the call.
  *
  * `scope` (TER-1014) says where the note holds: `conversation` (the concierge token's conversation —
  * refused without one), `project` (needs `project_id`) or `user`; left out, `project` with a project and
@@ -398,6 +403,7 @@ export async function recordDecision(
     expires_at_time?: string;
     supersedes?: string;
     keep_both?: boolean;
+    said_by?: 'person' | 'assistant';
   },
   deps: { embedder?: Embedder | null; log?: Pick<FastifyBaseLogger, 'info' | 'warn'>; now?: Date; minSimilarity?: number } = {},
 ): Promise<RecordDecisionResult> {
@@ -410,9 +416,9 @@ export async function recordDecision(
   await verifySources(ctx, a.sources);
   const target = a.supersedes !== undefined ? await supersedeTarget(ctx, a.supersedes) : undefined;
   const ownerId = ctx.scope.user.id;
-  const count = await ctx.repos.memoryItems.countNotesSince(ownerId, new Date(Date.now() - NOTES_WINDOW_MS));
-  if (count >= NOTES_PER_HOUR) throw new ControlError('NOTES_RATE_LIMITED', 'Limite de 30 anotações por hora atingido; tente mais tarde');
-  const { embedder = defaultEmbedder(), log = console, minSimilarity = config.decisionConflictMinSimilarity } = deps;
+  const writtenBy = noteWrittenBy(ctx, a.said_by);
+  const { embedder = defaultEmbedder(), minSimilarity = config.decisionConflictMinSimilarity } = deps;
+  const log: Pick<FastifyBaseLogger, 'info' | 'warn'> = deps.log ?? console;
   const item = noteItem({
     owner_id: ownerId,
     project_id: projectId,
@@ -423,6 +429,7 @@ export async function recordDecision(
     scope,
     conversation_id: conversationId,
     expires_at: expiresAt,
+    written_by: writtenBy,
   });
 
   const check = await findConflicts(ctx, item, a.question, embedder, minSimilarity);
@@ -430,6 +437,21 @@ export async function recordDecision(
   if (others.length > 0 && !a.keep_both) {
     const names = others.map((c) => `${c.ref} ("${c.title}")`).join(', ');
     return { recorded: false, conflicts: others, message: `Conflita com ${names}. Substituir?`, note: CONFLICT_NOTE };
+  }
+
+  const bucket = { ownerId, projectId, what: 'note' as const, writtenBy };
+  const admission = await admit(ctx.repos, bucket);
+  if (!admission.ok) {
+    if (admission.full) {
+      log.warn({ projectId, by: writtenBy }, 'memory queue: note dropped, the queue is full');
+      await memoryEvent(ctx.repos, projectId, 'memory_dropped', { what: 'note', by: writtenBy, count: 1, reason: 'queue_full' });
+      throw new ControlError('NOTES_QUEUE_FULL', msg('A fila de anotações deste projeto está cheia ({{max}}); nada foi gravado', { max: MEMORY_QUEUE_MAX }));
+    }
+    const queued = await ctx.repos.memoryWriteQueue.enqueue(bucket, { item, ...(target ? { supersedes: { kind: target.kind, id: target.id } } : {}) });
+    const clock = await localClock(ctx.repos, ownerId, admission.at);
+    log.info({ queueId: queued.id, projectId, by: writtenBy, at: admission.at.toISOString() }, 'memory queue: note queued');
+    await memoryEvent(ctx.repos, projectId, 'memory_queued', { what: 'note', by: writtenBy, count: 1, until: admission.at });
+    return { recorded: false, queued: true, queue_id: queued.id, write_at: admission.at.toISOString(), message: `Na fila: grava às ${clock}`, note: QUEUED_NOTE };
   }
 
   const row = await indexNote(ctx.repos, item, { embedder, log, supersedes: target, embedding: check.embedding });
@@ -460,7 +482,12 @@ export interface DecisionConflict {
 
 export type RecordDecisionResult =
   | { recorded: true; ref: string; scope: DecisionScope; expires_at: string | null; supersedes?: string; kept_alongside?: string[]; conflict_check?: 'unavailable' }
-  | { recorded: false; conflicts: DecisionConflict[]; message: string; note: string };
+  | { recorded: false; conflicts: DecisionConflict[]; message: string; note: string }
+  | { recorded: false; queued: true; queue_id: string; write_at: string; message: string; note: string };
+
+/** How the concierge goes on after a queued note (TER-1137); read by the model, in pt-BR like `CONFLICT_NOTE`. */
+export const QUEUED_NOTE =
+  'A cota de anotações deste projeto nesta hora acabou: a anotação está na fila e será gravada sozinha no horário indicado, sem nova chamada. Avise a pessoa em uma linha ("anotado; grava às HH:MM").';
 
 /** How the concierge goes on after a conflict (TER-1015); the conflicts are data, like any memory. Both
  *  this and the `message` are read by the model, in pt-BR like `MEMORY_NOTE`, never shown as UI copy. */

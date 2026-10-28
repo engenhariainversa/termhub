@@ -491,5 +491,6 @@
   "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Each type needs at least one column that is not a waiting column",
   "Cards que esperam uma pessoa ou terceiros": "Cards that wait on a person or a third party",
   "Coluna {{name}} aguardando": "Column {{name}} waiting",
-  "aguardando": "waiting"
+  "aguardando": "waiting",
+  "{{what}}; grava às {{time}}": "{{what}}; written at {{time}}"
 }

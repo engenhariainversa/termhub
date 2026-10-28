@@ -452,6 +452,7 @@ export const ModelName = {
   ChatFocus: 'ChatFocus',
   ChatDecision: 'ChatDecision',
   MemoryItem: 'MemoryItem',
+  MemoryWriteQueue: 'MemoryWriteQueue',
   MemoryRule: 'MemoryRule',
   InstanceSecret: 'InstanceSecret',
   ProjectGroup: 'ProjectGroup',
@@ -488,7 +489,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -4562,6 +4563,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         }
       }
     }
+    MemoryWriteQueue: {
+      payload: Prisma.$MemoryWriteQueuePayload<ExtArgs>
+      fields: Prisma.MemoryWriteQueueFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.MemoryWriteQueueFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.MemoryWriteQueueFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        findFirst: {
+          args: Prisma.MemoryWriteQueueFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.MemoryWriteQueueFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        findMany: {
+          args: Prisma.MemoryWriteQueueFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>[]
+        }
+        create: {
+          args: Prisma.MemoryWriteQueueCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        createMany: {
+          args: Prisma.MemoryWriteQueueCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.MemoryWriteQueueCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>[]
+        }
+        delete: {
+          args: Prisma.MemoryWriteQueueDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        update: {
+          args: Prisma.MemoryWriteQueueUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        deleteMany: {
+          args: Prisma.MemoryWriteQueueDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.MemoryWriteQueueUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.MemoryWriteQueueUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>[]
+        }
+        upsert: {
+          args: Prisma.MemoryWriteQueueUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$MemoryWriteQueuePayload>
+        }
+        aggregate: {
+          args: Prisma.MemoryWriteQueueAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateMemoryWriteQueue>
+        }
+        groupBy: {
+          args: Prisma.MemoryWriteQueueGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MemoryWriteQueueGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.MemoryWriteQueueCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.MemoryWriteQueueCountAggregateOutputType> | number
+        }
+      }
+    }
     MemoryRule: {
       payload: Prisma.$MemoryRulePayload<ExtArgs>
       fields: Prisma.MemoryRuleFieldRefs
@@ -7113,12 +7188,26 @@ export const MemoryItemScalarFieldEnum = {
   wrongAt: 'wrongAt',
   supersededAt: 'supersededAt',
   supersedes: 'supersedes',
+  writtenBy: 'writtenBy',
   sourceAt: 'sourceAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 } as const
 
 export type MemoryItemScalarFieldEnum = (typeof MemoryItemScalarFieldEnum)[keyof typeof MemoryItemScalarFieldEnum]
+
+
+export const MemoryWriteQueueScalarFieldEnum = {
+  id: 'id',
+  ownerId: 'ownerId',
+  projectId: 'projectId',
+  what: 'what',
+  writtenBy: 'writtenBy',
+  payload: 'payload',
+  createdAt: 'createdAt'
+} as const
+
+export type MemoryWriteQueueScalarFieldEnum = (typeof MemoryWriteQueueScalarFieldEnum)[keyof typeof MemoryWriteQueueScalarFieldEnum]
 
 
 export const MemoryRuleScalarFieldEnum = {
@@ -7938,6 +8027,7 @@ export type GlobalOmitConfig = {
   chatFocus?: Prisma.ChatFocusOmit
   chatDecision?: Prisma.ChatDecisionOmit
   memoryItem?: Prisma.MemoryItemOmit
+  memoryWriteQueue?: Prisma.MemoryWriteQueueOmit
   memoryRule?: Prisma.MemoryRuleOmit
   instanceSecret?: Prisma.InstanceSecretOmit
   projectGroup?: Prisma.ProjectGroupOmit

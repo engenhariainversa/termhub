@@ -216,6 +216,8 @@ export const FEED_KINDS = [
   'deploy_retried', 'github_wait', 'trust_auto_accepted',
   // TER-1120: a base workflow cancelled without a runner (the app's feed skips it until it has a line)
   'workflow_no_runner',
+  // TER-1137: a memory write over its hourly quota queued, or dropped (the app's feed skips them until it has a line)
+  'memory_queued', 'memory_dropped',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
@@ -224,11 +226,21 @@ const CANCEL_TEXT: Record<string, string> = {
   tab_closed: tk('a aba foi fechada'),
 };
 
+/** A queued or dropped memory write (TER-1137): what, how many, and why it was dropped. */
+function memoryTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string {
+  const n = num(p.count) ?? 1;
+  const lesson = p.what === 'lesson';
+  if (e.kind === 'memory_queued') return lesson ? t(locale, 'Memória: lições na fila ({{n}})', { n }) : t(locale, 'Memória: anotações na fila ({{n}})', { n });
+  if (p.reason === 'note_full') return t(locale, 'Memória: lição descartada, a anotação do projeto está cheia');
+  return lesson ? t(locale, 'Memória: lições descartadas, fila cheia ({{n}})', { n }) : t(locale, 'Memória: anotações descartadas, fila cheia ({{n}})', { n });
+}
+
 /** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
  *  over (TER-1049), a cancel's (TER-974) or a card untagged because its ticket already had work (TER-1110). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
   if (e.kind === 'escalated') return escalationEventText(p, locale);
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
+  if (e.kind === 'memory_queued' || e.kind === 'memory_dropped') return memoryTextOf(e, p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab

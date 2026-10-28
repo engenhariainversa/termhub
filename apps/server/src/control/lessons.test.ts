@@ -6,7 +6,8 @@ import type { Project, Tab } from '../db/repositories/types.js';
 import { Scoped } from '../auth/scope.js';
 import { HttpError } from '../lib/errors.js';
 import { ControlError, type ControlContext } from './context.js';
-import { LESSONS_PER_HOUR, recordLesson } from './lessons.js';
+import { recordLesson } from './lessons.js';
+import { LESSONS_PER_PROJECT_HOUR, MEMORY_QUEUE_MAX } from '../memory/quota.js';
 
 const indexProjectNote = vi.hoisted(() => vi.fn(async () => ({ sections: 0, lessons: 1 })));
 vi.mock('../memory/note.js', () => ({ indexProjectNote }));
@@ -24,7 +25,10 @@ const item = (over: Partial<MemoryItem> & { id: string; source_id: string }): Me
 });
 
 interface Setup {
+  /** Lessons of the project already written this hour (TER-1137). */
   count?: number;
+  /** Lessons already waiting in the project's queue. */
+  queued?: number;
   appendBlock?: () => Promise<unknown>;
   lessons?: MemoryItem[];
   user?: string;
@@ -38,7 +42,14 @@ function ctxFor(setup: Setup = {}) {
     { id: 'l2', project_id: 'p2', machine_id: 'm1', cwd: '/src', position: 0, created_at: '' },
   ];
   const tabs = [tab({ id: 't1', project_id: 'p1', machine_id: 'm1' }), tab({ id: 't2', project_id: 'p2', machine_id: 'm1' })];
-  const countNoteLessonsSince = vi.fn(async () => setup.count ?? 0);
+  const bucketWritesSince = vi.fn(async (_b: object, _since: Date, limit: number) => Array.from({ length: Math.min(limit, setup.count ?? 0) }, () => new Date('2026-10-28T10:15:00Z')));
+  const countNoteLessonsSince = vi.fn(async () => 0);
+  const memoryWriteQueue = {
+    count: vi.fn(async () => setup.queued ?? 0),
+    enqueue: vi.fn(async (b: object, payload: object) => ({ ...b, id: 'q1', payload, createdAt: new Date() })),
+    activeProjectCount: vi.fn(async () => 0),
+  };
+  const insertEvent = vi.fn(async (e: object) => ({ id: 'e1', created_at: '', ...e }));
   const appendBlock = vi.fn(setup.appendBlock ?? (async () => ({ id: 'n1', project_id: 'p1', content: '', updated_at: '2026-09-27T00:00:00.000Z' })));
   const listLessons = vi.fn(async () => ({ items: setup.lessons ?? [], next_cursor: null }));
   const repos = {
@@ -47,12 +58,15 @@ function ctxFor(setup: Setup = {}) {
     machines: { findById: vi.fn(async (id: string) => machines.find((m) => m.id === id)) },
     projectMachines: { find: vi.fn(async (p: string, m: string) => links.find((l) => l.project_id === p && l.machine_id === m)) },
     notes: { appendBlock },
-    memoryItems: { countNoteLessonsSince, listLessons },
+    memoryItems: { bucketWritesSince, countNoteLessonsSince, listLessons },
+    memoryWriteQueue,
+    automationEvents: { insert: insertEvent },
+    users: { timeZone: vi.fn(async () => null) },
   };
   const user = setup.user ?? 'u1';
   const scope = { user: { id: user } as never, viewAs: { kind: 'self' as const }, ownerId: user, createAs: user };
   const ctx: ControlContext = { repos: repos as unknown as Repositories, scope, scoped: new Scoped(repos as unknown as Repositories, scope), can: async () => true };
-  return { ctx, repos, calls: { countNoteLessonsSince, appendBlock, listLessons } };
+  return { ctx, repos, calls: { bucketWritesSince, appendBlock, listLessons, memoryWriteQueue, insertEvent } };
 }
 
 const validInput = { project_id: 'p1', symptom: 'P3009: migrate found failed migrations', cause: 'a migração anterior falhou', fix: 'rodar resolve --applied' };
@@ -104,22 +118,40 @@ describe('recordLesson', () => {
     expect(indexProjectNote).not.toHaveBeenCalled();
   });
 
-  it('refuses the 21st lesson within an hour, and writes nothing', async () => {
-    const { ctx, calls } = ctxFor({ count: LESSONS_PER_HOUR });
-    await expect(recordLesson(ctx, validInput, { embedder: null, log: console })).rejects.toMatchObject({ code: 'LESSONS_RATE_LIMITED' });
+  it('queues the 41st lesson of the project within an hour: nothing appended, the answer and the feed say when (TER-1137)', async () => {
+    const { ctx, calls } = ctxFor({ count: LESSONS_PER_PROJECT_HOUR });
+    const r = await recordLesson(ctx, { ...validInput, tab_id: 't1' }, { embedder: null, log: console });
     expect(calls.appendBlock).not.toHaveBeenCalled();
+    expect(r).toMatchObject({ ref: null, queued: true, write_at: '2026-10-28T11:15:00.000Z', message: 'Na fila: grava às 11:15' });
+    const [bucket, payload] = calls.memoryWriteQueue.enqueue.mock.calls[0]! as [object, { lesson_id: string; tab_id: string; input: object }];
+    expect(bucket).toEqual({ ownerId: 'u1', projectId: 'p1', what: 'lesson', writtenBy: null });
+    expect(payload).toMatchObject({ lesson_id: r.lesson_id, tab_id: 't1', input: { symptom: validInput.symptom, evidence: 'fixed' } });
+    expect(calls.insertEvent).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'memory_queued', payload: expect.objectContaining({ what: 'lesson', count: 1, until: '2026-10-28T11:15:00.000Z' }) }));
   });
 
-  it('allows the 20th lesson in the hour', async () => {
-    const { ctx, calls } = ctxFor({ count: LESSONS_PER_HOUR - 1, lessons: [item({ id: 'm1', source_id: 'note:p1:abc' })] });
+  it('allows the 40th lesson of the project in the hour', async () => {
+    const { ctx, calls } = ctxFor({ count: LESSONS_PER_PROJECT_HOUR - 1, lessons: [item({ id: 'm1', source_id: 'note:p1:abc' })] });
     await recordLesson(ctx, validInput, { embedder: null, log: console });
     expect(calls.appendBlock).toHaveBeenCalledTimes(1);
+  });
+
+  it('counts the lessons of this project only', async () => {
+    const { ctx, calls } = ctxFor();
+    await recordLesson(ctx, validInput, { embedder: null, log: console });
+    expect(calls.bucketWritesSince).toHaveBeenCalledWith({ ownerId: 'u1', projectId: 'p1', what: 'lesson', writtenBy: null }, expect.any(Date), LESSONS_PER_PROJECT_HOUR);
+  });
+
+  it('a full queue refuses with LESSONS_QUEUE_FULL and a feed event, nothing written', async () => {
+    const { ctx, calls } = ctxFor({ count: LESSONS_PER_PROJECT_HOUR, queued: MEMORY_QUEUE_MAX });
+    await expect(recordLesson(ctx, validInput, { embedder: null, log: console })).rejects.toMatchObject({ code: 'LESSONS_QUEUE_FULL' });
+    expect(calls.appendBlock).not.toHaveBeenCalled();
+    expect(calls.insertEvent).toHaveBeenCalledWith(expect.objectContaining({ kind: 'memory_dropped', payload: expect.objectContaining({ reason: 'queue_full' }) }));
   });
 
   it('a full note is refused as NOTE_FULL, and the rate limit was already checked', async () => {
     const { ctx, calls } = ctxFor({ appendBlock: async () => { throw new NoteTooLargeError(); } });
     await expect(recordLesson(ctx, validInput, { embedder: null, log: console })).rejects.toMatchObject({ code: 'NOTE_FULL' });
-    expect(calls.countNoteLessonsSince).toHaveBeenCalled();
+    expect(calls.bucketWritesSince).toHaveBeenCalled();
   });
 
   it('on success appends the block, indexes the note and resolves the ref of the freshly indexed item', async () => {

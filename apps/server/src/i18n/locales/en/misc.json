@@ -188,5 +188,10 @@
   "Parado: {{stalled}}": "Stalled: {{stalled}}",
   "A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.": "The base branch is red and holds the ready PRs; nothing is merged until it is green. Check the run that failed.",
   "A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.": "The base branch is red at {{sha}} because of “{{workflow}}” and holds the ready PRs; nothing is merged until it is green. Check the run.",
-  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "The workflow “{{workflow}}” was cancelled without running at {{sha}} (no runner took it); nothing was delivered and the merge queue goes on: {{url}}"
+  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "The workflow “{{workflow}}” was cancelled without running at {{sha}} (no runner took it); nothing was delivered and the merge queue goes on: {{url}}",
+  "Memória: lições na fila ({{n}})": "Memory: lessons queued ({{n}})",
+  "Memória: anotações na fila ({{n}})": "Memory: notes queued ({{n}})",
+  "Memória: lição descartada, a anotação do projeto está cheia": "Memory: lesson dropped, the project note is full",
+  "Memória: lições descartadas, fila cheia ({{n}})": "Memory: lessons dropped, queue full ({{n}})",
+  "Memória: anotações descartadas, fila cheia ({{n}})": "Memory: notes dropped, queue full ({{n}})"
 }

@@ -188,5 +188,10 @@
   "Parado: {{stalled}}": "Detenido: {{stalled}}",
   "A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.": "La rama base está en rojo y detiene los PR listos; no se hace merge de nada hasta que esté en verde. Revisa la ejecución que falló.",
   "A branch base está vermelha em {{sha}} por causa de «{{workflow}}» e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução.": "La rama base está en rojo en {{sha}} por «{{workflow}}» y detiene los PR listos; no se hace merge de nada hasta que esté en verde. Revisa la ejecución.",
-  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "El workflow «{{workflow}}» se canceló sin ejecutarse en {{sha}} (no tuvo runner); no se entregó nada y la cola de merge sigue: {{url}}"
+  "O workflow «{{workflow}}» foi cancelado sem rodar em {{sha}} (ficou sem runner); nada foi entregue e a fila de merge segue: {{url}}": "El workflow «{{workflow}}» se canceló sin ejecutarse en {{sha}} (no tuvo runner); no se entregó nada y la cola de merge sigue: {{url}}",
+  "Memória: lições na fila ({{n}})": "Memoria: lecciones en cola ({{n}})",
+  "Memória: anotações na fila ({{n}})": "Memoria: notas en cola ({{n}})",
+  "Memória: lição descartada, a anotação do projeto está cheia": "Memoria: lección descartada, la nota del proyecto está llena",
+  "Memória: lições descartadas, fila cheia ({{n}})": "Memoria: lecciones descartadas, cola llena ({{n}})",
+  "Memória: anotações descartadas, fila cheia ({{n}})": "Memoria: notas descartadas, cola llena ({{n}})"
 }

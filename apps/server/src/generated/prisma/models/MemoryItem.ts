@@ -59,6 +59,7 @@ export type MemoryItemMinAggregateOutputType = {
   wrongAt: Date | null
   supersededAt: Date | null
   supersedes: string | null
+  writtenBy: string | null
   sourceAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -87,6 +88,7 @@ export type MemoryItemMaxAggregateOutputType = {
   wrongAt: Date | null
   supersededAt: Date | null
   supersedes: string | null
+  writtenBy: string | null
   sourceAt: Date | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -116,6 +118,7 @@ export type MemoryItemCountAggregateOutputType = {
   wrongAt: number
   supersededAt: number
   supersedes: number
+  writtenBy: number
   sourceAt: number
   createdAt: number
   updatedAt: number
@@ -154,6 +157,7 @@ export type MemoryItemMinAggregateInputType = {
   wrongAt?: true
   supersededAt?: true
   supersedes?: true
+  writtenBy?: true
   sourceAt?: true
   createdAt?: true
   updatedAt?: true
@@ -182,6 +186,7 @@ export type MemoryItemMaxAggregateInputType = {
   wrongAt?: true
   supersededAt?: true
   supersedes?: true
+  writtenBy?: true
   sourceAt?: true
   createdAt?: true
   updatedAt?: true
@@ -211,6 +216,7 @@ export type MemoryItemCountAggregateInputType = {
   wrongAt?: true
   supersededAt?: true
   supersedes?: true
+  writtenBy?: true
   sourceAt?: true
   createdAt?: true
   updatedAt?: true
@@ -327,6 +333,7 @@ export type MemoryItemGroupByOutputType = {
   wrongAt: Date | null
   supersededAt: Date | null
   supersedes: string | null
+  writtenBy: string | null
   sourceAt: Date
   createdAt: Date
   updatedAt: Date
@@ -379,6 +386,7 @@ export type MemoryItemWhereInput = {
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersedes?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  writtenBy?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   sourceAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
@@ -411,6 +419,7 @@ export type MemoryItemOrderByWithRelationInput = {
   wrongAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersedes?: Prisma.SortOrderInput | Prisma.SortOrder
+  writtenBy?: Prisma.SortOrderInput | Prisma.SortOrder
   sourceAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -447,6 +456,7 @@ export type MemoryItemWhereUniqueInput = Prisma.AtLeast<{
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersedes?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  writtenBy?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   sourceAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
@@ -479,6 +489,7 @@ export type MemoryItemOrderByWithAggregationInput = {
   wrongAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersededAt?: Prisma.SortOrderInput | Prisma.SortOrder
   supersedes?: Prisma.SortOrderInput | Prisma.SortOrder
+  writtenBy?: Prisma.SortOrderInput | Prisma.SortOrder
   sourceAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -516,6 +527,7 @@ export type MemoryItemScalarWhereWithAggregatesInput = {
   wrongAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableWithAggregatesFilter<"MemoryItem"> | Date | string | null
   supersedes?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
+  writtenBy?: Prisma.StringNullableWithAggregatesFilter<"MemoryItem"> | string | null
   sourceAt?: Prisma.DateTimeWithAggregatesFilter<"MemoryItem"> | Date | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"MemoryItem"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"MemoryItem"> | Date | string
@@ -542,6 +554,7 @@ export type MemoryItemCreateInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -574,6 +587,7 @@ export type MemoryItemUncheckedCreateInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -600,6 +614,7 @@ export type MemoryItemUpdateInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -632,6 +647,7 @@ export type MemoryItemUncheckedUpdateInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -661,6 +677,7 @@ export type MemoryItemCreateManyInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -687,6 +704,7 @@ export type MemoryItemUpdateManyMutationInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -716,6 +734,7 @@ export type MemoryItemUncheckedUpdateManyInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -761,6 +780,7 @@ export type MemoryItemCountOrderByAggregateInput = {
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
   supersedes?: Prisma.SortOrder
+  writtenBy?: Prisma.SortOrder
   sourceAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -793,6 +813,7 @@ export type MemoryItemMaxOrderByAggregateInput = {
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
   supersedes?: Prisma.SortOrder
+  writtenBy?: Prisma.SortOrder
   sourceAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -821,6 +842,7 @@ export type MemoryItemMinOrderByAggregateInput = {
   wrongAt?: Prisma.SortOrder
   supersededAt?: Prisma.SortOrder
   supersedes?: Prisma.SortOrder
+  writtenBy?: Prisma.SortOrder
   sourceAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -977,6 +999,7 @@ export type MemoryItemCreateWithoutOwnerInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1007,6 +1030,7 @@ export type MemoryItemUncheckedCreateWithoutOwnerInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1043,6 +1067,7 @@ export type MemoryItemCreateWithoutVerifierInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1073,6 +1098,7 @@ export type MemoryItemUncheckedCreateWithoutVerifierInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1131,6 +1157,7 @@ export type MemoryItemScalarWhereInput = {
   wrongAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersededAt?: Prisma.DateTimeNullableFilter<"MemoryItem"> | Date | string | null
   supersedes?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
+  writtenBy?: Prisma.StringNullableFilter<"MemoryItem"> | string | null
   sourceAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   createdAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"MemoryItem"> | Date | string
@@ -1173,6 +1200,7 @@ export type MemoryItemCreateWithoutProjectInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1203,6 +1231,7 @@ export type MemoryItemUncheckedCreateWithoutProjectInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1257,6 +1286,7 @@ export type MemoryItemCreateManyOwnerInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1285,6 +1315,7 @@ export type MemoryItemCreateManyVerifierInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1311,6 +1342,7 @@ export type MemoryItemUpdateWithoutOwnerInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1341,6 +1373,7 @@ export type MemoryItemUncheckedUpdateWithoutOwnerInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1369,6 +1402,7 @@ export type MemoryItemUncheckedUpdateManyWithoutOwnerInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1395,6 +1429,7 @@ export type MemoryItemUpdateWithoutVerifierInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1425,6 +1460,7 @@ export type MemoryItemUncheckedUpdateWithoutVerifierInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1453,6 +1489,7 @@ export type MemoryItemUncheckedUpdateManyWithoutVerifierInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1481,6 +1518,7 @@ export type MemoryItemCreateManyProjectInput = {
   wrongAt?: Date | string | null
   supersededAt?: Date | string | null
   supersedes?: string | null
+  writtenBy?: string | null
   sourceAt: Date | string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -1507,6 +1545,7 @@ export type MemoryItemUpdateWithoutProjectInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1537,6 +1576,7 @@ export type MemoryItemUncheckedUpdateWithoutProjectInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1565,6 +1605,7 @@ export type MemoryItemUncheckedUpdateManyWithoutProjectInput = {
   wrongAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersededAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   supersedes?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  writtenBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   sourceAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1596,6 +1637,7 @@ export type MemoryItemSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   wrongAt?: boolean
   supersededAt?: boolean
   supersedes?: boolean
+  writtenBy?: boolean
   sourceAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1628,6 +1670,7 @@ export type MemoryItemSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   wrongAt?: boolean
   supersededAt?: boolean
   supersedes?: boolean
+  writtenBy?: boolean
   sourceAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1660,6 +1703,7 @@ export type MemoryItemSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   wrongAt?: boolean
   supersededAt?: boolean
   supersedes?: boolean
+  writtenBy?: boolean
   sourceAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -1692,12 +1736,13 @@ export type MemoryItemSelectScalar = {
   wrongAt?: boolean
   supersededAt?: boolean
   supersedes?: boolean
+  writtenBy?: boolean
   sourceAt?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type MemoryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ownerId" | "projectId" | "kind" | "sourceId" | "chunkIndex" | "title" | "text" | "trust" | "contentHash" | "sourceHash" | "embedModel" | "verifiedAt" | "verifiedBy" | "verifiedHash" | "hiddenHash" | "meta" | "scope" | "conversationId" | "expiresAt" | "wrongAt" | "supersededAt" | "supersedes" | "sourceAt" | "createdAt" | "updatedAt", ExtArgs["result"]["memoryItem"]>
+export type MemoryItemOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "ownerId" | "projectId" | "kind" | "sourceId" | "chunkIndex" | "title" | "text" | "trust" | "contentHash" | "sourceHash" | "embedModel" | "verifiedAt" | "verifiedBy" | "verifiedHash" | "hiddenHash" | "meta" | "scope" | "conversationId" | "expiresAt" | "wrongAt" | "supersededAt" | "supersedes" | "writtenBy" | "sourceAt" | "createdAt" | "updatedAt", ExtArgs["result"]["memoryItem"]>
 export type MemoryItemInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   owner?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   project?: boolean | Prisma.MemoryItem$projectArgs<ExtArgs>
@@ -1782,6 +1827,11 @@ export type $MemoryItemPayload<ExtArgs extends runtime.Types.Extensions.Internal
      * The ref (`note:<id>` / `decision:<id>`) of the row this one replaces (TER-1013 / TER-1015).
      */
     supersedes: string | null
+    /**
+     * Who a note came from (TER-1137), for its hourly quota: person | assistant | agent. Null for every
+     * other kind, and for a note written before it (counted as `assistant`).
+     */
+    writtenBy: string | null
     sourceAt: Date
     createdAt: Date
     updatedAt: Date
@@ -2234,6 +2284,7 @@ export interface MemoryItemFieldRefs {
   readonly wrongAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly supersededAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly supersedes: Prisma.FieldRef<"MemoryItem", 'String'>
+  readonly writtenBy: Prisma.FieldRef<"MemoryItem", 'String'>
   readonly sourceAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"MemoryItem", 'DateTime'>

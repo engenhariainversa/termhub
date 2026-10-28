@@ -401,6 +401,13 @@ export type ChatDecision = Prisma.ChatDecisionModel
  */
 export type MemoryItem = Prisma.MemoryItemModel
 /**
+ * Model MemoryWriteQueue
+ * A memory write over its hourly quota, waiting for room (TER-1137): a `record_decision` note, a
+ * `report_card` decision or a `record_lesson` lesson. The flusher writes them in order, the person's
+ * first, once their project's window has room again; nothing is dropped unless the queue is full.
+ */
+export type MemoryWriteQueue = Prisma.MemoryWriteQueueModel
+/**
  * Model MemoryRule
  * A current rule (regra vigente) or a proposal for one (TER-1010): decisions and concierge notes that
  * say the same thing, consolidated per project, or per user when the same permission shows up in two or

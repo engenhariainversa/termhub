@@ -39,6 +39,7 @@ import { ChatAttachmentsRepository, type ChatAttachmentsRepo } from './chat-atta
 import { ChatDecisionsRepository } from './chat-decisions.js';
 import { ChatAutoRepository } from './chat-auto.js';
 import { MemoryItemsRepository } from './memory-items.js';
+import { MemoryWriteQueueRepository } from './memory-write-queue.js';
 import { MemoryStatusRepository } from './memory-status.js';
 import { InstanceSecretsRepository } from './instance-secrets.js';
 import { ProjectGroupsRepository } from './project-groups.js';
@@ -108,6 +109,7 @@ export interface Repositories {
   chatDecisions: ChatDecisionsRepository;
   chatAuto: ChatAutoRepository;
   memoryItems: MemoryItemsRepository;
+  memoryWriteQueue: MemoryWriteQueueRepository;
   memoryRules: MemoryRulesRepository;
   memoryStatus: MemoryStatusRepository;
   instanceSecrets: InstanceSecretsRepository;
@@ -181,6 +183,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     chatDecisions: new ChatDecisionsRepository(db),
     chatAuto: new ChatAutoRepository(db),
     memoryItems: new MemoryItemsRepository(db),
+    memoryWriteQueue: new MemoryWriteQueueRepository(db),
     memoryRules: new MemoryRulesRepository(db),
     memoryStatus: new MemoryStatusRepository(db),
     instanceSecrets: new InstanceSecretsRepository(db),

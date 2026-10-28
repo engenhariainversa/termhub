@@ -52,7 +52,11 @@ export type AutomationEventKind =
   | 'trust_auto_accepted'
   // TER-1120: a workflow on the base head cancelled before any job got a runner: delivered nothing, does not
   // hold the merge queue ({ run_id, workflow, url, sha }), once per run
-  | 'workflow_no_runner';
+  | 'workflow_no_runner'
+  // TER-1137: a memory write over its hourly quota went to the queue ({ what: note | lesson, by, count, until }),
+  // or was dropped ({ what, by, count, reason: queue_full | note_full })
+  | 'memory_queued'
+  | 'memory_dropped';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;
