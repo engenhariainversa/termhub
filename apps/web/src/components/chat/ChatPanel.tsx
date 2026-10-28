@@ -25,6 +25,7 @@ import { compactDoneText, compactFailedText, contextLevel, contextMax, contextSh
 import { useChatLive } from '../../lib/chat-live';
 import { droppedRows, mergeMessage, mergeThread } from '../../lib/chat-merge';
 import { replyTargetOf, replyTargetOfAction, replyTargetOfQuestion, type ReplyTarget } from '../../lib/chat-reply';
+import { sameLimit } from '../../lib/chat-notice';
 import { chatTimeline, groupPendingActions, groupSettledActions, groupSettledQuestions } from '../../lib/chat-timeline';
 import { ChatQuestionTrail } from './ChatQuestionTrail';
 import { activeGrantsLabel } from './grant-list-text';
@@ -219,6 +220,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    * machine (the `lost` state the server resolves) matches none of them, which is the right answer too.
    */
   const [hostAccountId, setHostAccountId] = useState<string | null>(null);
+  /** TER-1144: a project chat's picker offers the project's Claude accounts; null = not read yet, 'error' = refused. */
+  const [projectAccounts, setProjectAccounts] = useState<{ id: string; label: string; machine_name: string }[] | 'error' | null>(null);
   const [changingHost, setChangingHost] = useState(false);
   const [hostError, setHostError] = useState<string | null>(null);
 
@@ -725,6 +728,20 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   const openPicker = async () => {
     setPicking(true);
     setHostError(null);
+    // TER-1144: a project chat on the project's accounts changes among them, not the account-wide host
+    if (projectId && host?.kind === 'ready' && host.account.kind === 'chosen' && host.account.via === 'project') {
+      try {
+        const { ai, available } = await api.setup.ai.get(projectId);
+        const byId = new Map(available.map((a) => [a.id, a]));
+        setProjectAccounts(ai.accounts.flatMap((id) => {
+          const a = byId.get(id);
+          return a && a.provider === 'claude' ? [{ id: a.id, label: a.label, machine_name: a.machine_name }] : [];
+        }));
+      } catch {
+        setProjectAccounts('error');
+      }
+      return;
+    }
     if (hostMachines !== null) return;
     let own: Set<string>;
     try {
@@ -775,6 +792,23 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     }
   };
 
+  /** TER-1144: the account a project chat runs on, picked for this conversation; null = the project decides. */
+  const chooseProjectAccount = async (aiAccountId: string | null) => {
+    if (!projectId) return;
+    setChangingHost(true);
+    setHostError(null);
+    try {
+      const { host: next } = await api.setChatProjectAccount(projectId, aiAccountId);
+      setHost(next);
+      setHostAccountId(aiAccountId);
+      setPicking(false);
+    } catch (e) {
+      setHostError(e instanceof ApiError ? e.message : i18n.t('Não foi possível trocar a máquina ou a conta do chat'));
+    } finally {
+      setChangingHost(false);
+    }
+  };
+
   /** Messages, gate cards and tab questions as one chronological thread, so a card reads where it was proposed. */
   const timeline = useMemo(() => chatTimeline(messages, actions, tabQuestions, tabSuggestions, tabLimits), [messages, actions, tabQuestions, tabSuggestions, tabLimits]);
   /** "Ver separadas" holds only for the cards it was clicked on: a new or decided card groups again. */
@@ -786,6 +820,18 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
   // A turn's settled cards fold into one accordion above its answer (TER-1024), and a run of settled tab
   // cards into another (TER-1108); pending ones never do.
   const entries = useMemo(() => groupSettledQuestions(groupSettledActions(separate ? timeline : groupPendingActions(timeline))), [separate, timeline]);
+  /** The assistant answer before each one (TER-1144: a limit said again is said in short). */
+  const previousAnswers = useMemo(() => {
+    const map = new Map<string, ChatMessage>();
+    let last: ChatMessage | undefined;
+    for (const m of messages) {
+      if (m.role !== 'assistant') continue;
+      if (last) map.set(m.id, last);
+      last = m;
+    }
+    return map;
+  }, [messages]);
+  const previousAnswer = (id: string) => previousAnswers.get(id);
   /**
    * The row a running answer would be written into: only the newest one can still be the live one.
    * Keyed on the id, not on a position: the loop below walks the merged timeline, where an index
@@ -1060,6 +1106,10 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
       onChoose={(machineId) => void chooseHost(machineId)}
       // The machine does not move: the account is set on the one already hosting the conversation.
       onChooseAccount={(aiAccountId) => hostMachineId !== null && void chooseHost(hostMachineId, aiAccountId)}
+      projectAccounts={projectAccounts === 'error' ? null : projectAccounts}
+      projectAccountsError={projectAccounts === 'error'}
+      setupHref={projectId ? `/projects/${projectId}/settings` : null}
+      onChooseProjectAccount={(aiAccountId) => void chooseProjectAccount(aiAccountId)}
     />
   );
 
@@ -1181,6 +1231,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
           if (entry.kind === 'action') return renderAction(entry.action);
           const m = entry.message;
           const row = fold.get(m.id);
+          // TER-1144: an answer stopped on the same limit as the answer before it says so in short
+          const limitRepeat = m.error_code === 'USAGE_LIMIT' && sameLimit(m.notice, previousAnswer(m.id)?.notice) && previousAnswer(m.id)?.error_code === 'USAGE_LIMIT';
           const streaming = row?.text || undefined;
           // An assistant row with no text and no error is either an answer still being written or a
           // leftover from a run that died with the process. It counts as live when this page knows
@@ -1202,6 +1254,7 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
               onReply={startReply}
               highlighted={highlightId === m.id}
               projectId={projectId}
+              limitRepeat={limitRepeat}
             />
           );
         })}

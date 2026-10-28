@@ -5,6 +5,7 @@ import { TMUX_KEYS, tmuxKey } from '@termhub/agent-protocol';
 import type { Action, Resource } from '../auth/permissions.js';
 import type { ApiTokenScope } from '../auth/api-tokens.js';
 import type { ControlContext } from '../control/context.js';
+import { setChatAccount } from '../control/chat-account.js';
 import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
@@ -157,6 +158,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
     run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
+  },
+  {
+    name: 'set_chat_account',
+    description:
+      "Move a project's chat (the concierge of that project) to another of the project's Claude accounts, when the person asks (\"troca pra conta X\", \"usa a conta do jarvis\"): account_id is one of the accounts in the project's Setup (AI accounts and model); null gives the choice back to the project (its concierge machine, else the first account of the list with room). The answer lists the project's accounts (id, label, machine, limited) — when the person names an account that is not there, tell them to add it in the project's Setup. Takes effect from the next message; the history stays, the model's memory starts over on the new account. The person's own project chats only.",
+    scope: 'terminals', resource: 'chat', action: 'update',
+    input: { project_id: id, account_id: id.nullable() },
+    run: (ctx, a) => setChatAccount(ctx, a as { project_id: string; account_id: string | null }),
   },
   {
     name: 'start_ai_login',

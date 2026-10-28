@@ -9,6 +9,8 @@ import { z } from 'zod';
 export const projectAiSchema = z.object({
   accounts: z.array(z.string()),
   models: z.object({ claude: z.string().nullable(), chatgpt: z.string().nullable() }),
+  /** TER-1144: the machine the project chat runs on; null = automatic. Absent from a server that predates it. */
+  chat_machine_id: z.string().nullable().optional(),
 });
 export type ProjectAi = z.infer<typeof projectAiSchema>;
 

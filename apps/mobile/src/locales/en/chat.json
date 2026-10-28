@@ -199,5 +199,12 @@
   "Mensagem grande demais: {{length}} de {{max}} caracteres. Remova um anexo para enviá-la como .txt": "Message too long: {{length}} of {{max}} characters. Remove an attachment to send it as a .txt",
   "Mensagem longa ({{chars}} caracteres) enviada como anexo": "Long message ({{chars}} characters) sent as an attachment",
   "Texto colado ({{chars}} caracteres) vai como anexo": "Pasted text ({{chars}} characters) goes as an attachment",
-  "Manter como texto": "Keep as text"
+  "Manter como texto": "Keep as text",
+  "na conta {{label}}, escolhida para esta conversa": "on the account {{label}}, chosen for this conversation",
+  "na conta {{label}}, pela máquina do concierge definida no projeto": "on the account {{label}}, from the concierge machine set in the project",
+  "A máquina do concierge ({{name}}) está offline ou sem conta com limite livre: o chat usa a próxima conta do projeto.": "The concierge machine ({{name}}) is offline or has no account with usage left: the chat uses the project's next account.",
+  "Nenhuma outra conta do projeto tem limite livre agora.": "No other account of the project has usage left right now.",
+  "Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.": "Add another Claude account to the project's Setup (AI accounts and model) so the chat can switch on its own.",
+  "Ainda no mesmo limite de uso (volta {{reset}}).": "Still at the same usage limit (back {{reset}}).",
+  "Ainda no mesmo limite de uso.": "Still at the same usage limit."
 }

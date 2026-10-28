@@ -23,7 +23,7 @@ import { forgetOrigin, originLine, rememberOrigin, sameNetworkAs, type ClientOri
 import { saveContext } from './context.js';
 import { streamedSystemPrompt } from './concierge-prompt.js';
 import { defaultEmbedder } from './embeddings.js';
-import { exclusiveConflict, hostFailure, machineReady, markLimited, resolveHost, type HostAgents, type HostChoice } from './host.js';
+import { exclusiveConflict, hostFailure, machineReady, markLimited, projectChatAccounts, resolveHost, type HostAgents, type HostChoice } from './host.js';
 import { auditBlocked, exclusiveError } from '../ai/exclusive.js';
 import { COMMAND_RULE_BUDGET, DEFAULT_ALLOW_KINDS, GRANTABLE_TOOL, redactSecretArgs, SECRET_ARGS, STANDING_GRANT_BUDGETS, TAB_TERMINAL_GRANT, type StandingGrantKind } from './gate.js';
 import { formatWords } from './command-rules.js';
@@ -130,9 +130,8 @@ class LimitFallback {
       console.info('chat: usage limit, answering on another account', { conversation_id: this.conversationId, machine_id: this.machine.id, from: this.account.id, to: pick.account.id, to_machine: pick.machine?.id ?? this.machine.id, resume: pick.resume });
       if (pick.machine) this.machine = pick.machine;
       this.account = { id: pick.account.id, label: accountName(pick.account.label, this.machine), configDir: pick.account.config_dir };
-      // TER-589: `pick.account` answers from here on. In a project chat running on the project's list it
-      // becomes that chat's account, so the next message starts there instead of on the limited one.
-      if (this.projectRun) await this.repos.chat.setRunAccount(this.conversationId, pick.account.id).catch((err) => console.error('chat: could not keep the project account', { conversation_id: this.conversationId, error: failureLabel(err) }));
+      // `pick.account` answers from here on. A project chat's next message skips the limited account by
+      // itself (`markLimited`, TER-1144): its row's account is only ever the person's own pick.
       return { pick, notice: { kind: 'account_swap', from: this.first.label, to: accountName(pick.account.label, this.machine), resets_at: this.first.resets_at } };
     }
     const fallback = await fallbackShortfall(this.repos, this.machine, this.account.id).catch(() => 'none_free' as const);
@@ -574,6 +573,24 @@ export class ChatService {
   async hostFor(user: User, projectId: string | null = null): Promise<HostChoice> {
     if (projectId === null) return this.hostForConversation(user, null, { wait: 'handover' });
     return this.hostForConversation(user, await this.conversationFor(user, projectId), { wait: 'handover' });
+  }
+
+  /**
+   * The account the person picks for a project chat (TER-1144), from the chat's settings or by asking the
+   * concierge: one of the project's Claude accounts, which the chat then starts on while it has room;
+   * `null` gives the choice back to the project's concierge machine and order. Answers the new host.
+   */
+  async setProjectAccount(user: User, projectId: string, accountId: string | null): Promise<HostChoice> {
+    const conversation = await this.conversationFor(user, projectId);
+    if (accountId !== null) {
+      const machines = await this.deps.repos.machines.list(user.id);
+      const { accounts } = await projectChatAccounts(this.deps.repos, user.id, projectId, machines);
+      if (!accounts.some((a) => a.account.id === accountId)) {
+        throw new HttpError(400, 'Essa conta não está nas contas do Claude do projeto (Setup → Contas de IA e modelo)', 'CHAT_ACCOUNT_NOT_IN_PROJECT');
+      }
+    }
+    await this.deps.repos.chat.setRunAccount(conversation.id, accountId);
+    return this.hostFor(user, projectId);
   }
 
   /** The host as seen by one run conversation: the account-wide row's machine and account, the extra

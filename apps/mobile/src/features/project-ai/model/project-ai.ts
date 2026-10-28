@@ -18,6 +18,8 @@ export interface ProjectAiDraft {
   /** Account ids, priority order: only accounts the project may list. */
   accounts: string[];
   models: Record<Provider, ModelDraft>;
+  /** TER-1144: the machine the project chat runs on; null = automatic. */
+  chatMachineId: string | null;
 }
 
 /** The model rule and the alias list are the shared ones (`@termhub/mobile-api` models.ts, TER-1097): the same the server validates with. */
@@ -65,7 +67,21 @@ export function draftFrom(ai: TProjectAi, available: readonly TProjectAiOption[]
   return {
     accounts: ai.accounts.filter((id, i) => known.has(id) && ai.accounts.indexOf(id) === i),
     models: { claude: modelDraft('claude', ai.models.claude), chatgpt: modelDraft('chatgpt', ai.models.chatgpt) },
+    chatMachineId: ai.chat_machine_id ?? null,
   };
+}
+
+/** TER-1144: the machines with a Claude account of the project, where its chat may run (the saved one stays listed). */
+export function chatMachinesOf(draft: ProjectAiDraft, available: readonly TProjectAiOption[]): { id: string; name: string }[] {
+  const machines = new Map<string, { id: string; name: string }>();
+  for (const o of available) {
+    if (o.provider === 'claude' && (draft.accounts.includes(o.id) || o.machine_id === draft.chatMachineId)) machines.set(o.machine_id, { id: o.machine_id, name: o.machine_name });
+  }
+  return [...machines.values()];
+}
+
+export function setChatMachine(draft: ProjectAiDraft, machineId: string | null): ProjectAiDraft {
+  return { ...draft, chatMachineId: machineId };
 }
 
 /** The model a choice saves: null for the CLI's default. */
@@ -96,11 +112,12 @@ export function payload(draft: ProjectAiDraft, available: readonly TProjectAiOpt
   return {
     accounts: draft.accounts.filter((id) => known.has(id)),
     models: { claude: modelValue(draft.models.claude), chatgpt: modelValue(draft.models.chatgpt) },
+    chat_machine_id: draft.chatMachineId,
   };
 }
 
 export function sameAi(a: TProjectAi, b: TProjectAi): boolean {
-  return a.accounts.length === b.accounts.length && a.accounts.every((id, i) => id === b.accounts[i]) && a.models.claude === b.models.claude && a.models.chatgpt === b.models.chatgpt;
+  return a.accounts.length === b.accounts.length && a.accounts.every((id, i) => id === b.accounts[i]) && a.models.claude === b.models.claude && a.models.chatgpt === b.models.chatgpt && (a.chat_machine_id ?? null) === (b.chat_machine_id ?? null);
 }
 
 /** Whether "Salvar" can go: something changed and every model is valid. */
