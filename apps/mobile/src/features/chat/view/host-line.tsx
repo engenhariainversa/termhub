@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import { fileRecentRoute } from '@/features/file-recent/model/format';
 import { useTranslation } from '@/i18n';
 import { Button } from '@/ui';
-import { accountFromProject, hostLine, type HostLine as HostLineCopy } from '../model/copy';
+import { accountFromProject, chatMachineAside, hostLine, type HostLine as HostLineCopy } from '../model/copy';
 import type { ChatHostState } from '../model/types';
 import { HostSheet } from './host-sheet';
 
@@ -27,6 +27,7 @@ export function HostLine({ host, canChange, projectId = null }: { host: ChatHost
   return (
     <View className="gap-1 border-b border-app-border px-4 py-2">
       <Text className={`text-sm ${TONE[line.tone]}`}>{line.text}</Text>
+      {chatMachineAside(host) ? <Text className="text-sm text-app-muted">{chatMachineAside(host)}</Text> : null}
       {pick ? (
         <>
           <Button label={t('Trocar máquina ou conta')} variant="ghost" onPress={() => setPicking(true)} />

@@ -492,5 +492,8 @@
   "Cards que esperam uma pessoa ou terceiros": "Cards that wait on a person or a third party",
   "Coluna {{name}} aguardando": "Column {{name}} waiting",
   "aguardando": "waiting",
-  "{{what}}; grava às {{time}}": "{{what}}; written at {{time}}"
+  "{{what}}; grava às {{time}}": "{{what}}; written at {{time}}",
+  "Máquina do concierge": "Concierge machine",
+  "Automática (a primeira conta com limite livre, em qualquer máquina)": "Automatic (the first account with usage left, on any machine)",
+  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "The project chat runs on this machine, with its accounts in the order above. When it is offline or has no account with usage left, it falls back to automatic."
 }

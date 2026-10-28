@@ -815,10 +815,10 @@ it('spells out what a set_automation_policy card turns on or widens, with the le
 
 it('spells out what a set_project_ai_setup card changes (TER-1147)', async () => {
   const repos = fakeRepos();
-  const call = action({ tool: 'set_project_ai_setup', args: { project_id: 'p1', remove: ['a1'], add: ['a2', 'a3'], prefer_machine_id: 'm1', models: { claude: 'sonnet', chatgpt: null }, confirm: true }, project_id: 'p1' });
+  const call = action({ tool: 'set_project_ai_setup', args: { project_id: 'p1', remove: ['a1'], add: ['a2', 'a3'], chat_machine_id: 'm1', models: { claude: 'sonnet', chatgpt: null }, confirm: true }, project_id: 'p1' });
   const [card] = await describeActions(repos, [call], OWNER);
   expect(card.summary).toBe(
-    'mudar as contas de IA e o modelo do projeto (tirar 1 conta; adicionar 2 contas; as contas de uma máquina primeiro (o chat do projeto passa a rodar nela); modelo do Claude: `sonnet`; modelo do Codex: o padrão do CLI) no projeto reactivando',
+    'mudar as contas de IA e o modelo do projeto (tirar 1 conta; adicionar 2 contas; trocar a máquina do concierge (o chat do projeto passa a rodar nela); modelo do Claude: `sonnet`; modelo do Codex: o padrão do CLI) no projeto reactivando',
   );
 });
 

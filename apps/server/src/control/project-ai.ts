@@ -69,8 +69,10 @@ export interface ConciergeView {
 }
 
 const REASON_TEXT: Record<ConciergeView['reason'], string> = {
+  conversation: 'a conta que a pessoa escolheu para esta conversa, com a máquina online e sem limite atingido',
+  machine: 'a primeira conta do Claude da máquina do concierge com folga',
   first_with_room: 'a primeira conta do Claude da ordem com a máquina online e sem limite atingido',
-  all_limited_last: 'todas as contas do Claude atingiram o limite: fica na última em que o chat respondeu',
+  all_limited_picked: 'todas as contas do Claude atingiram o limite: fica na que a pessoa escolheu para esta conversa',
   all_limited_first: 'todas as contas do Claude atingiram o limite: fica na primeira com a máquina online',
   none_ready: 'nenhuma máquina das contas do Claude da lista está online com um agente que roda o chat: vale o host da conversa geral',
   no_claude_account: 'o projeto não lista conta do Claude utilizável: vale o host da conversa geral',
@@ -82,11 +84,11 @@ async function machinesOf(ctx: ControlContext): Promise<Machine[]> {
 
 /** Who answers the project's chat now and why, without waiting on any agent (TER-1144's own pick). */
 async function conciergeNow(ctx: ControlContext, projectId: string, ai: ProjectAi, machines: Machine[], agents: Agents): Promise<ConciergeView> {
-  const { accounts } = await projectChatAccounts(ctx.repos, ctx.scope.user.id, projectId, machines);
+  const { accounts, chatMachineId } = await projectChatAccounts(ctx.repos, ctx.scope.user.id, projectId, machines);
   const conversation = await ctx.repos.chat.findLatestActiveForProject(projectId, ctx.scope.user.id);
   const model = conversation?.model ?? ai.models.claude;
   if (accounts.length === 0) return { account: null, machine: null, model, reason: 'no_claude_account', text: REASON_TEXT.no_claude_account };
-  const { pick, reason } = projectPick(accounts, (m) => machineReady(agents, m.id, CAPABILITY_CLAUDE_SYSTEM_PROMPT), conversation?.ai_account_id ?? null);
+  const { pick, reason } = projectPick(accounts, (m) => machineReady(agents, m.id, CAPABILITY_CLAUDE_SYSTEM_PROMPT), conversation?.ai_account_id ?? null, chatMachineId);
   return {
     account: pick ? { id: pick.account.id, label: pick.account.label } : null,
     machine: pick ? { id: pick.machine.id, name: pick.machine.name } : null,
@@ -102,6 +104,8 @@ export interface ProjectAiSetupView {
   /** accounts the project may add (of a machine linked to it), not listed yet */
   available: ProjectAiOption[];
   models: ProjectAi['models'];
+  /** the project's concierge machine (TER-1144); null = automatic */
+  chat_machine: { id: string; name: string } | null;
   concierge: ConciergeView;
 }
 
@@ -134,6 +138,7 @@ export async function getProjectAiSetup(ctx: ControlContext, input: { project_id
     accounts: views,
     available: available.filter((o) => !ai.accounts.includes(o.id)),
     models: ai.models,
+    chat_machine: ai.chat_machine_id ? { id: ai.chat_machine_id, name: machines.find((m) => m.id === ai.chat_machine_id)?.name ?? '' } : null,
     concierge: await conciergeNow(ctx, project.id, ai, machines, agents),
   };
 }
@@ -144,32 +149,27 @@ export interface SetProjectAiInput {
   accounts?: string[];
   add?: string[];
   remove?: string[];
-  /** this machine's accounts go first, in their order: the concierge (and start_agent with no machine) prefer it */
-  prefer_machine_id?: string;
+  /** the project's concierge machine (TER-1144); null = automatic */
+  chat_machine_id?: string | null;
   models?: { claude?: string | null; chatgpt?: string | null };
   confirm?: boolean;
 }
 
-/** The order after the call's changes: replace, then remove, then add at the end, then the machine first. */
-function nextOrder(current: string[], input: SetProjectAiInput, machineOf: (id: string) => string | undefined): string[] {
+/** The order after the call's changes: replace, then remove, then add at the end. */
+function nextOrder(current: string[], input: SetProjectAiInput): string[] {
   const removed = new Set(input.remove ?? []);
-  let order = (input.accounts ?? current).filter((id) => !removed.has(id));
+  const order = (input.accounts ?? current).filter((id) => !removed.has(id));
   for (const id of input.add ?? []) if (!order.includes(id)) order.push(id);
-  order = [...new Set(order)];
-  if (input.prefer_machine_id) {
-    const first = order.filter((id) => machineOf(id) === input.prefer_machine_id);
-    order = [...first, ...order.filter((id) => machineOf(id) !== input.prefer_machine_id)];
-  }
-  return order;
+  return [...new Set(order)];
 }
 
 const sameOrder = (a: string[], b: string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
-/** How a side of the change reads: "1. Claude · jarvis, 2. Codex · hulk; modelos: Claude opus, Codex padrão do CLI". */
-function describe(ai: ProjectAi, nameOf: (id: string) => string): string {
+/** How a side of the change reads: "1. Claude · jarvis, 2. Codex · hulk; modelos: Claude opus, Codex padrão do CLI; máquina do concierge: automática". */
+function describe(ai: ProjectAi, nameOf: (id: string) => string, machineName: (id: string) => string): string {
   const accounts = ai.accounts.length ? ai.accounts.map((id, i) => `${i + 1}. ${nameOf(id)}`).join(', ') : 'nenhuma conta (vale o comportamento de antes do Setup)';
   const model = (m: string | null) => m ?? 'padrão do CLI';
-  return `${accounts}; modelos: Claude ${model(ai.models.claude)}, Codex ${model(ai.models.chatgpt)}`;
+  return `${accounts}; modelos: Claude ${model(ai.models.claude)}, Codex ${model(ai.models.chatgpt)}; máquina do concierge: ${ai.chat_machine_id ? machineName(ai.chat_machine_id) : 'automática'}`;
 }
 
 export interface SetProjectAiOut {
@@ -195,33 +195,35 @@ export async function setProjectAiSetup(ctx: ControlContext, input: SetProjectAi
   const { ai: current } = await describeProjectAi(ctx.repos, aiScopeOf(ctx), project.id);
   const [accounts, machines] = await Promise.all([ctx.repos.aiAccounts.list(ctx.scope.ownerId), machinesOf(ctx)]);
   const byId = new Map(accounts.map((a) => [a.id, a]));
-  if (input.prefer_machine_id) {
-    const machine = await ctx.scoped.machine(input.prefer_machine_id);
+  if (input.chat_machine_id) {
+    const machine = await ctx.scoped.machine(input.chat_machine_id);
     if (!(await ctx.repos.projectMachines.find(project.id, machine.id))) throw new ControlError('MACHINE_NOT_LINKED', msg('A máquina {{machine}} não está ligada ao projeto', { machine: machine.name }));
   }
   const next: ProjectAi = {
-    accounts: nextOrder(current.accounts, input, (id) => byId.get(id)?.machine_id),
+    accounts: nextOrder(current.accounts, input),
     models: {
       claude: input.models?.claude !== undefined ? input.models.claude : current.models.claude,
       chatgpt: input.models?.chatgpt !== undefined ? input.models.chatgpt : current.models.chatgpt,
     },
+    chat_machine_id: input.chat_machine_id !== undefined ? input.chat_machine_id : current.chat_machine_id,
   };
+  const machineName = (id: string) => machines.find((m) => m.id === id)?.name ?? id;
   const nameOf = (id: string) => {
     const a = byId.get(id);
     const machine = a && machines.find((m) => m.id === a.machine_id);
     return a ? `${a.label} · ${machine?.name ?? a.machine_id}` : id;
   };
-  const base = { project_id: project.id, before: describe(current, nameOf) };
-  if (sameOrder(current.accounts, next.accounts) && current.models.claude === next.models.claude && current.models.chatgpt === next.models.chatgpt) {
+  const base = { project_id: project.id, before: describe(current, nameOf, machineName) };
+  if (sameOrder(current.accounts, next.accounts) && current.models.claude === next.models.claude && current.models.chatgpt === next.models.chatgpt && current.chat_machine_id === next.chat_machine_id) {
     return { ...base, changed: false, confirm_required: false, after: base.before, ai: current };
   }
-  if (!input.confirm) return { ...base, changed: false, confirm_required: true, after: describe(next, nameOf), ai: current };
+  if (!input.confirm) return { ...base, changed: false, confirm_required: true, after: describe(next, nameOf, machineName), ai: current };
   if (ctx.token?.gated && !ctx.approval) {
     throw new ControlError('CONFIRMATION_REQUIRED', msg('Mudar as contas de IA ou o modelo de um projeto precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.'));
   }
   const saved = await saveProjectAi(ctx.repos, aiScopeOf(ctx), project.id, next);
   ctx.log?.info({ project_id: project.id, accounts: saved.ai.accounts.length, via: ctx.token?.gated ? 'chat' : 'mcp' }, 'project ai setup changed');
-  return { ...base, changed: true, confirm_required: false, after: describe(saved.ai, nameOf), ai: saved.ai, concierge: await conciergeNow(ctx, project.id, saved.ai, machines, agents) };
+  return { ...base, changed: true, confirm_required: false, after: describe(saved.ai, nameOf, machineName), ai: saved.ai, concierge: await conciergeNow(ctx, project.id, saved.ai, machines, agents) };
 }
 
 export interface UnstickAccountView {
@@ -252,15 +254,16 @@ function fullUntil(u: AiAccountUsage, model: string | null): string | null {
 
 /**
  * `unstick_project_chat`: the project chat forgets which of its Claude accounts met their limit, reads
- * each one's usage again (fresh) on the machines that are online, leaves aside only the ones still full,
- * and starts its next message on the first of the project's order with room — the conversation's account
- * moves there. It never picks an account the project does not list, nor one exclusive to another project.
+ * each one's usage again (fresh) on the machines that are online and leaves aside only the ones still
+ * full, so its next message starts on one with room by the project's rules (TER-1144: the person's pick
+ * for the conversation, the concierge machine, the order). It writes neither the Setup nor the
+ * conversation's pick, and never picks an account the project does not list, nor one exclusive to another.
  */
 export async function unstickProjectChat(ctx: ControlContext, input: { project_id: string }, agents: Agents = liveAgents): Promise<UnstickOut> {
   refuseTab(ctx);
   const { project } = await ctx.scoped.project(input.project_id);
   const machines = await machinesOf(ctx);
-  const { accounts, model: projectModel } = await projectChatAccounts(ctx.repos, ctx.scope.user.id, project.id, machines);
+  const { accounts, model: projectModel, chatMachineId } = await projectChatAccounts(ctx.repos, ctx.scope.user.id, project.id, machines);
   const conversation = await ctx.repos.chat.findLatestActiveForProject(project.id, ctx.scope.user.id);
   const model = conversation?.model ?? projectModel;
   const none = { project_id: project.id, unstuck: false, account: null, machine: null, model };
@@ -282,8 +285,8 @@ export async function unstickProjectChat(ctx: ControlContext, input: { project_i
       return { ...view, state: 'full', peak, resets_at };
     }),
   );
-  const { pick, reason } = projectPick(accounts, ready, conversation?.ai_account_id ?? null);
-  const stuck = reason !== 'first_with_room' || !pick;
+  const { pick, reason } = projectPick(accounts, ready, conversation?.ai_account_id ?? null, chatMachineId);
+  const stuck = !pick || !(reason === 'conversation' || reason === 'machine' || reason === 'first_with_room');
   console.info('chat: project chat re-read its accounts', { project_id: project.id, to: pick?.account.id ?? null, reason });
   if (stuck) {
     const resets = views.map((v) => v.resets_at).filter((r): r is string => r !== null).sort();
@@ -292,7 +295,6 @@ export async function unstickProjectChat(ctx: ControlContext, input: { project_i
       : `Todas as contas do Claude do projeto continuam no limite${resets.length ? `; a primeira volta em ${resets[0]}` : ''}. Adicione outra conta com set_project_ai_setup ou espere.`;
     return { ...none, accounts: views, text };
   }
-  if (conversation && conversation.ai_account_id !== pick.account.id) await ctx.repos.chat.setRunAccount(conversation.id, pick.account.id);
   return {
     project_id: project.id,
     unstuck: true,

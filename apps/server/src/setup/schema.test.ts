@@ -106,13 +106,13 @@ describe('setup repositories (TER-1076)', () => {
 
 describe('setup ai block (TER-589)', () => {
   it('defaults to no accounts and no models, also for a setup saved before the block existed', () => {
-    expect(normalizeSetup({}, 2).ai).toEqual({ accounts: [], models: { claude: null, chatgpt: null } });
+    expect(normalizeSetup({}, 2).ai).toEqual({ accounts: [], models: { claude: null, chatgpt: null }, chat_machine_id: null });
     expect(normalizeSetup({ agent: { command: 'claude' } }, 2).ai.accounts).toEqual([]);
   });
 
   it('keeps the account order and the models as typed', () => {
     const d = setupInputSchema.parse({ ai: { accounts: ['b', 'a'], models: { claude: 'sonnet[1m]', chatgpt: 'gpt-5-codex' } } });
-    expect(d.ai).toEqual({ accounts: ['b', 'a'], models: { claude: 'sonnet[1m]', chatgpt: 'gpt-5-codex' } });
+    expect(d.ai).toEqual({ accounts: ['b', 'a'], models: { claude: 'sonnet[1m]', chatgpt: 'gpt-5-codex' }, chat_machine_id: null });
     expect(setupInputSchema.parse({ ai: { accounts: [], models: { claude: 'claude-opus-5-5' } } }).ai.models).toEqual({ claude: 'claude-opus-5-5', chatgpt: null });
   });
 

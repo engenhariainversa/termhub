@@ -46,7 +46,23 @@ export interface HostContext {
  * `via: 'project'` (TER-589): the account comes from the project's list, not from the person's pick. Still
  * `chosen` on the wire: an installed phone app parses `kind` strictly, and ignores the extra field.
  */
-export type HostAccount = { kind: 'chosen'; id: string; label: string; via?: 'project' } | { kind: 'default' } | { kind: 'lost' };
+export type HostAccount =
+  | {
+      kind: 'chosen';
+      id: string;
+      label: string;
+      via?: 'project';
+      /**
+       * TER-1144, project chats only: why this account — the person picked it for this conversation
+       * (`conversation`), it is on the project's concierge machine (`machine`), or the first of the
+       * project's list with room (`auto`).
+       */
+      source?: 'conversation' | 'machine' | 'auto';
+      /** TER-1144: the project's concierge machine when one is set (the screen says when it is not the one running). */
+      chat_machine?: { id: string; name: string } | null;
+    }
+  | { kind: 'default' }
+  | { kind: 'lost' };
 
 /**
  * Which machine and which account run this user's conversation — the "terminal geral" of spec §3 —
@@ -236,7 +252,7 @@ export async function projectChatAccounts(
   userId: string,
   projectId: string,
   machines: Machine[],
-): Promise<{ accounts: { account: AiAccount; machine: Machine }[]; model: string | null }> {
+): Promise<{ accounts: { account: AiAccount; machine: Machine }[]; model: string | null; chatMachineId: string | null }> {
   const [{ ai, accounts }, links] = await Promise.all([loadProjectAi(repos, projectId, userId), repos.projectMachines.listByProject(projectId)]);
   const linked = new Set(links.map((l) => l.machine_id));
   const byId = new Map(accounts.map((a) => [a.id, a]));
@@ -246,35 +262,41 @@ export async function projectChatAccounts(
     const machine = account && machines.find((m) => m.id === account.machine_id && m.type === 'agent');
     if (account && machine && account.provider === 'claude' && linked.has(machine.id) && usableIn(account, projectId)) listed.push({ account, machine });
   }
-  return { accounts: listed, model: ai.models.claude };
+  return { accounts: listed, model: ai.models.claude, chatMachineId: ai.chat_machine_id && linked.has(ai.chat_machine_id) ? ai.chat_machine_id : null };
 }
 
 /**
- * Why `projectPick` chose its account (TER-1147, for `get_project_ai_setup`): the first ready one not at
- * its limit, the one the chat last answered on when all are, the first ready otherwise; `none_ready` when
- * no listed account's machine can run the chat now.
+ * Why `projectPick` chose its account (TER-1147, for `get_project_ai_setup`), among the ready accounts not
+ * at their limit: the one the person picked for this conversation (`conversation`), the first on the
+ * project's concierge machine (`machine`), the first of the list (`first_with_room`); when all of them met
+ * their limit, the person's pick (`all_limited_picked`), else the first ready (`all_limited_first`);
+ * `none_ready` when no listed account's machine can run the chat now.
  */
-export type ProjectPickReason = 'first_with_room' | 'all_limited_last' | 'all_limited_first' | 'none_ready';
+export type ProjectPickReason = 'conversation' | 'machine' | 'first_with_room' | 'all_limited_picked' | 'all_limited_first' | 'none_ready';
 
-/** `projectChoice`'s pick, without waiting on agents: the order, the machines that are ready, the limit marks. */
+/** `projectChoice`'s pick, without waiting on agents: the person's pick, the concierge machine, the order, the limit marks. */
 export function projectPick<T extends { account: AiAccount; machine: Machine }>(
   accounts: T[],
   ready: (machine: Machine) => boolean,
-  lastAccountId: string | null,
+  pickedId: string | null,
+  chatMachineId: string | null,
 ): { pick: T | undefined; reason: ProjectPickReason } {
   const usable = accounts.filter((a) => ready(a.machine));
-  const free = usable.find((a) => !isLimited(a.account.id));
-  if (free) return { pick: free, reason: 'first_with_room' };
-  const last = usable.find((a) => a.account.id === lastAccountId);
-  if (last) return { pick: last, reason: 'all_limited_last' };
+  const free = usable.filter((a) => !isLimited(a.account.id));
+  let pick: T | undefined;
+  if ((pick = free.find((a) => a.account.id === pickedId))) return { pick, reason: 'conversation' };
+  if ((pick = free.find((a) => a.machine.id === chatMachineId))) return { pick, reason: 'machine' };
+  if ((pick = free[0])) return { pick, reason: 'first_with_room' };
+  if ((pick = usable.find((a) => a.account.id === pickedId))) return { pick, reason: 'all_limited_picked' };
   return usable[0] ? { pick: usable[0], reason: 'all_limited_first' } : { pick: undefined, reason: 'none_ready' };
 }
 
 /**
- * The account a project chat runs on (TER-1144): the first of the project's accounts whose machine is
- * ready and that has not just met its usage limit; when all of them did, the one the chat last answered
- * on, else the first ready. null when the project lists none or none of their machines is online: the
- * account-wide host decides, as before.
+ * The account a project chat runs on (TER-1144), among the project's accounts whose machine is ready and
+ * that have not just met their usage limit: the one the person picked for this conversation
+ * (`accountId`), else the first on the project's concierge machine, else the first of the list. When
+ * all of them are limited, the person's pick, else the first ready. null when the project lists none or
+ * none of their machines is online: the account-wide host decides, as before.
  */
 async function projectChoice(
   ctx: HostContext,
@@ -285,15 +307,22 @@ async function projectChoice(
   wait: boolean | 'handover' | undefined,
 ): Promise<{ machine: Machine; configDir: string | null; account: HostAccount; model: string | null } | null> {
   const repos = { ...ctx.repos, projectSetup: ctx.repos.projectSetup!, projectMachines: ctx.repos.projectMachines! };
-  const { accounts, model } = await projectChatAccounts(repos, user.id, project.id, machines);
+  const { accounts, model, chatMachineId } = await projectChatAccounts(repos, user.id, project.id, machines);
   if (accounts.length === 0) return null;
   if (wait) {
     const distinct = [...new Map(accounts.map((a) => [a.machine.id, a.machine])).values()];
     await Promise.all(distinct.map((m) => (wait === 'handover' ? ctx.agents.awaitHandover(m) : ctx.agents.awaitAgent(m))));
   }
-  const { pick } = projectPick(accounts, (m) => machineReady(ctx.agents, m.id, requires), project.accountId);
+  const { pick, reason } = projectPick(accounts, (m) => machineReady(ctx.agents, m.id, requires), project.accountId, chatMachineId);
+  const source: 'conversation' | 'machine' | 'auto' = reason === 'conversation' || reason === 'all_limited_picked' ? 'conversation' : reason === 'machine' ? 'machine' : 'auto';
   if (!pick) return null;
-  return { machine: pick.machine, configDir: pick.account.config_dir, account: { kind: 'chosen', id: pick.account.id, label: pick.account.label, via: 'project' }, model };
+  const chatMachine = chatMachineId ? machines.find((m) => m.id === chatMachineId) : undefined;
+  return {
+    machine: pick.machine,
+    configDir: pick.account.config_dir,
+    account: { kind: 'chosen', id: pick.account.id, label: pick.account.label, via: 'project', source, chat_machine: chatMachine ? { id: chatMachine.id, name: chatMachine.name } : null },
+    model,
+  };
 }
 
 async function accountFor(ctx: HostContext, accountId: string | null, machine: Machine): Promise<{ configDir: string | null; account: HostAccount }> {

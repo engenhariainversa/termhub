@@ -19,10 +19,12 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // or changed on the board, and the person sees every open watch in the chat and can cancel it there.
 // schedule_wakeup (TER-1100) is the same: a reminder is a watch on the clock. notify (TER-1101) only tells the
 // person themself, by the rules they set (levels, quiet hours, grouping, a cap per hour).
-// unstick_project_chat (TER-1147) only reads the usage of the project's accounts again and starts the chat's
-// next message on the first of the order the person set with room: nothing is typed or run on a machine, no
-// account outside that order is picked, and the person asked for it to get the chat going without a click.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'unstick_project_chat']);
+// set_chat_account (TER-1144): the person's own project chat moves to another account the project's Setup
+// already lists, on their word ("troca pra conta X"); reversible from the same place, nothing else changes.
+// unstick_project_chat (TER-1147) only reads the usage of the project's accounts again, so the chat's next
+// message starts on one with room by the project's own rules: nothing is typed or run on a machine, no
+// account outside the project's list is picked, and the person asked for it to get the chat going without a click.
+const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'set_chat_account', 'unstick_project_chat']);
 
 // Tools classified by reversibility
 const readTools = new Set([

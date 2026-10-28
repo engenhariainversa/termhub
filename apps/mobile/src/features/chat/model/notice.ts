@@ -44,13 +44,31 @@ const FALLBACK: Record<Extract<ChatNotice, { kind: 'usage_limit' }>['fallback'],
   auto_swap_off: tk('A troca automática está desligada nesta máquina.'),
 };
 
-/** The line under an answer stored as USAGE_LIMIT. */
-export function limitSentence(notice: ChatNotice | undefined, now: Date = new Date(), timeZone?: string): string {
+/** A project chat looks for room in every account of the project, on any machine (TER-1144). */
+const PROJECT_FALLBACK: Record<Extract<ChatNotice, { kind: 'usage_limit' }>['fallback'], string> = {
+  none_free: tk('Nenhuma outra conta do projeto tem limite livre agora.'),
+  no_other_account: tk('Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.'),
+  auto_swap_off: tk('Nenhuma outra conta do projeto tem limite livre agora.'),
+};
+
+/** The line under an answer stored as USAGE_LIMIT. `project`: the answer is a project chat's (TER-1144). */
+export function limitSentence(notice: ChatNotice | undefined, now: Date = new Date(), timeZone?: string, project = false): string {
   if (notice?.kind !== 'usage_limit') return t('A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.');
   const reset = resetClause(notice.resets_at, now, timeZone);
   const who = whose(notice.account);
   const hit = reset ? t('{{who}} atingiu o limite de uso e volta {{reset}}.', { who, reset }) : t('{{who}} atingiu o limite de uso.', { who });
-  return `${hit} ${t(FALLBACK[notice.fallback])}`;
+  return `${hit} ${t((project ? PROJECT_FALLBACK : FALLBACK)[notice.fallback])}`;
+}
+
+/** Whether two answers stopped on the same limit: the same account, back at the same time (TER-1144). */
+export function sameLimit(a: ChatNotice | undefined, b: ChatNotice | undefined): boolean {
+  return a?.kind === 'usage_limit' && b?.kind === 'usage_limit' && a.account === b.account && a.resets_at === b.resets_at;
+}
+
+/** The short line under an answer that stopped on the same limit as the one before it (TER-1144): said once in full. */
+export function limitRepeatSentence(notice: ChatNotice | undefined, now: Date = new Date(), timeZone?: string): string {
+  const reset = notice?.kind === 'usage_limit' ? resetClause(notice.resets_at, now, timeZone) : null;
+  return reset ? t('Ainda no mesmo limite de uso (volta {{reset}}).', { reset }) : t('Ainda no mesmo limite de uso.');
 }
 
 /** The line above an answer another account gave. */

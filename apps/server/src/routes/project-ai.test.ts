@@ -43,7 +43,7 @@ describe('project AI routes', () => {
     const res = await app.inject({ method: 'GET', url: '/projects/p1/setup/ai' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({
-      ai: { accounts: [], models: { claude: null, chatgpt: null } },
+      ai: { accounts: [], models: { claude: null, chatgpt: null }, chat_machine_id: null },
       available: [
         { id: 'a1', label: 'conta a1', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: true, exclusive_project: null },
         { id: 'a2', label: 'conta a2', provider: 'claude', machine_id: 'm1', machine_name: 'máquina m1', default: false, exclusive_project: null },
@@ -57,9 +57,23 @@ describe('project AI routes', () => {
     const ai = { accounts: ['a2', 'a1', 'c1'], models: { claude: 'opus', chatgpt: null } };
     const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai } });
     expect(res.statusCode).toBe(200);
-    expect(res.json().ai).toEqual(ai);
-    expect(stored().ai).toEqual(ai);
+    expect(res.json().ai).toEqual({ ...ai, chat_machine_id: null });
+    expect(stored().ai).toEqual({ ...ai, chat_machine_id: null });
     expect(stored().runner.worktree).toBe(false);
+  });
+
+  it('saves the concierge machine when it is linked to the project, and refuses one that is not (TER-1144)', async () => {
+    const { app, stored } = build();
+    const ai = { accounts: ['a2'], models: { claude: null, chatgpt: null }, chat_machine_id: 'm1' };
+    const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai } });
+    expect(res.statusCode).toBe(200);
+    expect(stored().ai.chat_machine_id).toBe('m1');
+    const refused = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { ...ai, chat_machine_id: 'm3' } } });
+    expect(refused.statusCode).toBe(400);
+    expect(stored().ai.chat_machine_id).toBe('m1');
+    // a screen from before the field sends none: the saved machine stays
+    await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { accounts: ['a1'], models: { claude: null, chatgpt: null } } } });
+    expect(stored().ai).toMatchObject({ accounts: ['a1'], chat_machine_id: 'm1' });
   });
 
   it.each([
@@ -128,7 +142,7 @@ describe('project AI routes with an account exclusive to a project (TER-990)', (
     await withExclusive(async () => {
       const res = await app.inject({ method: 'PUT', url: '/projects/p1/setup/ai', payload: { ai: { accounts: ['a2', 'a1'], models: { claude: 'opus' } } } });
       expect(res.statusCode).toBe(200);
-      expect(stored().ai).toEqual({ accounts: ['a1'], models: { claude: 'opus', chatgpt: null } });
+      expect(stored().ai).toEqual({ accounts: ['a1'], models: { claude: 'opus', chatgpt: null }, chat_machine_id: null });
     });
   });
 });

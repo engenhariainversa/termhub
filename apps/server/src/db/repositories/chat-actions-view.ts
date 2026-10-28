@@ -142,7 +142,8 @@ function projectAiPhrase(args: Record<string, unknown>): string {
   if (Array.isArray(args.accounts)) parts.push(`nova ordem com ${accounts(countOf(args.accounts))}`);
   if (countOf(args.remove)) parts.push(`tirar ${accounts(countOf(args.remove))}`);
   if (countOf(args.add)) parts.push(`adicionar ${accounts(countOf(args.add))}`);
-  if (typeof args.prefer_machine_id === 'string') parts.push('as contas de uma máquina primeiro (o chat do projeto passa a rodar nela)');
+  if (typeof args.chat_machine_id === 'string') parts.push('trocar a máquina do concierge (o chat do projeto passa a rodar nela)');
+  if (args.chat_machine_id === null) parts.push('máquina do concierge automática');
   const models = (args.models ?? {}) as Record<string, unknown>;
   const model = (v: unknown) => (typeof v === 'string' ? `\`${v}\`` : 'o padrão do CLI');
   if (models.claude !== undefined) parts.push(`modelo do Claude: ${model(models.claude)}`);

@@ -61,11 +61,17 @@ export async function describeProjectAi(repos: Repositories, scope: ProjectAiSco
  * exclusive to another project (TER-990) is refused when it is being added, and dropped when the block
  * already listed it from before it became exclusive (every path skips it anyway), so the rest saves.
  */
-export async function saveProjectAi(repos: Repositories, scope: ProjectAiScope, projectId: string, ai: ProjectAi): Promise<ProjectAiView> {
+export async function saveProjectAi(repos: Repositories, scope: ProjectAiScope, projectId: string, ai: ProjectAi, opts: { keepChatMachine?: boolean } = {}): Promise<ProjectAiView> {
   const s = scope.scoped;
   const available = await options(repos, scope, projectId);
   const allowed = new Set(available.map((o) => o.id));
   const current = await repos.projectSetup.get(projectId);
+  // TER-1144: a screen that predates the concierge machine sends no `chat_machine_id`; it keeps the saved one
+  if (opts.keepChatMachine) ai = { ...ai, chat_machine_id: current.data.ai.chat_machine_id };
+  else if (ai.chat_machine_id !== null) {
+    const { machines } = await s.projectMachines(projectId);
+    if (!machines.some(({ machine }) => machine.id === ai.chat_machine_id)) throw badRequest(msg('A máquina do concierge precisa estar ligada ao projeto'));
+  }
   const before = new Set(current.data.ai.accounts);
   const dropped = new Set<string>();
   for (const id of ai.accounts) {

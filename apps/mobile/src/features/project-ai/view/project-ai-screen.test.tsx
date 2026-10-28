@@ -81,7 +81,7 @@ describe('Contas e modelo do projeto', () => {
 
     expect(saveButton().props.accessibilityState.disabled).toBe(false);
     await fireEvent.press(saveButton());
-    expect(save).toHaveBeenCalledWith(expect.anything(), 'p-termhub', { accounts: ['a1', 'a3'], models: { claude: 'sonnet', chatgpt: null } });
+    expect(save).toHaveBeenCalledWith(expect.anything(), 'p-termhub', { accounts: ['a1', 'a3'], models: { claude: 'sonnet', chatgpt: null }, chat_machine_id: null });
     expect(await screen.findByText('Contas e modelo salvos.', undefined, LOAD)).toBeTruthy();
     expect(saveButton().props.accessibilityState.disabled).toBe(true);
   });

@@ -338,6 +338,9 @@ export const api = {
    */
   setChatHost: (machineId: string, aiAccountId?: string | null) =>
     request<{ conversation: ChatConversation; host: ChatHostState }>('POST', '/chat/host', { machine_id: machineId, ai_account_id: aiAccountId ?? null }),
+  /** TER-1144: the account of a project chat, one of the project's Claude accounts; null = the project decides. */
+  setChatProjectAccount: (projectId: string, aiAccountId: string | null) =>
+    request<{ host: ChatHostState }>('POST', '/chat/project-account', { project_id: projectId, ai_account_id: aiAccountId }),
   /** 202 with the ids of the stored question and its empty answer, as soon as both are stored
    *  (`wait: false`): the answer arrives over `/ws/chat`, so an edge that cuts a long request can never
    *  make the page think the message was not sent. 400 for over-8000-char text or a message with

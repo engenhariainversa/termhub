@@ -98,5 +98,6 @@
   "A decisão usada expirou ou não vale aqui": "La decisión usada expiró o no vale aquí",
   "A decisão usada foi substituída": "La decisión usada fue reemplazada",
   "Você pediu o status há pouco. Espere {{seconds}} s e tente de novo.": "Pediste el estado hace poco. Espera {{seconds}} s y vuelve a intentarlo.",
-  "Mensagem grande demais: {{length}} de {{max}} caracteres. Envie o texto como anexo .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres. Envía el texto como adjunto .txt"
+  "Mensagem grande demais: {{length}} de {{max}} caracteres. Envie o texto como anexo .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres. Envía el texto como adjunto .txt",
+  "Essa conta não está nas contas do Claude do projeto (Setup → Contas de IA e modelo)": "Esa cuenta no está entre las cuentas de Claude del proyecto (Setup → Cuentas de IA y modelo)"
 }

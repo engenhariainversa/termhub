@@ -28,9 +28,9 @@ const machines = [machine('m1', 'jarvis'), machine('m2', 'hulk'), machine('m3', 
 const acc = (id: string, machine_id: string, provider = 'claude', exclusive_project: { id: string; name: string } | null = null): AiAccount =>
   ({ id, label: `Claude ${id}`, provider, machine_id, config_dir: id === 'a1' ? null : `~/.claude-${id}`, exclusive_project, created_at: '' }) as AiAccount;
 
-function world(opts: { accounts?: string[]; token?: ControlToken; approval?: boolean; online?: string[]; conversation?: { id: string; model: string | null; ai_account_id: string | null } | null } = {}) {
+function world(opts: { accounts?: string[]; chatMachine?: string | null; token?: ControlToken; approval?: boolean; online?: string[]; conversation?: { id: string; model: string | null; ai_account_id: string | null } | null } = {}) {
   const accounts = [acc('a1', 'm1'), acc('a2', 'm2'), acc('a3', 'm2'), acc('c1', 'm1', 'chatgpt'), acc('x1', 'm1', 'claude', { id: 'p9', name: 'Cliente' }), acc('u3', 'm3')];
-  let stored = normalizeSetup({ ai: { accounts: opts.accounts ?? ['a1', 'a2', 'c1'], models: { claude: 'opus', chatgpt: null } } }, 2);
+  let stored = normalizeSetup({ ai: { accounts: opts.accounts ?? ['a1', 'a2', 'c1'], models: { claude: 'opus', chatgpt: null }, chat_machine_id: opts.chatMachine ?? null } }, 2);
   const conversation = opts.conversation === undefined ? { id: 'cv1', model: null, ai_account_id: 'a1' } : opts.conversation;
   const repos = {
     projects: { findById: vi.fn(async (id: string) => (id === 'p1' ? { id, name: 'Opa Pingou', owner_id: 'u1' } : undefined)) },
@@ -101,9 +101,18 @@ describe('get_project_ai_setup (TER-1147)', () => {
     const w = world();
     markLimited('a1', null);
     markLimited('a2', null);
-    expect((await getProjectAiSetup(w.ctx, { project_id: 'p1' }, w.agents)).concierge).toMatchObject({ account: { id: 'a1' }, reason: 'all_limited_last' });
+    expect((await getProjectAiSetup(w.ctx, { project_id: 'p1' }, w.agents)).concierge).toMatchObject({ account: { id: 'a1' }, reason: 'all_limited_picked' });
     const none = world({ accounts: ['c1'] });
     expect((await getProjectAiSetup(none.ctx, { project_id: 'p1' }, none.agents)).concierge).toMatchObject({ account: null, reason: 'no_claude_account' });
+  });
+
+  it('follows the person\'s pick for the conversation, then the concierge machine (TER-1144)', async () => {
+    const onHulk = world({ chatMachine: 'm2', conversation: { id: 'cv1', model: null, ai_account_id: null } });
+    const r = await getProjectAiSetup(onHulk.ctx, { project_id: 'p1' }, onHulk.agents);
+    expect(r.chat_machine).toEqual({ id: 'm2', name: 'hulk' });
+    expect(r.concierge).toMatchObject({ account: { id: 'a2' }, reason: 'machine' });
+    const picked = world({ chatMachine: 'm2' });
+    expect((await getProjectAiSetup(picked.ctx, { project_id: 'p1' }, picked.agents)).concierge).toMatchObject({ account: { id: 'a1' }, reason: 'conversation' });
   });
 
   it('is a 404 outside the scope', async () => {
@@ -115,22 +124,24 @@ describe('get_project_ai_setup (TER-1147)', () => {
 describe('set_project_ai_setup (TER-1147)', () => {
   it('without confirm, answers before and after and saves nothing', async () => {
     const w = world({ token: CHAT });
-    const r = await setProjectAiSetup(w.ctx, { project_id: 'p1', prefer_machine_id: 'm2', models: { claude: 'sonnet' } }, w.agents);
+    const r = await setProjectAiSetup(w.ctx, { project_id: 'p1', accounts: ['a2', 'a1', 'c1'], chat_machine_id: 'm2', models: { claude: 'sonnet' } }, w.agents);
     expect(r).toMatchObject({
       changed: false,
       confirm_required: true,
-      before: '1. Claude a1 · jarvis, 2. Claude a2 · hulk, 3. Claude c1 · jarvis; modelos: Claude opus, Codex padrão do CLI',
-      after: '1. Claude a2 · hulk, 2. Claude a1 · jarvis, 3. Claude c1 · jarvis; modelos: Claude sonnet, Codex padrão do CLI',
+      before: '1. Claude a1 · jarvis, 2. Claude a2 · hulk, 3. Claude c1 · jarvis; modelos: Claude opus, Codex padrão do CLI; máquina do concierge: automática',
+      after: '1. Claude a2 · hulk, 2. Claude a1 · jarvis, 3. Claude c1 · jarvis; modelos: Claude sonnet, Codex padrão do CLI; máquina do concierge: hulk',
     });
     expect(w.repos.projectSetup.save).not.toHaveBeenCalled();
   });
 
   it('with confirm on the approved card, saves the order and the model and says who answers the chat now', async () => {
-    const w = world({ token: CHAT, approval: true });
-    const r = await setProjectAiSetup(w.ctx, { project_id: 'p1', remove: ['c1'], add: ['a3'], prefer_machine_id: 'm2', models: { chatgpt: 'gpt-5-codex' }, confirm: true }, w.agents);
+    const w = world({ token: CHAT, approval: true, conversation: { id: 'cv1', model: null, ai_account_id: null } });
+    const r = await setProjectAiSetup(w.ctx, { project_id: 'p1', remove: ['c1'], add: ['a3'], chat_machine_id: 'm2', models: { chatgpt: 'gpt-5-codex' }, confirm: true }, w.agents);
     expect(r.changed).toBe(true);
-    expect(w.stored().ai).toEqual({ accounts: ['a2', 'a3', 'a1'], models: { claude: 'opus', chatgpt: 'gpt-5-codex' } });
-    expect(r.concierge).toMatchObject({ account: { id: 'a2' }, machine: { name: 'hulk' } });
+    expect(w.stored().ai).toEqual({ accounts: ['a1', 'a2', 'a3'], models: { claude: 'opus', chatgpt: 'gpt-5-codex' }, chat_machine_id: 'm2' });
+    expect(r.concierge).toMatchObject({ account: { id: 'a2' }, machine: { name: 'hulk' }, reason: 'machine' });
+    await setProjectAiSetup(w.ctx, { project_id: 'p1', chat_machine_id: null, confirm: true }, w.agents);
+    expect(w.stored().ai.chat_machine_id).toBeNull();
   });
 
   it('replaces the whole order, and changes nothing when the result is the same', async () => {
@@ -152,7 +163,7 @@ describe('set_project_ai_setup (TER-1147)', () => {
     const w = world({ token: CHAT, approval: true });
     await expect(setProjectAiSetup(w.ctx, { project_id: 'p1', add: ['x1'], confirm: true }, w.agents)).rejects.toMatchObject({ statusCode: 400 });
     await expect(setProjectAiSetup(w.ctx, { project_id: 'p1', add: ['u3'], confirm: true }, w.agents)).rejects.toMatchObject({ statusCode: 400 });
-    await expect(setProjectAiSetup(w.ctx, { project_id: 'p1', prefer_machine_id: 'm3', confirm: true }, w.agents)).rejects.toMatchObject({ code: 'MACHINE_NOT_LINKED' });
+    await expect(setProjectAiSetup(w.ctx, { project_id: 'p1', chat_machine_id: 'm3', confirm: true }, w.agents)).rejects.toMatchObject({ code: 'MACHINE_NOT_LINKED' });
     expect(w.repos.projectSetup.save).not.toHaveBeenCalled();
     const tab = world({ token: { id: 't', scopes: ['terminals'], tab: { id: 'tb', project_id: 'p1' } } });
     await expect(setProjectAiSetup(tab.ctx, { project_id: 'p1', remove: ['c1'], confirm: true }, tab.agents)).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -160,7 +171,7 @@ describe('set_project_ai_setup (TER-1147)', () => {
 });
 
 describe('unstick_project_chat (TER-1147)', () => {
-  it('forgets the limit marks, reads usage fresh and moves the chat to the first account with room', async () => {
+  it('forgets the limit marks, reads usage fresh and the chat\'s next message goes to the first account with room', async () => {
     const w = world({ token: CHAT });
     markLimited('a1', null);
     markLimited('a2', null);
@@ -175,7 +186,8 @@ describe('unstick_project_chat (TER-1147)', () => {
     expect(getAccountUsage).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1' }), expect.anything(), true);
     expect(isLimited('a1')).toBe(true);
     expect(isLimited('a2')).toBe(false);
-    expect(w.repos.chat.setRunAccount).toHaveBeenCalledWith('cv1', 'a2');
+    // the conversation's pick (TER-1144) is the person's: never written here
+    expect(w.repos.chat.setRunAccount).not.toHaveBeenCalled();
   });
 
   it('a window that caps another model does not keep the account aside', async () => {

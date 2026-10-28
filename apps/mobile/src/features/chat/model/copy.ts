@@ -76,7 +76,12 @@ export function failureSentence(code: string | null): string {
  * chosen account no longer applies to this machine, and the default is what is actually running —
  * the separate sentence about the account being lost is not part of this line. */
 function accountClause(account: Extract<ChatHostState, { kind: 'ready' }>['account']): string {
-  if (account.kind === 'chosen' && account.via === 'project') return t('na conta {{label}}, definida pelo projeto', { label: account.label });
+  if (account.kind === 'chosen' && account.via === 'project') {
+    // TER-1144: why this account, in the person's words (the same sentences as the web's)
+    if (account.source === 'conversation') return t('na conta {{label}}, escolhida para esta conversa', { label: account.label });
+    if (account.source === 'machine') return t('na conta {{label}}, pela máquina do concierge definida no projeto', { label: account.label });
+    return t('na conta {{label}}, definida pelo projeto', { label: account.label });
+  }
   return account.kind === 'chosen' ? t('na conta {{label}}', { label: account.label }) : t('na conta padrão do Claude dela');
 }
 
@@ -84,6 +89,12 @@ function accountClause(account: Extract<ChatHostState, { kind: 'ready' }>['accou
  * to change, so no picker is offered for it. */
 export function accountFromProject(host: ChatHostState): boolean {
   return host.kind === 'ready' && host.account.kind === 'chosen' && host.account.via === 'project';
+}
+
+/** TER-1144: the project's concierge machine when it is set and is not the one running the chat, in a sentence; else null. */
+export function chatMachineAside(host: ChatHostState): string | null {
+  if (host.kind !== 'ready' || host.account.kind !== 'chosen' || !host.account.chat_machine || host.account.chat_machine.id === host.machine.id) return null;
+  return t('A máquina do concierge ({{name}}) está offline ou sem conta com limite livre: o chat usa a próxima conta do projeto.', { name: host.account.chat_machine.name });
 }
 
 /** The host sheet's line about the account (spec 2026-09-30 project AI accounts §8): the project's own

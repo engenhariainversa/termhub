@@ -339,13 +339,13 @@ describe('a project chat with the project setup (TER-589)', () => {
   it("runs on the first of the project's accounts on the host, with the project's model", async () => {
     const { ctx } = withSetup({ accounts: ['b1', 'c1', 'a2', 'a1'], models: { claude: 'opus' } });
     expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toEqual({
-      kind: 'ready', machine: m1, sessionAtStake: false, configDir: '~/.claude-2', account: { kind: 'chosen', id: 'a2', label: 'trabalho', via: 'project' }, model: 'opus',
+      kind: 'ready', machine: m1, sessionAtStake: false, configDir: '~/.claude-2', account: { kind: 'chosen', id: 'a2', label: 'trabalho', via: 'project', source: 'auto', chat_machine: null }, model: 'opus',
     });
   });
 
-  it("follows the project's order, not the account it last answered on (TER-1144)", async () => {
+  it("follows the project's order when the person picked nothing (TER-1144)", async () => {
     const { ctx } = withSetup({ accounts: ['a2', 'a1'] });
-    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'a1' } })).toMatchObject({ account: { kind: 'chosen', id: 'a2', via: 'project' }, model: null });
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ account: { kind: 'chosen', id: 'a2', via: 'project', source: 'auto', chat_machine: null }, model: null });
   });
 
   it('skips an account that just met its usage limit; with all of them limited, keeps the last one (TER-1144)', async () => {
@@ -360,6 +360,31 @@ describe('a project chat with the project setup (TER-589)', () => {
     const m2 = machine('m2', 'hulk');
     const { ctx } = withSetup({ accounts: ['b1', 'a2'] }, {}, [m1, m2]);
     expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ kind: 'ready', machine: m2, configDir: null, account: { id: 'b1', via: 'project' } });
+  });
+
+  it("runs on the project's concierge machine, with its accounts in the Setup's order, and says why (TER-1144)", async () => {
+    const m2 = machine('m2', 'hulk');
+    const { ctx } = withSetup({ accounts: ['b1', 'a2', 'a1'], chat_machine_id: 'm1' }, {}, [m1, m2]);
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({
+      machine: m1, account: { id: 'a2', source: 'machine', chat_machine: { id: 'm1', name: 'jarvis' } },
+    });
+  });
+
+  it('falls back to the automatic order when the concierge machine is offline or has no account with room (TER-1144)', async () => {
+    const m2 = machine('m2', 'hulk');
+    const offline = withSetup({ accounts: ['a2', 'b1'], chat_machine_id: 'm2' }, {}, [m1, m2], { m1: { capabilities: ['claude'], agent_version: '0.5.0' } });
+    expect(await resolveHost(offline.ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ machine: m1, account: { id: 'a2', source: 'auto', chat_machine: { id: 'm2', name: 'hulk' } } });
+    const full = withSetup({ accounts: ['a2', 'b1'], chat_machine_id: 'm2' }, {}, [m1, m2]);
+    markLimited('b1', null);
+    expect(await resolveHost(full.ctx, user, { project: { id: 'p1', accountId: null } })).toMatchObject({ machine: m1, account: { id: 'a2', source: 'auto' } });
+  });
+
+  it("the account the person picked for the conversation wins while it has room (TER-1144)", async () => {
+    const m2 = machine('m2', 'hulk');
+    const { ctx } = withSetup({ accounts: ['a2', 'b1'], chat_machine_id: 'm1' }, {}, [m1, m2]);
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'b1' } })).toMatchObject({ machine: m2, account: { id: 'b1', source: 'conversation' } });
+    markLimited('b1', null);
+    expect(await resolveHost(ctx, user, { project: { id: 'p1', accountId: 'b1' } })).toMatchObject({ machine: m1, account: { id: 'a2', source: 'machine' } });
   });
 
   it('skips the accounts of a machine that is offline (TER-1144)', async () => {

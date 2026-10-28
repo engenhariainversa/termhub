@@ -93,6 +93,8 @@ const subagentIdParam = z.object({ id: z.string().min(1).max(64) });
 /** The host pair the user picks: the machine, and optionally which of its Claude accounts. No account
  *  (absent or null) means the machine's own default config dir. */
 const hostBody = z.object({ machine_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullish() });
+/** A project chat's account (TER-1144): one of the project's Claude accounts, or null for the project's own choice. */
+const projectAccountBody = z.object({ project_id: z.string().min(1).max(64), ai_account_id: z.string().min(1).max(64).nullable() });
 
 /** What a busy-run decision answers with: the decision is already durably recorded (`decide` ran
  * and the bus already published it) before this is ever reached, so a 409 here would tell the
@@ -204,6 +206,16 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     // who only uses project chats, or right after "Nova conversa").
     if (moved) await repos.chat.clearProjectSessions(user.id);
     return { conversation, host: await deps.service.hostFor(user) };
+  });
+
+  /**
+   * The account of a project chat (TER-1144): one of the project's Claude accounts, which the chat starts
+   * on while it has room, or `null` to give the choice back to the project's concierge machine and order.
+   * Answers the new host, like `/host`.
+   */
+  app.post('/project-account', { config: { action: 'update' } }, async (request) => {
+    const body = projectAccountBody.parse(request.body);
+    return { host: await deps.service.setProjectAccount(request.scope.user, body.project_id, body.ai_account_id) };
   });
 
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {

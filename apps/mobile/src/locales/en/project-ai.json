@@ -19,5 +19,8 @@
   "Remover": "Remove",
   "Outras contas das máquinas do projeto": "Other accounts on the project's machines",
   "Incluir {{name}}": "Include {{name}}",
-  "Salvar": "Save"
+  "Salvar": "Save",
+  "Máquina do concierge": "Concierge machine",
+  "Automática": "Automatic",
+  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "The project chat runs on this machine, with its accounts in the order above. When it is offline or has no account with usage left, it falls back to automatic."
 }
