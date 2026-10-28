@@ -175,7 +175,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const [task, setup] = await Promise.all([repos.tasks.findById(taskId), repos.projectSetup.get(projectId)]);
     if (!task || task.project_id !== projectId || !task.auto || task.parent_id !== null || !task.column_id) return null;
     const column = await repos.taskColumns.findById(task.column_id);
-    if (column?.category !== 'todo' || !setup.data.automation.enabled) return null;
+    if (column?.category !== 'todo' || column.waiting || !setup.data.automation.enabled) return null;
     return { task, setup: setup.data };
   }
 

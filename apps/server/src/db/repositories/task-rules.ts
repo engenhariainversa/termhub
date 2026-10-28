@@ -1,7 +1,7 @@
 import type { TaskType } from './types.js';
 import { LocalizedText, tk } from '../../i18n/index.js';
 
-/** Rules the board repositories enforce. Routes answer 409 for EPIC_HAS_CHILDREN and COLUMN_LAST_OF_CATEGORY, 400 for the rest. */
+/** Rules the board repositories enforce. Routes answer 409 for EPIC_HAS_CHILDREN, COLUMN_LAST_OF_CATEGORY and COLUMN_LAST_ACTIVE, 400 for the rest. */
 export type TaskRuleCode =
   | 'PARENT_NOT_FOUND'
   | 'PARENT_IS_SUBTASK'
@@ -17,6 +17,8 @@ export type TaskRuleCode =
   | 'COLUMN_NOT_FOUND'
   | 'COLUMN_NOT_DOING'
   | 'COLUMN_LAST_OF_CATEGORY'
+  | 'COLUMN_LAST_ACTIVE'
+  | 'COLUMN_WAITING_AGENT'
   | 'TOO_MANY_COLUMNS'
   | 'AUTO_NOT_FOR_SUBTASK';
 
@@ -40,6 +42,8 @@ const MESSAGES: Record<TaskRuleCode, string> = {
   COLUMN_NOT_FOUND: tk('Coluna não encontrada'),
   COLUMN_NOT_DOING: tk('A coluna do agente precisa ser do tipo Fazendo'),
   COLUMN_LAST_OF_CATEGORY: tk('O board precisa de ao menos uma coluna de cada tipo'),
+  COLUMN_LAST_ACTIVE: tk('Cada tipo precisa de ao menos uma coluna que não seja de espera'),
+  COLUMN_WAITING_AGENT: tk('A coluna do agente não pode ser uma coluna de espera'),
   TOO_MANY_COLUMNS: tk('Limite de 12 colunas'),
   AUTO_NOT_FOR_SUBTASK: tk('Subtarefas não levam a tag automático; marque o card'),
 };

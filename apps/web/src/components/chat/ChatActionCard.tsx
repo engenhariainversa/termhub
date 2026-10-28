@@ -50,7 +50,7 @@ export function isFolderGrantable(action: ChatAction): boolean {
 }
 
 /** The tools "Permitir sempre neste projeto" can trust: every write that only ever touches the board. */
-const BOARD_GRANT_TOOLS = new Set(['create_task', 'add_subtasks', 'update_task', 'move_task']);
+const BOARD_GRANT_TOOLS = new Set(['create_task', 'add_subtasks', 'update_task', 'move_task', 'create_column', 'update_column']);
 /** Mirrors the server's `BOARD_GRANT_TOOLS`; the server still refuses a card whose project does not resolve. */
 export const isBoardGrantable = (action: ChatAction): boolean => BOARD_GRANT_TOOLS.has(action.tool);
 

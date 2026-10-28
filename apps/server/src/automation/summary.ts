@@ -8,6 +8,7 @@ import { escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 import { MERGE_TOOL } from './merge.js';
 import { dayIn } from './usage.js';
 import { alertLine } from '../health/text.js';
+import { waitingCards } from '../health/waiting.js';
 
 /** How often the timer looks for summaries that are due. */
 export const SUMMARY_TICK_MS = 5 * 60_000;
@@ -96,13 +97,14 @@ async function dueOwners(repos: Repositories): Promise<Map<string, { hour: numbe
 async function compose(repos: Repositories, ownerId: string, projectIds: string[], zone: string, day: string, now: Date): Promise<SummaryContent> {
   // the period since the previous summary (24 h before for the first); cost is per day, so the days it touches count whole
   const since = (await repos.automationSummaries.previousSentAt(ownerId, day)) ?? new Date(now.getTime() - 86_400_000);
-  const [activity, cost, parked, approvals, decided, alerts] = await Promise.all([
+  const [activity, cost, parked, approvals, decided, alerts, held] = await Promise.all([
     repos.automationSummaries.activity(projectIds, since, now),
     repos.automationSummaries.costOfDays(projectIds, dayIn(zone, since), day),
     repos.automationSummaries.parkedRuns(projectIds, SLOT_FREE_REASONS as string[]),
     repos.automationSummaries.pendingCards(ownerId, MERGE_TOOL, projectIds),
     repos.automationSummaries.decisions(projectIds, since, now),
     repos.healthAlerts.listOpenByProjects(projectIds),
+    Promise.all(projectIds.map((id) => waitingCards(repos, id))).then((x) => x.flat()),
   ]);
   const taskIds = [...parked, ...decided].flatMap((p) => (p.task_id ? [p.task_id] : []));
   const tasks = new Map((await repos.tasks.findByIds([...new Set(taskIds)])).map((x) => [x.id, x]));
@@ -113,6 +115,8 @@ async function compose(repos: Repositories, ownerId: string, projectIds: string[
     ...approvals.map((a) => ({
       label: (locale: Locale) => `${a.number === null ? t(locale, 'Um PR') : `PR #${a.number}`} (${t(locale, REASON_TEXT.merge_needs_approval)})`,
     })),
+    // TER-1134: the cards of a waiting column, with what is missing (else the column's name)
+    ...held.map((c) => ({ label: () => `${c.ref} (${c.note ?? c.column})` })),
   ];
   const decisions: WaitingItem[] = decided.map((d) => ({
     label: (locale: Locale) => {

@@ -5,7 +5,7 @@ import { sendDueSummaries, summaryMessage } from './summary.js';
 
 const setup = (o: object) => setupSchema.parse({ automation: { enabled: true, ...o } });
 
-function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null; decisions?: Array<{ task_id: string | null; summary: string | null }>; stalled?: unknown[] } = {}) {
+function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: number | null }>; zone?: string | null; claimed?: Set<string>; cost?: number | null; previous?: Date | null; decisions?: Array<{ task_id: string | null; summary: string | null }>; stalled?: unknown[]; held?: boolean } = {}) {
   const projects = o.projects ?? [{ id: 'p1', owner: 'u1', summary_hour: 9 }];
   const claimed = o.claimed ?? new Set<string>();
   const lines: string[] = [];
@@ -30,7 +30,19 @@ function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: 
       pendingCards: vi.fn(async () => [{ project_id: 'p1', number: 12 }]),
       decisions: vi.fn(async () => o.decisions ?? []),
     },
-    tasks: { findByIds: vi.fn(async () => [{ id: 't1', ref: 'TER-9' }]) },
+    tasks: {
+      findByIds: vi.fn(async () => [{ id: 't1', ref: 'TER-9' }]),
+      listByProject: vi.fn(async () => [
+        { id: 't7', ref: 'TER-7', title: 'Contrato', parent_id: null, type: 'task', column_id: 'cw', position: 0, description: 'O que falta: parecer do advogado', updated_at: '2026-10-01T00:00:00.000Z' },
+        { id: 't8', ref: 'TER-8', title: 'Outro', parent_id: null, type: 'task', column_id: 'cd', position: 0, description: null, updated_at: '2026-10-01T00:00:00.000Z' },
+      ]),
+    },
+    taskColumns: {
+      list: vi.fn(async () => [
+        { id: 'cd', name: 'Fazendo', category: 'doing', waiting: false },
+        ...(o.held ? [{ id: 'cw', name: 'Esperando validação', category: 'doing', waiting: true }] : []),
+      ]),
+    },
     healthAlerts: { listOpenByProjects: vi.fn(async () => o.stalled ?? []) },
     chat: {
       getOrCreateForUser: vi.fn(async () => ({ id: 'c1' })),
@@ -44,6 +56,13 @@ function fakes(o: { projects?: Array<{ id: string; owner: string; summary_hour: 
 const live = { draining: false };
 
 describe('daily summary (TER-894)', () => {
+  it('lists the cards of a waiting column under "Esperando você", with what is missing (TER-1134)', async () => {
+    const f = fakes({ held: true });
+    expect(await sendDueSummaries({ repos: f.repos, lifecycle: live, push: f.push }, new Date('2026-10-05T12:00:00Z'))).toBe(1);
+    expect(f.lines[0]).toContain('TER-7 (parecer do advogado)');
+    expect(f.lines[0]).not.toContain('TER-8');
+  });
+
   it('is sent once at summary_hour in the user zone, not before, and not twice', async () => {
     const f = fakes({ zone: 'America/Sao_Paulo' });
     const deps = { repos: f.repos, lifecycle: live, push: f.push };

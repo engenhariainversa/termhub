@@ -3,6 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaClient } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { ProjectsRepository } from './projects.js';
+import { firstColumnId } from './task-board.js';
 import { TaskColumnsRepository } from './task-columns.js';
 
 const keyOf = (id: string) => 'K' + id.replace(/[^a-z0-9]/gi, '').slice(0, 8).toUpperCase();
@@ -148,5 +149,46 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TaskColumnsRepository (Po
     await db.project.delete({ where: { id: projectId } });
     expect(await db.taskColumn.count({ where: { projectId } })).toBe(0);
     expect(await db.task.count({ where: { projectId } })).toBe(0);
+  });
+  describe('waiting columns (TER-1134)', () => {
+    it('creates a waiting column and marks or clears an existing one', async () => {
+      await repo.ensureDefaults(projectId);
+      const wait = await repo.create(projectId, { name: 'Esperando validação', category: 'doing', waiting: true });
+      expect(wait).toMatchObject({ category: 'doing', waiting: true });
+      expect(await repo.setWaiting(wait.id, false)).toMatchObject({ waiting: false });
+      expect(await repo.setWaiting(wait.id, true)).toMatchObject({ waiting: true });
+      expect(await repo.setWaiting('nope', true)).toBeUndefined();
+    });
+
+    it('keeps one column of each category that is not waiting', async () => {
+      await repo.ensureDefaults(projectId);
+      const [, doing] = await repo.list(projectId);
+      const wait = await repo.create(projectId, { name: 'Esperando', category: 'doing', waiting: true });
+      await expect(repo.setWaiting(doing.id, true)).rejects.toMatchObject({ code: 'COLUMN_LAST_ACTIVE' });
+      await expect(repo.delete(doing.id)).rejects.toMatchObject({ code: 'COLUMN_LAST_ACTIVE' });
+      await expect(repo.setCategory(doing.id, 'done')).rejects.toMatchObject({ code: 'COLUMN_LAST_ACTIVE' });
+      // the waiting one may go: Fazendo stays
+      await card(wait.id, 'doing', 0);
+      expect(await repo.delete(wait.id)).toEqual({ moved_tasks: 1 });
+    });
+
+    it('a waiting column is never the agent column; marking the agent column sends the project back to automatic', async () => {
+      await repo.ensureDefaults(projectId);
+      const wait = await repo.create(projectId, { name: 'Esperando', category: 'doing', waiting: true });
+      await expect(repo.setAgentColumn(projectId, wait.id)).rejects.toMatchObject({ code: 'COLUMN_WAITING_AGENT' });
+      const qa = await repo.create(projectId, { name: 'QA', category: 'doing' });
+      await repo.setAgentColumn(projectId, qa.id);
+      await repo.setWaiting(qa.id, true);
+      expect((await db.project.findUniqueOrThrow({ where: { id: projectId } })).agentColumnId).toBeNull();
+    });
+
+    it('moves by status skip a waiting column that comes first', async () => {
+      await repo.ensureDefaults(projectId);
+      const wait = await repo.create(projectId, { name: 'Esperando', category: 'doing', waiting: true });
+      await repo.move(wait.id, 0);
+      const [doing] = (await repo.list(projectId)).filter((c) => c.category === 'doing' && !c.waiting);
+      const first = await db.$transaction((tx) => firstColumnId(tx, projectId, 'doing'));
+      expect(first).toBe(doing.id);
+    });
   });
 });

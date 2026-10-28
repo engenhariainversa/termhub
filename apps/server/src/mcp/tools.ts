@@ -13,7 +13,7 @@ import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
-import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
+import { addSubtasks, createColumn, createTask, deleteTask, listTasks, moveTask, updateColumn, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
 import { projectHealth } from '../health/view.js';
@@ -47,7 +47,8 @@ import { isAdmin } from '../auth/permissions.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { pathRefusal, SHARE_CAPTION_MAX, shareFile, type ShareArgs } from '../chat/attachments/share.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
-import type { TaskStatus, TaskType } from '../db/repositories/types.js';
+import { COLUMN_NAME_MAX, MAX_COLUMNS } from '../db/repositories/task-rules.js';
+import type { ColumnCategory, TaskStatus, TaskType } from '../db/repositories/types.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 export interface ToolDef {
@@ -72,6 +73,9 @@ export interface ToolDef {
 const id = z.string().min(1).max(64);
 
 const taskStatus = z.enum(['backlog', 'todo', 'doing', 'done']);
+const columnCategory = z.enum(['todo', 'doing', 'done']);
+const columnName = z.string().trim().min(1).max(COLUMN_NAME_MAX);
+const columnPosition = z.number().int().min(0).max(MAX_COLUMNS);
 const taskType = z.enum(['epic', 'story', 'task', 'subtask', 'bug', 'spike']);
 const creatableType = z.enum(['epic', 'story', 'task', 'bug', 'spike']);
 const workType = z.enum(['story', 'task', 'bug', 'spike']);
@@ -327,7 +331,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_tasks',
     description:
-      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category } — the board shows columns by the user's names, the category todo/doing/done is what they mean; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
+      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category, waiting } — the board shows columns by the user's names, the category todo/doing/done is what they mean, waiting marks an \"aguardando\" column whose cards wait on a person or a third party; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
@@ -343,7 +347,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_project_health',
     description:
-      "The project's open health alerts (TER-1121): stalled work termhub's watcher noticed on its own, oldest first. Each has its signal (pr_ready: a green PR left unmerged, with why it waits; base_red: the base branch red or never finishing; queue_stalled: automatic cards in todo and none started; tab_stuck: a tab working with no event; tab_waiting: a tab waiting on a question, a permission, the folder trust or a login; card_orphan: a card in doing with no tab nor run; run_blocked: a run escalated or blocked with no answer; machine_offline: a machine holding the project's work is offline; delivery_failed: the last merge's deploy or release failed; agent_outdated: a machine's agent below the minimum), level (needs_you = only the person can act; concierge = you may resolve it), the pt-BR text, a url when there is one, the subject's id (tab, card, run or machine), since when and whether the chat was already woken about it. An alert closes by itself once the sign is gone.",
+      "The project's open health alerts (TER-1121): stalled work termhub's watcher noticed on its own, oldest first. Each has its signal (pr_ready: a green PR left unmerged, with why it waits; base_red: the base branch red or never finishing; queue_stalled: automatic cards in todo and none started; tab_stuck: a tab working with no event; tab_waiting: a tab waiting on a question, a permission, the folder trust or a login; card_orphan: a card in doing with no tab nor run; run_blocked: a run escalated or blocked with no answer; machine_offline: a machine holding the project's work is offline; delivery_failed: the last merge's deploy or release failed; agent_outdated: a machine's agent below the minimum), level (needs_you = only the person can act; concierge = you may resolve it), the pt-BR text, a url when there is one, the subject's id (tab, card, run or machine), since when and whether the chat was already woken about it. An alert closes by itself once the sign is gone. waiting lists the cards in the project's \"aguardando\" columns (TER-1134: waiting on a person or a third party, never alerted): ref, title, column, note (the \"O que falta: …\" line of the description, null without one) and since.",
     scope: 'read', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: (ctx, a) => projectHealth(ctx, (a as { project_id: string }).project_id),
@@ -782,10 +786,24 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'move_task',
-    description: `Move a top-level card to a board column (column_id, from list_tasks) or to a status (backlog, or the first column of todo/doing/done) — exactly one of the two — at a position (0 = top, default; max ${TASK_POSITION_MAX}, clamped). Subtasks have no column: change their status with update_task.`,
+    description: `Move a top-level card to a board column (column_id, from list_tasks) or to a status (backlog, or the first column of todo/doing/done that is not "aguardando") — exactly one of the two — at a position (0 = top, default; max ${TASK_POSITION_MAX}, clamped). Subtasks have no column: change their status with update_task.`,
     scope: 'tasks', resource: 'tasks', action: 'update',
     input: { task_id: id, column_id: id.optional(), status: taskStatus.optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional() },
     run: (ctx, a) => moveTask(ctx, a as { task_id: string; column_id?: string; status?: TaskStatus; position?: number }),
+  },
+  {
+    name: 'create_column',
+    description: `Add a board column to a project (max ${MAX_COLUMNS} per project): name (max ${COLUMN_NAME_MAX} chars, the person's words), category todo, doing or done (what the column means to the system: cards in it take that status), position (0 = first; default the end; list_tasks gives the order). waiting: true marks it "aguardando" — its cards wait on a person or a third party (a lawyer, a test on a device, an authorization): automatic work never takes them, the health watcher raises no card_orphan nor queue_stalled for them, and get_project_health and the daily summary list them as "esperando você", each with the "O que falta: …" line of its description (write one when you move a card there). Moves by status never land on a waiting column while the category has another. Returns the column and the project's columns in order.`,
+    scope: 'tasks', resource: 'tasks', action: 'create',
+    input: { project_id: id, name: columnName, category: columnCategory, waiting: z.boolean().optional(), position: columnPosition.optional() },
+    run: (ctx, a) => createColumn(ctx, a as { project_id: string; name: string; category: ColumnCategory; waiting?: boolean; position?: number }),
+  },
+  {
+    name: 'update_column',
+    description: `Change a board column (column_id from list_tasks): name, category (todo/doing/done; its cards follow), waiting (true marks it "aguardando", see create_column; false clears it) and position (0 = first) — at least one. Each category keeps one column that is not waiting, and the project's agent column cannot be a waiting one (marking it sends the project back to the automatic agent column). Returns the column and the project's columns in order. To put a card in a column, use move_task with its column_id.`,
+    scope: 'tasks', resource: 'tasks', action: 'update',
+    input: { column_id: id, name: columnName.optional(), category: columnCategory.optional(), waiting: z.boolean().optional(), position: columnPosition.optional() },
+    run: (ctx, a) => updateColumn(ctx, a as { column_id: string; name?: string; category?: ColumnCategory; waiting?: boolean; position?: number }),
   },
   {
     name: 'delete_task',

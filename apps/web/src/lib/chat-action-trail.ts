@@ -63,6 +63,8 @@ const TOOL_LABEL: Record<string, string> = {
   update_task: tk('atualizar card'),
   move_task: tk('mover card'),
   delete_task: tk('apagar card'),
+  create_column: tk('criar coluna'),
+  update_column: tk('mudar coluna'),
   link_tab_task: tk('ligar aba a card'),
   pause_automation: tk('pausar automação'),
   resume_automation: tk('retomar automação'),

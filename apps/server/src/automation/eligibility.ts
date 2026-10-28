@@ -85,6 +85,8 @@ export interface EligibilityInput {
     auto: boolean;
     /** category of the card's board column; null in the backlog */
     column_category: TaskStatus | null;
+    /** the column is marked "aguardando" (TER-1134): the card waits on a person or a third party */
+    column_waiting?: boolean;
     description: string | null;
     subtask_count: number;
     /** a linked tab that still exists */
@@ -110,7 +112,8 @@ export function eligibilityOf({ card, project }: EligibilityInput): Eligibility 
   if (!project.automation.enabled) return no('automation_off');
   if (project.paused) return no('paused');
   if (!(project.automation.types as readonly TaskType[]).includes(card.type)) return no('type_not_allowed');
-  if (card.column_category !== 'todo') return no('not_in_todo');
+  // a waiting column is never the to-do, whatever its category: its cards are not "waiting" in the queue either
+  if (card.column_category !== 'todo' || card.column_waiting) return no('not_in_todo');
   if (!card.description?.trim() && card.subtask_count === 0) return no('no_description');
   if (card.active_run || card.tab_alive) return no('has_agent');
   if (project.capable_machines === 0) return no('no_capable_machine');

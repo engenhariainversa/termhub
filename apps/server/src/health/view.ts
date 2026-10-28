@@ -4,6 +4,7 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import type { HealthSignal } from '../setup/schema.js';
 import type { HealthLevel } from './signals.js';
 import { alertLine, SIGNAL_NAME } from './text.js';
+import { waitingCards, type WaitingCard } from './waiting.js';
 
 /** One open alert as the panel ("Saúde do projeto") and `get_project_health` show it. */
 export interface HealthItem {
@@ -31,10 +32,13 @@ export function healthItem(a: HealthAlert, locale: Locale, now: Date): HealthIte
   };
 }
 
-/** The project's open alerts, in the reader's language (404 outside the scope). */
-export async function projectHealth(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<{ enabled: boolean; items: HealthItem[] }> {
+/**
+ * The project's open alerts, in the reader's language, and the cards of its waiting columns ("esperando você",
+ * TER-1134), shown whether or not the watcher is on (404 outside the scope).
+ */
+export async function projectHealth(ctx: ControlContext, projectId: string, locale: Locale = DEFAULT_LOCALE): Promise<{ enabled: boolean; items: HealthItem[]; waiting: WaitingCard[] }> {
   await ctx.scoped.project(projectId);
-  const [setup, alerts] = await Promise.all([ctx.repos.projectSetup.get(projectId), ctx.repos.healthAlerts.listOpen(projectId)]);
+  const [setup, alerts, waiting] = await Promise.all([ctx.repos.projectSetup.get(projectId), ctx.repos.healthAlerts.listOpen(projectId), waitingCards(ctx.repos, projectId)]);
   const now = new Date();
-  return { enabled: setup.data.health.enabled, items: alerts.map((a) => healthItem(a, locale, now)) };
+  return { enabled: setup.data.health.enabled, items: alerts.map((a) => healthItem(a, locale, now)), waiting };
 }

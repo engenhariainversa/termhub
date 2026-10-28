@@ -46,7 +46,7 @@ const subtasksBody = z.object({
 const reorderBody = z.object({ position });
 
 /** Rules that conflict with what the board holds (spec §9): 409 instead of 400. */
-const CONFLICTS = new Set<TaskRuleCode>(['EPIC_HAS_CHILDREN', 'COLUMN_LAST_OF_CATEGORY']);
+const CONFLICTS = new Set<TaskRuleCode>(['EPIC_HAS_CHILDREN', 'COLUMN_LAST_OF_CATEGORY', 'COLUMN_LAST_ACTIVE']);
 
 /** Board rules live in the repositories; a broken one is the client's mistake (400) or a conflict (409). */
 export async function taskRules<T>(run: () => Promise<T>): Promise<T> {

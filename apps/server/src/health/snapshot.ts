@@ -23,8 +23,9 @@ const later = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : (a
 
 export async function buildSnapshot(repos: Repositories, project: Project, owner: User, setup: ProjectSetupData, now = new Date()): Promise<HealthSnapshot> {
   const automationOn = setup.automation.enabled && !(await isPaused(repos, project.owner_id, project.id));
-  const [tasks, tabs, active, links, prRows, lastRunAt] = await Promise.all([
+  const [tasks, columns, tabs, active, links, prRows, lastRunAt] = await Promise.all([
     repos.tasks.listByProject(project.id),
+    repos.taskColumns.list(project.id),
     repos.tabs.listByProject(project.id),
     repos.automationRuns.activeByProject(project.id),
     repos.projectMachines.listByProject(project.id),
@@ -34,6 +35,8 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
   const refOf = new Map(tasks.map((t) => [t.id, t.ref]));
   const runTabs = new Set(active.flatMap((r) => (r.tab_id ? [r.tab_id] : [])));
   const tabIds = new Set(tabs.map((t) => t.id));
+  // TER-1134: a card in a waiting column waits on a person or a third party; it is in "esperando você", never an orphan
+  const waitingColumns = new Set(columns.filter((c) => c.waiting).map((c) => c.id));
 
   // a PR naming several cards has one row per card: one entry per URL
   const prs = new Map<string, SnapshotPr>();
@@ -62,7 +65,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     const activeTasks = new Set(active.map((r) => r.task_id));
     for (const r of active) runs.push({ id: r.id, task_id: r.task_id, ref: r.task_id ? (refOf.get(r.task_id) ?? null) : null, status: r.status, waiting_reason: r.waiting_reason, ended_at: r.ended_at });
     for (const t of tasks) {
-      if (t.status !== 'doing' || t.parent_id !== null || t.type === 'epic') continue;
+      if (t.status !== 'doing' || t.parent_id !== null || t.type === 'epic' || (t.column_id && waitingColumns.has(t.column_id))) continue;
       const latest = await repos.automationRuns.latestOfTask(t.id);
       if (latest?.status === 'blocked') runs.push({ id: latest.id, task_id: t.id, ref: t.ref, status: latest.status, waiting_reason: latest.waiting_reason, ended_at: latest.ended_at });
       doing.push({

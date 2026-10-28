@@ -580,6 +580,8 @@ model TaskColumn {
   name      String
   category  TaskStatus
   position  Int
+  /// TER-1134: "aguardando" — its cards wait on a person or a third party; the health watcher and automatic work skip them.
+  waiting   Boolean    @default(false)
   createdAt DateTime   @default(now()) @map("created_at")
   project   Project    @relation("ProjectColumns", fields: [projectId], references: [id], onDelete: Cascade)
   tasks     Task[]

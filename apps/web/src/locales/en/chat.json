@@ -652,5 +652,7 @@
   "uma vez": "once",
   "Uma vez": "Once",
   "versão publicada": "version published",
-  "{{what}} às {{time}}": "{{what}} at {{time}}"
+  "{{what}} às {{time}}": "{{what}} at {{time}}",
+  "criar coluna": "create column",
+  "mudar coluna": "change column"
 }

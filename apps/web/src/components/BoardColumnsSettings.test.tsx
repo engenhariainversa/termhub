@@ -54,6 +54,19 @@ const reloaded = async (calls = 2) => {
 };
 
 describe('BoardColumnsSettings', () => {
+  it('marks a column "aguardando", keeps the last active one of a category unmarkable and out of the agent column (TER-1134)', async () => {
+    mocks.list.mockResolvedValue({ tasks: [], columns: [...columns.slice(0, 3), { ...col('c5', 'Esperando validação', 'doing', 3), waiting: true }, { ...col('c3', 'Feito', 'done', 4) }], agent_column_id: null });
+    render(<BoardColumnsSettings project={project} />);
+    const qa = await screen.findByRole('checkbox', { name: 'Coluna QA aguardando' });
+    expect(screen.getByRole('checkbox', { name: 'Coluna Esperando validação aguardando' })).toBeChecked();
+    // Feito is the only done column that is not waiting
+    expect(screen.getByRole('checkbox', { name: 'Coluna Feito aguardando' })).toBeDisabled();
+    expect(screen.queryByRole('option', { name: 'Esperando validação' })).not.toBeInTheDocument();
+    fireEvent.click(qa);
+    await waitFor(() => expect(mocks.update).toHaveBeenCalledWith('c4', { waiting: true }));
+    await reloaded();
+  });
+
   it('lists the columns in order and locks the last column of each category', async () => {
     render(<BoardColumnsSettings project={project} />);
     expect(await screen.findByDisplayValue('QA')).toBeInTheDocument();

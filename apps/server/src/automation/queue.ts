@@ -122,6 +122,7 @@ export async function eligibilityQueue(
         parent_id: c.parent_id,
         auto: c.auto,
         column_category: col?.category ?? null,
+        column_waiting: col?.waiting ?? false,
         description: c.description,
         subtask_count: c.subtask_counts.total,
         tab_alive: Boolean(tab),

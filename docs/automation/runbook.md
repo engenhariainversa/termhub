@@ -671,7 +671,7 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
 | `queue_stalled` tagged cards in A fazer, nothing running, nothing started (each card's reason) | queue | 60 min | concierge | automation on |
 | `tab_stuck` tab `working` with no hook event | tab | 30 min | concierge | every project |
 | `tab_waiting` tab on a question, a permission, the folder trust or a login | tab | 10 min | concierge | every project |
-| `card_orphan` card in Doing with no live tab, run, open PR or blocked run | card | 120 min | concierge | automation on |
+| `card_orphan` card in Doing with no live tab, run, open PR or blocked run (a card in an "aguardando" column is never one, TER-1134) | card | 120 min | concierge | automation on |
 | `run_blocked` run escalated (`waiting` with a person's reason) or `blocked` | run | 60 min | person | automation on |
 | `machine_offline` agent machine offline holding an active run of the project, or a tab with an event within the `tab_stuck` minutes before its last contact (TER-1135) | machine | 15 min | person | every project |
 | `delivery_failed` newest merge of a repo whose deploy or release failed, nothing merged since | PR url + workflow | 30 min | person | automation on |
