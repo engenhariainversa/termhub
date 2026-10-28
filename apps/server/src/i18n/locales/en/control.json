@@ -169,5 +169,6 @@
   "Informe name, category, waiting ou position": "Give name, category, waiting or position",
   "Só a pessoa ou o concierge mudam as contas de IA de um projeto, nunca um agente numa aba": "Only the person or the concierge changes a project's AI accounts, never an agent in a tab",
   "A máquina {{machine}} não está ligada ao projeto": "The machine {{machine}} is not linked to the project",
-  "Mudar as contas de IA ou o modelo de um projeto precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Changing a project's AI accounts or model needs the person's confirmation in the chat. Nothing was changed: propose the call again."
+  "Mudar as contas de IA ou o modelo de um projeto precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Changing a project's AI accounts or model needs the person's confirmation in the chat. Nothing was changed: propose the call again.",
+  "O card {{ref}} tem PR aberto, não mesclado: {{prs}}; repita com confirm: true para mover para Feito mesmo assim": "Card {{ref}} has an open PR, not merged: {{prs}}; repeat with confirm: true to move it to Done anyway"
 }

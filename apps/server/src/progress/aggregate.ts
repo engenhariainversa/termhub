@@ -1,5 +1,9 @@
-import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
-import type { TabState } from '../db/repositories/types.js';
+import type { AgentOnCard, AutomationFeedEvent, CardProgress, EpicLifecycle, EpicProgress, ProgressEstimate, ProgressScope, ProgressUsage, PullRequestBadge } from '@termhub/mobile-api';
+import type { TabState, TaskType } from '../db/repositories/types.js';
+import { epicBranchName } from '../automation/branches.js';
+import { epicPhaseOf, epicPullsOf } from '../automation/epic-phase.js';
+import type { MergeWait } from '../automation/merge-wait.js';
+import type { ProjectSetupData } from '../setup/schema.js';
 import type { AutomationEvent } from '../db/repositories/index.js';
 import { escalationEventText } from '../automation/escalation-text.js';
 import { t, tk, type Locale } from '../i18n/index.js';
@@ -39,7 +43,25 @@ export interface ProgressCardRow {
   pull_requests: PullRequestBadge[];
   auto: boolean;
 }
-export interface ProgressEpicRow { id: string; ref: string; title: string; project: { id: string; key: string; name: string }; cards: ProgressCardRow[] }
+/** One of the epic's own PRs, with what its lifecycle reads (TER-1150). */
+export interface ProgressEpicPr extends PullRequestBadge {
+  head_ref: string;
+  changed_level: string | null;
+  mention_only: boolean;
+}
+export interface ProgressEpicRow {
+  id: string;
+  ref: string;
+  title: string;
+  project: { id: string; key: string; name: string };
+  cards: ProgressCardRow[];
+  /** TER-1150: absent on rows built before the lifecycle (tests); an epic without them has no lifecycle */
+  status?: TaskStatus;
+  auto?: boolean;
+  started_at?: Date | null;
+  done_at?: Date | null;
+  pull_requests?: ProgressEpicPr[];
+}
 
 const STATUS_ORDER: Record<TaskStatus, number> = { doing: 0, todo: 1, done: 2, backlog: 3 };
 const iso = (d: Date | null) => d?.toISOString() ?? null;
@@ -166,6 +188,7 @@ export function aggregateEpic(epic: ProgressEpicRow, includeAgents: boolean): Ep
     ci: ciSummary(cards),
     ci_error: null,
     usage: null,
+    lifecycle: null,
   };
 }
 
@@ -191,10 +214,40 @@ export function withUsage(epic: EpicProgress, totals: Map<string, ProgressUsage>
   return { ...epic, cards, usage: sum };
 }
 
+/**
+ * TER-1150: where an automatic epic is in its life, for the panel; null for a manual one. `wait`: the merge
+ * executor's hold on the epic PR (its fix caps say the CI or the conflict outlasted the fixes).
+ */
+export function lifecycleOf(epic: ProgressEpicRow, setup: ProjectSetupData, wait: MergeWait | null = null): EpicLifecycle | null {
+  if (!epic.auto || !epic.status) return null;
+  let branch: string | null = null;
+  try {
+    branch = epicBranchName(setup.automation.epic_branch_pattern, epic);
+  } catch {
+    // a pattern that gives no valid name: every PR of the epic counts as its own
+  }
+  const prs = epicPullsOf(
+    (epic.pull_requests ?? []).map((p) => ({ ...p, release_runs: (p.release_runs ?? []).map((r) => ({ ...r, version: r.version ?? null })) })),
+    branch,
+  );
+  const { phase, failure, pr } = epicPhaseOf({ status: epic.status, cards: epic.cards.map((c) => ({ type: c.type as TaskType, status: c.status })), epicPrs: prs, setup, wait });
+  let pull_request: PullRequestBadge | null = null;
+  if (pr) {
+    const { head_ref: _h, changed_level: _c, mention_only: _m, ...badge } = pr;
+    pull_request = badge;
+  }
+  return { phase, branch, started_at: iso(epic.started_at ?? null), done_at: iso(epic.done_at ?? null), pull_request, failure };
+}
+
+/** Phases in which an epic stays on the active panel even with no card in doing: it is not in the code yet (TER-1150). */
+const STILL_ACTIVE: ReadonlyArray<EpicLifecycle['phase']> = ['integrating', 'delivering', 'failed'];
+
 /** active: epics with a card in doing; all: every epic with cards, finished last. Needs-you first, then working agents, then ref. */
 export function selectEpics(epics: EpicProgress[], scope: ProgressScope): EpicProgress[] {
-  const kept = epics.filter((e) => e.cards.length > 0 && (scope === 'all' || e.cards.some((c) => c.status === 'doing')));
-  const finished = (e: EpicProgress) => Number(e.estimate.kind === 'done');
+  // TER-1150: an automatic epic integrating or delivering stays on the active panel; it leaves only once done
+  const active = (e: EpicProgress) => e.cards.some((c) => c.status === 'doing') || (!!e.lifecycle && STILL_ACTIVE.includes(e.lifecycle.phase));
+  const kept = epics.filter((e) => e.cards.length > 0 && (scope === 'all' || active(e)));
+  const finished = (e: EpicProgress) => Number(e.lifecycle ? e.lifecycle.phase === 'done' : e.estimate.kind === 'done');
   return kept.sort(
     (a, b) =>
       finished(a) - finished(b) ||
@@ -220,6 +273,8 @@ export const FEED_KINDS = [
   'memory_queued', 'memory_dropped',
   // TER-1138: an idle tab closed by itself (the app's feed skips it until it has a line)
   'tab_auto_closed',
+  // TER-1150: an automatic epic's birth and death
+  'epic_started', 'epic_done',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */

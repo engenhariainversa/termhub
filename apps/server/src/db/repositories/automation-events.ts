@@ -58,7 +58,11 @@ export type AutomationEventKind =
   // TER-1137: a memory write over its hourly quota went to the queue ({ what: note | lesson, by, count, until }),
   // or was dropped ({ what, by, count, reason: queue_full | note_full })
   | 'memory_queued'
-  | 'memory_dropped';
+  | 'memory_dropped'
+  // TER-1150: an automatic epic born — its first card started, the epic went to Fazendo ({ branch, by, card_id })
+  // — and finished — its PR merged and delivered, the epic in Feito ({ branch, branch_deleted, pr?, url? })
+  | 'epic_started'
+  | 'epic_done';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

@@ -33,6 +33,11 @@ export function feedLine(e: TAutomationFeedEvent): string | null {
       return t('{{ref}}: pergunta do agente respondida', { ref });
     case 'escalated':
       return t('{{ref}} precisa de você: {{reason}}', { ref, reason: e.reason_text ?? '' });
+    // TER-1150: an automatic epic's birth (its first card started) and death (in the code and delivered)
+    case 'epic_started':
+      return e.branch ? t('{{ref}}: épico começou na branch {{branch}}', { ref, branch: e.branch }) : t('{{ref}}: épico começou', { ref });
+    case 'epic_done':
+      return t('{{ref}}: épico concluído, na base e entregue', { ref });
     case 'pr_opened':
       return t('{{ref}}: PR aberto', { ref });
     case 'merged':

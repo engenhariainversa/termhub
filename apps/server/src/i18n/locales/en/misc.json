@@ -209,5 +209,9 @@
   "Aba {{tab}} fechada sozinha: {{machine}} sem folga, parada há {{hours}} h": "Tab {{tab}} closed by itself: {{machine}} has no room, idle for {{hours}} h",
   "Aba {{tab}} fechada sozinha em {{machine}}: parada há {{hours}} h": "Tab {{tab}} closed by itself on {{machine}}: idle for {{hours}} h",
   "A sessão pode ser retomada na mesma pasta (--continue)": "The session can be resumed in the same folder (--continue)",
-  "A máquina do concierge precisa estar ligada ao projeto": "The concierge machine must be linked to the project"
+  "A máquina do concierge precisa estar ligada ao projeto": "The concierge machine must be linked to the project",
+  "Épico {{label}} em andamento sem história ativa nem PR há {{duration}}": "Epic {{label}} in progress with no active story nor PR for {{duration}}",
+  "Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}": "Card {{label}} in Done with PR {{pr}} still open for {{duration}}",
+  "Épico parado em andamento": "Stalled epic in progress",
+  "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR"
 }

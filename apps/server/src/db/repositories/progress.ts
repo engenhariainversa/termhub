@@ -1,7 +1,7 @@
 import type { PullRequestBadge } from '@termhub/mobile-api';
 import type { PrismaClient } from '../prisma.js';
 import type { AutomationEvent } from './automation-events.js';
-import { FEED_KINDS, type FeedRow, type ProgressEpicRow, type ProgressTabRow } from '../../progress/aggregate.js';
+import { FEED_KINDS, type FeedRow, type ProgressEpicPr, type ProgressEpicRow, type ProgressTabRow } from '../../progress/aggregate.js';
 
 const TAB = { include: { machine: { select: { name: true } } } } as const;
 
@@ -15,6 +15,35 @@ type TabWithMachine = {
   rateLimitedAt: Date | null;
   machine: { name: string };
 };
+
+type PrRow = {
+  number: number;
+  url: string;
+  title: string;
+  state: string;
+  draft: boolean;
+  ciState: string;
+  ciSummary: unknown;
+  deployState: string;
+  deployUrl: string | null;
+  releaseRuns: unknown;
+  headRef: string;
+  changedLevel: string | null;
+  mentionOnly: boolean;
+};
+
+const toBadge = (p: PrRow): PullRequestBadge => ({
+  number: p.number,
+  url: p.url,
+  title: p.title,
+  state: p.state as 'open' | 'closed' | 'merged',
+  draft: p.draft,
+  ci_state: p.ciState as PullRequestBadge['ci_state'],
+  ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [], ...(p.ciSummary as object) },
+  deploy_state: p.deployState as PullRequestBadge['deploy_state'],
+  deploy_url: p.deployUrl,
+  release_runs: (Array.isArray(p.releaseRuns) ? p.releaseRuns : []) as NonNullable<PullRequestBadge['release_runs']>,
+});
 
 const toTab = (t: TabWithMachine | null, automatic: Set<string>): ProgressTabRow | null =>
   t && { id: t.id, name: t.name, machine_name: t.machine.name, state: t.state, state_at: t.stateAt, activity: t.activity, activity_verb: t.activityVerb, rate_limited_at: t.rateLimitedAt, automatic: automatic.has(t.id) };
@@ -42,7 +71,7 @@ export class ProgressRepository {
     const project = { status: { not: 'archived' as const }, ...(opts.owner ? { ownerId: opts.owner } : {}), ...(opts.projectId ? { id: opts.projectId } : {}) };
     const epics = await this.db.task.findMany({
       where: { type: 'epic', project },
-      include: { project: { select: { id: true, key: true, name: true } } },
+      include: { project: { select: { id: true, key: true, name: true } }, pullRequests: { orderBy: [{ number: 'desc' }] } },
       orderBy: [{ projectId: 'asc' }, { number: 'asc' }],
     });
     if (epics.length === 0) return [];
@@ -72,6 +101,12 @@ export class ProgressRepository {
         ref: ref(e.number),
         title: e.title,
         project: e.project,
+        // TER-1150: what the epic's lifecycle reads (its own PRs are the integrator's, epic branch → base)
+        status: e.status,
+        auto: e.auto,
+        started_at: e.startedAt,
+        done_at: e.doneAt,
+        pull_requests: e.pullRequests.map((p): ProgressEpicPr => ({ ...toBadge(p), head_ref: p.headRef, changed_level: p.changedLevel, mention_only: p.mentionOnly })),
         cards: (byEpic.get(e.id) ?? []).map((c) => ({
           id: c.id,
           ref: ref(c.number),
@@ -86,20 +121,7 @@ export class ProgressRepository {
           active_seconds: c.activeSeconds,
           tab: toTab(c.tab, automatic),
           subtasks: c.subtasks.map((s) => ({ id: s.id, ref: ref(s.number), status: s.status, done_at: s.doneAt, tab: toTab(s.tab, automatic) })),
-          pull_requests: c.pullRequests.map(
-            (p): PullRequestBadge => ({
-              number: p.number,
-              url: p.url,
-              title: p.title,
-              state: p.state as 'open' | 'closed' | 'merged',
-              draft: p.draft,
-              ci_state: p.ciState as PullRequestBadge['ci_state'],
-              ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [], ...(p.ciSummary as object) },
-              deploy_state: p.deployState as PullRequestBadge['deploy_state'],
-              deploy_url: p.deployUrl,
-              release_runs: p.releaseRuns as unknown as NonNullable<PullRequestBadge['release_runs']>,
-            }),
-          ),
+          pull_requests: c.pullRequests.map(toBadge),
         })),
       };
     });

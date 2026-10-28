@@ -8,7 +8,7 @@ import { PauseBanner } from './PauseAutomationButton';
 import { ProjectHealthPanel } from './ProjectHealthPanel';
 import { feedLine, feedWhy } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
-import { basisLabel, ciLabel, epicCiLine, formatEstimate, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
+import { basisLabel, ciLabel, epicCiLine, formatEstimate, lifecycleLine, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
 import { relativeTime } from '../lib/time';
 import { i18n, useTranslation } from '../i18n';
 import type { AgentOnCard, AutomationFeedEvent, AutomationUsage, CardProgress, EpicProgress, ProgressEstimate, ProgressResponse, ProgressScope, PullRequestBadge } from '../lib/types';
@@ -141,6 +141,20 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
   );
 }
 
+const PHASE_TONE: Record<string, string> = { failed: 'text-red-600', integrating: 'text-amber-600', delivering: 'text-amber-600', done: 'text-emerald-600' };
+
+/** TER-1150: the automatic epic's phase, its branch and its own PR (CI, deploy and link). */
+function EpicLifecycleLine({ lifecycle }: { lifecycle: NonNullable<EpicProgress['lifecycle']> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs">
+      <span className={PHASE_TONE[lifecycle.phase] ?? 'text-zinc-500'}>{lifecycleLine(lifecycle)}</span>
+      {lifecycle.branch && <span className="font-mono text-zinc-500" title={t('Branch do épico')}>{lifecycle.branch}</span>}
+      {lifecycle.pull_request && <PullRequestBadges pulls={[lifecycle.pull_request]} />}
+    </div>
+  );
+}
+
 function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string }) {
   const { t } = useTranslation();
   return (
@@ -170,6 +184,7 @@ function EpicBlock({ epic, projectId }: { epic: EpicProgress; projectId: string 
         {epic.ci && <span>{epicCiLine(epic.ci)}</span>}
         <UsageCost usage={epic.usage} />
       </div>
+      {epic.lifecycle && <EpicLifecycleLine lifecycle={epic.lifecycle} />}
       {epic.ci_error && <p className="text-xs text-red-600">{epic.ci_error}</p>}
       <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
         {epic.cards.map((c) => (

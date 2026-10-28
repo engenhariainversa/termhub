@@ -12,6 +12,15 @@ afterEach(() => {
   void i18n.changeLanguage('pt-BR');
 });
 
+describe('an automatic epic born and finished (TER-1150)', () => {
+  it('says the branch it started on, and that it ended in the base and delivered', async () => {
+    expect(feedLine(ev({ kind: 'epic_started', ref: 'TER-1', branch: 'epic/TER-1-x' }))).toBe('TER-1: épico começou na branch epic/TER-1-x');
+    expect(feedLine(ev({ kind: 'epic_done', ref: 'TER-1' }))).toBe('TER-1: épico concluído, na base e entregue');
+    await i18n.changeLanguage('en');
+    expect(feedLine(ev({ kind: 'epic_done', ref: 'TER-1' }))).toBe('TER-1: epic finished, in the base branch and delivered');
+  });
+});
+
 describe('feed lines for changes to automatic work (TER-975)', () => {
   it('writes each kind in pt-BR', () => {
     expect(feedLine(ev({ kind: 'automation_on' }))).toBe('Automático ligado no projeto');

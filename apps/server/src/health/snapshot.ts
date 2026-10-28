@@ -13,7 +13,9 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { Project, User } from '../db/repositories/types.js';
 import { localeOf } from '../i18n/index.js';
 import type { ProjectSetupData } from '../setup/schema.js';
-import type { HealthSnapshot, SnapshotCard, SnapshotMachine, SnapshotPr, SnapshotRun } from './signals.js';
+import { deliveryOf } from '../automation/epic-phase.js';
+import { WATCH_MERGED_FOR_MS } from '../db/repositories/task-pull-requests.js';
+import type { HealthSnapshot, SnapshotCard, SnapshotDoneUnmerged, SnapshotEpic, SnapshotMachine, SnapshotPr, SnapshotRun } from './signals.js';
 
 /** Merged PRs older than this no longer count for a failed deploy or release. */
 export const DELIVERY_LOOKBACK_MS = 3 * 24 * 3600_000;
@@ -75,6 +77,33 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     }
   }
 
+  // TER-1150: automatic epics in Fazendo with nothing alive under them, and cards in Feito whose PR is still open
+  const epics: SnapshotEpic[] = [];
+  const doneUnmerged: SnapshotDoneUnmerged[] = [];
+  if (automationOn) {
+    const activeTasks = new Set(active.map((r) => r.task_id));
+    const linked = prRows.filter((r) => !r.mention_only);
+    for (const e of tasks) {
+      if (e.type !== 'epic' || !e.auto || e.status !== 'doing' || (e.column_id && waitingColumns.has(e.column_id))) continue;
+      const cards = tasks.filter((t) => t.epic_id === e.id && t.parent_id === null);
+      const ids = new Set([e.id, ...cards.map((c) => c.id)]);
+      const prs = linked.filter((r) => ids.has(r.task_id));
+      epics.push({
+        task_id: e.id, ref: e.ref, title: e.title,
+        since: [e, ...cards].reduce<Date>((a, t) => later(a, date(t.updated_at)) ?? a, date(e.updated_at) ?? now),
+        active_card: activeTasks.has(e.id) || cards.some((c) => c.status === 'doing' || activeTasks.has(c.id)),
+        // a delivery the CI sync stopped following (past its watch window) keeps nothing alive: the zombie says so
+        open_pr: prs.some((r) => r.state === 'open' || (r.task_id === e.id && r.state === 'merged' && deliveryOf(setup, r).state !== 'ok' && !!r.merged_at && now.getTime() - r.merged_at.getTime() < WATCH_MERGED_FOR_MS)),
+      });
+    }
+    const done = new Map(tasks.filter((t) => t.status === 'done' && t.parent_id === null).map((t) => [t.id, t]));
+    for (const r of linked) {
+      const t = done.get(r.task_id);
+      if (!t || r.state !== 'open') continue;
+      doneUnmerged.push({ task_id: t.id, ref: t.ref, url: r.url, number: r.number, ci_state: r.ci_state, since: date(t.updated_at) ?? now });
+    }
+  }
+
   const changedAt = new Map(tasks.map((t) => [t.id, date(t.updated_at)]));
   const queued = automationOn
     ? (await automationQueue(controlContextFor(repos, owner), project.id, localeOf(owner.locale)))
@@ -110,5 +139,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     runs,
     machines,
     min_agent_version: MIN_AGENT_VERSION,
+    epics,
+    done_unmerged: doneUnmerged,
   };
 }

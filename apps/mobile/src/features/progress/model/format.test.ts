@@ -1,6 +1,6 @@
 import { setLocale } from '@/i18n';
 import type { TPullRequestBadge } from '@/services/api/contract';
-import { ciLabel, epicCiLine, formatDuration, formatEstimate, stateLabel, usageLine } from './format';
+import { ciLabel, epicCiLine, formatDuration, formatEstimate, lifecycleLine, stateLabel, usageLine } from './format';
 
 it('formats durations', () => {
   expect(formatDuration(1200)).toBe('20 min');
@@ -14,6 +14,13 @@ it('formats estimates', () => {
   expect(formatEstimate({ kind: 'none', reason: 'not_started' })).toBe('ainda não começou');
   expect(formatEstimate({ kind: 'none', reason: 'few_samples' })).toBe('estimativa após 2 subtarefas');
   expect(formatEstimate({ kind: 'done' })).toBe('concluído');
+});
+it('says where an automatic epic is in its life (TER-1150)', () => {
+  const life = { branch: 'epic/TER-1-x', started_at: '2026-10-20T12:00:00.000Z', done_at: null, pull_request: null, failure: null } as const;
+  expect(lifecycleLine({ ...life, phase: 'not_started', started_at: null })).toBe('não começou');
+  expect(lifecycleLine({ ...life, phase: 'integrating' })).toMatch(/^histórias prontas · integrando · desde \d/);
+  expect(lifecycleLine({ ...life, phase: 'failed', failure: 'conflict' })).toMatch(/^falhou: conflito · desde /);
+  expect(lifecycleLine({ ...life, phase: 'done', done_at: '2026-10-28T12:00:00.000Z' })).toMatch(/^concluído em \d/);
 });
 it('names states', () => {
   expect(stateLabel('waiting_input')).toBe('esperando você');

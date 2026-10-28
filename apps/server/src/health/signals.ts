@@ -42,6 +42,8 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   machine_offline: 'needs_you',
   delivery_failed: 'needs_you',
   agent_outdated: 'needs_you',
+  epic_zombie: 'concierge',
+  done_unmerged: 'concierge',
 };
 
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login. */
@@ -120,6 +122,30 @@ export interface SnapshotMachine {
   active_run: boolean;
 }
 
+/** TER-1150: an automatic epic in Fazendo, and what still keeps it alive. */
+export interface SnapshotEpic {
+  task_id: string;
+  ref: string;
+  title: string;
+  /** the epic's or its cards' last change, or the last end of one of their runs, whichever is latest */
+  since: Date;
+  /** a card of the epic in Fazendo or with an active run */
+  active_card: boolean;
+  /** an open PR of the epic or of its cards, or the epic's merged PR still delivering */
+  open_pr: boolean;
+}
+
+/** TER-1150: a card in Feito whose PR is still open (red, in conflict or just never merged). */
+export interface SnapshotDoneUnmerged {
+  task_id: string;
+  ref: string;
+  url: string;
+  number: number;
+  ci_state: string;
+  /** when the card last changed: about when it was moved to Feito */
+  since: Date;
+}
+
 export interface SnapshotQueued {
   task_id: string;
   ref: string;
@@ -148,6 +174,9 @@ export interface HealthSnapshot {
   runs: SnapshotRun[];
   machines: SnapshotMachine[];
   min_agent_version: string;
+  /** TER-1150; absent from a snapshot built before it */
+  epics?: SnapshotEpic[];
+  done_unmerged?: SnapshotDoneUnmerged[];
 }
 
 const AUTONOMY_ORDER: AutonomyLevel[] = ['pr', 'merge', 'deploy', 'release'];
@@ -239,6 +268,17 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
     for (const run of pr.release_runs) {
       if (run.state === 'failed') add('delivery_failed', `${pr.url}#${run.workflow}`, null, { label: `#${pr.number}`, url: run.url ?? pr.url, workflow: run.workflow, ref: pr.task_ref });
     }
+  }
+
+  // 10. an automatic epic in Fazendo with nothing alive under it: no card in progress, no PR, no delivery (TER-1150)
+  for (const e of s.epics ?? []) {
+    if (e.active_card || e.open_pr) continue;
+    add('epic_zombie', e.task_id, e.since, { label: e.ref, title: e.title });
+  }
+
+  // 11. a card in Feito whose PR is still open: done on the board, not in the code (TER-1150)
+  for (const d of s.done_unmerged ?? []) {
+    add('done_unmerged', `${d.url}#${d.task_id}`, d.since, { label: d.ref, url: d.url, pr: `#${d.number}`, ci: d.ci_state });
   }
   return out;
 }

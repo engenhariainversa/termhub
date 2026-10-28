@@ -21,6 +21,8 @@ const TEXT: Record<HealthSignal, string> = {
   machine_offline: tk('Máquina {{label}} offline com trabalho do projeto há {{duration}}'),
   delivery_failed: tk('{{workflow}} do PR {{label}} falhou e nada mudou há {{duration}}'),
   agent_outdated: tk('Máquina {{label}} com o agente {{version}}, abaixo do mínimo {{min}}'),
+  epic_zombie: tk('Épico {{label}} em andamento sem história ativa nem PR há {{duration}}'),
+  done_unmerged: tk('Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}'),
 };
 const BASE_PENDING = tk('Branch base {{label}} com a CI sem terminar há {{duration}}');
 const FAILING = tk('falhando: {{names}}');
@@ -41,6 +43,8 @@ export const SIGNAL_NAME: Record<HealthSignal, string> = {
   machine_offline: tk('Máquina offline com trabalho'),
   delivery_failed: tk('Deploy ou release com falha'),
   agent_outdated: tk('Agente abaixo do mínimo'),
+  epic_zombie: tk('Épico parado em andamento'),
+  done_unmerged: tk('Card em Feito com PR não mesclado'),
 };
 
 /** "45 min", "3 h", "2 d". */
@@ -58,7 +62,7 @@ const str = (v: unknown): string => (v === null || v === undefined ? '' : String
 export function alertLine(a: Pick<HealthAlert, 'signal' | 'detail' | 'since_at'>, locale: Locale, now: Date): string {
   const d = a.detail;
   const vars = {
-    label: str(d.label), ref: str(d.ref), workflow: str(d.workflow), version: str(d.version), min: str(d.min),
+    label: str(d.label), ref: str(d.ref), pr: str(d.pr), workflow: str(d.workflow), version: str(d.version), min: str(d.min),
     duration: durationText(locale, now.getTime() - Date.parse(a.since_at)),
   };
   const head = a.signal === 'base_red' && d.state === 'pending' ? t(locale, BASE_PENDING, vars) : t(locale, TEXT[a.signal], vars);
@@ -94,6 +98,8 @@ const HINT: Record<HealthSignal, string> = {
   machine_offline: 'wake_machine se ela acorda pela rede; senão a pessoa liga a máquina',
   delivery_failed: 'o run com falha está no link; a pessoa decide rodar de novo ou corrigir',
   agent_outdated: 'update_machine_agent atualiza o agente; sem isso o automático pode deixar de iniciar execuções',
+  epic_zombie: 'list_tasks mostra as histórias do épico; se falta trabalho, ponha a próxima história em A fazer; se o épico já está na main e entregue, mova-o para Feito; se foi abandonado, a pessoa decide',
+  done_unmerged: 'o card está em Feito mas o PR não foi mesclado: veja o PR (CI vermelha, conflito, aprovação); se o trabalho não acabou, mova o card de volta para Em andamento, senão a pessoa mescla ou fecha o PR',
 };
 
 const q = (v: unknown): string => `«${sanitisePromptText(str(v)).slice(0, 200)}»`;
@@ -103,7 +109,7 @@ const s = (v: unknown): string => sanitisePromptText(str(v)).slice(0, 300);
 export function healthWakeText(alerts: HealthAlert[], noticed: ReadonlySet<string>, now: Date, rules: string | null = null): string {
   const lines = alerts.map((a) => {
     const d = a.detail;
-    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null]
+    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' || a.signal === 'epic_zombie' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null]
       .filter(Boolean)
       .join(', ');
     const said = noticed.has(a.id) ? ' A pessoa já recebeu push sobre isto.' : '';

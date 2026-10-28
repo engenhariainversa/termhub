@@ -129,6 +129,23 @@ describe('observe (TER-1121)', () => {
     expect(signals(s, config({ enabled: false }))).toEqual([]);
   });
 
+  // TER-1150
+  it('an automatic epic in Fazendo with no card in progress nor PR is a zombie, from its last change', () => {
+    const e = { task_id: 'e1', ref: 'TER-1', title: 'Identidade', since: ago(300), active_card: false, open_pr: false };
+    expect(observe(snap({ epics: [e] }), config())[0]).toMatchObject({ signal: 'epic_zombie', subject: 'e1', level: 'concierge', since: ago(300), detail: { label: 'TER-1', title: 'Identidade' } });
+    expect(signals(snap({ epics: [{ ...e, active_card: true }, { ...e, task_id: 'e2', open_pr: true }] }))).toEqual([]);
+    expect(isDue('epic_zombie', config(), ago(239), now)).toBe(false);
+    expect(isDue('epic_zombie', config(), ago(240), now)).toBe(true);
+  });
+
+  it('a card in Feito with its PR still open is done_unmerged, one per PR and card; gone with the PR merged', () => {
+    const d = { task_id: 't7', ref: 'TER-7', url: 'https://github.com/o/r/pull/9', number: 9, ci_state: 'failed', since: ago(40) };
+    expect(observe(snap({ done_unmerged: [d] }), config())[0]).toMatchObject({ signal: 'done_unmerged', subject: 'https://github.com/o/r/pull/9#t7', level: 'concierge', detail: { label: 'TER-7', pr: '#9', ci: 'failed' } });
+    expect(signals(snap({ done_unmerged: [] }))).toEqual([]);
+    // both need the automatic work on
+    expect(signals(snap({ automation: false, done_unmerged: [d], epics: [{ task_id: 'e1', ref: 'TER-1', title: 'x', since: ago(300), active_card: false, open_pr: false }] }))).toEqual([]);
+  });
+
   it('isDue compares with the signal minutes', () => {
     expect(isDue('pr_ready', config(), ago(119), now)).toBe(false);
     expect(isDue('pr_ready', config(), ago(120), now)).toBe(true);

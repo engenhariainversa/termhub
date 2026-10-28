@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { agentOnCard, progressResponse, type EpicProgress, type PullRequestBadge } from '@termhub/mobile-api';
-import { aggregateCard, aggregateEpic, FEED_KINDS, feedOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
+import { setupSchema } from '../setup/schema.js';
+import { aggregateCard, aggregateEpic, FEED_KINDS, feedOf, lifecycleOf, selectEpics, withUsage, type FeedRow, type ProgressCardRow, type ProgressEpicPr, type ProgressEpicRow, type ProgressTabRow } from './aggregate.js';
 
 const at = (min: number) => new Date(Date.UTC(2026, 8, 27, 12, 0) + min * 60_000);
 const tab = (id: string, state: ProgressTabRow['state']): ProgressTabRow => ({ id, name: `aba ${id}`, machine_name: 'jarvis', state, state_at: at(0), activity: null, activity_verb: null, rate_limited_at: null, automatic: false });
@@ -107,6 +108,45 @@ describe('selectEpics', () => {
   });
   it('all keeps every epic with cards, finished ones last', () => {
     expect(selectEpics([finished, todoOnly, doing, empty], 'all').map((e) => e.id)).toEqual(['a', 'b', 'd']);
+  });
+});
+
+// TER-1150: Pedro's E2 vanished from the panel with its four stories in Feito while the integrator still took the
+// epic branch to main: an automatic epic stays on the active panel until it is in the code and delivered
+describe('the automatic epic lifecycle (TER-1150)', () => {
+  const setup = setupSchema.parse({ repo: { integration_id: 'i1', full_name: 'o/r', base_branch: 'main', deploy_workflow: 'deploy.yml' }, automation: { enabled: true, autonomy: 'release' } });
+  const BRANCH = 'epic/TER-e1-epico-e1';
+  const epicPr = (over: Partial<ProgressEpicPr> = {}): ProgressEpicPr => ({
+    number: 80, url: 'https://github.com/o/r/pull/80', title: 'TER-e1: integrate', state: 'open', draft: false, ci_state: 'running',
+    ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null, release_runs: [], head_ref: BRANCH, changed_level: null, mention_only: false, ...over,
+  });
+  const auto = (cards: ProgressCardRow[], over: Partial<ProgressEpicRow> = {}): ProgressEpicRow => ({ ...epic(cards), status: 'doing', auto: true, started_at: at(0), done_at: null, pull_requests: [], ...over });
+  const withLife = (row: ProgressEpicRow) => ({ ...aggregateEpic(row, true), lifecycle: lifecycleOf(row, setup) });
+  const allDone = [card({ id: '2', status: 'done' }), card({ id: '3', status: 'done' })];
+
+  it('every story done and the epic PR open: integrating, with the PR, and still on the active panel', () => {
+    const e = withLife(auto(allDone, { pull_requests: [epicPr()] }));
+    expect(e.lifecycle).toMatchObject({ phase: 'integrating', branch: BRANCH, started_at: at(0).toISOString(), pull_request: { number: 80 }, failure: null });
+    expect(e.lifecycle!.pull_request).not.toHaveProperty('head_ref');
+    expect(selectEpics([e], 'active').map((x) => x.id)).toEqual(['e1']);
+    expect(() => progressResponse.parse({ epics: [e], generated_at: at(0).toISOString() })).not.toThrow();
+  });
+
+  it('merged and deploying stays; a failed deploy stays and says why; done leaves the active panel and sorts last in all', () => {
+    const delivering = withLife(auto(allDone, { pull_requests: [epicPr({ state: 'merged', deploy_state: 'running' })] }));
+    expect(delivering.lifecycle!.phase).toBe('delivering');
+    const failed = withLife(auto(allDone, { id: 'e2', ref: 'TER-e2', pull_requests: [epicPr({ state: 'merged', deploy_state: 'failed', head_ref: 'epic/TER-e2-epico-e1' })] }));
+    expect(failed.lifecycle).toMatchObject({ phase: 'failed', failure: 'deploy' });
+    const done = withLife(auto(allDone, { id: 'e3', ref: 'TER-e3', status: 'done', done_at: at(90) }));
+    expect(done.lifecycle).toMatchObject({ phase: 'done', done_at: at(90).toISOString() });
+    expect(selectEpics([done, delivering, failed], 'active').map((x) => x.id)).toEqual(['e1', 'e2']);
+    expect(selectEpics([done, delivering], 'all').map((x) => x.id)).toEqual(['e1', 'e3']);
+  });
+
+  it('a manual epic has no lifecycle and keeps the old rule', () => {
+    const row = { ...epic(allDone), status: 'doing' as const, auto: false, pull_requests: [] };
+    expect(lifecycleOf(row, setup)).toBeNull();
+    expect(selectEpics([withLife(row)], 'active')).toEqual([]);
   });
 });
 

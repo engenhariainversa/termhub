@@ -59,7 +59,7 @@ describe('ProjectHealthPanel (TER-1121)', () => {
 
 describe('HealthSetup (TER-1121)', () => {
   const signals = Object.fromEntries(
-    ['pr_ready', 'base_red', 'queue_stalled', 'tab_stuck', 'tab_waiting', 'card_orphan', 'run_blocked', 'machine_offline', 'delivery_failed', 'agent_outdated'].map((k) => [k, { enabled: true, minutes: 30 }]),
+    ['pr_ready', 'base_red', 'queue_stalled', 'tab_stuck', 'tab_waiting', 'card_orphan', 'run_blocked', 'machine_offline', 'delivery_failed', 'agent_outdated', 'epic_zombie', 'done_unmerged'].map((k) => [k, { enabled: true, minutes: 30 }]),
   ) as ProjectHealthSetup['signals'];
 
   it('switches a sign off and changes its minutes', () => {
