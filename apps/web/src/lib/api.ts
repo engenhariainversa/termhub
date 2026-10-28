@@ -443,7 +443,7 @@ export const api = {
   /** A plain boolean is the same as `{ enabled: boolean }` (the pre-D8 shape every caller still
    *  uses); `{ enabled?, autodecide? }` is the D8 shape for "Responder sozinho quando houver
    *  precedente" — the server refuses a body with no key. `codex_replies` is the opt-in for the Codex reply card. */
-  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; client_context?: boolean; context_limit?: number | null; auto_thresholds?: AutoThresholdPair | null }) =>
+  setChatMemory: (body: boolean | { enabled?: boolean; autodecide?: boolean; codex_replies?: boolean; client_context?: boolean; context_limit?: number | null; blocked_models?: string[]; auto_thresholds?: AutoThresholdPair | null }) =>
     request<ChatMemory>('PATCH', '/chat/memory', typeof body === 'boolean' ? { enabled: body } : body),
   /** Says whether termhub is in focus on this screen (TER-642: a suggested answer's countdown only runs
    *  while it is). Best effort: `keepalive` lets the last one out while the page goes away, and a

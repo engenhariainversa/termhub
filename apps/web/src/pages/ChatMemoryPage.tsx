@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import type { ChatDecision, ChatMemory, ConciergeNote, LessonItem } from '../lib/types';
 import { ContextLimitField } from '../components/chat/ContextLimitField';
+import { ConciergeModelsField } from '../components/chat/ConciergeModelsField';
 import { formatDate } from '../lib/format';
 import { MemoryRulesSection } from '../components/MemoryRulesSection';
 import { MemoryStatusBadge, MemoryStatusControls } from '../components/MemoryStatusControls';
@@ -463,6 +464,9 @@ export function ChatMemoryPage() {
 
       {/* TER-1038: the chat's context meter limit; not tied to embeddings either. */}
       {memory && <ContextLimitField memory={memory} onSaved={setMemory} />}
+
+      {/* TER-1145: the models the concierge never runs on; not tied to embeddings either. */}
+      {memory && <ConciergeModelsField memory={memory} onSaved={setMemory} />}
 
       <MemoryRulesSection />
 

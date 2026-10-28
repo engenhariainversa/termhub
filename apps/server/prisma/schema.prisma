@@ -97,6 +97,9 @@ model User {
   /// The chat's context meter measures against this many tokens instead of the model's window
   /// (TER-1038): opt-in, null = the window.
   chatContextLimit        Int?                     @map("chat_context_limit")
+  /// "Modelos do concierge" (TER-1145): the Claude model families (fable, opus, sonnet, haiku) the
+  /// concierge never runs on. Empty = no restriction, the default; the tabs' agents are not affected.
+  chatBlockedModels       String[]                 @default([]) @map("chat_blocked_models")
   memoryItems             MemoryItem[]
   verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
   memoryRules             MemoryRule[]
@@ -1050,6 +1053,8 @@ model ChatConversation {
   /// uuid passed to claude -p as --session-id / --resume
   cliSessionId       String?             @map("cli_session_id")
   model              String?
+  /// The model the CLI's `init` last said this conversation ran on (TER-1145), shown on the chat's host card.
+  lastModel          String?             @map("last_model")
   /// The host: the user's own machine this conversation runs on. Null = not chosen yet.
   machineId          String?             @map("machine_id")
   machine            Machine?            @relation(fields: [machineId], references: [id], onDelete: SetNull)

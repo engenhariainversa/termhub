@@ -288,7 +288,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     chat,
     chatLiveRuns,
     projectGroups,
-    users: { findById: vi.fn(async (id: string) => (id === user.id ? user : undefined)) },
+    users: { findById: vi.fn(async (id: string) => (id === user.id ? user : undefined)), chatBlockedModels: vi.fn(async (): Promise<string[]> => []) },
     apiTokens: { listByUser: vi.fn(async () => []), create: vi.fn(async () => ({})), revoke: vi.fn(async () => undefined), revokeForConversation: vi.fn(async () => 0) },
     chatActions,
     tabQuestions,
@@ -4098,6 +4098,32 @@ describe('usage limit (TER-588)', () => {
     await built.service.send(user, 'oi');
     expect(built.inputs()[0].model ?? null).toBeNull();
     expect(built.chat.setRunAccount).not.toHaveBeenCalled();
+  });
+
+  it('"Modelos do concierge" (TER-1145): a project default on Fable starts the chat on the next allowed model, also after a swap', async () => {
+    const personal = { id: 'acc_p', provider: 'claude', machine_id: 'm1', config_dir: '~/.claude-p', label: 'Pessoal' };
+    const built = build([], { host: { machines: [jarvis()] }, accounts: [work, personal], projectAi: { accounts: ['acc_p', 'acc_w'], models: { claude: 'fable' } } });
+    vi.mocked(built.repos.users.chatBlockedModels).mockResolvedValue(['fable']);
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield* limitFrames; } }));
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield delta('oi!'); yield done(SID); } }));
+    expect(await built.service.send(user, 'oi', { projectId: 'p1' })).toMatchObject({ text: 'oi!', error_code: null });
+    expect(built.inputs()[0]).toMatchObject({ config_dir: '~/.claude-p', model: 'opus' });
+    expect(built.inputs()[1]).toMatchObject({ config_dir: '~/.claude-work', model: 'opus' });
+  });
+
+  it('"Modelos do concierge" (TER-1145): off, a project default on Fable is kept', async () => {
+    const built = build([], { host: { machines: [jarvis()] }, accounts: [work], projectAi: { accounts: ['acc_w'], models: { claude: 'fable' } } });
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield delta('oi!'); yield done(SID); } }));
+    await built.service.send(user, 'oi', { projectId: 'p1' });
+    expect(built.inputs()[0]).toMatchObject({ model: 'fable' });
+  });
+
+  it('"Modelos do concierge" (TER-1145): with Fable blocked, the account-wide chat names a model instead of the CLI default', async () => {
+    const built = build([], { host: { machines: [jarvis()] }, accounts: [work] });
+    vi.mocked(built.repos.users.chatBlockedModels).mockResolvedValue(['fable']);
+    vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield delta('oi!'); yield done(SID); } }));
+    await built.service.send(user, 'oi');
+    expect(built.inputs()[0]).toMatchObject({ model: 'opus' });
   });
 
   // The report behind TER-837: a chat on Opus, the other account with room except for its Fable allowance.

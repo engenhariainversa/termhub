@@ -1335,7 +1335,12 @@ export type ChatHostState =
    * The screen says that once, because nothing else will: the failed resume and the fresh session are
    * both invisible from the browser.
    */
-  | { kind: 'ready'; machine: ChatHostMachine; configDir: string | null; account: ChatHostAccount; sessionAtStake: boolean }
+  /**
+   * `model` is what the run passes as `--model` (null = the CLI's default), `modelSteered` that
+   * "Modelos do concierge" chose it instead of the project's or the CLI's (TER-1145), and `lastModel`
+   * the model the CLI last said this conversation ran on. All three absent from an older server.
+   */
+  | { kind: 'ready'; machine: ChatHostMachine; configDir: string | null; account: ChatHostAccount; sessionAtStake: boolean; model?: string | null; modelSteered?: boolean; lastModel?: string | null }
   | { kind: 'no_machine' }
   /**
    * `sessionAtStake` is the server's answer to "is there a model memory to lose here": true when the
@@ -1768,6 +1773,9 @@ export interface ChatMemory {
   client_context?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
+  /** "Modelos do concierge" (TER-1145): the Claude families the concierge never runs on; empty = none.
+   *  Absent from an older server. */
+  blocked_models?: string[];
   available: boolean;
   count: number;
   notes: number;
