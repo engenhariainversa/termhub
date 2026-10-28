@@ -373,6 +373,18 @@ it('rejects an empty or oversized message', async () => {
   expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'x'.repeat(8001) } })).statusCode).toBe(400);
 });
 
+it('says how long an oversized message is, not a bare "Dados inválidos" (TER-1139)', async () => {
+  const { app, service } = build();
+  const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: `  ${'x'.repeat(8001)}  ` } });
+  expect(res.statusCode).toBe(400);
+  expect(res.json()).toEqual({ error: 'Mensagem grande demais: 8001 de 8000 caracteres. Envie o texto como anexo .txt', code: 'MESSAGE_TOO_LONG' });
+  const en = await app.inject({ method: 'POST', url: '/chat/messages', headers: { 'accept-language': 'en' }, payload: { text: 'x'.repeat(9000) } });
+  expect(en.json().error).toBe('Message too long: 9000 of 8000 characters. Send the text as a .txt attachment');
+  // The limit itself is unchanged: 8000 after trimming still goes.
+  expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: `${'x'.repeat(8000)}   ` } })).statusCode).toBe(202);
+  expect(service.start).toHaveBeenCalledTimes(1);
+});
+
 it('passes the service busy error through as 409', async () => {
   const { HttpError } = await import('../lib/errors.js');
   const { app } = build({ start: vi.fn(async () => { throw new HttpError(409, 'O concierge ainda está respondendo a mensagem anterior', 'CHAT_BUSY'); }) });

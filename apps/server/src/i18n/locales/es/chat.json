@@ -97,5 +97,6 @@
   "Uma aba de agente só compartilha arquivos da própria máquina": "Una pestaña de agente solo comparte archivos de su propia máquina",
   "A decisão usada expirou ou não vale aqui": "La decisión usada expiró o no vale aquí",
   "A decisão usada foi substituída": "La decisión usada fue reemplazada",
-  "Você pediu o status há pouco. Espere {{seconds}} s e tente de novo.": "Pediste el estado hace poco. Espera {{seconds}} s y vuelve a intentarlo."
+  "Você pediu o status há pouco. Espere {{seconds}} s e tente de novo.": "Pediste el estado hace poco. Espera {{seconds}} s y vuelve a intentarlo.",
+  "Mensagem grande demais: {{length}} de {{max}} caracteres. Envie o texto como anexo .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres. Envía el texto como adjunto .txt"
 }

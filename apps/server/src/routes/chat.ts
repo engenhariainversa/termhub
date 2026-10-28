@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE, replyCardKind } from '@termhub/mobile-api';
+import { CHAT_MESSAGE_MAX_CHARS, chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE, replyCardKind } from '@termhub/mobile-api';
+import { assertMessageFits } from '../chat/message-size.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import { chatMemoryRoutes } from './chat-memory.js';
@@ -57,7 +58,7 @@ export type IndexActionsFn = (userId: string, actions: ChatAction[]) => Promise<
  *  soon as the message is stored, like the phone's, and never holds the request for the whole answer. */
 const messageBody = z
   .object({
-    text: z.string().trim().max(8000).default(''),
+    text: z.string().trim().max(CHAT_MESSAGE_MAX_CHARS).default(''),
     project_id: z.string().min(1).max(64).nullish(),
     attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     wait: z.boolean().optional(),
@@ -207,6 +208,7 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
 
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
     // `wait` is read and ignored: a page loaded before this release still sends it.
+    assertMessageFits(request.body, CHAT_MESSAGE_MAX_CHARS);
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = messageBody.parse(request.body);
     // Each only when the body carried it, so a plain message calls the service exactly as before.
     // `client`: where it came from (TER-1088), read from the request, never from the body.
