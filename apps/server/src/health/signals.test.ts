@@ -39,6 +39,14 @@ describe('observe (TER-1121)', () => {
     expect(signals(snap({ queued: [{ ...queued[0], reason: 'paused' }] }))).toEqual([]);
   });
 
+  it('a type the Setup leaves out never starts: alone in the queue it is no alert (TER-1143)', () => {
+    const spike = { task_id: 't3', ref: 'TER-3', reason: 'type_not_allowed', reason_text: 'Tipo não permitido no automático' };
+    expect(signals(snap({ queued: [spike], last_run_at: ago(90) }))).toEqual([]);
+    const card = { task_id: 't4', ref: 'TER-4', reason: null, reason_text: null };
+    const [o] = observe(snap({ queued: [spike, card], last_run_at: ago(90) }), config());
+    expect(o).toMatchObject({ signal: 'queue_stalled', detail: { label: '1', cards: 'TER-4' } });
+  });
+
   it('tabs: working with no event is stuck, a question or the trust dialog is waiting, from the state time', () => {
     const tabs = [
       { id: 'a', name: 'a', state: 'working', state_at: ago(40), machine_id: 'm', run: true },
