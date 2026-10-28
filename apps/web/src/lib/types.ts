@@ -440,6 +440,20 @@ export interface EpicProgress {
   ci_error: string | null;
   /** the epic's own automatic tabs plus its cards'; null/absent = nothing metered */
   usage?: ProgressUsage | null;
+  /** TER-1150: the automatic epic's lifecycle; null/absent for a manual epic or a server that predates it */
+  lifecycle?: EpicLifecycle | null;
+}
+
+/** TER-1150: where an automatic epic is in its life, from its first card to its delivery (same shape as `@termhub/mobile-api`). */
+export type EpicPhase = 'not_started' | 'in_progress' | 'integrating' | 'delivering' | 'failed' | 'done';
+export interface EpicLifecycle {
+  phase: EpicPhase;
+  branch: string | null;
+  started_at: string | null;
+  done_at: string | null;
+  /** the epic's own PR (epic branch → base) */
+  pull_request: PullRequestBadge | null;
+  failure: 'ci' | 'conflict' | 'deploy' | 'release' | null;
 }
 /** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
 export interface AutomationFeedEvent {
@@ -697,7 +711,7 @@ export interface ProjectSetupData {
 }
 
 /** TER-1121: the signs of stalled work the project's health watcher looks for. */
-export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated';
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated' | 'epic_zombie' | 'done_unmerged';
 
 export interface ProjectHealthSetup {
   enabled: boolean;

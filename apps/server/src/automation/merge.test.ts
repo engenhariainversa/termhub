@@ -212,6 +212,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
     updateBranch: vi.fn(async () => true),
     branchSha: vi.fn(async () => 'base1'),
     createBranch: vi.fn(),
+    deleteBranch: vi.fn(async () => 'deleted' as const),
     openPull: vi.fn(),
     findOpenPull: vi.fn(),
   };
@@ -553,7 +554,22 @@ describe('runMergeExecutor', () => {
       expect(w.gh.compare).toHaveBeenCalledWith('tok', 'acme/app', 'main', 'h1'); // into the base: R1's delivery gate
       expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, { sha: 'h1', title: `TER-1: integrate ${EPIC_BRANCH} (#7)`, method: 'squash' });
       expect(w.repos.tasks.move).toHaveBeenCalledWith('e1', { status: 'done' }, 0);
-      expect(w.state.events).toEqual([expect.objectContaining({ kind: 'merged', task_id: 'e1' })]);
+      // TER-1150: nothing to deliver, so the epic dies with the merge: its branch goes and epic_done says so
+      expect(w.gh.deleteBranch).toHaveBeenCalledWith('tok', 'acme/app', EPIC_BRANCH);
+      expect(w.state.events).toEqual([
+        expect.objectContaining({ kind: 'merged', task_id: 'e1' }),
+        expect.objectContaining({ kind: 'epic_done', task_id: 'e1', payload: expect.objectContaining({ branch: EPIC_BRANCH, branch_deleted: true, pr: 7 }) }),
+      ]);
+    });
+
+    it('with a deploy to follow (approved above the level), the epic stays in Fazendo until the delivery is through (TER-1150)', async () => {
+      const w = world({ setup: setupWith({ autonomy: 'deploy' }, { deploy_workflow: 'deploy.yml' }), prs: [epicPr()] });
+      onEpicBranch(w);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).toHaveBeenCalled();
+      expect(w.repos.tasks.move).not.toHaveBeenCalledWith('e1', { status: 'done' }, 0);
+      expect(w.gh.deleteBranch).not.toHaveBeenCalled();
+      expect(w.state.events).toEqual([expect.objectContaining({ kind: 'merged', task_id: 'e1', payload: expect.objectContaining({ moved_to_done: false }) })]);
     });
 
     it('while the integrator has not finished (none done yet, or one active), it is not touched: no update-branch, no merge, no card', async () => {

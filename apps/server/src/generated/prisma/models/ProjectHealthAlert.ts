@@ -764,7 +764,7 @@ export type $ProjectHealthAlertPayload<ExtArgs extends runtime.Types.Extensions.
     id: string
     projectId: string
     /**
-     * pr_ready | base_red | queue_stalled | tab_stuck | tab_waiting | card_orphan | run_blocked | machine_offline | delivery_failed | agent_outdated
+     * pr_ready | base_red | queue_stalled | tab_stuck | tab_waiting | card_orphan | run_blocked | machine_offline | delivery_failed | agent_outdated | epic_zombie | done_unmerged
      */
     signal: string
     /**

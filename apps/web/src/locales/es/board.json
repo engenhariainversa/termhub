@@ -495,5 +495,21 @@
   "{{what}}; grava às {{time}}": "{{what}}; se guarda a las {{time}}",
   "Máquina do concierge": "Máquina del concierge",
   "Automática (a primeira conta com limite livre, em qualquer máquina)": "Automática (la primera cuenta con límite disponible, en cualquier máquina)",
-  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "El chat del proyecto corre en esta máquina, con sus cuentas en el orden de arriba. Si está offline o sin cuenta con límite disponible, vuelve a la automática."
+  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "El chat del proyecto corre en esta máquina, con sus cuentas en el orden de arriba. Si está offline o sin cuenta con límite disponible, vuelve a la automática.",
+  "Épico em andamento sem história ativa nem PR": "Épica en curso sin historia activa ni PR",
+  "Card em Feito com PR não mesclado": "Tarjeta en Hecho con PR sin fusionar",
+  "{{ref}}: épico começou na branch {{branch}}": "{{ref}}: la épica empezó en la rama {{branch}}",
+  "{{ref}}: épico começou": "{{ref}}: la épica empezó",
+  "{{ref}}: épico concluído, na base e entregue": "{{ref}}: épica terminada, en la rama base y entregada",
+  "não começou": "no empezó",
+  "histórias prontas · integrando": "historias listas · integrando",
+  "na base · entrega em andamento": "en la rama base · entrega en curso",
+  "falhou": "falló",
+  "falhou: CI": "falló: CI",
+  "falhou: conflito": "falló: conflicto",
+  "falhou: deploy": "falló: deploy",
+  "falhou: publicação": "falló: publicación",
+  "{{phase}} em {{date}}": "{{phase}} el {{date}}",
+  "{{phase}} · desde {{date}}": "{{phase}} · desde {{date}}",
+  "Branch do épico": "Rama de la épica"
 }

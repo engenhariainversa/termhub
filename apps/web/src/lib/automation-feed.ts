@@ -39,6 +39,11 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       return e.summary ? t('{{ref}} decidiu sozinho: {{summary}}', { ref, summary: e.summary }) : t('{{ref}}: seguiu a própria recomendação (registrada no PR)', { ref });
     case 'escalated':
       return t('{{ref}} precisa de você: {{reason}}', { ref, reason: e.reason_text ?? '' });
+    // TER-1150: an automatic epic's birth (its first card started) and death (in the code and delivered)
+    case 'epic_started':
+      return e.branch ? t('{{ref}}: épico começou na branch {{branch}}', { ref, branch: e.branch }) : t('{{ref}}: épico começou', { ref });
+    case 'epic_done':
+      return t('{{ref}}: épico concluído, na base e entregue', { ref });
     case 'pr_opened':
       return t('{{ref}}: PR aberto', { ref });
     case 'merged':

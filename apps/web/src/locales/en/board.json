@@ -495,5 +495,21 @@
   "{{what}}; grava às {{time}}": "{{what}}; written at {{time}}",
   "Máquina do concierge": "Concierge machine",
   "Automática (a primeira conta com limite livre, em qualquer máquina)": "Automatic (the first account with usage left, on any machine)",
-  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "The project chat runs on this machine, with its accounts in the order above. When it is offline or has no account with usage left, it falls back to automatic."
+  "O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.": "The project chat runs on this machine, with its accounts in the order above. When it is offline or has no account with usage left, it falls back to automatic.",
+  "Épico em andamento sem história ativa nem PR": "Epic in progress with no active story nor PR",
+  "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR",
+  "{{ref}}: épico começou na branch {{branch}}": "{{ref}}: epic started on branch {{branch}}",
+  "{{ref}}: épico começou": "{{ref}}: epic started",
+  "{{ref}}: épico concluído, na base e entregue": "{{ref}}: epic finished, in the base branch and delivered",
+  "não começou": "not started",
+  "histórias prontas · integrando": "stories done · integrating",
+  "na base · entrega em andamento": "in the base branch · delivery running",
+  "falhou": "failed",
+  "falhou: CI": "failed: CI",
+  "falhou: conflito": "failed: conflict",
+  "falhou: deploy": "failed: deploy",
+  "falhou: publicação": "failed: release",
+  "{{phase}} em {{date}}": "{{phase}} on {{date}}",
+  "{{phase}} · desde {{date}}": "{{phase}} · since {{date}}",
+  "Branch do épico": "Epic branch"
 }

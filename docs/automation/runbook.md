@@ -676,6 +676,8 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
 | `machine_offline` agent machine offline holding an active run of the project, or a tab with an event within the `tab_stuck` minutes before its last contact (TER-1135) | machine | 15 min | person | every project |
 | `delivery_failed` newest merge of a repo whose deploy or release failed, nothing merged since | PR url + workflow | 30 min | person | automation on |
 | `agent_outdated` online agent below `MIN_AGENT_VERSION` | machine | 60 min | person | automation on |
+| `epic_zombie` automatic epic in Doing with no card in Doing or with an active run, no open PR of it or its cards, and no delivery of its PR running (TER-1150) | epic | 240 min | concierge | automation on |
+| `done_unmerged` card in Done whose own PR is still open (red, in conflict, or never merged) (TER-1150) | PR url + card | 30 min | concierge | automation on |
 
 - **Episodes.** A sign is timed from when it started as far as the data tells (the tab's last event, the
   last run's start, the machine's last contact, the card's last change), else from the first sweep that saw
@@ -738,6 +740,30 @@ was a session end); a terminal where no agent ever reported (a plain shell); a t
 rest for 2 h or more close before their time, oldest first, three per sweep, with "sem folga" in the feed
 line; the next check tells whether that was enough. A full disk does not trigger it: closing tabs frees no
 disk.
+
+## 9j. An automatic epic is born and dies (TER-1150)
+
+An automatic epic has an explicit lifecycle (`apps/server/src/automation/epic-phase.ts` reads it,
+`epic-lifecycle.ts` acts on it), shown on its block in Progresso (web and app) as `lifecycle`:
+
+| Phase | When | What termhub does |
+| --- | --- | --- |
+| `not_started` | no card of the epic started | nothing |
+| born → `in_progress` | the dispatcher starts the epic's first card | creates `epic/…` from the base, moves the epic from the backlog/A fazer to Fazendo, records `epic_started` (`branch`, `by` = the card) |
+| `integrating` | every card in Feito; the integrator's PR (epic branch → base) not merged | the epic stays on the active panel ("histórias prontas · integrando") with the PR, its CI and link |
+| `delivering` | the epic PR merged; the deploy (or a release the PR needs) still running | the epic stays in Fazendo ("na base · entrega em andamento") |
+| `failed` | the epic PR red or held by the fix caps (`ci`, `conflict`), or its deploy/release failed | shown with the cause; `delivery_failed` and the merge executor's escalations already tell the person |
+| dies → `done` | every card in Feito, no PR of the epic or its cards open, every epic PR merged and delivered | the epic goes to Feito by itself, `epic/…` is deleted on GitHub (a branch already gone is fine), its runs' worktrees and tabs are cleaned up, `epic_done` is recorded; the panel lists it only under "todos" with the date |
+
+- A merge with nothing to deliver (no deploy workflow, no release path) dies on the merge itself.
+- An epic never dies with a card out of Feito, an open PR or a delivery pending or failed.
+- `epic_zombie` (section 9h) flags an epic in Fazendo with nothing alive under it for 4 h.
+- A card in Feito whose own PR is still open raises `done_unmerged`; `move_task`/`update_task` to done with
+  such a PR answer `CONFIRM_REQUIRED` with the PR and its CI, and only `confirm: true` moves it (the web board
+  drag is not gated).
+- A card PR a person merged on GitHub moves its automatic card to Feito on the next dispatcher pass (as the merge
+  executor would: runs ended, cleanup due, `merged` with `by: external`), unless the card changed after the merge.
+- Multi-repo: every epic PR (one per repository) counts; the epic integrates while any is open.
 
 ## 10. After a failed deploy or release
 

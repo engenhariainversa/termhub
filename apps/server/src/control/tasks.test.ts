@@ -46,6 +46,7 @@ function ctx() {
       childIds: vi.fn(async () => [] as string[]),
       delete: vi.fn(async () => true),
     },
+    taskPullRequests: { listByTasks: vi.fn(async (_ids: string[]) => [] as Array<Record<string, unknown>>) },
     taskColumns: {
       list: vi.fn(async (pid: string) => columns.filter((c) => c.project_id === pid)),
       findById: vi.fn(async (id: string) => [...columns, { id: 'cx', project_id: 'px', name: 'Alheia', category: 'doing', position: 0, created_at: '' }].find((c) => c.id === id)),
@@ -174,6 +175,16 @@ describe('updateTask', () => {
     expect(r.board_url).toBe('https://app.test/projects/p1/tasks');
   });
 
+  it('status done with an open PR of its own asks for confirm: true first (TER-1150)', async () => {
+    const { c, repos } = ctx();
+    repos.taskPullRequests.listByTasks.mockResolvedValue([{ number: 5, state: 'open', ci_state: 'running', draft: true, url: 'u5', mention_only: false }]);
+    await expect(updateTask(c, { task_id: 'k2', status: 'done' })).rejects.toMatchObject({ code: 'CONFIRM_REQUIRED', message: expect.stringContaining('#5 (CI running, draft) u5') });
+    expect(repos.tasks.update).not.toHaveBeenCalled();
+    repos.tasks.update.mockResolvedValue({ ...k2, status: 'done' });
+    await updateTask(c, { task_id: 'k2', status: 'done', confirm: true });
+    expect(repos.tasks.update).toHaveBeenCalled();
+  });
+
   it('requires at least one field', async () => {
     const { c, repos } = ctx();
     await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto'));
@@ -237,6 +248,38 @@ describe('moveTask', () => {
     repos.tasks.move.mockResolvedValue({ ...k2, status: 'done', position: 3 });
     await moveTask(c, { task_id: 'k2', status: 'done', position: 3 });
     expect(repos.tasks.move).toHaveBeenCalledWith('k2', { status: 'done' }, 3);
+  });
+
+  // TER-1150: Feito with an open PR asks first, naming the PR and its CI
+  it('to done with an open PR of its own: CONFIRM_REQUIRED naming the PR, nothing moved; confirm: true moves it', async () => {
+    const { c, repos } = ctx();
+    const open = { number: 12, state: 'open', ci_state: 'failed', draft: false, url: 'https://github.com/o/r/pull/12', mention_only: false };
+    repos.taskPullRequests.listByTasks.mockResolvedValue([open, { ...open, number: 9, state: 'merged' }, { ...open, number: 3, mention_only: true }]);
+    const refused = await moveTask(c, { task_id: 'k2', status: 'done' }).catch((e: unknown) => e as ControlError);
+    expect(refused).toMatchObject({ code: 'CONFIRM_REQUIRED' });
+    expect(String((refused as ControlError).message)).toContain('#12 (CI failed) https://github.com/o/r/pull/12');
+    expect(String((refused as ControlError).message)).not.toContain('#9');
+    expect(String((refused as ControlError).message)).not.toContain('#3');
+    expect(repos.tasks.move).not.toHaveBeenCalled();
+    repos.tasks.move.mockResolvedValue({ ...k2, status: 'done' });
+    await moveTask(c, { task_id: 'k2', status: 'done', confirm: true });
+    expect(repos.tasks.move).toHaveBeenCalledWith('k2', { status: 'done' }, 0);
+  });
+
+  it('a done column counts as done; another category or a merged PR moves without asking', async () => {
+    const { c, repos } = ctx();
+    columns.push({ id: 'c9', project_id: 'p1', name: 'Feito', category: 'done', position: 2, created_at: '' });
+    try {
+      repos.taskPullRequests.listByTasks.mockResolvedValue([{ number: 12, state: 'open', ci_state: 'passed', draft: false, url: 'u', mention_only: false }]);
+      await expect(moveTask(c, { task_id: 'k2', column_id: 'c9' })).rejects.toMatchObject({ code: 'CONFIRM_REQUIRED' });
+      repos.tasks.move.mockResolvedValue({ ...k2, status: 'doing' });
+      await moveTask(c, { task_id: 'k2', column_id: 'c2' });
+      repos.taskPullRequests.listByTasks.mockResolvedValue([{ number: 12, state: 'merged', ci_state: 'passed', draft: false, url: 'u', mention_only: false }]);
+      await moveTask(c, { task_id: 'k2', status: 'done' });
+      expect(repos.tasks.move).toHaveBeenCalledTimes(2);
+    } finally {
+      columns.pop();
+    }
   });
 
   it('refuses a subtask with the repository message', async () => {

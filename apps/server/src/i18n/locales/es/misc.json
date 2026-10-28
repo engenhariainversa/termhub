@@ -209,5 +209,9 @@
   "Aba {{tab}} fechada sozinha: {{machine}} sem folga, parada há {{hours}} h": "Pestaña {{tab}} cerrada sola: {{machine}} sin margen, inactiva hace {{hours}} h",
   "Aba {{tab}} fechada sozinha em {{machine}}: parada há {{hours}} h": "Pestaña {{tab}} cerrada sola en {{machine}}: inactiva hace {{hours}} h",
   "A sessão pode ser retomada na mesma pasta (--continue)": "La sesión se puede retomar en la misma carpeta (--continue)",
-  "A máquina do concierge precisa estar ligada ao projeto": "La máquina del concierge debe estar vinculada al proyecto"
+  "A máquina do concierge precisa estar ligada ao projeto": "La máquina del concierge debe estar vinculada al proyecto",
+  "Épico {{label}} em andamento sem história ativa nem PR há {{duration}}": "Épica {{label}} en curso sin historia activa ni PR desde hace {{duration}}",
+  "Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}": "Tarjeta {{label}} en Hecho con el PR {{pr}} aún abierto desde hace {{duration}}",
+  "Épico parado em andamento": "Épica detenida en curso",
+  "Card em Feito com PR não mesclado": "Tarjeta en Hecho con PR sin fusionar"
 }
