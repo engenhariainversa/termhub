@@ -96,9 +96,11 @@ export function watchWakeText(items: { watch: Pick<ChatWatch, 'id' | 'kind' | 'l
   const lines = items.map(({ watch, fire }) => {
     const reminder = watch.kind === 'reminder';
     const ongoing = watch.recurring && watch.status === 'open' ? (reminder ? ' O lembrete continua ativo.' : ' A assinatura continua ativa.') : '';
+    // TER-1144: a recurring watch that reached its cap closed with this fire.
+    const capped = !reminder && fire.payload.last === true ? ` Foi o último aviso desta assinatura (limite de ${s(fire.payload.max_fires)} avisos): ela terminou; se a pessoa ainda quiser acompanhar, crie outra.` : '';
     // A reminder's label is its own note: said once.
     if (reminder) return `- Lembrete ${watch.id}: ${describeFire(watch, fire)} Sua nota: ${q(watch.note)}.${ongoing}`;
-    return `- Assinatura ${watch.id} (${q(watch.label)}): ${describeFire(watch, fire)} Sua nota: ${q(watch.note)}.${ongoing}`;
+    return `- Assinatura ${watch.id} (${q(watch.label)}): ${describeFire(watch, fire)} Sua nota: ${q(watch.note)}.${ongoing}${capped}`;
   });
   const onlyReminders = items.every((i) => i.watch.kind === 'reminder');
   const heading = onlyReminders

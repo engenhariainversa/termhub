@@ -8,7 +8,12 @@ import type { ChatHostAccount, ChatHostAiAccount, ChatHostMachine, ChatHostState
  * chosen account is not the one doing it.
  */
 function accountClause(account: ChatHostAccount): string {
-  if (account.kind === 'chosen' && account.via === 'project') return i18n.t('na conta {{label}}, definida pelo projeto', { label: account.label });
+  if (account.kind === 'chosen' && account.via === 'project') {
+    // TER-1144: why this account, in the person's words
+    if (account.source === 'conversation') return i18n.t('na conta {{label}}, escolhida para esta conversa', { label: account.label });
+    if (account.source === 'machine') return i18n.t('na conta {{label}}, pela máquina do concierge definida no projeto', { label: account.label });
+    return i18n.t('na conta {{label}}, definida pelo projeto', { label: account.label });
+  }
   return account.kind === 'chosen' ? i18n.t('na conta {{label}}', { label: account.label }) : i18n.t('na conta padrão do Claude dela');
 }
 
@@ -87,7 +92,17 @@ export interface ChatHostProps {
   onChoose: (machineId: string) => void;
   /** Changes only the account, on the machine that already hosts the conversation. `null` = its default login. */
   onChooseAccount: (aiAccountId: string | null) => void;
+  /** TER-1144, a project chat on the project's accounts: the project's Claude accounts, in its order; null = still being read. */
+  projectAccounts?: { id: string; label: string; machine_name: string }[] | null;
+  projectAccountsError?: boolean;
+  /** The project's Setup, where its accounts and concierge machine are set. */
+  setupHref?: string | null;
+  /** Picks one of the project's accounts for this conversation; `null` = the project decides. */
+  onChooseProjectAccount?: (aiAccountId: string | null) => void;
 }
+
+/** The option that gives a project chat's account back to the project (TER-1144). Never a real id. */
+const PROJECT_CHOICE = '';
 
 /**
  * The line above the thread that says where this conversation runs, and what to do when it cannot run
@@ -103,7 +118,7 @@ export interface ChatHostProps {
  * that performs the change names the machine it changes to, so the sentence about the model's memory is
  * always read before the change happens, never after.
  */
-export function ChatHost({ host, machines, accounts, accountsError, accountId, viewingAs, picking, changing, error, onPick, onCancelPick, onChoose, onChooseAccount }: ChatHostProps) {
+export function ChatHost({ host, machines, accounts, accountsError, accountId, viewingAs, picking, changing, error, onPick, onCancelPick, onChoose, onChooseAccount, projectAccounts = null, projectAccountsError = false, setupHref = null, onChooseProjectAccount }: ChatHostProps) {
   const { t } = useTranslation();
   // Which machine is the host right now, so the picker never offers to change to it.
   const current = host.kind === 'ready' || host.kind === 'offline' || host.kind === 'agent_too_old' ? host.machine : null;
@@ -116,7 +131,11 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
   // then offers nothing but the current pair and Cancelar is a dead end dressed as a choice.
   const otherMachines = (machines ?? []).filter((m) => m.id !== current?.id);
   const otherAccounts = accountOptions.filter((o) => o.key !== currentAccountKey);
-  const changeable = !viewingAs && (otherMachines.length > 0 || (current !== null && otherAccounts.length > 0));
+  const projectRun = host.kind === 'ready' && host.account.kind === 'chosen' && host.account.via === 'project';
+  const changeable = !viewingAs && (projectRun ? (projectAccounts?.length ?? 0) > 0 : otherMachines.length > 0 || (current !== null && otherAccounts.length > 0));
+  // TER-1144: the project's concierge machine, when it is set and is not the one running the chat
+  const chatMachine = host.kind === 'ready' && host.account.kind === 'chosen' ? host.account.chat_machine ?? null : null;
+  const chatMachineAside = chatMachine !== null && host.kind === 'ready' && chatMachine.id !== host.machine.id ? chatMachine : null;
 
   return (
     // `section`, named, so a screen reader can reach "where is this running" without walking the
@@ -193,6 +212,10 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
         <p className="mt-1 text-warn">{t('Esta conversa continua em {{name}}, que não é onde a sessão anterior rodou: o histórico fica, mas a memória do modelo começa de novo.', { name: host.machine.name })}</p>
       )}
 
+      {chatMachineAside && (
+        <p className="mt-1 text-fg-muted">{t('A máquina do concierge ({{name}}) está offline ou sem conta com limite livre: o chat usa a próxima conta do projeto.', { name: chatMachineAside.name })}</p>
+      )}
+
       {host.kind === 'ready' && host.account.kind === 'lost' && (
         // The silent degradation the payload knows about: the chosen account is not the one running —
         // and it sends the person to the picker below, the one place that can set this conversation's
@@ -214,6 +237,34 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
             <p className="text-fg">{t('Você está vendo os dados de outra pessoa. Esta conversa é sempre sua: saia de “ver como” para trocar a máquina ou a conta dela.')}</p>
           ) : (
             <>
+            {projectRun ? (
+              // TER-1144: the project's accounts, any machine; the account-wide host is not this chat's
+              <>
+                <p className="mt-2 text-fg-dim">{t('Conta deste chat, entre as contas do projeto')}</p>
+                {projectAccountsError ? (
+                  <p className="mt-1 text-fg-dim">{t('Não foi possível ler as contas do projeto.')}</p>
+                ) : projectAccounts === null ? (
+                  <p className="mt-1 text-fg-dim">{t('Carregando as contas do projeto…')}</p>
+                ) : (
+                  <ChoiceList
+                    options={[
+                      { key: PROJECT_CHOICE, name: t('Automática: máquina do concierge, depois a ordem do projeto') },
+                      ...projectAccounts.map((a) => ({ key: a.id, name: `${a.label} · ${a.machine_name}` })),
+                    ]}
+                    currentKey={accountId ?? PROJECT_CHOICE}
+                    changing={changing}
+                    onChoose={(key) => onChooseProjectAccount?.(key === PROJECT_CHOICE ? null : key)}
+                    change
+                  />
+                )}
+                {setupHref && (
+                  <Link to={setupHref} className="mt-2 inline-block text-accent hover:underline">
+                    {t('Contas e máquina do concierge no Setup do projeto')}
+                  </Link>
+                )}
+              </>
+            ) : (
+              <>
             {machines === null ? (
               <p className="mt-2 text-fg-dim">{t('Carregando suas máquinas…')}</p>
             ) : otherMachines.length === 0 ? (
@@ -223,14 +274,7 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
             ) : (
               <ChoiceList options={machines.map((m) => ({ key: m.id, name: m.name }))} currentKey={current?.id ?? null} changing={changing} onChoose={onChoose} change />
             )}
-            {/* The other half of the pair (spec §3), on the machine that is hosting right now: without it
-                `ai_account_id` could only ever be null and the chosen/lost states were unreachable. Only
-                where there is a machine to read them from — `no_machine` has no accounts to speak of. */}
-            {host.kind === 'ready' && host.account.kind === 'chosen' && host.account.via === 'project' ? (
-              // TER-589: the project's setup picks this chat's account (and moves on to the next when one
-              // hits its limit); a pick here would not be the one running, so none is offered.
-              <p className="mt-3 text-fg-dim">{t('A conta deste chat vem do setup do projeto (Contas de IA e modelo), na ordem definida lá.')}</p>
-            ) : current !== null && (
+            {current !== null && (
               <>
                 <p className="mt-3 text-fg-dim">{t('Conta do Claude em {{name}}', { name: current.name })}</p>
                 {accountsError ? (
@@ -251,6 +295,8 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
                     change
                   />
                 )}
+              </>
+            )}
               </>
             )}
             </>

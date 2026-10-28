@@ -93,7 +93,15 @@ const chatHostMachine = z.object({ id: z.string(), name: z.string() });
  * the project's configured account: optional, and `kind` keeps its three values, so an app that predates
  * it still parses (`z.object` strips the unknown key). */
 const chatHostAccount = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('chosen'), id: z.string(), label: z.string(), via: z.literal('project').optional() }),
+  z.object({
+    kind: z.literal('chosen'),
+    id: z.string(),
+    label: z.string(),
+    via: z.literal('project').optional(),
+    // TER-1144: why a project chat is on this account, and the project's concierge machine when set
+    source: z.enum(['conversation', 'machine', 'auto']).optional().catch(undefined),
+    chat_machine: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
+  }),
   z.object({ kind: z.literal('default') }),
   z.object({ kind: z.literal('lost') }),
 ]);

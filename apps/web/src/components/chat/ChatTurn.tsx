@@ -9,7 +9,7 @@ import { openLinksInNewTab } from '../../lib/links';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
 import { splitSettled } from '../../lib/markdown-split';
-import { limitSentence, swapSentence } from '../../lib/chat-notice';
+import { limitRepeatSentence, limitSentence, swapSentence } from '../../lib/chat-notice';
 import { isReplyable } from '../../lib/chat-reply';
 import type { ChatErrorCode, ChatMessage } from '../../lib/types';
 import { ChatMessageMenu, ChatMoreButton, keepsNativeMenu, type MenuPoint } from './ChatMessageMenu';
@@ -55,8 +55,8 @@ const FAILURE_LINE: Record<ChatErrorCode, string> = {
 };
 
 /** The sentence under a stopped answer: the limit's own, with its reset time, or the code's. */
-function failureLine(message: ChatMessage): string {
-  if (message.error_code === 'USAGE_LIMIT') return limitSentence(message.notice);
+function failureLine(message: ChatMessage, project: boolean, limitRepeat: boolean): string {
+  if (message.error_code === 'USAGE_LIMIT') return limitRepeat ? limitRepeatSentence(message.notice) : limitSentence(message.notice, undefined, undefined, project);
   return i18n.t((message.error_code && FAILURE_LINE[message.error_code]) || GENERIC_FAILURE);
 }
 
@@ -184,6 +184,8 @@ export interface ChatTurnProps {
   highlighted?: boolean;
   /** The conversation's project: a Markdown path opens as a file tab there; null = the account chat. */
   projectId?: string | null;
+  /** The answer before this one stopped on the same usage limit: the line is said in short (TER-1144). */
+  limitRepeat?: boolean;
 }
 
 /**
@@ -199,7 +201,7 @@ export interface ChatTurnProps {
  * every delta, and parsing plus sanitising one message costs about 1 ms — a 50-message thread was
  * paying ~51 ms per delta, on the same main thread the answer is being written on.
  */
-export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false, projectId = null }: ChatTurnProps) {
+export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, waiting, failed, onOpenReply, onReply, highlighted = false, projectId = null, limitRepeat = false }: ChatTurnProps) {
   const body = message.role === 'user' ? '' : message.text || streaming || (waiting ? i18n.t('pensando…') : '');
   /**
    * While the answer streams (nothing stored yet), the body is split at its last finished block: the
@@ -298,7 +300,20 @@ export const ChatTurn = memo(function ChatTurn({ message, streaming, tools, wait
           {more}
         </div>
       )}
-      {failed && <p className="mt-1 text-xs text-danger">{failureLine(message)}</p>}
+      {failed && (
+        <p className="mt-1 text-xs text-danger">
+          {failureLine(message, projectId !== null, limitRepeat)}
+          {/* TER-1144: where a project chat's accounts are set, said once with the full line */}
+          {message.error_code === 'USAGE_LIMIT' && projectId !== null && !limitRepeat && (
+            <>
+              {' '}
+              <a href={`/projects/${projectId}/settings`} className="text-accent underline" onClick={(e) => { e.preventDefault(); appNavigate(`/projects/${projectId}/settings`); }}>
+                {i18n.t('Contas do projeto')}
+              </a>
+            </>
+          )}
+        </p>
+      )}
       {menu}
     </li>
   );

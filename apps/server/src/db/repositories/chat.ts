@@ -316,11 +316,11 @@ export class ChatRepository {
   }
 
   /**
-   * The project account a project chat last answered on (TER-589): written on that project conversation's
-   * own row only, never the account-wide host, and without touching its session — the run that moved
-   * accounts already moved the session with it.
+   * The account the person picked for a project chat (TER-1144; null: the project's order decides):
+   * written on that project conversation's own row only, never the account-wide host, and without
+   * touching its session — a session the new account cannot resume is started fresh by the run.
    */
-  async setRunAccount(id: string, aiAccountId: string): Promise<void> {
+  async setRunAccount(id: string, aiAccountId: string | null): Promise<void> {
     await this.db.chatConversation.update({ where: { id }, data: { aiAccountId } });
   }
 

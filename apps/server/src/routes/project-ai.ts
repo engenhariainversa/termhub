@@ -18,6 +18,7 @@ export async function projectAiRoutes(app: FastifyInstance, repos: Repositories)
   app.put('/:id/setup/ai', async (request) => {
     const { id } = idParam.parse(request.params);
     const { ai } = projectAiBody.parse(request.body);
-    return saveProjectAi(repos, request, id, ai);
+    const sent = (request.body as { ai?: Record<string, unknown> }).ai;
+    return saveProjectAi(repos, request, id, ai, { keepChatMachine: !sent || !('chat_machine_id' in sent) });
   });
 }

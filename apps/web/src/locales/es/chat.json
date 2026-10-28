@@ -4,7 +4,6 @@
   "A conta": "La cuenta",
   "A conta \"{{label}}\" do Claude": "La cuenta de Claude \"{{label}}\"",
   "A conta de IA que você escolheu não serve mais para essa máquina. Use “Trocar máquina ou conta” para escolher outra.": "La cuenta de IA que elegiste ya no sirve para esta máquina. Usa “Cambiar máquina o cuenta” para elegir otra.",
-  "A conta deste chat vem do setup do projeto (Contas de IA e modelo), na ordem definida lá.": "La cuenta de este chat viene de la configuración del proyecto (Cuentas de IA y modelo), en el orden definido allí.",
   "A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.": "La cuenta de Claude de este chat alcanzó su límite de uso. Espera a que se restablezca el límite y envía el mensaje de nuevo.",
   "A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.": "La cuenta de Claude de este chat no tiene sesión iniciada en esta máquina. Inicia sesión allí (claude, luego /login) y envía el mensaje de nuevo.",
   "A conta padrão do Claude desta máquina": "La cuenta predeterminada de Claude de esta máquina",
@@ -677,5 +676,18 @@
   "Modelo do concierge: o padrão da CLI.": "Modelo del concierge: el predeterminado de la CLI.",
   "Modelo do concierge: {{model}}, pela sua configuração de modelos do concierge.": "Modelo del concierge: {{model}}, por tu configuración de modelos del concierge.",
   "Modelo do concierge: {{model}}.": "Modelo del concierge: {{model}}.",
-  "Última resposta em {{model}}.": "Última respuesta en {{model}}."
+  "Última resposta em {{model}}.": "Última respuesta en {{model}}.",
+  "na conta {{label}}, escolhida para esta conversa": "en la cuenta {{label}}, elegida para esta conversación",
+  "na conta {{label}}, pela máquina do concierge definida no projeto": "en la cuenta {{label}}, por la máquina del concierge definida en el proyecto",
+  "A máquina do concierge ({{name}}) está offline ou sem conta com limite livre: o chat usa a próxima conta do projeto.": "La máquina del concierge ({{name}}) está offline o sin cuenta con límite disponible: el chat usa la siguiente cuenta del proyecto.",
+  "Conta deste chat, entre as contas do projeto": "Cuenta de este chat, entre las cuentas del proyecto",
+  "Não foi possível ler as contas do projeto.": "No se pudieron leer las cuentas del proyecto.",
+  "Carregando as contas do projeto…": "Cargando las cuentas del proyecto…",
+  "Automática: máquina do concierge, depois a ordem do projeto": "Automática: la máquina del concierge, luego el orden del proyecto",
+  "Contas e máquina do concierge no Setup do projeto": "Cuentas y máquina del concierge en el Setup del proyecto",
+  "Contas do projeto": "Cuentas del proyecto",
+  "Nenhuma outra conta do projeto tem limite livre agora.": "Ninguna otra cuenta del proyecto tiene límite disponible ahora.",
+  "Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.": "Agrega otra cuenta de Claude en el Setup del proyecto (Cuentas de IA y modelo) para que el chat cambie solo.",
+  "Ainda no mesmo limite de uso (volta {{reset}}).": "Sigue en el mismo límite de uso (vuelve {{reset}}).",
+  "Ainda no mesmo limite de uso.": "Sigue en el mismo límite de uso."
 }

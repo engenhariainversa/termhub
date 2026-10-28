@@ -565,6 +565,8 @@ export type DecisionMode = 'ask' | 'auto';
 export interface ProjectAi {
   accounts: string[];
   models: { claude: string | null; chatgpt: string | null };
+  /** TER-1144: the machine the project chat runs on; null = automatic (first account with room, any machine). */
+  chat_machine_id?: string | null;
 }
 export interface ProjectAiOption {
   id: string;
@@ -1306,7 +1308,19 @@ export type ChatHostAiAccount = Pick<AiAccount, 'id' | 'label'>;
  * without saying so.
  */
 /** `via: 'project'` (TER-589): the project's setup chose this account for the project chat, not the person. */
-export type ChatHostAccount = { kind: 'chosen'; id: string; label: string; via?: 'project' } | { kind: 'default' } | { kind: 'lost' };
+export type ChatHostAccount =
+  | {
+      kind: 'chosen';
+      id: string;
+      label: string;
+      via?: 'project';
+      /** TER-1144, project chats: picked for this conversation, on the project's concierge machine, or the project's order. */
+      source?: 'conversation' | 'machine' | 'auto';
+      /** TER-1144: the project's concierge machine when one is set. */
+      chat_machine?: { id: string; name: string } | null;
+    }
+  | { kind: 'default' }
+  | { kind: 'lost' };
 
 /**
  * `GET /api/chat`'s `host`: which machine and account run this conversation — the "terminal geral" of

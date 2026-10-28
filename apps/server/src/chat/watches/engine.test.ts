@@ -339,12 +339,12 @@ describe('limits', () => {
   });
 
   it('a recurring watch fires at most once per cooldown, then tells the newest stop', async () => {
-    const w = await watchTab({ recurring: true });
+    const w = await watchTab({ recurring: true, params: { events: ['finished', 'waiting_input'] } });
     const e = engine();
     events.push({ tabId: 't1', id: 'ev1', kind: 'finished', created_at: at(1000) });
     advance(2000);
     await e.sweep();
-    events.push({ tabId: 't1', id: 'ev2', kind: 'finished', created_at: at(1000) }, { tabId: 't1', id: 'ev3', kind: 'finished', created_at: at(2000) });
+    events.push({ tabId: 't1', id: 'ev2', kind: 'waiting_input', created_at: at(1000) }, { tabId: 't1', id: 'ev3', kind: 'finished', created_at: at(2000) });
     advance(60_000);
     await e.sweep();
     expect(wakes).toHaveLength(1);
@@ -353,6 +353,38 @@ describe('limits', () => {
     expect(wakes).toHaveLength(2);
     expect(store.fires.map((f) => f.event_key)).toEqual(['tab:ev1', 'tab:ev3']);
     expect((await store.findById(w.id))?.status).toBe('open');
+  });
+
+  // TER-1144: an agent cycling working → finished every few minutes woke the chat at every cooldown (24×).
+  it('a recurring watch tells a tab that keeps finishing once, until it stops some other way', async () => {
+    const w = await watchTab({ recurring: true, params: { events: ['finished', 'waiting_input'] } });
+    const e = engine();
+    for (let i = 1; i <= 6; i++) {
+      events.push({ tabId: 't1', id: `ev${i}`, kind: 'finished', created_at: at(1000) });
+      advance(WATCH_LIMITS.recurringCooldownMs + 1000);
+      await e.sweep();
+    }
+    expect(wakes).toHaveLength(1);
+    events.push({ tabId: 't1', id: 'ask', kind: 'waiting_input', created_at: at(1000) });
+    advance(WATCH_LIMITS.recurringCooldownMs + 1000);
+    await e.sweep();
+    events.push({ tabId: 't1', id: 'fin', kind: 'finished', created_at: at(1000) });
+    advance(WATCH_LIMITS.recurringCooldownMs + 1000);
+    await e.sweep();
+    expect(store.fires.map((f) => f.event_key)).toEqual(['tab:ev1', 'tab:ask', 'tab:fin']);
+    expect((await store.findById(w.id))?.fire_count).toBe(3);
+  });
+
+  it('a recurring watch closes after its last allowed fire', async () => {
+    const w = await watchTab({ recurring: true, params: { events: ['finished', 'waiting_input'] } });
+    const e = engine({ wakesPerHour: 1000 });
+    for (let i = 0; i < WATCH_LIMITS.maxFires + 2; i++) {
+      events.push({ tabId: 't1', id: `ev${i}`, kind: i % 2 ? 'waiting_input' : 'finished', created_at: at(1000) });
+      advance(WATCH_LIMITS.recurringCooldownMs + 1000);
+      await e.sweep();
+    }
+    expect(store.fires).toHaveLength(WATCH_LIMITS.maxFires);
+    expect((await store.findById(w.id))?.status).toBe('done');
   });
 
   it('an expired watch wakes the chat once with `expired` and closes', async () => {

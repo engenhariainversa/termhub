@@ -1,4 +1,4 @@
-import { limitSentence, resetClause, swapSentence } from './notice';
+import { limitRepeatSentence, limitSentence, resetClause, sameLimit, swapSentence } from './notice';
 
 // 2026-09-30 05:56 in São Paulo; the limit resets at 06:20 UTC, 03:20 there.
 const NOW = new Date('2026-09-30T08:56:00.000Z');
@@ -33,5 +33,15 @@ describe('swapSentence', () => {
   it('says which account hit the limit and which one took over', () => {
     expect(swapSentence({ kind: 'account_swap', from: null, to: 'Trabalho', resets_at: RESETS }, NOW, TZ)).toBe('A conta padrão do Claude desta máquina atingiu o limite de uso (volta às 03:20); a conta "Trabalho" assumiu esta resposta.');
     expect(swapSentence({ kind: 'account_swap', from: 'Pessoal', to: 'Trabalho', resets_at: null }, NOW, TZ)).toBe('A conta "Pessoal" do Claude atingiu o limite de uso; a conta "Trabalho" assumiu esta resposta.');
+  });
+});
+
+describe('a project chat at its limit (TER-1144)', () => {
+  const notice = { kind: 'usage_limit', account: 'Claude · jarvis', resets_at: null, fallback: 'none_free' } as const;
+
+  it('speaks of the project and says the same limit only once in full', () => {
+    expect(limitSentence(notice, undefined, undefined, true)).toBe('A conta "Claude · jarvis" do Claude atingiu o limite de uso. Nenhuma outra conta do projeto tem limite livre agora.');
+    expect(sameLimit(notice, { ...notice })).toBe(true);
+    expect(limitRepeatSentence(notice)).toBe('Ainda no mesmo limite de uso.');
   });
 });

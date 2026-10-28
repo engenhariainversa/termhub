@@ -93,6 +93,9 @@ export const WATCH_LIMITS = {
   maxHours: 24 * 7,
   /** A recurring watch fires at most once in this window; what happens meanwhile is told at its end. */
   recurringCooldownMs: 10 * 60_000,
+  /** TER-1144: a recurring watch (not a reminder, which has `REMINDER_LIMITS.maxTimes`) closes after this many
+   *  fires; the last wake says so, and the concierge registers a new one if the person still wants it. */
+  maxFires: 10,
   noteMax: 500,
   /** TER-1115: the person's line (`label` in `watch` and `schedule_wakeup`). */
   labelMax: 120,

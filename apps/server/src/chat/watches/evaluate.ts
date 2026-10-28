@@ -61,7 +61,7 @@ export interface Evaluation {
   close: WatchStatus | null;
 }
 
-type Watch = Pick<ChatWatch, 'id' | 'user_id' | 'kind' | 'target_id' | 'params' | 'baseline' | 'recurring' | 'created_at' | 'fire_count'>;
+type Watch = Pick<ChatWatch, 'id' | 'user_id' | 'kind' | 'target_id' | 'params' | 'baseline' | 'recurring' | 'created_at' | 'fire_count'> & Partial<Pick<ChatWatch, 'last_event'>>;
 
 const wants = (w: Watch, event: string) => w.params.events.includes(event);
 const done = (w: Watch): WatchStatus | null => (w.recurring ? null : 'done');
@@ -129,6 +129,22 @@ export async function initialBaseline(probe: WatchProbe, w: Pick<ChatWatch, 'use
 
 /** `now` only matters to reminders, which follow the clock. */
 export async function evaluateWatch(probe: WatchProbe, w: Watch, now = new Date()): Promise<Evaluation | null> {
+  return capped(w, await evaluateKind(probe, w, now));
+}
+
+/**
+ * TER-1144: a recurring watch fires at most `WATCH_LIMITS.maxFires` times. The fire that reaches it closes the
+ * watch, and its payload says it was the last (`last`, `max_fires`) so the wake tells the concierge it ended.
+ * Reminders are paced by their own `times`/`until`.
+ */
+function capped(w: Watch, ev: Evaluation | null): Evaluation | null {
+  if (!ev || ev.events.length === 0 || ev.close || !w.recurring || w.kind === 'reminder') return ev;
+  if (w.fire_count + ev.events.length < WATCH_LIMITS.maxFires) return ev;
+  const events = ev.events.map((e, i) => (i === ev.events.length - 1 ? { ...e, payload: { ...e.payload, last: true, max_fires: WATCH_LIMITS.maxFires } } : e));
+  return { ...ev, events, close: 'done' };
+}
+
+async function evaluateKind(probe: WatchProbe, w: Watch, now: Date): Promise<Evaluation | null> {
   switch (w.kind) {
     case 'tab':
       return evaluateTab(probe, w);
@@ -159,9 +175,17 @@ async function evaluateTab(probe: WatchProbe, w: Watch): Promise<Evaluation | nu
   // Once: the first stop after the watch began is the one asked about. Recurring: the newest, since a
   // cooldown may have let several pass.
   const ev = w.recurring ? events[events.length - 1] : events[0];
+  // TER-1144: a recurring watch tells each stop state once. An agent that keeps working and finishing again
+  // (a polling loop, background work it waits on) writes a new `finished` every few minutes; only a stop of
+  // another watched kind in between (a question, an error) re-arms it. The `working` between them never
+  // does — it is how every one of those loops looks. Rows from before this read their last event instead.
+  const notified = typeof w.baseline.notified === 'string' ? w.baseline.notified : w.fire_count > 0 ? (w.last_event ?? null) : null;
+  if (w.recurring && notified && events.every((e) => e.kind === notified)) {
+    return { events: [], baseline: { cursor: ev.created_at, notified }, close: null };
+  }
   return {
     events: [{ key: `tab:${ev.id}`, event: ev.kind, payload: { tab_id: tab.id, tab_name: tab.name, project_id: tab.project_id, machine_id: tab.machine_id, state: ev.kind, at: ev.created_at, state_now: tab.state } }],
-    baseline: { cursor: ev.created_at },
+    baseline: w.recurring ? { cursor: ev.created_at, notified: ev.kind } : { cursor: ev.created_at },
     close: done(w),
   };
 }

@@ -6,6 +6,7 @@ import type { TChatAttachment, TTabQuestionAnswerBody } from '@/services/api/con
 import { AppText, Banner, Button, EmptyState, Icon, type IconName, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { inboxKey } from '../model/chat-inbox';
 import { activeGrantIndex } from '../model/grant-time';
+import { sameLimit } from '../model/notice';
 import { isReplyable, replyRefOf, replyRefOfCard, type ReplyableCard, type ReplyRef } from '../model/reply';
 import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
@@ -108,7 +109,18 @@ const MessageRow = memo(function MessageRow({
   // Markdown paths in an answer open as previews, looked for on the conversation's project machines.
   const activeProject = useChatStore((s) => s.activeProject);
   const fileContext = useMemo(() => ({ projectId: activeProject ?? null }), [activeProject]);
-  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} />;
+  // TER-1144: an answer stopped on the same limit as the answer before it says so in short
+  const limitRepeat = useChatStore((s) => {
+    if (message.error_code !== 'USAGE_LIMIT' || s.activeProject === undefined) return false;
+    const list = s.conversations[s.activeProject ?? '']?.messages ?? [];
+    const i = list.findIndex((m) => m.id === message.id);
+    for (let j = i - 1; j >= 0; j--) {
+      const m = list[j]!;
+      if (m.role === 'assistant') return m.error_code === 'USAGE_LIMIT' && sameLimit(m.notice, message.notice);
+    }
+    return false;
+  });
+  const bubble = <MessageBubble message={message} streamed={streamed} started={started} onRetry={onRetry} onOpenReply={onOpenReply} highlighted={highlighted} fileContext={fileContext} limitRepeat={limitRepeat} />;
   // Only a row the server has, with something in it, can be answered (TER-447). The wrapper stays either
   // way: a sent row becoming the server's, or an answer getting its text, is not remounted (TER-1001).
   // A touch held on it opens its menu (TER-1090).

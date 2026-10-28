@@ -5,6 +5,7 @@ import { TMUX_KEYS, tmuxKey } from '@termhub/agent-protocol';
 import type { Action, Resource } from '../auth/permissions.js';
 import type { ApiTokenScope } from '../auth/api-tokens.js';
 import type { ControlContext } from '../control/context.js';
+import { setChatAccount } from '../control/chat-account.js';
 import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
@@ -157,6 +158,14 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
     run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
+  },
+  {
+    name: 'set_chat_account',
+    description:
+      "Move a project's chat (the concierge of that project) to another of the project's Claude accounts, when the person asks (\"troca pra conta X\", \"usa a conta do jarvis\"): account_id is one of the accounts in the project's Setup (AI accounts and model); null gives the choice back to the project (its concierge machine, else the first account of the list with room). The answer lists the project's accounts (id, label, machine, limited) — when the person names an account that is not there, tell them to add it in the project's Setup. Takes effect from the next message; the history stays, the model's memory starts over on the new account. The person's own project chats only.",
+    scope: 'terminals', resource: 'chat', action: 'update',
+    input: { project_id: id, account_id: id.nullable() },
+    run: (ctx, a) => setChatAccount(ctx, a as { project_id: string; account_id: string | null }),
   },
   {
     name: 'start_ai_login',
@@ -664,7 +673,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'watch',
     description:
-      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, merge_blocked (termhub will not merge the green head by itself: it depends on a person\'s card, has no CI, or waits for an approval), deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed, merge_blocked; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). label: the one line the person sees in the chat for this watch, written for them in their language, plain and short (≤120, e.g. "Te aviso quando a aba OPM-568 (Abacate) parar") — no tool names nor instructions. note: what to do when it happens, in your own words (≤500); only you read it, the person never sees it. hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
+      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, merge_blocked (termhub will not merge the green head by itself: it depends on a person\'s card, has no CI, or waits for an approval), deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed, merge_blocked; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). label: the one line the person sees in the chat for this watch, written for them in their language, plain and short (≤120, e.g. "Te aviso quando a aba OPM-568 (Abacate) parar") — no tool names nor instructions. note: what to do when it happens, in your own words (≤500); only you read it, the person never sees it. hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min and 10 times; a tab is told each stop once — another \'finished\' right after a \'finished\' is skipped until it stops some other way), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',

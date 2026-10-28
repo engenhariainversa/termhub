@@ -289,10 +289,22 @@ it('cannot be clicked twice while the change is in flight', async () => {
   for (const name of ['macbook', 'jarvis']) expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true);
 });
 
-it('says the project chose the account, and offers no account to pick (TER-589)', () => {
+it("a project chat picks among the project's accounts, not the machine's (TER-1144)", () => {
   const host: ChatHostState = { kind: 'ready', machine: machine('m1', 'jarvis'), configDir: null, account: { kind: 'chosen', id: 'a2', label: 'trabalho', via: 'project' }, sessionAtStake: false };
-  show(host, { picking: true, accounts: [{ id: 'a1', label: 'pessoal', machine_id: 'm1' } as never] });
+  const onChooseProjectAccount = vi.fn();
+  show(host, { picking: true, accounts: [{ id: 'a1', label: 'pessoal', machine_id: 'm1' } as never], projectAccounts: [{ id: 'a2', label: 'trabalho', machine_name: 'jarvis' }, { id: 'h1', label: 'Claude', machine_name: 'hulk' }], setupHref: '/projects/p1/settings', onChooseProjectAccount });
   expect(screen.getByText('Esta conversa roda na máquina jarvis, na conta trabalho, definida pelo projeto.')).toBeTruthy();
-  expect(screen.getByText('A conta deste chat vem do setup do projeto (Contas de IA e modelo), na ordem definida lá.')).toBeTruthy();
   expect(screen.queryByText('Conta do Claude em jarvis')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Trocar para Claude · hulk' }));
+  expect(onChooseProjectAccount).toHaveBeenCalledWith('h1');
+  expect(screen.getByRole('link', { name: 'Contas e máquina do concierge no Setup do projeto' }).getAttribute('href')).toBe('/projects/p1/settings');
+});
+
+it('says why a project chat is on its account, and when the concierge machine is not the one running (TER-1144)', () => {
+  const host: ChatHostState = { kind: 'ready', machine: machine('m1', 'jarvis'), configDir: null, account: { kind: 'chosen', id: 'a2', label: 'trabalho', via: 'project', source: 'auto', chat_machine: { id: 'm2', name: 'hulk' } }, sessionAtStake: false };
+  show(host);
+  expect(screen.getByText('A máquina do concierge (hulk) está offline ou sem conta com limite livre: o chat usa a próxima conta do projeto.')).toBeTruthy();
+  cleanup();
+  show({ ...host, account: { kind: 'chosen', id: 'a2', label: 'trabalho', via: 'project', source: 'conversation' } });
+  expect(screen.getByText('Esta conversa roda na máquina jarvis, na conta trabalho, escolhida para esta conversa.')).toBeTruthy();
 });

@@ -4021,7 +4021,7 @@ describe('usage limit (TER-588)', () => {
     expect(runner.run).toHaveBeenCalledTimes(1);
   });
 
-  it("project chat (TER-589): starts on the project's first account with its model, and keeps the one that took over", async () => {
+  it("project chat (TER-589): starts on the project's first account with its model, and moves on at the limit", async () => {
     const personal = { id: 'acc_p', provider: 'claude', machine_id: 'm1', config_dir: '~/.claude-p', label: 'Pessoal' };
     const built = build([], { host: { machines: [jarvis()] }, accounts: [work, personal], projectAi: { accounts: ['acc_p', 'acc_w'], models: { claude: 'opus' } } });
     vi.mocked(built.runner.run).mockImplementationOnce(() => ({ write: () => true, [Symbol.asyncIterator]: async function* () { yield* limitFrames; } }));
@@ -4030,8 +4030,8 @@ describe('usage limit (TER-588)', () => {
     expect(final).toMatchObject({ text: 'oi!', error_code: null });
     expect(built.inputs()[0]).toMatchObject({ config_dir: '~/.claude-p', model: 'opus' });
     expect(built.inputs()[1]).toMatchObject({ config_dir: '~/.claude-work', model: 'opus' });
-    // the project conversation keeps the account that answered; the account-wide host is untouched
-    expect(built.chat.setRunAccount).toHaveBeenCalledWith('c_p1', 'acc_w');
+    // TER-1144: the row's account is the person's own pick, never the one that took over; the host is untouched
+    expect(built.chat.setRunAccount).not.toHaveBeenCalled();
     expect(built.chat.setHost).not.toHaveBeenCalled();
   });
 
@@ -4079,6 +4079,16 @@ describe('usage limit (TER-588)', () => {
     expect(final).toMatchObject({ error_code: 'USAGE_LIMIT' });
     expect(built.hosted).toEqual(['m1']);
     expect(built.chat.updateMessage).toHaveBeenLastCalledWith(final.id, expect.objectContaining({ notice: expect.objectContaining({ kind: 'usage_limit', account: 'Claude · jarvis' }) }));
+  });
+
+  it('project chat (TER-1144): the person picks one of the project accounts for the conversation; another account is refused', async () => {
+    const built = build([], { host: { machines: [jarvis(), hulk()] }, accounts: [onJarvis, onHulk], projectAi: { accounts: ['acc_j', 'acc_h'] } });
+    linkedBoth(built);
+    await built.service.setProjectAccount(user, 'p1', 'acc_h');
+    expect(built.chat.setRunAccount).toHaveBeenCalledWith('c_p1', 'acc_h');
+    await expect(built.service.setProjectAccount(user, 'p1', 'acc_w')).rejects.toMatchObject({ code: 'CHAT_ACCOUNT_NOT_IN_PROJECT' });
+    await built.service.setProjectAccount(user, 'p1', null);
+    expect(built.chat.setRunAccount).toHaveBeenLastCalledWith('c_p1', null);
   });
 
   it('account-wide chat (TER-589): never keeps the account that took over', async () => {
