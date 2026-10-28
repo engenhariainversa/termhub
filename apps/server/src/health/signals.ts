@@ -47,6 +47,9 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login. */
 export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required'] as const;
 
+/** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
+export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
+
 /** Run waits that are not an escalation: they resume on their own (quota back, GitHub back). */
 export const SELF_RESUMING_WAITS = ['quota', 'github_transient'];
 
@@ -179,8 +182,9 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
     });
   }
 
-  // 3. cards waiting in A fazer and nothing running, nothing started for a while
-  const waiting = s.queued.filter((q) => q.reason !== 'automation_off' && q.reason !== 'paused');
+  // 3. cards waiting in A fazer and nothing running, nothing started for a while. A type the Setup leaves out
+  // never starts, however long it waits: it is not a stalled queue (TER-1143).
+  const waiting = s.queued.filter((q) => !STRUCTURAL_REASONS.includes(q.reason ?? ''));
   if (waiting.length > 0 && s.active_runs === 0) {
     add('queue_stalled', 'queue', s.last_run_at, {
       label: String(waiting.length),

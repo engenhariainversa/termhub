@@ -30,9 +30,11 @@ describe('eligibilityOf', () => {
   it('a tagged card that passes every check is eligible', () => {
     expect(eligibilityOf(input())).toEqual({ eligible: true });
   });
-  it('untagged cards and subtasks are not in the queue', () => {
+  it('untagged cards, subtasks and epics are not in the queue', () => {
     expect(eligibilityOf(input({ auto: false }))).toBeNull();
     expect(eligibilityOf(input({ type: 'subtask', parent_id: 'k1' }))).toBeNull();
+    // TER-1143: an epic's tag marks its cards; the epic itself never runs
+    expect(eligibilityOf(input({ type: 'epic' }))).toBeNull();
   });
   it('reads each reason of spec 5 in order, the first failing check winning', () => {
     const all = input({ type: 'spike', column_category: 'doing', description: null, tab_alive: true }, { paused: true, repo_ready: false, capable_machines: 0 }, { enabled: false });

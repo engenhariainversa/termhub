@@ -104,10 +104,11 @@ export type Eligibility = { eligible: true } | { eligible: false; reason: Inelig
 
 /**
  * Whether a card gets automatic work, and otherwise the first check it fails (spec §5 order).
- * `null` = the card is not in the queue at all: a subtask, or a card that is not tagged.
+ * `null` = the card is not in the queue at all: a subtask, a card that is not tagged, or an epic — its tag
+ * marks its cards (and its integration), the epic itself never runs (TER-1143).
  */
 export function eligibilityOf({ card, project }: EligibilityInput): Eligibility | null {
-  if (card.parent_id !== null || !card.auto) return null;
+  if (card.parent_id !== null || !card.auto || card.type === 'epic') return null;
   const no = (reason: IneligibleReason): Eligibility => ({ eligible: false, reason });
   if (!project.automation.enabled) return no('automation_off');
   if (project.paused) return no('paused');
