@@ -10,6 +10,7 @@ import { TAB_TOKEN_TOOLS } from './tab-token.js';
 import { listProjectGroups } from '../control/groups.js';
 import { find, listAiAccounts, listMachines, listProjects, listTabs } from '../control/inventory.js';
 import { setAccountExclusive } from '../control/account-exclusive.js';
+import { getProjectAiSetup, setProjectAiSetup, unstickProjectChat, type SetProjectAiInput } from '../control/project-ai.js';
 import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
@@ -158,6 +159,39 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'ai_accounts', action: 'update',
     input: { account_id: id, project_id: id.nullable(), confirm: z.boolean().optional() },
     run: (ctx, a) => setAccountExclusive(ctx, a as { account_id: string; project_id: string | null; confirm?: boolean }, ctx.token?.gated ? 'chat' : 'mcp'),
+  },
+  {
+    name: 'get_project_ai_setup',
+    description:
+      "Read a project's Setup \"AI accounts and model\": accounts (Claude and Codex) in the project's order — position, id, label, provider, machine (id, name, online), default (the machine's own login), exclusive_project, usable (false: listed but skipped everywhere — exclusive to another project, or its machine unlinked), limited_until (Claude: the project chat leaves the account aside until then, after it met its usage limit) and usage (plan and every window with utilization 0..100 and resets_at; model names a window that caps one family only, e.g. fable) —, available (accounts of the project's linked machines it could add), models (the default model per CLI; null = the CLI's own) chat_machine (the project's concierge machine, or null = automatic) and concierge: the account, machine and model the project's chat answers on now, reason and text (why). Among the listed Claude accounts whose machine is online and that have not met their limit, the project's chat runs on the one the person picked for the conversation (set_chat_account), else the first on the concierge machine, else the first of the list.",
+    scope: 'read', resource: 'projects', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => getProjectAiSetup(ctx, a as { project_id: string }),
+  },
+  {
+    name: 'set_project_ai_setup',
+    description:
+      "Change a project's Setup \"AI accounts and model\" (the project's chat, start_agent and automatic work follow it). accounts: the whole order of ai_accounts ids (replaces it); remove: ids to drop; add: ids appended at the end; chat_machine_id: the project's concierge machine (a linked machine: the project's chat runs there on its listed accounts, in order, and falls back to the automatic order when it is offline or out of room; null = automatic); models: { claude, chatgpt } default model per CLI (an alias like opus or sonnet for Claude; null = the CLI's own); a key left out keeps its value. The account changes apply in that order. To move one conversation only, use set_chat_account instead. Accounts must be Claude or Codex logins on a machine linked to the project; an account exclusive to another project is refused. Without confirm: true nothing is saved: the answer has before and after (confirm_required: true) — show them to the person, then repeat the same call with confirm: true, which asks the person on a card. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'projects', action: 'update',
+    strict: true,
+    input: {
+      project_id: id,
+      accounts: z.array(id).max(20).optional(),
+      add: z.array(id).max(20).optional(),
+      remove: z.array(id).max(20).optional(),
+      chat_machine_id: id.nullable().optional(),
+      models: z.object({ claude: z.string().trim().regex(MODEL_RE).nullable().optional(), chatgpt: z.string().trim().regex(MODEL_RE).nullable().optional() }).strict().optional(),
+      confirm: z.boolean().optional(),
+    },
+    run: (ctx, a) => setProjectAiSetup(ctx, a as unknown as SetProjectAiInput),
+  },
+  {
+    name: 'unstick_project_chat',
+    description:
+      "Get a project's chat that stopped on a usage limit going again without waiting for the reset: it forgets which of the project's Claude accounts met their limit, reads each one's usage again on the machines that are online, and leaves aside only those still full: the chat's next message starts on an account with room by the project's rules (the person's pick for the conversation, else the concierge machine, else the first of the list; also on another machine). It changes neither the Setup nor the conversation's pick. It only picks accounts the project lists, never one exclusive to another project. unstuck: false says why (every account still full, with the first reset, or no machine online): offer set_project_ai_setup to add or reorder accounts, or set_chat_account. Then tell the person they can send the message again. Agent tabs cannot call it.",
+    scope: 'terminals', resource: 'projects', action: 'update',
+    input: { project_id: id },
+    run: (ctx, a) => unstickProjectChat(ctx, a as { project_id: string }),
   },
   {
     name: 'set_chat_account',

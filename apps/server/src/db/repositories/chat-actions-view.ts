@@ -133,6 +133,24 @@ function automationPolicyPhrase(args: Record<string, unknown>): string {
   return args.enabled === undefined ? `mudar o Setup do trabalho automático (${what})` : what;
 }
 
+const countOf = (v: unknown): number => (Array.isArray(v) ? v.length : 0);
+
+/** What a `set_project_ai_setup` card changes (TER-1147); the concierge showed the before and after in the chat. */
+function projectAiPhrase(args: Record<string, unknown>): string {
+  const parts: string[] = [];
+  const accounts = (n: number) => (n === 1 ? '1 conta' : `${n} contas`);
+  if (Array.isArray(args.accounts)) parts.push(`nova ordem com ${accounts(countOf(args.accounts))}`);
+  if (countOf(args.remove)) parts.push(`tirar ${accounts(countOf(args.remove))}`);
+  if (countOf(args.add)) parts.push(`adicionar ${accounts(countOf(args.add))}`);
+  if (typeof args.chat_machine_id === 'string') parts.push('trocar a máquina do concierge (o chat do projeto passa a rodar nela)');
+  if (args.chat_machine_id === null) parts.push('máquina do concierge automática');
+  const models = (args.models ?? {}) as Record<string, unknown>;
+  const model = (v: unknown) => (typeof v === 'string' ? `\`${v}\`` : 'o padrão do CLI');
+  if (models.claude !== undefined) parts.push(`modelo do Claude: ${model(models.claude)}`);
+  if (models.chatgpt !== undefined) parts.push(`modelo do Codex: ${model(models.chatgpt)}`);
+  return `mudar as contas de IA e o modelo do projeto${parts.length ? ` (${parts.join('; ')})` : ''}`;
+}
+
 function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
@@ -183,6 +201,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return `retomar o trabalho automático${args.project_id ? ' do projeto' : ' de todos os projetos'}`;
     case 'set_automation_policy':
       return automationPolicyPhrase(args);
+    case 'set_project_ai_setup':
+      return projectAiPhrase(args);
     case 'set_machine_automation':
       return args.accept === true ? 'fazer a máquina aceitar trabalho automático' : 'fazer a máquina recusar trabalho automático';
     case 'install_machine_hooks': {

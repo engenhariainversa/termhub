@@ -1,6 +1,6 @@
-import type { FastifyRequest } from 'fastify';
+import type { FastifyBaseLogger, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { scoped } from '../auth/scope.js';
+import { scoped, type Scoped } from '../auth/scope.js';
 import { isAgentProvider, type AgentProvider } from '../ai/project-accounts.js';
 import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -29,9 +29,18 @@ export interface ProjectAiView {
 
 export const projectAiBody = z.object({ ai: aiSchema });
 
-async function options(repos: Repositories, request: FastifyRequest, projectId: string): Promise<ProjectAiOption[]> {
-  const { machines } = await scoped(repos, request).projectMachines(projectId);
-  const accounts = await repos.aiAccounts.list(request.scope.ownerId);
+/** Whose project it is and how to reach it: a route's request, or an MCP tool's control context (TER-1147). */
+export interface ProjectAiScope {
+  scoped: Scoped;
+  ownerId: string | null;
+  log?: Pick<FastifyBaseLogger, 'info' | 'warn'>;
+}
+
+export const requestAiScope = (repos: Repositories, request: FastifyRequest): ProjectAiScope => ({ scoped: scoped(repos, request), ownerId: request.scope.ownerId, log: request.log });
+
+async function options(repos: Repositories, scope: ProjectAiScope, projectId: string): Promise<ProjectAiOption[]> {
+  const { machines } = await scope.scoped.projectMachines(projectId);
+  const accounts = await repos.aiAccounts.list(scope.ownerId);
   return machines.flatMap(({ machine }) =>
     accounts
       .filter((a) => a.machine_id === machine.id)
@@ -40,8 +49,8 @@ async function options(repos: Repositories, request: FastifyRequest, projectId: 
 }
 
 /** The project's `ai` block and what it may list. 404 outside the scope. */
-export async function describeProjectAi(repos: Repositories, request: FastifyRequest, projectId: string): Promise<ProjectAiView> {
-  const available = await options(repos, request, projectId);
+export async function describeProjectAi(repos: Repositories, scope: ProjectAiScope, projectId: string): Promise<ProjectAiView> {
+  const available = await options(repos, scope, projectId);
   const setup = await repos.projectSetup.get(projectId);
   return { ai: setup.data.ai, available };
 }
@@ -52,9 +61,9 @@ export async function describeProjectAi(repos: Repositories, request: FastifyReq
  * exclusive to another project (TER-990) is refused when it is being added, and dropped when the block
  * already listed it from before it became exclusive (every path skips it anyway), so the rest saves.
  */
-export async function saveProjectAi(repos: Repositories, request: FastifyRequest, projectId: string, ai: ProjectAi, opts: { keepChatMachine?: boolean } = {}): Promise<ProjectAiView> {
-  const s = scoped(repos, request);
-  const available = await options(repos, request, projectId);
+export async function saveProjectAi(repos: Repositories, scope: ProjectAiScope, projectId: string, ai: ProjectAi, opts: { keepChatMachine?: boolean } = {}): Promise<ProjectAiView> {
+  const s = scope.scoped;
+  const available = await options(repos, scope, projectId);
   const allowed = new Set(available.map((o) => o.id));
   const current = await repos.projectSetup.get(projectId);
   // TER-1144: a screen that predates the concierge machine sends no `chat_machine_id`; it keeps the saved one
@@ -72,7 +81,7 @@ export async function saveProjectAi(repos: Repositories, request: FastifyRequest
         dropped.add(id);
         continue;
       }
-      await auditBlocked(repos, request.log, option, { project_id: projectId, path: 'project_setup' });
+      await auditBlocked(repos, scope.log, option, { project_id: projectId, path: 'project_setup' });
       throw badRequest(exclusiveError(option).localized);
     }
     if (allowed.has(id)) continue;

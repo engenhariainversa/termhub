@@ -226,6 +226,16 @@ export function isLimited(accountId: string, now = Date.now()): boolean {
   return false;
 }
 
+/** Until when the account is left aside (ISO), or null when it is not (TER-1147: `get_project_ai_setup`). */
+export function limitedUntilOf(accountId: string, now = Date.now()): string | null {
+  return isLimited(accountId, now) ? new Date(limitedUntil.get(accountId)!).toISOString() : null;
+}
+
+/** Forgets the limit marks of these accounts (TER-1147: `unstick_project_chat` reads them again). */
+export function forgetLimited(accountIds: Iterable<string>): void {
+  for (const id of accountIds) limitedUntil.delete(id);
+}
+
 /** Tests only. */
 export function clearLimited(): void {
   limitedUntil.clear();
@@ -261,6 +271,32 @@ export async function projectChatAccounts(
 }
 
 /**
+ * Why `projectPick` chose its account (TER-1147, for `get_project_ai_setup`), among the ready accounts not
+ * at their limit: the one the person picked for this conversation (`conversation`), the first on the
+ * project's concierge machine (`machine`), the first of the list (`first_with_room`); when all of them met
+ * their limit, the person's pick (`all_limited_picked`), else the first ready (`all_limited_first`);
+ * `none_ready` when no listed account's machine can run the chat now.
+ */
+export type ProjectPickReason = 'conversation' | 'machine' | 'first_with_room' | 'all_limited_picked' | 'all_limited_first' | 'none_ready';
+
+/** `projectChoice`'s pick, without waiting on agents: the person's pick, the concierge machine, the order, the limit marks. */
+export function projectPick<T extends { account: AiAccount; machine: Machine }>(
+  accounts: T[],
+  ready: (machine: Machine) => boolean,
+  pickedId: string | null,
+  chatMachineId: string | null,
+): { pick: T | undefined; reason: ProjectPickReason } {
+  const usable = accounts.filter((a) => ready(a.machine));
+  const free = usable.filter((a) => !isLimited(a.account.id));
+  let pick: T | undefined;
+  if ((pick = free.find((a) => a.account.id === pickedId))) return { pick, reason: 'conversation' };
+  if ((pick = free.find((a) => a.machine.id === chatMachineId))) return { pick, reason: 'machine' };
+  if ((pick = free[0])) return { pick, reason: 'first_with_room' };
+  if ((pick = usable.find((a) => a.account.id === pickedId))) return { pick, reason: 'all_limited_picked' };
+  return usable[0] ? { pick: usable[0], reason: 'all_limited_first' } : { pick: undefined, reason: 'none_ready' };
+}
+
+/**
  * The account a project chat runs on (TER-1144), among the project's accounts whose machine is ready and
  * that have not just met their usage limit: the one the person picked for this conversation
  * (`accountId`), else the first on the project's concierge machine, else the first of the list. When
@@ -282,18 +318,8 @@ async function projectChoice(
     const distinct = [...new Map(accounts.map((a) => [a.machine.id, a.machine])).values()];
     await Promise.all(distinct.map((m) => (wait === 'handover' ? ctx.agents.awaitHandover(m) : ctx.agents.awaitAgent(m))));
   }
-  const ready = accounts.filter((a) => machineReady(ctx.agents, a.machine.id, requires));
-  const free = ready.filter((a) => !isLimited(a.account.id));
-  const picked = (list: typeof ready) => list.find((a) => a.account.id === project.accountId);
-  const onMachine = (list: typeof ready) => list.find((a) => a.machine.id === chatMachineId);
-  let pick: (typeof ready)[number] | undefined;
-  let source: 'conversation' | 'machine' | 'auto' = 'auto';
-  if ((pick = picked(free))) source = 'conversation';
-  else if ((pick = onMachine(free))) source = 'machine';
-  else if (!(pick = free[0])) {
-    pick = picked(ready) ?? ready[0];
-    if (pick && pick.account.id === project.accountId) source = 'conversation';
-  }
+  const { pick, reason } = projectPick(accounts, (m) => machineReady(ctx.agents, m.id, requires), project.accountId, chatMachineId);
+  const source: 'conversation' | 'machine' | 'auto' = reason === 'conversation' || reason === 'all_limited_picked' ? 'conversation' : reason === 'machine' ? 'machine' : 'auto';
   if (!pick) return null;
   const chatMachine = chatMachineId ? machines.find((m) => m.id === chatMachineId) : undefined;
   return {

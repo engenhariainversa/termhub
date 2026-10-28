@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Repositories } from '../db/repositories/index.js';
-import { describeProjectAi, projectAiBody, saveProjectAi } from '../setup/project-ai.js';
+import { describeProjectAi, projectAiBody, requestAiScope, saveProjectAi } from '../setup/project-ai.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -12,13 +12,13 @@ const idParam = z.object({ id: z.string().min(1).max(64) });
 export async function projectAiRoutes(app: FastifyInstance, repos: Repositories) {
   app.get('/:id/setup/ai', async (request) => {
     const { id } = idParam.parse(request.params);
-    return describeProjectAi(repos, request, id);
+    return describeProjectAi(repos, requestAiScope(repos, request), id);
   });
 
   app.put('/:id/setup/ai', async (request) => {
     const { id } = idParam.parse(request.params);
     const { ai } = projectAiBody.parse(request.body);
     const sent = (request.body as { ai?: Record<string, unknown> }).ai;
-    return saveProjectAi(repos, request, id, ai, { keepChatMachine: !sent || !('chat_machine_id' in sent) });
+    return saveProjectAi(repos, requestAiScope(repos, request), id, ai, { keepChatMachine: !sent || !('chat_machine_id' in sent) });
   });
 }
