@@ -103,8 +103,8 @@ export interface SnapshotMachine {
   online: boolean;
   last_seen_at: Date | null;
   agent_version: string | null;
-  /** a tab of this project, or an active run, sits on it */
-  has_work: boolean;
+  /** an active run of this project sits on it (its tabs are in `HealthSnapshot.tabs`) */
+  active_run: boolean;
 }
 
 export interface SnapshotQueued {
@@ -197,7 +197,7 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // 7. an agent machine offline while it holds this project's work; 9. one below the minimum agent
   for (const m of s.machines) {
     if (!m.agent) continue;
-    if (!m.online && m.has_work) add('machine_offline', m.id, m.last_seen_at, { label: m.name });
+    if (!m.online && holdsWork(s, m, config)) add('machine_offline', m.id, m.last_seen_at, { label: m.name });
     if (m.online && m.agent_version && !versionAtLeast(m.agent_version, s.min_agent_version)) add('agent_outdated', m.id, null, { label: m.name, version: m.agent_version, min: s.min_agent_version });
   }
 
@@ -216,6 +216,24 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   }
   return out;
 }
+
+/**
+ * TER-1135: what counts as the project's work on a machine — an active run, or a tab with an event shortly
+ * before the machine was last seen (within the `tab_stuck` minutes). A tab sitting in "trabalhando" with no
+ * event for days is not work but its own sign (`tab_stuck`), and must not keep a machine alert alive.
+ */
+export function holdsWork(s: HealthSnapshot, m: SnapshotMachine, config: ProjectHealth): boolean {
+  if (m.active_run) return true;
+  const from = (m.last_seen_at ?? s.now).getTime() - config.signals.tab_stuck.minutes * 60_000;
+  return s.tabs.some((t) => t.machine_id === m.id && !!t.state_at && t.state_at.getTime() >= from);
+}
+
+/**
+ * TER-1135: signs whose subject flickers — a machine on a shaky Wi-Fi or going to sleep drops and comes back.
+ * Gone from the snapshot, such an alert stays for this long before it resolves; seen again meanwhile, it is
+ * the same episode (no new push, no new wake) and its `flaps` count goes up.
+ */
+export const FLAP_GRACE_MS: Partial<Record<HealthSignal, number>> = { machine_offline: 60 * 60_000 };
 
 /** Whether an observed sign has lasted past its minutes. `since` falls back to the alert's first sighting. */
 export function isDue(signal: HealthSignal, config: ProjectHealth, since: Date, now: Date): boolean {

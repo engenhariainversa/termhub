@@ -169,6 +169,8 @@
   "Branch base {{label}} com a CI sem terminar há {{duration}}": "Base branch {{label}} with CI not finishing for {{duration}}",
   "falhando: {{names}}": "failing: {{names}}",
   "sem terminar: {{names}}": "not finished: {{names}}",
+  "voltou há {{duration}}": "back for {{duration}}",
+  "caiu de novo {{n}}x": "dropped again {{n}}x",
   "PR pronto parado": "Ready PR stalled",
   "Fila do automático parada": "Automatic queue stalled",
   "Aba travada trabalhando": "Tab stuck working",

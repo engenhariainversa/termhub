@@ -169,6 +169,8 @@
   "Branch base {{label}} com a CI sem terminar há {{duration}}": "Rama base {{label}} con la CI sin terminar desde hace {{duration}}",
   "falhando: {{names}}": "fallando: {{names}}",
   "sem terminar: {{names}}": "sin terminar: {{names}}",
+  "voltou há {{duration}}": "volvió hace {{duration}}",
+  "caiu de novo {{n}}x": "se cayó de nuevo {{n}}x",
   "PR pronto parado": "PR listo detenido",
   "Fila do automático parada": "Cola del automático detenida",
   "Aba travada trabalhando": "Pestaña trabada trabajando",

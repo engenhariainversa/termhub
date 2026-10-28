@@ -95,6 +95,11 @@ export class HealthAlertsRepository {
     return map(await this.db.projectHealthAlert.findUniqueOrThrow({ where }));
   }
 
+  /** Rewrites a running episode's detail alone (a flickering sign gone for now, TER-1135). */
+  async note(id: string, detail: HealthDetail): Promise<void> {
+    await this.db.projectHealthAlert.updateMany({ where: { id, resolvedAt: null }, data: { detail: detail as object } });
+  }
+
   /** Marks an alert open (past its minutes); true for the caller that did. */
   async open(id: string, now = new Date()): Promise<boolean> {
     const { count } = await this.db.projectHealthAlert.updateMany({ where: { id, openedAt: null, resolvedAt: null }, data: { openedAt: now } });
