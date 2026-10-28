@@ -54,6 +54,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatRepository (Postgres)
     expect(reloaded.last_message_at).not.toBeNull();
   });
 
+  it('keeps the model the last run reported (TER-1145)', async () => {
+    const c = await repo.getOrCreateForUser(userId);
+    expect(c.last_model).toBeNull();
+    await repo.setLastModel(c.id, 'claude-opus-5-5');
+    await repo.setLastModel(c.id, 'claude-opus-5-5');
+    expect((await repo.findByIdForUser(c.id, userId))?.last_model).toBe('claude-opus-5-5');
+    await repo.setLastModel(c.id, 'claude-sonnet-5-5');
+    expect((await repo.findByIdForUser(c.id, userId))?.last_model).toBe('claude-sonnet-5-5');
+  });
+
   it('stores the context fill, keeps the window a turn did not report, and drops both with the session (TER-315)', async () => {
     const c = await repo.getOrCreateForProject(userId, projectId);
     expect(c.context_tokens).toBeNull();

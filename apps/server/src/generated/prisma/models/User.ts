@@ -133,6 +133,7 @@ export type UserCountAggregateOutputType = {
   pushTabFinished: number
   conciergePush: number
   chatContextLimit: number
+  chatBlockedModels: number
   deletionRequestedAt: number
   deletionScheduledAt: number
   automationPausedAt: number
@@ -250,6 +251,7 @@ export type UserCountAggregateInputType = {
   pushTabFinished?: true
   conciergePush?: true
   chatContextLimit?: true
+  chatBlockedModels?: true
   deletionRequestedAt?: true
   deletionScheduledAt?: true
   automationPausedAt?: true
@@ -372,6 +374,7 @@ export type UserGroupByOutputType = {
   pushTabFinished: boolean
   conciergePush: runtime.JsonValue | null
   chatContextLimit: number | null
+  chatBlockedModels: string[]
   deletionRequestedAt: Date | null
   deletionScheduledAt: Date | null
   automationPausedAt: Date | null
@@ -430,6 +433,7 @@ export type UserWhereInput = {
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
+  chatBlockedModels?: Prisma.StringNullableListFilter<"User">
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -495,6 +499,7 @@ export type UserOrderByWithRelationInput = {
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrderInput | Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatBlockedModels?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -563,6 +568,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
+  chatBlockedModels?: Prisma.StringNullableListFilter<"User">
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -628,6 +634,7 @@ export type UserOrderByWithAggregationInput = {
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrderInput | Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
+  chatBlockedModels?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrderInput | Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -671,6 +678,7 @@ export type UserScalarWhereWithAggregatesInput = {
   pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableWithAggregatesFilter<"User">
   chatContextLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
+  chatBlockedModels?: Prisma.StringNullableListFilter<"User">
   deletionRequestedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"User"> | Date | string | null
@@ -705,6 +713,7 @@ export type UserCreateInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -770,6 +779,7 @@ export type UserUncheckedCreateInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -833,6 +843,7 @@ export type UserUpdateInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -898,6 +909,7 @@ export type UserUncheckedUpdateInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -962,6 +974,7 @@ export type UserCreateManyInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -996,6 +1009,7 @@ export type UserUpdateManyMutationInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1031,12 +1045,21 @@ export type UserUncheckedUpdateManyInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
   locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+}
+
+export type StringNullableListFilter<$PrismaModel = never> = {
+  equals?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel> | null
+  has?: string | Prisma.StringFieldRefInput<$PrismaModel> | null
+  hasEvery?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
+  hasSome?: string[] | Prisma.ListStringFieldRefInput<$PrismaModel>
+  isEmpty?: boolean
 }
 
 export type UserCountOrderByAggregateInput = {
@@ -1066,6 +1089,7 @@ export type UserCountOrderByAggregateInput = {
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
+  chatBlockedModels?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
   deletionScheduledAt?: Prisma.SortOrder
   automationPausedAt?: Prisma.SortOrder
@@ -1174,6 +1198,10 @@ export type UserNullableScalarRelationFilter = {
   isNot?: Prisma.UserWhereInput | null
 }
 
+export type UserCreatechatBlockedModelsInput = {
+  set: string[]
+}
+
 export type StringFieldUpdateOperationsInput = {
   set?: string
 }
@@ -1212,6 +1240,11 @@ export type NullableIntFieldUpdateOperationsInput = {
   decrement?: number
   multiply?: number
   divide?: number
+}
+
+export type UserUpdatechatBlockedModelsInput = {
+  set?: string[]
+  push?: string | string[]
 }
 
 export type UserCreateNestedManyWithoutRoleRefInput = {
@@ -1700,6 +1733,7 @@ export type UserCreateWithoutRoleRefInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -1763,6 +1797,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -1856,6 +1891,7 @@ export type UserScalarWhereInput = {
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
+  chatBlockedModels?: Prisma.StringNullableListFilter<"User">
   deletionRequestedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   deletionScheduledAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
   automationPausedAt?: Prisma.DateTimeNullableFilter<"User"> | Date | string | null
@@ -1890,6 +1926,7 @@ export type UserCreateWithoutSessionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -1954,6 +1991,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2032,6 +2070,7 @@ export type UserUpdateWithoutSessionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2096,6 +2135,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2158,6 +2198,7 @@ export type UserCreateWithoutMachinesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2222,6 +2263,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2300,6 +2342,7 @@ export type UserUpdateWithoutMachinesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2364,6 +2407,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2426,6 +2470,7 @@ export type UserCreateWithoutProjectsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2490,6 +2535,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2568,6 +2614,7 @@ export type UserUpdateWithoutProjectsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2632,6 +2679,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2694,6 +2742,7 @@ export type UserCreateWithoutIntegrationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2758,6 +2807,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -2836,6 +2886,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2900,6 +2951,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -2962,6 +3014,7 @@ export type UserCreateWithoutUploadsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3026,6 +3079,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3104,6 +3158,7 @@ export type UserUpdateWithoutUploadsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3168,6 +3223,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3230,6 +3286,7 @@ export type UserCreateWithoutApiTokensInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3294,6 +3351,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3372,6 +3430,7 @@ export type UserUpdateWithoutApiTokensInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3436,6 +3495,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3498,6 +3558,7 @@ export type UserCreateWithoutChatConversationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3562,6 +3623,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3640,6 +3702,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3704,6 +3767,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3766,6 +3830,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3830,6 +3895,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -3908,6 +3974,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -3972,6 +4039,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4034,6 +4102,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4098,6 +4167,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4176,6 +4246,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4240,6 +4311,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4302,6 +4374,7 @@ export type UserCreateWithoutFileGrantsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4366,6 +4439,7 @@ export type UserUncheckedCreateWithoutFileGrantsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4444,6 +4518,7 @@ export type UserUpdateWithoutFileGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4508,6 +4583,7 @@ export type UserUncheckedUpdateWithoutFileGrantsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4570,6 +4646,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4634,6 +4711,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4712,6 +4790,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4776,6 +4855,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4838,6 +4918,7 @@ export type UserCreateWithoutChatCommandRulesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4902,6 +4983,7 @@ export type UserUncheckedCreateWithoutChatCommandRulesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -4980,6 +5062,7 @@ export type UserUpdateWithoutChatCommandRulesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5044,6 +5127,7 @@ export type UserUncheckedUpdateWithoutChatCommandRulesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5106,6 +5190,7 @@ export type UserCreateWithoutChatWatchesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5170,6 +5255,7 @@ export type UserUncheckedCreateWithoutChatWatchesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5248,6 +5334,7 @@ export type UserUpdateWithoutChatWatchesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5312,6 +5399,7 @@ export type UserUncheckedUpdateWithoutChatWatchesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5374,6 +5462,7 @@ export type UserCreateWithoutConciergeNoticesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5438,6 +5527,7 @@ export type UserUncheckedCreateWithoutConciergeNoticesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5516,6 +5606,7 @@ export type UserUpdateWithoutConciergeNoticesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5580,6 +5671,7 @@ export type UserUncheckedUpdateWithoutConciergeNoticesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5642,6 +5734,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5706,6 +5799,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5784,6 +5878,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5848,6 +5943,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -5910,6 +6006,7 @@ export type UserCreateWithoutChatFocusInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -5974,6 +6071,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6052,6 +6150,7 @@ export type UserUpdateWithoutChatFocusInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6116,6 +6215,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6178,6 +6278,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6242,6 +6343,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6320,6 +6422,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6384,6 +6487,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6446,6 +6550,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6510,6 +6615,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6577,6 +6683,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6641,6 +6748,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -6719,6 +6827,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6783,6 +6892,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6856,6 +6966,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6920,6 +7031,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -6982,6 +7094,7 @@ export type UserCreateWithoutMemoryWriteQueueInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7046,6 +7159,7 @@ export type UserUncheckedCreateWithoutMemoryWriteQueueInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7124,6 +7238,7 @@ export type UserUpdateWithoutMemoryWriteQueueInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7188,6 +7303,7 @@ export type UserUncheckedUpdateWithoutMemoryWriteQueueInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7250,6 +7366,7 @@ export type UserCreateWithoutMemoryRulesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7314,6 +7431,7 @@ export type UserUncheckedCreateWithoutMemoryRulesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7392,6 +7510,7 @@ export type UserUpdateWithoutMemoryRulesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7456,6 +7575,7 @@ export type UserUncheckedUpdateWithoutMemoryRulesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7518,6 +7638,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7582,6 +7703,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7660,6 +7782,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7724,6 +7847,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7786,6 +7910,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7850,6 +7975,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -7928,6 +8054,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -7992,6 +8119,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8054,6 +8182,7 @@ export type UserCreateWithoutDevicesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8118,6 +8247,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8196,6 +8326,7 @@ export type UserUpdateWithoutDevicesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8260,6 +8391,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8322,6 +8454,7 @@ export type UserCreateWithoutNotificationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8386,6 +8519,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8464,6 +8598,7 @@ export type UserUpdateWithoutNotificationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8528,6 +8663,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8590,6 +8726,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8654,6 +8791,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8732,6 +8870,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8796,6 +8935,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -8858,6 +8998,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -8922,6 +9063,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9000,6 +9142,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9064,6 +9207,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9126,6 +9270,7 @@ export type UserCreateWithoutDataExportsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9190,6 +9335,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9268,6 +9414,7 @@ export type UserUpdateWithoutDataExportsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9332,6 +9479,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9394,6 +9542,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9458,6 +9607,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9536,6 +9686,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9600,6 +9751,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9662,6 +9814,7 @@ export type UserCreateManyRoleRefInput = {
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Date | string | null
   deletionScheduledAt?: Date | string | null
   automationPausedAt?: Date | string | null
@@ -9696,6 +9849,7 @@ export type UserUpdateWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9759,6 +9913,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -9822,6 +9977,7 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
   deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -10140,6 +10296,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
+  chatBlockedModels?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
@@ -10206,6 +10363,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
+  chatBlockedModels?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
@@ -10242,6 +10400,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
+  chatBlockedModels?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
@@ -10278,6 +10437,7 @@ export type UserSelectScalar = {
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
+  chatBlockedModels?: boolean
   deletionRequestedAt?: boolean
   deletionScheduledAt?: boolean
   automationPausedAt?: boolean
@@ -10286,7 +10446,7 @@ export type UserSelectScalar = {
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "chatClientContext" | "pushTabFinished" | "conciergePush" | "chatContextLimit" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "chatClientContext" | "pushTabFinished" | "conciergePush" | "chatContextLimit" | "chatBlockedModels" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -10441,6 +10601,11 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * (TER-1038): opt-in, null = the window.
      */
     chatContextLimit: number | null
+    /**
+     * "Modelos do concierge" (TER-1145): the Claude model families (fable, opus, sonnet, haiku) the
+     * concierge never runs on. Empty = no restriction, the default; the tabs' agents are not affected.
+     */
+    chatBlockedModels: string[]
     /**
      * Self-service deletion (TER-720): when the person asked; the account is deactivated from then on.
      */
@@ -10945,6 +11110,7 @@ export interface UserFieldRefs {
   readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly conciergePush: Prisma.FieldRef<"User", 'Json'>
   readonly chatContextLimit: Prisma.FieldRef<"User", 'Int'>
+  readonly chatBlockedModels: Prisma.FieldRef<"User", 'String[]'>
   readonly deletionRequestedAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly deletionScheduledAt: Prisma.FieldRef<"User", 'DateTime'>
   readonly automationPausedAt: Prisma.FieldRef<"User", 'DateTime'>

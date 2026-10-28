@@ -53,6 +53,8 @@ function fakeRepos() {
       setChatCodexReplies: vi.fn(async () => undefined),
       chatContextLimit: vi.fn(async (): Promise<number | null> => null),
       setChatContextLimit: vi.fn(async () => undefined),
+      chatBlockedModels: vi.fn(async (): Promise<string[]> => []),
+      setChatBlockedModels: vi.fn(async () => undefined),
       chatAutoThresholds: vi.fn(async (): Promise<{ high: number | null; low: number | null; calibration: { high: number; low: number; samples: number; computed_at: string } | null }> => ({ high: null, low: null, calibration: null })),
       setChatAutoThresholds: vi.fn(async () => undefined),
     },
@@ -243,7 +245,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     repos.memoryItems.countNotesSince.mockResolvedValueOnce(2);
     const res = await build(kind, repos).inject({ method: 'GET', url: '/chat/memory' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, client_context: true, context_limit: null, available: false, count: 7, notes: 2, ...AUTO_DEFAULTS });
+    expect(res.json()).toEqual({ enabled: true, autodecide: true, codex_replies: false, client_context: true, context_limit: null, blocked_models: [], available: false, count: 7, notes: 2, ...AUTO_DEFAULTS });
     expect(repos.memoryItems.countNotesSince).toHaveBeenCalledWith('u1', new Date(0));
   });
 
@@ -255,7 +257,7 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
     expect(res.statusCode).toBe(200);
     expect(repos.users.setChatSuggestions).toHaveBeenCalledWith('u1', false);
     expect(repos.users.setChatAutodecide).not.toHaveBeenCalled();
-    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, client_context: true, context_limit: null, available: false, count: 3, notes: 0, ...AUTO_DEFAULTS });
+    expect(res.json()).toEqual({ enabled: false, autodecide: false, codex_replies: false, client_context: true, context_limit: null, blocked_models: [], available: false, count: 3, notes: 0, ...AUTO_DEFAULTS });
   });
 
   it('PATCH /memory sets autodecide and leaves the suggestion switch alone', async () => {
@@ -295,6 +297,20 @@ describe.each(['web', 'mobile'] as const)('%s chat memory routes', (kind) => {
       expect(r.statusCode).toBe(400);
     }
     expect(repos.users.setChatContextLimit).toHaveBeenCalledTimes(2);
+  });
+
+  it('PATCH /memory keeps the concierge off the models picked, never off all of them (TER-1145)', async () => {
+    const repos = fakeRepos();
+    repos.users.chatBlockedModels.mockResolvedValueOnce(['fable']);
+    const res = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { blocked_models: ['fable', 'fable'] } });
+    expect(res.statusCode).toBe(200);
+    expect(repos.users.setChatBlockedModels).toHaveBeenCalledWith('u1', ['fable']);
+    expect(res.json()).toMatchObject({ blocked_models: ['fable'] });
+    for (const bad of [['fable', 'opus', 'sonnet', 'haiku'], ['gpt-5'], 'fable']) {
+      const r = await build(kind, repos).inject({ method: 'PATCH', url: '/chat/memory', payload: { blocked_models: bad } });
+      expect(r.statusCode).toBe(400);
+    }
+    expect(repos.users.setChatBlockedModels).toHaveBeenCalledTimes(1);
   });
 
   describe('automatic-answer thresholds (TER-642)', () => {

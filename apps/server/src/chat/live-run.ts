@@ -47,7 +47,7 @@ export interface LiveRunDeps {
   conversationId: string;
   /** The CLI session this run resumes (or will name), updated from the CLI's own frames. */
   sessionId: string | null;
-  chat: Pick<ChatRepository, 'addMessage' | 'updateMessage' | 'deleteMessage' | 'setCliSession' | 'setContext'>;
+  chat: Pick<ChatRepository, 'addMessage' | 'updateMessage' | 'deleteMessage' | 'setCliSession' | 'setContext'> & Partial<Pick<ChatRepository, 'setLastModel'>>;
   /** The conversation's subagents (spec 2026-09-26 panel §5.3), kept from the CLI's task frames. */
   subagents: Pick<ChatSubagentsRepository, 'start' | 'setStatus' | 'interruptRunning'>;
   chatActions: Pick<ChatActionsRepository, 'setSubagentByToolUse'>;
@@ -292,6 +292,8 @@ export class LiveRun {
         } else if (frame.type === 'init') {
           this.dir = frame.dir ?? this.dir;
           this.runModel = frame.model ?? this.runModel;
+          // TER-1145: the chat's host card says which model the concierge is on.
+          if (frame.model) await this.deps.chat.setLastModel?.(this.deps.conversationId, frame.model).catch((err) => console.error('chat: the run model could not be kept', { conversation_id: this.deps.conversationId, error: failureLabel(err) }));
         } else if (frame.type === 'error') {
           await this.saveSession(frame.session_id);
           if (frame.turn_ended) {

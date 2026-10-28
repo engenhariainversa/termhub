@@ -29,6 +29,20 @@ function accountClause(account: ChatHostAccount): string {
 const agentTooOldText = (name: string, version: string): string =>
   version ? i18n.t('O agente da máquina {{name}} (versão {{version}}) ainda não sabe rodar o chat.', { name, version }) : i18n.t('O agente da máquina {{name}} ainda não sabe rodar o chat.', { name });
 
+/** Which model the concierge runs on (TER-1145): the one termhub passes, else the CLI's default, and the
+ *  one the CLI last said it answered on when that adds something. */
+function modelSentence(host: Extract<ChatHostState, { kind: 'ready' }>): string {
+  const model = host.model ?? null;
+  const last = host.lastModel ?? null;
+  const base =
+    model === null
+      ? i18n.t('Modelo do concierge: o padrão da CLI.')
+      : host.modelSteered
+        ? i18n.t('Modelo do concierge: {{model}}, pela sua configuração de modelos do concierge.', { model })
+        : i18n.t('Modelo do concierge: {{model}}.', { model });
+  return last !== null && last !== model ? `${base} ${i18n.t('Última resposta em {{model}}.', { model: last })}` : base;
+}
+
 /** The option key that stands for "no account": the machine's own default Claude login. Never a real
  *  account id — the server takes ids of at least one character — so it cannot collide with one. */
 const DEFAULT_ACCOUNT = '';
@@ -131,6 +145,7 @@ export function ChatHost({ host, machines, accounts, accountsError, accountId, v
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-fg-dim">
           <p>{t('Esta conversa roda na máquina {{name}}, {{account}}.', { name: host.machine.name, account: accountClause(host.account) })}</p>
           <ChangeButton onPick={onPick} picking={picking} />
+          <p className="basis-full">{modelSentence(host)}</p>
         </div>
       ) : (
         // Every problem gets the same shape: what happened, what to do about it, and the way to do it.
