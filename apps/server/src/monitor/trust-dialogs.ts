@@ -24,6 +24,10 @@ export interface TrustDialog {
   cli: TrustCli;
   /** The trust option is selected and answering it changes nothing else: Enter is the answer. */
   acceptable: boolean;
+  /** The selection mark is on the trust option (TER-1148: false when it starts on "No, exit"). */
+  selected: boolean;
+  /** Answering also changes the CLI's permissions: never answered by the server. */
+  changesPermissions: boolean;
 }
 
 interface Rule {
@@ -99,7 +103,8 @@ export function trustDialogOf(screen: string): TrustDialog | null {
   }
   if (!found) return null;
   const selected = lines.slice(found.start).some((l) => found.rule.selected.test(l));
-  return { cli: found.rule.cli, acceptable: selected && !found.rule.changesPermissions };
+  const changesPermissions = !!found.rule.changesPermissions;
+  return { cli: found.rule.cli, acceptable: selected && !changesPermissions, selected, changesPermissions };
 }
 
 /** How each CLI is named in the tab's state text. */

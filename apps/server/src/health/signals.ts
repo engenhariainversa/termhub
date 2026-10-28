@@ -44,6 +44,13 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   agent_outdated: 'needs_you',
 };
 
+/**
+ * TER-1148: a tab on the folder trust dialog waits on nobody but the person (the server already answers it
+ * wherever it may), and its agent has not even started: past this long it opens as `needs_you`, whatever the
+ * `tab_waiting` minutes say.
+ */
+export const TRUST_PROMPT_ALERT_MS = 2 * 60_000;
+
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login. */
 export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required'] as const;
 
@@ -158,8 +165,8 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   if (!config.enabled) return [];
   const out: Observation[] = [];
   const on = (signal: HealthSignal) => config.signals[signal].enabled && (s.automation || LIGHT_SIGNALS.includes(signal));
-  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail, now = false) => {
-    if (on(signal)) out.push({ signal, subject, level: LEVEL_OF[signal], since, detail, ...(now ? { now } : {}) });
+  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail, now = false, level: HealthLevel = LEVEL_OF[signal]) => {
+    if (on(signal)) out.push({ signal, subject, level, since, detail, ...(now ? { now } : {}) });
   };
 
   // 1. a green PR, not a draft, still open while the autonomy lets termhub merge it. One held by policy for
@@ -204,7 +211,11 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   for (const tab of s.tabs) {
     if (!tab.state_at) continue;
     if (tab.state === 'working') add('tab_stuck', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
-    else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
+    else if (tab.state === 'trust_prompt') {
+      // TER-1148: only the person can answer it, and nothing runs meanwhile — the person is pushed after 2 minutes
+      const due = s.now.getTime() - tab.state_at.getTime() >= TRUST_PROMPT_ALERT_MS;
+      add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due, 'needs_you');
+    } else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
   }
 
   // 5. a card in Doing nobody works on: no tab, no run, no PR to wait for, not parked on a blocked run (6 says that)

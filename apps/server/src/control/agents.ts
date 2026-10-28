@@ -20,7 +20,7 @@ import { automationAllowList, automationDenyList } from './automation-tools.js';
 import { AI_MEMORY_MCP_SERVER, aiMemoryForRun, aiMemoryMcpConfig, withAiMemoryHint, withAiMemoryServer } from '../memory/ai-memory-runs.js';
 import { aiMemoryRunPrepLine } from '@termhub/machine-ops';
 import type { ProjectAiMemory } from '../setup/schema.js';
-import { followLaunch } from '../monitor/folder-trust.js';
+import { followLaunch, pretrustFolder } from '../monitor/folder-trust.js';
 import { watch } from './watches.js';
 
 const quiet = { info: () => undefined, warn: () => undefined };
@@ -637,6 +637,8 @@ export async function startAgent(
   } catch (e) {
     throw tagged(e);
   }
+  // TER-1148: the folder trusted in the machine's Claude accounts first, so the dialog never comes up
+  if (account.provider === 'claude') await pretrustFolder(ctx.repos, ctx.log ?? quiet, { id: tab.tab_id, cwd: cwd ?? null, project_id: project.id, machine_id: machine.id }, machine, [account.config_dir]);
   try {
     await typeCommandLine(machine, tab.tmux_session as string, line);
   } catch (e) {
@@ -802,6 +804,10 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   if (target.tab_id === tab.id) await ctx.repos.apiTokens.revokeForTab(tab.id).catch(() => undefined);
   const mcp = await tabMcp(ctx, machine, account.provider, target);
   const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
+  if (account.provider === 'claude') {
+    const where = target.tab_id === tab.id ? tab : { id: target.tab_id, cwd: null, project_id: project.id, machine_id: machine.id };
+    await pretrustFolder(ctx.repos, ctx.log ?? quiet, where, machine, [account.config_dir]);
+  }
   await typeCommandLine(machine, target.tmux_session, line);
   await ctx.repos.tabs.setAgentFields(target.tab_id, { ai_account_id: account.id }).catch(() => undefined);
   followLaunch(ctx.repos, ctx.log ?? quiet, target.tab_id, machine);
