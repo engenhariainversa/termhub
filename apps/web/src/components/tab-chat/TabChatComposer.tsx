@@ -1,7 +1,9 @@
-import { useCallback, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
 import { Paperclip } from 'lucide-react';
+import { pasteGoesAsFile, pastedTextName } from '@termhub/mobile-api/pasted-text';
 import { useTranslation } from '../../i18n';
 import { api, ApiError } from '../../lib/api';
+import { formatNumber } from '../../lib/format';
 import { appNavigate } from '../../lib/app-navigate';
 import { sendsMessage } from '../../lib/chat-scroll';
 import { filePreviewHref } from '../../lib/md-paths';
@@ -16,6 +18,12 @@ interface Draft {
   path: string | null;
   error: string | null;
 }
+
+/** A long text as the `.txt` it is saved as on the tab's machine (TER-1139). */
+const pastedTextFile = (text: string) => new File([text], pastedTextName(), { type: 'text/plain' });
+
+/** What a saved file's path is given room for in the message, when the text goes as a file. */
+const PATH_ROOM = 512;
 
 const MAX_ROWS = 8;
 const LINE_PX = 20;
@@ -46,6 +54,11 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const seq = useRef(0);
+  /** A paste that went in as a file (TER-1139): its chip, and what "Manter como texto" puts back where. */
+  const [pasted, setPasted] = useState<{ key: number; text: string; at: number } | null>(null);
+  /** The send's safety net: the text too long for the session, on its way to the machine as a `.txt`. */
+  const [converting, setConverting] = useState(false);
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   // The box grows with its text up to MAX_ROWS, then scrolls.
   useLayoutEffect(() => {
@@ -56,15 +69,18 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
   }, [text]);
 
   const addFiles = useCallback(
-    (files: File[]) => {
+    (files: File[]): number[] => {
+      const keys: number[] = [];
       for (const file of files) {
         const key = ++seq.current;
+        keys.push(key);
         setDrafts((d) => [...d, { key, name: file.name || t('arquivo'), phase: 'uploading', path: null, error: null }]);
         api.tabs.pasteFile(tabId, file, file.name || undefined).then(
           (r) => setDrafts((d) => d.map((x) => (x.key === key ? { ...x, phase: 'uploaded', path: r.path } : x))),
           (e: unknown) => setDrafts((d) => d.map((x) => (x.key === key ? { ...x, phase: 'failed', error: e instanceof ApiError ? e.message : t('Não foi possível enviar o arquivo.') } : x))),
         );
       }
+      return keys;
     },
     [tabId, t],
   );
@@ -73,15 +89,33 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
   const paths = drafts.flatMap((d) => (d.phase === 'uploaded' && d.path ? [d.path] : []));
   const message = withAttachedPaths(text, paths);
   const tooLong = message.length > TAB_MESSAGE_MAX_CHARS;
-  const canSend = !blockedReason && !sending && !uploading && !tooLong && message.length > 0;
+  /** Too long because of the text itself: the send saves it as a `.txt` and sends its path (TER-1139). */
+  const textTooLong = tooLong && text.trim().length > 0 && withAttachedPaths('', paths).length + PATH_ROOM <= TAB_MESSAGE_MAX_CHARS;
+  const canSend = !blockedReason && !sending && !uploading && !converting && (!tooLong || textTooLong) && message.length > 0;
+  const pastedFits = pasted !== null && withAttachedPaths(text + pasted.text, paths).length <= TAB_MESSAGE_MAX_CHARS;
 
   const send = async () => {
     if (!canSend) return;
     const before = { text, drafts };
     setSending(true);
+    setSizeError(null);
     setText('');
     setDrafts([]);
-    const ok = await onSend(message).catch(() => false);
+    let body = message;
+    if (textTooLong) {
+      setConverting(true);
+      try {
+        const file = pastedTextFile(text.trim());
+        const saved = await api.tabs.pasteFile(tabId, file, file.name);
+        body = withAttachedPaths('', [...paths, saved.path]);
+      } catch (e) {
+        setSizeError(e instanceof ApiError ? e.message : t('Não foi possível enviar o arquivo.'));
+        body = '';
+      } finally {
+        setConverting(false);
+      }
+    }
+    const ok = body ? await onSend(body).catch(() => false) : false;
     setSending(false);
     // A refused message comes back, unless something new was typed meanwhile.
     if (!ok) {
@@ -93,10 +127,39 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
 
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(e.clipboardData?.files ?? []);
-    if (files.length === 0) return;
+    if (files.length > 0) {
+      e.preventDefault();
+      addFiles(files);
+      return;
+    }
+    // A long text is saved on the machine as a `.txt`, like a pasted file, and the session gets its path.
+    const pastedText = e.clipboardData?.getData('text/plain') ?? '';
+    const box = e.currentTarget;
+    const start = box.selectionStart ?? text.length;
+    const end = box.selectionEnd ?? start;
+    const after = text.slice(0, start) + pastedText + text.slice(end);
+    if (!pasteGoesAsFile(pastedText, withAttachedPaths(after, paths), TAB_MESSAGE_MAX_CHARS)) return;
     e.preventDefault();
-    addFiles(files);
+    const [key] = addFiles([pastedTextFile(pastedText)]);
+    if (end > start) setText(text.slice(0, start) + text.slice(end));
+    setPasted({ key, text: pastedText, at: start });
   };
+  /** "Manter como texto": the chip goes (the file stays on the machine, as a removed chip's does) and the text comes back. */
+  const keepPastedAsText = () => {
+    if (!pasted) return;
+    setDrafts((all) => all.filter((x) => x.key !== pasted.key));
+    setText((current) => {
+      const at = Math.min(pasted.at, current.length);
+      return current.slice(0, at) + pasted.text + current.slice(at);
+    });
+    setPasted(null);
+    boxRef.current?.focus();
+  };
+  // The paste's chip went (✕, or sent): nothing left to undo.
+  const pastedKey = pasted?.key;
+  useEffect(() => {
+    if (pastedKey !== undefined && !drafts.some((d) => d.key === pastedKey)) setPasted(null);
+  }, [pastedKey, drafts]);
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     const files = Array.from(e.dataTransfer?.files ?? []);
     if (files.length === 0) return;
@@ -128,6 +191,16 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
             );
           })}
         </ul>
+      )}
+      {pasted && (
+        <div className="mb-2 flex flex-wrap items-center gap-x-2 text-[11px] text-fg-muted">
+          <span>{t('Texto colado ({{chars}} caracteres) vai como anexo', { chars: formatNumber(pasted.text.length) })}</span>
+          {pastedFits && (
+            <button type="button" className="text-accent hover:underline" onClick={keepPastedAsText}>
+              {t('Manter como texto')}
+            </button>
+          )}
+        </div>
       )}
       <div className="flex items-end gap-2">
         <button type="button" className="mb-1 rounded p-1 text-fg-dim hover:bg-bg-3 hover:text-fg disabled:opacity-40" onClick={() => fileRef.current?.click()} disabled={!!blockedReason} title={t('Anexar arquivo')} aria-label={t('Anexar arquivo')}>
@@ -169,7 +242,13 @@ export function TabChatComposer({ tabId, projectId, machineId, onSend, onInterru
           {t('Enviar')}
         </button>
       </div>
-      {tooLong && <p className="mt-1 text-[11px] text-danger">{t('Mensagem longa demais (máximo de {{max}} caracteres)', { max: TAB_MESSAGE_MAX_CHARS })}</p>}
+      {sizeError ? (
+        <p className="mt-1 text-[11px] text-danger">{sizeError}</p>
+      ) : textTooLong ? (
+        <p className="mt-1 text-[11px] text-fg-muted">{t('Mensagem grande demais: {{length}} de {{max}} caracteres; vai como anexo .txt', { length: formatNumber(message.length), max: formatNumber(TAB_MESSAGE_MAX_CHARS) })}</p>
+      ) : (
+        tooLong && <p className="mt-1 text-[11px] text-danger">{t('Mensagem longa demais (máximo de {{max}} caracteres)', { max: TAB_MESSAGE_MAX_CHARS })}</p>
+      )}
     </div>
   );
 }

@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from './attachments.js';
+import { CHAT_MESSAGE_MAX_CHARS } from './pasted-text.js';
 import { replyCardRef, tabQuestionSchema, type ReplyCardKind, type StandingGrantKind, type TAutoDecision } from './events.js';
 
 /** `POST chat/messages`: text, or attachments, or both (spec 2026-09-26 §5.5). An empty text with ids
  * is a message made of files alone; neither is refused before anything is stored. */
 export const mobileMessageBody = z
   .object({
-    text: z.string().trim().max(8000).default(''),
+    text: z.string().trim().max(CHAT_MESSAGE_MAX_CHARS).default(''),
     project_id: z.string().min(1).max(64).nullish(),
     attachment_ids: z.array(z.string().min(1).max(64)).max(MAX_ATTACHMENTS_PER_MESSAGE).optional(),
     /** The message this one answers (TER-447). */

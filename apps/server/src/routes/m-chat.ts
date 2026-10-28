@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionChallengesBody, decisionChallengesResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
+import { CHAT_MESSAGE_MAX_CHARS, chatGrantListQuery, chatGrantListResponse, chatProjectsResponse, decisionChallengesBody, decisionChallengesResponse, decisionProofMessage, deviceSelf, hostOptionsResponse, mobileBatchDecisionBody, projectFavoriteBody, mobileDecisionBody, mobileMessageBody, sendAccepted, type PinDecision } from '@termhub/mobile-api';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
@@ -21,6 +21,7 @@ import { featuresFor } from '../features/flags.js';
 import type { HostAgents } from '../chat/host.js';
 import { failureLabel, type ChatService } from '../chat/service.js';
 import { mobileSignals } from '../chat/client-origin.js';
+import { assertMessageFits } from '../chat/message-size.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { chatBus } from '../chat/bus.js';
 import { openAnswersIn } from '../chat/open-answers.js';
@@ -268,6 +269,7 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
    * the same tick `start` resolved: nothing else awaits it, and an unhandled rejection kills the process.
    */
   app.post('/messages', { config: { action: 'create' } }, async (request, reply) => {
+    assertMessageFits(request.body, CHAT_MESSAGE_MAX_CHARS);
     const { text, project_id, attachment_ids, reply_to_id, reply_to_card } = mobileMessageBody.parse(request.body);
     const started = await deps.chat.start(request.scope.user, text, { projectId: project_id ?? null, ...(attachment_ids ? { attachmentIds: attachment_ids } : {}), ...(reply_to_id ? { replyToId: reply_to_id } : {}), ...(reply_to_card ? { replyToCard: reply_to_card } : {}), client: mobileSignals(request, deviceOf(request)) });
     started.done.catch((err) => request.log.warn({ code: failureLabel(err), conversationId: started.conversation_id }, 'mobile run failed after start'));

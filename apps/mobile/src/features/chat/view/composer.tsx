@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Keyboard, Pressable, Text, TextInput, View, type LayoutChangeEvent } from 'react-native';
 import Animated, { Easing, ReduceMotion, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
-import { MAX_ATTACHMENTS_PER_MESSAGE, type TChatAttachment } from '@/services/api/contract';
+import { CHAT_MESSAGE_MAX_CHARS, insertedRun, MAX_ATTACHMENTS_PER_MESSAGE, pasteGoesAsFile, type TChatAttachment } from '@/services/api/contract';
 import { useTranslation } from '@/i18n';
+import { formatNumber } from '@/i18n/format';
 import { Icon, type IconName } from '@/ui';
 import { KeyCommands } from '../../../../modules/key-commands';
 import { onChatFiles, takeChatFiles } from '../model/chat-inbox';
 import { CHAT_MSG } from '../model/messages';
 import { useAttachmentDrafts, type PickedFile } from '../viewmodel/attachments';
+import { pastedTextFile } from '../viewmodel/pasted-file';
 import { useVoice, type RecordedClip } from '../viewmodel/use-voice';
 import { useVoiceNote, type VoiceNote } from '../viewmodel/use-voice-note';
 import type { ReplyRef } from '../model/reply';
@@ -117,6 +119,11 @@ type Props = {
   onInterrupt?(): void;
   /** The chat this box belongs to (`inboxKey`): files sent here from a file preview land as chips. */
   inbox?: string;
+  /** The longest text the other side takes (TER-1139): the chat's 8000 by default, a tab's 4000. A
+   * longer paste becomes a `.txt` chip, and a longer text is sent as one. */
+  maxChars?: number;
+  /** A text sent as a `.txt` leaves a line saying so in the message (the chat); a tab gets the file alone. */
+  summarizeLongText?: boolean;
 };
 
 /** A round button of the pill: the symbol on a filled circle (`fill`) or bare. */
@@ -213,7 +220,7 @@ function HoldMic({ note, disabled }: { note: VoiceNote; disabled: boolean }) {
  * rules; Shift+Return, the on-screen keyboard's Return and Return during an IME composition write a
  * new line, as everywhere else.
  */
-export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox }: Props) {
+export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, attachmentStatuses, replyTo = null, onCancelReply, disabled = false, onInterrupt, inbox, maxChars = CHAT_MESSAGE_MAX_CHARS, summarizeLongText = true }: Props) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const [height, setHeight] = useState(MIN_HEIGHT);
@@ -286,11 +293,21 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
     });
   }, [attachments.drafts, sending, disabled, onSend, clearDrafts]);
 
+  /** A paste that went in as a `.txt` chip (TER-1139): its chip, and what "Manter como texto" puts back where. */
+  const [pasted, setPasted] = useState<{ key: string; text: string; at: number } | null>(null);
+  const pastedKey = pasted?.key;
+  useEffect(() => {
+    if (pastedKey && !attachments.drafts.some((d) => d.key === pastedKey)) setPasted(null);
+  }, [pastedKey, attachments.drafts]);
+  /** The send's safety net: a text too long for the other side on its way up as a `.txt`. */
+  const [converting, setConverting] = useState(false);
+  const [sizeError, setSizeError] = useState<string | null>(null);
+
   const hasText = text.trim().length > 0;
   /** A chip that is (or will be) part of the message: uploading or uploaded; a refused one is not. */
   const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
   const invalid = attachments.invalid.length > 0;
-  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !invalid && !sending && !disabled;
+  const sendable = (body: string) => (body.trim().length > 0 || attachments.uploaded.length > 0) && !attachments.uploading && !converting && !invalid && !sending && !disabled;
   const canSend = sendable(text);
 
   // The box empties at once (the row is already on screen) and gets its text back if the send
@@ -299,16 +316,40 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   // next message's.
   const submit = async (body: string = text) => {
     if (!sendable(body)) return;
+    setSizeError(null);
+    const trimmed = body.trim();
+    // Past what the other side takes (typed, dictated, a paste that stayed text): the text goes up
+    // as a `.txt` instead of being refused (TER-1139).
+    const oversize = trimmed.length > maxChars;
+    if (oversize && attachments.drafts.length >= MAX_CHIPS) {
+      setSizeError(t('Mensagem grande demais: {{length}} de {{max}} caracteres. Remova um anexo para enviá-la como .txt', { length: formatNumber(trimmed.length), max: formatNumber(maxChars) }));
+      return;
+    }
     const carried = attachments.drafts.filter((d) => d.phase === 'uploaded' && d.attachment !== null);
     changeText('');
-    if (await onSend(body, carried.map((d) => d.attachment!))) attachments.clear(carried.map((d) => d.key));
+    let message = body;
+    const sent = carried.map((d) => d.attachment!);
+    if (oversize) {
+      setConverting(true);
+      try {
+        sent.push(await uploadAttachment(await pastedTextFile(trimmed), () => undefined));
+        message = summarizeLongText ? t('Mensagem longa ({{chars}} caracteres) enviada como anexo', { chars: formatNumber(trimmed.length) }) : '';
+      } catch (e) {
+        setSizeError(e instanceof Error && e.message ? e.message : CHAT_MSG.attachmentUploadFailed);
+        setText((current) => current || body);
+        return;
+      } finally {
+        setConverting(false);
+      }
+    }
+    if (await onSend(message, sent)) attachments.clear(carried.map((d) => d.key));
     else setText((current) => current || body);
   };
   submitRef.current = submit;
 
   // An emptied box (sent, or erased) is back to one line at once, without waiting for the native
   // layout; the returned text of a failed send is laid out again by the input.
-  const changeText = (next: string) => {
+  const setBox = (next: string) => {
     // At once, not on the next render: a hardware Return typed right after the last letter sends it.
     textRef.current = next;
     setText(next);
@@ -317,6 +358,35 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
       setWrapped(false);
     }
   };
+  // What the person typed or pasted. The input only reports the new value, so a paste is the run that
+  // grew it: a long one leaves the box as a `.txt` chip (TER-1139), with room for one more chip.
+  const changeText = (next: string) => {
+    const before = textRef.current;
+    const run = next.length > before.length ? insertedRun(before, next) : null;
+    if (!run || !pasteGoesAsFile(run.inserted, next, maxChars) || attachments.drafts.length >= MAX_CHIPS) {
+      setBox(next);
+      return;
+    }
+    setBox(run.head + run.tail);
+    void pastedTextFile(run.inserted).then(
+      (file) => {
+        const [key] = addRef.current([file]);
+        if (key) setPasted({ key, text: run.inserted, at: run.head.length });
+      },
+      // The cache could not be written: the paste stays text, as it would have.
+      () => setBox(next),
+    );
+  };
+  /** "Manter como texto": the chip goes and its text comes back where it was pasted. */
+  const keepPastedAsText = () => {
+    if (!pasted) return;
+    attachments.remove(pasted.key);
+    const current = textRef.current;
+    const at = Math.min(pasted.at, current.length);
+    setBox(current.slice(0, at) + pasted.text + current.slice(at));
+    setPasted(null);
+  };
+  const pastedFits = pasted !== null && (text + pasted.text).trim().length <= maxChars;
 
   // The input sizes itself to its text (between `MIN_HEIGHT` and `MAX_HEIGHT`) and this is where the
   // pill hears of it. Not `onContentSizeChange`: iOS only sends it when the input's own layout
@@ -359,7 +429,7 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
   const sendDisabled = !canSend || busy;
   const statusText = busy
     ? t('transcrevendo…')
-    : attachments.uploading
+    : attachments.uploading || converting
       ? CHAT_MSG.attachmentUploading
       : invalid
         ? CHAT_MSG.attachmentInvalid
@@ -527,9 +597,19 @@ export function Composer({ sending, onSend, uploadAttachment, deleteAttachment, 
         </Animated.View>
       </View>
       {/* Only when there is something to say: an empty line here would hold the pill off the keyboard. */}
-      {(note.error ?? voice.error) ? (
-        <Text className="px-1 pt-1 text-xs text-app-danger" numberOfLines={1}>
-          {note.error ?? voice.error}
+      {pasted ? (
+        <View className="flex-row flex-wrap items-center gap-x-2 px-1 pt-1">
+          <Text className="text-xs text-app-muted">{t('Texto colado ({{chars}} caracteres) vai como anexo', { chars: formatNumber(pasted.text.length) })}</Text>
+          {pastedFits ? (
+            <Pressable accessibilityRole="button" onPress={keepPastedAsText} hitSlop={8}>
+              <Text className="text-xs font-semibold text-app-text underline">{t('Manter como texto')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      {(sizeError ?? note.error ?? voice.error) ? (
+        <Text className="px-1 pt-1 text-xs text-app-danger" numberOfLines={2}>
+          {sizeError ?? note.error ?? voice.error}
         </Text>
       ) : null}
       {(note.hint ?? voice.notice) ? (

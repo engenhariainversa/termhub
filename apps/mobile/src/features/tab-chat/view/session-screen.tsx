@@ -9,7 +9,7 @@ import { TabQuestionCard } from '@/features/chat/view/tab-question-card';
 import { TabSuggestionCard } from '@/features/chat/view/tab-suggestion-card';
 import type { PickedFile } from '@/features/chat/viewmodel/attachments';
 import { useTranslation } from '@/i18n';
-import { kindFromNameAndMime, type TChatAttachment, type TTabQuestion, type TTabQuestionAnswerBody, type TTabSuggestion } from '@/services/api/contract';
+import { kindFromNameAndMime, TAB_MESSAGE_MAX_CHARS, type TChatAttachment, type TTabQuestion, type TTabQuestionAnswerBody, type TTabSuggestion } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { AppText, Banner, Button, EmptyState, KeyboardInsetView, MAX_READABLE_WIDTH, readableColumn, Screen } from '@/ui';
 import { agentName } from '../model/agent-label';
@@ -313,6 +313,8 @@ export function SessionView({ tabId }: { tabId: string }) {
             deleteAttachment={deleteAttachment}
             disabled={BLOCKED.has(availability)}
             onInterrupt={working ? () => void act('interrupt') : undefined}
+            maxChars={TAB_MESSAGE_MAX_CHARS}
+            summarizeLongText={false}
           />
           {status !== 'error' && error ? <Text className="px-4 pb-2 text-xs text-app-danger">{error}</Text> : null}
         </View>
