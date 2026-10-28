@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
 import type { MemoryItem } from '../db/repositories/memory-items.js';
 import { NoteTooLargeError } from '../db/repositories/notes.js';
@@ -119,6 +119,10 @@ describe('recordLesson', () => {
   });
 
   it('queues the 41st lesson of the project within an hour: nothing appended, the answer and the feed say when (TER-1137)', async () => {
+    // the fake window's lessons are at 10:15 UTC: the clock must sit inside that hour
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-28T10:30:00.000Z'));
+    onTestFinished(() => vi.useRealTimers());
     const { ctx, calls } = ctxFor({ count: LESSONS_PER_PROJECT_HOUR });
     const r = await recordLesson(ctx, { ...validInput, tab_id: 't1' }, { embedder: null, log: console });
     expect(calls.appendBlock).not.toHaveBeenCalled();
