@@ -18,7 +18,8 @@ whatever it changes.
 ## Fix
 
 Freeze `Date` inside the test, within the hour the fakes assume:
-`vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-28T10:30:00.000Z')); onTestFinished(() => vi.useRealTimers());`.
+`vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-28T10:30:00Z') })`, with `afterEach(() => vi.useRealTimers())`
+in the `describe` (TER-1145 and TER-1146 found it on the same day; `main` carries this form).
 Any test whose fakes return fixed timestamps compared against `new Date()` needs the same.
 
 ## How to check
