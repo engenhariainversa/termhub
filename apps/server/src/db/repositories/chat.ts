@@ -12,6 +12,8 @@ export interface ChatConversation {
   title: string | null;
   cli_session_id: string | null;
   model: string | null;
+  /** The model the CLI's `init` last said this conversation ran on (TER-1145); null until a run said it. */
+  last_model: string | null;
   /** The host: the user's own machine this conversation runs on. Null = not chosen yet. */
   machine_id: string | null;
   /** The Claude account on that host. Null = the machine's default config dir. */
@@ -83,6 +85,7 @@ const mapConversation = (c: PrismaConversation): ChatConversation => ({
   title: c.title,
   cli_session_id: c.cliSessionId,
   model: c.model,
+  last_model: c.lastModel ?? null,
   machine_id: c.machineId,
   ai_account_id: c.aiAccountId,
   project_id: c.projectId,
@@ -230,6 +233,11 @@ export class ChatRepository {
   /** A null session also clears the context fill: it described the session that is gone. */
   async setCliSession(id: string, sessionId: string | null): Promise<void> {
     await this.db.chatConversation.update({ where: { id }, data: sessionId === null ? NO_SESSION : { cliSessionId: sessionId } });
+  }
+
+  /** The model a run's `init` reported (TER-1145). A conversation deleted meanwhile is nobody's to update. */
+  async setLastModel(id: string, model: string): Promise<void> {
+    await this.db.chatConversation.updateMany({ where: { id, OR: [{ lastModel: null }, { lastModel: { not: model } }] }, data: { lastModel: model } });
   }
 
   /** Stores how full the session's context is (TER-315). A turn that did not report the window keeps

@@ -38,6 +38,7 @@ import type { ChoicePayload, PermissionPayload } from './tab-question-payload.js
 import { mintConciergeToken } from './token.js';
 import { indexMessage } from '../memory/index-items.js';
 import { groupsOf, type GroupView } from '../control/groups.js';
+import { conciergeModel } from './concierge-model.js';
 
 export type { ChatErrorCode } from './stream.js';
 
@@ -552,7 +553,8 @@ export class ChatService {
    *  conversation's (spec 2026-09-23 §3); a project chat additionally needs an agent that forwards its
    *  prompt, so the same machine can be ready for one scope and too old for the other. */
   async hostFor(user: User, projectId: string | null = null): Promise<HostChoice> {
-    if (projectId === null) return this.hostForConversation(user, null, { wait: 'handover' });
+    // The account-wide row itself, so the screen reads the model it runs on (TER-1145).
+    if (projectId === null) return this.hostForConversation(user, await this.deps.repos.chat.getOrCreateForUser(user.id), { wait: 'handover' });
     return this.hostForConversation(user, await this.conversationFor(user, projectId), { wait: 'handover' });
   }
 
@@ -562,12 +564,20 @@ export class ChatService {
    * account-wide conversation, whose session `resolveHost` reads itself. `wait` is for a caller about
    * to send or run now: it gives a host moving between instances (a deploy) a few seconds to attach;
    * `'handover'` is the screen's share of that wait, for an agent this instance has never held. */
-  private hostForConversation(user: User, conversation: ChatConversation | null, opts: { wait?: boolean | 'handover' } = {}): Promise<HostChoice> {
+  private async hostForConversation(user: User, conversation: ChatConversation | null, opts: { wait?: boolean | 'handover' } = {}): Promise<HostChoice> {
     const ctx = { repos: this.deps.repos, agents: this.deps.agents };
     const wait = opts.wait ?? false;
-    if (conversation === null || conversation.project_id === null) return resolveHost(ctx, user, conversation === null ? { wait } : { runSessionId: conversation.cli_session_id, wait });
-    // TER-589: a configured project runs its chat on its own accounts and model.
-    return resolveHost(ctx, user, { requires: CAPABILITY_CLAUDE_SYSTEM_PROMPT, runSessionId: conversation.cli_session_id, wait, project: { id: conversation.project_id, accountId: conversation.ai_account_id } });
+    const host =
+      conversation === null || conversation.project_id === null
+        ? await resolveHost(ctx, user, conversation === null ? { wait } : { runSessionId: conversation.cli_session_id, wait })
+        : // TER-589: a configured project runs its chat on its own accounts and model.
+          await resolveHost(ctx, user, { requires: CAPABILITY_CLAUDE_SYSTEM_PROMPT, runSessionId: conversation.cli_session_id, wait, project: { id: conversation.project_id, accountId: conversation.ai_account_id } });
+    if (host.kind !== 'ready') return host;
+    // TER-1145: the conversation's own model, else the project's default, settled against the families
+    // the person keeps the concierge off. The tabs' agents never read this.
+    const blocked = await this.deps.repos.users.chatBlockedModels(user.id).catch((): string[] => []);
+    const { model, steered } = conciergeModel(conversation?.model ?? host.model ?? null, blocked);
+    return { ...host, model, modelSteered: steered, lastModel: conversation?.last_model ?? null };
   }
 
   /**
@@ -726,7 +736,7 @@ export class ChatService {
       if (elsewhere) throw new HttpError(409, 'O concierge ainda está respondendo: compacte quando ele terminar', 'CHAT_BUSY');
       this.compacting.add(live.id);
       chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: live.id, state: 'started', tokens_before: null, tokens: null, error_code: null });
-      const done = this.runCompact(user, live, this.deps.runnerFor(host.machine.id), host.configDir, live.cli_session_id);
+      const done = this.runCompact(user, live, this.deps.runnerFor(host.machine.id), host.configDir, live.cli_session_id, host.model ?? null);
       handedOff = true;
       return { conversation_id: live.id, done };
     } finally {
@@ -735,7 +745,7 @@ export class ChatService {
   }
 
   /** The run `compact` started: `/compact` on stdin, read until the CLI is done. Releases the lock. */
-  private async runCompact(user: User, conversation: ChatConversation, runner: RunnerClient, configDir: string | null, sessionId: string): Promise<void> {
+  private async runCompact(user: User, conversation: ChatConversation, runner: RunnerClient, configDir: string | null, sessionId: string, model: string | null): Promise<void> {
     let before: number | null = null;
     let after: number | null = null;
     let compacted = false;
@@ -750,7 +760,7 @@ export class ChatService {
         errorCode = 'TOKEN_FAILED';
         return;
       }
-      const input: RunnerInput = { session_id: sessionId, resume: true, text: '/compact', config_dir: configDir, model: conversation.model, token, append_system_prompt: null };
+      const input: RunnerInput = { session_id: sessionId, resume: true, text: '/compact', config_dir: configDir, model, token, append_system_prompt: null };
       for await (const line of runner.run(input)) {
         const frame = parseFrame(line);
         if (frame?.type === 'compacted') {
@@ -1684,6 +1694,8 @@ export class ChatService {
           } else if (frame.type === 'init') {
             sessionDir = frame.dir ?? sessionDir;
             runModel = frame.model ?? runModel;
+            // TER-1145: the chat's host card says which model the concierge is on.
+            if (frame.model) await this.deps.repos.chat.setLastModel?.(conversation.id, frame.model).catch((err) => console.error('chat: the run model could not be kept', { conversation_id: conversation.id, error: failureLabel(err) }));
           } else if (frame.type === 'error') {
             // The reason is the container's closed-set classification, so a failure is diagnosable
             // from the stored row alone: CLI_REJECTED means our own flags were refused, which no
@@ -1722,8 +1734,8 @@ export class ChatService {
       }
 
       if (token !== undefined) {
-        // the conversation's own model, else the project's default (TER-589)
-        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
+        // the conversation's own model, else the project's default (TER-589), as "Modelos do concierge" allows (TER-1145)
+        const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, host.model ?? null);
         let input: RunnerInput = {
           session_id: conversation.cli_session_id ?? randomUUID(),
           resume: conversation.cli_session_id !== null,
@@ -1890,8 +1902,8 @@ export class ChatService {
         else await live.failOpen('TOKEN_FAILED');
         return;
       }
-      // the conversation's own model, else the project's default (TER-589)
-      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, conversation.model ?? host.model ?? null);
+      // the conversation's own model, else the project's default (TER-589), as "Modelos do concierge" allows (TER-1145)
+      const fallback = new LimitFallback(this.deps.repos, host.machine, conversation.project_id, conversation.id, host, host.model ?? null);
       /** A missing session is retried on a fresh one once — and never after a swap started one fresh. */
       let freshTried = false;
       for (;;) {

@@ -669,5 +669,13 @@
   "encerrada, a aba foi fechada": "closed, the tab was closed",
   "Dispensar este card?": "Dismiss this card?",
   "Sim, dispensar": "Yes, dismiss",
-  "Tira este card da lista de pendências. A aba não é tocada.": "Takes this card off the pending list. The tab is not touched."
+  "Tira este card da lista de pendências. A aba não é tocada.": "Takes this card off the pending list. The tab is not touched.",
+  "Modelos do concierge": "Concierge models",
+  "Nunca usar {{model}}": "Never use {{model}}",
+  "Não foi possível salvar os modelos do concierge": "Could not save the concierge models",
+  "O concierge nunca sobe nesses modelos: quando o modelo do projeto ou o padrão da CLI for um deles, ele usa o próximo liberado (opus, sonnet, haiku), também ao trocar de conta por limite. Os agentes das abas não mudam.": "The concierge never starts on these models: when the project's model or the CLI's default is one of them, it uses the next one allowed (opus, sonnet, haiku), also when it switches accounts over a limit. The tabs' agents do not change.",
+  "Modelo do concierge: o padrão da CLI.": "Concierge model: the CLI's default.",
+  "Modelo do concierge: {{model}}, pela sua configuração de modelos do concierge.": "Concierge model: {{model}}, from your concierge models setting.",
+  "Modelo do concierge: {{model}}.": "Concierge model: {{model}}.",
+  "Última resposta em {{model}}.": "Last answer on {{model}}."
 }

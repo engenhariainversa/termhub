@@ -54,6 +54,7 @@ export type ChatConversationMinAggregateOutputType = {
   title: string | null
   cliSessionId: string | null
   model: string | null
+  lastModel: string | null
   machineId: string | null
   aiAccountId: string | null
   projectId: string | null
@@ -74,6 +75,7 @@ export type ChatConversationMaxAggregateOutputType = {
   title: string | null
   cliSessionId: string | null
   model: string | null
+  lastModel: string | null
   machineId: string | null
   aiAccountId: string | null
   projectId: string | null
@@ -94,6 +96,7 @@ export type ChatConversationCountAggregateOutputType = {
   title: number
   cliSessionId: number
   model: number
+  lastModel: number
   machineId: number
   aiAccountId: number
   projectId: number
@@ -126,6 +129,7 @@ export type ChatConversationMinAggregateInputType = {
   title?: true
   cliSessionId?: true
   model?: true
+  lastModel?: true
   machineId?: true
   aiAccountId?: true
   projectId?: true
@@ -146,6 +150,7 @@ export type ChatConversationMaxAggregateInputType = {
   title?: true
   cliSessionId?: true
   model?: true
+  lastModel?: true
   machineId?: true
   aiAccountId?: true
   projectId?: true
@@ -166,6 +171,7 @@ export type ChatConversationCountAggregateInputType = {
   title?: true
   cliSessionId?: true
   model?: true
+  lastModel?: true
   machineId?: true
   aiAccountId?: true
   projectId?: true
@@ -273,6 +279,7 @@ export type ChatConversationGroupByOutputType = {
   title: string | null
   cliSessionId: string | null
   model: string | null
+  lastModel: string | null
   machineId: string | null
   aiAccountId: string | null
   projectId: string | null
@@ -316,6 +323,7 @@ export type ChatConversationWhereInput = {
   title?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   cliSessionId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   model?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
+  lastModel?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   machineId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
@@ -355,6 +363,7 @@ export type ChatConversationOrderByWithRelationInput = {
   title?: Prisma.SortOrderInput | Prisma.SortOrder
   cliSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   model?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastModel?: Prisma.SortOrderInput | Prisma.SortOrder
   machineId?: Prisma.SortOrderInput | Prisma.SortOrder
   aiAccountId?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -397,6 +406,7 @@ export type ChatConversationWhereUniqueInput = Prisma.AtLeast<{
   title?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   cliSessionId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   model?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
+  lastModel?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   machineId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
@@ -436,6 +446,7 @@ export type ChatConversationOrderByWithAggregationInput = {
   title?: Prisma.SortOrderInput | Prisma.SortOrder
   cliSessionId?: Prisma.SortOrderInput | Prisma.SortOrder
   model?: Prisma.SortOrderInput | Prisma.SortOrder
+  lastModel?: Prisma.SortOrderInput | Prisma.SortOrder
   machineId?: Prisma.SortOrderInput | Prisma.SortOrder
   aiAccountId?: Prisma.SortOrderInput | Prisma.SortOrder
   projectId?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -464,6 +475,7 @@ export type ChatConversationScalarWhereWithAggregatesInput = {
   title?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
   cliSessionId?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
   model?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
+  lastModel?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
   machineId?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
   aiAccountId?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
   projectId?: Prisma.StringNullableWithAggregatesFilter<"ChatConversation"> | string | null
@@ -483,6 +495,7 @@ export type ChatConversationCreateInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -519,6 +532,7 @@ export type ChatConversationUncheckedCreateInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -553,6 +567,7 @@ export type ChatConversationUpdateInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -589,6 +604,7 @@ export type ChatConversationUncheckedUpdateInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -624,6 +640,7 @@ export type ChatConversationCreateManyInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -643,6 +660,7 @@ export type ChatConversationUpdateManyMutationInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -660,6 +678,7 @@ export type ChatConversationUncheckedUpdateManyInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -695,6 +714,7 @@ export type ChatConversationCountOrderByAggregateInput = {
   title?: Prisma.SortOrder
   cliSessionId?: Prisma.SortOrder
   model?: Prisma.SortOrder
+  lastModel?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -720,6 +740,7 @@ export type ChatConversationMaxOrderByAggregateInput = {
   title?: Prisma.SortOrder
   cliSessionId?: Prisma.SortOrder
   model?: Prisma.SortOrder
+  lastModel?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -740,6 +761,7 @@ export type ChatConversationMinOrderByAggregateInput = {
   title?: Prisma.SortOrder
   cliSessionId?: Prisma.SortOrder
   model?: Prisma.SortOrder
+  lastModel?: Prisma.SortOrder
   machineId?: Prisma.SortOrder
   aiAccountId?: Prisma.SortOrder
   projectId?: Prisma.SortOrder
@@ -1157,6 +1179,7 @@ export type ChatConversationCreateWithoutUserInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1191,6 +1214,7 @@ export type ChatConversationUncheckedCreateWithoutUserInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -1255,6 +1279,7 @@ export type ChatConversationScalarWhereInput = {
   title?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   cliSessionId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   model?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
+  lastModel?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   machineId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   aiAccountId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
   projectId?: Prisma.StringNullableFilter<"ChatConversation"> | string | null
@@ -1274,6 +1299,7 @@ export type ChatConversationCreateWithoutMachineInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1309,6 +1335,7 @@ export type ChatConversationUncheckedCreateWithoutMachineInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   aiAccountId?: string | null
   projectId?: string | null
   archivedAt?: Date | string | null
@@ -1368,6 +1395,7 @@ export type ChatConversationCreateWithoutProjectInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1403,6 +1431,7 @@ export type ChatConversationUncheckedCreateWithoutProjectInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   archivedAt?: Date | string | null
@@ -1462,6 +1491,7 @@ export type ChatConversationCreateWithoutAiAccountInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1497,6 +1527,7 @@ export type ChatConversationUncheckedCreateWithoutAiAccountInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   projectId?: string | null
   archivedAt?: Date | string | null
@@ -1556,6 +1587,7 @@ export type ChatConversationCreateWithoutApiTokensInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1591,6 +1623,7 @@ export type ChatConversationUncheckedCreateWithoutApiTokensInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -1640,6 +1673,7 @@ export type ChatConversationUpdateWithoutApiTokensInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1675,6 +1709,7 @@ export type ChatConversationUncheckedUpdateWithoutApiTokensInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1708,6 +1743,7 @@ export type ChatConversationCreateWithoutMessagesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1743,6 +1779,7 @@ export type ChatConversationUncheckedCreateWithoutMessagesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -1792,6 +1829,7 @@ export type ChatConversationUpdateWithoutMessagesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1827,6 +1865,7 @@ export type ChatConversationUncheckedUpdateWithoutMessagesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -1860,6 +1899,7 @@ export type ChatConversationCreateWithoutAttachmentsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -1895,6 +1935,7 @@ export type ChatConversationUncheckedCreateWithoutAttachmentsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -1944,6 +1985,7 @@ export type ChatConversationUpdateWithoutAttachmentsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -1979,6 +2021,7 @@ export type ChatConversationUncheckedUpdateWithoutAttachmentsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2012,6 +2055,7 @@ export type ChatConversationCreateWithoutActionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2047,6 +2091,7 @@ export type ChatConversationUncheckedCreateWithoutActionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2096,6 +2141,7 @@ export type ChatConversationUpdateWithoutActionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2131,6 +2177,7 @@ export type ChatConversationUncheckedUpdateWithoutActionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2164,6 +2211,7 @@ export type ChatConversationCreateWithoutSubagentsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2199,6 +2247,7 @@ export type ChatConversationUncheckedCreateWithoutSubagentsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2248,6 +2297,7 @@ export type ChatConversationUpdateWithoutSubagentsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2283,6 +2333,7 @@ export type ChatConversationUncheckedUpdateWithoutSubagentsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2316,6 +2367,7 @@ export type ChatConversationCreateWithoutLiveRunInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2351,6 +2403,7 @@ export type ChatConversationUncheckedCreateWithoutLiveRunInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2400,6 +2453,7 @@ export type ChatConversationUpdateWithoutLiveRunInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2435,6 +2489,7 @@ export type ChatConversationUncheckedUpdateWithoutLiveRunInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2468,6 +2523,7 @@ export type ChatConversationCreateWithoutGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2503,6 +2559,7 @@ export type ChatConversationUncheckedCreateWithoutGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2552,6 +2609,7 @@ export type ChatConversationUpdateWithoutGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2587,6 +2645,7 @@ export type ChatConversationUncheckedUpdateWithoutGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2620,6 +2679,7 @@ export type ChatConversationCreateWithoutProjectGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2655,6 +2715,7 @@ export type ChatConversationUncheckedCreateWithoutProjectGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2704,6 +2765,7 @@ export type ChatConversationUpdateWithoutProjectGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2739,6 +2801,7 @@ export type ChatConversationUncheckedUpdateWithoutProjectGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2772,6 +2835,7 @@ export type ChatConversationCreateWithoutStandingGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2807,6 +2871,7 @@ export type ChatConversationUncheckedCreateWithoutStandingGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -2856,6 +2921,7 @@ export type ChatConversationUpdateWithoutStandingGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -2891,6 +2957,7 @@ export type ChatConversationUncheckedUpdateWithoutStandingGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -2924,6 +2991,7 @@ export type ChatConversationCreateWithoutFileGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -2959,6 +3027,7 @@ export type ChatConversationUncheckedCreateWithoutFileGrantsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3008,6 +3077,7 @@ export type ChatConversationUpdateWithoutFileGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3043,6 +3113,7 @@ export type ChatConversationUncheckedUpdateWithoutFileGrantsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3076,6 +3147,7 @@ export type ChatConversationCreateWithoutCommandRulesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -3111,6 +3183,7 @@ export type ChatConversationUncheckedCreateWithoutCommandRulesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3160,6 +3233,7 @@ export type ChatConversationUpdateWithoutCommandRulesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3195,6 +3269,7 @@ export type ChatConversationUncheckedUpdateWithoutCommandRulesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3228,6 +3303,7 @@ export type ChatConversationCreateWithoutConciergeNoticesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -3263,6 +3339,7 @@ export type ChatConversationUncheckedCreateWithoutConciergeNoticesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3312,6 +3389,7 @@ export type ChatConversationUpdateWithoutConciergeNoticesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3347,6 +3425,7 @@ export type ChatConversationUncheckedUpdateWithoutConciergeNoticesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3380,6 +3459,7 @@ export type ChatConversationCreateWithoutTabLimitNoticesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -3415,6 +3495,7 @@ export type ChatConversationUncheckedCreateWithoutTabLimitNoticesInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3464,6 +3545,7 @@ export type ChatConversationUpdateWithoutTabLimitNoticesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3499,6 +3581,7 @@ export type ChatConversationUncheckedUpdateWithoutTabLimitNoticesInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3532,6 +3615,7 @@ export type ChatConversationCreateWithoutTabQuestionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -3567,6 +3651,7 @@ export type ChatConversationUncheckedCreateWithoutTabQuestionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3616,6 +3701,7 @@ export type ChatConversationUpdateWithoutTabQuestionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3651,6 +3737,7 @@ export type ChatConversationUncheckedUpdateWithoutTabQuestionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3684,6 +3771,7 @@ export type ChatConversationCreateWithoutChatDecisionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   archivedAt?: Date | string | null
   tabId?: string | null
   reviewMode?: boolean
@@ -3719,6 +3807,7 @@ export type ChatConversationUncheckedCreateWithoutChatDecisionsInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3768,6 +3857,7 @@ export type ChatConversationUpdateWithoutChatDecisionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3803,6 +3893,7 @@ export type ChatConversationUncheckedUpdateWithoutChatDecisionsInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3836,6 +3927,7 @@ export type ChatConversationCreateManyUserInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   projectId?: string | null
@@ -3855,6 +3947,7 @@ export type ChatConversationUpdateWithoutUserInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3889,6 +3982,7 @@ export type ChatConversationUncheckedUpdateWithoutUserInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3923,6 +4017,7 @@ export type ChatConversationUncheckedUpdateManyWithoutUserInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
@@ -3943,6 +4038,7 @@ export type ChatConversationCreateManyMachineInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   aiAccountId?: string | null
   projectId?: string | null
   archivedAt?: Date | string | null
@@ -3961,6 +4057,7 @@ export type ChatConversationUpdateWithoutMachineInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -3996,6 +4093,7 @@ export type ChatConversationUncheckedUpdateWithoutMachineInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4030,6 +4128,7 @@ export type ChatConversationUncheckedUpdateManyWithoutMachineInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4049,6 +4148,7 @@ export type ChatConversationCreateManyProjectInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   aiAccountId?: string | null
   archivedAt?: Date | string | null
@@ -4067,6 +4167,7 @@ export type ChatConversationUpdateWithoutProjectInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -4102,6 +4203,7 @@ export type ChatConversationUncheckedUpdateWithoutProjectInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4136,6 +4238,7 @@ export type ChatConversationUncheckedUpdateManyWithoutProjectInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   aiAccountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4155,6 +4258,7 @@ export type ChatConversationCreateManyAiAccountInput = {
   title?: string | null
   cliSessionId?: string | null
   model?: string | null
+  lastModel?: string | null
   machineId?: string | null
   projectId?: string | null
   archivedAt?: Date | string | null
@@ -4173,6 +4277,7 @@ export type ChatConversationUpdateWithoutAiAccountInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewMode?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -4208,6 +4313,7 @@ export type ChatConversationUncheckedUpdateWithoutAiAccountInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4242,6 +4348,7 @@ export type ChatConversationUncheckedUpdateManyWithoutAiAccountInput = {
   title?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   cliSessionId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   model?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastModel?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   projectId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   archivedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -4409,6 +4516,7 @@ export type ChatConversationSelect<ExtArgs extends runtime.Types.Extensions.Inte
   title?: boolean
   cliSessionId?: boolean
   model?: boolean
+  lastModel?: boolean
   machineId?: boolean
   aiAccountId?: boolean
   projectId?: boolean
@@ -4449,6 +4557,7 @@ export type ChatConversationSelectCreateManyAndReturn<ExtArgs extends runtime.Ty
   title?: boolean
   cliSessionId?: boolean
   model?: boolean
+  lastModel?: boolean
   machineId?: boolean
   aiAccountId?: boolean
   projectId?: boolean
@@ -4473,6 +4582,7 @@ export type ChatConversationSelectUpdateManyAndReturn<ExtArgs extends runtime.Ty
   title?: boolean
   cliSessionId?: boolean
   model?: boolean
+  lastModel?: boolean
   machineId?: boolean
   aiAccountId?: boolean
   projectId?: boolean
@@ -4497,6 +4607,7 @@ export type ChatConversationSelectScalar = {
   title?: boolean
   cliSessionId?: boolean
   model?: boolean
+  lastModel?: boolean
   machineId?: boolean
   aiAccountId?: boolean
   projectId?: boolean
@@ -4511,7 +4622,7 @@ export type ChatConversationSelectScalar = {
   createdAt?: boolean
 }
 
-export type ChatConversationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "title" | "cliSessionId" | "model" | "machineId" | "aiAccountId" | "projectId" | "archivedAt" | "tabId" | "reviewMode" | "contextTokens" | "contextWindow" | "contextCompactedAt" | "lastMessageAt" | "lastTypedAt" | "createdAt", ExtArgs["result"]["chatConversation"]>
+export type ChatConversationOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "userId" | "title" | "cliSessionId" | "model" | "lastModel" | "machineId" | "aiAccountId" | "projectId" | "archivedAt" | "tabId" | "reviewMode" | "contextTokens" | "contextWindow" | "contextCompactedAt" | "lastMessageAt" | "lastTypedAt" | "createdAt", ExtArgs["result"]["chatConversation"]>
 export type ChatConversationInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   machine?: boolean | Prisma.ChatConversation$machineArgs<ExtArgs>
@@ -4579,6 +4690,10 @@ export type $ChatConversationPayload<ExtArgs extends runtime.Types.Extensions.In
      */
     cliSessionId: string | null
     model: string | null
+    /**
+     * The model the CLI's `init` last said this conversation ran on (TER-1145), shown on the chat's host card.
+     */
+    lastModel: string | null
     /**
      * The host: the user's own machine this conversation runs on. Null = not chosen yet.
      */
@@ -5061,6 +5176,7 @@ export interface ChatConversationFieldRefs {
   readonly title: Prisma.FieldRef<"ChatConversation", 'String'>
   readonly cliSessionId: Prisma.FieldRef<"ChatConversation", 'String'>
   readonly model: Prisma.FieldRef<"ChatConversation", 'String'>
+  readonly lastModel: Prisma.FieldRef<"ChatConversation", 'String'>
   readonly machineId: Prisma.FieldRef<"ChatConversation", 'String'>
   readonly aiAccountId: Prisma.FieldRef<"ChatConversation", 'String'>
   readonly projectId: Prisma.FieldRef<"ChatConversation", 'String'>

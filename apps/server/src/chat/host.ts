@@ -65,7 +65,12 @@ export type HostChoice =
    * not hear less because they had two. A run pins the host it used (`pinHostMachine`), which is what
    * keeps this false for the ordinary single-machine conversation that never chose anything.
    */
-  | { kind: 'ready'; machine: Machine; configDir: string | null; account: HostAccount; sessionAtStake: boolean; model?: string | null }
+  /**
+   * `model` is what the run passes as `--model` (null = the CLI's default). The chat service settles it
+   * against "Modelos do concierge" (TER-1145): `modelSteered` says the setting replaced the model the run
+   * would have used, and `lastModel` is the one the CLI last said this conversation ran on.
+   */
+  | { kind: 'ready'; machine: Machine; configDir: string | null; account: HostAccount; sessionAtStake: boolean; model?: string | null; modelSteered?: boolean; lastModel?: string | null }
   | { kind: 'no_machine' }
   /**
    * `sessionAtStake` is what tells the two ways of reaching this apart, because they deserve different

@@ -237,6 +237,16 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { chatContextLimit: limit } });
   }
 
+  /** "Modelos do concierge" (TER-1145): the families the concierge never runs on; empty = no restriction. */
+  async chatBlockedModels(userId: string): Promise<string[]> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatBlockedModels: true } });
+    return u?.chatBlockedModels ?? [];
+  }
+
+  async setChatBlockedModels(userId: string, families: string[]): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatBlockedModels: families } });
+  }
+
   /** "Avisar quando uma aba terminar" (TER-925): off unless the person turned it on. */
   async pushTabFinished(userId: string): Promise<boolean> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { pushTabFinished: true } });

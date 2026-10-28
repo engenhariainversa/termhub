@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { autoThresholdsBody, chatContextLimit } from '@termhub/mobile-api';
+import { CONCIERGE_MODEL_FAMILIES } from '../chat/concierge-model.js';
 import { FOCUS_BEAT_SECONDS, reportFocus } from '../chat/auto-answer.js';
 import { thresholdsFor } from '../chat/auto-thresholds.js';
 import type { ChatDecision } from '../db/repositories/chat-decisions.js';
@@ -66,9 +67,15 @@ const memoryBody = z
     context_limit: chatContextLimit.nullable().optional(),
     // TER-642: the automatic-answer thresholds pinned by hand; null hands them back to calibration.
     auto_thresholds: autoThresholdsBody.nullable().optional(),
+    // TER-1145: "Modelos do concierge", the families the concierge never runs on; at least one stays allowed.
+    blocked_models: z
+      .array(z.enum(CONCIERGE_MODEL_FAMILIES))
+      .max(CONCIERGE_MODEL_FAMILIES.length - 1, { message: 'Deixe pelo menos um modelo liberado para o concierge' })
+      .transform((families) => [...new Set(families)])
+      .optional(),
   })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined, {
-    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit ou auto_thresholds',
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined || b.blocked_models !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit, auto_thresholds ou blocked_models',
   });
 /** `POST /focus` (TER-642): one screen's heartbeat. `client_id` is that screen's own random id. */
 const focusBody = z.object({ client_id: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
@@ -339,6 +346,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     client_context: await repos.users.chatClientContext(userId),
     // The chat's context meter limit (TER-1038): null = the model's window, the default.
     context_limit: await repos.users.chatContextLimit(userId),
+    // "Modelos do concierge" (TER-1145): empty = no restriction, the default.
+    blocked_models: await repos.users.chatBlockedModels(userId),
     // `false` when embeddings are not configured on this server at all: the switch has nothing to do.
     available: config.embeddings !== null,
     count: await repos.chatDecisions.countForUser(userId),
@@ -361,6 +370,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
     if (body.client_context !== undefined) await repos.users.setChatClientContext(userId, body.client_context);
     if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
+    if (body.blocked_models !== undefined) await repos.users.setChatBlockedModels(userId, body.blocked_models);
     // Pinning turns calibration off for this person; null turns it back on. A countdown already
     // running keeps the thresholds it was scheduled under.
     if (body.auto_thresholds !== undefined) await repos.users.setChatAutoThresholds(userId, body.auto_thresholds);

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { ChatDecision, DecisionNeighbour } from '../db/repositories/chat-decisions.js';
 import type { MemoryHit, MemoryFilter, NewMemoryItem } from '../db/repositories/memory-items.js';
 import type { TabQuestion } from '../db/repositories/tab-questions.js';
@@ -539,6 +539,9 @@ describe('recordDecision', () => {
   });
 
   it('queues the 61st note of the hour from the same origin: nothing written now, the answer says when (TER-1137)', async () => {
+    // The window's writes are stamped 10:15 UTC: the clock has to sit inside that hour, or the slot is now.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-28T10:30:00Z') });
+    onTestFinished(() => vi.useRealTimers());
     const { ctx, calls } = ctxForNotes({ count: 60, timeZone: 'America/Sao_Paulo' });
     const r = await recordDecision(ctx, { question: 'q', decision: 'd', reason: 'r' }, { embedder: null });
     expect(calls.upsertMany).not.toHaveBeenCalled();

@@ -43,6 +43,14 @@ it('names the machine and the account running the conversation', async () => {
   expect(screen.getByText(/conta trabalho/i)).toBeTruthy();
 });
 
+it('says which model the concierge runs on, and when the concierge models setting chose it (TER-1145)', async () => {
+  show({ kind: 'ready', machine: machine('m1', 'jarvis'), configDir: null, account: { kind: 'default' }, sessionAtStake: false, model: 'opus', modelSteered: true, lastModel: 'claude-opus-5-5' });
+  expect(screen.getByText('Modelo do concierge: opus, pela sua configuração de modelos do concierge. Última resposta em claude-opus-5-5.')).toBeTruthy();
+  cleanup();
+  show({ kind: 'ready', machine: machine('m1', 'jarvis'), configDir: null, account: { kind: 'default' }, sessionAtStake: false });
+  expect(screen.getByText('Modelo do concierge: o padrão da CLI.')).toBeTruthy();
+});
+
 it('says the login is the machine default when no account was chosen', async () => {
   show({ kind: 'ready', machine: machine('m1', 'jarvis'), configDir: null, account: { kind: 'default' }, sessionAtStake: false });
 
