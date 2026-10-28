@@ -55,8 +55,8 @@ export async function automationQueue(ctx: ControlContext, projectId: string, lo
 /** A merge wait's text: a conflict escalation names the PR head it is about, so a new push visibly ends it (TER-1016). */
 function mergeWaitText({ wait, sha, detail }: MergeWaitEntry, locale: Locale): string {
   if (wait === 'merge_conflict_cap' && sha) return t(locale, 'Escalado por conflito em {{sha}}; aguardando um push que resolva', { sha: sha.slice(0, 7) });
-  // TER-1120: the workflow that left the base red
-  if (wait === 'merge_base_red' && detail) return `${t(locale, REASON_TEXT[wait])}: ${detail}`;
+  // TER-1120: the workflow that left the base red; TER-1136: the cards the PR depends on
+  if ((wait === 'merge_base_red' || wait === 'merge_person_card') && detail) return `${t(locale, REASON_TEXT[wait])}: ${detail}`;
   return t(locale, REASON_TEXT[wait]);
 }
 

@@ -30,6 +30,8 @@ export interface TaskPullRequest extends PullRequestInfo {
   deploy_url: string | null;
   release_runs: ReleaseRun[];
   changed_level: string | null;
+  /** TER-1136: the PR only cites this card in passing; it never holds the merge. Absent = a link. */
+  mention_only?: boolean;
   synced_at: string;
 }
 
@@ -59,6 +61,7 @@ const map = (r: Row): TaskPullRequest => ({
   deploy_url: r.deployUrl,
   release_runs: (Array.isArray(r.releaseRuns) ? r.releaseRuns : []) as unknown as ReleaseRun[],
   changed_level: r.changedLevel,
+  mention_only: r.mentionOnly,
   synced_at: r.syncedAt.toISOString(),
 });
 
@@ -79,14 +82,16 @@ export class TaskPullRequestsRepository {
   constructor(private db: PrismaClient) {}
 
   /** The PR's rows become exactly `taskIds`: upserted (CI fields kept), the others deleted. */
-  async replaceLinks(projectId: string, pr: PullRequestInfo, taskIds: string[]): Promise<void> {
+  /** The PR's cards, `mentioned` (TER-1136) being the ones it only cites in passing. */
+  async replaceLinks(projectId: string, pr: PullRequestInfo, taskIds: string[], mentioned: string[] = []): Promise<void> {
     await this.db.$transaction(async (tx) => {
       await tx.taskPullRequest.deleteMany({ where: { projectId, repo: pr.repo, number: pr.number, taskId: { notIn: taskIds } } });
       for (const taskId of taskIds) {
+        const fields = { ...prFields(pr), mentionOnly: mentioned.includes(taskId) };
         await tx.taskPullRequest.upsert({
           where: { taskId_repo_number: { taskId, repo: pr.repo, number: pr.number } },
-          create: { id: newId(), projectId, taskId, repo: pr.repo, number: pr.number, ...prFields(pr) },
-          update: prFields(pr),
+          create: { id: newId(), projectId, taskId, repo: pr.repo, number: pr.number, ...fields },
+          update: fields,
         });
       }
     });

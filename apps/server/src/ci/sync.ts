@@ -5,7 +5,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { PullRequestInfo } from '../db/repositories/task-pull-requests.js';
 import { GithubCiError, type GithubCiClient, type GithubPull } from '../integrations/github-ci.js';
 import type { GithubHealthReader } from '../integrations/github-status.js';
-import { ciOf, refsIn } from './rules.js';
+import { ciOf, linkedRefsIn, refsIn } from './rules.js';
 import { setCiError } from './status.js';
 
 export interface CiSyncDeps {
@@ -60,29 +60,39 @@ function ownEpicBranch(pattern: string, epic: { ref: string; title: string }): s
  * Card ids a PR names: a subtask counts for its parent; epics and unknown numbers count for nothing. One
  * exception, only where automation is on (`epicPattern`): a PR whose head is an automatic epic's own branch
  * is that epic's PR (agentic board §10.2) and is linked to the epic alone, so the merge executor sees it.
+ *
+ * `mentioned` (TER-1136): the cards the PR only cites in passing — named in its title or body but not in its
+ * branch nor after a "Depende de"/"Closes" (`linkedRefsIn`). They still show the PR; they never hold its merge.
  */
-async function cardsNamed(repos: Repositories, projectId: string, key: string, pull: GithubPull, epicPattern: string | null): Promise<string[]> {
+async function cardsNamed(repos: Repositories, projectId: string, key: string, pull: GithubPull, epicPattern: string | null): Promise<{ ids: string[]; mentioned: string[] }> {
   const refs = refsIn([pull.head.ref, pull.title, pull.body], key);
   if (epicPattern) {
     for (const n of refsIn([pull.head.ref], key)) {
       const t = await repos.tasks.findByRef(projectId, n);
-      if (t?.type === 'epic' && t.auto && ownEpicBranch(epicPattern, t) === pull.head.ref) return [t.id];
+      if (t?.type === 'epic' && t.auto && ownEpicBranch(epicPattern, t) === pull.head.ref) return { ids: [t.id], mentioned: [] };
     }
   }
+  const linked = new Set([...refsIn([pull.head.ref], key), ...linkedRefsIn([pull.title, pull.body], key)]);
   const ids = new Set<string>();
+  const links = new Set<string>();
   for (const n of refs) {
     const t = await repos.tasks.findByRef(projectId, n);
     if (!t || t.type === 'epic') continue;
-    ids.add(t.parent_id ?? t.id);
+    const id = t.parent_id ?? t.id;
+    ids.add(id);
+    if (linked.has(n)) links.add(id);
   }
   // TER-1110: a PR that names no card (a project whose branches and titles carry the ticket's key, never the
-  // termhub ref) is the card's whose automatic run works on its branch
-  if (ids.size === 0) {
+  // termhub ref) is the card's whose automatic run works on its branch; so is one that only cites cards in passing
+  if (links.size === 0) {
     const taskId = await repos.automationRuns.taskOfBranch(projectId, pull.head.ref);
     const t = taskId ? await repos.tasks.findById(taskId) : undefined;
-    if (t && t.type !== 'epic') ids.add(t.parent_id ?? t.id);
+    if (t && t.type !== 'epic') {
+      ids.add(t.parent_id ?? t.id);
+      links.add(t.parent_id ?? t.id);
+    }
   }
-  return [...ids];
+  return { ids: [...ids], mentioned: [...ids].filter((id) => !links.has(id)) };
 }
 
 /** One project's CI sync (spec 2026-09-26 progress-panel §5.5). */
@@ -109,7 +119,10 @@ export async function syncProjectCi(deps: CiSyncDeps, projectId: string): Promis
     const epicPattern = setup.automation?.enabled ? (setup.automation.epic_branch_pattern ?? null) : null;
     const page = await deps.github.listPulls(token, repo.full_name, deps.etags.get(projectId) ?? null);
     if (!page.notModified) {
-      for (const pull of page.pulls) await repos.taskPullRequests.replaceLinks(projectId, infoOf(repo.full_name, pull), await cardsNamed(repos, projectId, project.key, pull, epicPattern));
+      for (const pull of page.pulls) {
+        const { ids, mentioned } = await cardsNamed(repos, projectId, project.key, pull, epicPattern);
+        await repos.taskPullRequests.replaceLinks(projectId, infoOf(repo.full_name, pull), ids, mentioned);
+      }
       if (page.etag) deps.etags.set(projectId, page.etag);
       pulls = page.pulls.length;
     }

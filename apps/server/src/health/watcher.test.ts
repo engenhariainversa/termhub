@@ -79,6 +79,15 @@ describe('reconcile (TER-1121)', () => {
     expect(store.rows[0].resolved_at).toBe(at(135).toISOString());
   });
 
+  it('TER-1136: a ready PR held by a person\'s card opens at once, with the cards, and is told elsewhere', async () => {
+    const store = memoryStore();
+    const config = healthSchema.parse({});
+    const held = { ...readyPr, wait: 'merge_person_card', wait_detail: 'PST-3' };
+    const open = await reconcile(store, 'p', empty(at(0), { prs: [held] }), config);
+    expect(open.map((a) => [a.signal, a.opened_at])).toEqual([['pr_ready', at(0).toISOString()]]);
+    expect(open[0]!.detail).toMatchObject({ reason: 'merge_person_card', cards: 'PST-3', told_elsewhere: 1 });
+  });
+
   it('seeing it again after it was resolved is a new episode, measured from then', async () => {
     const store = memoryStore();
     const config = healthSchema.parse({});

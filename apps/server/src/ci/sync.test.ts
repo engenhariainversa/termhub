@@ -46,14 +46,14 @@ describe('syncProjectCi', () => {
   it('links the PR to the cards it names, a subtask to its parent, never an epic or a missing number', async () => {
     const { deps, replaceLinks, etags } = setup();
     expect(await syncProjectCi(deps, 'p1')).toEqual({ pulls: 1, checked: 0 });
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc' }), ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc' }), ['card2'], []);
     expect(etags.get('p1')).toBe('e2');
   });
 
   it('stores the PR base branch', async () => {
     const { deps, replaceLinks } = setup();
     await syncProjectCi(deps, 'p1');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ base_ref: 'epic/TER-1-x' }), ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ base_ref: 'epic/TER-1-x' }), ['card2'], []);
   });
 
   // Agentic board §10.2: the epic PR (head = an automatic epic's own branch) is linked to that epic alone.
@@ -62,7 +62,7 @@ describe('syncProjectCi', () => {
     const epicPull = pull({ title: 'TER-4: integrate epic/TER-4-big-epic', body: 'Part of TER-4\n- TER-2 Painel (#6)', head: { ref: 'epic/TER-4-big-epic', sha: 'e' }, base: { ref: 'main' } });
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [epicPull] });
     await syncProjectCi(deps, 'p1');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: 'epic/TER-4-big-epic', base_ref: 'main' }), ['epic4']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: 'epic/TER-4-big-epic', base_ref: 'main' }), ['epic4'], []);
   });
 
   it('with automation off, links exactly as before: an epic PR naming only the epic is on no card, and card refs in a PR still link the cards', async () => {
@@ -70,8 +70,8 @@ describe('syncProjectCi', () => {
     const epicPull = pull({ number: 9, title: 'TER-4: integrate epic/TER-4-big-epic', body: 'Part of TER-4.\n\nCard PRs merged into the epic branch: #6, #7.', head: { ref: 'epic/TER-4-big-epic', sha: 'e' }, base: { ref: 'main' } });
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [epicPull, pull()] });
     await syncProjectCi(deps, 'p1');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 9 }), []);
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 9 }), [], []);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2'], []);
   });
 
   it('never links an epic otherwise: automation off, a manual epic, or a head that is not the epic\'s own branch', async () => {
@@ -85,7 +85,8 @@ describe('syncProjectCi', () => {
       const { deps, replaceLinks, github } = setup({ automation: c.automation });
       vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'x', body: 'TER-2', head: { ref: c.head, sha: 'e' } })] });
       await syncProjectCi(deps, 'p1');
-      expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: c.head }), ['card2']);
+      // only the body names TER-2: a card it cites in passing
+      expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ head_ref: c.head }), ['card2'], ['card2']);
     }
   });
 
@@ -93,7 +94,7 @@ describe('syncProjectCi', () => {
     const { deps, replaceLinks, github } = setup();
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'x', body: null, head: { ref: 'main-fix', sha: 'z' } })] });
     await syncProjectCi(deps, 'p1');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), []);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), [], []);
   });
 
   it('links a PR that names no card to the card whose automatic run works on its branch (TER-1110)', async () => {
@@ -106,14 +107,36 @@ describe('syncProjectCi', () => {
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ title: 'APPS-337 More tab', body: null, head: { ref: 'feature/apps-337-more', sha: 'z' } })] });
     await syncProjectCi(deps, 'p1');
     expect(taskOfBranch).toHaveBeenCalledWith('p1', 'feature/apps-337-more');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2'], []);
+  });
+
+  // TER-1136: only a ref in the branch or after "Depende de"/"Closes" holds the merge; a passing mention does not
+  it('marks the cards a PR only cites in passing, and links the run\'s card when it names no other', async () => {
+    const { deps, replaceLinks, github } = setup();
+    const taskOfBranch = vi.fn(async () => 'card6');
+    const more: Record<number, { id: string; type: string; parent_id: string | null }> = { ...cards, 6: { id: 'card6', type: 'story', parent_id: null }, 8: { id: 'card8', type: 'story', parent_id: null } };
+    Object.assign(deps.repos, {
+      automationRuns: { taskOfBranch },
+      tasks: { findByRef: vi.fn(async (_p: string, n: number) => more[n]), findById: vi.fn(async (id: string) => ({ id, type: 'story', parent_id: null })) },
+    });
+    vi.mocked(github.listPulls).mockResolvedValue({
+      notModified: false,
+      etag: null,
+      pulls: [
+        pull({ number: 7, title: 'API pública por site', body: 'Tela mínima no cms (o visual final vem do TER-2)', head: { ref: 'feature/api', sha: 'a' } }),
+        pull({ number: 8, title: 'TER-6: API', body: 'Depende de: TER-8\n\nVer também TER-2', head: { ref: 'TER-6-api', sha: 'b' } }),
+      ],
+    });
+    await syncProjectCi(deps, 'p1');
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 7 }), ['card2', 'card6'], ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ number: 8 }), ['card6', 'card8', 'card2'], ['card2']);
   });
 
   it('maps a merged PR', async () => {
     const { deps, replaceLinks, github } = setup();
     vi.mocked(github.listPulls).mockResolvedValue({ notModified: false, etag: null, pulls: [pull({ state: 'closed', merged_at: '2026-09-27T11:00:00Z', merge_commit_sha: 'm' })] });
     await syncProjectCi(deps, 'p1');
-    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ state: 'merged', merge_commit_sha: 'm', merged_at: new Date('2026-09-27T11:00:00Z') }), ['card2']);
+    expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ state: 'merged', merge_commit_sha: 'm', merged_at: new Date('2026-09-27T11:00:00Z') }), ['card2'], []);
   });
 
   it('refreshes CI of open watched PRs and deploy of merged ones, once per PR, even when the list is not modified', async () => {

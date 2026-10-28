@@ -678,6 +678,9 @@ model TaskPullRequest {
   deployUrl      String?   @map("deploy_url")
   /// [{ workflow, state: none|running|passed|failed, url, version }] — the setup's release_workflows on merge_commit_sha
   releaseRuns    Json      @default("[]") @map("release_runs")
+  /// TER-1136: the PR only cites this card in passing (its title or body, with no "Depende de"/"Closes"
+  /// before the ref): shown on the card, but it never holds the merge for a person
+  mentionOnly    Boolean   @default(false) @map("mention_only")
   syncedAt       DateTime  @default(now()) @map("synced_at")
   project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task           Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)

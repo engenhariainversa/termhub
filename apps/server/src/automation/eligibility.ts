@@ -66,7 +66,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   merge_no_write: tk('Integração do GitHub sem permissão de escrita'),
   merge_conflict_cap: tk('PR com conflito depois das tentativas de correção'),
   merge_ci_cap: tk('CI vermelho depois das tentativas de correção'),
-  merge_person_card: tk('O PR cita um card manual que não está em Feito; uma pessoa mescla'),
+  merge_person_card: tk('O PR depende de um card manual que não está em Feito; uma pessoa mescla'),
   merge_no_ci: tk('PR sem CI; o termhub não mescla sem CI verde'),
   merge_github_down: tk('GitHub instável; a correção do CI é pedida de novo quando ele voltar'),
   merge_fix_waits_for_tab: tk('A correção do PR espera a aba do card ficar livre; feche a aba para abrir outra'),

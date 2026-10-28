@@ -69,7 +69,7 @@ export async function reconcile(store: Pick<HealthAlertsRepository, 'listUnresol
     }
     let alert = await store.seen(projectId, { signal: o.signal, subject: o.subject, level: o.level, detail, since }, now);
     seenIds.add(alert.id);
-    if (!alert.opened_at && isDue(o.signal, config, new Date(alert.since_at), now) && (await store.open(alert.id, now))) alert = { ...alert, opened_at: now.toISOString() };
+    if (!alert.opened_at && (o.now || isDue(o.signal, config, new Date(alert.since_at), now)) && (await store.open(alert.id, now))) alert = { ...alert, opened_at: now.toISOString() };
     if (alert.opened_at) open.push(alert);
   }
   const gone: string[] = [];
