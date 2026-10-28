@@ -312,8 +312,13 @@ open any PR you want a second look at.
 
 A PR belongs to the automatic card whose run worked on its head branch. Other cards it cites in its title
 or body are only references (TER-1004): the merge does not move them to done, and deploys and releases are
-reported on the PR's own card. A cited manual card that is not done yet holds the merge for a person
-(`merge_person_card` in the queue and, once the PR is green, an escalation once per head); a done one does not.
+reported on the PR's own card. Only a card the PR is linked to can hold its merge (TER-1136): one named in its
+head branch, or in its title or body right after a link word (`Depende de:`, `Depends on`, `Blocked by`,
+`Bloqueado por`, `Requires`, `Closes`, `Fixes`, `Resolves`, `Fecha`, `Corrige`). A card only cited in passing
+("o visual final vem do TER-3") still shows the PR but never holds it (`task_pull_requests.mention_only`). A
+linked manual card that is not done yet holds the merge for a person (`merge_person_card` in the queue with the
+cards, and, once the PR is green, an escalation once per head: push, chat line, a wake of the project chat with
+the ways out, an immediate `pr_ready` health alert and a `merge_blocked` event on `pr` watches); a done one does not.
 
 ## 7a. Decisions automatic work takes alone (TER-1043)
 
@@ -373,7 +378,7 @@ Reasons from `apps/server/src/automation/escalation-text.ts`; the feed shows the
 | `decision_needed` | Stopped on a question and the project has "Parar em decisões de produto" on | Answer in the tab |
 | `ci_cap` | CI still red after the fix attempts | Open the PR, fix it, push; the merge follows when green |
 | `conflict_cap` | Conflict after the fix attempts | Resolve it; the merge follows when CI is green |
-| `merge_person_card` | The PR is green but also cites a manual card that is not done (refs in `cards`) | Merge it by hand, or remove the citation from the PR text (or finish that card); the next pass merges it |
+| `merge_person_card` | The PR is green but depends on a manual card that is not done (refs in `cards`) | Merge it by hand, mark that card automatic or finish it, or remove the link word (`Depende de`, `Closes`…) from the PR text; the next pass merges it |
 | `deploy_failed` | The deploy failed after a merge; the project is paused | Section 10, then "Retomar automático" |
 | `deploy_failed_not_paused` | Same, and the pause could not be applied | Pause the project yourself first, then section 10 |
 | `release_failed` | A release workflow failed after a merge; nothing is paused | Section 10 |

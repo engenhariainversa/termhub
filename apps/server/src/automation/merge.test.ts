@@ -767,6 +767,30 @@ describe('runMergeExecutor', () => {
     expect(w.gh.merge).not.toHaveBeenCalled();
   });
 
+  it('TER-1136: the held PR names the cards in the queue and its chat line, and wakes the chat once per head', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3' })] });
+    const wakeHeld = vi.fn(async () => true);
+    Object.assign(w.deps, { wakeHeld });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(mergeWaitEntryOf('c1', new Date('2026-10-05T12:00:00Z'))).toEqual(expect.objectContaining({ wait: 'merge_person_card', detail: 'TER-7' }));
+    expect(wakeHeld).toHaveBeenCalledTimes(1);
+    expect(wakeHeld).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u1', projectId: 'p1', cardRef: 'TER-5', pr: 7, cards: [{ id: 'c3', ref: 'TER-7', title: 'Card manual' }] }));
+    expect(w.state.messages.join('\n')).toContain('O PR #7 está verde, mas depende de TER-7');
+  });
+
+  it('TER-1136: a person\'s card the PR only cites in passing does not hold the merge', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3', mention_only: true })] });
+    const wakeHeld = vi.fn(async () => true);
+    Object.assign(w.deps, { wakeHeld });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledWith('c1', { status: 'done' }, 0);
+    expect(w.repos.tasks.move).not.toHaveBeenCalledWith('c3', expect.anything(), expect.anything());
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    expect(wakeHeld).not.toHaveBeenCalled();
+  });
+
   it('TER-1004: a person\'s card the PR only cites and that is already done does not hold the merge', async () => {
     const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3' })] });
     const cards: Record<string, object> = { e1: EPIC, e2: EPIC2, c1: CARD, c2: LONE, c3: { ...MANUAL, status: 'done' } };

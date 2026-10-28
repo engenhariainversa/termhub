@@ -116,6 +116,18 @@ export class AutomationEventsRepository {
     return row ? map(row) : null;
   }
 
+  /**
+   * TER-1136: the newest event of one of `kinds` about a PR head (payload `pr` and `sha`), in the project: what
+   * the merge executor said about it (an escalation, an approval asked). Null when it said nothing.
+   */
+  async lastForPullHead(projectId: string, kinds: AutomationEventKind[], pr: number, sha: string): Promise<AutomationEvent | null> {
+    const row = await this.db.automationEvent.findFirst({
+      where: { projectId, kind: { in: kinds }, AND: [{ payload: { path: ['pr'], equals: pr } }, { payload: { path: ['sha'], equals: sha } }] },
+      orderBy: { createdAt: 'desc' },
+    });
+    return row ? map(row) : null;
+  }
+
   /** How many events of `kind` the run recorded since `since` (the answer cap of spec D18, review I2). */
   async countForRun(runId: string, kind: AutomationEventKind, since: Date): Promise<number> {
     return this.db.automationEvent.count({ where: { runId, kind, createdAt: { gte: since } } });

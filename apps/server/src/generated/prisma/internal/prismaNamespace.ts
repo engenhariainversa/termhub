@@ -6502,6 +6502,7 @@ export const TaskPullRequestScalarFieldEnum = {
   deployState: 'deployState',
   deployUrl: 'deployUrl',
   releaseRuns: 'releaseRuns',
+  mentionOnly: 'mentionOnly',
   syncedAt: 'syncedAt'
 } as const
 

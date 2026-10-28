@@ -90,6 +90,18 @@ describe('PR watches', () => {
   const prWatch = (events: string[], baselinePr: TaskPullRequest | null, over: Partial<ChatWatch> = {}) =>
     watch({ kind: 'pr', target_id: 'k1', params: { events }, baseline: { prs: baselinePr ? { [baselinePr.url]: { state: baselinePr.state, ci_state: baselinePr.ci_state, head_sha: baselinePr.head_sha, deploy_state: baselinePr.deploy_state, merge_sha: baselinePr.merge_commit_sha, releases: Object.fromEntries(baselinePr.release_runs.map((r) => [r.workflow, r.state])) } } : {} }, ...over });
 
+  it('TER-1136: a head termhub will not merge by itself is `merge_blocked`, once per head and reason', async () => {
+    const green = pr({ ci_state: 'passed' });
+    const held = { ...green, merge_blocked: 'merge_person_card' };
+    const ev = await evaluateWatch(probe({ prs: [held] }), prWatch(['merge_blocked'], green));
+    expect(ev?.events).toEqual([expect.objectContaining({ event: 'merge_blocked', key: `${green.url}:merge_blocked:merge_person_card@aaa`, payload: expect.objectContaining({ number: 511, reason: 'merge_person_card', head_sha: 'aaa' }) })]);
+    // the same block again: nothing new
+    const again = await evaluateWatch(probe({ prs: [held] }), watch({ kind: 'pr', target_id: 'k1', params: { events: ['merge_blocked'] }, baseline: ev!.baseline }));
+    expect(again).toBeNull();
+    // not asked for: only the baseline moves
+    expect((await evaluateWatch(probe({ prs: [held] }), prWatch(['merged'], green)))?.events).toEqual([]);
+  });
+
   it('a new PR of the card is `opened`', async () => {
     const ev = await evaluateWatch(probe({ prs: [pr()] }), prWatch(['opened'], null));
     expect(ev?.events).toEqual([expect.objectContaining({ event: 'opened', payload: expect.objectContaining({ number: 511, pr_url: pr().url }) })]);

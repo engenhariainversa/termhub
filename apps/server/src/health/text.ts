@@ -63,7 +63,11 @@ export function alertLine(a: Pick<HealthAlert, 'signal' | 'detail' | 'since_at'>
   };
   const head = a.signal === 'base_red' && d.state === 'pending' ? t(locale, BASE_PENDING, vars) : t(locale, TEXT[a.signal], vars);
   const extra: string[] = [];
-  if (a.signal === 'pr_ready' && typeof d.reason === 'string' && d.reason in REASON_TEXT) extra.push(t(locale, REASON_TEXT[d.reason as IneligibleReason]));
+  if (a.signal === 'pr_ready' && typeof d.reason === 'string' && d.reason in REASON_TEXT) {
+    // TER-1136: a PR held by a person's card names the cards
+    const why = t(locale, REASON_TEXT[d.reason as IneligibleReason]);
+    extra.push(d.cards ? `${why}: ${str(d.cards)}` : why);
+  }
   if (a.signal === 'base_red' && d.failing) extra.push(t(locale, d.state === 'pending' ? PENDING : FAILING, { names: str(d.failing) }));
   if (a.signal === 'queue_stalled' && d.cards) extra.push(str(d.cards));
   const back = typeof d.back_at === 'string' ? Date.parse(d.back_at) : NaN;
@@ -80,7 +84,7 @@ export function noticeHeadline(alerts: Pick<HealthAlert, 'signal' | 'detail' | '
 
 /** What unblocks each sign, for the concierge (pt-BR, the wake's language). */
 const HINT: Record<HealthSignal, string> = {
-  pr_ready: 'o motivo da fila está acima (list_automation_queue também mostra); base vermelha se destrava consertando a base, aprovação a pessoa dá no chat, build de loja só ela faz',
+  pr_ready: 'o motivo da fila está acima (list_automation_queue também mostra); base vermelha se destrava consertando a base, aprovação a pessoa dá no chat, build de loja só ela faz; um PR que depende de card manual a pessoa mescla no GitHub, ou autoriza marcar o card como automático ou movê-lo para Feito',
   base_red: 'o workflow que falha (ou que nunca termina, por exemplo sem runner) precisa de conserto ou sair dos checks e entregas do Setup; enquanto isso nenhum PR é mesclado',
   queue_stalled: 'list_automation_queue diz o motivo de cada card (conta, máquina, backoff); destrave o que estiver ao seu alcance',
   tab_stuck: 'read_screen na aba diz se ela está mesmo trabalhando (um build longo) ou travada; travada, send_key ou send_input dentro das regras, senão avise',

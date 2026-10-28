@@ -4,7 +4,7 @@ import type { AutoAnswer, TabQuestion } from '../db/repositories/tab-questions.j
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import type { ChatService } from './service.js';
-import { createWaker, POST_RUN_WAKE_COOLDOWN_MS, postRunBlockWakeText, stoppedTabWakeText, wakeText, type PostRunBlockWake } from './wake.js';
+import { createWaker, heldPrWakeText, POST_RUN_WAKE_COOLDOWN_MS, postRunBlockWakeText, stoppedTabWakeText, wakeText, type PostRunBlockWake } from './wake.js';
 
 const cleanPayload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
 const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
@@ -250,5 +250,15 @@ describe('the post-run block wake (TER-1112)', () => {
     const waker = createWaker({ repos: repos() as unknown as Repositories, chat, maxPerHour: 12, log: log() });
     expect(await waker.wakeForPostRunBlock(wake())).toBe(false);
     expect(chat.wake).not.toHaveBeenCalled();
+  });
+});
+
+describe('heldPrWakeText (TER-1136)', () => {
+  it('names the PR, the cards it depends on as quoted data, and the ways out, never merging by itself', () => {
+    const text = heldPrWakeText({ cardRef: 'PST-7', pr: 7, prUrl: 'https://github.com/o/r/pull/7', cards: [{ id: 'wze', ref: 'PST-3', title: 'Visual «final»' }] });
+    expect(text).toMatch(/^Automático: o PR #7 \(https:\/\/github.com\/o\/r\/pull\/7\) do card PST-7/);
+    expect(text).toContain('depende de PST-3 («Visual final», task_id wze)');
+    expect(text).toContain('mesclar no GitHub');
+    expect(text).toContain('Não mescle nem mude card algum sem a pessoa pedir');
   });
 });

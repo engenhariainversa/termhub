@@ -26,7 +26,7 @@ import { recordTakenDecisions, type TakenDecision } from './decisions-taken.js';
 import { DECIDE_NUDGES_MAX, DECIDE_TEXT, decisionException, questionOf } from './decision.js';
 import { MAX_RESTARTS } from './restart.js';
 import { escalationWhy } from './why.js';
-import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT, POST_RUN_BLOCKED } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationEventText, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT, POST_RUN_BLOCKED } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
 import { inRunRepo, runRepoOf } from './run-pr.js';
@@ -251,7 +251,8 @@ export async function escalateDelivery(repos: Repositories, about: { project_id:
     log.warn({ projectId: about.project_id, code: errorCode(e) }, 'automation: escalation not recorded: no push'),
   );
   log.info({ projectId: about.project_id, taskId: about.task_id, reason }, 'automation: delivery escalated');
-  await postEscalationLine(repos, { id: '', project_id: about.project_id, task_id: about.task_id, tab_id: null }, reason, null, log);
+  // the line names what the feed names (the PR and the cards it depends on, TER-1136)
+  await postEscalationLine(repos, { id: '', project_id: about.project_id, task_id: about.task_id, tab_id: null }, reason, (locale) => escalationEventText({ reason, ...extra }, locale), log);
 }
 
 /**
