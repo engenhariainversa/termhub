@@ -25,6 +25,9 @@ const TEXT: Record<HealthSignal, string> = {
 const BASE_PENDING = tk('Branch base {{label}} com a CI sem terminar há {{duration}}');
 const FAILING = tk('falhando: {{names}}');
 const PENDING = tk('sem terminar: {{names}}');
+/** TER-1135: a flickering machine — back for now, and how many times it came back and dropped again. */
+const BACK = tk('voltou há {{duration}}');
+const FLAPS = tk('caiu de novo {{n}}x');
 
 /** Every signal's name, for the Setup and the panel. */
 export const SIGNAL_NAME: Record<HealthSignal, string> = {
@@ -63,6 +66,9 @@ export function alertLine(a: Pick<HealthAlert, 'signal' | 'detail' | 'since_at'>
   if (a.signal === 'pr_ready' && typeof d.reason === 'string' && d.reason in REASON_TEXT) extra.push(t(locale, REASON_TEXT[d.reason as IneligibleReason]));
   if (a.signal === 'base_red' && d.failing) extra.push(t(locale, d.state === 'pending' ? PENDING : FAILING, { names: str(d.failing) }));
   if (a.signal === 'queue_stalled' && d.cards) extra.push(str(d.cards));
+  const back = typeof d.back_at === 'string' ? Date.parse(d.back_at) : NaN;
+  if (!Number.isNaN(back)) extra.push(t(locale, BACK, { duration: durationText(locale, now.getTime() - back) }));
+  if (d.flaps) extra.push(t(locale, FLAPS, { n: str(d.flaps) }));
   return extra.length ? `${head}: ${extra.join('; ')}` : head;
 }
 

@@ -668,7 +668,7 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
 | `tab_waiting` tab on a question, a permission, the folder trust or a login | tab | 10 min | concierge | every project |
 | `card_orphan` card in Doing with no live tab, run, open PR or blocked run | card | 120 min | concierge | automation on |
 | `run_blocked` run escalated (`waiting` with a person's reason) or `blocked` | run | 60 min | person | automation on |
-| `machine_offline` agent machine offline holding a tab or a run of the project | machine | 15 min | person | every project |
+| `machine_offline` agent machine offline holding an active run of the project, or a tab with an event within the `tab_stuck` minutes before its last contact (TER-1135) | machine | 15 min | person | every project |
 | `delivery_failed` newest merge of a repo whose deploy or release failed, nothing merged since | PR url + workflow | 30 min | person | automation on |
 | `agent_outdated` online agent below `MIN_AGENT_VERSION` | machine | 60 min | person | automation on |
 
@@ -676,6 +676,10 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
   last run's start, the machine's last contact, the card's last change), else from the first sweep that saw
   it. Past its minutes the alert opens (`opened_at`); a sweep that no longer sees it resolves it
   (`resolved_at`); seeing it again later is a new episode on the same row.
+- **Flickering machines (TER-1135).** A machine on shaky Wi-Fi or going to sleep drops and comes back. Once
+  `machine_offline` is no longer seen, its alert keeps running for an hour (`FLAP_GRACE_MS`, `back_at` in
+  its detail) before it resolves; a drop within that hour is the same episode, timed from its first drop,
+  with no new push or wake, and `flaps` in the detail counts the drops ("caiu de novo 2x" on the panel).
 - **Telling.** Each episode reaches the person once (claims `noticed_at` and `woken_at`, both colours):
   a "person" sign becomes a concierge notice (`needs_you`, section 9g: the person's levels, quiet hours,
   grouping and cap apply), and every open sign wakes the project's chat with the diagnosis, the ids and what

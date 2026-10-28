@@ -79,7 +79,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     machines.push({
       id: m.id, name: m.name, agent: m.type === 'agent', online, last_seen_at: date(m.agent_last_seen_at),
       agent_version: (online ? agents.info(m.id)?.agent_version : null) ?? m.agent_version,
-      has_work: tabs.some((t) => t.machine_id === m.id) || active.some((r) => r.machine_id === m.id),
+      active_run: active.some((r) => r.machine_id === m.id),
     });
   }
 

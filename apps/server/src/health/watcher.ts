@@ -2,7 +2,7 @@
  * TER-1121: the project health watcher. Every `HEALTH_SWEEP_MS` it reads each active project (`snapshot.ts`),
  * asks which signs of stalled work it shows (`signals.ts`) and keeps one alert per sign and subject: a sign
  * past its minutes opens the alert, a sign no longer seen resolves it, and seeing it again later is a new
- * episode. Each open episode reaches the person once:
+ * episode — except a flickering one (`FLAP_GRACE_MS`, an offline machine), which waits out a grace first. Each open episode reaches the person once:
  *
  * - `needs_you` signs (only the person can act) become a concierge notice (`notify` needs_you): it leaves as
  *   a push by the person's own rules — levels, quiet hours, grouping, the hourly cap (TER-1101);
@@ -20,7 +20,7 @@ import type { Project, User } from '../db/repositories/types.js';
 import { localeOf } from '../i18n/index.js';
 import { currentRulesBlock } from '../memory/current-rules.js';
 import type { ProjectHealth, ProjectSetupData } from '../setup/schema.js';
-import { isDue, observe, type HealthSnapshot } from './signals.js';
+import { FLAP_GRACE_MS, isDue, observe, type HealthSnapshot } from './signals.js';
 import { buildSnapshot } from './snapshot.js';
 import { healthWakeText, noticeHeadline } from './text.js';
 
@@ -53,18 +53,35 @@ export interface HealthWatcher {
  * Records what one snapshot shows: every sign seen, the ones past their minutes opened, the rest resolved.
  * Answers the project's open alerts afterwards.
  */
-export async function reconcile(store: Pick<HealthAlertsRepository, 'listUnresolved' | 'seen' | 'open' | 'resolve'>, projectId: string, snapshot: HealthSnapshot, config: ProjectHealth): Promise<HealthAlert[]> {
+export async function reconcile(store: Pick<HealthAlertsRepository, 'listUnresolved' | 'seen' | 'open' | 'resolve' | 'note'>, projectId: string, snapshot: HealthSnapshot, config: ProjectHealth): Promise<HealthAlert[]> {
   const now = snapshot.now;
   const before = await store.listUnresolved(projectId);
+  const running = new Map(before.map((a) => [`${a.signal}\n${a.subject}`, a]));
   const seenIds = new Set<string>();
   const open: HealthAlert[] = [];
   for (const o of observe(snapshot, config)) {
-    let alert = await store.seen(projectId, { signal: o.signal, subject: o.subject, level: o.level, detail: o.detail, since: o.since }, now);
+    let { detail, since } = o;
+    const prev = running.get(`${o.signal}\n${o.subject}`);
+    if (prev && FLAP_GRACE_MS[o.signal]) {
+      // TER-1135: back from a flicker, it is the same episode — counted, and timed from its first drop
+      const flaps = (typeof prev.detail.flaps === 'number' ? prev.detail.flaps : 0) + (prev.detail.back_at ? 1 : 0);
+      if (flaps) (detail = { ...detail, flaps }), (since = null);
+    }
+    let alert = await store.seen(projectId, { signal: o.signal, subject: o.subject, level: o.level, detail, since }, now);
     seenIds.add(alert.id);
     if (!alert.opened_at && isDue(o.signal, config, new Date(alert.since_at), now) && (await store.open(alert.id, now))) alert = { ...alert, opened_at: now.toISOString() };
     if (alert.opened_at) open.push(alert);
   }
-  await store.resolve(before.filter((a) => !seenIds.has(a.id)).map((a) => a.id), now);
+  const gone: string[] = [];
+  for (const a of before) {
+    if (seenIds.has(a.id)) continue;
+    const grace = config.enabled && config.signals[a.signal].enabled ? FLAP_GRACE_MS[a.signal] : undefined;
+    const back = typeof a.detail.back_at === 'string' ? Date.parse(a.detail.back_at) : NaN;
+    // a flickering sign gone for now waits out its grace before the episode ends
+    if (grace && Number.isNaN(back)) await store.note(a.id, { ...a.detail, back_at: now.toISOString() });
+    else if (!grace || now.getTime() - back >= grace) gone.push(a.id);
+  }
+  await store.resolve(gone, now);
   return open;
 }
 
