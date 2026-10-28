@@ -121,6 +121,8 @@ const AUTH_ERRORS = new Set(['authentication_failed', 'oauth_org_not_allowed']);
 export const AUTH_REQUIRED_TEXT = 'Login da conta expirou: rode /login nesta aba';
 /** Claude Code's folder trust dialog, read off the screen (TER-1046): the screen itself is never kept. */
 export const TRUST_PROMPT_TEXT = 'O Claude Code pergunta se esta pasta é confiável';
+/** The same for any CLI's dialog (TER-1122): `label` is the CLI's name (trust-dialogs.ts). */
+export const trustPromptText = (label: string): string => `O ${label} pergunta se esta pasta é confiável`;
 
 export const isRateLimit = (i: Interpreted | null): boolean => !!i && i.meta.event === 'StopFailure' && i.meta.error === 'rate_limit';
 

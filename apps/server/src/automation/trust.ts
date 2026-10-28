@@ -2,6 +2,7 @@ import { captureScreen } from '../agent/screen.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Tab } from '../db/repositories/types.js';
+import { trustDialogOf } from '../monitor/trust-dialogs.js';
 import { sendKeyToSession } from '../terminal/session-ops.js';
 
 /*
@@ -9,18 +10,16 @@ import { sendKeyToSession } from '../terminal/session-ops.js';
  * before any hook in a folder Claude has not seen, and after an account swap (trust is kept per account).
  * An automatic run always works in a worktree termhub itself made for it, so the server answers it: the
  * new agent pre-accepts the worktree, and this covers older agents and accounts it did not reach.
+ * TER-1122: the same for Codex's, Cursor's and Gemini's own dialogs (monitor/trust-dialogs.ts).
  */
-
-/** The answer the question opens on (Claude Code 2.1.x: "1. Yes, I trust this folder" / "2. No, exit"). */
-const YES_SELECTED = /❯\s*1\.\s*Yes, I trust this folder/;
-const ASKS = /one you trust|trust this folder/i;
 
 /**
- * Whether the screen shows the trust question with its "Yes" option selected — only then is Enter the
- * answer; any other screen (the "No" option selected, a different dialog) is left for the person.
+ * Whether the screen shows a CLI's trust question with its trust option selected — only then is Enter the
+ * answer; any other screen (the "No" option selected, a different dialog, a dialog that would also change
+ * the CLI's permissions) is left for the person.
  */
 export function showsTrustQuestion(screen: string): boolean {
-  return ASKS.test(screen) && screen.split('\n').some((line) => YES_SELECTED.test(line));
+  return trustDialogOf(screen)?.acceptable === true;
 }
 
 /** Lines of the screen read: the question fills less than a screen. */

@@ -188,7 +188,7 @@ describe('sweepStaleWorking — the agent exited without a hook (TER-643)', () =
     expect(exited).toHaveBeenCalledTimes(1);
   });
 
-  it('the agent still in front: a Claude tab goes on to its screen, a Codex tab is left alone', async () => {
+  it('the agent still in front: a Claude tab goes on to its screen, a Codex tab is only read for its trust dialog', async () => {
     const claude = setup([tab()], BUSY, { pane: 'busy' });
     await sweepStaleWorking(claude.repos, log() as never, now, claude.deps);
     expect(claude.capture).toHaveBeenCalledTimes(1);
@@ -196,9 +196,16 @@ describe('sweepStaleWorking — the agent exited without a hook (TER-643)', () =
 
     const codex = setup([tab({ state_tool: 'codex' })], PROMPT, { pane: 'busy' });
     await sweepStaleWorking(codex.repos, log() as never, now, codex.deps);
-    expect(codex.capture).not.toHaveBeenCalled();
+    expect(codex.capture).toHaveBeenCalledTimes(1);
     expect(codex.recordEvent).not.toHaveBeenCalled();
     expect(codex.exited).not.toHaveBeenCalled();
+  });
+
+  it('TER-1122: a Codex tab left working on its own trust dialog (outside the project folder) is trust_prompt', async () => {
+    const codexTrust = readFileSync(new URL('./fixtures/trust-screens/codex-0.159.3.txt', import.meta.url), 'utf8');
+    const codex = setup([tab({ state_tool: 'codex', cwd: '/elsewhere' })], codexTrust, { pane: 'busy' });
+    await sweepStaleWorking(codex.repos, log() as never, now, codex.deps);
+    expect(codex.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: 'codex', ifStateAt: AT }));
   });
 
   it('a pane it cannot read (an older agent) leaves a Codex tab as it was and a Claude tab to its screen', async () => {
@@ -365,7 +372,7 @@ describe('sweepStaleWorking — a background wait that never reports (TER-1053)'
     }
   });
 
-  it('a timeout of 0 turns it off, and a Codex tab is never read', async () => {
+  it('a timeout of 0 turns it off, and a Codex tab never gets it (its screen is only read for the trust dialog)', async () => {
     const off = setup([waiting()], DONE);
     off.deps.backgroundTimeoutMs = 0;
     await twice(off);
@@ -373,7 +380,7 @@ describe('sweepStaleWorking — a background wait that never reports (TER-1053)'
 
     const codex = setup([waiting({ state_tool: 'codex' })], DONE);
     await twice(codex);
-    expect(codex.capture).not.toHaveBeenCalled();
+    expect(codex.recordEvent).not.toHaveBeenCalled();
   });
 
   it('a hook that landed meanwhile wins: nothing is published', async () => {

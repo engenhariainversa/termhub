@@ -8,7 +8,7 @@ import { publishWatches } from './watches/view.js';
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 
 /*
- * TER-1117: a tab waiting on Claude Code's folder trust dialog wakes the project's chat on its own. Before,
+ * TER-1117: a tab waiting on its CLI's folder trust dialog (Claude Code, Codex, Cursor or Gemini, TER-1122) wakes the project's chat on its own. Before,
  * the concierge only learnt of it through a watch it had to remember, or when the person asked. Where the
  * server answers the dialog itself (the project's folder, monitor/folder-trust.ts) the tab never gets here.
  * The wake is a watch the server registers in the project's chat, already behind the event: the watch
@@ -19,7 +19,7 @@ type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 
 /** What the chat is told to do. */
 export const TRUST_WAKE_NOTE =
-  'A aba está parada no diálogo de confiança da pasta do Claude Code ("Is this a project you created or one you trust?") e não segue sozinha. A opção 1 ("Yes, I trust this folder") já vem marcada: com o aval da pessoa, ou de uma regra dela que cubra esta pasta, send_key Enter na aba confia e o agente continua; senão, avise a pessoa (notify needs_you) dizendo a aba e que ela precisa confiar na pasta.';
+  'A aba está parada no diálogo de confiança da pasta do CLI dela (Claude Code: "Is this a project you created or one you trust?"; Codex: "Trust this folder?"; Cursor: "Workspace Trust Required"; Gemini: "Do you trust the files in this folder?") e não segue sozinha. read_screen mostra qual. A opção de confiar (Claude "Yes, I trust this folder", Codex "Trust and continue", Cursor "Trust this workspace", Gemini "Trust folder") já vem marcada: com o aval da pessoa, ou de uma regra dela que cubra esta pasta, send_key Enter na aba confia e o agente continua. Se a opção marcada for outra, ou o Codex oferecer "work in this folder without asking for approval" (isso também desliga as aprovações), não responda: avise a pessoa (notify needs_you) dizendo a aba e que ela precisa confiar na pasta.';
 /** How long the server's watch waits to be delivered. */
 const WAKE_HOURS = 6;
 

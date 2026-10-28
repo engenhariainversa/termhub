@@ -13,6 +13,11 @@ const { LAUNCH_CHECKS_MS, checkLaunch, followLaunch, resetAnsweredForTests, sett
 const AT = '2026-10-24T18:00:00.000Z';
 const TRUST = readFileSync(new URL('./fixtures/claude-screens/trust-2.1.289.txt', import.meta.url), 'utf8');
 const NO_SELECTED = TRUST.replace('❯ 1. Yes, I trust this folder', '  1. Yes, I trust this folder').replace('   2. No, exit', ' ❯ 2. No, exit');
+const OTHERS = [
+  { cli: 'codex', screen: readFileSync(new URL('./fixtures/trust-screens/codex-0.159.3.txt', import.meta.url), 'utf8'), label: 'Codex' },
+  { cli: 'cursor', screen: readFileSync(new URL('./fixtures/trust-screens/cursor.txt', import.meta.url), 'utf8'), label: 'Cursor' },
+  { cli: 'gemini', screen: readFileSync(new URL('./fixtures/trust-screens/gemini.txt', import.meta.url), 'utf8'), label: 'Gemini CLI' },
+] as const;
 const PROMPT = '● Pronto.\n\n✻ Brewed for 3s\n\n────────────\n❯ \n────────────';
 
 const tab = (over: Partial<Tab> = {}): Tab & { tmux_session: string } =>
@@ -43,7 +48,7 @@ describe('settleTrustDialog — the folder trust dialog (TER-1117)', () => {
     const l = log();
     expect(await settleTrustDialog(repos, l as never, tab(), machine, TRUST, deps)).toBe('accepted');
     expect(deps.sendEnter).toHaveBeenCalledWith(machine, 'th-t1');
-    expect(recordFeed).toHaveBeenCalledWith(repos, { project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: 't1', tab_name: 'api', folder: 'project' } });
+    expect(recordFeed).toHaveBeenCalledWith(repos, { project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: 't1', tab_name: 'api', folder: 'project', cli: 'claude' } });
     expect(recordEvent).not.toHaveBeenCalled();
     // ids only: the screen is never logged
     expect(JSON.stringify(l.info.mock.calls)).not.toContain('trust this folder');
@@ -71,6 +76,30 @@ describe('settleTrustDialog — the folder trust dialog (TER-1117)', () => {
       expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: 'claude', meta: { event: 'ScreenCheck', screen: 'trust' }, ifStateAt: null }));
       expect(publish).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it('TER-1122: Codex, Cursor and Gemini get the same answer in the project folder, and their own trust_prompt elsewhere', async () => {
+    for (const o of OTHERS) {
+      resetAnsweredForTests();
+      recordFeed.mockClear();
+      const inside = setup();
+      expect(await settleTrustDialog(inside.repos, log() as never, tab(), machine, o.screen, inside.deps)).toBe('accepted');
+      expect(inside.deps.sendEnter).toHaveBeenCalledWith(machine, 'th-t1');
+      expect(recordFeed).toHaveBeenCalledWith(inside.repos, expect.objectContaining({ kind: 'trust_auto_accepted', payload: expect.objectContaining({ cli: o.cli }) }));
+      resetAnsweredForTests();
+      const outside = setup();
+      expect(await settleTrustDialog(outside.repos, log() as never, tab({ cwd: '/elsewhere' }), machine, o.screen, outside.deps)).toBe('reported');
+      expect(outside.deps.sendEnter).not.toHaveBeenCalled();
+      expect(outside.recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: o.cli, text: `O ${o.label} pergunta se esta pasta é confiável` }));
+    }
+  });
+
+  it('TER-1122: Codex asking to also turn its approvals off is reported, never answered', async () => {
+    const screen = '› 1. Yes, allow Codex to work in this folder without asking for approval\n  2. No, ask me to approve edits and commands';
+    const { repos, recordEvent, deps } = setup();
+    expect(await settleTrustDialog(repos, log() as never, tab(), machine, screen, deps)).toBe('reported');
+    expect(deps.sendEnter).not.toHaveBeenCalled();
+    expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: 'codex' }));
   });
 
   it('a tab whose state moved meanwhile is left alone', async () => {
@@ -108,6 +137,12 @@ describe('followLaunch — the screen read right after an agent start (TER-1117)
     expect(waiting.deps.capture).not.toHaveBeenCalled();
     const busy = setup({ screen: PROMPT });
     expect(await checkLaunch(busy.repos, log() as never, 't1', machine, busy.deps)).toBe(false);
+  });
+
+  it('TER-1122: a Codex start is followed the same way', async () => {
+    const { repos, deps } = setup({ screen: OTHERS[0].screen });
+    expect(await checkLaunch(repos, log() as never, 't1', machine, deps)).toBe(true);
+    expect(deps.sendEnter).toHaveBeenCalledTimes(1);
   });
 
   it('a tab that reported working from the start still turns trust_prompt, never stays "working"', async () => {

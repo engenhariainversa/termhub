@@ -12,6 +12,7 @@ import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { normalizeSetup } from '../setup/schema.js';
 import { applyErrorHandler } from '../lib/errors.js';
+import { resetAnsweredForTests } from '../monitor/folder-trust.js';
 import { mcpRoutes } from './route.js';
 import { removeTempDir } from '../../test/temp-dir.js';
 
@@ -323,10 +324,39 @@ describe.skipIf(!realTmux)('start_agent against a real tmux and a fake CLI', () 
       expect(flat).toContain('fake-claude trusted');
       expect(flat).toContain('fake-claude answering=[responda oi');
       // in the feed, and the tab never reported a wait on the person
-      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: out.tab_id, tab_name: expect.any(String), folder: 'project' } }));
+      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: out.tab_id, tab_name: expect.any(String), folder: 'project', cli: 'claude' } }));
       expect(recordEvent).not.toHaveBeenCalled();
     } finally {
       writeFileSync(claude, FAKE_CLI);
+    }
+  }, 30_000);
+
+  it("TER-1122: the same for Codex — its own trust dialog in the project's folder is answered and it goes on to the prompt", async () => {
+    // the tab is "t1" again, as in the test above: forget the Enter sent there (one per tab per 15 s)
+    resetAnsweredForTests();
+    const { app, repos } = build(cwd);
+    const insert = vi.fn(async (e: Record<string, unknown>) => ({ id: 'ev1', created_at: '', ...e }));
+    Object.assign(repos, { automationEvents: { insert } });
+    const create = vi.mocked(repos.tabs.create);
+    const plain = create.getMockImplementation()!;
+    create.mockImplementation(async (...a: Parameters<typeof plain>) => Object.assign(await plain(...a), { cwd: null }));
+    const recordEvent = vi.fn();
+    Object.assign(repos.tabs, { recordEvent });
+
+    // Codex 0.159.3 in a folder it never saw: its real "Folder access" screen, the prompt only after Enter
+    const dialog = fileURLToPath(new URL('../monitor/fixtures/trust-screens/codex-0.159.3.txt', import.meta.url));
+    const codex = join(home, 'bin', 'codex');
+    writeFileSync(codex, `#!/bin/sh\ncat '${dialog}'\nread answer\necho "fake-codex trusted"\nfor a; do last=$a; done\nprintf 'fake-codex answering=[%s]\\n' "$last"\n`);
+    try {
+      const out = payloadOf(await callTool(app, 'start_agent', { project_id: 'p1', account_id: 'a2', prompt: 'responda oi' }));
+      expect(await screenWith(app, out.tab_id, 'Trust this folder?')).toContain('Trust and continue');
+      const flat = await screenWith(app, out.tab_id, 'fake-codex answering=');
+      expect(flat).toContain('fake-codex trusted');
+      expect(flat).toContain('fake-codex answering=[responda oi');
+      expect(insert).toHaveBeenCalledWith(expect.objectContaining({ project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: out.tab_id, tab_name: expect.any(String), folder: 'project', cli: 'codex' } }));
+      expect(recordEvent).not.toHaveBeenCalled();
+    } finally {
+      writeFileSync(codex, FAKE_CLI);
     }
   }, 30_000);
 });

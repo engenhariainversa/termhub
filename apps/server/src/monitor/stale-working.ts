@@ -10,7 +10,7 @@ import { STALE_WORKING_LIMIT } from '../db/repositories/tabs.js';
 import type { Machine, Tab, TabState } from '../db/repositories/types.js';
 import { paneForeground } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
-import { SCREEN_STATE_LINES, claudeScreenState, type ScreenState } from './screen-state.js';
+import { SCREEN_STATE_LINES, claudeScreenState, trustDialogVisible, type ScreenState } from './screen-state.js';
 import { defaultTrustDeps, settleTrustDialog, type FolderTrustDeps } from './folder-trust.js';
 import { AUTH_REQUIRED_TEXT, TRUST_PROMPT_TEXT, cap } from './state.js';
 import { classifyTurnEnd } from './turn-end.js';
@@ -94,7 +94,8 @@ export const UNREPORTED_RECHECK_MS = 2 * 60_000;
  * service that owns the tmux server) sends no hook at all, and the pane falls back to its shell, which
  * no screen rule reads. The shell back in front (or a dead pane) means the agent exited: the tab becomes
  * `idle` with AGENT_EXITED_TEXT, under the same `ifStateAt` condition, and the project's chat gets a card
- * offering to resume it. Codex tabs only get this check; their screen has no rule here.
+ * offering to resume it. Codex and Cursor tabs only get this check and the folder trust dialog (TER-1122); their
+ * screen has no other rule here.
  */
 export async function sweepStaleWorking(repos: Repositories, log: Log, now = new Date(), deps: StaleWorkingDeps = defaultDeps(BACKGROUND_TIMEOUT_MINUTES * 60_000)): Promise<void> {
   const tabs = await repos.tabs.listStaleWorking(new Date(now.getTime() - STALE_WORKING_MS));
@@ -126,7 +127,12 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
       await deps.exited(repos, log, updated, machine, tab.state_at);
       return;
     }
-    if (tab.state_tool !== 'claude') return;
+    if (tab.state_tool !== 'claude') {
+      // TER-1122: Codex, Cursor and Gemini have no screen rule here but their folder trust dialog
+      const other = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
+      if (trustDialogVisible(other)) await settleTrustDialog(repos, log, tab, machine, other, deps.trust ?? defaultTrustDeps, ['working', 'waiting_background']);
+      return;
+    }
     // A tab that waits on its background work (TER-644): its hooks went quiet on purpose, and a screen without
     // the background line (a shell runs in the background) proves nothing — until the timeout (TER-1053).
     if (tab.state === 'waiting_background') {
@@ -178,9 +184,10 @@ async function restoreTurnEnd(repos: Repositories, log: Log, tab: Tab & { state_
 }
 
 /**
- * One pass over the tabs that never reported a state (TER-1046). Claude Code's folder trust dialog, and its
+ * One pass over the tabs that never reported a state (TER-1046). An agent CLI's folder trust dialog (any of
+ * Claude Code, Codex, Cursor and Gemini, TER-1122), and Claude Code's
  * login error on a fresh session, come before any hook: such a tab showed no indicator at all and sat there
- * unnoticed. A tab open for UNREPORTED_AFTER_MS with Claude Code in front has its screen read; the dialog
+ * unnoticed. A tab open for UNREPORTED_AFTER_MS with something other than its shell in front has its screen read; the dialog
  * is answered in the project's own folder (TER-1117, folder-trust.ts) and otherwise becomes `trust_prompt`,
  * the login error `auth_required` (both need the person), conditional on the tab
  * still having no state. Anything else (a plain shell, a Claude Code at its prompt with no hooks installed)
@@ -198,7 +205,7 @@ export async function sweepUnreported(repos: Repositories, log: Log, now = new D
     try {
       const machine = await repos.machines.findById(tab.machine_id);
       if (!machine || (machine.type === 'agent' && !deps.isOnline(machine.id))) continue;
-      // a shell in front (or a dead pane) is not Claude Code: nothing to read
+      // a shell in front (or a dead pane) is not an agent CLI: nothing to read
       const pane = await deps.foreground(machine, tab.tmux_session);
       if (pane === 'shell' || pane === 'dead') continue;
       const raw = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);

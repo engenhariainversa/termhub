@@ -396,9 +396,11 @@ describe('startAgent', () => {
     expect(again.note).toContain('use watch (kind tab)');
   });
 
-  it('TER-1117: a Codex start or an automatic run (its follower answers) is not read for the trust dialog', async () => {
+  it('TER-1122: a Codex start is read for its trust dialog too; an automatic run (its follower answers) is not', async () => {
     const { c } = ctx();
     await startAgent(c, { project_id: 'p1', account_id: 'a2', prompt: 'write a spec' });
+    expect(followLaunch).toHaveBeenCalledTimes(1);
+    followLaunch.mockClear();
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, { cwd: '/wt/TER-1' });
     expect(followLaunch).not.toHaveBeenCalled();
   });

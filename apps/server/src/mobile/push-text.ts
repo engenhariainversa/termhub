@@ -74,7 +74,7 @@ export function tabAuthRequiredText(ctx: PushContext & { accountLabel: string | 
   };
 }
 
-/** A tab waits on Claude Code's folder trust dialog (TER-1117): which tab and which folder, nothing from the screen. */
+/** A tab waits on its CLI's folder trust dialog (TER-1117, any CLI since TER-1122): which tab and which folder, nothing from the screen. */
 export function tabTrustPromptText(ctx: PushContext & { folder: string | null }, locale: Locale = DEFAULT_LOCALE): PushText {
   const tab = ctx.tabName ?? '—';
   return {

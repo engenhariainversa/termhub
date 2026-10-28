@@ -14,6 +14,8 @@ const openReply = vi.fn(async (..._args: unknown[]) => undefined);
 vi.mock('../chat/tab-suggestions.js', () => ({ scheduleTabSuggestion: (...a: unknown[]) => schedule(...a), cancelTabSuggestion: (...a: unknown[]) => cancel(...a), openCodexReply: (...a: unknown[]) => openReply(...a) }));
 const autoSwapOnLimit = vi.fn();
 vi.mock('../control/account-swap.js', () => ({ autoSwapOnLimit: (...a: unknown[]) => autoSwapOnLimit(...a) }));
+const followLaunch = vi.fn();
+vi.mock('./folder-trust.js', () => ({ followLaunch: (...a: unknown[]) => followLaunch(...a) }));
 
 const { ingestHookEvent } = await import('./ingest.js');
 
@@ -469,6 +471,20 @@ describe('ingestHookEvent — a Codex request_user_input answered, through the r
     expect(res).toEqual({ ok: false, reason: 'ignored' });
     expect(state()).toBe('waiting_input');
     expect(note).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ingestHookEvent — a Cursor session that just started (TER-1122)', () => {
+  it('is read for its workspace trust dialog, as a start_agent tab is; other events and CLIs are not', async () => {
+    followLaunch.mockClear();
+    const { r } = repos(tab({ state_tool: 'cursor' }));
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'cursor', session: 'th-t1', event: { hook_event_name: 'sessionStart' } });
+    await vi.waitFor(() => expect(followLaunch).toHaveBeenCalledWith(r, log, 't1', expect.objectContaining({ id: 'm1' })));
+    followLaunch.mockClear();
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'cursor', session: 'th-t1', event: { hook_event_name: 'beforeSubmitPrompt' } });
+    await ingestHookEvent(r, log, { machineId: 'm1', tool: 'claude', session: 'th-t1', event: { hook_event_name: 'SessionStart', source: 'startup' } });
+    await new Promise((res) => setTimeout(res, 0));
+    expect(followLaunch).not.toHaveBeenCalled();
   });
 });
 
