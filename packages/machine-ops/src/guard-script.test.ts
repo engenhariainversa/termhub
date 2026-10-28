@@ -5,7 +5,7 @@
  * has its own case here, and the normal-run cases prove the guard stays silent on them.
  */
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -16,6 +16,8 @@ const WORKTREE = '/home/u/.termhub/worktrees/p1/TER-1';
 
 let dir: string;
 let script: string;
+/** A folder put first on the guard's PATH, holding an `awk` other than the system's (see the TER-1111 cases). */
+let awkDir = '';
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'th-guard-'));
@@ -29,7 +31,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 /** The guard's decision for a tool call: 'deny' with the reason, or 'allow' when it printed nothing. */
 function decide(tool: string, input: Record<string, unknown>, branch: string | null = BRANCH, worktree = WORKTREE): { deny: boolean; reason: string } {
   const event = { hook_event_name: 'PreToolUse', tool_name: tool, tool_input: input };
-  const r = spawnSync('sh', [script, branch ?? '', worktree], { input: JSON.stringify(event), env: { PATH: '/usr/bin:/bin', HOME: '/home/u' }, timeout: 5000 });
+  const r = spawnSync('sh', [script, branch ?? '', worktree], { input: JSON.stringify(event), env: { PATH: `${awkDir ? `${awkDir}:` : ''}/usr/bin:/bin`, HOME: '/home/u' }, timeout: 5000 });
   if (r.error) throw r.error;
   expect(r.status, r.stderr?.toString()).toBe(0);
   const out = r.stdout.toString();
@@ -65,9 +67,9 @@ describe('guard — git push (the auto-mode gap)', () => {
 });
 
 describe('guard v2 — push from a repo folder of the workspace (spec 2026-10-07 multi-repo R13)', () => {
-  it('is marked as version 2', () => {
-    expect(GUARD_SCRIPT_VERSION).toBe(2);
-    expect(GUARD_SCRIPT).toContain('# termhub-guard v2\n');
+  it('is now version 3 (TER-1111)', () => {
+    expect(GUARD_SCRIPT_VERSION).toBe(3);
+    expect(GUARD_SCRIPT).toContain('# termhub-guard v3\n');
   });
   it('allows the run\'s own branch from <WORKTREE>/<key>, in the four plain forms', () => {
     for (const key of ['frontend', 'hub-community-frontend', 'api.v2', 'bff_1', 'main']) {
@@ -133,6 +135,125 @@ describe('guard — blocked programs, each item of the hard lock', () => {
   ];
   it.each(cases)('denies %s', (_label, command) => {
     expect(bash(command).deny, command).toBe(true);
+  });
+});
+
+/** The awks the guard may meet: the system's, plus mawk, gawk, BWK and busybox when this host has them. */
+const AWKS: Array<[string, string]> = [
+  ['system awk', ''],
+  ...([['mawk', '/usr/bin/mawk'], ['gawk', '/usr/bin/gawk'], ['bwk awk', '/usr/bin/original-awk'], ['busybox awk', '/usr/bin/busybox'], ['busybox awk', '/bin/busybox']] as Array<[string, string]>).filter(([, p]) => existsSync(p)),
+].filter(([label], i, all) => all.findIndex(([l]) => l === label) === i);
+
+describe.each(AWKS)('guard v3 — the whole command is read (TER-1111), with %s', (_label, bin) => {
+  beforeEach(() => {
+    if (!bin) return;
+    awkDir = join(dir, 'awk-bin');
+    mkdirSync(awkDir, { recursive: true });
+    symlinkSync(bin, join(awkDir, 'awk')); // busybox picks its applet from the name
+  });
+  afterEach(() => { awkDir = ''; });
+
+  it('denies a push to another ref, docker or gh pr merge hidden after a quote', () => {
+    for (const c of [
+      'git commit -m "fix" && git push origin main',
+      'echo "x" && git push origin main',
+      `git commit -m "a \\"quoted\\" message" && git push --force origin ${BRANCH}`,
+      'echo "x" && docker ps',
+      'git commit -m "x"; docker compose up -d',
+      "echo 'x' && gh pr merge 1 --squash",
+      'echo "x" && npm publish',
+      'git log --format="%h" && ssh jarvis uptime',
+    ]) expect(bash(c).deny, c).toBe(true);
+  });
+  it('reads every simple command: newlines, glued operators, $( ), backticks, subshells, sh -c and eval', () => {
+    for (const c of [
+      'echo x\ndocker ps',
+      'echo x;docker ps',
+      'true&&docker ps',
+      'echo $(docker ps)',
+      'echo "$(gh pr merge 1)"',
+      'echo `docker ps`',
+      '(docker ps)',
+      'cat <(docker ps)',
+      'sh -c "docker ps"',
+      "bash -lc 'gh pr merge 1'",
+      'eval "docker ps"',
+      'cat <<EOF\n$(docker ps)\nEOF',
+      '/usr/bin/docker ps',
+      'sudo docker ps',
+    ]) expect(bash(c).deny, c).toBe(true);
+  });
+  it('leaves quoted text, comments and quoted heredocs alone: they are data', () => {
+    for (const c of [
+      'git commit -m "Guard: deny docker, ssh and gh pr merge after a quote"',
+      'git commit -m "fix the push rule"',
+      `gh pr create --title "Guard v3" --body "$(cat <<'EOF'\nRun docker run --rm node:22 first.\ngit push origin main is denied.\nEOF\n)"`,
+      'cat <<\'EOF\' > /tmp/x.md\ndocker ps\n$(docker ps)\nEOF',
+      'npm test # not docker',
+      'grep -rn "process.env.DATABASE_URL" apps/server/src',
+      'echo "a;b && c | d"',
+    ]) expect(bash(c).deny, c).toBe(false);
+  });
+  it('allows the run\'s push as the last command, with -q, 2>&1 and | tail -N', () => {
+    for (const c of [
+      `git add -A && git commit -m "x \\"y\\"" && git push -u origin ${BRANCH}`,
+      `git commit -m "fix push" && git push -u origin ${BRANCH}`,
+      `git push -u origin ${BRANCH} 2>&1 | tail -5`,
+      `git push -u origin ${BRANCH} 2>&1 | tail -n 20`,
+      `git push -q origin ${BRANCH}`,
+      `git push -u origin ${BRANCH} -q 2>&1 | tail -3`,
+      `git push --quiet origin HEAD:refs/heads/${BRANCH}`,
+      `npm test; git push -u origin ${BRANCH}`,
+      `cd ${WORKTREE} && git push -u origin ${BRANCH}`,
+      `git -C ${WORKTREE}/frontend push -u origin ${BRANCH} 2>&1 | tail -5`,
+      `cd ${WORKTREE}/frontend && git push -u origin ${BRANCH}`,
+    ]) expect(bash(c).deny, c).toBe(false);
+  });
+  it('denies a push chained in the middle, piped elsewhere, nested or steered', () => {
+    for (const c of [
+      `git push -u origin ${BRANCH} && echo done`,
+      `git push -u origin ${BRANCH}; git push origin main`,
+      `git push -u origin ${BRANCH} | tee push.log`,
+      `git push -u origin ${BRANCH} 2>&1 | tail -5 && echo ok`,
+      `git push -u origin ${BRANCH} 2>&1 | tail -5 | cat`,
+      `git push -u origin ${BRANCH} >/dev/null`,
+      `cd /home/u/other && git push -u origin ${BRANCH}`,
+      `cd .. && git push -u origin ${BRANCH}`,
+      `GIT_DIR=/home/u/other/.git git push -u origin ${BRANCH}`,
+      `export GIT_WORK_TREE=/x; git push -u origin ${BRANCH}`,
+      `(git push -u origin ${BRANCH})`,
+      `echo $(git push -u origin ${BRANCH})`,
+      `sh -c "git push -u origin ${BRANCH}"`,
+      `git push -u origin $(echo ${BRANCH})`,
+      `git -C ${WORKTREE} push -u origin ${BRANCH}`,
+      `git --no-pager push -u origin ${BRANCH}`,
+      'git push -q',
+      'xargs git push origin main',
+    ]) expect(bash(c).deny, c).toBe(true);
+  });
+  it('denies git aliases, which can hide a push', () => {
+    for (const c of ['git -c alias.p=push p origin main', 'git config alias.p push', 'git -calias.x=push x']) expect(bash(c).deny, c).toBe(true);
+  });
+  it('says which push form it takes', () => {
+    const r = bash('git commit -m "x" && git push origin main');
+    expect(r.reason).toContain(`git push -u origin ${BRANCH}`);
+    expect(r.reason).toContain('ultimo comando');
+    expect(bash('git push origin x', null).reason).toContain('nao tem branch');
+  });
+  it('denies what it cannot read: an open quote, ANSI-C quoting, a \\u escape that is not a control character', () => {
+    for (const c of ['echo "x', "echo 'x", "$'\\x64ocker' ps", 'echo $(docker ps']) expect(bash(c).deny, c).toBe(true);
+    const raw = (json: string) => spawnSync('sh', [script, BRANCH, WORKTREE], { input: json, env: { PATH: `${awkDir ? `${awkDir}:` : ''}/usr/bin:/bin`, HOME: '/home/u' }, timeout: 5000 }).stdout.toString();
+    expect(raw('{"tool_name":"Bash","tool_input":{"command":"\\u0064ocker ps"}}')).toContain('"permissionDecision":"deny"');
+    expect(raw('{"tool_name":"Bash","tool_input":{"command":"echo x\\u000adocker ps"}}')).toContain('"permissionDecision":"deny"');
+    expect(raw('{"tool_name":"Bash","tool_input":{"command":"ls -la\\u0009x"}}')).toBe('');
+    expect(raw('{"tool_name":"Bash","tool_input":{"description":"run \\"command\\"","command":"docker ps"}}')).toContain('"permissionDecision":"deny"');
+  });
+  it('denies rm -r after a cd out of the worktree, and on a path it cannot pin', () => {
+    for (const c of ['cd / && rm -rf usr', 'cd && rm -rf x', 'rm -rf "$HOME"', 'rm -rf ${HOME}/x', 'echo "x" && rm -rf /home/u']) expect(bash(c).deny, c).toBe(true);
+    expect(bash(`cd ${WORKTREE}/apps/web && rm -rf dist`).deny).toBe(false);
+  });
+  it('finds a credential in a quoted path', () => {
+    for (const c of ['cat "$HOME/.ssh/id_ed25519"', 'echo "x" && cat .env', "cat 'apps/server/.env.local'"]) expect(bash(c).deny, c).toBe(true);
   });
 });
 

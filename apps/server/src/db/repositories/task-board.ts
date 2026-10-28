@@ -31,10 +31,13 @@ export async function ensureDefaultColumns(tx: Tx, projectId: string): Promise<v
   });
 }
 
-/** The first column of a category, by position. Every category always keeps one (TaskColumnsRepository refuses to remove the last). */
+/**
+ * The first column of a category, by position, that is not a waiting column (TER-1134). Every category always
+ * keeps one (TaskColumnsRepository refuses to remove or mark the last); a waiting one is only the fallback.
+ */
 export async function firstColumnId(tx: Tx, projectId: string, category: ColumnCategory): Promise<string> {
   await ensureDefaultColumns(tx, projectId);
-  const c = await tx.taskColumn.findFirst({ where: { projectId, category }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { id: true } });
+  const c = await tx.taskColumn.findFirst({ where: { projectId, category }, orderBy: [{ waiting: 'asc' }, { position: 'asc' }, { createdAt: 'asc' }], select: { id: true } });
   if (!c) throw new TaskRuleError('COLUMN_NOT_FOUND');
   return c.id;
 }

@@ -83,7 +83,10 @@ const str = (v: unknown): string | null => {
   const s = v.replaceAll('\u0000', '').trim();
   return s ? s : null;
 };
-const cap = (v: string | null): string | null => (v && v.length > STATE_TEXT_MAX ? `${v.slice(0, STATE_TEXT_MAX - 1)}…` : v);
+export const cap = (v: string | null): string | null => (v && v.length > STATE_TEXT_MAX ? `${v.slice(0, STATE_TEXT_MAX - 1)}…` : v);
+
+/** The `source` values of Claude's `SessionStart` that are kept in the event's meta; anything else is dropped. */
+const SESSION_SOURCES: ReadonlySet<string> = new Set(['startup', 'resume', 'clear', 'compact']);
 
 /** The most of an agent's answer that is kept whole (spec 2026-09-30 last answer): the hook body is
  *  capped at 256 KB, and a hundred thousand characters is a long answer. */
@@ -154,7 +157,13 @@ export function runningBackgroundTasks(v: unknown): number {
 function interpretClaudeEvent(ev: Record<string, unknown>): Interpreted | null {
   const name = str(ev.hook_event_name);
   switch (name) {
-    case 'SessionStart':
+    case 'SessionStart': {
+      // What started the session (`startup`, `resume`, `clear`, `compact`) is kept: a compaction is no turn
+      // of the agent. Claude Code compacts on its own at the prompt ("Compacted while idle") and sends this
+      // with no Stop after it, so recordEvent keeps a tab that was back at its prompt where it was (TER-1133).
+      const source = str(ev.source);
+      return { kind: 'working', text: null, meta: source && SESSION_SOURCES.has(source) ? { event: name, source } : { event: name } };
+    }
     case 'UserPromptSubmit':
     case 'PreCompact':
       // the prompt is the user's content: only the fact that it is busy is kept

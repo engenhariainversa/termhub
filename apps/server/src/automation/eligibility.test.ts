@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { automationSchema } from '../setup/schema.js';
-import { eligibilityOf, REASON_TEXT, type EligibilityInput } from './eligibility.js';
+import { eligibilityOf, NEW_CARD_GRACE_MS, REASON_TEXT, type EligibilityInput } from './eligibility.js';
 
 const input = (card: Partial<EligibilityInput['card']> = {}, project: Partial<EligibilityInput['project']> = {}, automation: Record<string, unknown> = {}): EligibilityInput => ({
-  card: { type: 'task', parent_id: null, auto: true, column_category: 'todo', description: 'Do it', subtask_count: 0, tab_alive: false, active_run: false, ...card },
-  project: { automation: automationSchema.parse({ enabled: true, ...automation }), paused: false, repo_ready: true, capable_machines: 1, ...project },
+  card: { type: 'task', parent_id: null, auto: true, column_category: 'todo', description: 'Do it', subtask_count: 0, tab_alive: false, active_run: false, has_ticket: false, just_created: false, ...card },
+  project: { automation: automationSchema.parse({ enabled: true, ...automation }), paused: false, repo_ready: true, capable_machines: 1, require_ticket: false, ...project },
 });
 const reason = (i: EligibilityInput) => {
   const r = eligibilityOf(i);
@@ -12,6 +12,21 @@ const reason = (i: EligibilityInput) => {
 };
 
 describe('eligibilityOf', () => {
+  it('a card in a waiting column is never taken, whatever the column category (TER-1134)', () => {
+    expect(reason(input({ column_waiting: true }))).toBe('not_in_todo');
+    expect(eligibilityOf(input({ column_waiting: false }))).toEqual({ eligible: true });
+  });
+  // TER-1110
+  it('a project that requires a ticket leaves out a card with neither a ticket nor an explicit branch', () => {
+    expect(reason(input({}, { require_ticket: true }))).toBe('no_ticket');
+    expect(eligibilityOf(input({ has_ticket: true }, { require_ticket: true }))).toEqual({ eligible: true });
+    expect(eligibilityOf(input({ has_ticket: false }, { require_ticket: false }))).toEqual({ eligible: true });
+  });
+  it('a card created a moment ago waits, after every other check', () => {
+    expect(reason(input({ just_created: true }))).toBe('just_created');
+    expect(reason(input({ just_created: true }, { repo_ready: false }))).toBe('repo_missing');
+    expect(NEW_CARD_GRACE_MS).toBe(2 * 60_000);
+  });
   it('a tagged card that passes every check is eligible', () => {
     expect(eligibilityOf(input())).toEqual({ eligible: true });
   });
@@ -54,7 +69,7 @@ describe('eligibilityOf', () => {
     expect(reason(input({ active_run: true }))).toBe('has_agent');
   });
   it('has pt-BR text for every reason', () => {
-    expect(REASON_TEXT.no_capable_machine).toBe('Nenhuma máquina com agente 0.19 ligada ao projeto; atualize o agente');
+    expect(REASON_TEXT.no_capable_machine).toBe('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente');
     expect(REASON_TEXT.paused).toBe('Automático pausado');
   });
 });

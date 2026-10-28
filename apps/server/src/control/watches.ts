@@ -29,6 +29,9 @@ export interface WatchArgs {
   events?: string[];
   to?: CardStatus;
   workflow?: string;
+  /** TER-1115: the line the person reads in the chat ("Te aviso quando a aba OPM-568 parar"). Required by the
+   *  tool; optional here so an older caller still gets a watch (the chat then composes the line itself). */
+  label?: string;
   note: string;
   hours?: number;
   recurring?: boolean;
@@ -132,6 +135,7 @@ export async function watch(ctx: ControlContext, a: WatchArgs, probe: WatchProbe
       baseline: await initialBaseline(probe, base, now),
       label: target.label,
       note: a.note.trim().slice(0, WATCH_LIMITS.noteMax),
+      summary: personLabel(a.label),
       recurring: a.recurring === true,
       expires_at: new Date(now.getTime() + hours * 3600_000),
     },
@@ -159,6 +163,12 @@ export async function cancelWatch(ctx: ControlContext, a: { watch_id: string }):
   return { watch };
 }
 
+/** The concierge's line for the person, one line and short; null when it gave none (an older caller). */
+const personLabel = (text: string | undefined): string | null => {
+  const line = (text ?? '').replace(/\s+/g, ' ').trim().slice(0, WATCH_LIMITS.labelMax);
+  return line || null;
+};
+
 export interface ScheduleWakeupArgs {
   /** In this many minutes. */
   in_minutes?: number;
@@ -166,6 +176,8 @@ export interface ScheduleWakeupArgs {
   at?: string;
   /** At the next time the person's clock reads "HH:MM". */
   at_time?: string;
+  /** TER-1115: the line the person reads in the chat ("Conferir o build"). Required by the tool, as in `watch`. */
+  label?: string;
   note: string;
   every_minutes?: number;
   times?: number;
@@ -250,6 +262,7 @@ export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs,
     throw new ControlError('REMINDER_LIMIT', msg('Esta conversa já tem {{max}} lembretes abertos: cancele algum com cancel_watch (list_watches lista todos) antes de criar outro.', { max: REMINDER_LIMITS.openPerScope }));
 
   const note = a.note.trim().slice(0, WATCH_LIMITS.noteMax);
+  const summary = personLabel(a.label);
   const params: WatchParams = {
     events: ['due'],
     at: due.toISOString(),
@@ -268,8 +281,10 @@ export async function scheduleWakeup(ctx: ControlContext, a: ScheduleWakeupArgs,
       project_id: projectId,
       conversation_id: conversationId,
       baseline: { next: due.toISOString() },
-      label: note.split('\n')[0]!.slice(0, 120),
+      // A reminder has no target name: its label is the person's line (an installed app shows `label`).
+      label: summary ?? note.split('\n')[0]!.slice(0, 120),
       note,
+      summary,
       recurring: repeating,
       expires_at: new Date(last.getTime() + 3600_000),
     },

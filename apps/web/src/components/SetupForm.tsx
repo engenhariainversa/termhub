@@ -3,6 +3,7 @@ import { api, ApiError } from '../lib/api';
 import { useData } from '../lib/data';
 import { machineLabel } from '../lib/machine-labels';
 import { AutomationSetup } from './AutomationSetup';
+import { HealthSetup } from './HealthSetup';
 import { ProjectAiCard } from './ProjectAiCard';
 import { tk, useTranslation } from '../i18n';
 import {
@@ -138,7 +139,7 @@ export function SetupForm({ project }: Props) {
                 className="input"
                 value={data.repo?.integration_id ?? ''}
                 onChange={(e) =>
-                  patch('repo', e.target.value ? { ...(data.repo ?? { full_name: null, base_branch: 'main', branch_pattern: '{ticket}-{slug}', draft_pr: true, deploy_workflow: null }), integration_id: e.target.value } : null)
+                  patch('repo', e.target.value ? { ...(data.repo ?? { full_name: null, base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: null }), integration_id: e.target.value } : null)
                 }
               >
                 <option value="">{t('— sem repositório —')}</option>
@@ -181,6 +182,12 @@ export function SetupForm({ project }: Props) {
                     onChange={(e) => patch('repo', { ...data.repo!, deploy_workflow: e.target.value.trim() ? e.target.value : null })}
                   />
                 </Row>
+                <p className="text-xs text-fg-dim">
+                  {t('No padrão da branch, {ticket} é a chave do ticket externo (Jira, Linear, GitHub) do card, ou a ref do card quando ele não tem ticket; {ticket_lower} é a mesma chave em minúsculas, {ref} é sempre a ref do card e {slug} vem do título. Uma linha "branch: nome" na descrição do card vale mais que o padrão.')}
+                </p>
+                <Check checked={data.repo.require_ticket ?? false} onChange={(v) => patch('repo', { ...data.repo!, require_ticket: v })}>
+                  {t('Exigir ticket externo: card sem ticket não entra no automático, e a ref do termhub nunca vai para o GitHub')}
+                </Check>
                 <Check checked={data.repo.draft_pr} onChange={(v) => patch('repo', { ...data.repo!, draft_pr: v })}>
                   {t('Abrir PR como rascunho até a aprovação')}
                 </Check>
@@ -385,7 +392,9 @@ export function SetupForm({ project }: Props) {
         </ul>
       </Card>
 
-      {data.automation && <AutomationSetup value={data.automation} onChange={(next) => patch('automation', next)} />}
+      {data.automation && <AutomationSetup projectId={project.id} value={data.automation} onChange={(next) => patch('automation', next)} />}
+
+      {data.health && <HealthSetup value={data.health} onChange={(next) => patch('health', next)} />}
 
       {data.ai_memory && (
         <Card

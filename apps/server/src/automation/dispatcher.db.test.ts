@@ -26,8 +26,8 @@ vi.mock('../agent/registry.js', async (importOriginal) => {
     ...real,
     agents: {
       isOnline: (id: string) => reg.online.has(id),
-      // agent 0.19.0: worktrees and the hard-lock guard (TER-1005)
-      info: (id: string) => (reg.online.has(id) ? { agent_version: '0.19.0' } : null),
+      // agent 0.36.0: worktrees and the hard-lock guard v3 (TER-1005, TER-1111)
+      info: (id: string) => (reg.online.has(id) ? { agent_version: '0.36.0' } : null),
       capabilities: (id: string) => (reg.online.has(id) ? (reg.caps.get(id) ?? ['worktree']) : null),
     },
   };
@@ -79,7 +79,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     resetWaiting();
     await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'owner' } });
     await db.project.create({ data: { id: projectId, ownerId, key: keyOf(projectId), name: 'p' } });
-    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.36.0' } });
     await repos.projectMachines.link({ project_id: projectId, machine_id: machineId, cwd: '/home/u/app' });
     accountId = (await repos.aiAccounts.create({ provider: 'claude', label: 'main', machine_id: machineId })).id;
     reg.online.add(machineId);
@@ -107,6 +107,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       instance: `test-${newId()}`,
       lifecycle: { draining: false },
       now: () => new Date(),
+      newCardGraceMs: 0,
       startAgent: startAgent as unknown as DispatcherDeps['startAgent'],
       ensureWorkspace: ensureWorkspace as unknown as DispatcherDeps['ensureWorkspace'],
       ensureEpicBranch: ensureEpicBranch as unknown as DispatcherDeps['ensureEpicBranch'],
@@ -164,6 +165,43 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     // the next tick does not start it again
     await tickOnce(deps);
     expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  // TER-1110: a tab opened by hand already worked on the ticket, and the automatic work opened a second agent
+  it('a card whose ticket a tab already works on is untagged with the reason, and no agent starts', async () => {
+    const c = await card();
+    await repos.tabs.create(projectId, machineId, `${c.ref} feito à mão`);
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await runsOf()).toEqual([]);
+    expect((await repos.tasks.findById(c.id))!.auto).toBe(false);
+    const events = await eventsOf();
+    expect(events.map((e) => [e.kind, e.taskId])).toEqual([['untagged', c.id]]);
+    expect(events[0]!.payload).toMatchObject({ via: 'existing_work', message: `Já há trabalho em andamento neste ticket: a aba ${c.ref} feito à mão` });
+  });
+
+  it('a card created a moment ago waits the grace period before it starts (TER-1110)', async () => {
+    const c = await card();
+    const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
+    await tickOnce(deps);
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await reasonOf(c.id)).toBe('just_created');
+    await tickOnce({ ...deps, now: () => new Date(Date.now() + 61_000) });
+    expect(startAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it('a project that requires a ticket starts a card without one on no branch of the termhub ref (TER-1110)', async () => {
+    await setSetup({ repo: { require_ticket: true, branch_pattern: 'feature/{ticket_lower}-{slug}' } });
+    const bare = await card('Sem ticket');
+    const named = await repos.tasks.create(projectId, { title: 'More tab', column_id: todoId, auto: true, description: 'Branch: `feature/apps-337-more-tab-list`\n\nfaça isto' });
+    const { deps, startAgent, ensureWorkspace } = makeDeps();
+    await tickOnce(deps);
+    expect(await reasonOf(bare.id)).toBe('no_ticket');
+    expect(startAgent).toHaveBeenCalledTimes(1);
+    expect(ensureWorkspace.mock.calls[0]![1]).toMatchObject({ ref: named.ref, branch: 'feature/apps-337-more-tab-list' });
+    const prompt = (startAgent.mock.calls[0] as unknown as [unknown, { prompt: string }])[1].prompt;
+    expect(prompt).toContain(`Nunca use a ref ${named.ref} do termhub`);
   });
 
   it("a start makes sure the owner has an active project chat, so the agent's questions become cards (review I1)", async () => {
@@ -318,7 +356,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
 
   it('one start per account per tick: two machines, one account each, starts only on the first card of a shared account', async () => {
     const other = newId();
-    await db.machine.create({ data: { id: other, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
+    await db.machine.create({ data: { id: other, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.36.0' } });
     await repos.projectMachines.link({ project_id: projectId, machine_id: other, cwd: '/home/u/app2' });
     const second = (await repos.aiAccounts.create({ provider: 'claude', label: 'two', machine_id: other })).id;
     reg.online.add(other);
@@ -492,7 +530,9 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
 
   // TER-987: the event said only LAUNCH_FAILED, and nobody could tell why the agent never started
   it('run_blocked carries the reason of our own errors, in pt-BR and English, and the wait grows after the second failure', async () => {
-    await card();
+    const c = await card();
+    // past the new-card wait (TER-1110), so the queue reads the card as eligible once the backoff ends
+    await db.task.update({ where: { id: c.id }, data: { createdAt: new Date(Date.now() - 10 * 60_000) } });
     const reason = new ControlError('LAUNCH_FAILED', msg('A aba {{tab}} foi aberta, mas o agente não foi iniciado: {{reason}}. Veja a tela com read_screen ou feche a aba com close_tab.', { tab: 'tab-1', reason: msg('Parâmetros inválidos para a máquina') }));
     const first = makeDeps();
     first.startAgent.mockRejectedValueOnce(Object.defineProperty(reason, 'tab_id', { value: 'tab-1' }));

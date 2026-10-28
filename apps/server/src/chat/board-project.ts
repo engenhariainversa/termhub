@@ -11,7 +11,14 @@ const idOf = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length
  */
 export async function boardProjectOf(repos: Repositories, ownerId: string, tool: string, args: Record<string, unknown>): Promise<string | null> {
   if (!boardGrantable(tool)) return null;
-  if (tool === 'create_task') {
+  if (tool === 'update_column') {
+    const columnId = idOf(args.column_id);
+    const column = columnId ? await repos.taskColumns.findById(columnId) : undefined;
+    if (!column) return null;
+    const [project] = await repos.projects.findByIdsForOwner([column.project_id], ownerId);
+    return project?.id ?? null;
+  }
+  if (tool === 'create_task' || tool === 'create_column') {
     const projectId = idOf(args.project_id);
     if (!projectId) return null;
     const [project] = await repos.projects.findByIdsForOwner([projectId], ownerId);

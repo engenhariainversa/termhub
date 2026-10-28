@@ -1,5 +1,5 @@
 import Fastify from 'fastify';
-import { tabChatPage, tabsResponse } from '@termhub/mobile-api';
+import { sessionStartOptions, tabChatPage, tabsResponse } from '@termhub/mobile-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { actionForMethod } from '../auth/permissions.js';
 import { ControlError } from '../control/context.js';
@@ -90,7 +90,10 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
     },
     projects: { findById: vi.fn(async (id: string) => [project, foreignProject].find((p) => p.id === id)), list: vi.fn(async () => [project]) },
     machines: { findById: vi.fn(async (id: string) => (id === 'm1' ? machine : undefined)), list: vi.fn(async () => [machine]) },
-    projectMachines: { find: vi.fn(async (p: string, m: string) => ({ id: 'pm', project_id: p, machine_id: m, cwd: '/w' })) },
+    projectMachines: {
+      find: vi.fn(async (p: string, m: string) => ({ id: 'pm', project_id: p, machine_id: m, cwd: '/w' })),
+      listByProject: vi.fn(async (p: string) => (p === 'p1' ? [{ id: 'pm', project_id: p, machine_id: 'm1', cwd: '/w' }] : [])),
+    },
     automationRuns: { activeTabRefs: vi.fn(async (_owner: string | null) => [{ tab_id: 't1', ref: 'TH-12' }]) },
     tabQuestions: { listOpenForTab: vi.fn(async (_tab: string, _user: string) => opts.questions ?? []) },
     chatDecisions: {},
@@ -183,9 +186,41 @@ describe('POST /tabs', () => {
     expect(res.json()).toEqual({ error: 'Escolha a conta', code: 'ACCOUNT_REQUIRED' });
   });
 
+  it('passes the account chosen in Nova sessão (TER-1119)', async () => {
+    const { app } = build();
+    const res = await app.inject({ method: 'POST', url: '/tabs', payload: { project_id: 'p1', machine_id: 'm1', account_id: 'acc1', prompt: 'oi' } });
+    expect(res.statusCode).toBe(200);
+    expect(startAgent).toHaveBeenCalledWith(expect.anything(), { project_id: 'p1', machine_id: 'm1', account_id: 'acc1', prompt: 'oi' });
+  });
+
   it('a prompt over 4000 characters answers 400', async () => {
     const { app } = build();
     expect((await app.inject({ method: 'POST', url: '/tabs', payload: { project_id: 'p1', prompt: 'x'.repeat(4001) } })).statusCode).toBe(400);
+  });
+});
+
+describe('GET /tabs/start-options', () => {
+  it("lists the project's machines with whether they are online and their accounts (TER-1119)", async () => {
+    agentState.online = false;
+    const { app } = build();
+    const res = await app.inject({ method: 'GET', url: '/tabs/start-options?project_id=p1' });
+    expect(res.statusCode).toBe(200);
+    expect(sessionStartOptions.parse(res.json())).toEqual({
+      machines: [{ id: 'm1', name: 'box', online: false, choices: [{ account_id: 'acc1', label: 'Pessoal', provider: 'claude', model: 'opus' }], suggested: 'acc1', provider: null }],
+    });
+    expect(tabAgentOptions).toHaveBeenCalledWith(expect.anything(), project, machine);
+  });
+
+  it('a project outside the scope answers 404; no project answers 400', async () => {
+    const { app } = build();
+    expect((await app.inject({ method: 'GET', url: '/tabs/start-options?project_id=p2' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/tabs/start-options' })).statusCode).toBe(400);
+    expect(tabAgentOptions).not.toHaveBeenCalled();
+  });
+
+  it('needs terminals:read', async () => {
+    const { app } = build({ grants: [] });
+    expect((await app.inject({ method: 'GET', url: '/tabs/start-options?project_id=p1' })).statusCode).toBe(403);
   });
 });
 

@@ -6,12 +6,19 @@ import { applyErrorHandler } from '../lib/errors.js';
 import { monitorBus } from '../monitor/bus.js';
 import { hashHookToken, newHookToken } from '../monitor/token.js';
 import { recordInputOrigin, resetInputOrigins } from '../terminal/input-origin.js';
-import { hooksRoutes } from './hooks.js';
+import { hooksRoutes, type HooksDeps } from './hooks.js';
 
 const { token, hash } = newHookToken();
 const tab: Tab = { id: 'tab1', project_id: 'p1', machine_id: 'm1', name: 'x', kind: 'terminal', tmux_session: 'termhub-p1-tab1', simulator_udid: null, position: 0, state: null, state_text: null, state_tool: null, state_at: null, state_seen_at: null, created_at: '2026-09-18T00:00:00.000Z' };
 
-function buildApp(logStream?: { write(line: string): void }) {
+/** The tab's runs (TER-1112): `active` is what activeByTab answers, `latest` what latestByTab answers. */
+interface Runs {
+  active: Record<string, unknown> | null;
+  latest: Record<string, unknown> | null;
+}
+const activeRun = { id: 'run1', project_id: 'p1', task_id: 'task1', status: 'running' };
+
+function buildApp(logStream?: { write(line: string): void }, runs: Runs = { active: activeRun, latest: activeRun }, deps: HooksDeps = {}) {
   const recordEvent = vi.fn(async (_id: string, e: { kind: Tab['state']; tool: string; text: string | null }) => ({
     tab: { ...tab, state: e.kind, state_text: e.text, state_tool: e.tool, state_at: '2026-09-18T10:00:00.000Z' },
     event: { id: 'e1', tab_id: tab.id, kind: e.kind, tool: e.tool, text: e.text, meta: {}, created_at: '2026-09-18T10:00:00.000Z' },
@@ -23,13 +30,14 @@ function buildApp(logStream?: { write(line: string): void }) {
     machines: { findById: async (id: string) => (id === 'm1' ? { id: 'm1', owner_id: 'u1' } : undefined) },
     users: { findById: async (id: string) => (id === 'u1' ? { id, name: 'Pedro' } : undefined) },
     chat: { findUserMessagesForUser: async () => [] },
-    automationRuns: { activeByTab: async (tabId: string) => (tabId === tab.id ? { id: 'run1', project_id: 'p1', task_id: 'task1' } : null) },
+    automationRuns: { activeByTab: async (tabId: string) => (tabId === tab.id ? runs.active : null), latestByTab: async (tabId: string) => (tabId === tab.id ? runs.latest : null) },
+    tasks: { findById: async (id: string) => (id === 'task1' ? { id, ref: 'TER-1', title: 'Card' } : undefined) },
     automationEvents: { insert },
     projects: { findById: async (id: string) => (id === 'p1' ? { id: 'p1', owner_id: 'u1' } : undefined) },
   } as unknown as Repositories;
   const app = Fastify(logStream ? { logger: { level: 'debug', stream: logStream } } : {});
   applyErrorHandler(app);
-  app.register((instance) => hooksRoutes(instance, repos), { prefix: '/api/hooks' });
+  app.register((instance) => hooksRoutes(instance, repos, deps), { prefix: '/api/hooks' });
   return { app, recordEvent, insert };
 }
 
@@ -181,5 +189,63 @@ describe('POST /api/hooks/guard (TER-993)', () => {
     const { app } = buildApp();
     expect((await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'x' }, 'Bearer nope')).statusCode).toBe(401);
     expect((await guard(app, { session: tab.tmux_session, tool: 'bad tool!', reason: 'x' })).statusCode).toBe(400);
+  });
+});
+
+describe('a tab whose automatic run ended (TER-1112)', () => {
+  const ended = { id: 'run0', project_id: 'p1', task_id: 'task1', status: 'done', branch: 'TER-1-card' };
+  const guard = (app: ReturnType<typeof Fastify>, payload: unknown) =>
+    app.inject({ method: 'POST', url: '/api/hooks/guard', payload: payload as Record<string, unknown>, headers: { authorization: `Bearer ${token}` } });
+  const submit = (prompt: string, tool = 'claude') => ({ tool, session: tab.tmux_session, event: { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt } });
+
+  it('records a guard block against the last run (after_run) and wakes the chat', async () => {
+    const wakeForPostRunBlock = vi.fn(async () => true);
+    const { app, insert } = buildApp(undefined, { active: null, latest: ended }, { postRunWaker: { wakeForPostRunBlock } });
+    expect((await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'docker e trava dura' })).statusCode).toBe(200);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ kind: 'guard_blocked', run_id: 'run0', task_id: 'task1', payload: { tab_id: 'tab1', tool: 'Bash', reason: 'docker e trava dura', after_run: true } }));
+    expect(wakeForPostRunBlock).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u1', projectId: 'p1', runId: 'run0', tabId: 'tab1', cardRef: 'TER-1', cause: 'guard_blocked', tool: 'Bash', reason: 'docker e trava dura' }));
+  });
+
+  it('wakes nobody for a block during a run', async () => {
+    const wakeForPostRunBlock = vi.fn(async () => true);
+    const { app, insert } = buildApp(undefined, undefined, { postRunWaker: { wakeForPostRunBlock } });
+    expect((await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'x' })).statusCode).toBe(200);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ run_id: 'run1', payload: { tab_id: 'tab1', tool: 'Bash', reason: 'x' } }));
+    expect(wakeForPostRunBlock).not.toHaveBeenCalled();
+  });
+
+  it('still drops a block from a tab that never ran automatic work', async () => {
+    const { app, insert } = buildApp(undefined, { active: null, latest: null });
+    expect((await guard(app, { session: tab.tmux_session, tool: 'Bash', reason: 'x' })).statusCode).toBe(202);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('reopens a run for a typed request and tells the agent', async () => {
+    resetInputOrigins();
+    const reopenRun = vi.fn(async () => ({ id: 'run2', task_id: 'task1', branch: 'TER-1-card' }) as never);
+    const { app } = buildApp(undefined, { active: null, latest: ended }, { reopenRun });
+    const r = await post(app, submit('ajusta o teste também'));
+    expect(reopenRun).toHaveBeenCalledWith(expect.objectContaining({ id: 'tab1' }));
+    expect(r.json()).toEqual({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: expect.stringMatching(/^termhub automatic work note: this message reopened automatic work on card TER-1 .*run run2, on branch TER-1-card.*report_card/) } });
+  });
+
+  it('keeps the origin note first when both apply', async () => {
+    resetInputOrigins();
+    recordInputOrigin(tab.id, 'ajusta', { level: 'assistant', userId: 'u1' });
+    const reopenRun = vi.fn(async () => ({ id: 'run2', task_id: 'task1', branch: null }) as never);
+    const { app } = buildApp(undefined, { active: null, latest: ended }, { reopenRun });
+    const context = (await post(app, submit('ajusta'))).json().hookSpecificOutput.additionalContext as string;
+    expect(context).toMatch(/^termhub origin note: [^\n]+\n\ntermhub automatic work note: /);
+  });
+
+  it('reopens nothing for a slash command or a queued notification, and adds no note when nothing reopened', async () => {
+    resetInputOrigins();
+    const reopenRun = vi.fn(async () => null);
+    const { app } = buildApp(undefined, { active: null, latest: ended }, { reopenRun });
+    expect((await post(app, submit('/clear'))).json()).toEqual({ ok: true, tab_id: 'tab1', state: 'working' });
+    expect((await post(app, submit('<task-notification>x</task-notification>'))).json()).toEqual({ ok: true, tab_id: 'tab1', state: 'working' });
+    expect(reopenRun).not.toHaveBeenCalled();
+    expect((await post(app, submit('mais uma coisa'))).json()).toEqual({ ok: true, tab_id: 'tab1', state: 'working' });
+    expect(reopenRun).toHaveBeenCalledTimes(1);
   });
 });

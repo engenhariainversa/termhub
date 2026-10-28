@@ -13,10 +13,12 @@ import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
-import { addSubtasks, createTask, deleteTask, listTasks, moveTask, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
+import { addSubtasks, createColumn, createTask, deleteTask, listTasks, moveTask, updateColumn, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
+import { projectHealth } from '../health/view.js';
 import { policyText } from '../automation/policy.js';
+import { needsPrCiWarning, NO_PR_CI_TEXT, projectPrCi } from '../automation/pr-ci.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
 import { DECISIONS_MAX } from '../automation/decisions-taken.js';
@@ -45,7 +47,8 @@ import { isAdmin } from '../auth/permissions.js';
 import { readAttachment } from '../chat/attachments/read-tool.js';
 import { pathRefusal, SHARE_CAPTION_MAX, shareFile, type ShareArgs } from '../chat/attachments/share.js';
 import { MAX_SUBTASKS_PER_CALL } from '../db/repositories/tasks.js';
-import type { TaskStatus, TaskType } from '../db/repositories/types.js';
+import { COLUMN_NAME_MAX, MAX_COLUMNS } from '../db/repositories/task-rules.js';
+import type { ColumnCategory, TaskStatus, TaskType } from '../db/repositories/types.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 
 export interface ToolDef {
@@ -70,6 +73,9 @@ export interface ToolDef {
 const id = z.string().min(1).max(64);
 
 const taskStatus = z.enum(['backlog', 'todo', 'doing', 'done']);
+const columnCategory = z.enum(['todo', 'doing', 'done']);
+const columnName = z.string().trim().min(1).max(COLUMN_NAME_MAX);
+const columnPosition = z.number().int().min(0).max(MAX_COLUMNS);
 const taskType = z.enum(['epic', 'story', 'task', 'subtask', 'bug', 'spike']);
 const creatableType = z.enum(['epic', 'story', 'task', 'bug', 'spike']);
 const workType = z.enum(['story', 'task', 'bug', 'spike']);
@@ -219,7 +225,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'send_input',
-    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
+    description: `Type text into a terminal tab (max ${INPUT_MAX_CHARS} chars) and press Enter unless enter is false. A tab waiting for a permission needs answering_permission: true. A request typed into a tab whose automatic run already ended reopens automatic work on that card (same branch; termhub follows the tab again), unless the project's automation is off or paused. ${PRECEDENT_NOTE} ${ON_BEHALF_NOTE}`,
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: {
       tab_id: id,
@@ -325,7 +331,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_tasks',
     description:
-      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category } — the board shows columns by the user's names, the category todo/doing/done is what they mean; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
+      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category, waiting } — the board shows columns by the user's names, the category todo/doing/done is what they mean, waiting marks an \"aguardando\" column whose cards wait on a person or a third party; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
@@ -339,14 +345,25 @@ export const TOOLS: ToolDef[] = [
     run: async (ctx, a) => ({ items: await automationQueue(ctx, (a as { project_id: string }).project_id) }),
   },
   {
+    name: 'get_project_health',
+    description:
+      "The project's open health alerts (TER-1121): stalled work termhub's watcher noticed on its own, oldest first. Each has its signal (pr_ready: a green PR left unmerged, with why it waits; base_red: the base branch red or never finishing; queue_stalled: automatic cards in todo and none started; tab_stuck: a tab working with no event; tab_waiting: a tab waiting on a question, a permission, the folder trust or a login; card_orphan: a card in doing with no tab nor run; run_blocked: a run escalated or blocked with no answer; machine_offline: a machine holding the project's work is offline; delivery_failed: the last merge's deploy or release failed; agent_outdated: a machine's agent below the minimum), level (needs_you = only the person can act; concierge = you may resolve it), the pt-BR text, a url when there is one, the subject's id (tab, card, run or machine), since when and whether the chat was already woken about it. An alert closes by itself once the sign is gone. waiting lists the cards in the project's \"aguardando\" columns (TER-1134: waiting on a person or a third party, never alerted): ref, title, column, note (the \"O que falta: …\" line of the description, null without one) and since.",
+    scope: 'read', resource: 'tasks', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => projectHealth(ctx, (a as { project_id: string }).project_id),
+  },
+  {
     name: 'get_automation_policy',
     description:
-      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. Read it before opening a pull request, to know what happens after it.",
+      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. pr_ci says whether the repository runs any workflow on pull requests (present, absent, unknown); the text warns when it is absent at merge level or above, since termhub only merges a green CI. Read it before opening a pull request, to know what happens after it.",
     scope: 'read', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => {
       const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
-      return { enabled: automation.enabled, autonomy: automation.autonomy, text: policyText(automation, repo?.deploy_workflow ?? null) };
+      const prCi = await projectPrCi(ctx, (a as { project_id: string }).project_id);
+      const text = policyText(automation, repo?.deploy_workflow ?? null);
+      // TER-1114: at merge level or above, a repository with no CI on PRs never gets a PR merged
+      return { enabled: automation.enabled, autonomy: automation.autonomy, pr_ci: prCi, text: needsPrCiWarning(automation, prCi) ? `${text}\nAviso: ${NO_PR_CI_TEXT}` : text };
     },
   },
   {
@@ -646,7 +663,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'watch',
     description:
-      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). note: what to do when it happens, in your own words (≤500). hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
+      'Ask termhub to wake this chat when something happens ("me avise quando…"), instead of a subagent that waits: the server keeps it (it survives restarts and deploys), and when the event happens it starts a turn here with the event (ids, URLs, state, version) and your note — then read what you need, decide and write to the person. Only what changes after the call counts: the answer has `current`, so say it at once when it is already there. kind tab (tab_id; events: finished, waiting_input = a question, waiting_permission, idle, error, blocked, auth_required, trust_prompt, waiting_background, gone = closed/session ended; default every stop but waiting_background), card (task_id: id or ref like TER-12; event moved, optional to = backlog|todo|doing|done; also gone), pr (task_id for the card\'s PRs, or pr_url; events opened, merged, closed, ci_failed, ci_passed, merge_blocked (termhub will not merge the green head by itself: it depends on a person\'s card, has no CI, or waits for an approval), deploy_ok, deploy_failed, release_ok, release_failed with its version — agent, OTA, store workflows; optional workflow; default merged, closed, ci_failed, merge_blocked; needs the project\'s GitHub integration), machine (machine_id; online, offline after 3 min, gone), agent_release (version x.y.z: an @termhub/agent at or above it is on npm). label: the one line the person sees in the chat for this watch, written for them in their language, plain and short (≤120, e.g. "Te aviso quando a aba OPM-568 (Abacate) parar") — no tool names nor instructions. note: what to do when it happens, in your own words (≤500); only you read it, the person never sees it. hours: validity, default 24, max 168; when it runs out you are woken once with "expired". recurring: true fires on every occurrence (at most every 10 min), default once. At most 30 open per chat; wakes are batched and capped per hour. The person sees the open ones in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
@@ -660,6 +677,7 @@ export const TOOLS: ToolDef[] = [
       events: z.array(z.string().min(1).max(40)).min(1).max(12).optional(),
       to: taskStatus.optional(),
       workflow: z.string().trim().min(1).max(200).optional(),
+      label: z.string().trim().min(1).max(WATCH_LIMITS.labelMax),
       note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
       hours: z.number().positive().max(WATCH_LIMITS.maxHours).optional(),
       recurring: z.boolean().optional(),
@@ -669,7 +687,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'schedule_wakeup',
     description:
-      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. note: what to do then, in your own words (≤500). To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). For a periodic summary of a long job ("me manda um resumo a cada hora enquanto isso roda"): every_minutes plus stop_with = the watch_id of the watch on that job — the reminder stops by itself when that watch closes; send each summary with notify. At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
+      'Have termhub wake this chat at a set time ("me acorde em 5 min", "me lembra às 18h de conferir o build"), instead of a subagent that sleeps: the server keeps it (it survives restarts and deploys) and at that time starts a turn here with your note — then do what it says and write to the person. Exactly one of: in_minutes (1 to 10080), at (ISO 8601 with offset, or "YYYY-MM-DDTHH:MM" on the person\'s clock) or at_time ("HH:MM", the next time the person\'s clock reads it). Times without an offset are in the person\'s time zone; the answer gives due_local and time_zone: confirm the time to the person on their clock. label: the one line the person sees in the chat for this reminder, written for them in their language, plain and short (≤120, e.g. "Conferir o build") — the time is shown next to it. note: what to do then, in your own words (≤500); only you read it. To repeat: every_minutes (at least 5), stopping after times wakes (at most 100) and/or at until / until_time (same formats); with neither it repeats for 24 h. Nothing beyond 7 days. If the server was down at the time, it wakes you as soon as it is back and says how late (a repeating one wakes once for the times it missed). For a periodic summary of a long job ("me manda um resumo a cada hora enquanto isso roda"): every_minutes plus stop_with = the watch_id of the watch on that job — the reminder stops by itself when that watch closes; send each summary with notify. At most 10 open reminders per chat (they count towards the 30 watches). list_watches lists them (kind reminder, with next_at), cancel_watch cancels one; the person sees them in the chat and can cancel them. Only works in the termhub chat.',
     scope: 'read',
     resource: 'chat',
     action: 'create',
@@ -677,6 +695,7 @@ export const TOOLS: ToolDef[] = [
       in_minutes: z.number().int().min(1).max(WATCH_LIMITS.maxHours * 60).optional(),
       at: z.string().trim().min(16).max(40).optional(),
       at_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+      label: z.string().trim().min(1).max(WATCH_LIMITS.labelMax),
       note: z.string().trim().min(1).max(WATCH_LIMITS.noteMax),
       every_minutes: z.number().int().min(REMINDER_LIMITS.minEveryMinutes).max(WATCH_LIMITS.maxHours * 60).optional(),
       times: z.number().int().min(1).max(REMINDER_LIMITS.maxTimes).optional(),
@@ -688,7 +707,7 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'list_watches',
-    description: "This chat's open watches (from watch) and reminders (from schedule_wakeup, kind reminder, with next_at and every_minutes): id, kind, target, events, your note, whether recurring, and until when. Only works in the termhub chat.",
+    description: "This chat's open watches (from watch) and reminders (from schedule_wakeup, kind reminder, with next_at and every_minutes): id, kind, target (label), events, summary (the line the person sees) and your note (only you see it), whether recurring, until when, and what already happened (fire_count, last_event, last_fired_at). Only works in the termhub chat.",
     scope: 'read',
     resource: 'chat',
     action: 'read',
@@ -767,10 +786,24 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'move_task',
-    description: `Move a top-level card to a board column (column_id, from list_tasks) or to a status (backlog, or the first column of todo/doing/done) — exactly one of the two — at a position (0 = top, default; max ${TASK_POSITION_MAX}, clamped). Subtasks have no column: change their status with update_task.`,
+    description: `Move a top-level card to a board column (column_id, from list_tasks) or to a status (backlog, or the first column of todo/doing/done that is not "aguardando") — exactly one of the two — at a position (0 = top, default; max ${TASK_POSITION_MAX}, clamped). Subtasks have no column: change their status with update_task.`,
     scope: 'tasks', resource: 'tasks', action: 'update',
     input: { task_id: id, column_id: id.optional(), status: taskStatus.optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional() },
     run: (ctx, a) => moveTask(ctx, a as { task_id: string; column_id?: string; status?: TaskStatus; position?: number }),
+  },
+  {
+    name: 'create_column',
+    description: `Add a board column to a project (max ${MAX_COLUMNS} per project): name (max ${COLUMN_NAME_MAX} chars, the person's words), category todo, doing or done (what the column means to the system: cards in it take that status), position (0 = first; default the end; list_tasks gives the order). waiting: true marks it "aguardando" — its cards wait on a person or a third party (a lawyer, a test on a device, an authorization): automatic work never takes them, the health watcher raises no card_orphan nor queue_stalled for them, and get_project_health and the daily summary list them as "esperando você", each with the "O que falta: …" line of its description (write one when you move a card there). Moves by status never land on a waiting column while the category has another. Returns the column and the project's columns in order.`,
+    scope: 'tasks', resource: 'tasks', action: 'create',
+    input: { project_id: id, name: columnName, category: columnCategory, waiting: z.boolean().optional(), position: columnPosition.optional() },
+    run: (ctx, a) => createColumn(ctx, a as { project_id: string; name: string; category: ColumnCategory; waiting?: boolean; position?: number }),
+  },
+  {
+    name: 'update_column',
+    description: `Change a board column (column_id from list_tasks): name, category (todo/doing/done; its cards follow), waiting (true marks it "aguardando", see create_column; false clears it) and position (0 = first) — at least one. Each category keeps one column that is not waiting, and the project's agent column cannot be a waiting one (marking it sends the project back to the automatic agent column). Returns the column and the project's columns in order. To put a card in a column, use move_task with its column_id.`,
+    scope: 'tasks', resource: 'tasks', action: 'update',
+    input: { column_id: id, name: columnName.optional(), category: columnCategory.optional(), waiting: z.boolean().optional(), position: columnPosition.optional() },
+    run: (ctx, a) => updateColumn(ctx, a as { column_id: string; name?: string; category?: ColumnCategory; waiting?: boolean; position?: number }),
   },
   {
     name: 'delete_task',

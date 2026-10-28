@@ -1,4 +1,5 @@
 {
+  "{{cli}} · modelo {{model}}": "{{cli}} · model {{model}}",
   "{{state}} (automático, {{ref}})": "{{state}} (automatic, {{ref}})",
   "Aba não encontrada.": "Tab not found.",
   "Aceitar edições": "Accept edits",
@@ -10,7 +11,10 @@
   "Cancelar": "Cancel",
   "Compactar (/compact)": "Compact (/compact)",
   "Concluído": "Done",
+  "Conta de IA": "AI account",
   "Login expirado: rode /login": "Login expired: run /login",
+  "Nenhuma máquina ligada a este projeto.": "No machine linked to this project.",
+  "Offline": "Offline",
   "Pergunta se a pasta é confiável": "Asks whether the folder is trusted",
   "Bloqueado": "Blocked",
   "Conversa compactada": "Conversation compacted",
@@ -44,6 +48,7 @@
   "Não foi possível iniciar a sessão. Tente de novo.": "Could not start the session. Try again.",
   "Não foi possível ler a tela.": "Could not read the screen.",
   "O que o Claude deve fazer?": "What should Claude do?",
+  "O que o Codex deve fazer?": "What should Codex do?",
   "Padrão": "Default",
   "Parado": "Idle",
   "Parte do histórico foi omitida por ser grande demais": "Part of the history was left out because it was too large",
@@ -118,5 +123,9 @@
   "Escreva abaixo para falar com o Codex nesta aba.": "Write below to talk to Codex in this tab.",
   "Hooks instalados. Reinicie o Codex nesta aba (codex resume retoma a conversa) para o histórico aparecer aqui.": "Hooks installed. Restart Codex in this tab (codex resume picks the conversation back up) for the history to show up here.",
   "Limpar a conversa desta sessão? O Codex esquece o que foi dito até aqui.": "Clear this session's conversation? Codex forgets what was said so far.",
-  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o Codex nesta aba (codex resume retoma a conversa): a partir daí ela aparece aqui.": "This tab's history comes from Codex, and the hooks are what tell termhub which session to read. Install the hooks on {{machine}} and restart Codex in this tab (codex resume picks the conversation back up): from then on it shows up here."
+  "O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o Codex nesta aba (codex resume retoma a conversa): a partir daí ela aparece aqui.": "This tab's history comes from Codex, and the hooks are what tell termhub which session to read. Install the hooks on {{machine}} and restart Codex in this tab (codex resume picks the conversation back up): from then on it shows up here.",
+  "O histórico desta aba vem do Claude Code ou do Codex, e são os hooks que dizem ao termhub qual sessão ler. Instale os hooks em {{machine}} e reinicie o agente nesta aba (claude --continue ou codex resume retomam a conversa): a partir daí ela aparece aqui.": "This tab's history comes from Claude Code or Codex, and the hooks are what tell termhub which session to read. Install the hooks on {{machine}} and restart the agent in this tab (claude --continue or codex resume picks the conversation back up): from then on it shows up here.",
+  "O agente desta aba ainda não informou a sessão": "The agent in this tab has not reported its session yet",
+  "O histórico aparece assim que o Claude Code ou o Codex rodar nesta aba com os hooks do termhub. Se ele já estava aberto antes dos hooks, reinicie-o (claude --continue ou codex resume retomam a conversa); se nada mudar, reinstale os hooks em {{machine}}.": "The history shows up as soon as Claude Code or Codex runs in this tab with the termhub hooks. If it was already open before the hooks, restart it (claude --continue or codex resume picks the conversation back up); if nothing changes, reinstall the hooks on {{machine}}.",
+  "Hooks instalados. Reinicie o agente nesta aba (claude --continue ou codex resume retomam a conversa) para o histórico aparecer aqui.": "Hooks installed. Restart the agent in this tab (claude --continue or codex resume picks the conversation back up) for the history to show up here."
 }

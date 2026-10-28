@@ -119,6 +119,7 @@ export const ModelName = {
   PushTicket: 'PushTicket',
   UserNotification: 'UserNotification',
   AutomationSummary: 'AutomationSummary',
+  ProjectHealthAlert: 'ProjectHealthAlert',
   LegalDocumentVersion: 'LegalDocumentVersion',
   LegalAcceptance: 'LegalAcceptance',
   DataExport: 'DataExport',
@@ -438,6 +439,7 @@ export const TaskColumnScalarFieldEnum = {
   name: 'name',
   category: 'category',
   position: 'position',
+  waiting: 'waiting',
   createdAt: 'createdAt'
 } as const
 
@@ -491,6 +493,7 @@ export const TaskPullRequestScalarFieldEnum = {
   deployState: 'deployState',
   deployUrl: 'deployUrl',
   releaseRuns: 'releaseRuns',
+  mentionOnly: 'mentionOnly',
   syncedAt: 'syncedAt'
 } as const
 
@@ -929,13 +932,15 @@ export const ChatWatchScalarFieldEnum = {
   baseline: 'baseline',
   label: 'label',
   note: 'note',
+  summary: 'summary',
   recurring: 'recurring',
   status: 'status',
   createdAt: 'createdAt',
   expiresAt: 'expiresAt',
   closedAt: 'closedAt',
   lastFiredAt: 'lastFiredAt',
-  fireCount: 'fireCount'
+  fireCount: 'fireCount',
+  lastEvent: 'lastEvent'
 } as const
 
 export type ChatWatchScalarFieldEnum = (typeof ChatWatchScalarFieldEnum)[keyof typeof ChatWatchScalarFieldEnum]
@@ -1302,6 +1307,25 @@ export const AutomationSummaryScalarFieldEnum = {
 } as const
 
 export type AutomationSummaryScalarFieldEnum = (typeof AutomationSummaryScalarFieldEnum)[keyof typeof AutomationSummaryScalarFieldEnum]
+
+
+export const ProjectHealthAlertScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  signal: 'signal',
+  subject: 'subject',
+  level: 'level',
+  detail: 'detail',
+  sinceAt: 'sinceAt',
+  firstSeenAt: 'firstSeenAt',
+  lastSeenAt: 'lastSeenAt',
+  openedAt: 'openedAt',
+  wokenAt: 'wokenAt',
+  noticedAt: 'noticedAt',
+  resolvedAt: 'resolvedAt'
+} as const
+
+export type ProjectHealthAlertScalarFieldEnum = (typeof ProjectHealthAlertScalarFieldEnum)[keyof typeof ProjectHealthAlertScalarFieldEnum]
 
 
 export const LegalDocumentVersionScalarFieldEnum = {

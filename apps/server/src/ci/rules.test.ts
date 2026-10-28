@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ciOf, deployOf, refsIn, type WorkflowRun } from './rules.js';
+import { ciOf, deployOf, linkedRefsIn, refsIn, type WorkflowRun } from './rules.js';
 
 const run = (over: Partial<WorkflowRun>): WorkflowRun => ({
   id: 1, name: 'CI e Deploy', path: '.github/workflows/deploy.yml', status: 'completed', conclusion: 'success',
@@ -13,6 +13,20 @@ describe('refsIn', () => {
   it('does not match a longer number, another key or a ref glued to letters', () => {
     expect(refsIn(['TER-1830 XTER-18 TERM-18', null], 'TER')).toEqual([1830]);
     expect(refsIn(['TER-18'], 'TER')).not.toContain(183);
+  });
+});
+
+describe('linkedRefsIn', () => {
+  it('takes refs after a dependency or closing word, lists included', () => {
+    expect(linkedRefsIn(['Depende de: TER-12, TER-13 e TER-14'], 'TER')).toEqual([12, 13, 14]);
+    expect(linkedRefsIn(['**Depends on:** TER-5\nCloses ter-6', 'Fecha TER-7; bloqueado por TER-8 and TER-9'], 'TER')).toEqual([5, 6, 7, 8, 9]);
+  });
+  it('leaves a passing mention out', () => {
+    expect(linkedRefsIn(['Tela mínima no cms (o visual final vem do TER-3)', 'Segue o padrão do TER-952; ver TER-1011'], 'TER')).toEqual([]);
+    expect(linkedRefsIn(['Closes the gap; TER-4 does the rest', 'prefixed TER-5'], 'TER')).toEqual([]);
+  });
+  it('does not read a link word inside another word', () => {
+    expect(linkedRefsIn(['unfixed TER-1', 'enclosed TER-2', 'fecharam TER-3'], 'TER')).toEqual([]);
   });
 });
 

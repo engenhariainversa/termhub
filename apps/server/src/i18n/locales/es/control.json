@@ -165,5 +165,6 @@
   "Assinatura não encontrada nesta conversa: um aviso \"done\" só vale para algo que a pessoa pediu para acompanhar aqui. Sem isso, use fyi.": "Suscripción no encontrada en esta conversación: un aviso \"done\" solo vale para algo que la persona pidió seguir aquí. Sin eso, usa fyi.",
   "Esta conversa já tem {{max}} avisos esperando para sair: escreva no chat sem notify.": "Esta conversación ya tiene {{max}} avisos esperando para salir: escribe en el chat sin notify.",
   "stop_with só vale com every_minutes: é o fim de um resumo periódico.": "stop_with solo vale con every_minutes: es el fin de un resumen periódico.",
-  "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with debe ser el id de una suscripción abierta de esta conversación (watch): el trabajo que el resumen sigue."
+  "stop_with deve ser o id de uma assinatura aberta desta conversa (watch): o trabalho que o resumo acompanha.": "stop_with debe ser el id de una suscripción abierta de esta conversación (watch): el trabajo que el resumen sigue.",
+  "Informe name, category, waiting ou position": "Indica name, category, waiting o position"
 }

@@ -24,10 +24,12 @@ export type CardWatchEvent = (typeof CARD_EVENTS)[number];
 export const CARD_STATUSES = ['backlog', 'todo', 'doing', 'done'] as const;
 export type CardStatus = (typeof CARD_STATUSES)[number];
 
-/** A pull request (of a card, or by URL), its CI, its deploy and its release workflows (agent, OTA, store). */
-export const PR_EVENTS = ['opened', 'merged', 'closed', 'ci_failed', 'ci_passed', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed'] as const;
+/** A pull request (of a card, or by URL), its CI, its deploy and its release workflows (agent, OTA, store), and
+ *  `merge_blocked` (TER-1136): termhub's merge executor will not merge its head by itself (held for a person,
+ *  no CI, or waiting for an approval in the chat). */
+export const PR_EVENTS = ['opened', 'merged', 'closed', 'ci_failed', 'ci_passed', 'merge_blocked', 'deploy_ok', 'deploy_failed', 'release_ok', 'release_failed'] as const;
 export type PrWatchEvent = (typeof PR_EVENTS)[number];
-export const PR_DEFAULT_EVENTS: readonly PrWatchEvent[] = ['merged', 'closed', 'ci_failed'];
+export const PR_DEFAULT_EVENTS: readonly PrWatchEvent[] = ['merged', 'closed', 'ci_failed', 'merge_blocked'];
 
 export const MACHINE_EVENTS = ['online', 'offline', 'gone'] as const;
 export type MachineWatchEvent = (typeof MACHINE_EVENTS)[number];
@@ -92,6 +94,8 @@ export const WATCH_LIMITS = {
   /** A recurring watch fires at most once in this window; what happens meanwhile is told at its end. */
   recurringCooldownMs: 10 * 60_000,
   noteMax: 500,
+  /** TER-1115: the person's line (`label` in `watch` and `schedule_wakeup`). */
+  labelMax: 120,
 } as const;
 
 /** Limits of `schedule_wakeup` (TER-1100 §5), on top of `WATCH_LIMITS.openPerScope`, which reminders count towards. */

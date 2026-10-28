@@ -77,10 +77,15 @@ export interface WaitEvent {
   keepsWaitText: boolean;
   /** a subagent's event, null or absent for the main thread's */
   subagent?: SubagentRef | null;
+  /** Claude's `SessionStart` after a compaction (`source: "compact"`, TER-1133) */
+  compaction?: boolean;
 }
 
 export type WaitOutcome =
-  | { action: 'drop'; reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' | 'reminder_during_background' | 'reminder_after_finished' }
+  | {
+      action: 'drop';
+      reason: 'session_start_during_turn' | 'post_tool_after_interrupt' | 'subagent_during_wait' | 'reminder_during_background' | 'reminder_after_finished' | 'compaction_at_rest';
+    }
   /**
    * `carry`: the person had seen the wait this one follows. `born`: a wait with nothing new in it,
    * seen from its first moment. `none`: a request the person has not seen.
@@ -178,6 +183,15 @@ export function decideWait(current: WaitCurrent, history: HistoryRow[], event: W
   // (TER-1046): the reminder would turn such a tab back into a plain wait for the person.
   if (event.continuesWait && event.keepsWaitText && event.kind === 'waiting_input' && isTurnOver(current.state)) {
     return { action: 'drop', reason: 'reminder_after_finished' };
+  }
+
+  // A compaction is no turn (TER-1133). Claude Code compacts on its own at the prompt ("Compacted while idle,
+  // before the prompt cache expired"), and so does a /compact the person types: either ends with a
+  // SessionStart and no Stop after it, which would leave a tab back at its prompt working for ever. Only a tab
+  // with nothing running is kept where it is; one that is working (a compaction in the middle of a turn) or
+  // that has no session yet records it as before.
+  if (event.compaction && event.kind === 'working' && current.state !== null && current.state !== 'working' && current.state !== 'idle') {
+    return { action: 'drop', reason: 'compaction_at_rest' };
   }
 
   // Cursor's launch with a prompt fires sessionStart and beforeSubmitPrompt together. When the

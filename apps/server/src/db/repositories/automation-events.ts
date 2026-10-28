@@ -49,7 +49,10 @@ export type AutomationEventKind =
   // TER-1025: a run that reported a GitHub error waits for GitHub ({ reason, attempt, tab_id }), and Claude's
   // trust question of a termhub worktree answered by the server ({ tab_id })
   | 'github_wait'
-  | 'trust_auto_accepted';
+  | 'trust_auto_accepted'
+  // TER-1120: a workflow on the base head cancelled before any job got a runner: delivered nothing, does not
+  // hold the merge queue ({ run_id, workflow, url, sha }), once per run
+  | 'workflow_no_runner';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;
@@ -110,6 +113,18 @@ export class AutomationEventsRepository {
   /** The run's newest event of `kind`, or null. */
   async lastForRun(runId: string, kind: AutomationEventKind): Promise<AutomationEvent | null> {
     const row = await this.db.automationEvent.findFirst({ where: { runId, kind }, orderBy: { createdAt: 'desc' } });
+    return row ? map(row) : null;
+  }
+
+  /**
+   * TER-1136: the newest event of one of `kinds` about a PR head (payload `pr` and `sha`), in the project: what
+   * the merge executor said about it (an escalation, an approval asked). Null when it said nothing.
+   */
+  async lastForPullHead(projectId: string, kinds: AutomationEventKind[], pr: number, sha: string): Promise<AutomationEvent | null> {
+    const row = await this.db.automationEvent.findFirst({
+      where: { projectId, kind: { in: kinds }, AND: [{ payload: { path: ['pr'], equals: pr } }, { payload: { path: ['sha'], equals: sha } }] },
+      orderBy: { createdAt: 'desc' },
+    });
     return row ? map(row) : null;
   }
 

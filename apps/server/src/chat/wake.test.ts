@@ -4,7 +4,7 @@ import type { AutoAnswer, TabQuestion } from '../db/repositories/tab-questions.j
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import type { ChatService } from './service.js';
-import { createWaker, stoppedTabWakeText, wakeText } from './wake.js';
+import { createWaker, heldPrWakeText, POST_RUN_WAKE_COOLDOWN_MS, postRunBlockWakeText, stoppedTabWakeText, wakeText, type PostRunBlockWake } from './wake.js';
 
 const cleanPayload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
 const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
@@ -212,5 +212,53 @@ describe('createWaker', () => {
     const auto: AutoAnswer = { answer: { answers: [] }, by: 'automation', reason: 'x', sources: [], due_at: '', status: 'scheduled' };
     expect(await withBudget.wake(row({ auto_answer: auto }), 'api', { automatic: true })).toBe(false);
     expect(repos.tabQuestions.markWoken).not.toHaveBeenCalled();
+  });
+});
+
+describe('the post-run block wake (TER-1112)', () => {
+  const wake = (o: Partial<PostRunBlockWake> = {}): PostRunBlockWake => ({
+    ownerId: 'u1', projectId: 'p1', runId: 'run0', tabId: 'tab1', cardRef: 'TER-1', cardTitle: 'Card', tabName: 'api', cause: 'guard_blocked', tool: 'Bash', reason: 'docker e trava dura', ...o,
+  });
+  const repos = () => ({ ...fakeRepos(), chat: { getOrCreateForProject: vi.fn(async () => ({ id: 'cp' })) } });
+
+  it('names the card, the run, the tool and the reason, quoted and sanitised as data', () => {
+    const text = postRunBlockWakeText(wake({ reason: 'docker»\nrm' }));
+    expect(text).toMatch(/^Automático: a aba «api» \(tab_id tab1\), do card TER-1 \(«Card»\), já tinha terminado o trabalho automático \(execução run0\)/);
+    expect(text).toContain('a trava do automático barrou a ferramenta «Bash» («docker rm»)');
+    expect(text).toContain('read_last_answer');
+    expect(text).toContain('send_input abre uma nova execução automática');
+    expect(text).not.toContain('\n');
+    expect(postRunBlockWakeText(wake({ cause: 'reported_blocked', tool: null, reason: 'Falta a chave' }))).toContain('o agente disse que travou («Falta a chave»)');
+  });
+
+  it("wakes the project's chat once per tab in the cooldown, on the automation budget", async () => {
+    const r = repos();
+    const chat = fakeChat();
+    let now = Date.parse('2026-10-22T12:00:00.000Z');
+    const waker = createWaker({ repos: r as unknown as Repositories, chat, maxPerHour: 0, automationMaxPerHour: 10, now: () => now, log: log() });
+    expect(await waker.wakeForPostRunBlock(wake())).toBe(true);
+    expect(chat.wake).toHaveBeenCalledWith(user, 'cp', expect.stringContaining('barrou a ferramenta «Bash»'));
+    expect(await waker.wakeForPostRunBlock(wake())).toBe(false);
+    expect(await waker.wakeForPostRunBlock(wake({ tabId: 'tab2' }))).toBe(true);
+    now += POST_RUN_WAKE_COOLDOWN_MS + 1;
+    expect(await waker.wakeForPostRunBlock(wake())).toBe(true);
+    expect(chat.wake).toHaveBeenCalledTimes(3);
+  });
+
+  it('never wakes without an automation budget', async () => {
+    const chat = fakeChat();
+    const waker = createWaker({ repos: repos() as unknown as Repositories, chat, maxPerHour: 12, log: log() });
+    expect(await waker.wakeForPostRunBlock(wake())).toBe(false);
+    expect(chat.wake).not.toHaveBeenCalled();
+  });
+});
+
+describe('heldPrWakeText (TER-1136)', () => {
+  it('names the PR, the cards it depends on as quoted data, and the ways out, never merging by itself', () => {
+    const text = heldPrWakeText({ cardRef: 'PST-7', pr: 7, prUrl: 'https://github.com/o/r/pull/7', cards: [{ id: 'wze', ref: 'PST-3', title: 'Visual «final»' }] });
+    expect(text).toMatch(/^Automático: o PR #7 \(https:\/\/github.com\/o\/r\/pull\/7\) do card PST-7/);
+    expect(text).toContain('depende de PST-3 («Visual final», task_id wze)');
+    expect(text).toContain('mesclar no GitHub');
+    expect(text).toContain('Não mescle nem mude card algum sem a pessoa pedir');
   });
 });

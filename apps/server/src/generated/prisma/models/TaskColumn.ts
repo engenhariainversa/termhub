@@ -41,6 +41,7 @@ export type TaskColumnMinAggregateOutputType = {
   name: string | null
   category: $Enums.TaskStatus | null
   position: number | null
+  waiting: boolean | null
   createdAt: Date | null
 }
 
@@ -50,6 +51,7 @@ export type TaskColumnMaxAggregateOutputType = {
   name: string | null
   category: $Enums.TaskStatus | null
   position: number | null
+  waiting: boolean | null
   createdAt: Date | null
 }
 
@@ -59,6 +61,7 @@ export type TaskColumnCountAggregateOutputType = {
   name: number
   category: number
   position: number
+  waiting: number
   createdAt: number
   _all: number
 }
@@ -78,6 +81,7 @@ export type TaskColumnMinAggregateInputType = {
   name?: true
   category?: true
   position?: true
+  waiting?: true
   createdAt?: true
 }
 
@@ -87,6 +91,7 @@ export type TaskColumnMaxAggregateInputType = {
   name?: true
   category?: true
   position?: true
+  waiting?: true
   createdAt?: true
 }
 
@@ -96,6 +101,7 @@ export type TaskColumnCountAggregateInputType = {
   name?: true
   category?: true
   position?: true
+  waiting?: true
   createdAt?: true
   _all?: true
 }
@@ -192,6 +198,7 @@ export type TaskColumnGroupByOutputType = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting: boolean
   createdAt: Date
   _count: TaskColumnCountAggregateOutputType | null
   _avg: TaskColumnAvgAggregateOutputType | null
@@ -224,6 +231,7 @@ export type TaskColumnWhereInput = {
   name?: Prisma.StringFilter<"TaskColumn"> | string
   category?: Prisma.EnumTaskStatusFilter<"TaskColumn"> | $Enums.TaskStatus
   position?: Prisma.IntFilter<"TaskColumn"> | number
+  waiting?: Prisma.BoolFilter<"TaskColumn"> | boolean
   createdAt?: Prisma.DateTimeFilter<"TaskColumn"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   tasks?: Prisma.TaskListRelationFilter
@@ -236,6 +244,7 @@ export type TaskColumnOrderByWithRelationInput = {
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
   position?: Prisma.SortOrder
+  waiting?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   tasks?: Prisma.TaskOrderByRelationAggregateInput
@@ -251,6 +260,7 @@ export type TaskColumnWhereUniqueInput = Prisma.AtLeast<{
   name?: Prisma.StringFilter<"TaskColumn"> | string
   category?: Prisma.EnumTaskStatusFilter<"TaskColumn"> | $Enums.TaskStatus
   position?: Prisma.IntFilter<"TaskColumn"> | number
+  waiting?: Prisma.BoolFilter<"TaskColumn"> | boolean
   createdAt?: Prisma.DateTimeFilter<"TaskColumn"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   tasks?: Prisma.TaskListRelationFilter
@@ -263,6 +273,7 @@ export type TaskColumnOrderByWithAggregationInput = {
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
   position?: Prisma.SortOrder
+  waiting?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.TaskColumnCountOrderByAggregateInput
   _avg?: Prisma.TaskColumnAvgOrderByAggregateInput
@@ -280,6 +291,7 @@ export type TaskColumnScalarWhereWithAggregatesInput = {
   name?: Prisma.StringWithAggregatesFilter<"TaskColumn"> | string
   category?: Prisma.EnumTaskStatusWithAggregatesFilter<"TaskColumn"> | $Enums.TaskStatus
   position?: Prisma.IntWithAggregatesFilter<"TaskColumn"> | number
+  waiting?: Prisma.BoolWithAggregatesFilter<"TaskColumn"> | boolean
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"TaskColumn"> | Date | string
 }
 
@@ -288,6 +300,7 @@ export type TaskColumnCreateInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutColumnsInput
   tasks?: Prisma.TaskCreateNestedManyWithoutColumnInput
@@ -300,6 +313,7 @@ export type TaskColumnUncheckedCreateInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutColumnInput
   agentFor?: Prisma.ProjectUncheckedCreateNestedManyWithoutAgentColumnInput
@@ -310,6 +324,7 @@ export type TaskColumnUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutColumnsNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutColumnNestedInput
@@ -322,6 +337,7 @@ export type TaskColumnUncheckedUpdateInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutColumnNestedInput
   agentFor?: Prisma.ProjectUncheckedUpdateManyWithoutAgentColumnNestedInput
@@ -333,6 +349,7 @@ export type TaskColumnCreateManyInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
 }
 
@@ -341,6 +358,7 @@ export type TaskColumnUpdateManyMutationInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -350,6 +368,7 @@ export type TaskColumnUncheckedUpdateManyInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -374,6 +393,7 @@ export type TaskColumnCountOrderByAggregateInput = {
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
   position?: Prisma.SortOrder
+  waiting?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -387,6 +407,7 @@ export type TaskColumnMaxOrderByAggregateInput = {
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
   position?: Prisma.SortOrder
+  waiting?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -396,6 +417,7 @@ export type TaskColumnMinOrderByAggregateInput = {
   name?: Prisma.SortOrder
   category?: Prisma.SortOrder
   position?: Prisma.SortOrder
+  waiting?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -482,6 +504,7 @@ export type TaskColumnCreateWithoutAgentForInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutColumnsInput
   tasks?: Prisma.TaskCreateNestedManyWithoutColumnInput
@@ -493,6 +516,7 @@ export type TaskColumnUncheckedCreateWithoutAgentForInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutColumnInput
 }
@@ -507,6 +531,7 @@ export type TaskColumnCreateWithoutProjectInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   tasks?: Prisma.TaskCreateNestedManyWithoutColumnInput
   agentFor?: Prisma.ProjectCreateNestedManyWithoutAgentColumnInput
@@ -517,6 +542,7 @@ export type TaskColumnUncheckedCreateWithoutProjectInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutColumnInput
   agentFor?: Prisma.ProjectUncheckedCreateNestedManyWithoutAgentColumnInput
@@ -548,6 +574,7 @@ export type TaskColumnUpdateWithoutAgentForInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutColumnsNestedInput
   tasks?: Prisma.TaskUpdateManyWithoutColumnNestedInput
@@ -559,6 +586,7 @@ export type TaskColumnUncheckedUpdateWithoutAgentForInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutColumnNestedInput
 }
@@ -588,6 +616,7 @@ export type TaskColumnScalarWhereInput = {
   name?: Prisma.StringFilter<"TaskColumn"> | string
   category?: Prisma.EnumTaskStatusFilter<"TaskColumn"> | $Enums.TaskStatus
   position?: Prisma.IntFilter<"TaskColumn"> | number
+  waiting?: Prisma.BoolFilter<"TaskColumn"> | boolean
   createdAt?: Prisma.DateTimeFilter<"TaskColumn"> | Date | string
 }
 
@@ -596,6 +625,7 @@ export type TaskColumnCreateWithoutTasksInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutColumnsInput
   agentFor?: Prisma.ProjectCreateNestedManyWithoutAgentColumnInput
@@ -607,6 +637,7 @@ export type TaskColumnUncheckedCreateWithoutTasksInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
   agentFor?: Prisma.ProjectUncheckedCreateNestedManyWithoutAgentColumnInput
 }
@@ -632,6 +663,7 @@ export type TaskColumnUpdateWithoutTasksInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutColumnsNestedInput
   agentFor?: Prisma.ProjectUpdateManyWithoutAgentColumnNestedInput
@@ -643,6 +675,7 @@ export type TaskColumnUncheckedUpdateWithoutTasksInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   agentFor?: Prisma.ProjectUncheckedUpdateManyWithoutAgentColumnNestedInput
 }
@@ -652,6 +685,7 @@ export type TaskColumnCreateManyProjectInput = {
   name: string
   category: $Enums.TaskStatus
   position: number
+  waiting?: boolean
   createdAt?: Date | string
 }
 
@@ -660,6 +694,7 @@ export type TaskColumnUpdateWithoutProjectInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUpdateManyWithoutColumnNestedInput
   agentFor?: Prisma.ProjectUpdateManyWithoutAgentColumnNestedInput
@@ -670,6 +705,7 @@ export type TaskColumnUncheckedUpdateWithoutProjectInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutColumnNestedInput
   agentFor?: Prisma.ProjectUncheckedUpdateManyWithoutAgentColumnNestedInput
@@ -680,6 +716,7 @@ export type TaskColumnUncheckedUpdateManyWithoutProjectInput = {
   name?: Prisma.StringFieldUpdateOperationsInput | string
   category?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
   position?: Prisma.IntFieldUpdateOperationsInput | number
+  waiting?: Prisma.BoolFieldUpdateOperationsInput | boolean
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -729,6 +766,7 @@ export type TaskColumnSelect<ExtArgs extends runtime.Types.Extensions.InternalAr
   name?: boolean
   category?: boolean
   position?: boolean
+  waiting?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   tasks?: boolean | Prisma.TaskColumn$tasksArgs<ExtArgs>
@@ -742,6 +780,7 @@ export type TaskColumnSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Ex
   name?: boolean
   category?: boolean
   position?: boolean
+  waiting?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["taskColumn"]>
@@ -752,6 +791,7 @@ export type TaskColumnSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Ex
   name?: boolean
   category?: boolean
   position?: boolean
+  waiting?: boolean
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["taskColumn"]>
@@ -762,10 +802,11 @@ export type TaskColumnSelectScalar = {
   name?: boolean
   category?: boolean
   position?: boolean
+  waiting?: boolean
   createdAt?: boolean
 }
 
-export type TaskColumnOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "name" | "category" | "position" | "createdAt", ExtArgs["result"]["taskColumn"]>
+export type TaskColumnOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "name" | "category" | "position" | "waiting" | "createdAt", ExtArgs["result"]["taskColumn"]>
 export type TaskColumnInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   tasks?: boolean | Prisma.TaskColumn$tasksArgs<ExtArgs>
@@ -792,6 +833,10 @@ export type $TaskColumnPayload<ExtArgs extends runtime.Types.Extensions.Internal
     name: string
     category: $Enums.TaskStatus
     position: number
+    /**
+     * TER-1134: "aguardando" — its cards wait on a person or a third party; the health watcher and automatic work skip them.
+     */
+    waiting: boolean
     createdAt: Date
   }, ExtArgs["result"]["taskColumn"]>
   composites: {}
@@ -1224,6 +1269,7 @@ export interface TaskColumnFieldRefs {
   readonly name: Prisma.FieldRef<"TaskColumn", 'String'>
   readonly category: Prisma.FieldRef<"TaskColumn", 'TaskStatus'>
   readonly position: Prisma.FieldRef<"TaskColumn", 'Int'>
+  readonly waiting: Prisma.FieldRef<"TaskColumn", 'Boolean'>
   readonly createdAt: Prisma.FieldRef<"TaskColumn", 'DateTime'>
 }
     

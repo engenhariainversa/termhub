@@ -28,13 +28,13 @@ export class TaskColumnsRepository {
   }
 
   /** Appended at the end. At most MAX_COLUMNS per project. */
-  async create(projectId: string, input: { name: string; category: ColumnCategory }): Promise<TaskColumn> {
+  async create(projectId: string, input: { name: string; category: ColumnCategory; waiting?: boolean }): Promise<TaskColumn> {
     return this.db.$transaction(async (tx) => {
       await lockProject(tx, projectId);
       await ensureDefaultColumns(tx, projectId);
       const count = await tx.taskColumn.count({ where: { projectId } });
       if (count >= MAX_COLUMNS) throw new TaskRuleError('TOO_MANY_COLUMNS');
-      const c = await tx.taskColumn.create({ data: { id: newId(), projectId, name: input.name, category: input.category, position: count } });
+      const c = await tx.taskColumn.create({ data: { id: newId(), projectId, name: input.name, category: input.category, waiting: input.waiting ?? false, position: count } });
       return mapTaskColumn(c);
     });
   }
@@ -63,6 +63,26 @@ export class TaskColumnsRepository {
     });
   }
 
+  /**
+   * Marks the column "aguardando" (TER-1134) or clears the mark. Each category keeps one column that is not
+   * waiting (where moves by status land); a project whose agent column gets the mark goes back to automatic.
+   */
+  async setWaiting(id: string, waiting: boolean): Promise<TaskColumn | undefined> {
+    return this.db.$transaction(async (tx) => {
+      const col = await this.locked(tx, id);
+      if (!col) return undefined;
+      if (col.waiting !== waiting) {
+        if (waiting) {
+          const active = await tx.taskColumn.count({ where: { projectId: col.projectId, category: col.category, waiting: false, id: { not: id } } });
+          if (active === 0) throw new TaskRuleError('COLUMN_LAST_ACTIVE');
+          await tx.project.updateMany({ where: { id: col.projectId, agentColumnId: id }, data: { agentColumnId: null } });
+        }
+        await tx.taskColumn.update({ where: { id }, data: { waiting } });
+      }
+      return mapTaskColumn(await tx.taskColumn.findUniqueOrThrow({ where: { id } }));
+    });
+  }
+
   /** Moves the column to `position` (clamped) and answers the project's columns in their new order. */
   async move(id: string, position: number): Promise<TaskColumn[] | undefined> {
     return this.db.$transaction(async (tx) => {
@@ -80,13 +100,18 @@ export class TaskColumnsRepository {
 
   /**
    * Deletes the column; its cards go, in order, to the end of the first other column of the same
-   * category. A project that pointed its agent column here falls back to automatic (FK SET NULL).
+   * category (a waiting one first when the column was waiting, else one that is not). A project that pointed its agent column here falls back to automatic (FK SET NULL).
    */
   async delete(id: string): Promise<{ moved_tasks: number } | undefined> {
     return this.db.$transaction(async (tx) => {
       const col = await this.locked(tx, id);
       if (!col) return undefined;
-      const target = await tx.taskColumn.findFirst({ where: { projectId: col.projectId, category: col.category, id: { not: id } }, orderBy: ORDER, select: { id: true } });
+      await this.refuseLastOfCategory(tx, col);
+      const target = await tx.taskColumn.findFirst({
+        where: { projectId: col.projectId, category: col.category, id: { not: id } },
+        orderBy: [{ waiting: col.waiting ? 'desc' : 'asc' }, ...ORDER],
+        select: { id: true },
+      });
       if (!target) throw new TaskRuleError('COLUMN_LAST_OF_CATEGORY');
       const cards = await tx.task.findMany({ where: { columnId: id }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }], select: { id: true } });
       const agg = await tx.task.aggregate({ where: { columnId: target.id }, _max: { position: true } });
@@ -99,16 +124,17 @@ export class TaskColumnsRepository {
     });
   }
 
-  /** null = automatic (the first `doing` column). A set column must be one of the project's `doing` columns. */
+  /** null = automatic (the first `doing` column that is not waiting). A set column must be one of the project's `doing` columns, not a waiting one. */
   async setAgentColumn(projectId: string, columnId: string | null): Promise<void> {
     await this.db.$transaction(async (tx) => {
       // Locked before the category check so it cannot race a concurrent setCategory that moves
       // this same column out of `doing` (both serialize on the project row).
       await lockProject(tx, projectId);
       if (columnId) {
-        const col = await tx.taskColumn.findFirst({ where: { id: columnId, projectId }, select: { category: true } });
+        const col = await tx.taskColumn.findFirst({ where: { id: columnId, projectId }, select: { category: true, waiting: true } });
         if (!col) throw new TaskRuleError('COLUMN_NOT_FOUND');
         if (col.category !== 'doing') throw new TaskRuleError('COLUMN_NOT_DOING');
+        if (col.waiting) throw new TaskRuleError('COLUMN_WAITING_AGENT');
       }
       await tx.project.update({ where: { id: projectId }, data: { agentColumnId: columnId } });
     });
@@ -122,8 +148,11 @@ export class TaskColumnsRepository {
     return tx.taskColumn.findUnique({ where: { id } });
   }
 
-  private async refuseLastOfCategory(tx: Tx, col: { id: string; projectId: string; category: string }): Promise<void> {
-    const others = await tx.taskColumn.count({ where: { projectId: col.projectId, category: col.category as ColumnCategory, id: { not: col.id } } });
+  /** The column may leave its category: another column stays there, and one that is not waiting when this one is not. */
+  private async refuseLastOfCategory(tx: Tx, col: { id: string; projectId: string; category: string; waiting: boolean }): Promise<void> {
+    const where = { projectId: col.projectId, category: col.category as ColumnCategory, id: { not: col.id } };
+    const others = await tx.taskColumn.count({ where });
     if (others === 0) throw new TaskRuleError('COLUMN_LAST_OF_CATEGORY');
+    if (!col.waiting && (await tx.taskColumn.count({ where: { ...where, waiting: false } })) === 0) throw new TaskRuleError('COLUMN_LAST_ACTIVE');
   }
 }

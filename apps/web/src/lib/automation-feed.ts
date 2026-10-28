@@ -59,6 +59,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
       // TER-1117: answered in the project's own folder, outside any run (the server's line names the tab)
       if (!e.task_id && e.reason_text) return e.reason_text;
       return t('{{ref}}: confiança da pasta confirmada sozinha', { ref });
+    case 'workflow_no_runner':
+      // TER-1120: delivered nothing and does not hold the merge queue
+      return t('Workflow {{workflow}} cancelado sem runner na branch base; a fila de merge segue', { workflow: e.workflow ?? t('sem nome') });
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });
     case 'release_failed':
@@ -98,7 +101,8 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'tagged':
       return t('{{ref}}: marcado como automático', { ref });
     case 'untagged':
-      return t('{{ref}}: tirado do automático', { ref });
+      // TER-1110: the dispatcher found work already going on for the card's ticket
+      return e.reason_text ? t('{{ref}}: tirado do automático — {{reason}}', { ref, reason: e.reason_text }) : t('{{ref}}: tirado do automático', { ref });
     case 'machine_opt_in':
       return e.machine ? t('{{machine}} passou a aceitar trabalho automático', { machine: e.machine }) : t('Uma máquina passou a aceitar trabalho automático');
     case 'machine_opt_out':

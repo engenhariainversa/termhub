@@ -48,7 +48,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatWatchesRepository (Po
     const w = await repo.create(input(), t0);
     const [a, b] = await Promise.all([repo.fire(w, { ...fired('tab:e1'), close: 'done' }, t0), repo.fire(w, { ...fired('tab:e1'), close: 'done' }, t0)]);
     expect(a + b).toBe(1);
-    expect(await repo.findById(w.id)).toMatchObject({ status: 'done', fire_count: 1 });
+    expect(await repo.findById(w.id)).toMatchObject({ status: 'done', fire_count: 1, last_event: 'finished', summary: null });
     expect(await repo.fire(w, { ...fired('tab:e2'), close: 'done' }, t0)).toBe(0);
     expect(await db.chatWatchFire.count({ where: { watchId: w.id } })).toBe(1);
   });
@@ -59,7 +59,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatWatchesRepository (Po
     expect(await repo.fire(w, { ...fired('tab:e2'), close: null, cooldownMs: 600_000 }, new Date(t0.getTime() + 60_000))).toBe(0);
     expect(await repo.fire(w, { ...fired('tab:e1'), close: null, cooldownMs: 600_000 }, new Date(t0.getTime() + 700_000))).toBe(0);
     expect(await repo.fire(w, { ...fired('tab:e3'), close: null, cooldownMs: 600_000 }, new Date(t0.getTime() + 700_000))).toBe(1);
-    expect(await repo.findById(w.id)).toMatchObject({ status: 'open', fire_count: 2 });
+    expect(await repo.findById(w.id)).toMatchObject({ status: 'open', fire_count: 2, last_event: 'finished', last_fired_at: new Date(t0.getTime() + 700_000).toISOString() });
   });
 
   it('claims, delivers, hands back and counts wakes; a stale claim can be taken over', async () => {

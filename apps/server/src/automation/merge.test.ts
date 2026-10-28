@@ -11,6 +11,9 @@ import { epicBranchName } from './branches.js';
 import type { TriggeredStart } from './dispatcher.js';
 import { mergeApproved, mergeKey, MERGE_TOOL, runMergeExecutor, type MergeDeps } from './merge.js';
 import { mergeWaitEntryOf, mergeWaitOf, resetMergeWaits } from './merge-wait.js';
+import { resetPushOnlyWorkflows, unlistedWorkflows } from './unlisted-workflows.js';
+import type { RunJob } from '../integrations/github-ci.js';
+import { BASE_RED_ESCALATE_MS } from './merge.js';
 
 // The card's sentence is built from many repositories; what matters here is that the card is asked and published.
 vi.mock('../db/repositories/chat-actions-view.js', () => ({ describeActions: vi.fn(async (_r: unknown, rows: ChatAction[]) => rows.map(() => ({ summary: 's', subagent: null }))) }));
@@ -107,7 +110,14 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
       // the unique index of ci_fix_requested (task, pr, sha); a tick before the check lets two passes interleave
       insertOnce: vi.fn(async (e: { kind: string; task_id: string; payload: Record<string, unknown> }) => {
         await Promise.resolve();
-        if (state.events.some((x) => x.kind === e.kind && x.task_id === e.task_id && x.payload?.pr === e.payload.pr && x.payload?.sha === e.payload.sha)) return null;
+        // TER-1120: a red base once per project and base head, a no-runner warning once per run
+        const same = (x: { kind: string; task_id?: string | null; payload?: Record<string, unknown> }) =>
+          e.kind === 'workflow_no_runner'
+            ? x.payload?.run_id === e.payload.run_id
+            : e.payload.reason === 'merge_base_red'
+              ? x.payload?.reason === 'merge_base_red' && x.payload?.base_sha === e.payload.base_sha
+              : x.task_id === e.task_id && x.payload?.pr === e.payload.pr && x.payload?.sha === e.payload.sha;
+        if (state.events.some((x) => x.kind === e.kind && same(x))) return null;
         const row = { id: `ev${++state.eventSeq}`, created_at: '', ...e };
         state.events.push(row);
         return row;
@@ -188,7 +198,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   const pullFor = (over: Record<string, unknown> = {}) => ({
     mergeable: true as boolean | null,
     mergeable_state: 'clean',
-    head_sha: 'h1',
+    head_sha: state.prs[0]?.head_sha ?? 'h1',
     head_ref: state.prs[0]?.head_ref ?? BRANCH.c1!,
     head_repo: 'acme/app' as string | null,
     base_ref: state.prs[0]?.base_ref ?? EPIC_BRANCH,
@@ -217,7 +227,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   const seen = new Map([['p1:acme/app#7', 'h1']]);
   const removeWorkspace = vi.fn(async (_m: unknown, _i: { repoDir: string; root: string; path: string }) => ({ removed: true, dirty: false }));
   const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
-  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z') };
+  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, noCiSince: new Map(), removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z'), redSince: new Map(), neverStarted: new Map() };
   return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor, removeWorkspace, closeTab };
 }
 
@@ -227,6 +237,7 @@ const approve = (a: ChatAction) => {
 
 beforeEach(() => {
   resetMergeWaits();
+  resetPushOnlyWorkflows();
   setCiError('p1', null);
 });
 
@@ -289,16 +300,76 @@ describe('runMergeExecutor', () => {
     }
   });
 
-  it('no CI at all, or CI still running, does nothing here', async () => {
+  it('no CI at all, or CI still running, merges nothing and asks nothing', async () => {
     for (const ci_state of ['none', 'running'] as const) {
       const w = world({ prs: [pr({ ci_state })] });
       await runMergeExecutor(w.deps, 'p1');
-      expect(w.gh.pull).not.toHaveBeenCalled();
       expect(w.gh.merge).not.toHaveBeenCalled();
       expect(w.state.actions).toHaveLength(0);
       expect(w.startFixer).not.toHaveBeenCalled();
       expect(w.type).not.toHaveBeenCalled();
+      expect(w.state.events).toHaveLength(0);
     }
+  });
+
+  describe('a PR with no CI at all (TER-1114)', () => {
+    const at = (iso: string) => () => new Date(iso);
+    const escalations = (w: ReturnType<typeof world>) => w.state.events.filter((e) => e.kind === 'escalated');
+
+    it('past the grace on the same head: escalated once per head, and the queue says why', async () => {
+      const w = world({ prs: [pr({ ci_state: 'none' })] });
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:04:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      // right after a push GitHub may not have queued the runs yet
+      expect(escalations(w)).toHaveLength(0);
+      expect(mergeWaitOf('c1', new Date('2026-10-05T12:04:00Z'))).toBeNull();
+      w.deps.now = at('2026-10-05T12:05:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w)).toEqual([expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ reason: 'merge_no_ci', pr: 7, sha: 'h1' }) })]);
+      expect(mergeWaitOf('c1', new Date('2026-10-05T12:05:00Z'))).toBe('merge_no_ci');
+      expect(w.state.messages).toHaveLength(1);
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      // a new head starts the grace over, then gets its own notice
+      w.state.prs = [pr({ ci_state: 'none', head_sha: 'h2' })];
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w)).toHaveLength(1);
+      w.deps.now = at('2026-10-05T12:10:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w).map((e) => e.payload?.sha)).toEqual(['h1', 'h2']);
+    });
+
+    it('a head whose CI shows up within the grace is never told', async () => {
+      const w = world({ prs: [pr({ ci_state: 'none' })] });
+      await runMergeExecutor(w.deps, 'p1');
+      w.state.prs = [pr({ ci_state: 'running' })];
+      await runMergeExecutor(w.deps, 'p1');
+      w.state.prs = [pr({ ci_state: 'none' })];
+      w.deps.now = at('2026-10-05T12:06:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w)).toHaveLength(0);
+    });
+
+    it('in conflict: a fixer for the head, with no CI wait and no CI notice', async () => {
+      const w = world({ prs: [pr({ ci_state: 'none' })] });
+      w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty' }));
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.startFixer).toHaveBeenCalledWith(expect.objectContaining({ taskId: 'c1', role: 'fixer', triggerSha: 'h1' }));
+      w.deps.now = at('2026-10-05T12:10:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w).filter((e) => e.payload?.reason === 'merge_no_ci')).toHaveLength(0);
+    });
+
+    it('a red CI in conflict gets the conflict fixer, not a CI fix request', async () => {
+      const w = world({ prs: [pr({ ci_state: 'failed', ci_summary: { total: 1, passed: 0, failed: 1, running: 0, failing: ['ci'] } })] });
+      w.gh.pull.mockResolvedValue(w.pullFor({ mergeable: false, mergeable_state: 'dirty' }));
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.startFixer).toHaveBeenCalledTimes(1);
+      const { prompt } = (w.startFixer.mock.calls[0] as unknown as [{ prompt: string }])[0];
+      expect(prompt).toContain('tem conflito com');
+      expect(w.state.events.filter((e) => e.kind === 'ci_fix_requested')).toHaveLength(0);
+    });
   });
 
   it('without required_checks, a merge needs the same green reading on two passes; a new head starts over', async () => {
@@ -344,6 +415,100 @@ describe('runMergeExecutor', () => {
       expect(w.gh.merge).toHaveBeenCalledTimes(wait ? 0 : 1);
       if (wait) expect(mergeWaitOf('c2', new Date('2026-10-05T12:00:00Z'))).toBe(wait);
     }
+  });
+
+  // TER-1120: "Mobile TestFlight (hulk)" sat a day in the queue with no runner and ended cancelled
+  describe('a red base (TER-1120)', () => {
+    const setup = setupWith({ autonomy: 'deploy', release_workflows: ['publish-agent.yml'] }, { deploy_workflow: 'deploy.yml' });
+    const T0 = new Date('2026-10-05T12:00:00Z').getTime();
+    const queued: RunJob[] = [{ name: 'build', status: 'completed', conclusion: 'cancelled', steps: [], runner_name: null }];
+    const started: RunJob[] = [{ name: 'build', status: 'completed', conclusion: 'cancelled', steps: [{ name: 'checkout', conclusion: 'success' }], runner_name: 'hulk' }];
+
+    function redBase(baseRuns: WorkflowRun[], jobs: RunJob[] = queued) {
+      const w = world({ setup, prs: [pr({ task_id: 'c2', base_ref: 'main' })] });
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? baseRuns : [run('ci', 'completed', 'success')]));
+      const runJobs = vi.fn(async () => jobs);
+      const wakeBaseRed = vi.fn(async () => true);
+      let at = T0;
+      Object.assign(w.deps, { ci: { ...w.ci, runJobs }, wakeBaseRed, now: () => new Date(at) });
+      return { ...w, runJobs, wakeBaseRed, later: (ms: number) => (at += ms) };
+    }
+
+    it('a workflow cancelled before any job got a runner does not hold the queue, and is reported once', async () => {
+      const w = redBase([run('ci', 'completed', 'success', 1), run('mobile-testflight', 'completed', 'cancelled', 2)]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.runJobs).toHaveBeenCalledWith('tok', 'acme/app', 2);
+      expect(w.gh.merge).toHaveBeenCalledTimes(1);
+      const warned = w.state.events.filter((e) => e.kind === 'workflow_no_runner');
+      expect(warned).toHaveLength(1);
+      expect(warned[0]!.payload).toMatchObject({ run_id: '2', workflow: 'mobile-testflight', sha: 'base1' });
+      expect(w.state.messages.some((m) => m.includes('mobile-testflight') && m.includes('sem runner'))).toBe(true);
+      // the next PR on the same base reads the run from the cache: no second read, no second warning
+      w.state.prs = [pr({ task_id: 'c2', base_ref: 'main', number: 8, head_sha: 'h2' })];
+      w.gh.pull.mockResolvedValue(w.pullFor({ head_sha: 'h2', base_ref: 'main' }));
+      w.seen.set('p1:acme/app#8', 'h2');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.runJobs).toHaveBeenCalledTimes(1);
+      expect(w.state.events.filter((e) => e.kind === 'workflow_no_runner')).toHaveLength(1);
+    });
+
+    it('a cancelled workflow whose job ran on a runner still makes the base red', async () => {
+      const w = redBase([run('ci', 'completed', 'success', 1), run('mobile-testflight', 'completed', 'cancelled', 2)], started);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(mergeWaitEntryOf('c2', new Date(T0))).toMatchObject({ wait: 'merge_base_red', detail: 'mobile-testflight' });
+      expect(w.state.events.some((e) => e.kind === 'workflow_no_runner')).toBe(false);
+    });
+
+    it('a real red base is escalated once per base head, after it held a ready PR for 15 minutes', async () => {
+      const w = redBase([run('ci', 'completed', 'failure', 1)]);
+      await runMergeExecutor(w.deps, 'p1');
+      w.later(BASE_RED_ESCALATE_MS - 60_000);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+      w.later(60_000);
+      await runMergeExecutor(w.deps, 'p1');
+      await runMergeExecutor(w.deps, 'p1');
+      const escalated = w.state.events.filter((e) => e.kind === 'escalated');
+      expect(escalated).toHaveLength(1);
+      expect(escalated[0]).toMatchObject({ task_id: 'c2', payload: { reason: 'merge_base_red', base: 'main', base_sha: 'base1', workflow: 'ci', run_url: 'r/ci', pr: 7 } });
+      expect(w.wakeBaseRed).toHaveBeenCalledTimes(1);
+      expect(w.wakeBaseRed).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', cardRef: 'TER-6', pr: 7, baseBranch: 'main', baseSha: 'base1', workflow: 'ci' }));
+      expect(w.state.messages.some((m) => m.includes('TER-6') && m.includes('base1'.slice(0, 7)) && m.includes('«ci»'))).toBe(true);
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      // a new base head that is red again is told again, once it held the PR as long
+      w.gh.branchSha.mockResolvedValue('base2');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(1);
+      w.later(BASE_RED_ESCALATE_MS);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated').map((e) => e.payload?.base_sha)).toEqual(['base1', 'base2']);
+      expect(w.wakeBaseRed).toHaveBeenCalledTimes(2);
+    });
+
+    it('a base that turns green between readings starts the 15 minutes over', async () => {
+      const w = redBase([run('ci', 'completed', 'failure', 1)]);
+      await runMergeExecutor(w.deps, 'p1');
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? [run('ci', 'in_progress', null, 1)] : [run('ci', 'completed', 'success')]));
+      w.later(BASE_RED_ESCALATE_MS);
+      await runMergeExecutor(w.deps, 'p1');
+      w.ci.listRuns.mockImplementation(async (_t, _r, sha) => (sha.startsWith('base') ? [run('ci', 'completed', 'failure', 1)] : [run('ci', 'completed', 'success')]));
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    });
+
+    it('a workflow only a push to the base runs, named nowhere in the Setup, is the Setup warning', async () => {
+      const push = (name: string, id: number): WorkflowRun => ({ ...run(name, 'completed', 'success', id), event: 'push' });
+      const w = redBase([push('ci', 1), push('deploy', 2), push('mobile-testflight', 3), { ...run('nightly', 'completed', 'success', 4), event: 'schedule' }]);
+      await runMergeExecutor(w.deps, 'p1');
+      expect(unlistedWorkflows('p1', setup)).toEqual([{ name: 'mobile-testflight', path: '.github/workflows/mobile-testflight.yml' }]);
+      // named as a release workflow, it is no longer a warning
+      expect(unlistedWorkflows('p1', setupWith({ release_workflows: ['mobile-testflight.yml'] }, { deploy_workflow: 'deploy.yml' }))).toEqual([]);
+      // read once per base head
+      const reads = w.ci.listRuns.mock.calls.filter(([, , sha]) => sha === 'h1').length;
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.ci.listRuns.mock.calls.filter(([, , sha]) => sha === 'h1').length).toBe(reads);
+    });
   });
 
   it('a PR into the base that is behind it (compared explicitly) is updated and waits for CI again', async () => {
@@ -600,6 +765,30 @@ describe('runMergeExecutor', () => {
     await runMergeExecutor(w.deps, 'p1');
     expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(2);
     expect(w.gh.merge).not.toHaveBeenCalled();
+  });
+
+  it('TER-1136: the held PR names the cards in the queue and its chat line, and wakes the chat once per head', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3' })] });
+    const wakeHeld = vi.fn(async () => true);
+    Object.assign(w.deps, { wakeHeld });
+    await runMergeExecutor(w.deps, 'p1');
+    await runMergeExecutor(w.deps, 'p1');
+    expect(mergeWaitEntryOf('c1', new Date('2026-10-05T12:00:00Z'))).toEqual(expect.objectContaining({ wait: 'merge_person_card', detail: 'TER-7' }));
+    expect(wakeHeld).toHaveBeenCalledTimes(1);
+    expect(wakeHeld).toHaveBeenCalledWith(expect.objectContaining({ ownerId: 'u1', projectId: 'p1', cardRef: 'TER-5', pr: 7, cards: [{ id: 'c3', ref: 'TER-7', title: 'Card manual' }] }));
+    expect(w.state.messages.join('\n')).toContain('O PR #7 está verde, mas depende de TER-7');
+  });
+
+  it('TER-1136: a person\'s card the PR only cites in passing does not hold the merge', async () => {
+    const w = world({ prs: [pr(), pr({ id: 'pr2', task_id: 'c3', mention_only: true })] });
+    const wakeHeld = vi.fn(async () => true);
+    Object.assign(w.deps, { wakeHeld });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.repos.tasks.move).toHaveBeenCalledWith('c1', { status: 'done' }, 0);
+    expect(w.repos.tasks.move).not.toHaveBeenCalledWith('c3', expect.anything(), expect.anything());
+    expect(w.state.events.filter((e) => e.kind === 'escalated')).toHaveLength(0);
+    expect(wakeHeld).not.toHaveBeenCalled();
   });
 
   it('TER-1004: a person\'s card the PR only cites and that is already done does not hold the merge', async () => {
@@ -961,7 +1150,8 @@ describe('red CI (spec D21)', () => {
     expect(w.state.runs.find((r) => r.id === 'impl')!.fix_count).toBe(1);
     expect(requests(w)).toEqual([expect.objectContaining({ task_id: 'c1', payload: expect.objectContaining({ pr: 7, sha: 'h1', via: 'typed', run_id: 'impl', count: 1 }) })]);
     expect(w.gh.merge).not.toHaveBeenCalled();
-    expect(w.gh.pull).not.toHaveBeenCalled();
+    // read only for a conflict, which comes first (TER-1114)
+    expect(w.gh.files).not.toHaveBeenCalled();
   });
 
   it('the implementer run ended: a fixer run keyed by the PR head with the CI prompt; once per SHA', async () => {
@@ -1194,7 +1384,7 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     Object.assign(w.state.runs[0]!, { status: 'done', ended_at: NOW });
     await runMergeExecutor(w.deps, 'p1');
     expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'conflict_cap', sha: 'h1', cause: 'fixer_no_push' }) })]);
-    expect(mergeWaitEntryOf('c1', NOW)).toEqual({ wait: 'merge_conflict_cap', sha: 'h1' });
+    expect(mergeWaitEntryOf('c1', NOW)).toEqual({ wait: 'merge_conflict_cap', sha: 'h1', detail: null });
 
     // a new run of the card works and reports done, but pushes nothing: h1 is still the head, still in conflict
     w.state.runs.push({ id: 'again', task_id: 'c1', role: 'implementer', trigger_sha: null, status: 'running', waiting_reason: null, tab_id: 'tab2', branch: BRANCH.c1!, fix_count: 0 });

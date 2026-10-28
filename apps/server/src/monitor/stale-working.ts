@@ -6,12 +6,13 @@ import { captureScreen } from '../agent/screen.js';
 import { AGENT_EXITED_TEXT, notifyAgentExited } from '../chat/agent-exited.js';
 import { failureLabel } from '../chat/service.js';
 import type { Repositories } from '../db/repositories/index.js';
+import { STALE_WORKING_LIMIT } from '../db/repositories/tabs.js';
 import type { Machine, Tab, TabState } from '../db/repositories/types.js';
 import { paneForeground } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
 import { SCREEN_STATE_LINES, claudeScreenState, trustDialogVisible, type ScreenState } from './screen-state.js';
 import { defaultTrustDeps, settleTrustDialog, type FolderTrustDeps } from './folder-trust.js';
-import { AUTH_REQUIRED_TEXT, TRUST_PROMPT_TEXT } from './state.js';
+import { AUTH_REQUIRED_TEXT, TRUST_PROMPT_TEXT, cap } from './state.js';
 import { classifyTurnEnd } from './turn-end.js';
 
 /**
@@ -98,6 +99,8 @@ export const UNREPORTED_RECHECK_MS = 2 * 60_000;
  */
 export async function sweepStaleWorking(repos: Repositories, log: Log, now = new Date(), deps: StaleWorkingDeps = defaultDeps(BACKGROUND_TIMEOUT_MINUTES * 60_000)): Promise<void> {
   const tabs = await repos.tabs.listStaleWorking(new Date(now.getTime() - STALE_WORKING_MS));
+  // the newest stuck tabs are the ones left out: say so, it is how TER-1133 would have been seen
+  if (tabs.length >= STALE_WORKING_LIMIT) log.warn({ count: tabs.length }, 'monitor: stale working list is full');
   const listed = new Set(tabs.map((t) => t.id));
   for (const id of deps.checked.keys()) if (!id.startsWith('unreported:') && !listed.has(id)) deps.checked.delete(id);
   for (const id of deps.screens.keys()) if (!listed.has(id)) deps.screens.delete(id);
@@ -145,12 +148,39 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
     }
     const kind = screen ? WAIT_OF[screen] : undefined;
     if (!screen || !kind) return;
+    if (screen === 'prompt' && (await restoreTurnEnd(repos, log, tab, machine))) return;
     const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, { kind, tool: 'claude', text: TEXT_OF[screen] ?? null, meta: { event: 'ScreenCheck', screen }, ifStateAt: tab.state_at });
     log.info({ tabId: tab.id, machineId: machine.id, screen, recorded: event !== null }, 'monitor: stale working tab read from the screen');
     if (event) publishTabChange(updated, tab.project_id, machine);
   } catch (err) {
     log.warn({ tabId: tab.id, code: failureLabel(err) }, 'monitor: stale working check failed');
   }
+}
+
+/**
+ * A Claude tab at its prompt whose last answer is still the newest thing it did (TER-1133): nothing but a session
+ * start (a compaction, a /clear) or a subagent came after it, so no turn of the person was lost — the tab only
+ * left its turn end by mistake. It goes back there as the Stop read it (`classifyTurnEnd`, as in TER-1053), with
+ * that answer as its text, and does not alert again: the Stop already did. The flags are the idle reminder's
+ * (`decideWait` marks such a wait seen from birth when no turn ran since the last one). False when there is no
+ * answer, or a turn started after it: the plain screen reading follows. The answer is never logged.
+ */
+async function restoreTurnEnd(repos: Repositories, log: Log, tab: Tab & { state_at: string }, machine: Machine): Promise<boolean> {
+  const answer = await repos.tabs.readLastAnswer(tab.id);
+  if (!answer || answer.stale || answer.tool !== 'claude') return false;
+  const kind = classifyTurnEnd(answer.text);
+  const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, {
+    kind,
+    tool: 'claude',
+    text: cap(answer.text),
+    meta: { event: 'ScreenCheck', screen: 'prompt', restored: true },
+    continuesWait: true,
+    keepsWaitText: true,
+    ifStateAt: tab.state_at,
+  });
+  log.info({ tabId: tab.id, machineId: machine.id, kind, recorded: event !== null }, 'monitor: stale working tab back to its turn end');
+  if (event) publishTabChange(updated, tab.project_id, machine);
+  return true;
 }
 
 /**

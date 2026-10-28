@@ -150,6 +150,8 @@ export function withRepoMirror(setup: ProjectSetupData, discovered: ProjectRepos
       full_name: target.full_name,
       base_branch: target.base_branch,
       branch_pattern: target.branch_pattern,
+      // a project-wide rule, not a per-repo one: it stays as the person set it
+      require_ticket: setup.repo?.require_ticket ?? false,
       draft_pr: target.draft_pr,
       deploy_workflow: target.deploy_workflow,
     },

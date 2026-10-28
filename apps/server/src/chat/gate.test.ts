@@ -157,7 +157,7 @@ describe('grantable', () => {
 });
 
 describe('boardGrantable', () => {
-  it.each(['create_task', 'add_subtasks', 'update_task', 'move_task'])('covers %s', (t) => expect(boardGrantable(t)).toBe(true));
+  it.each(['create_task', 'add_subtasks', 'update_task', 'move_task', 'create_column', 'update_column'])('covers %s', (t) => expect(boardGrantable(t)).toBe(true));
   it.each(['delete_task', 'start_agent', 'send_input', 'run_command', 'list_tasks', 'close_tab', 'link_tab_task'])('never covers %s', (t) => expect(boardGrantable(t)).toBe(false));
   it('covered tools are all write-class', () => {
     for (const t of BOARD_GRANT_TOOLS) expect(actionClass(t, {})).toBe('write');

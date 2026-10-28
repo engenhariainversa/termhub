@@ -56,6 +56,8 @@ export interface ColumnOut {
   id: string;
   name: string;
   category: ColumnCategory;
+  /** "aguardando" (TER-1134): its cards wait on a person or a third party; the watcher and automatic work skip them */
+  waiting: boolean;
 }
 
 export interface ListedTaskOut extends TaskTreeOut {
@@ -80,7 +82,7 @@ export const taskOut = (t: Task): TaskOut => ({
   created_at: t.created_at, updated_at: t.updated_at,
 });
 const outTree = (t: TaskWithSubtasks): TaskTreeOut => ({ ...taskOut(t), subtasks: t.subtasks.map(taskOut), subtask_counts: t.subtask_counts });
-const columnOut = (c: TaskColumn): ColumnOut => ({ id: c.id, name: c.name, category: c.category });
+const columnOut = (c: TaskColumn): ColumnOut => ({ id: c.id, name: c.name, category: c.category, waiting: c.waiting });
 
 /** Board rules live in the repository; a broken one is the caller's mistake, said in pt-BR. */
 export async function rules<T>(run: () => Promise<T>): Promise<T> {
@@ -169,6 +171,41 @@ export async function moveTask(
   const moved = await rules(() => ctx.repos.tasks.move(task.id, target, input.position ?? 0));
   if (!moved) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');
   return { task: taskOut(moved), board_url: boardUrl(task.project_id) };
+}
+
+/** TER-1134: a new board column, appended or put at `position` (0 = first). Answers it and the project's columns in order. */
+export async function createColumn(
+  ctx: ControlContext,
+  input: { project_id: string; name: string; category: ColumnCategory; waiting?: boolean; position?: number },
+): Promise<{ column: ColumnOut; columns: ColumnOut[]; board_url: string }> {
+  await ctx.scoped.project(input.project_id);
+  let column = await rules(() => ctx.repos.taskColumns.create(input.project_id, { name: input.name, category: input.category, waiting: input.waiting }));
+  const columns = input.position !== undefined ? await ctx.repos.taskColumns.move(column.id, input.position) : undefined;
+  column = columns?.find((c) => c.id === column.id) ?? column;
+  return { column: columnOut(column), columns: (columns ?? (await ctx.repos.taskColumns.list(input.project_id))).map(columnOut), board_url: boardUrl(input.project_id) };
+}
+
+/**
+ * TER-1134: renames, re-categorizes (its cards follow), marks or clears "aguardando" and moves a column. The
+ * category goes first, so a refused one leaves the rest untouched, as the board's own column menu does.
+ */
+export async function updateColumn(
+  ctx: ControlContext,
+  input: { column_id: string; name?: string; category?: ColumnCategory; waiting?: boolean; position?: number },
+): Promise<{ column: ColumnOut; columns: ColumnOut[]; board_url: string }> {
+  const { column: found } = await ctx.scoped.column(input.column_id);
+  if (input.name === undefined && input.category === undefined && input.waiting === undefined && input.position === undefined) {
+    throw new ControlError('BAD_REQUEST', 'Informe name, category, waiting ou position');
+  }
+  const { taskColumns } = ctx.repos;
+  let column: TaskColumn | undefined = found;
+  if (input.category !== undefined) column = await rules(() => taskColumns.setCategory(found.id, input.category as ColumnCategory));
+  if (input.waiting !== undefined) column = await rules(() => taskColumns.setWaiting(found.id, input.waiting as boolean));
+  if (input.name !== undefined) column = await taskColumns.rename(found.id, input.name);
+  const columns = input.position !== undefined ? await taskColumns.move(found.id, input.position) : await taskColumns.list(found.project_id);
+  column = columns?.find((c) => c.id === found.id) ?? column;
+  if (!column || !columns) throw new ControlError('NOT_FOUND', 'Coluna não encontrada');
+  return { column: columnOut(column), columns: columns.map(columnOut), board_url: boardUrl(found.project_id) };
 }
 
 /** Destructive and cascading, so it needs `confirm: true`; the refusal spells out what would go. */

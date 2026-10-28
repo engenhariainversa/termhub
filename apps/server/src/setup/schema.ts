@@ -16,8 +16,10 @@ export const repoSchema = z.object({
   /** owner/repo */
   full_name: z.string().trim().regex(/^[\w.-]+\/[\w.-]+$/, 'use owner/repo').nullable().default(null),
   base_branch: z.string().trim().min(1).max(100).default('main'),
-  /** placeholders: {ticket} {slug} */
+  /** placeholders: {ticket} (the external ticket's key, else the card's ref), {ticket_lower}, {ref}, {slug} */
   branch_pattern: z.string().trim().min(1).max(100).default('{ticket}-{slug}'),
+  /** TER-1110: automatic work only on cards with an external ticket (or an explicit branch), and never the termhub ref on GitHub */
+  require_ticket: z.boolean().default(false),
   draft_pr: z.boolean().default(true),
   /** GitHub Actions workflow whose run on the merge commit is "the deploy" (file name or display name); null = not tracked */
   deploy_workflow: z.string().trim().min(1).max(200).nullable().default(null),
@@ -151,6 +153,48 @@ export const aiMemorySchema = z.object({
 });
 export type ProjectAiMemory = z.infer<typeof aiMemorySchema>;
 
+/** TER-1121: the health watcher's signs of stalled work, and the minutes each waits before it counts. */
+export const HEALTH_SIGNALS = ['pr_ready', 'base_red', 'queue_stalled', 'tab_stuck', 'tab_waiting', 'card_orphan', 'run_blocked', 'machine_offline', 'delivery_failed', 'agent_outdated'] as const;
+export type HealthSignal = (typeof HEALTH_SIGNALS)[number];
+export const HEALTH_DEFAULT_MINUTES: Record<HealthSignal, number> = {
+  pr_ready: 120,
+  base_red: 30,
+  queue_stalled: 60,
+  tab_stuck: 30,
+  tab_waiting: 10,
+  card_orphan: 120,
+  run_blocked: 60,
+  machine_offline: 15,
+  delivery_failed: 30,
+  agent_outdated: 60,
+};
+const healthSignalSchema = (minutes: number) =>
+  z.object({ enabled: z.boolean().default(true), minutes: z.number().int().min(5).max(7 * 24 * 60).default(minutes) }).default({});
+
+/**
+ * The project's health watcher (TER-1121): on by default. The tab and machine signs run on every project; the
+ * others only while the project's automatic work is on. Quiet hours and push levels are the person's own
+ * notice rules (TER-1101), not repeated here.
+ */
+export const healthSchema = z.object({
+  enabled: z.boolean().default(true),
+  signals: z
+    .object({
+      pr_ready: healthSignalSchema(HEALTH_DEFAULT_MINUTES.pr_ready),
+      base_red: healthSignalSchema(HEALTH_DEFAULT_MINUTES.base_red),
+      queue_stalled: healthSignalSchema(HEALTH_DEFAULT_MINUTES.queue_stalled),
+      tab_stuck: healthSignalSchema(HEALTH_DEFAULT_MINUTES.tab_stuck),
+      tab_waiting: healthSignalSchema(HEALTH_DEFAULT_MINUTES.tab_waiting),
+      card_orphan: healthSignalSchema(HEALTH_DEFAULT_MINUTES.card_orphan),
+      run_blocked: healthSignalSchema(HEALTH_DEFAULT_MINUTES.run_blocked),
+      machine_offline: healthSignalSchema(HEALTH_DEFAULT_MINUTES.machine_offline),
+      delivery_failed: healthSignalSchema(HEALTH_DEFAULT_MINUTES.delivery_failed),
+      agent_outdated: healthSignalSchema(HEALTH_DEFAULT_MINUTES.agent_outdated),
+    })
+    .default({}),
+});
+export type ProjectHealth = z.infer<typeof healthSchema>;
+
 /** Why a saved allow rule is refused (TER-968): shown to the person on the field. */
 export const UNSAFE_ALLOWED_TOOL = tk('Regra ampla demais para uma aba automática: alcançaria git push, merge, publicação ou outro comando bloqueado. Use uma regra específica, como Bash(npm test:*).');
 
@@ -253,6 +297,7 @@ export const setupSchema = z.object({
   ai: aiSchema.default({}),
   automation: automationSchema.default({}),
   ai_memory: aiMemorySchema.default({}),
+  health: healthSchema.default({}),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;

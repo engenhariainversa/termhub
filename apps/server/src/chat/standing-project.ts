@@ -11,7 +11,7 @@ const idOf = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length
  * kind the tab comes back too, so the gate can apply its state guards without a second read. Shared by
  * the gate and the decision routes, so "Liberar sem prazo" is accepted for exactly the calls the gate honours.
  */
-export async function standingProjectOf(repos: Pick<Repositories, 'projects' | 'tasks' | 'tabs'>, ownerId: string, kind: StandingGrantKind, tool: string, args: Record<string, unknown>): Promise<{ projectId: string; tab?: Tab } | null> {
+export async function standingProjectOf(repos: Pick<Repositories, 'projects' | 'tasks' | 'tabs' | 'taskColumns'>, ownerId: string, kind: StandingGrantKind, tool: string, args: Record<string, unknown>): Promise<{ projectId: string; tab?: Tab } | null> {
   if (kind === 'open_tab' || kind === 'start_agent') {
     const projectId = idOf(args.project_id);
     if (!projectId) return null;

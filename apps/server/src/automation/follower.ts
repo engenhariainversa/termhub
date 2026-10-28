@@ -9,7 +9,7 @@ import type { PaneForeground } from '@termhub/machine-ops';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun, AutomationRunPatch } from '../db/repositories/automation-runs.js';
 import type { Tab, Task } from '../db/repositories/types.js';
-import { localeOf, msg, t } from '../i18n/index.js';
+import { localeOf, msg, t, type Locale } from '../i18n/index.js';
 import { chatBus } from '../chat/bus.js';
 import type { AutomationEventPayload } from '../db/repositories/automation-events.js';
 import type { StoppedTabWake } from '../chat/wake.js';
@@ -26,10 +26,11 @@ import { recordTakenDecisions, type TakenDecision } from './decisions-taken.js';
 import { DECIDE_NUDGES_MAX, DECIDE_TEXT, decisionException, questionOf } from './decision.js';
 import { MAX_RESTARTS } from './restart.js';
 import { escalationWhy } from './why.js';
-import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT } from './escalation-text.js';
+import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, AGENT_EXITED, escalationEventText, escalationReasonText, NEEDS_PERSON, SLOT_FREE_REASONS, PERMISSION_NEEDED, QUESTION_EXPIRED, QUESTION_UNANSWERED, REPORTED_BLOCKED, RESUME_CAP, CARD_BUDGET, TRUST_PROMPT, DECISION_EXCEPTION, DECISION_NEEDED, GITHUB_TRANSIENT, POST_RUN_BLOCKED } from './escalation-text.js';
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
 import { inRunRepo, runRepoOf } from './run-pr.js';
+import { endedRunOfTab, wakeForPostRunBlock } from './post-run.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
 
@@ -163,7 +164,7 @@ function writeRun(repos: Repositories, run: AutomationRun, patch: Pick<Automatio
  * active conversation, opened when there is none. `detail` — the chat's or the agent's own words —
  * replaces the reason's text here only; it is never put in an event. Never throws.
  */
-async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 'id' | 'project_id' | 'task_id' | 'tab_id'>, reason: string, detail: string | null, log: Log): Promise<void> {
+export async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 'id' | 'project_id' | 'task_id' | 'tab_id'>, reason: string, detail: string | null | ((locale: Locale) => string), log: Log): Promise<void> {
   try {
     const project = await repos.projects.findById(run.project_id);
     if (!project?.owner_id) return;
@@ -171,7 +172,7 @@ async function postEscalationLine(repos: Repositories, run: Pick<AutomationRun, 
     const [owner, task] = await Promise.all([repos.users.findById(ownerId), run.task_id ? repos.tasks.findById(run.task_id) : undefined]);
     if (!owner) return;
     const locale = localeOf(owner.locale);
-    const why = detail?.trim() || escalationReasonText(reason, locale);
+    const why = (typeof detail === 'function' ? detail(locale) : detail?.trim()) || escalationReasonText(reason, locale);
     const latest = CARD_REASONS.has(reason) && run.tab_id ? await repos.tabQuestions.latestQuestionForTab(run.tab_id) : undefined;
     // the card the escalation is about: still open (or, for question_expired, the one that closed unanswered),
     // the owner's, in a conversation still on screen — never an older answered card
@@ -250,7 +251,8 @@ export async function escalateDelivery(repos: Repositories, about: { project_id:
     log.warn({ projectId: about.project_id, code: errorCode(e) }, 'automation: escalation not recorded: no push'),
   );
   log.info({ projectId: about.project_id, taskId: about.task_id, reason }, 'automation: delivery escalated');
-  await postEscalationLine(repos, { id: '', project_id: about.project_id, task_id: about.task_id, tab_id: null }, reason, null, log);
+  // the line names what the feed names (the PR and the cards it depends on, TER-1136)
+  await postEscalationLine(repos, { id: '', project_id: about.project_id, task_id: about.task_id, tab_id: null }, reason, (locale) => escalationEventText({ reason, ...extra }, locale), log);
 }
 
 /**
@@ -962,12 +964,14 @@ async function adoptableRunOfTabToken(ctx: ControlContext): Promise<{ run: Autom
 
 /**
  * The condition of the tab tool `report_card`: an active run in the tab (preflight F-8), or a tab whose latest
- * run ended `blocked` and may still be adopted, where the agent finished the work by hand (spike TER-1031 §5.4).
- * Fails closed. `get_card` stays on `tabHasActiveRun`.
+ * run ended — one ended `blocked` may still be adopted when the agent finished the work by hand (spike TER-1031
+ * §5.4), and a block reported after any run ended reaches the person (TER-1112). Fails closed. `get_card` stays
+ * on `tabHasActiveRun`.
  */
 export async function tabMayReport(ctx: ControlContext): Promise<boolean> {
   if (await tabHasActiveRun(ctx)) return true;
-  return (await adoptableRunOfTabToken(ctx).catch(() => null)) !== null;
+  const tab = ctx.token?.tab;
+  return !!tab && (await endedRunOfTab(ctx.repos, tab).catch(() => null)) !== null;
 }
 
 /**
@@ -977,6 +981,8 @@ export async function tabMayReport(ctx: ControlContext): Promise<boolean> {
  * In a tab whose run already ended `blocked` (spike TER-1031 §5.4), only `done` with a `pr_url` is taken: the
  * run is adopted at once when the CI sync already linked a PR from its branch, else the answer is
  * `pending` and the sync adopts it once it links the PR. The URL given is never trusted on its own.
+ * In a tab whose run ended otherwise (TER-1112), `blocked` escalates that last run (POST_RUN_BLOCKED) and wakes
+ * the project's chat, and `done` changes nothing.
  */
 export async function reportCard(
   ctx: ControlContext,
@@ -999,10 +1005,10 @@ export async function reportCard(
   return { ok: true };
 }
 
-/** `report_card` from a tab whose latest run ended `blocked` (spike TER-1031 §5.4). */
-async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; decisions?: TakenDecision[] }): Promise<{ ok: true; pending?: true; message?: string }> {
+/** `report_card` from a tab whose latest run ended `blocked` (spike TER-1031 §5.4), or ended at all (TER-1112). */
+async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; decisions?: TakenDecision[] }): Promise<{ ok: true; pending?: true; message?: string }> {
   const adoptable = await adoptableRunOfTabToken(ctx).catch(() => null);
-  if (!adoptable) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  if (!adoptable || (i.status === 'blocked' && (await promptedAfterRun(ctx, adoptable.run)))) return reportAfterRun(ctx, i);
   const { run, task } = adoptable;
   if (i.status === 'blocked') throw new ControlError('RUN_BLOCKED', msg('O trabalho automático desta aba já está bloqueado e a pessoa já foi avisada; não há o que reportar'));
   if (!i.pr_url) throw new ControlError('PR_URL_REQUIRED', msg('O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele'));
@@ -1021,6 +1027,37 @@ async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'bl
       minutes,
     }),
   };
+}
+
+/** Whether something was typed into the run's tab after it ended: a block reported then is a new one. */
+async function promptedAfterRun(ctx: ControlContext, run: AutomationRun): Promise<boolean> {
+  if (!run.tab_id || !run.ended_at) return false;
+  try {
+    return await ctx.repos.tabs.promptedSince(run.tab_id, run.ended_at);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `report_card` from a tab whose latest run already ended and that no reopened run follows (TER-1112: a request
+ * typed there while automation was paused or off, or on a card already done). `blocked` reaches the person
+ * anyway: an `escalated` event on that last run (POST_RUN_BLOCKED, `after_run`) — the feed, the push, the chat
+ * line — and a wake of the project's chat. `done` changes nothing: the run's own end already handed the card on.
+ */
+async function reportAfterRun(ctx: ControlContext, i: { status: 'done' | 'blocked'; reason?: string; decisions?: TakenDecision[] }): Promise<{ ok: true; message?: string }> {
+  const tab = ctx.token?.tab;
+  const run = tab ? await endedRunOfTab(ctx.repos, tab).catch(() => null) : null;
+  if (!tab || !run) throw new ControlError('NO_RUN', msg('Esta aba não tem trabalho automático em andamento'));
+  const log = ctx.log ?? noopLog;
+  if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
+  if (i.decisions?.length) await recordTakenDecisions(ctx.repos, run, i.decisions, { log });
+  if (i.status === 'done') return { ok: true, message: t(localeOf(ctx.scope.user.locale), 'O trabalho automático desta aba já tinha terminado; nada foi alterado') };
+  const reason = i.reason!.trim();
+  await escalateRun(ctx.repos, run, POST_RUN_BLOCKED, log, { detail: reason, extra: { cause: POST_RUN_BLOCKED, after_run: true, tab_id: tab.id } });
+  const row = await ctx.repos.tabs.findById(tab.id).catch(() => undefined);
+  await wakeForPostRunBlock(ctx.repos, ctx.postRunWaker, run, { id: tab.id, name: row?.name ?? '' }, { cause: 'reported_blocked', reason }, log);
+  return { ok: true };
 }
 
 /**

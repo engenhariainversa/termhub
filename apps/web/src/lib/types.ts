@@ -320,6 +320,8 @@ export interface TaskColumn {
   name: string;
   category: ColumnCategory;
   position: number;
+  /** "aguardando" (TER-1134): its cards wait on a person or a third party; the health watcher and automatic work skip them. Absent from an older server. */
+  waiting?: boolean;
   created_at: string;
 }
 
@@ -660,7 +662,10 @@ export interface ProjectSetupData {
     integration_id: string | null;
     full_name: string | null;
     base_branch: string;
+    /** {ticket} (the external ticket's key, else the card's ref), {ticket_lower}, {ref}, {slug} */
     branch_pattern: string;
+    /** TER-1110: automatic work only on cards with an external ticket, never the termhub ref on GitHub */
+    require_ticket: boolean;
     draft_pr: boolean;
     deploy_workflow: string | null;
   } | null;
@@ -683,6 +688,41 @@ export interface ProjectSetupData {
   automation?: ProjectAutomation;
   /** TER-1019 (use_in_runs: TER-1020); absent from an older server */
   ai_memory?: { publish_rules: boolean; use_in_runs?: boolean };
+  /** TER-1121: the project health watcher; absent from an older server */
+  health?: ProjectHealthSetup;
+}
+
+/** TER-1121: the signs of stalled work the project's health watcher looks for. */
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated';
+
+export interface ProjectHealthSetup {
+  enabled: boolean;
+  signals: Record<HealthSignal, { enabled: boolean; minutes: number }>;
+}
+
+/** One open alert of the panel "Saúde do projeto" (GET /projects/:id/health), its text in the reader's language. */
+export interface HealthItem {
+  id: string;
+  signal: HealthSignal;
+  /** needs_you: only the person can act; concierge: the project's chat may resolve it */
+  level: 'needs_you' | 'concierge';
+  name: string;
+  text: string;
+  url: string | null;
+  subject: string;
+  since_at: string;
+  opened_at: string;
+  woken: boolean;
+}
+
+/** A card of a waiting column ("esperando você", TER-1134), with what is missing when its description says. */
+export interface HealthWaitingCard {
+  task_id: string;
+  ref: string;
+  title: string;
+  column: string;
+  note: string | null;
+  since: string;
 }
 
 export interface ProjectSetup {
@@ -1419,6 +1459,12 @@ export interface ChatWatch {
    *  repeats. Null or absent otherwise (an older server leaves them out). */
   next_at?: string | null;
   every_minutes?: number | null;
+  /** TER-1115: the concierge's line for the person (`note` comes blank: it is the concierge's own); what
+   *  already happened (the last event and when); a watched tab's state now. Absent from an older server. */
+  summary?: string | null;
+  last_event?: string | null;
+  last_fired_at?: string | null;
+  target_state?: string | null;
 }
 
 /**

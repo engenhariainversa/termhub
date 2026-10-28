@@ -25,8 +25,8 @@ vi.mock('../agent/registry.js', async (importOriginal) => {
     ...real,
     agents: {
       isOnline: (id: string) => reg.online.has(id),
-      // agent 0.19.0: worktrees and the hard-lock guard (TER-1005)
-      info: (id: string) => (reg.online.has(id) ? { agent_version: '0.19.0' } : null),
+      // agent 0.36.0: worktrees and the hard-lock guard v3 (TER-1005, TER-1111)
+      info: (id: string) => (reg.online.has(id) ? { agent_version: '0.36.0' } : null),
       capabilities: (id: string) => (reg.online.has(id) ? ['worktree'] : null),
     },
   };
@@ -94,7 +94,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     resetWaiting();
     await db.user.create({ data: { id: ownerId, email: `${ownerId}@test.local`, name: 'owner' } });
     await db.project.create({ data: { id: projectId, ownerId, key: keyOf(projectId), name: 'p' } });
-    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
+    await db.machine.create({ data: { id: machineId, name: 'm', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.36.0' } });
     await repos.projectMachines.link({ project_id: projectId, machine_id: machineId, cwd: '/home/u/app' });
     accountId = (await repos.aiAccounts.create({ provider: 'claude', label: 'main', machine_id: machineId })).id;
     reg.online.add(machineId);
@@ -102,7 +102,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
     machineIds = [machineId];
     for (let i = 1; i < 20; i++) {
       const id = newId();
-      await db.machine.create({ data: { id, name: `m${i}`, type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.19.0' } });
+      await db.machine.create({ data: { id, name: `m${i}`, type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.36.0' } });
       await repos.projectMachines.link({ project_id: projectId, machine_id: id, cwd: `/home/u/app${i}` });
       accountIds.push((await repos.aiAccounts.create({ provider: 'claude', label: `a${i}`, machine_id: id })).id);
       machineIds.push(id);
@@ -177,6 +177,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         instance,
         lifecycle,
         now: () => new Date(),
+        newCardGraceMs: 0,
         startAgent: fakeStartAgent(instance) as unknown as DispatcherDeps['startAgent'],
         ensureWorkspace: (async (_m: unknown, i: { projectId: string; ref: string }) => ({ path: `/w/${i.projectId}/${i.ref}`, created: true })) as unknown as DispatcherDeps['ensureWorkspace'],
         ensureEpicBranch: (async () => {}) as unknown as DispatcherDeps['ensureEpicBranch'],
@@ -567,6 +568,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation across colours
         gh: {} as GithubWriteClient,
         usage: async () => 10,
         room: async () => true, // the real one reads the machine's hardware
+        newCardGraceMs: 0,
       },
       follower: { type: async (_c, tabId, text) => void typed.push({ instance: 'wired', id: tabId, text, seq: ++seq }), settleMs: 0 },
     });
