@@ -530,6 +530,14 @@ describe('POST /chat/messages', () => {
     expect((await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '  ' } })).statusCode).toBe(400);
   });
 
+  it('says how long an oversized message is (TER-1139)', async () => {
+    const { app, start } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: 'x'.repeat(8001) } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Mensagem grande demais: 8001 de 8000 caracteres. Envie o texto como anexo .txt', code: 'MESSAGE_TOO_LONG' });
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('passes attachment_ids to start and allows an empty text with them', async () => {
     const { app, start } = build();
     const res = await app.inject({ method: 'POST', url: '/chat/messages', payload: { text: '', attachment_ids: ['a1'] } });

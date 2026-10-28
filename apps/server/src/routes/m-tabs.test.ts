@@ -445,7 +445,9 @@ describe('POST /tabs/:id/chat/messages', () => {
     expect((await build({ grants: ['terminals:read'] }).app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'oi' } })).statusCode).toBe(403);
     const { app } = build();
     expect((await app.inject({ method: 'POST', url: '/tabs/t2/chat/messages', payload: { text: 'oi' } })).statusCode).toBe(404);
-    expect((await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'x'.repeat(4001) } })).statusCode).toBe(400);
+    const long = await app.inject({ method: 'POST', url: '/tabs/t1/chat/messages', payload: { text: 'x'.repeat(4001) } });
+    expect(long.statusCode).toBe(400);
+    expect(long.json().code).toBe('MESSAGE_TOO_LONG');
     expect(sendInput).not.toHaveBeenCalled();
   });
 });

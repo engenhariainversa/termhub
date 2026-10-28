@@ -1,11 +1,13 @@
 import { i18n, tk, useTranslation } from '../../i18n';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AudioLines, Paperclip, Trash2 } from 'lucide-react';
+import { CHAT_MESSAGE_MAX_CHARS, pasteGoesAsFile, pastedTextName } from '@termhub/mobile-api/pasted-text';
 import { api, ApiError } from '../../lib/api';
 import { useChatInbox } from '../../lib/chat-inbox';
 import { ACCEPT_ATTRIBUTE, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, checkFile, type AttachmentKind } from '../../lib/attachments';
 import { sendsMessage } from '../../lib/chat-scroll';
 import { downscaleImage } from '../../lib/image-downscale';
+import { formatNumber } from '../../lib/format';
 import type { ReplyTarget } from '../../lib/chat-reply';
 import type { ChatAttachment, ReplyCardKind } from '../../lib/types';
 import { useDictation, type Dictation } from '../../lib/use-dictation';
@@ -103,6 +105,19 @@ function voiceNoteFile(clip: Clip): File {
   const ext = type === 'audio/mp4' ? 'm4a' : type === 'audio/ogg' ? 'ogg' : 'webm';
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
   return new File([clip.audio], `audio-${stamp}.${ext}`, { type });
+}
+
+/** A long text as the `.txt` it is sent as (TER-1139). */
+function pastedTextFile(text: string): File {
+  return new File([text], pastedTextName(), { type: 'text/plain' });
+}
+
+/** A paste that went into the box as a file (TER-1139): its chip, and what "Manter como texto" puts back where. */
+interface PastedText {
+  key: string;
+  text: string;
+  /** Where the caret was, in the box's text as it was left. */
+  at: number;
 }
 
 /** One file in the box, from the moment it was picked until the message that carries it is sent. */
@@ -323,6 +338,16 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   const uploadedIds = useMemo(() => attachments.drafts.flatMap((d) => (d.phase === 'uploaded' && d.attachment ? [d.attachment.id] : [])), [attachments.drafts]);
   /** A chip that is not a refusal counts as content: a box with one is a box about to send. */
   const hasChips = attachments.drafts.some((d) => d.phase !== 'failed');
+  const [pasted, setPasted] = useState<PastedText | null>(null);
+  // The paste's chip went (✕, or sent with its message): there is nothing left to undo.
+  const pastedKey = pasted?.key;
+  useEffect(() => {
+    if (pastedKey && !attachments.drafts.some((d) => d.key === pastedKey)) setPasted(null);
+  }, [pastedKey, attachments.drafts]);
+  /** A message too long for the server on its way up as a `.txt` (the send's safety net, TER-1139). */
+  const [convertingSend, setConvertingSend] = useState(false);
+  /** Why that conversion could not happen or failed; cleared by the next send. */
+  const [sizeError, setSizeError] = useState<string | null>(null);
 
   // The hook keeps the latest callback; the functional update reads the box as it is when the clip lands.
   const dictation = useDictation((clip) => {
@@ -425,7 +450,7 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   const notReadyToDictate = busy || dictation.state === 'checking' || dictation.state === 'starting';
   // Review Focus #2: nothing leaves while a chip is still on the wire.
   const disabled =
-    role === 'stop' || role === 'sendVoice' ? false : role === 'send' ? blocked || !(hasText || uploadedIds.length > 0) || uploading || busy : !voiceActive && (blocked || notReadyToDictate);
+    role === 'stop' || role === 'sendVoice' ? false : role === 'send' ? blocked || !(hasText || uploadedIds.length > 0) || uploading || busy || convertingSend : !voiceActive && (blocked || notReadyToDictate);
   /** Dictation lives on its own button now (left of the row): the box's text, transcribed. */
   const dictateOff = blocked || notReadyToDictate || dictation.state === 'recording' || voiceActive;
   const sendingVoice = voiceKey.current !== null && attachments.drafts.some((d) => d.key === voiceKey.current && d.phase === 'uploading');
@@ -437,14 +462,38 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
   const send = useCallback(async () => {
     if (!canSend) return;
     const value = text.trim();
+    setSizeError(null);
+    // Past what the server takes (typed, dictated, or a paste that stayed text): the text goes up as a
+    // `.txt` and the message says so, instead of the server's refusal (TER-1139).
+    const oversize = value.length > CHAT_MESSAGE_MAX_CHARS;
+    if (oversize && attachments.drafts.length >= MAX_ATTACHMENTS_PER_MESSAGE) {
+      setSizeError(t('Mensagem grande demais: {{length}} de {{max}} caracteres. Remova um anexo para enviá-la como .txt', { length: formatNumber(value.length), max: formatNumber(CHAT_MESSAGE_MAX_CHARS) }));
+      return;
+    }
     // Cleared before the request, not after (see `onSend`). On failure the text and the chips come
     // back below.
     setText('');
     const taken = attachments.take();
     let ok = false;
     try {
+      let body = value;
+      let ids = uploadedIds;
+      if (oversize) {
+        setConvertingSend(true);
+        try {
+          const file = pastedTextFile(value);
+          const { attachment } = await api.chat.attachments.upload(file, file.name, projectId ?? null);
+          body = t('Mensagem longa ({{chars}} caracteres) enviada como anexo', { chars: formatNumber(value.length) });
+          ids = [...uploadedIds, attachment.id];
+        } catch (e) {
+          setSizeError(e instanceof ApiError ? e.message : t('Não foi possível enviar o arquivo'));
+          throw e;
+        } finally {
+          setConvertingSend(false);
+        }
+      }
       // The third argument only with a reply, so a plain send calls `onSend` exactly as before.
-      ok = await (replyTo ? onSend(value, uploadedIds, replyTo.id) : onSend(value, uploadedIds));
+      ok = await (replyTo ? onSend(body, ids, replyTo.id) : onSend(body, ids));
     } catch {
       ok = false;
     }
@@ -455,7 +504,20 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
     // Give the text back so nothing is lost — unless something new was typed meanwhile.
     setText((current) => current || value);
     taken.restore();
-  }, [canSend, text, uploadedIds, attachments, onSend, replyTo]);
+  }, [canSend, text, uploadedIds, attachments, onSend, replyTo, projectId, t]);
+
+  /** "Manter como texto": the paste's chip goes and its text comes back where the caret was. */
+  const keepPastedAsText = () => {
+    if (!pasted) return;
+    attachments.remove(pasted.key);
+    setText((current) => {
+      const at = Math.min(pasted.at, current.length);
+      return current.slice(0, at) + pasted.text + current.slice(at);
+    });
+    setPasted(null);
+    ref.current?.focus();
+  };
+  const pastedFits = pasted !== null && (text + pasted.text).trim().length <= CHAT_MESSAGE_MAX_CHARS;
 
   // Answering is about to be typed: the box takes the focus as the preview appears.
   const replyId = replyTo?.id;
@@ -474,15 +536,17 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
     ? { text: blockedReason, danger: false }
     : voiceNote.hint
       ? { text: voiceNote.hint, danger: false }
-      : uploading
+      : uploading || convertingSend
         ? { text: sendingVoice ? t('enviando áudio…') : t('enviando anexo…'), danger: false }
         : busy
           ? { text: t('transcrevendo…'), danger: false }
-          : status
-            ? { text: status, danger: true }
-            : notice
-              ? { text: notice, danger: false }
-              : { text: attachments.notice ?? '', danger: false };
+          : sizeError
+            ? { text: sizeError, danger: true }
+            : status
+              ? { text: status, danger: true }
+              : notice
+                ? { text: notice, danger: false }
+                : { text: attachments.notice ?? '', danger: false };
 
   return (
     // `env(safe-area-inset-bottom)` resolves to 0px in every browser today, because the app-wide
@@ -547,6 +611,16 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
             />
           ))}
         </ul>
+        {pasted && (
+          <div className="mb-2 flex flex-wrap items-center gap-x-2 text-xs text-fg-muted">
+            <span>{t('Texto colado ({{chars}} caracteres) vai como anexo', { chars: formatNumber(pasted.text.length) })}</span>
+            {pastedFits && (
+              <button type="button" className="rounded px-1 text-accent underline-offset-2 hover:underline" onClick={keepPastedAsText}>
+                {t('Manter como texto')}
+              </button>
+            )}
+          </div>
+        )}
         {/* 16px, not the 14px the rest of the chat uses: iOS Safari zooms the page into any field
             whose font is under 16px the moment it takes focus, and a zoomed page is wider than the
             screen — which is what "the side blows out when I tap the box" was. The zoom is silent,
@@ -559,11 +633,26 @@ export function ChatComposer({ onSend, replyTo = null, onCancelReply, blockedRea
           placeholder={t('Pergunte ou peça algo às suas máquinas')}
           onChange={(e) => setText(e.target.value)}
           onPaste={(e) => {
-            // Files only; a text paste stays the browser's.
             const files = e.clipboardData?.files;
-            if (!files || files.length === 0) return;
+            if (files && files.length > 0) {
+              e.preventDefault();
+              attachments.add(files);
+              return;
+            }
+            // A long text goes in as a `.txt` chip (TER-1139); a short one, or one with no room for
+            // another chip, stays the browser's paste (the send's safety net still catches it).
+            const pastedText = e.clipboardData?.getData('text/plain') ?? '';
+            const box = e.currentTarget;
+            const start = box.selectionStart ?? text.length;
+            const end = box.selectionEnd ?? start;
+            const after = text.slice(0, start) + pastedText + text.slice(end);
+            if (!pasteGoesAsFile(pastedText, after, CHAT_MESSAGE_MAX_CHARS) || attachments.drafts.length >= MAX_ATTACHMENTS_PER_MESSAGE) return;
             e.preventDefault();
-            attachments.add(files);
+            const [key] = attachments.add([pastedTextFile(pastedText)]);
+            if (!key) return;
+            // A selection the paste would have replaced goes, as it would have.
+            if (end > start) setText(text.slice(0, start) + text.slice(end));
+            setPasted({ key, text: pastedText, at: start });
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape' && replyTo) {

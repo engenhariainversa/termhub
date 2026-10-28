@@ -9,6 +9,7 @@ export * from './proofs.js';
 export * from './progress.js';
 export * from './project-ai.js';
 export * from './models.js';
+export * from './pasted-text.js';
 export * from './account.js';
 export * from './tab-chat.js';
 export * from './file-preview.js';

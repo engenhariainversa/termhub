@@ -195,5 +195,9 @@
   "nenhuma fala reconhecida no áudio": "no se reconoció ninguna voz en el audio",
   "português": "portugués",
   "inglês": "inglés",
-  "espanhol": "español"
+  "espanhol": "español",
+  "Mensagem grande demais: {{length}} de {{max}} caracteres. Remova um anexo para enviá-la como .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres. Quita un adjunto para enviarlo como .txt",
+  "Mensagem longa ({{chars}} caracteres) enviada como anexo": "Mensaje largo ({{chars}} caracteres) enviado como adjunto",
+  "Texto colado ({{chars}} caracteres) vai como anexo": "El texto pegado ({{chars}} caracteres) va como adjunto",
+  "Manter como texto": "Mantener como texto"
 }

@@ -84,5 +84,6 @@
   "Conta {{account}}": "Cuenta {{account}}",
   "Modelo: {{model}}": "Modelo: {{model}}",
   "Iniciado com {{cli}} · conta {{account}} · modelo {{model}}": "Iniciado con {{cli}} · cuenta {{account}} · modelo {{model}}",
-  "padrão do CLI": "predeterminado del CLI"
+  "padrão do CLI": "predeterminado del CLI",
+  "Mensagem grande demais: {{length}} de {{max}} caracteres; vai como anexo .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres; va como adjunto .txt"
 }

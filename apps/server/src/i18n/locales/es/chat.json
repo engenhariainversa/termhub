@@ -96,5 +96,6 @@
   "Tipo de arquivo não compartilhável: só imagens (png, jpg, gif, webp), PDF, Word, Excel, áudio, vídeo e texto": "Tipo de archivo no compartible: solo imágenes (png, jpg, gif, webp), PDF, Word, Excel, audio, video y texto",
   "Uma aba de agente só compartilha arquivos da própria máquina": "Una pestaña de agente solo comparte archivos de su propia máquina",
   "A decisão usada expirou ou não vale aqui": "La decisión usada expiró o no vale aquí",
-  "A decisão usada foi substituída": "La decisión usada fue reemplazada"
+  "A decisão usada foi substituída": "La decisión usada fue reemplazada",
+  "Mensagem grande demais: {{length}} de {{max}} caracteres. Envie o texto como anexo .txt": "Mensaje demasiado largo: {{length}} de {{max}} caracteres. Envía el texto como adjunto .txt"
 }

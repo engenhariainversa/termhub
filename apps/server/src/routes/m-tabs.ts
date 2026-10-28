@@ -6,6 +6,7 @@ import {
   tabActionBody,
   tabChatQuery,
   tabFileQuery,
+  TAB_MESSAGE_MAX_CHARS,
   tabMessageBody,
   tabScreenQuery,
   type TSessionStartOptions,
@@ -41,6 +42,7 @@ import type { Machine } from '../db/repositories/types.js';
 import type { PaneForeground } from '@termhub/machine-ops';
 import { tk } from '../i18n/index.js';
 import { audit } from '../auth/audit.js';
+import { assertMessageFits } from '../chat/message-size.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -242,6 +244,7 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
   /** Text typed into the session, as in the web terminal: no confirmation card (spec D12). */
   app.post('/:id/chat/messages', { config: { action: 'write' } }, async (request) => {
     const { id } = idParam.parse(request.params);
+    assertMessageFits(request.body, TAB_MESSAGE_MAX_CHARS, { trim: false });
     const { text } = tabMessageBody.parse(request.body);
     const { tab } = await scoped(repos, request).tab(id);
     await control(() => sendInput(ctxOf(request), { tab_id: tab.id, text }, { level: 'person_typed', userId: request.scope.user.id, surface: deps.surface ?? 'app' }));
