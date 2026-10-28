@@ -6366,6 +6366,7 @@ export const MachineScalarFieldEnum = {
   claudeAutoSwap: 'claudeAutoSwap',
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
+  idleTabCloseHours: 'idleTabCloseHours',
   aiMemoryEnabled: 'aiMemoryEnabled',
   aiMemoryUrl: 'aiMemoryUrl',
   permissionHint: 'permissionHint',

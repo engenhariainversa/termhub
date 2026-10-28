@@ -165,6 +165,27 @@ export class TabsRepository {
     return rows.map(mapTab);
   }
 
+  /**
+   * Agent tabs at rest (`idle`, `finished` or `waiting_input`) since before `before`, on machines that close idle
+   * tabs (`idle_tab_close_hours` set, TER-1138), oldest first, at most `limit`: what monitor/idle-tabs.ts looks at.
+   * A tab that never reported a state (a plain shell) is never on it.
+   */
+  async listIdleOnClosingMachines(before: Date, limit = STALE_WORKING_LIMIT): Promise<Tab[]> {
+    const rows = await this.db.tab.findMany({
+      where: {
+        kind: 'terminal',
+        tmuxSession: { not: null },
+        state: { in: ['idle', 'finished', 'waiting_input'] },
+        stateTool: { not: null },
+        stateAt: { lt: before },
+        machine: { idleTabCloseHours: { not: null } },
+      },
+      orderBy: [{ stateAt: 'asc' }],
+      take: limit,
+    });
+    return rows.map(mapTab);
+  }
+
   /** Every tab on one machine. */
   async listByMachine(machineId: string): Promise<Tab[]> {
     const rows = await this.db.tab.findMany({ where: { machineId }, orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] });

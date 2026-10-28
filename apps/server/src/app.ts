@@ -44,6 +44,7 @@ import { loadPublicIdKey, setPublicIdKey } from './public/public-id.js';
 import { hooksRoutes } from './routes/hooks.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { startStaleWorkingSweeper } from './monitor/stale-working.js';
+import { startIdleTabsSweeper } from './monitor/idle-tabs.js';
 import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
@@ -439,6 +440,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopStaleWorking = startStaleWorkingSweeper(repos, fastify.log, config.monitorBackgroundTimeoutMs);
   // Question cards no tab can answer any more — its session died or its agent exited with no hook (TER-1140)
   const stopStuckTabQuestions = startStuckTabQuestionSweeper(repos, fastify.log);
+  // TER-1138: agent tabs at rest for long are closed on the machines that opted in (Máquinas → Fechar abas paradas)
+  const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -568,6 +571,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopTabGoneActionExpiry();
     stopStaleWorking();
     stopStuckTabQuestions();
+    stopIdleTabs();
     stopDecisionSweeper();
     stopMemorySweeper();
     stopMemoryQueue();
