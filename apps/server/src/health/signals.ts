@@ -50,6 +50,9 @@ export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_pro
 /** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
 export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
 
+/** Queue reasons that end on their own in a minute or two: the card is about to start (TER-1110's wait). */
+export const TRANSIENT_REASONS: readonly string[] = ['just_created'];
+
 /** Run waits that are not an escalation: they resume on their own (quota back, GitHub back). */
 export const SELF_RESUMING_WAITS = ['quota', 'github_transient'];
 
@@ -122,6 +125,8 @@ export interface SnapshotQueued {
   ref: string;
   reason: string | null;
   reason_text: string | null;
+  /** when the card last changed (put in A fazer, edited): how long it has waited at most */
+  since: Date;
 }
 
 export interface HealthSnapshot {
@@ -183,10 +188,13 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   }
 
   // 3. cards waiting in A fazer and nothing running, nothing started for a while. A type the Setup leaves out
-  // never starts, however long it waits: it is not a stalled queue (TER-1143).
-  const waiting = s.queued.filter((q) => !STRUCTURAL_REASONS.includes(q.reason ?? ''));
+  // never starts, however long it waits: it is not a stalled queue (TER-1143); a new card in its first minutes
+  // is about to start. The sign lasts since the oldest card waits, or since the last start when that is newer:
+  // a card put in A fazer a minute ago is no queue stalled for hours (TER-1146).
+  const waiting = s.queued.filter((q) => !STRUCTURAL_REASONS.includes(q.reason ?? '') && !TRANSIENT_REASONS.includes(q.reason ?? ''));
   if (waiting.length > 0 && s.active_runs === 0) {
-    add('queue_stalled', 'queue', s.last_run_at, {
+    const oldest = waiting.reduce((a, q) => (q.since < a ? q.since : a), waiting[0].since);
+    add('queue_stalled', 'queue', s.last_run_at && s.last_run_at > oldest ? s.last_run_at : oldest, {
       label: String(waiting.length),
       cards: waiting.slice(0, 5).map((q) => (q.reason_text ? `${q.ref} (${q.reason_text})` : q.ref)).join('; '),
     });

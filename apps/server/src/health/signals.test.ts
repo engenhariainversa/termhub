@@ -32,7 +32,7 @@ describe('observe (TER-1121)', () => {
   });
 
   it('a queue of todo cards with nothing running, unless the work is off or paused', () => {
-    const queued = [{ task_id: 't1', ref: 'TER-1', reason: 'no_account', reason_text: 'Sem conta com folga' }, { task_id: 't2', ref: 'TER-2', reason: null, reason_text: null }];
+    const queued = [{ task_id: 't1', ref: 'TER-1', reason: 'no_account', reason_text: 'Sem conta com folga', since: ago(300) }, { task_id: 't2', ref: 'TER-2', reason: null, reason_text: null, since: ago(200) }];
     const [o] = observe(snap({ queued, last_run_at: ago(90) }), config());
     expect(o).toMatchObject({ signal: 'queue_stalled', subject: 'queue', since: ago(90), detail: { label: '2', cards: 'TER-1 (Sem conta com folga); TER-2' } });
     expect(signals(snap({ queued, active_runs: 1 }))).toEqual([]);
@@ -40,11 +40,25 @@ describe('observe (TER-1121)', () => {
   });
 
   it('a type the Setup leaves out never starts: alone in the queue it is no alert (TER-1143)', () => {
-    const spike = { task_id: 't3', ref: 'TER-3', reason: 'type_not_allowed', reason_text: 'Tipo não permitido no automático' };
+    const spike = { task_id: 't3', ref: 'TER-3', reason: 'type_not_allowed', reason_text: 'Tipo não permitido no automático', since: ago(300) };
     expect(signals(snap({ queued: [spike], last_run_at: ago(90) }))).toEqual([]);
-    const card = { task_id: 't4', ref: 'TER-4', reason: null, reason_text: null };
+    const card = { task_id: 't4', ref: 'TER-4', reason: null, reason_text: null, since: ago(300) };
     const [o] = observe(snap({ queued: [spike, card], last_run_at: ago(90) }), config());
     expect(o).toMatchObject({ signal: 'queue_stalled', detail: { label: '1', cards: 'TER-4' } });
+  });
+
+  it('a new card in its first minutes is no stalled queue; the sign lasts since the oldest card waits (TER-1146)', () => {
+    const fresh = { task_id: 't5', ref: 'TER-5', reason: 'just_created', reason_text: 'Card recém-criado; o automático começa em até 2 min', since: ago(1) };
+    expect(signals(snap({ queued: [fresh], last_run_at: ago(180) }))).toEqual([]);
+    // a card put in A fazer 5 min ago, the last start 3 h ago: 5 min, not yet due
+    const card = { task_id: 't6', ref: 'TER-6', reason: null, reason_text: null, since: ago(5) };
+    const [o] = observe(snap({ queued: [fresh, card], last_run_at: ago(180) }), config());
+    expect(o).toMatchObject({ signal: 'queue_stalled', since: ago(5), detail: { label: '1', cards: 'TER-6' } });
+    expect(isDue('queue_stalled', config(), o.since!, now)).toBe(false);
+    // the oldest card waits 2 h and nothing ever started: due, with its age
+    const [old] = observe(snap({ queued: [card, { ...card, task_id: 't7', ref: 'TER-7', since: ago(120) }] }), config());
+    expect(old.since).toEqual(ago(120));
+    expect(isDue('queue_stalled', config(), old.since!, now)).toBe(true);
   });
 
   it('tabs: working with no event is stuck, a question or the trust dialog is waiting, from the state time', () => {

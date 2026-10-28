@@ -75,10 +75,11 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     }
   }
 
+  const changedAt = new Map(tasks.map((t) => [t.id, date(t.updated_at)]));
   const queued = automationOn
     ? (await automationQueue(controlContextFor(repos, owner), project.id, localeOf(owner.locale)))
         .filter((q) => q.reason !== 'not_in_todo')
-        .map((q) => ({ task_id: q.task_id, ref: q.ref, reason: q.reason, reason_text: q.reason_text }))
+        .map((q) => ({ task_id: q.task_id, ref: q.ref, reason: q.reason, reason_text: q.reason_text, since: changedAt.get(q.task_id) ?? now }))
     : [];
 
   const machines: SnapshotMachine[] = [];
