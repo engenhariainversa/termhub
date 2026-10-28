@@ -218,6 +218,8 @@ export const FEED_KINDS = [
   'workflow_no_runner',
   // TER-1137: a memory write over its hourly quota queued, or dropped (the app's feed skips them until it has a line)
   'memory_queued', 'memory_dropped',
+  // TER-1138: an idle tab closed by itself (the app's feed skips it until it has a line)
+  'tab_auto_closed',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
@@ -235,6 +237,19 @@ function memoryTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   return lesson ? t(locale, 'Memória: lições descartadas, fila cheia ({{n}})', { n }) : t(locale, 'Memória: anotações descartadas, fila cheia ({{n}})', { n });
 }
 
+/**
+ * TER-1138: an idle tab closed by itself — which, where, after how long or because the machine had no room —
+ * and that its session is resumed in the same folder. Names and counts only.
+ */
+function tabClosedTextOf(p: Record<string, unknown>, locale: Locale): string {
+  const vars = { tab: str(p.tab) ?? '—', machine: str(p.machine) ?? '—', hours: num(p.hours) ?? 0 };
+  const head =
+    p.reason === 'no_room'
+      ? t(locale, 'Aba {{tab}} fechada sozinha: {{machine}} sem folga, parada há {{hours}} h', vars)
+      : t(locale, 'Aba {{tab}} fechada sozinha em {{machine}}: parada há {{hours}} h', vars);
+  return `${head}. ${t(locale, 'A sessão pode ser retomada na mesma pasta (--continue)')}`;
+}
+
 /** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
  *  over (TER-1049), a cancel's (TER-974) or a card untagged because its ticket already had work (TER-1110). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
@@ -242,6 +257,7 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'run_blocked') return startFailureOf(p, locale);
   if (e.kind === 'memory_queued' || e.kind === 'memory_dropped') return memoryTextOf(e, p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
+  if (e.kind === 'tab_auto_closed') return tabClosedTextOf(p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
   if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });

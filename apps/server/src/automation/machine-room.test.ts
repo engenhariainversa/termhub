@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Machine } from '../db/repositories/types.js';
 import type { HardwareSnapshot } from '../system/hardware.js';
-import { createMachineRoom, freeDiskKb, hasRoom, MIN_AVAILABLE_MEMORY_KB, MIN_FREE_DISK_KB, ROOM_CACHE_MS } from './machine-room.js';
+import { createMachineRoom, freeDiskKb, hasRoom, lastRoomOf, MIN_AVAILABLE_MEMORY_KB, MIN_FREE_DISK_KB, resetLastRooms, ROOM_CACHE_MS, roomReading } from './machine-room.js';
 
 const GB = 1024 * 1024;
 const snap = (o: Partial<HardwareSnapshot> = {}): HardwareSnapshot => ({
@@ -44,12 +44,38 @@ describe('hasRoom', () => {
   });
 });
 
+describe('roomReading (TER-1138)', () => {
+  const at = new Date('2026-10-28T10:00:00Z');
+  it('names the limit that failed, with the values read', () => {
+    expect(roomReading(snap(), '/home/u/w', at)).toEqual({ ok: true, limit: null, mem_available_kb: 42 * GB, disk_free_kb: 93 * GB, disk_mount: '/', load1: 3, ncpu: 12, at: at.toISOString() });
+    expect(roomReading(snap({ mem_used_kb: 58 * GB }), '/home/u/w', at)).toMatchObject({ ok: false, limit: 'memory', mem_available_kb: 2 * GB });
+    expect(roomReading(snap(), '/mnt/hd/w', at)).toMatchObject({ ok: false, limit: 'disk', disk_free_kb: 10 * GB, disk_mount: '/mnt/hd' });
+    expect(roomReading(snap({ load: [14.5, 1, 1] }), '/home/u/w', at)).toMatchObject({ ok: false, limit: 'load', load1: 14.5, ncpu: 12 });
+  });
+
+  it('memory comes first, then disk, then load; a missing value fails its own limit', () => {
+    expect(roomReading(snap({ mem_used_kb: 58 * GB, load: [20, 1, 1] }), '/mnt/hd/w', at).limit).toBe('memory');
+    expect(roomReading(snap({ load: [20, 1, 1] }), '/mnt/hd/w', at).limit).toBe('disk');
+    expect(roomReading(snap({ mem_total_kb: null }), '/a', at)).toMatchObject({ limit: 'memory', mem_available_kb: null });
+    expect(roomReading(snap({ disks: [] }), '/a', at)).toMatchObject({ limit: 'disk', disk_free_kb: null, disk_mount: null });
+    expect(roomReading(snap({ ncpu: 0 }), '/a', at)).toMatchObject({ limit: 'load', ncpu: null });
+  });
+});
+
 describe('createMachineRoom', () => {
+  it('keeps the last check of each machine for list_machines and the idle-tab sweep', async () => {
+    resetLastRooms();
+    const room = createMachineRoom({ probe: async () => snap({ mem_used_kb: 58 * GB }), now: () => Date.parse('2026-10-28T10:00:00Z') });
+    expect(lastRoomOf('m1')).toBeNull();
+    await room.check(machine, '/w', '/r');
+    expect(lastRoomOf('m1')).toMatchObject({ ok: false, limit: 'memory', at: '2026-10-28T10:00:00.000Z' });
+  });
+
   it('expands ~ with the home guessed from the project folder', async () => {
     const probe = vi.fn(async () => snap({ disks: [{ mount: '/home/u', source: 'x', size_kb: 900 * GB, used_kb: 0, avail_kb: 5 * GB }, ...snap().disks] }));
     const room = createMachineRoom({ probe });
-    expect(await room.check(machine, '~/.termhub/worktrees', '/home/u/app')).toBe(false); // /home/u has only 5 GB
-    expect(await room.check(machine, '~/.termhub/worktrees', '/srv/app')).toBe(true); // unknown home: the root
+    expect(await room.check(machine, '~/.termhub/worktrees', '/home/u/app')).toMatchObject({ ok: false, limit: 'disk', disk_mount: '/home/u' }); // /home/u has only 5 GB
+    expect(await room.check(machine, '~/.termhub/worktrees', '/srv/app')).toMatchObject({ ok: true, limit: null, disk_mount: '/' }); // unknown home: the root
   });
 
   it('reads once a minute per machine, shares a reading in flight, and reads again after invalidate', async () => {
@@ -77,8 +103,8 @@ describe('createMachineRoom', () => {
     });
     const warn = vi.fn();
     const room = createMachineRoom({ probe, now: () => t, log: { warn } });
-    expect(await room.check(machine, '/w', '/r')).toBe(false);
-    expect(await room.check(machine, '/w', '/r')).toBe(false);
+    expect(await room.check(machine, '/w', '/r')).toMatchObject({ ok: false, limit: 'reading', mem_available_kb: null });
+    expect((await room.check(machine, '/w', '/r')).ok).toBe(false);
     expect(probe).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalledTimes(1);
     t = ROOM_CACHE_MS;

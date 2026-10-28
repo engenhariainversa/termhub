@@ -705,6 +705,40 @@ minutes after boot) and keeps one alert per sign of stalled work and subject (`p
   project_health_alerts WHERE project_id = …`. Logs carry ids and signal names only. Resolved rows go after
   30 days.
 
+## 9i. A machine "sem folga", and idle tabs closed by themselves (TER-1138)
+
+**Which limit.** Automatic placement needs, on the machine it picks: 4 GB of memory available, 20 GB free on
+the mount that holds `worktrees_dir`, and the 1-minute load below the CPU count (`automation/machine-room.ts`,
+read with `hw.probe` and cached a minute). A machine that fails says which limit and by how much, with how
+many tabs it holds and the way out, in every place the queue's reason reaches (list_automation_queue, the
+board, the app, the `queue_stalled` alert and the concierge):
+
+    máquina hulk: sem folga: memória disponível 2,1 GB < 4 GB (33 abas abertas); feche abas paradas ou use outra máquina do projeto
+
+`list_machines` carries the last check per machine (`room`: `ok`, `limit` = memory / disk / load / reading,
+the values read, `at`); null until the dispatcher checked it since the server started. A failed probe reads
+`limit: "reading"`.
+
+**Closing idle tabs.** Opt-in per machine: Máquinas → the machine → Geral → "Fechar abas paradas"
+(`machines.idle_tab_close_hours`, 2 h to 30 days, 24 h proposed; null = off, the default). Every 10 minutes
+`monitor/idle-tabs.ts` closes, on those machines, agent tabs (opened by hand, by `start_agent`, "Iniciar
+sessão" or an automatic run) that are `finished` or `idle` for that long, or `waiting_input` with a report as
+their last answer for three times that long. Closing is `close_tab`: the tmux session and the tab go, the
+folder (a worktree too, with whatever it holds) and the CLI's session stay — resume with `claude --continue`
+(or the CLI's own) in the same folder. Each close is a feed line ("Aba X fechada sozinha em hulk: parada há
+30 h") with the session id in its payload (`tab_auto_closed`).
+
+Never closed: a tab `working`, `waiting_permission`, `waiting_background`, `blocked`, `auth_required`,
+`trust_prompt` or `error`; a `waiting_input` whose last answer asks something; a tab with an active automatic
+run or stopped on a usage limit; a tab where something other than the agent at its prompt runs in front (a
+build or a server started after the agent left, a Claude screen that is not its prompt, a last hook that
+was a session end); a terminal where no agent ever reported (a plain shell); a tab of a machine offline.
+
+**With no room.** When the machine's last check (under 15 minutes old) failed on memory or load, its tabs at
+rest for 2 h or more close before their time, oldest first, three per sweep, with "sem folga" in the feed
+line; the next check tells whether that was enough. A full disk does not trigger it: closing tabs frees no
+disk.
+
 ## 10. After a failed deploy or release
 
 A deploy that failed on GitHub's side does not pause the project (TER-1025): a run with no job, with no
@@ -784,6 +818,9 @@ is updated anyway.
 TER-1086 (section 9c) gives every user the `share_file` tool: the concierge can show them their machines'
 files in the chat. Nothing leaves a machine without a card the person approves, a folder they trusted
 themselves, or an agent tab sharing from its own project folder.
+
+TER-1138 (section 9i): everyone with automatic work now reads which limit left a machine without room. Closing
+idle tabs is off for every machine until its owner turns it on (Máquinas → Fechar abas paradas).
 
 TER-1110 (section 4, "Branch names and external tickets") changes every project with automation on whose
 cards come from an external ticket: their branches now carry the ticket's key instead of the termhub ref

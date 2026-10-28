@@ -164,6 +164,8 @@ export interface Machine {
   /** TER-735: the AI accounts' usage is queried on this machine (the credential never leaves it); off = no bars */
   ai_usage_query: boolean;
   automation_allowed: boolean;
+  /** TER-1138: idle agent tabs are closed after this many hours on this machine; null = off. Absent from servers before it. */
+  idle_tab_close_hours?: number | null;
   /** TER-614: Claude permission cards of this machine show an excerpt of the command or file (opt-in) */
   permission_hint: boolean;
   /**

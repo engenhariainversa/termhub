@@ -193,5 +193,20 @@
   "Memória: anotações na fila ({{n}})": "Memory: notes queued ({{n}})",
   "Memória: lição descartada, a anotação do projeto está cheia": "Memory: lesson dropped, the project note is full",
   "Memória: lições descartadas, fila cheia ({{n}})": "Memory: lessons dropped, queue full ({{n}})",
-  "Memória: anotações descartadas, fila cheia ({{n}})": "Memory: notes dropped, queue full ({{n}})"
+  "Memória: anotações descartadas, fila cheia ({{n}})": "Memory: notes dropped, queue full ({{n}})",
+  "({{n}} abas abertas)": "({{n}} open tabs)",
+  "memória não lida": "memory not read",
+  "memória disponível {{value}} GB < {{min}} GB": "available memory {{value}} GB < {{min}} GB",
+  "feche abas paradas ou use outra máquina do projeto": "close idle tabs or use another machine of the project",
+  "disco da pasta de worktrees não encontrado": "disk of the worktrees folder not found",
+  "disco livre em {{mount}} {{value}} GB < {{min}} GB": "free disk on {{mount}} {{value}} GB < {{min}} GB",
+  "libere disco ou use outra máquina do projeto": "free up disk or use another machine of the project",
+  "carga não lida": "load not read",
+  "carga {{load}} ≥ {{ncpu}} CPUs": "load {{load}} ≥ {{ncpu}} CPUs",
+  "espere a carga baixar ou use outra máquina do projeto": "wait for the load to drop or use another machine of the project",
+  "a leitura de memória/disco/carga falhou": "the memory/disk/load reading failed",
+  "sem folga": "no room",
+  "Aba {{tab}} fechada sozinha: {{machine}} sem folga, parada há {{hours}} h": "Tab {{tab}} closed by itself: {{machine}} has no room, idle for {{hours}} h",
+  "Aba {{tab}} fechada sozinha em {{machine}}: parada há {{hours}} h": "Tab {{tab}} closed by itself on {{machine}}: idle for {{hours}} h",
+  "A sessão pode ser retomada na mesma pasta (--continue)": "The session can be resumed in the same folder (--continue)"
 }
