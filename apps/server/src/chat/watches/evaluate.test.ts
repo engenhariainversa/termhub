@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatWatch } from '../../db/repositories/chat-watches.js';
 import type { TaskPullRequest } from '../../db/repositories/task-pull-requests.js';
+import { WATCH_LIMITS } from './kinds.js';
 import { evaluateWatch, expiredEvaluation, initialBaseline, OFFLINE_GRACE_MS, type ProbeMachine, type ProbeTab, type ProbeTask, type WatchProbe } from './evaluate.js';
 
 type Ev = { id: string; kind: ProbeTab['state'] & string; created_at: string };
@@ -50,6 +51,34 @@ describe('tab watches', () => {
     expect(ev?.close).toBeNull();
   });
 
+  // TER-1144: an agent that keeps stopping and starting again (a polling loop, background work it waits on)
+  // writes a `finished` every few minutes; a recurring watch told the person each one (24 times).
+  it('a recurring watch never tells the same stop twice in a row, but moves past it silently', async () => {
+    const w = watch({ recurring: true, params: { events: ['finished', 'waiting_input'] }, baseline: { cursor: '2026-10-21T12:00:00.000Z' } });
+    const first = await evaluateWatch(probe({ events }), w);
+    expect(first?.events[0]).toMatchObject({ key: 'tab:e2', event: 'finished' });
+    expect(first?.baseline).toEqual({ cursor: '2026-10-21T12:09:00.000Z', notified: 'finished' });
+    const again = [...events, { id: 'e4', kind: 'finished' as const, created_at: '2026-10-21T12:30:00.000Z' }];
+    const second = await evaluateWatch(probe({ events: again }), { ...w, baseline: first!.baseline, fire_count: 1, last_event: 'finished' });
+    expect(second).toEqual({ events: [], baseline: { cursor: '2026-10-21T12:30:00.000Z', notified: 'finished' }, close: null });
+  });
+
+  it('a recurring watch re-arms once the tab stopped in another watched way, and tells the newest stop', async () => {
+    const w = watch({ recurring: true, params: { events: ['finished', 'waiting_input'] }, baseline: { cursor: '2026-10-21T12:10:00.000Z', notified: 'finished' }, fire_count: 1, last_event: 'finished' });
+    const asked = { id: 'e5', kind: 'waiting_input' as const, created_at: '2026-10-21T12:20:00.000Z' };
+    const ev = await evaluateWatch(probe({ events: [asked] }), w);
+    expect(ev?.events[0]).toMatchObject({ key: 'tab:e5', event: 'waiting_input' });
+    // Changed and came back within one pass (the cooldown held the question): the stop is told again.
+    const back = await evaluateWatch(probe({ events: [asked, { id: 'e6', kind: 'finished', created_at: '2026-10-21T12:25:00.000Z' }] }), w);
+    expect(back?.events[0]).toMatchObject({ key: 'tab:e6', event: 'finished' });
+    expect(back?.baseline).toEqual({ cursor: '2026-10-21T12:25:00.000Z', notified: 'finished' });
+  });
+
+  it('a recurring watch from before the dedupe takes its last event as the one told', async () => {
+    const w = watch({ recurring: true, baseline: { cursor: '2026-10-21T12:00:00.000Z' }, fire_count: 24, last_event: 'finished' });
+    expect(await evaluateWatch(probe({ events }), w)).toEqual({ events: [], baseline: { cursor: '2026-10-21T12:09:00.000Z', notified: 'finished' }, close: null });
+  });
+
   it('ignores stops the watch did not ask for and those before it', async () => {
     expect(await evaluateWatch(probe({ events: [{ id: 'e3', kind: 'error', created_at: '2026-10-21T12:05:00.000Z' }] }), watch({ baseline: { cursor: '2026-10-21T12:00:00.000Z' } }))).toBeNull();
     expect(await evaluateWatch(probe({ events: [events[0]] }), watch({ baseline: { cursor: '2026-10-21T12:00:00.000Z' } }))).toBeNull();
@@ -63,6 +92,22 @@ describe('tab watches', () => {
   it('starts from now', async () => {
     const now = new Date('2026-10-21T12:00:00.000Z');
     expect(await initialBaseline(probe(), { user_id: 'u1', kind: 'tab', target_id: 't1', params: { events: ['finished'] } }, now)).toEqual({ cursor: now.toISOString() });
+  });
+});
+
+describe('recurring cap (TER-1144)', () => {
+  it('the last fire a recurring watch may send closes it and says so', async () => {
+    const w = watch({ recurring: true, baseline: { cursor: '2026-10-21T12:00:00.000Z' }, fire_count: WATCH_LIMITS.maxFires - 1 });
+    const ev = await evaluateWatch(probe({ events: [{ id: 'e1', kind: 'finished', created_at: '2026-10-21T12:05:00.000Z' }] }), w);
+    expect(ev?.close).toBe('done');
+    expect(ev?.events[0].payload).toMatchObject({ last: true, max_fires: WATCH_LIMITS.maxFires });
+  });
+
+  it('below the cap it stays open', async () => {
+    const w = watch({ recurring: true, baseline: { cursor: '2026-10-21T12:00:00.000Z' }, fire_count: WATCH_LIMITS.maxFires - 2 });
+    const ev = await evaluateWatch(probe({ events: [{ id: 'e1', kind: 'finished', created_at: '2026-10-21T12:05:00.000Z' }] }), w);
+    expect(ev?.close).toBeNull();
+    expect(ev?.events[0].payload.last).toBeUndefined();
   });
 });
 
