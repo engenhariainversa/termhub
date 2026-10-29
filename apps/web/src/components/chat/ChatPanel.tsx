@@ -5,6 +5,7 @@ import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatActionTrail } from './ChatActionTrail';
 import { ChatComposer } from './ChatComposer';
+import { ChatContextBadge } from './ChatContextBadge';
 import { ChatContextMeter } from './ChatContextMeter';
 import { ChatHost } from './ChatHost';
 import { ChatPendingBar } from './ChatPendingBar';
@@ -1129,9 +1130,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     // `waiting_permission` in backticks, a long path — widened this column past the viewport and
     // took the composer's send button off screen with it.
     <div ref={rootRef} className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4" onKeyDown={onPanelKeyDown}>
-      {/* The header shows one cog (TER-1039); the context, the host, the subagents, the trusted tabs and
+      {/* The header shows the context badge (TER-1151) and one cog (TER-1039); the context's details, the host, the subagents, the trusted tabs and
        *  starting over live in the dialog it opens. The dot keeps what mattered at a glance in sight. */}
-      <ChatSettingsButton open={settingsOpen} attention={activeSubagents.length > 0 || contextLevel(context?.tokens == null ? null : contextShare(context.tokens, contextMax(context.window ?? null, contextLimit))) !== 'ok'} onOpen={() => setSettingsOpen(true)} />
+      <ChatSettingsButton
+        open={settingsOpen}
+        attention={activeSubagents.length > 0 || contextLevel(context?.tokens == null ? null : contextShare(context.tokens, contextMax(context.window ?? null, contextLimit))) !== 'ok'}
+        onOpen={() => setSettingsOpen(true)}
+        before={<ChatContextBadge tokens={context?.tokens ?? null} window={context?.window ?? null} limit={contextLimit} compactedAt={context?.compacted_at ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />}
+      />
       <ChatSettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
