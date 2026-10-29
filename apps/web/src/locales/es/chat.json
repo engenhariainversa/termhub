@@ -689,5 +689,9 @@
   "Nenhuma outra conta do projeto tem limite livre agora.": "Ninguna otra cuenta del proyecto tiene límite disponible ahora.",
   "Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.": "Agrega otra cuenta de Claude en el Setup del proyecto (Cuentas de IA y modelo) para que el chat cambie solo.",
   "Ainda no mesmo limite de uso (volta {{reset}}).": "Sigue en el mismo límite de uso (vuelve {{reset}}).",
-  "Ainda no mesmo limite de uso.": "Sigue en el mismo límite de uso."
+  "Ainda no mesmo limite de uso.": "Sigue en el mismo límite de uso.",
+  "{{tokens}} de {{max}} tokens (o seu limite)": "{{tokens}} de {{max}} tokens (tu límite)",
+  "{{tokens}} de {{max}} tokens": "{{tokens}} de {{max}} tokens",
+  "compactado às {{time}}": "compactada a las {{time}}",
+  "compactado em {{when}}": "compactada el {{when}}"
 }
