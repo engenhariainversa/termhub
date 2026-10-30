@@ -3538,6 +3538,91 @@ describe('context fill and "Compactar" (TER-315)', () => {
     expect(chat.setContext).toHaveBeenCalledWith('c1', { tokens: 1000, window: 200_000 });
   });
 
+  // TER-1154: a conversation at 905k of 1M ran into the end of its context; past 85% the next message
+  // compacts the session first.
+  describe('compacting on its own before the run (TER-1154)', () => {
+    const full = (b: ReturnType<typeof build>, tokens = 905_000) => {
+      b.conversation.cli_session_id = SESSION;
+      b.conversation.context_tokens = tokens;
+      b.conversation.context_window = 1_000_000;
+      const lr = liveRunner();
+      vi.mocked(b.runner.run).mockImplementation(lr.run);
+      return lr;
+    };
+    const answer = async (run: Awaited<ReturnType<typeof runAt>>) => {
+      for (const line of run.input.text.trim().split('\n')) run.push(replayOf(line));
+      run.push(delta('ok'));
+      run.push(done(SESSION));
+    };
+
+    it('runs /compact on the session first, says so, then answers in the same session', async () => {
+      const b = build([], { streaming: true });
+      const lr = full(b);
+      const { events, off } = listen();
+      const started = await b.service.start(user, 'E aí?');
+      const compaction = await runAt(lr, 0);
+      expect(compaction.input).toMatchObject({ session_id: SESSION, resume: true, text: '/compact', append_system_prompt: null });
+      expect(compaction.input.stream_input).toBeUndefined();
+      for (const l of compactLines(905_000, 40_000)) compaction.push(l);
+      compaction.end();
+      const run = await runAt(lr, 1);
+      expect(run.input).toMatchObject({ session_id: SESSION, resume: true, stream_input: true });
+      await answer(run);
+      const final = await started.done;
+      run.end();
+      await settled();
+      off();
+      expect(final).toMatchObject({ text: 'ok', error_code: null });
+      expect(events.filter((e) => e.type === 'compact')).toEqual([
+        { type: 'compact', user_id: 'u1', conversation_id: 'c1', state: 'started', tokens_before: null, tokens: null, error_code: null },
+        { type: 'compact', user_id: 'u1', conversation_id: 'c1', state: 'done', tokens_before: 905_000, tokens: 40_000, error_code: null },
+      ]);
+      expect(b.chat.setContext).toHaveBeenCalledWith('c1', { tokens: 40_000, compacted: true });
+    });
+
+    it('a compaction that fails starts a new session told the last messages, never a stuck chat', async () => {
+      const b = build([], { streaming: true });
+      const lr = full(b);
+      b.messages.push({ id: 'old1', role: 'user', text: 'qual o status do deploy?', error_code: null }, { id: 'old2', role: 'assistant', text: 'Deploy verde.', error_code: null });
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const { events, off } = listen();
+      const started = await b.service.start(user, 'E aí?');
+      const compaction = await runAt(lr, 0);
+      compaction.push(JSON.stringify({ type: 'termhub_error', reason: 'run_failed' }));
+      compaction.end();
+      const run = await runAt(lr, 1);
+      expect(run.input.resume).toBe(false);
+      expect(run.input.session_id).not.toBe(SESSION);
+      const [note, turn] = run.input.text.trim().split('\n').map((l) => JSON.parse(l).message.content as string);
+      expect(note).toContain('encheu o contexto e não pôde ser compactada');
+      expect(note).toContain('- Pessoa: qual o status do deploy?');
+      expect(note).toContain('- Você: Deploy verde.');
+      expect(turn).toContain('E aí?');
+      await answer(run);
+      const final = await started.done;
+      run.end();
+      await settled();
+      off();
+      err.mockRestore();
+      expect(final).toMatchObject({ text: 'ok', error_code: null });
+      expect(b.chat.setCliSession).toHaveBeenCalledWith('c1', null);
+      expect(events.filter((e) => e.type === 'compact').map((e) => (e as { state: string }).state)).toEqual(['started', 'done']);
+    });
+
+    it('leaves a session under the threshold alone', async () => {
+      const b = build([], { streaming: true });
+      const lr = full(b, 840_000);
+      const started = await b.service.start(user, 'E aí?');
+      const run = await runAt(lr, 0);
+      expect(run.input).toMatchObject({ session_id: SESSION, resume: true, stream_input: true });
+      await answer(run);
+      await started.done;
+      run.end();
+      await settled();
+      expect(lr.runs).toHaveLength(1);
+    });
+  });
+
   it('a fill that cannot be stored does not fail the answer', async () => {
     const { service, chat } = build([delta('ok'), doneWithContext()]);
     chat.setContext.mockRejectedValueOnce(new Error('db down'));

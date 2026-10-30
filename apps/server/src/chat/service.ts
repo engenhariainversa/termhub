@@ -31,6 +31,7 @@ import type { ChatCommandRule } from '../db/repositories/chat-command-rules.js';
 import { LiveRun, type LiveTurn } from './live-run.js';
 import { accountSystemPrompt, CONCIERGE_RULES_MAX, projectSystemPrompt } from './project-prompt.js';
 import { RESUME_WINDOW_MS, STALE_MS, resumeNote } from './resume.js';
+import { FRESH_SUMMARY_MESSAGES, contextFull, freshSessionNote, type CompactOutcome } from './auto-compact.js';
 import { codeForReason, parseFrame, type ChatErrorCode, type ChatFailureReason } from './stream.js';
 import { toSubagentView, type SubagentView } from './subagent-view.js';
 import { sanitisePromptText, tabQuestionContext } from './tab-question-context.js';
@@ -783,10 +784,22 @@ export class ChatService {
 
   /** The run `compact` started: `/compact` on stdin, read until the CLI is done. Releases the lock. */
   private async runCompact(user: User, conversation: ChatConversation, runner: RunnerClient, configDir: string | null, sessionId: string, model: string | null): Promise<void> {
-    let before: number | null = null;
-    let after: number | null = null;
-    let compacted = false;
-    let errorCode: ChatErrorCode = null;
+    let outcome: CompactOutcome = { compacted: false, before: null, after: null, errorCode: 'RUNNER_FAILED' };
+    try {
+      outcome = await this.compactSession(user, conversation, runner, configDir, sessionId, model);
+    } finally {
+      this.compacting.delete(conversation.id);
+      try {
+        await this.publishCompacted(user, conversation.id, outcome);
+      } finally {
+        this.releaseLock(user, conversation.id);
+      }
+    }
+  }
+
+  /** `/compact` on the session, read until the CLI is done (the caller holds the lock). Never throws. */
+  private async compactSession(user: User, conversation: ChatConversation, runner: RunnerClient, configDir: string | null, sessionId: string, model: string | null): Promise<CompactOutcome> {
+    const out: CompactOutcome = { compacted: false, before: null, after: null, errorCode: null };
     try {
       // The runner writes the MCP config from a token even for a run that calls no tool; minting one
       // revokes the conversation's previous token, which is safe here: the lock says no run holds it.
@@ -794,34 +807,73 @@ export class ChatService {
       try {
         token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals'], { accountWide: conversation.project_id === null });
       } catch {
-        errorCode = 'TOKEN_FAILED';
-        return;
+        return { ...out, errorCode: 'TOKEN_FAILED' };
       }
       const input: RunnerInput = { session_id: sessionId, resume: true, text: '/compact', config_dir: configDir, model, token, append_system_prompt: null };
       for await (const line of runner.run(input)) {
         const frame = parseFrame(line);
         if (frame?.type === 'compacted') {
-          compacted = true;
-          before = frame.tokens_before ?? null;
-          after = frame.tokens ?? null;
-        } else if (frame?.type === 'error') errorCode = codeForReason(frame.reason);
+          out.compacted = true;
+          out.before = frame.tokens_before ?? null;
+          out.after = frame.tokens ?? null;
+        } else if (frame?.type === 'error') out.errorCode = codeForReason(frame.reason);
       }
       // A run that ended without compacting (a CLI that took `/compact` as plain text, a killed
       // process) did not do what was asked, whatever it printed.
-      if (!compacted && errorCode === null) errorCode = 'RUNNER_FAILED';
+      if (!out.compacted && out.errorCode === null) out.errorCode = 'RUNNER_FAILED';
     } catch (err) {
       console.error('chat: compaction failed', { conversation_id: conversation.id, error: failureLabel(err) });
-      errorCode ??= 'RUNNER_FAILED';
+      out.errorCode ??= 'RUNNER_FAILED';
+    }
+    return out;
+  }
+
+  /** The new fill and the `compact` event that ends a compaction, manual or automatic. */
+  private async publishCompacted(user: User, conversationId: string, o: CompactOutcome): Promise<void> {
+    if (o.compacted && o.after !== null) await saveContext(this.deps.repos.chat, user.id, conversationId, { tokens: o.after, compacted: true });
+    const ok = o.compacted && o.errorCode === null;
+    chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversationId, state: ok ? 'done' : 'failed', tokens_before: o.before, tokens: o.after, error_code: ok ? null : o.errorCode });
+  }
+
+  /**
+   * TER-1154: a session past `AUTO_COMPACT_AT` of its window is compacted before the run that would
+   * resume it, so a long conversation never runs into the end of the context mid-answer. The screens
+   * hear it as a "Compactar" of their own (started, then done). A compaction that fails leaves that
+   * session behind: the run starts a new one, told what the conversation was about by the thread's
+   * last messages, and the screens hear `done` with no new size. Called under the run's lock, before
+   * the run mints its own token (this one's would revoke it). Never throws.
+   */
+  private async compactBeforeRun(user: User, conversation: ChatConversation, runner: RunnerClient, host: RunHost, live: LiveRun): Promise<void> {
+    const sessionId = live.sessionId;
+    if (sessionId === null || !contextFull(conversation)) return;
+    this.compacting.add(conversation.id);
+    try {
+      chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: 'started', tokens_before: null, tokens: null, error_code: null });
+      const outcome = await this.compactSession(user, conversation, runner, host.configDir, sessionId, host.model ?? null);
+      if (outcome.compacted && outcome.errorCode === null) {
+        await this.publishCompacted(user, conversation.id, outcome);
+        return;
+      }
+      console.error('chat: automatic compaction failed, starting a new session', { conversation_id: conversation.id, error_code: outcome.errorCode });
+      await live.startFresh(await this.freshSessionNote(conversation));
+      await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: 0, compacted: true });
+      chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: 'done', tokens_before: conversation.context_tokens, tokens: null, error_code: null });
+    } catch (err) {
+      console.error('chat: automatic compaction could not finish', { conversation_id: conversation.id, error: failureLabel(err) });
     } finally {
       this.compacting.delete(conversation.id);
-      try {
-        if (compacted && after !== null) await saveContext(this.deps.repos.chat, user.id, conversation.id, { tokens: after, compacted: true });
-        const ok = compacted && errorCode === null;
-        chatBus.publish({ type: 'compact', user_id: user.id, conversation_id: conversation.id, state: ok ? 'done' : 'failed', tokens_before: before, tokens: after, error_code: ok ? null : errorCode });
-      } finally {
-        this.releaseLock(user, conversation.id);
-      }
     }
+  }
+
+  /** What a new session is told about the one it replaces: the thread's last messages, newest kept. */
+  private async freshSessionNote(conversation: ChatConversation): Promise<string> {
+    let messages: ChatMessage[] = [];
+    try {
+      messages = await this.deps.repos.chat.listMessages(conversation.id, FRESH_SUMMARY_MESSAGES);
+    } catch (err) {
+      console.error('chat: the thread could not be read for a new session', { conversation_id: conversation.id, error: failureLabel(err) });
+    }
+    return freshSessionNote(messages.filter((m) => m.text.trim() !== '').map((m) => ({ role: m.role, text: m.text })));
   }
 
   /** What the sidebar's 💬 shows per project: answering right now, and what waits on the user — pending
@@ -1937,6 +1989,8 @@ export class ChatService {
     persist = true;
     this.saveLiveRun(user, conversation.id, live.storedTurns());
     try {
+      // TER-1154: before the run's own token, which the compaction's would revoke.
+      await this.compactBeforeRun(user, conversation, runner, host, live);
       let token: string;
       try {
         // Wide scopes are safe here only because mintConciergeToken always pairs them with

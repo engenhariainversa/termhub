@@ -1,4 +1,4 @@
-import { CAPABILITY_CLAUDE, type ClaudeOpenParams } from '@termhub/agent-protocol';
+import { CAPABILITY_CLAUDE, claudeOpenParams, type ClaudeOpenParams } from '@termhub/agent-protocol';
 import { ChannelLimitError, type AgentChannel, type ChannelClosedReason, type ChannelHandlers } from '../agent/connection.js';
 import { agents } from '../agent/registry.js';
 import { config } from '../config.js';
@@ -191,6 +191,16 @@ async function* runOnAgent(
       ...(input.stream_input ? { stream_input: true } : {}),
     };
 
+    // TER-1154: an open frame the protocol refuses (a prompt over its cap) is dropped by the agent
+    // without a word, and the open then times out. Checked here instead, and named for what it is:
+    // our own run failing, never the machine going away. The paths only, never the values.
+    const checked = claudeOpenParams.safeParse(params);
+    if (!checked.success) {
+      console.error('chat: claude open params refused by the protocol', { machine_id: machineId, paths: checked.error.issues.map((i) => i.path.join('.')) });
+      yield failureLine('run_failed', null);
+      return;
+    }
+
     let channel: AgentChannel;
     try {
       channel = await host.openClaude(machineId, params, handlers);
@@ -202,8 +212,9 @@ async function* runOnAgent(
       // Except when the machine is perfectly fine and simply has no channel left (64 terminals open):
       // told apart, because "a sua máquina saiu do ar" about a healthy machine sends the person looking
       // for a problem that is not there, and the thing to do — close a few tabs — is nothing like
-      // waking a laptop up.
-      yield failureLine(err instanceof ChannelLimitError ? 'host_busy' : 'host_gone', null);
+      // waking a laptop up. The same for an agent still connected that refused or never answered the
+      // open (TER-1154): the run failed there, the machine did not go anywhere.
+      yield failureLine(err instanceof ChannelLimitError ? 'host_busy' : host.capabilities(machineId) === null ? 'host_gone' : 'run_failed', null);
       return;
     }
 

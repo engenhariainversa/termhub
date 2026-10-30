@@ -277,13 +277,39 @@ it('reports a machine that is not connected without opening anything', async () 
   expect(lastFrame(run.lines)).toMatchObject({ type: 'error', reason: 'host_gone' });
 });
 
-it('reports an open that the agent refused, without leaving the iteration hanging', async () => {
+it('reports an open that failed because the machine went away, without leaving the iteration hanging', async () => {
   const agent = fakeHost({ failOpen: new Error('agent offline: m-1') });
-  const run = collect(agentRunner('m-1', { host: agent.host }).run(input));
+  // Connected at the check, gone by the time the open failed.
+  let connected = true;
+  const host = { ...agent.host, capabilities: () => (connected ? ['pty', 'claude'] : null), openClaude: (...a: Parameters<typeof agent.host.openClaude>) => ((connected = false), agent.host.openClaude(...a)) };
+  const run = collect(agentRunner('m-1', { host }).run(input));
   await run.done;
 
   expect(agent.seen.closes).toBe(0); // there is no channel to close
   expect(lastFrame(run.lines)).toMatchObject({ type: 'error', reason: 'host_gone' });
+});
+
+// TER-1154: an open the agent dropped (it timed out) on a machine still connected read "the chat's
+// machine went offline" while the machine was right there.
+it('reports an open that failed on a machine still connected as a failed run, not a machine gone', async () => {
+  const agent = fakeHost({ failOpen: new Error('agent open timeout: ch 3') });
+  const run = collect(agentRunner('m-1', { host: agent.host }).run(input));
+  await run.done;
+
+  expect(lastFrame(run.lines)).toMatchObject({ type: 'error', reason: 'run_failed' });
+});
+
+it('never sends an open frame the protocol refuses: a prompt over its cap fails the run without opening', async () => {
+  const agent = fakeHost();
+  const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+  const run = collect(agentRunner('m-1', { host: agent.host }).run({ ...input, append_system_prompt: 'x'.repeat(8001) }));
+  await run.done;
+
+  expect(agent.seen.machineIds).toEqual([]);
+  expect(lastFrame(run.lines)).toMatchObject({ type: 'error', reason: 'run_failed' });
+  // The path only, never the prompt.
+  expect(err).toHaveBeenCalledWith('chat: claude open params refused by the protocol', { machine_id: 'm-1', paths: ['append_system_prompt'] });
+  err.mockRestore();
 });
 
 it('tells a machine with no channel left apart from a machine that went away', async () => {
