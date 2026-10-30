@@ -1422,6 +1422,9 @@ export interface ChatAction {
   /** TER-1081: what a pending run_command card offers to allow for good — the command and its prefix as
    * text; absent when no rule could cover it (or from an older server). */
   command_rule?: { exact: string; prefix: string | null };
+  /** TER-1153: a pending card whose project, tab or card no longer exists for this user: only
+   * Autorizar/Recusar, no "sempre"/"liberar" buttons. Absent otherwise (and from an older server). */
+  target_gone?: true;
 }
 
 /**

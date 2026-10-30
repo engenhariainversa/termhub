@@ -158,7 +158,12 @@ describe('terminal grants (TER-325)', () => {
 
   it('assertProjectAllGrantableAction refuses a foreign tab and delete_task with 400', async () => {
     const refused = { statusCode: 400, code: 'GRANT_NOT_ALLOWED', message: 'Só dá para liberar tudo neste projeto numa ação de quadro ou de terminal de um projeto seu' };
-    await expect(assertProjectAllGrantableAction(repos({ ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }) as never, 'u1', 'a1')).rejects.toMatchObject(refused);
+    // TER-1153: a card whose tab (or project) is gone says what to do, not the rule.
+    const gone = { statusCode: 400, code: 'GRANT_NOT_ALLOWED', message: expect.stringContaining('não existe mais') };
+    await expect(assertProjectAllGrantableAction(repos({ ...keyCard, tab_id: 't9', args: { tab_id: 't9', key: 'enter' } }) as never, 'u1', 'a1')).rejects.toMatchObject(gone);
+    const goneTask = repos(boardCard);
+    goneTask.tasks.findByIdsForOwner.mockResolvedValueOnce([]);
+    await expect(assertProjectAllGrantableAction(goneTask as never, 'u1', 'a2')).rejects.toMatchObject(gone);
     await expect(assertProjectAllGrantableAction(repos({ ...boardCard, tool: 'delete_task' }) as never, 'u1', 'a2')).rejects.toMatchObject(refused);
     await expect(assertProjectAllGrantableAction(repos({ ...keyCard, status: 'denied' }) as never, 'u1', 'a1')).rejects.toMatchObject({ statusCode: 409 });
   });
@@ -273,8 +278,9 @@ describe('standing grants (TER-386)', () => {
 
   it('assertStandingGrantableAction refuses a non-routine tool and an unresolved project with 400, a decided row with 409, another user\'s with 404', async () => {
     await expect(assertStandingGrantableAction(repos({ ...openCard, tool: 'delete_task', args: { task_id: 'k1' } }) as never, 'u1', 'a1')).rejects.toMatchObject(refused);
-    await expect(assertStandingGrantableAction(repos({ ...openCard, args: { project_id: 'p9' } }) as never, 'u1', 'a1')).rejects.toMatchObject(refused);
-    await expect(assertStandingGrantableAction(repos({ ...openCard, tool: 'close_tab', args: { tab_id: 't9' }, tab_id: 't9' }) as never, 'u1', 'a1')).rejects.toMatchObject(refused);
+    const gone = { statusCode: 400, code: 'GRANT_NOT_ALLOWED', message: expect.stringContaining('não existe mais') };
+    await expect(assertStandingGrantableAction(repos({ ...openCard, args: { project_id: 'p9' } }) as never, 'u1', 'a1')).rejects.toMatchObject(gone);
+    await expect(assertStandingGrantableAction(repos({ ...openCard, tool: 'close_tab', args: { tab_id: 't9' }, tab_id: 't9' }) as never, 'u1', 'a1')).rejects.toMatchObject(gone);
     await expect(assertStandingGrantableAction(repos({ ...openCard, status: 'approved' }) as never, 'u1', 'a1')).rejects.toMatchObject({ statusCode: 409 });
     const foreign = repos();
     foreign.chatActions.findByIdForUser.mockResolvedValueOnce(undefined as never);

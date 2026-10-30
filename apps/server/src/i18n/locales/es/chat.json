@@ -31,6 +31,7 @@
   "Só dá para permitir sempre neste projeto ações de quadro de um projeto seu": "Permitir siempre en este proyecto solo funciona para acciones de tablero de uno de tus proyectos",
   "Só dá para liberar tudo neste projeto numa ação de quadro ou de terminal de um projeto seu": "Permitir todo en este proyecto solo funciona en una acción de tablero o de terminal de uno de tus proyectos",
   "Só dá para liberar sem prazo uma ação de rotina de um projeto seu": "Solo una acción de rutina de uno de tus proyectos se puede permitir sin límite de tiempo",
+  "Este pedido é de um projeto, aba ou tarefa que não existe mais, então não dá para liberar nada a partir dele. Recuse e peça de novo ao chat no projeto certo.": "Esta solicitud es de un proyecto, pestaña o tarea que ya no existe, así que no se puede permitir nada a partir de ella. Recházala y vuelve a pedirlo al chat en el proyecto correcto.",
   "A aba desta ação foi fechada: nada foi feito e o pedido expirou. Use “Propor de novo” para o chat pedir de novo numa aba aberta.": "La pestaña de esta acción se cerró: no se hizo nada y la solicitud venció. Usa “Proponer de nuevo” para que el chat vuelva a pedirlo en una pestaña abierta.",
   "Esta permissão já foi revogada": "Este permiso ya se revocó",
   "Permissão não encontrada": "Permiso no encontrado",

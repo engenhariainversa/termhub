@@ -292,3 +292,20 @@ describe('ActionCard: "Permitir sempre nesta pasta" (TER-1086)', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta pasta' })).toBeNull();
   });
 });
+
+// TER-1153: a card whose project, tab or card is gone can only be answered — nothing can be trusted from it.
+describe('ActionCard: a card whose target is gone', () => {
+  const ALWAYS = /Permitir sempre|Liberar/;
+  it.each([
+    ['create_task on a gone project', { ...BASE_ACTION, tool: 'create_task', args: { project_id: 'p9', title: 'x' }, project_id: 'p9', target_gone: true as const }],
+    ['send_key to a closed tab', { ...BASE_ACTION, tool: 'send_key', args: { tab_id: 't9', key: 'enter' }, tab_id: 't9', target_gone: true as const }],
+    ['open_tab in a gone project', { ...BASE_ACTION, tool: 'open_tab', args: { project_id: 'p9' }, project_id: 'p9', target_gone: true as const }],
+  ])('offers only Autorizar and Recusar for %s', async (_l, action) => {
+    const onDecide = jest.fn();
+    await render(<ActionCard action={action} busy={false} onDecide={onDecide} revoking={false} onRevoke={jest.fn()} />);
+    expect(screen.queryAllByRole('button', { name: ALWAYS })).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Recusar' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'deny');
+  });
+});

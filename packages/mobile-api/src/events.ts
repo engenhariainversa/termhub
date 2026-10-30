@@ -90,6 +90,9 @@ export const chatActionSchema = z.object({
   surfaced_at: z.string().nullable().optional(),
   /** A send the concierge made on a precedent from memory (TER-641); null when it cited none. */
   auto_decision: autoDecisionSchema.nullable().optional(),
+  /** TER-1153: a pending card whose project, tab or card no longer exists for this user — the card then
+   * offers only Autorizar/Recusar. Absent otherwise, from an older server, and stripped by an older app. */
+  target_gone: z.literal(true).optional(),
 });
 
 /** "Permitir sempre nesta aba" while it holds (server `ChatGrantView`). */
@@ -364,6 +367,8 @@ export const chatEventSchema = z.discriminatedUnion('type', [
      * confirmation for an id already on screen then only moves it. `resurfaced` marks that re-publish. */
     surfaced_at: z.string().nullable().optional(),
     resurfaced: z.literal(true).optional(),
+    /** As on `chatActionSchema` (TER-1153). */
+    target_gone: z.literal(true).optional(),
   }),
   z.object({ type: z.literal('decision'), user_id: z.string(), conversation_id: z.string(), action_id: z.string(), status: z.enum(['approved', 'denied']) }),
   z.object({ type: z.literal('grant'), user_id: z.string(), conversation_id: z.string(), grant: chatGrantSchema }),

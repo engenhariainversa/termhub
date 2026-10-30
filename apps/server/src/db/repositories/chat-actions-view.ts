@@ -42,6 +42,10 @@ export interface ChatActionCard {
   /** TER-1081: what a pending run_command card offers to allow for good — the command and its prefix, as
    * text — absent when no rule could cover it. The decision route checks it again, with the tab. */
   command_rule?: { exact: string; prefix: string | null };
+  /** TER-1153: a pending card whose target (project, tab, card, machine) no longer resolves for this user —
+   * gone, or never theirs. Screens then offer only Autorizar/Recusar: no "sempre"/"liberar" grant can
+   * attach to a target that is not there. Absent otherwise. */
+  target_gone?: true;
 }
 
 const asString = (v: unknown): string => (typeof v === 'string' ? v : '');
@@ -327,7 +331,7 @@ const commandRuleOf = (action: ChatAction): Pick<ChatActionCard, 'command_rule'>
   return offer ? { command_rule: offer } : {};
 };
 
-const toCard = (action: ChatAction, summary: string, subagent: { id: string; description: string } | null, autoDecision: AutoDecisionView | null): ChatActionCard => ({
+const toCard = (action: ChatAction, summary: string, subagent: { id: string; description: string } | null, autoDecision: AutoDecisionView | null, targetGone: boolean): ChatActionCard => ({
   id: action.id,
   tool: action.tool,
   args: action.args,
@@ -344,6 +348,7 @@ const toCard = (action: ChatAction, summary: string, subagent: { id: string; des
   surfaced_at: action.surfaced_at ?? null,
   auto_decision: autoDecision,
   ...commandRuleOf(action),
+  ...(targetGone && action.status === 'pending' ? { target_gone: true as const } : {}),
 });
 
 /**
@@ -503,7 +508,7 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
     const summary = summarize(action, task, loc, ticketById, integrationById);
     const sa = action.subagent_id ? subById.get(action.subagent_id) : undefined;
     const subagent = sa && sa.conversation_id === action.conversation_id ? { id: sa.id, description: sa.description } : null;
-    return toCard(action, summary, subagent, autoDecisions[index] ?? null);
+    return toCard(action, summary, subagent, autoDecisions[index] ?? null, Boolean(loc.missing) || (Boolean(taskId) && !task));
   });
 }
 
