@@ -1922,6 +1922,7 @@ export class ChatService {
             subagent: c.subagent,
             created_at: c.created_at,
             ...(c.command_rule ? { command_rule: c.command_rule } : {}),
+            ...(c.target_gone ? { target_gone: true as const } : {}),
             origin_update: true,
           });
         }

@@ -182,6 +182,23 @@ const TAB_PROMPT_CHANGED = (tabId: string) => ({
   message: `A aba ${tabId} está esperando outra permissão, pedida depois da pergunta que o usuário confirmou: responder agora aceitaria algo que ele nunca viu. Nada foi executado e a confirmação não vale mais. Leia a tela com read_screen e proponha a ação de novo.`,
 });
 
+/**
+ * TER-1153: the refusal for a board write (`boardGrantable`) whose project does not resolve for this
+ * user — a deleted project, a card or column that is gone, or an id that was never theirs (one answer
+ * for all, so the refusal is no existence oracle). Undefined when the target resolves.
+ */
+async function boardTargetGone(ctx: ControlContext, call: GatedCall): Promise<{ ok: false; code: string; message: string } | undefined> {
+  if (!boardGrantable(call.tool)) return undefined;
+  if (await boardProjectOf(ctx.repos, ctx.scope.user.id, call.tool, call.args)) return undefined;
+  const id = targetId(call.args.project_id) ?? targetId(call.args.column_id) ?? targetId(call.args.task_id) ?? '?';
+  const what = call.tool === 'create_task' || call.tool === 'create_column' ? `O projeto ${id}` : call.tool === 'update_column' ? `A coluna ${id}` : `A tarefa ${id}`;
+  return {
+    ok: false,
+    code: 'TARGET_NOT_FOUND',
+    message: `${what} não existe mais ou não é deste usuário, então nada foi pedido a ele nem executado. Ache o projeto certo com find (ou list_projects / list_tasks) e proponha a ação de novo com o id atual; não use ids guardados de conversas antigas sem conferir.`,
+  };
+}
+
 /** What the action targets, for the chat's card and for re-validating an approval. Ids only: a value
  * of another shape is not an id and is dropped rather than stored. */
 const targetId = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length <= 64 ? v : null);
@@ -404,6 +421,7 @@ async function publishCard(repos: Repositories, userId: string, row: ChatAction)
     subagent: card.subagent,
     created_at: row.created_at,
     ...(card.command_rule ? { command_rule: card.command_rule } : {}),
+    ...(card.target_gone ? { target_gone: true as const } : {}),
   });
 }
 
@@ -798,6 +816,12 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
     if (!row) {
       const grantId = await defaultGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
+    }
+    // TER-1153: a board write whose project does not resolve would only ask a question nobody can
+    // usefully answer (the call 404s once approved). Refused here, with no card.
+    if (!row) {
+      const gone = await boardTargetGone(ctx, call);
+      if (gone) return gone;
     }
     return ask(ctx, call, conversationId, key, cls);
   }
