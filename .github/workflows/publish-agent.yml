@@ -30,7 +30,7 @@ concurrency:
 jobs:
   # ── Is this version still missing from npm? ────────────────────────
   decide:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jarvis-termhub-ci]
     timeout-minutes: 5
     outputs:
       version: ${{ steps.check.outputs.version }}

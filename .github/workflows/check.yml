@@ -8,7 +8,7 @@ on:
 jobs:
   # ── Verificação: typecheck + build (GitHub-hosted) ─────────────────
   check:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, jarvis-termhub-ci]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -61,11 +61,11 @@ jobs:
           exit 1
       - name: Aplicar migrations (testes de repositório usam o Postgres)
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+          DATABASE_URL: postgresql://postgres:postgres@localhost:${{ job.services.postgres.ports['5432'] }}/termhub
         run: cd apps/server && npx prisma migrate deploy
       - name: Testes server
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+          DATABASE_URL: postgresql://postgres:postgres@localhost:${{ job.services.postgres.ports['5432'] }}/termhub
           TERMHUB_DB_TESTS: '1'
         run: npm test -w @termhub/server
       # Ahead of the web tests on purpose: the public city ships as its own bundle, and the test
@@ -98,7 +98,7 @@ jobs:
         run: npm run build -w @termhub/landing
       - name: Migrations aplicadas batem com o schema (sem drift)
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/termhub
+          DATABASE_URL: postgresql://postgres:postgres@localhost:${{ job.services.postgres.ports['5432'] }}/termhub
         run: |
           cd apps/server
           npx prisma migrate deploy
@@ -111,5 +111,5 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: termhub
-        ports: ["5432:5432"]
-        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
+        ports: ["5432"]
+        options: --cgroup-parent=github-runners.slice --cpus 1 --memory 1g --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 10
