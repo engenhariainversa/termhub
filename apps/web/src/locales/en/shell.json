@@ -216,8 +216,5 @@
   "Não foi possível gerar o arquivo. Peça de novo.": "Could not build the file. Ask again.",
   "O arquivo da última exportação expirou.": "The file of the last export has expired.",
   "Você pode pedir outra exportação a partir de {{date}}.": "You can ask for another export from {{date}}.",
-  "Auditoria": "Audit log",
-  "Termos de uso": "Terms of use",
-  "Política de privacidade": "Privacy policy",
-  "Documentos legais": "Legal documents"
+  "Auditoria": "Audit log"
 }

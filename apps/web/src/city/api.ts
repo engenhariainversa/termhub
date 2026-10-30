@@ -5,6 +5,7 @@
  */
 import type { ModelCity } from '../office/model';
 import type { PublicBuilding, PublicCity, PublicRobot } from '../lib/types';
+import type { LegalConfig } from './LegalFooter';
 
 /** One change of one robot of a published building, as /ws/public sends it. `building` is a snapshot id: they join. */
 export interface RobotFrame {
@@ -38,6 +39,23 @@ export async function fetchCity(nickname: string): Promise<PublicCity | null> {
   if (r.status === 404) return null;
   if (!r.ok) throw new Error(`public city: ${r.status}`);
   return (await r.json()) as PublicCity;
+}
+
+let legal: Promise<LegalConfig | null> | null = null;
+
+/**
+ * This instance's legal footer (terms, policy, operator) for the beta sign-up, read once per page.
+ * Best effort: a failed read shows no footer rather than an error, and is tried again next time.
+ */
+export function fetchLegal(): Promise<LegalConfig | null> {
+  legal ??= fetch('/api/public/legal', { credentials: 'omit' })
+    .then((r) => (r.ok ? (r.json() as Promise<LegalConfig>) : null))
+    .catch(() => null)
+    .then((v) => {
+      if (!v) legal = null;
+      return v;
+    });
+  return legal;
 }
 
 /**

@@ -84,15 +84,19 @@ describe('PATCH /auth/me/nickname', () => {
     try {
       config.legal.termsUrl = null;
       config.legal.privacyUrl = null;
+      config.legal.entity = null;
       const none = (await buildApp({ id: 'u1', nickname: null }).inject({ method: 'GET', url: '/auth/config' })).json();
       expect(none.terms_url).toBeNull();
       expect(none.privacy_url).toBeNull();
+      expect(none.legal_entity).toBeNull();
 
       config.legal.termsUrl = 'https://termhub.dev/termos/';
       config.legal.privacyUrl = 'https://termhub.dev/privacidade/';
+      config.legal.entity = '8020 Digital Ltda · CNPJ 32.285.763/0001-12';
       const set = (await buildApp({ id: 'u1', nickname: null }).inject({ method: 'GET', url: '/auth/config' })).json();
       expect(set.terms_url).toBe('https://termhub.dev/termos/');
       expect(set.privacy_url).toBe('https://termhub.dev/privacidade/');
+      expect(set.legal_entity).toBe('8020 Digital Ltda · CNPJ 32.285.763/0001-12');
     } finally {
       Object.assign(config.legal, saved);
     }

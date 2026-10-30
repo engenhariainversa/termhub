@@ -109,6 +109,12 @@ const envSchema = z.object({
    */
   TERMS_URL: z.string().url().optional(),
   PRIVACY_URL: z.string().url().optional(),
+  /**
+   * Who runs this instance, as the login screen's footer prints it under the legal links, e.g.
+   * "8020 Digital Ltda · CNPJ 32.285.763/0001-12" for the hosted service. Unset = no line: a
+   * self-hosted instance is not run by termhub.dev's operator.
+   */
+  LEGAL_ENTITY: z.string().trim().min(1).max(200).optional(),
 
   /** WhatsApp group the alpha-tester invite (Waitlist tab → Convidar) links to */
   ALPHA_COMMUNITY_URL: z.string().url().default('https://77a.it/comunidadetermhub'),
@@ -258,7 +264,7 @@ export const config = {
   monitorBackgroundTimeoutMs: env.MONITOR_BACKGROUND_TIMEOUT_MINUTES * 60_000,
   mcpUrl: env.MCP_URL ?? null,
   publicCityUrl: resolvePublicCityUrl(env),
-  legal: { termsUrl: env.TERMS_URL ?? null, privacyUrl: env.PRIVACY_URL ?? null },
+  legal: { termsUrl: env.TERMS_URL ?? null, privacyUrl: env.PRIVACY_URL ?? null, entity: env.LEGAL_ENTITY ?? null },
   accountDeletionUrl: env.ACCOUNT_DELETION_URL ?? `${new URL(resolvePublicCityUrl(env)).origin}/excluir-conta/`,
   backupRetentionDays: env.BACKUP_RETENTION_DAYS ?? null,
   alphaCommunityUrl: env.ALPHA_COMMUNITY_URL,
