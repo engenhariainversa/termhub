@@ -312,3 +312,22 @@ describe('GET /public/city/:nickname/card.png', () => {
     });
   });
 });
+
+describe('GET /public/legal', () => {
+  it("serves the instance's legal footer, null where it has none", async () => {
+    const { config } = await import('../config.js');
+    const saved = { ...config.legal };
+    try {
+      Object.assign(config.legal, { termsUrl: null, privacyUrl: null, entity: null });
+      const none = await buildApp().app.inject({ method: 'GET', url: '/public/legal' });
+      expect(none.statusCode).toBe(200);
+      expect(none.json()).toEqual({ terms_url: null, privacy_url: null, legal_entity: null });
+
+      Object.assign(config.legal, { termsUrl: 'https://termhub.dev/termos/', privacyUrl: 'https://termhub.dev/privacidade/', entity: '8020 Digital Ltda · CNPJ 32.285.763/0001-12' });
+      const set = await buildApp().app.inject({ method: 'GET', url: '/public/legal' });
+      expect(set.json()).toEqual({ terms_url: 'https://termhub.dev/termos/', privacy_url: 'https://termhub.dev/privacidade/', legal_entity: '8020 Digital Ltda · CNPJ 32.285.763/0001-12' });
+    } finally {
+      Object.assign(config.legal, saved);
+    }
+  });
+});

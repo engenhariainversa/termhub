@@ -137,6 +137,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AuthContext, opts: {
     // Read before sign-in (the login screen links to them), so they live here too. null = not set.
     terms_url: config.legal.termsUrl,
     privacy_url: config.legal.privacyUrl,
+    legal_entity: config.legal.entity,
   }));
 
   app.get('/me', { config: { public: true } }, async (request) => {

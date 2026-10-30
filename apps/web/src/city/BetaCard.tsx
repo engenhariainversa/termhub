@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { LegalFooter, type LegalConfig } from './LegalFooter';
+import { fetchLegal } from './api';
 import { BetaForm } from './BetaForm';
 import { tk, useTranslation } from '../i18n';
 
@@ -54,6 +56,17 @@ const BENEFITS = [
  */
 export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border' }: { ownerName: string | null; onCollapse?: () => void; className?: string }) {
   const { t } = useTranslation();
+  // the sign-up posts to this instance, so its own terms, policy and operator go under the form
+  const [legal, setLegal] = useState<LegalConfig | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetchLegal().then((v) => {
+      if (live) setLegal(v);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
   return (
     <section aria-labelledby="beta-title" className={`${className} border-line bg-bg-2/95 p-4 text-left shadow-2xl shadow-black/40 backdrop-blur`}>
       <div className="mb-2 flex items-start gap-2">
@@ -86,6 +99,7 @@ export function BetaCard({ ownerName, onCollapse, className = 'rounded-lg border
       <a href={LANDING_URL} className="mt-3 inline-block text-xs text-accent hover:underline">
         {t('Conheça o termhub →')}
       </a>
+      <LegalFooter config={legal} className="mt-3 border-t border-line pt-3" />
     </section>
   );
 }

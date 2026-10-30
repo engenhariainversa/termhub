@@ -10,7 +10,12 @@ const fetchMock = vi.fn();
 
 beforeEach(() => {
   void i18n.changeLanguage('en');
-  vi.stubGlobal('fetch', fetchMock);
+  // the legal footer's read is answered here; fetchMock sees only the sign-up
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    url === '/api/public/legal'
+      ? Promise.resolve(new Response(JSON.stringify({ terms_url: null, privacy_url: 'https://termhub.dev/privacidade/', legal_entity: '8020 Digital Ltda · CNPJ 32.285.763/0001-12' }), { status: 200 }))
+      : fetchMock(url, init),
+  );
 });
 afterEach(() => {
   cleanup();
@@ -33,6 +38,12 @@ describe('the public city in English', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Join the free beta' }));
     expect(await screen.findByText('Sign-up received.')).toBeInTheDocument();
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).locale).toBe('en');
+  });
+
+  it("shows the instance's privacy policy and operator under the sign-up", async () => {
+    render(<BetaCard ownerName={null} />);
+    expect(await screen.findByText('8020 Digital Ltda · CNPJ 32.285.763/0001-12')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', 'https://termhub.dev/privacidade/');
   });
 
   it('writes the share images in English, with plurals', () => {
