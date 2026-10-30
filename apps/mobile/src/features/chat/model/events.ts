@@ -144,6 +144,8 @@ function actionFromConfirmation(e: Extract<ChatEvent, { type: 'confirmation' }>)
     created_at: e.created_at,
     // Carried through verbatim, like `subagent`: absent on an older server (spec 2026-09-30 §2.2).
     ...(e.surfaced_at !== undefined ? { surfaced_at: e.surfaced_at } : {}),
+    // TER-1153: the card's target is gone, so it offers no grant. Absent on an older server.
+    ...(e.target_gone ? { target_gone: true as const } : {}),
   };
 }
 
@@ -168,8 +170,10 @@ export function applyEvent(slice: EventSlice, e: ChatEvent): EventSlice {
       // repeat with nothing new changes nothing.
       const subagent = e.subagent ?? existing.subagent;
       const surfacedAt = e.surfaced_at ?? existing.surfaced_at;
-      if (subagent === existing.subagent && surfacedAt === existing.surfaced_at) return slice;
-      return { ...slice, actions: slice.actions.map((a) => (a.id === e.action_id ? { ...a, subagent, surfaced_at: surfacedAt } : a)) };
+      // A card can lose its target while it waits (TER-1153): a re-publish says so, and it sticks.
+      const targetGone = e.target_gone ?? existing.target_gone;
+      if (subagent === existing.subagent && surfacedAt === existing.surfaced_at && targetGone === existing.target_gone) return slice;
+      return { ...slice, actions: slice.actions.map((a) => (a.id === e.action_id ? { ...a, subagent, surfaced_at: surfacedAt, ...(targetGone ? { target_gone: targetGone } : {}) } : a)) };
     }
     case 'decision': {
       const actions = settlePending(slice.actions, e.action_id, e.status);

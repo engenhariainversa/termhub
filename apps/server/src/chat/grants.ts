@@ -74,6 +74,11 @@ export async function grantTabTerminal(repos: Repositories, userId: string, acti
   return grant;
 }
 
+/** TER-1153: the grant button of a card whose project (or tab, or card) no longer resolves for this user —
+ * gone, or never theirs. Says what to do rather than the rule; the screens no longer offer the button
+ * for such a card (`target_gone`), so this answers an older screen or a card that went stale while open. */
+const GRANT_TARGET_GONE = () => new HttpError(400, 'Este pedido é de um projeto, aba ou tarefa que não existe mais, então não dá para liberar nada a partir dele. Recuse e peça de novo ao chat no projeto certo.', 'GRANT_NOT_ALLOWED');
+
 const PROJECT_GRANT_NOT_ALLOWED = () => new HttpError(400, 'Só dá para permitir sempre neste projeto ações de quadro de um projeto seu', 'GRANT_NOT_ALLOWED');
 
 /** "Permitir sempre neste projeto" only for a pending board card whose project resolves (spec 2026-09-26
@@ -84,7 +89,7 @@ export async function assertProjectGrantableAction(repos: Repositories, userId: 
   const row = await pendingRow(repos, userId, actionId);
   if (!boardGrantable(row.tool)) throw PROJECT_GRANT_NOT_ALLOWED();
   const projectId = await boardProjectOf(repos, userId, row.tool, (row.args ?? {}) as Record<string, unknown>);
-  if (!projectId) throw PROJECT_GRANT_NOT_ALLOWED();
+  if (!projectId) throw GRANT_TARGET_GONE();
   return { action: row, projectId };
 }
 
@@ -98,8 +103,9 @@ export async function assertProjectAllGrantableAction(repos: Repositories, userI
   const row = await pendingRow(repos, userId, actionId);
   let projectId: string | null | undefined;
   if (boardGrantable(row.tool)) projectId = await boardProjectOf(repos, userId, row.tool, (row.args ?? {}) as Record<string, unknown>);
-  else projectId = (await terminalTabOf(repos, userId, row))?.project_id;
-  if (!projectId) throw PROJECT_ALL_GRANT_NOT_ALLOWED();
+  else if (terminalGrantable(row.tool, (row.args ?? {}) as Record<string, unknown>) && row.tab_id) projectId = (await terminalTabOf(repos, userId, row))?.project_id ?? null;
+  else throw PROJECT_ALL_GRANT_NOT_ALLOWED();
+  if (!projectId) throw GRANT_TARGET_GONE();
   return { action: row, projectId };
 }
 
@@ -131,7 +137,7 @@ export async function assertStandingGrantableAction(repos: Repositories, userId:
   const kind = standingKindOf(row.tool, args);
   if (!kind) throw STANDING_GRANT_NOT_ALLOWED();
   const resolved = await standingProjectOf(repos, userId, kind, row.tool, args);
-  if (!resolved) throw STANDING_GRANT_NOT_ALLOWED();
+  if (!resolved) throw GRANT_TARGET_GONE();
   return { action: row, kind, projectId: resolved.projectId };
 }
 

@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ChatAction } from './chat-actions.js';
 import type { ChatGrant, ChatGrantWithConversation } from './chat-grants.js';
 import type { ChatProjectGrant, ChatProjectGrantWithConversation } from './chat-project-grants.js';
@@ -826,4 +826,30 @@ it('names the machine on a set_machine_automation card (TER-975)', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'set_machine_automation', args: { machine_id: 'm1', accept: true }, machine_id: 'm1' })], OWNER);
   expect(card.summary).toBe('fazer a máquina aceitar trabalho automático no macbook m3');
+});
+
+// TER-1153: a pending card whose target no longer resolves offers no grant — the screens read `target_gone`.
+describe('target_gone', () => {
+  it.each([
+    ['a gone project', action({ tool: 'create_task', args: { project_id: 'nope', title: 'x' }, project_id: 'nope' })],
+    ['a foreign project', action({ tool: 'create_task', args: { project_id: foreignProject.id, title: 'x' }, project_id: foreignProject.id })],
+    ['a gone card', action({ tool: 'move_task', args: { task_id: 'gone', status: 'done' } })],
+    ['a closed tab', action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone' })],
+  ])('is set on a pending card for %s', async (_label, row) => {
+    const [card] = await describeActions(fakeRepos(), [row], OWNER);
+    expect(card.target_gone).toBe(true);
+  });
+
+  it('is absent when the target resolves, and on a decided card', async () => {
+    const [ok, decided] = await describeActions(
+      fakeRepos(),
+      [
+        action({ tool: 'create_task', args: { project_id: 'p1', title: 'x' }, project_id: 'p1' }),
+        action({ id: 'a2', tool: 'create_task', args: { project_id: 'nope', title: 'x' }, project_id: 'nope', status: 'denied' }),
+      ],
+      OWNER,
+    );
+    expect(ok).not.toHaveProperty('target_gone');
+    expect(decided).not.toHaveProperty('target_gone');
+  });
 });

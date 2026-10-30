@@ -328,3 +328,27 @@ describe('"Permitir sempre nesta pasta" (TER-1086)', () => {
     expect(screen.queryByRole('button', { name: 'Permitir sempre nesta pasta' })).toBeNull();
   });
 });
+
+// TER-1153: a card whose project, tab or card is gone can only be answered — nothing can be trusted from it.
+describe('a card whose target is gone', () => {
+  const ALWAYS = /Permitir sempre|Liberar/;
+  it.each([
+    ['create_task on a gone project', card({ tool: 'create_task', args: { project_id: 'p9', title: 'x' }, tab_id: null, project_id: 'p9', summary: 'criar a tarefa "x" num projeto que não existe mais', target_gone: true })],
+    ['send_input to a closed tab', card({ target_gone: true })],
+    ['run_command with a rule offer', card({ tool: 'run_command', args: { tab_id: 't1', command: 'ls' }, command_rule: { exact: 'ls', prefix: null }, target_gone: true })],
+    ['share_file from a gone machine', card({ tool: 'share_file', args: { machine_id: 'm9', path: '~/docs/a.pdf' }, tab_id: null, target_gone: true })],
+  ])('offers only Autorizar and Recusar for %s', (_l, action) => {
+    const onDecide = vi.fn();
+    render(<ChatActionCard action={action} deciding={false} onDecide={onDecide} />);
+    expect(screen.queryAllByRole('button', { name: ALWAYS })).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Recusar' }));
+    expect(onDecide).toHaveBeenCalledWith('a1', 'deny');
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeInTheDocument();
+  });
+
+  it('the same board card with its project still offers them', () => {
+    render(<ChatActionCard action={card({ tool: 'create_task', args: { project_id: 'p1', title: 'x' }, tab_id: null, project_id: 'p1' })} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Liberar tudo neste projeto' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Permitir sempre neste projeto' })).toBeInTheDocument();
+  });
+});

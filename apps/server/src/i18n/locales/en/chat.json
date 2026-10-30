@@ -31,6 +31,7 @@
   "Só dá para permitir sempre neste projeto ações de quadro de um projeto seu": "Always allow in this project only works for board actions of one of your projects",
   "Só dá para liberar tudo neste projeto numa ação de quadro ou de terminal de um projeto seu": "Allowing everything in this project only works on a board or terminal action of one of your projects",
   "Só dá para liberar sem prazo uma ação de rotina de um projeto seu": "Only a routine action of one of your projects can be allowed with no time limit",
+  "Este pedido é de um projeto, aba ou tarefa que não existe mais, então não dá para liberar nada a partir dele. Recuse e peça de novo ao chat no projeto certo.": "This request is for a project, tab or card that no longer exists, so nothing can be allowed from it. Deny it and ask the chat again in the right project.",
   "A aba desta ação foi fechada: nada foi feito e o pedido expirou. Use “Propor de novo” para o chat pedir de novo numa aba aberta.": "The tab of this action was closed: nothing was done and the request expired. Use “Propose again” to have the chat ask again in an open tab.",
   "Esta permissão já foi revogada": "This permission was already revoked",
   "Permissão não encontrada": "Permission not found",

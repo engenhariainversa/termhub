@@ -404,8 +404,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // new `surfaced_at`) — merged in, never re-added.
         setActions((prev) =>
           prev.some((a) => a.id === e.action_id)
-            ? prev.map((a) => (a.id === e.action_id ? { ...a, ...(e.subagent ? { subagent: e.subagent } : {}), ...(e.surfaced_at ? { surfaced_at: e.surfaced_at } : {}) } : a))
-            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null, ...(e.command_rule ? { command_rule: e.command_rule } : {}) }],
+            ? prev.map((a) => (a.id === e.action_id ? { ...a, ...(e.subagent ? { subagent: e.subagent } : {}), ...(e.surfaced_at ? { surfaced_at: e.surfaced_at } : {}), ...(e.target_gone ? { target_gone: true as const } : {}) } : a))
+            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null, ...(e.command_rule ? { command_rule: e.command_rule } : {}), ...(e.target_gone ? { target_gone: true as const } : {}) }],
         );
       } else if (e.type === 'decision') {
         // Someone answered — possibly in another open tab. Keyed on the action id alone.
