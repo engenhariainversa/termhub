@@ -33,9 +33,9 @@ const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v =
  * CLAUDE_CONFIG_DIR), `<dir>/.claude.json` for every other config dir. Only files that exist: an account
  * Claude never started has no file, and creating one would look like a fresh install to it.
  */
-export async function claudeConfigFiles(home: string): Promise<string[]> {
+export async function claudeConfigFiles(home: string, extraDirs: readonly string[] = []): Promise<string[]> {
   const out: string[] = [];
-  for (const d of claudeConfigDirs(await discoverClaudeDirs(home))) {
+  for (const d of claudeConfigDirs([...(await discoverClaudeDirs(home)), ...extraDirs])) {
     const file = d === CLAUDE_DEFAULT_DIR ? path.join(home, '.claude.json') : path.join(expandHome(d, home), '.claude.json');
     if (out.includes(file)) continue;
     try {
@@ -82,13 +82,26 @@ export async function trustIn(file: string, keys: string[]): Promise<boolean> {
  * different, its real path (a symlinked home). Best effort: a file it cannot read or write is skipped, and
  * nothing here ever fails the worktree call. Returns how many files changed.
  */
-export async function trustWorktree(dir: string, home: string): Promise<number> {
+export async function trustWorktree(dir: string, home: string, extraDirs: readonly string[] = []): Promise<number> {
   const keys = [dir];
   const real = await realpath(dir).catch(() => dir);
   if (real !== dir) keys.push(real);
   let changed = 0;
-  for (const file of await claudeConfigFiles(home).catch(() => [])) {
+  for (const file of await claudeConfigFiles(home, extraDirs).catch(() => [])) {
     if (await trustIn(file, keys).catch(() => false)) changed++;
   }
   return changed;
+}
+
+/**
+ * TER-1148: a folder the server is about to start or resume Claude Code in (a project's own folder, a run's
+ * worktree), marked trusted the same way, in every Claude account here plus the `extraDirs` the server names.
+ * Only an existing folder: `~/x` is expanded first. Returns how many files changed, or null when `dir` is not
+ * a folder here.
+ */
+export async function trustFolder(dir: string, home: string, extraDirs: readonly string[] = []): Promise<number | null> {
+  const abs = path.resolve(dir === '~' ? home : expandHome(dir, home));
+  const isDir = await stat(abs).then((s) => s.isDirectory(), () => false);
+  if (!isDir) return null;
+  return trustWorktree(abs, home, extraDirs);
 }

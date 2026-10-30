@@ -14,6 +14,7 @@ import { deriveInputOrigin, verifyOnBehalfOf } from './input-origin.js';
 import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES, waitForState } from './screen.js';
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
+import { followLaunch, pretrustFolder } from '../monitor/folder-trust.js';
 import { msg } from '../i18n/index.js';
 
 export { INPUT_MAX_CHARS };
@@ -146,9 +147,22 @@ export async function sendInput(
  * No origin is recorded: a shell line is never the prompt Claude Code submits.
  */
 export async function typeCommandInTab(ctx: ControlContext, tabId: string, line: string): Promise<void> {
-  const { machine, cwd, session } = await terminal(ctx, tabId);
+  const { tab, machine, cwd, session } = await terminal(ctx, tabId);
+  const log = ctx.log ?? quietLog;
   await ensureSession(machine, session, cwd);
+  // TER-1148: the resumed agent may open its folder's trust dialog again (a new account, a new folder)
+  if (tab.state_tool !== 'codex' && tab.state_tool !== 'cursor' && tab.state_tool !== 'gemini') await pretrustFolder(ctx.repos, log, tab, machine, await accountDirOf(ctx, tab));
   await typeCommandLine(machine, session, line);
+  followLaunch(ctx.repos, log, tab.id, machine);
+}
+
+const quietLog = { info: () => undefined, warn: () => undefined };
+
+/** The config dir of the tab's own AI account, when termhub knows it: that account resumes the session. */
+async function accountDirOf(ctx: ControlContext, tab: Tab): Promise<(string | null)[]> {
+  if (!tab.ai_account_id) return [];
+  const account = await ctx.repos.aiAccounts.findById(tab.ai_account_id).catch(() => null);
+  return account ? [account.config_dir] : [];
 }
 
 /** Presses one key from the closed list in the tab. */

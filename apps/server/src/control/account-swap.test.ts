@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { getAccountUsage, linkClaudeSession, sendKeyToSession, sendTextToSession, awaitAgent, applyState, notifyLimitInChat } = vi.hoisted(() => ({
+const { getAccountUsage, linkClaudeSession, sendKeyToSession, sendTextToSession, awaitAgent, applyState, notifyLimitInChat, pretrustFolder, followLaunch } = vi.hoisted(() => ({
   notifyLimitInChat: vi.fn(async () => undefined),
+  pretrustFolder: vi.fn(async () => true),
+  followLaunch: vi.fn(),
   getAccountUsage: vi.fn(),
   linkClaudeSession: vi.fn(),
   sendKeyToSession: vi.fn(),
@@ -15,6 +17,7 @@ vi.mock('../ai/claude-session.js', () => ({ linkClaudeSession }));
 vi.mock('../terminal/session-ops.js', () => ({ sendKeyToSession, sendTextToSession, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../monitor/ingest.js', () => ({ applyState }));
+vi.mock('../monitor/folder-trust.js', () => ({ pretrustFolder, followLaunch }));
 vi.mock('../chat/tab-limits.js', () => ({ notifyLimitInChat }));
 
 import type { FastifyBaseLogger } from 'fastify';
@@ -223,6 +226,11 @@ describe('swapAccount', () => {
       return tab;
     });
 
+    pretrustFolder.mockImplementation(async () => {
+      order.push('pretrust');
+      return true;
+    });
+
     const m = machine();
     const result = await drive(swapAccount(r, log, baseTab(), m, { auto: false }));
 
@@ -234,7 +242,10 @@ describe('swapAccount', () => {
     expect(linkClaudeSession).toHaveBeenNthCalledWith(1, m, { transcriptPath: TRANSCRIPT, sessionId: SID, configDir: null });
     expect(linkClaudeSession).toHaveBeenNthCalledWith(2, m, { transcriptPath: TRANSCRIPT, sessionId: SID, configDir: null });
     const line = resumeLine(null, SID, RESUME_PROMPT);
-    expect(order).toEqual(['link:null', 'key:Escape', 'text:/exit', 'link:null', 'record', 'state', `text:${line}`]);
+    // TER-1148: the folder trusted in the new account before the resume, and its screen followed after it
+    expect(order).toEqual(['link:null', 'key:Escape', 'text:/exit', 'link:null', 'record', 'state', 'pretrust', `text:${line}`]);
+    expect(pretrustFolder).toHaveBeenCalledWith(r, log, expect.objectContaining({ id: 't1' }), m, [null]);
+    expect(followLaunch).toHaveBeenCalledWith(r, log, 't1', m);
     expect(sendKeyToSession).toHaveBeenCalledWith(m, 'th-t1', 'Escape');
     expect(sendTextToSession).toHaveBeenCalledWith(m, 'th-t1', '/exit', true);
     expect(sendTextToSession).toHaveBeenCalledWith(m, 'th-t1', line, true);

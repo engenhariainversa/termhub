@@ -255,6 +255,19 @@ export const RPC = {
     10_000,
   ),
   /**
+   * Marks a folder trusted in every Claude account of this machine (`projects[dir].hasTrustDialogAccepted`
+   * in each `.claude.json`), as `git.worktree.ensure` does for a worktree (TER-1148): the server calls it
+   * right before it starts or resumes Claude Code in a project's own folder or a run's worktree, so the
+   * trust question never stops the tab. `config_dirs`: accounts the server knows of outside the home's
+   * `~/.claude*` (an AI account's config dir). `changed`: how many config files it rewrote; `notfound` when
+   * `dir` is not a folder here (since agent 0.37.0).
+   */
+  'claude.trustFolder': def(
+    z.object({ dir: machinePath, config_dirs: z.array(machinePath).max(16).optional() }),
+    z.object({ changed: z.number().int().min(0) }),
+    10_000,
+  ),
+  /**
    * Lines of a Claude Code transcript by byte range (spec 2026-10-01 tab chat §4). The agent knows
    * nothing about a line's shape: it keeps the lines whose `type` is in `types`, truncates every
    * string longer than `max_string` and replaces a line still over TRANSCRIPT_LINE_MAX_BYTES by a

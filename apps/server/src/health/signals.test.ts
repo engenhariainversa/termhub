@@ -71,6 +71,19 @@ describe('observe (TER-1121)', () => {
     expect(out.map((o) => [o.signal, o.subject, o.since])).toEqual([['tab_stuck', 'a', ago(40)], ['tab_waiting', 'b', ago(12)]]);
   });
 
+  it('TER-1148: the trust dialog calls the person (needs_you) after 2 minutes, not after the tab_waiting minutes', () => {
+    const tab = (state: string, min: number) => ({ id: state, name: state, state, state_at: ago(min), machine_id: 'm', run: true });
+    const [early] = observe(snap({ tabs: [tab('trust_prompt', 1)] }), config());
+    expect(early).toMatchObject({ signal: 'tab_waiting', level: 'needs_you' });
+    expect(early.now).toBeUndefined();
+    const [due] = observe(snap({ tabs: [tab('trust_prompt', 2)] }), config());
+    expect(due).toMatchObject({ signal: 'tab_waiting', level: 'needs_you', now: true, detail: { state: 'trust_prompt', run: 1 } });
+    // a question stays the concierge's, on its own minutes
+    const [question] = observe(snap({ tabs: [tab('waiting_input', 2)] }), config());
+    expect(question).toMatchObject({ level: 'concierge' });
+    expect(question.now).toBeUndefined();
+  });
+
   it('a card in doing nobody works on is an orphan; a tab, a run, an open PR or a blocked run takes it out', () => {
     const card = { task_id: 't', ref: 'TER-9', title: 'x', since: ago(200), tab_alive: false, active_run: false, latest_run: 'done', open_pr: false };
     expect(signals(snap({ doing: [card] }))).toEqual(['card_orphan:t']);

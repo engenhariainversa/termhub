@@ -8,7 +8,7 @@ vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish
 const recordFeed = vi.fn(async () => {});
 vi.mock('../automation/events.js', () => ({ recordEvent: (...a: unknown[]) => recordFeed(...(a as [])) }));
 
-const { LAUNCH_CHECKS_MS, checkLaunch, followLaunch, resetAnsweredForTests, settleTrustDialog } = await import('./folder-trust.js');
+const { LAUNCH_CHECKS_MS, checkLaunch, followLaunch, pretrustFolder, resetAnsweredForTests, settleTrustDialog, trustedFolderOf } = await import('./folder-trust.js');
 
 const AT = '2026-10-24T18:00:00.000Z';
 const TRUST = readFileSync(new URL('./fixtures/claude-screens/trust-2.1.289.txt', import.meta.url), 'utf8');
@@ -25,14 +25,19 @@ const tab = (over: Partial<Tab> = {}): Tab & { tmux_session: string } =>
 const machine = { id: 'm1', owner_id: 'u1', type: 'agent' } as Machine;
 const log = () => ({ info: vi.fn(), warn: vi.fn() });
 
-function setup(opts: { tab?: Tab | undefined; trustProjectFolder?: boolean; screen?: string } = {}) {
+const LINK_CWD = '/srv/api';
+const WORKTREE = '/home/p/.termhub/worktrees/p1/TER-1';
+
+function setup(opts: { tab?: Tab | undefined; trustProjectFolder?: boolean; screen?: string; link?: boolean; worktree?: string | null } = {}) {
   const recordEvent = vi.fn(async (_id: string, ev: { kind: Tab['state'] }) => ({ tab: tab({ state: ev.kind }), event: {} }));
   const repos = {
     tabs: { recordEvent, findById: vi.fn(async () => ('tab' in opts ? opts.tab : tab())) },
     projectSetup: { get: vi.fn(async () => ({ data: { agent: { trust_project_folder: opts.trustProjectFolder ?? true } } })) },
+    projectMachines: { find: vi.fn(async () => (opts.link === false ? undefined : { project_id: 'p1', machine_id: 'm1', cwd: LINK_CWD })) },
+    automationRuns: { latestByTab: vi.fn(async () => (opts.worktree ? { project_id: 'p1', worktree_path: opts.worktree } : null)) },
   } as unknown as Repositories;
   let clock = 0;
-  const deps = { capture: vi.fn(async () => opts.screen ?? TRUST), sendEnter: vi.fn(async () => {}), now: () => clock };
+  const deps = { capture: vi.fn(async () => opts.screen ?? TRUST), sendEnter: vi.fn(async () => {}), sendUp: vi.fn(async () => {}), pause: vi.fn(async () => {}), now: () => clock };
   return { repos, recordEvent, deps, tick: (ms: number) => (clock += ms) };
 }
 
@@ -66,16 +71,52 @@ describe('settleTrustDialog — the folder trust dialog (TER-1117)', () => {
     const cases = [
       { t: tab({ cwd: '/home/p/.termhub/worktrees/x/TER-1' }), screen: TRUST, off: false },
       { t: tab(), screen: TRUST, off: true },
-      { t: tab(), screen: NO_SELECTED, off: false },
+      // "No" selected outside the project: never moved, never answered
+      { t: tab({ cwd: '/elsewhere' }), screen: NO_SELECTED, off: false },
     ];
     for (const c of cases) {
       publish.mockClear();
-      const { repos, recordEvent, deps } = setup({ trustProjectFolder: !c.off });
+      const { repos, recordEvent, deps } = setup({ trustProjectFolder: !c.off, screen: c.screen });
       expect(await settleTrustDialog(repos, log() as never, c.t, machine, c.screen, deps)).toBe('reported');
       expect(deps.sendEnter).not.toHaveBeenCalled();
+      expect(deps.sendUp).not.toHaveBeenCalled();
       expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', tool: 'claude', meta: { event: 'ScreenCheck', screen: 'trust' }, ifStateAt: null }));
       expect(publish).toHaveBeenCalledTimes(1);
     }
+  });
+
+  it('TER-1148: the link\'s folder spelled out in the tab, or the worktree of the tab\'s run, is answered too', async () => {
+    const spelled = setup();
+    expect(await settleTrustDialog(spelled.repos, log() as never, tab({ cwd: `${LINK_CWD}/` }), machine, TRUST, spelled.deps)).toBe('accepted');
+    resetAnsweredForTests();
+    recordFeed.mockClear();
+    const worktree = setup({ worktree: WORKTREE });
+    expect(await settleTrustDialog(worktree.repos, log() as never, tab({ cwd: WORKTREE }), machine, TRUST, worktree.deps)).toBe('accepted');
+    expect(recordFeed).toHaveBeenCalledWith(worktree.repos, expect.objectContaining({ payload: expect.objectContaining({ folder: 'worktree' }) }));
+  });
+
+  it('TER-1148: a project with no link on this machine is not trusted, whatever the cwd', async () => {
+    const { repos } = setup({ link: false });
+    expect(await trustedFolderOf(repos, tab())).toBeNull();
+    expect(await trustedFolderOf(repos, tab({ cwd: LINK_CWD }))).toBeNull();
+  });
+
+  it('TER-1148: the cursor on "No, exit" in the project folder is moved up to "Yes" before the Enter', async () => {
+    const { repos, recordEvent, deps } = setup();
+    deps.capture.mockResolvedValueOnce(NO_SELECTED).mockResolvedValueOnce(TRUST);
+    expect(await settleTrustDialog(repos, log() as never, tab(), machine, NO_SELECTED, deps)).toBe('accepted');
+    expect(deps.sendUp).toHaveBeenCalledTimes(2);
+    expect(deps.sendEnter).toHaveBeenCalledTimes(1);
+    expect(deps.sendUp.mock.invocationCallOrder[1]).toBeLessThan(deps.sendEnter.mock.invocationCallOrder[0]!);
+    expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('TER-1148: a selection that never reaches "Yes" is never answered: the tab becomes trust_prompt', async () => {
+    const { repos, recordEvent, deps } = setup({ screen: NO_SELECTED });
+    expect(await settleTrustDialog(repos, log() as never, tab(), machine, NO_SELECTED, deps)).toBe('reported');
+    expect(deps.sendUp).toHaveBeenCalledTimes(3);
+    expect(deps.sendEnter).not.toHaveBeenCalled();
+    expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt' }));
   });
 
   it('TER-1122: Codex, Cursor and Gemini get the same answer in the project folder, and their own trust_prompt elsewhere', async () => {
@@ -149,5 +190,35 @@ describe('followLaunch — the screen read right after an agent start (TER-1117)
     const { repos, recordEvent, deps } = setup({ tab: tab({ state: 'working', state_at: AT, cwd: '/elsewhere' }) });
     expect(await checkLaunch(repos, log() as never, 't1', machine, deps)).toBe(true);
     expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'trust_prompt', ifStateAt: AT }));
+  });
+});
+
+describe('pretrustFolder — the folder trusted before Claude Code opens it (TER-1148)', () => {
+  const agentMachine = (version: string | null) => ({ ...machine, agent_version: version }) as Machine;
+
+  it("marks the project's folder in the machine's Claude accounts, naming the account that starts", async () => {
+    const { repos } = setup();
+    const rpc = vi.fn(async () => 1);
+    expect(await pretrustFolder(repos, log() as never, tab(), agentMachine('0.37.0'), ['~/.claude_work', null, '~/.claude_work'], rpc)).toBe(true);
+    expect(rpc).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), LINK_CWD, ['~/.claude_work']);
+  });
+
+  it("a run's worktree, but never a folder outside the project, the option off, an older agent or an ssh machine", async () => {
+    const wt = setup({ worktree: WORKTREE });
+    const rpc = vi.fn(async () => 0);
+    expect(await pretrustFolder(wt.repos, log() as never, tab({ cwd: WORKTREE }), agentMachine('0.37.0'), [], rpc)).toBe(true);
+    expect(rpc).toHaveBeenLastCalledWith(expect.anything(), WORKTREE, []);
+    rpc.mockClear();
+    expect(await pretrustFolder(setup().repos, log() as never, tab({ cwd: '/elsewhere' }), agentMachine('0.37.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup({ trustProjectFolder: false }).repos, log() as never, tab(), agentMachine('0.37.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup().repos, log() as never, tab(), agentMachine('0.36.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup().repos, log() as never, tab(), { ...agentMachine('0.37.0'), type: 'ssh' } as Machine, [], rpc)).toBe(false);
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it('a failed call is logged by code and never thrown: the screen is still followed', async () => {
+    const l = log();
+    expect(await pretrustFolder(setup().repos, l as never, tab(), agentMachine('0.37.0'), [], vi.fn(async () => Promise.reject(new Error('boom'))))).toBe(false);
+    expect(l.warn).toHaveBeenCalledTimes(1);
   });
 });

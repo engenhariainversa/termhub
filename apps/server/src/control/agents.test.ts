@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage, paneForeground, followLaunch, watch } = vi.hoisted(() => ({
+const { openTab, sendTextToSession, installTabMcp, tabMcpSupported, cfg, getAccountUsage, paneForeground, followLaunch, pretrustFolder, watch } = vi.hoisted(() => ({
   followLaunch: vi.fn(),
+  pretrustFolder: vi.fn(async () => true),
   watch: vi.fn(),
   getAccountUsage: vi.fn(),
   paneForeground: vi.fn(),
@@ -18,7 +19,7 @@ vi.mock('./terminals.js', () => ({ openTab }));
 // typeCommandLine (file for a long line, TER-987) has its own tests: here the line it is given is what is checked
 vi.mock('../terminal/session-ops.js', () => ({ sendTextToSession, paneForeground, typeCommandLine: (m: unknown, s: string, line: string) => sendTextToSession(m, s, line, true) }));
 vi.mock('../terminal/tab-mcp.js', async (orig) => ({ ...(await orig<typeof import('../terminal/tab-mcp.js')>()), installTabMcp, tabMcpSupported }));
-vi.mock('../monitor/folder-trust.js', () => ({ followLaunch }));
+vi.mock('../monitor/folder-trust.js', () => ({ followLaunch, pretrustFolder }));
 vi.mock('./watches.js', () => ({ watch }));
 
 import type { Repositories } from '../db/repositories/index.js';
@@ -379,6 +380,9 @@ describe('startAgent', () => {
     // TER-1117: a Claude start has its screen read for the folder trust dialog; outside the chat, no watch
     expect(followLaunch).toHaveBeenCalledWith(c.repos, c.log, 't9', expect.objectContaining({ id: 'm1' }));
     expect(watch).not.toHaveBeenCalled();
+    // TER-1148: the folder is trusted in the machine's Claude accounts before the line is typed
+    expect(pretrustFolder).toHaveBeenCalledWith(c.repos, c.log, { id: 't9', cwd: null, project_id: 'p1', machine_id: 'm1' }, expect.objectContaining({ id: 'm1' }), ['/Users/p/.claude-work']);
+    expect(pretrustFolder.mock.invocationCallOrder[0]).toBeLessThan(sendTextToSession.mock.invocationCallOrder[0]!);
   });
 
   it('TER-1117: from the chat, the tab is watched until its first stop, and the answer says so', async () => {
@@ -398,8 +402,11 @@ describe('startAgent', () => {
 
   it('TER-1122: a Codex start is read for its trust dialog too; an automatic run (its follower answers) is not', async () => {
     const { c } = ctx();
+    pretrustFolder.mockClear();
     await startAgent(c, { project_id: 'p1', account_id: 'a2', prompt: 'write a spec' });
     expect(followLaunch).toHaveBeenCalledTimes(1);
+    // a Codex start leaves Claude's config files alone
+    expect(pretrustFolder).not.toHaveBeenCalled();
     followLaunch.mockClear();
     await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, { cwd: '/wt/TER-1' });
     expect(followLaunch).not.toHaveBeenCalled();
