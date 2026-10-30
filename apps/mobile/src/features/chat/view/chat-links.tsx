@@ -1,7 +1,9 @@
 import { Linking, Share, Text } from 'react-native';
 import { MarkdownIt, type RenderRules } from 'react-native-markdown-display';
 import { isWebUrl } from '../model/links';
+import { isDraftFence } from '@termhub/mobile-api';
 import { codeFenceRules } from './code-fence';
+import { DraftCard } from './draft-card';
 
 /**
  * The answers' parser (TER-1089): the library's default (`typographer`) plus `linkify`, so a bare
@@ -28,6 +30,12 @@ export function shareLink(url: string): void {
  *  asks `onLinkPress` first (a Markdown path opens its preview) and opens only an http(s) URL itself. */
 export const chatMarkdownRules: RenderRules = {
   ...codeFenceRules,
+  // A ```draft fence is a message for the person to send (TER-1159): a "Mensagem pronta" card.
+  fence: (node, children, parent, styles, inheritedStyles) => {
+    const info = String((node as { sourceInfo?: string }).sourceInfo ?? '');
+    if (!isDraftFence(info)) return codeFenceRules.fence!(node, children, parent, styles, inheritedStyles);
+    return <DraftCard key={node.key} content={node.content} style={styles} rules={chatMarkdownRules} markdownit={chatMarkdownIt} />;
+  },
   link: (node, children, _parent, styles, onLinkPress) => {
     const href = String(node.attributes.href ?? '');
     return (

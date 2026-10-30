@@ -5,6 +5,7 @@ import { appNavigate } from '../../lib/app-navigate';
 import { copyText } from '../../lib/clipboard';
 import { codeLanguage, decorateCodeBlocks } from '../../lib/code-blocks';
 import { codeFileName, downloadText } from '../../lib/code-download';
+import { copyDraft, decorateDraftBlocks, DRAFT_SOURCE_ATTR } from '../../lib/draft-blocks';
 import { openLinksInNewTab } from '../../lib/links';
 import { renderMarkdown } from '../../lib/markdown';
 import { filePreviewHref, linkifyMdPaths, MD_PATH_ATTR } from '../../lib/md-paths';
@@ -67,6 +68,14 @@ const COPY_OUTCOME = {
   failed: { state: 'failed', label: tk('Falhou'), announced: tk('Não foi possível copiar o código'), name: tk('Não foi possível copiar') },
 } as const;
 
+/** The same, for a "Mensagem pronta" card's copy (TER-1159). */
+const DRAFT_COPY_OUTCOME = {
+  copied: { state: 'copied', label: tk('Copiado ✓'), announced: tk('Mensagem copiada'), name: tk('Mensagem copiada') },
+  failed: { state: 'failed', label: tk('Falhou'), announced: tk('Não foi possível copiar a mensagem'), name: tk('Não foi possível copiar') },
+} as const;
+
+type CopyOutcome = { state: string; label: string; announced: string; name: string };
+
 /**
  * The one delegated handler for every copy button a message's decorated HTML may contain — there is
  * no React node per block, since the blocks come from an HTML string. `event.target` is whatever the
@@ -90,13 +99,26 @@ export function handleCopyClick(event: MouseEvent<HTMLDivElement>): void {
   // trimmed before anything reaches the clipboard.
   const text = (pre?.textContent ?? '').replace(/\n$/, '');
 
-  void copyText(text).then((ok) => flashCopy(button, ok ? COPY_OUTCOME.copied : COPY_OUTCOME.failed));
+  void copyText(text).then((ok) => flashCopy(button, ok ? COPY_OUTCOME.copied : COPY_OUTCOME.failed, tk('Copiar código')));
+}
+
+/**
+ * The delegated handler for a "Mensagem pronta" card's "Copiar" (TER-1159): the draft goes to the
+ * clipboard as HTML (Teams and Slack keep its lists, bold and links when it is pasted) and as plain
+ * text in Slack's typed Markdown (`copyDraft`). Returns whether the click was on that button.
+ */
+export function handleDraftCopyClick(event: MouseEvent<HTMLDivElement>): boolean {
+  const button = (event.target as HTMLElement).closest('[data-draft-copy]') as HTMLElement | null;
+  if (!button) return false;
+  const source = button.closest(`[${DRAFT_SOURCE_ATTR}]`)?.getAttribute(DRAFT_SOURCE_ATTR) ?? '';
+  void copyDraft(source).then((ok) => flashCopy(button, ok ? DRAFT_COPY_OUTCOME.copied : DRAFT_COPY_OUTCOME.failed, tk('Copiar mensagem')));
+  return true;
 }
 
 /** Transient, DOM-only feedback on the button that was clicked — there is no React state to hold it,
  * since the button is not a React node. The outcome also goes into the block's own live region, which
  * `decorateCodeBlocks` mounted with the block. Reverts on its own after `COPY_FEEDBACK_MS`. */
-function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typeof COPY_OUTCOME]): void {
+function flashCopy(button: HTMLElement, outcome: CopyOutcome, restingName: string): void {
   const live = button.closest('figure')?.querySelector('[data-copy-live]') ?? null;
   if (live) live.textContent = i18n.t(outcome.announced);
 
@@ -114,7 +136,7 @@ function flashCopy(button: HTMLElement, outcome: (typeof COPY_OUTCOME)[keyof typ
       copyTimers.delete(button);
       if (live) live.textContent = '';
       if (label) label.textContent = i18n.t('Copiar');
-      button.setAttribute('aria-label', i18n.t('Copiar código'));
+      button.setAttribute('aria-label', i18n.t(restingName));
       button.removeAttribute('data-copy-state');
     }, COPY_FEEDBACK_MS),
   );
@@ -131,7 +153,9 @@ export function toHtml(markdown: string, projectId: string | null): string {
   const rendered = renderMarkdown(markdown, { markdownOnly: true });
   // No fence in this piece, nothing to decorate: every delta of a prose-only reply would otherwise pay
   // for a full DOMParser round trip that cannot change anything. `linkifyMdPaths` skips the same way.
-  const decorated = rendered.includes('<pre') ? decorateCodeBlocks(rendered) : rendered;
+  // A ```draft fence becomes a "Mensagem pronta" card first (TER-1159), so only real code gets a code header.
+  const drafted = /language-draft/i.test(rendered) ? decorateDraftBlocks(rendered) : rendered;
+  const decorated = drafted.includes('<pre') ? decorateCodeBlocks(drafted) : drafted;
   // A URL in the answer (a Markdown link or a bare one `marked` autolinked) opens in a new tab (TER-1089).
   return linkifyMdPaths(openLinksInNewTab(decorated), (path) => filePreviewHref(projectId, path));
 }
@@ -163,6 +187,7 @@ export function handleMarkdownClick(event: MouseEvent<HTMLDivElement>): void {
     return;
   }
   if (handleDownloadClick(event)) return;
+  if (handleDraftCopyClick(event)) return;
   handleCopyClick(event);
 }
 

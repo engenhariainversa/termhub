@@ -73,3 +73,8 @@ it('tells the concierge to pause the automatic work on request, without asking',
 it('tells the concierge to come back at a set time with schedule_wakeup and confirm it on the person\'s clock (TER-1100)', () => {
   expect(ORCHESTRATOR_PROMPT).toMatch(/schedule_wakeup and confirm the time to the person on their clock/);
 });
+
+// TER-1159: a message for someone else comes in a ```draft fence, which the chat shows as a card with Copiar.
+it('tells the concierge to put a message for others in a draft fence', () => {
+  expect(ORCHESTRATOR_PROMPT).toMatch(/message for the person to send to others .*```draft fence/);
+});

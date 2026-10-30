@@ -408,5 +408,9 @@
   "Compactando…": "Compacting…",
   "Compactar": "Compact",
   "compactando…": "compacting…",
-  "Contexto": "Context"
+  "Contexto": "Context",
+  "Mensagem pronta": "Ready to send",
+  "Copiar mensagem": "Copy message",
+  "Mensagem copiada": "Message copied",
+  "Não foi possível copiar a mensagem": "Could not copy the message"
 }

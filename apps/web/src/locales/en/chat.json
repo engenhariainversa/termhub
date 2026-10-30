@@ -693,5 +693,9 @@
   "{{tokens}} de {{max}} tokens (o seu limite)": "{{tokens}} of {{max}} tokens (your limit)",
   "{{tokens}} de {{max}} tokens": "{{tokens}} of {{max}} tokens",
   "compactado às {{time}}": "compacted at {{time}}",
-  "compactado em {{when}}": "compacted on {{when}}"
+  "compactado em {{when}}": "compacted on {{when}}",
+  "Mensagem pronta": "Ready to send",
+  "Copiar mensagem": "Copy message",
+  "Mensagem copiada": "Message copied",
+  "Não foi possível copiar a mensagem": "Could not copy the message"
 }

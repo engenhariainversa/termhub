@@ -73,6 +73,16 @@ body { @apply bg-bg text-fg antialiased; font-family: ui-sans-serif, system-ui, 
   .prose-termhub .code-block__copy[data-copy-state] { @apply opacity-100; }
 }
 
+/* A "Mensagem pronta" card (TER-1159, `decorateDraftBlocks`): the draft as prose under a header whose
+   "Copiar" is always shown — copying it is what the card is for, so it does not wait for a hover. */
+.prose-termhub .draft-card { @apply my-2 overflow-hidden rounded-md border border-line bg-bg-2; }
+.prose-termhub .draft-card__header { @apply flex items-center justify-between gap-2 border-b border-line px-3 py-1.5; }
+.prose-termhub .draft-card__title { @apply text-xs font-medium text-fg-muted; }
+.prose-termhub .draft-card__copy { @apply inline-flex min-h-[24px] items-center rounded border border-line px-2 py-1 text-xs text-fg transition hover:bg-bg-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent; }
+.prose-termhub .draft-card__body { @apply px-3 py-2; }
+.prose-termhub .draft-card__body > :first-child { @apply mt-0; }
+.prose-termhub .draft-card__body > :last-child { @apply mb-0; }
+
 /* The settings sidebar slides in over the projects one (spec 2026-09-23 app chrome §4); no motion
    for whoever asked the system for none. */
 @keyframes chrome-slide-in { from { transform: translateX(-100%); } to { transform: translateX(0); } }
