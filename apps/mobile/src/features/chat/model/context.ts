@@ -64,8 +64,33 @@ export function contextDetails(m: ContextMeter): string[] {
   ];
   if (m.ownLimit && m.window !== null) lines.push(t('Janela do modelo: {{window}} tokens', { window: exact(m.window) }));
   lines.push(m.compactedAt ? t('Última compactação: {{when}}', { when: formatDateTime(m.compactedAt, { dateStyle: 'short', timeStyle: 'short' }) }) : t('Esta conversa ainda não foi compactada.'));
-  if (m.level !== 'ok') lines.push(t('Está perto do limite: compacte a conversa no chat do termhub na web (botão Compactar ou /compact).'));
+  if (m.level !== 'ok') lines.push(t('Está perto do limite: compacte a conversa (botão Compactar ou /compact) para liberar espaço.'));
   return lines;
+}
+
+/** `/compact` alone in the box, as in Claude Code and the web's chat: it compacts instead of being sent (TER-1152). */
+export function isCompactCommand(text: string): boolean {
+  return text.trim() === '/compact';
+}
+
+/** What the screen says once "Compactar" finished: the web's `compactDoneText`, in the header's units. */
+export function compactDoneText(before: number | null, after: number | null): string {
+  if (before !== null && after !== null) return t('Conversa compactada: {{before}} → {{after}} tokens', { before: shortTokens(before), after: shortTokens(after) });
+  return t('Conversa compactada');
+}
+
+/** Why "Compactar" failed, by the code of the server's `compact` event (the web's `compactFailedText`). */
+export function compactFailedText(code: string | null): string {
+  switch (code) {
+    case 'MISSING_SESSION':
+      return t('A sessão desta conversa não existe mais na máquina: não há o que compactar');
+    case 'HOST_GONE':
+      return t('A máquina do chat saiu do ar durante a compactação');
+    case 'CLI_MISSING':
+      return t('A máquina do chat não tem o Claude Code instalado');
+    default:
+      return t('Não foi possível compactar a conversa');
+  }
 }
 
 /** The limit field's text → tokens: empty is `null` (back to the model's window), a whole number of

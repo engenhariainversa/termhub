@@ -203,7 +203,6 @@
   "Janela do modelo: {{window}} tokens": "Ventana del modelo: {{window}} tokens",
   "Última compactação: {{when}}": "Última compactación: {{when}}",
   "Esta conversa ainda não foi compactada.": "Esta conversación aún no se ha compactado.",
-  "Está perto do limite: compacte a conversa no chat do termhub na web (botão Compactar ou /compact).": "Está cerca del límite: compacta la conversación en el chat de termhub en la web (botón Compactar o /compact).",
   "Limite de contexto do chat (mil tokens)": "Límite de contexto del chat (miles de tokens)",
   "janela": "ventana",
   "Use um número inteiro entre 10 e 10000 (mil tokens), ou deixe vazio.": "Usa un número entero entre 10 y 10000 (miles de tokens), o déjalo vacío.",
@@ -397,5 +396,17 @@
   "encerrada, a aba foi fechada": "cerrada, la pestaña se cerró",
   "Dispensar este card?": "¿Descartar esta tarjeta?",
   "Sim, dispensar": "Sí, descartar",
-  "Não": "No"
+  "Não": "No",
+  "Está perto do limite: compacte a conversa (botão Compactar ou /compact) para liberar espaço.": "Está cerca del límite: compacta la conversación (botón Compactar o /compact) para liberar espacio.",
+  "Conversa compactada: {{before}} → {{after}} tokens": "Conversación compactada: {{before}} → {{after}} tokens",
+  "A sessão desta conversa não existe mais na máquina: não há o que compactar": "La sesión de esta conversación ya no existe en la máquina: no hay nada que compactar",
+  "A máquina do chat saiu do ar durante a compactação": "La máquina del chat se desconectó durante la compactación",
+  "A máquina do chat não tem o Claude Code instalado": "La máquina del chat no tiene Claude Code instalado",
+  "Não foi possível compactar a conversa": "No se pudo compactar la conversación",
+  "Compactar a conversa? O concierge resume o que foi dito até aqui para liberar contexto.": "¿Compactar la conversación? El concierge resume lo dicho hasta aquí para liberar contexto.",
+  "Compactar agora": "Compactar ahora",
+  "Compactando…": "Compactando…",
+  "Compactar": "Compactar",
+  "compactando…": "compactando…",
+  "Contexto": "Contexto"
 }

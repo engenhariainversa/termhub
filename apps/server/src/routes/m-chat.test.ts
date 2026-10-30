@@ -78,6 +78,8 @@ function build(opts: {
   subagentsFor?: ReturnType<typeof vi.fn>;
   cancelSubagent?: ReturnType<typeof vi.fn>;
   openAnswerIds?: ReturnType<typeof vi.fn>;
+  isCompacting?: ReturnType<typeof vi.fn>;
+  compact?: ReturnType<typeof vi.fn>;
   /** The members of the signed-in user's Favoritos, in order; undefined = no Favoritos row yet. */
   favorites?: string[];
   setFavorite?: ReturnType<typeof vi.fn>;
@@ -102,6 +104,8 @@ function build(opts: {
     subagentsFor: opts.subagentsFor ?? vi.fn(async () => []),
     cancelSubagent: opts.cancelSubagent ?? vi.fn(async () => ({ id: 'sub1', description: 'Escrever testes', subagent_type: null, status: 'stopping', started_at: '2026-09-26T12:00:00.000Z', ended_at: null })),
     openAnswerIds: opts.openAnswerIds ?? vi.fn(async () => []),
+    isCompacting: opts.isCompacting ?? vi.fn(() => false),
+    compact: opts.compact ?? vi.fn(async () => ({ conversation_id: 'c1', done: Promise.resolve() })),
   };
   const session = {
     checkPin: opts.checkPin ?? vi.fn(async () => ({ ok: true })),
@@ -482,6 +486,30 @@ describe('POST /chat/reset', () => {
 
     const busy = build({ reset: vi.fn(async () => { throw new HttpError(409, 'ocupado', 'CHAT_BUSY'); }) });
     expect((await busy.app.inject({ method: 'POST', url: '/chat/reset', payload: {} })).statusCode).toBe(409);
+  });
+});
+
+describe('POST /chat/compact', () => {
+  it('starts the compaction of the scope and answers 202', async () => {
+    const { app, service } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/compact', payload: { project_id: 'p1' } });
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ conversation_id: 'c1' });
+    expect(service.compact).toHaveBeenCalledWith(expect.objectContaining({ id: 'u1' }), 'p1');
+    await app.inject({ method: 'POST', url: '/chat/compact', payload: {} });
+    expect(service.compact).toHaveBeenLastCalledWith(expect.anything(), null);
+  });
+
+  it('passes the service refusal through with its code', async () => {
+    const { app } = build({ compact: vi.fn(async () => { throw new HttpError(409, 'Ainda não há contexto para compactar nesta conversa', 'CHAT_NOTHING_TO_COMPACT'); }) });
+    const res = await app.inject({ method: 'POST', url: '/chat/compact', payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CHAT_NOTHING_TO_COMPACT');
+  });
+
+  it('GET / says whether the conversation is being compacted', async () => {
+    const { app } = build({ isCompacting: vi.fn(() => true) });
+    expect((await app.inject({ method: 'GET', url: '/chat' })).json().compacting).toBe(true);
   });
 });
 

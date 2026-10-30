@@ -168,6 +168,8 @@ export const chatResponse = z.object({
   /** The person's own context limit for the meter (TER-1038); null = the model's window, and so does an
    * older server, which never sends the field. */
   context_limit: z.number().nullable().optional(),
+  /** "Compactar" is under way (TER-1152): a screen opened meanwhile shows it. An older server never sends it. */
+  compacting: z.boolean().optional(),
   host: chatHostStateSchema,
 });
 

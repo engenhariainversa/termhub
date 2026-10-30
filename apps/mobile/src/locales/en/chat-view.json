@@ -203,7 +203,6 @@
   "Janela do modelo: {{window}} tokens": "Model window: {{window}} tokens",
   "Última compactação: {{when}}": "Last compacted: {{when}}",
   "Esta conversa ainda não foi compactada.": "This conversation has not been compacted yet.",
-  "Está perto do limite: compacte a conversa no chat do termhub na web (botão Compactar ou /compact).": "It is close to the limit: compact the conversation in the termhub chat on the web (the Compact button or /compact).",
   "Limite de contexto do chat (mil tokens)": "Chat context limit (thousand tokens)",
   "janela": "window",
   "Use um número inteiro entre 10 e 10000 (mil tokens), ou deixe vazio.": "Use a whole number between 10 and 10000 (thousand tokens), or leave it empty.",
@@ -397,5 +396,17 @@
   "encerrada, a aba foi fechada": "closed, the tab was closed",
   "Dispensar este card?": "Dismiss this card?",
   "Sim, dispensar": "Yes, dismiss",
-  "Não": "No"
+  "Não": "No",
+  "Está perto do limite: compacte a conversa (botão Compactar ou /compact) para liberar espaço.": "It is close to the limit: compact the conversation (the Compact button or /compact) to free up space.",
+  "Conversa compactada: {{before}} → {{after}} tokens": "Conversation compacted: {{before}} → {{after}} tokens",
+  "A sessão desta conversa não existe mais na máquina: não há o que compactar": "This conversation's session no longer exists on the machine: there is nothing to compact",
+  "A máquina do chat saiu do ar durante a compactação": "The chat's machine went offline while compacting",
+  "A máquina do chat não tem o Claude Code instalado": "The chat's machine does not have Claude Code installed",
+  "Não foi possível compactar a conversa": "Could not compact the conversation",
+  "Compactar a conversa? O concierge resume o que foi dito até aqui para liberar contexto.": "Compact the conversation? The concierge summarizes what was said so far to free up context.",
+  "Compactar agora": "Compact now",
+  "Compactando…": "Compacting…",
+  "Compactar": "Compact",
+  "compactando…": "compacting…",
+  "Contexto": "Context"
 }

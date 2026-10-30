@@ -41,7 +41,7 @@ async function openConversation(route = 'p-termhub') {
 }
 
 const realActions = { ...stores.chat.getState() };
-function stubAction<K extends 'reset' | 'cancelSubagent'>(name: K) {
+function stubAction<K extends 'reset' | 'cancelSubagent' | 'compact'>(name: K) {
   const fn = jest.fn(async () => undefined);
   useChatStore.setState({ [name]: fn } as Partial<ReturnType<typeof useChatStore.getState>>);
   return fn;
@@ -63,7 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  useChatStore.setState({ error: null, connected: false, live: emptyFold(), conversations: conversationsBefore, reset: realActions.reset, cancelSubagent: realActions.cancelSubagent });
+  useChatStore.setState({ error: null, connected: false, live: emptyFold(), conversations: conversationsBefore, reset: realActions.reset, cancelSubagent: realActions.cancelSubagent, compact: realActions.compact });
 });
 
 describe('Configurações da conversa (TER-1039)', () => {
@@ -147,6 +147,24 @@ describe('Configurações da conversa (TER-1039)', () => {
     await render(<ConversationSettingsScreen />);
     await fireEvent.press(screen.getByRole('button', { name: 'Memória do chat' }));
     expect(mockRouter.push).toHaveBeenCalledWith('/chat-memory');
+  });
+
+  it('Contexto shows the fill and Compactar asks first, then compacts (TER-1152)', async () => {
+    const compact = stubAction('compact');
+    serveChat((res) => ({ conversation: { ...res.conversation, context_tokens: 411_000, context_window: 1_000_000 } }));
+    await openConversation();
+    await render(<ConversationSettingsScreen />);
+    expect(screen.getByText(/411.000 de 1.000.000 tokens \(41%\)/)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Compactar' }));
+    expect(compact).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByRole('button', { name: 'Compactar agora' }));
+    expect(compact).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no Contexto before the first answer reported a fill', async () => {
+    await openConversation();
+    await render(<ConversationSettingsScreen />);
+    expect(screen.queryByRole('button', { name: 'Compactar' })).toBeNull();
   });
 
   it('Nova conversa asks first, then resets and goes back to the conversation', async () => {
