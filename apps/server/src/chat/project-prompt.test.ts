@@ -1,4 +1,7 @@
+import { STANDING_GRANT_KINDS } from '@termhub/mobile-api';
 import { describe, expect, it } from 'vitest';
+import { streamedSystemPrompt } from './concierge-prompt.js';
+import { DEFAULT_ALLOW_KINDS } from './gate.js';
 import { accountSystemPrompt, commandRulesLine, fit, projectSystemPrompt } from './project-prompt.js';
 
 it('names the project, its machines and paths, and asks for focus and brevity', () => {
@@ -90,6 +93,59 @@ it('stays under the protocol cap with a long machine list and the standing grant
   expect(text.length).toBeLessThanOrEqual(4000);
   expect(text).toContain('Liberado sem confirmação neste projeto');
   expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+});
+
+// TER-1154: the default allowances, a full rules block, the standing grants, a few command rules and one
+// group added up to 4115 chars; with the orchestrator's rules the open frame passed the protocol's 8000,
+// the agent dropped it and the chat read "machine went offline".
+describe('every optional line at once (TER-1154)', () => {
+  const rulesOf = (n: number) => ['Regras vigentes do projeto (decisões do dono que valem agora):', ...Array.from({ length: n }, (_, i) => `- [note:${i}] «pergunta ${i} ${'x'.repeat(80)}»: «resposta»`)].join('\n');
+  const all = (rules = rulesOf(9)) =>
+    projectSystemPrompt(
+      { name: 'postream', key: 'PST' },
+      [{ machine: 'jarvis', cwd: '/home/x/postream' }],
+      [...STANDING_GRANT_KINDS],
+      [{ name: 'grupo', siblings: Array.from({ length: 40 }, (_, i) => `projeto ${i}`) }],
+      [...DEFAULT_ALLOW_KINDS],
+      Array.from({ length: 30 }, (_, i) => ({ pattern: `gh pr checks ${i}`, match: 'prefix' as const })),
+      rules,
+    );
+
+  it('fits the cap, so the orchestrator prompt and this one fit the open frame', () => {
+    const text = all();
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(streamedSystemPrompt(text).length).toBeLessThanOrEqual(8000);
+    expect(text).toContain('jarvis → /home/x/postream');
+    expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+  });
+
+  it('gives up the groups and command rules first, keeping the rules whole when that is enough', () => {
+    const text = all();
+    expect(text).not.toContain('Its sidebar groups');
+    expect(text).not.toContain('run_command roda sem confirmação');
+    expect(text).toContain('- [note:8]');
+    expect(text).not.toContain('outras em search_memory');
+    expect(text).toContain('Liberado sem confirmação neste projeto');
+    expect(text).toContain('Liberado sem confirmação por padrão');
+  });
+
+  it('then trims the rules at a rule end and points to search_memory', () => {
+    const text = all(rulesOf(20));
+    expect(text).toContain('- [note:0]');
+    expect(text).not.toContain('- [note:19]');
+    expect(text).toMatch(/»: «resposta»\n- … \(outras em search_memory\)\nAnswer about this project/);
+    expect(text).toContain('Liberado sem confirmação por padrão');
+  });
+
+  it('keeps every line when they fit', () => {
+    const text = projectSystemPrompt(p, links, ['board'], [{ name: 'g', siblings: ['a'] }], [...DEFAULT_ALLOW_KINDS], [{ pattern: 'git status', match: 'exact' }], rulesOf(1));
+    for (const s of ['Its sidebar groups', 'run_command roda sem confirmação', '- [note:0]', 'Liberado sem confirmação neste projeto', 'Liberado sem confirmação por padrão']) expect(text).toContain(s);
+    expect(text).not.toContain('outras em search_memory');
+  });
+
+  it('never goes over the cap, even with a rules block far past its own cap', () => {
+    expect(all(rulesOf(60)).length).toBeLessThanOrEqual(4000);
+  });
 });
 
 const p = { name: 'notify', key: 'NOT' };

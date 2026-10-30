@@ -163,6 +163,15 @@ export class LiveRun {
     return true;
   }
 
+  /** Before the first process (TER-1154): a session too full to go on, and that could not be compacted,
+   *  is left behind. The next process starts a new one, told `note` (what the conversation was about)
+   *  before the waiting turns. */
+  async startFresh(note: string): Promise<void> {
+    this.session = null;
+    await this.deps.chat.setCliSession(this.deps.conversationId, null);
+    this.addNote(note);
+  }
+
   /** Asks the CLI to stop one background subagent. False when the input is closed or the line was
    *  refused. The row's status and its event are the caller's; a refusal comes back as a
    *  `control_response` and is rolled back here. */
