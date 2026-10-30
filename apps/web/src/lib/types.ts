@@ -1083,6 +1083,8 @@ export interface AuthConfig {
   /** this instance's terms of use and privacy policy (TERMS_URL / PRIVACY_URL); null = no link */
   terms_url?: string | null;
   privacy_url?: string | null;
+  /** who runs this instance, e.g. "8020 Digital Ltda · CNPJ …" (LEGAL_ENTITY); null = no line */
+  legal_entity?: string | null;
 }
 
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';

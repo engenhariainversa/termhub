@@ -189,7 +189,7 @@ export function LoginPage() {
             </button>
           </form>
         )}
-        <LegalLinks className="mt-6 justify-center border-t border-line pt-4" />
+        <LegalLinks className="mt-6 items-center border-t border-line pt-4 text-center" />
       </div>
     </div>
   );

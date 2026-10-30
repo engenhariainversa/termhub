@@ -14,6 +14,8 @@ import { DICT, HTML_LANG, LANG_KEY, LANG_NAMES, LANGS, LangContext, OG_LOCALE, d
 export const APP_URL = 'https://app.termhub.dev';
 export const REPO_URL = 'https://github.com/engenhariainversa/termhub';
 export const COFFEE_URL = 'https://buymeacoffee.com/pedrogoiania';
+/** The company behind the hosted service, the controller named in the terms and the privacy policy. */
+export const LEGAL_ENTITY = '8020 Digital Ltda · CNPJ 32.285.763/0001-12';
 
 /** Click handler for the site's calls to action; the navigation itself is untouched. */
 export const trackCta = (target: string, location: string) => () => track('cta_click', { target, location });
@@ -77,6 +79,7 @@ export function SiteFooter() {
     <footer className="border-t border-border-2">
       <div className="mx-auto flex max-w-page flex-wrap items-center gap-x-6 gap-y-2 px-4 py-6 coarse:gap-y-6 text-caption text-muted md:px-6">
         <span>© {new Date().getFullYear()} termhub · MIT</span>
+        <span>{LEGAL_ENTITY}</span>
         <a href={REPO_URL} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">GitHub</a>
         <a href={`${REPO_URL}/blob/main/README.md`} className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.docs}</a>
         <a href="/security/" className="hover-tint tap px-1.5 py-0.5 hover:text-frost">{t.footer.security}</a>
