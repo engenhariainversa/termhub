@@ -157,6 +157,8 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
       tab_suggestions,
       tab_limits: await describeTabLimits(repos, limitRows, user.id),
       subagents,
+      // A screen opened in the middle of "Compactar" (TER-1152) shows it as under way, as on the web.
+      compacting: deps.chat.isCompacting(conversation.id),
       // The rows a screen opened in the middle of a run shows as being answered (spec 2026-09-29).
       open_answer_ids: openAnswersIn(messages, open),
       context_limit,
@@ -280,6 +282,17 @@ export async function mobileChatRoutes(app: FastifyInstance, repos: Repositories
   app.post('/reset', { config: { action: 'update' } }, async (request) => {
     const { project_id } = resetBody.parse(request.body ?? {});
     return { conversation: await deps.chat.reset(request.scope.user, project_id ?? null) };
+  });
+
+  /**
+   * "Compactar" (TER-1152), the web's `POST /api/chat/compact`: runs `/compact` on the scope's CLI
+   * session. 202 once it started; its end reaches the phone over /ws/m/chat (`compact`, then the new
+   * fill as `context`). The service's 409s (an answer being written, no session yet, the host) pass through.
+   */
+  app.post('/compact', { config: { action: 'update' } }, async (request, reply) => {
+    const { project_id } = resetBody.parse(request.body ?? {});
+    const started = await deps.chat.compact(request.scope.user, project_id ?? null);
+    return reply.code(202).send({ conversation_id: started.conversation_id });
   });
 
   /**

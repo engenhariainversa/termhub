@@ -20,6 +20,7 @@ import { ActionTrailCard } from './action-trail-card';
 import { QuestionTrailCard } from './question-trail-card';
 import { Composer } from './composer';
 import { ContextMeter } from './context-meter';
+import { useCompactControl } from '../viewmodel/useCompactControl';
 import { HostLine } from './host-line';
 import { MessageBubble } from './message-bubble';
 import { MessageMenu } from './message-menu';
@@ -447,6 +448,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
   const title = activeProject ? (projects.find((p) => p.id === activeProject)?.name ?? t('Conversa')) : t('Chat geral');
   const shownError = error ?? slot?.error ?? null;
   const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
+  const compact = useCompactControl(slot);
 
   return (
     <Screen padded={false} width="full">
@@ -466,7 +468,7 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
               {title}
             </AppText>
             {/* TER-1038: "ctx 150k/200k", against the person's own limit when they set one. */}
-            <ContextMeter meter={meter} />
+            <ContextMeter meter={meter} compact={compact} />
             {/* Everything else about the conversation — where it runs, subagents, trusted tabs, memory,
                 "Nova conversa" — is one tap away, in its settings (TER-1039). */}
             <Pressable
@@ -488,6 +490,12 @@ export function ConversationView({ routeId, embedded = false, jumpTo }: { routeI
           {shownError ? (
             <View className="px-4 pt-3">
               <Banner tone="danger" text={shownError} />
+            </View>
+          ) : null}
+          {/* What the last "Compactar" did (TER-1152), until the next message goes. */}
+          {!shownError && slot?.compactNote ? (
+            <View testID="conversation-compact-note" className="px-4 pt-3">
+              <Banner tone="info" text={slot.compactNote} />
             </View>
           ) : null}
         </View>
