@@ -105,7 +105,8 @@ describe('TicketsView', () => {
   it("choosing EI in the source select leaves only EI-2's ticket", async () => {
     mount();
     await screen.findByText('Bug no login');
-    fireEvent.change(screen.getByDisplayValue('todas as fontes'), { target: { value: 'EI' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Fonte' }));
+    fireEvent.click(screen.getByRole('option', { name: 'EI' }));
     expect(screen.queryByText('Bug no login')).not.toBeInTheDocument();
     expect(screen.getByText('Nova tela')).toBeInTheDocument();
   });

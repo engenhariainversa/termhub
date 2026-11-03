@@ -7,6 +7,7 @@ import type { Project, ProjectAi, ProjectAiOption } from '../lib/types';
 import { useTranslation } from '../i18n';
 import { ExclusiveBadge } from './AiAccountsView';
 import { ConfirmDialog } from './Modal';
+import { Combobox } from './Combobox';
 
 const PROVIDERS = [
   { key: 'claude', label: 'Claude Code', aliases: CLAUDE_MODEL_ALIASES },
@@ -164,19 +165,12 @@ export function ProjectAiCard({ project }: { project: Project }) {
           <label className="label" htmlFor="chat-machine">
             {t('Máquina do concierge')}
           </label>
-          <select
+          <Combobox
             id="chat-machine"
-            className="input"
             value={ai.chat_machine_id ?? ''}
-            onChange={(e) => setAi({ ...ai, chat_machine_id: e.target.value === '' ? null : e.target.value })}
-          >
-            <option value="">{t('Automática (a primeira conta com limite livre, em qualquer máquina)')}</option>
-            {chatMachines.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setAi({ ...ai, chat_machine_id: v === '' ? null : v })}
+            options={[{ value: '', label: t('Automática (a primeira conta com limite livre, em qualquer máquina)') }, ...chatMachines.map((m) => ({ value: m.id, label: m.name }))]}
+          />
           <p className="mt-1 text-xs text-fg-dim">
             {t('O chat do projeto roda nessa máquina, com as contas dela na ordem acima. Offline ou sem conta com limite livre, ele volta para a automática.')}
           </p>

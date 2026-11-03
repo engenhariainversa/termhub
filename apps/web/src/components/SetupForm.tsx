@@ -16,6 +16,7 @@ import {
   type ProjectSetupData,
   type TicketSource,
 } from '../lib/types';
+import { Combobox, type ComboboxOption } from './Combobox';
 
 interface Props {
   project: Project;
@@ -93,6 +94,20 @@ export function SetupForm({ project }: Props) {
     }
   };
 
+  // Opening a list for the first time loads it; "listar" stays as the way to load it again.
+  const loadOnce = (integrationId: string) => {
+    if (!conn[integrationId]) void loadOptions(integrationId);
+  };
+  const optionsOf = (integrationId: string, key: string): ComboboxOption[] => {
+    const c = conn[integrationId];
+    if (!c || c === 'loading' || !c.ok) return [];
+    return (c.options?.[key] ?? []).map((o) => ({ value: o.id, hint: o.name && o.name !== o.id ? o.name : undefined }));
+  };
+  const connError = (integrationId: string) => {
+    const c = conn[integrationId];
+    return c && c !== 'loading' && !c.ok ? c.error : undefined;
+  };
+
   const sync = async () => {
     setSyncMsg(t('sincronizando…'));
     try {
@@ -154,17 +169,23 @@ export function SetupForm({ project }: Props) {
               <>
                 <Row label={t('Repositório (owner/repo)')}>
                   <div className="flex gap-2">
-                    <input className="input font-mono" list={`repos-${project.id}`} value={data.repo.full_name ?? ''} onChange={(e) => patch('repo', { ...data.repo!, full_name: e.target.value || null })} /* i18n-ignore */ placeholder="engenhariainversa/app" />
+                    <Combobox
+                      mono
+                      allowFreeText
+                      aria-label={t('Repositório (owner/repo)')}
+                      value={data.repo.full_name ?? ''}
+                      onChange={(v) => patch('repo', { ...data.repo!, full_name: v || null })}
+                      options={optionsOf(data.repo.integration_id!, 'repos')}
+                      loading={conn[data.repo.integration_id!] === 'loading'}
+                      onOpen={() => loadOnce(data.repo!.integration_id!)}
+                      // i18n-ignore: an example of the id
+                      placeholder="engenhariainversa/app"
+                    />
                     <button type="button" className="btn-ghost shrink-0 text-xs" onClick={() => void loadOptions(data.repo!.integration_id!)}>
                       {conn[data.repo.integration_id!] === 'loading' ? '…' : t('listar')}
                     </button>
                   </div>
-                  <datalist id={`repos-${project.id}`}>
-                    {(() => {
-                      const c = conn[data.repo.integration_id!];
-                      return c && c !== 'loading' && c.ok ? c.options?.repos?.map((r) => <option key={r.id} value={r.id} />) : null;
-                    })()}
-                  </datalist>
+                  {connError(data.repo.integration_id!) && <p className="mt-1 text-xs text-danger">{connError(data.repo.integration_id!)}</p>}
                 </Row>
                 <div className="grid grid-cols-2 gap-3">
                   <Row label={t('Branch base')}>
@@ -221,23 +242,22 @@ export function SetupForm({ project }: Props) {
               </Row>
               <Row label={t(scopeDef.label)}>
                 <div className="flex gap-2">
-                  <input
-                    className="input font-mono"
-                    list={`scope-${project.id}-${i}`}
+                  <Combobox
+                    mono
+                    allowFreeText
+                    aria-label={t(scopeDef.label)}
                     value={s.scope}
-                    onChange={(e) => updateSource(i, { scope: e.target.value })}
+                    onChange={(v) => updateSource(i, { scope: v })}
+                    options={optionsOf(s.integration_id, scopeDef.optionsKey)}
+                    loading={scopeOptions === 'loading'}
+                    onOpen={() => loadOnce(s.integration_id)}
                     placeholder={scopeDef.placeholder}
                   />
                   <button type="button" className="btn-ghost shrink-0 text-xs" onClick={() => void loadOptions(s.integration_id)}>
                     {scopeOptions === 'loading' ? '…' : t('listar')}
                   </button>
                 </div>
-                <datalist id={`scope-${project.id}-${i}`}>
-                  {scopeOptions && scopeOptions !== 'loading' && scopeOptions.ok
-                    ? scopeOptions.options?.[scopeDef.optionsKey]?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)
-                    : null}
-                </datalist>
-                {scopeOptions && scopeOptions !== 'loading' && !scopeOptions.ok && <p className="mt-1 text-xs text-danger">{scopeOptions.error}</p>}
+                {connError(s.integration_id) && <p className="mt-1 text-xs text-danger">{connError(s.integration_id)}</p>}
                 {duplicate(i) && <p className="mt-1 text-xs text-danger">{t('Fonte repetida')}</p>}
               </Row>
               <Row label={t(scopeDef.filterLabel)} hint={t(scopeDef.filterHint)}>
@@ -288,15 +308,12 @@ export function SetupForm({ project }: Props) {
 
       <Card title={t('Runner')} hint={t('Máquina onde a automação (Claude) roda. Pode ser diferente da máquina dos terminais — ex.: projeto mobile precisa de macOS.')}>
         <Row label={t('Máquina')}>
-          <select className="input" value={data.runner.machine_id ?? ''} onChange={(e) => patch('runner', { ...data.runner, machine_id: e.target.value || null })}>
-            <option value="">{t('— a mesma do projeto —')}</option>
-            {machines.map((m) => (
-              <option key={m.id} value={m.id}>
-                {machineLabel(m)}
-                {m.os ? ` (${m.os})` : ''}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            aria-label={t('Máquina')}
+            value={data.runner.machine_id ?? ''}
+            onChange={(v) => patch('runner', { ...data.runner, machine_id: v || null })}
+            options={[{ value: '', label: t('— a mesma do projeto —') }, ...machines.map((m) => ({ value: m.id, label: machineLabel(m), hint: m.os ?? undefined }))]}
+          />
           {runnerMachine && (
             <p className="mt-1 text-xs text-fg-dim">
               {runnerMachine.name}: {runnerMachine.os ?? t('SO não detectado')} ·{' '}

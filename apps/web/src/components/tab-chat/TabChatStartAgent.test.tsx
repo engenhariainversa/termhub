@@ -66,10 +66,11 @@ describe('TabChatStartAgent (TER-1094, TER-1104)', () => {
     expect(screen.queryByTestId('tab-chat-start-agent')).toBeNull();
     expect(startAgent).not.toHaveBeenCalled();
     expect(screen.getByTestId('tab-chat-cli-claude').getAttribute('aria-pressed')).toBe('true');
-    expect((screen.getByTestId('tab-chat-account') as HTMLSelectElement).value).toBe('a1');
+    expect(screen.getByTestId('tab-chat-account').textContent).toContain(claude.label);
     expect(screen.getByText('Modelo: opus')).toBeTruthy();
-    fireEvent.change(screen.getByTestId('tab-chat-account'), { target: { value: 'a3' } });
-    expect((screen.getByTestId('tab-chat-account') as HTMLSelectElement).value).toBe('a3');
+    fireEvent.click(screen.getByTestId('tab-chat-account'));
+    fireEvent.click(screen.getByRole('option', { name: 'Outra' }));
+    expect(screen.getByTestId('tab-chat-account').textContent).toContain('Outra');
     fireEvent.click(screen.getByTestId('tab-chat-cli-chatgpt'));
     expect(screen.queryByTestId('tab-chat-account')).toBeNull();
     expect(screen.getByText('Conta Trabalho')).toBeTruthy();

@@ -6,6 +6,7 @@ import type { Project, ProjectMachineLink } from '../lib/types';
 import { ConfirmDialog } from './Modal';
 import { DirectoryBrowser } from './DirectoryBrowser';
 import { Trans, useTranslation } from '../i18n';
+import { Combobox } from './Combobox';
 
 function LinkRow({ project, link, onUnlinked }: { project: Project; link: ProjectMachineLink; onUnlinked: (closed: number) => void }) {
   const { machines, statuses, updateProjectMachine, unlinkMachine } = useData();
@@ -163,12 +164,7 @@ export function ProjectMachines({ project }: { project: Project }) {
             <label className="label" htmlFor="link-machine">
               {t('Máquina')}
             </label>
-            <select id="link-machine" className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
-              <option value="">{t('Escolha…')}</option>
-              {available.map((m) => (
-                <option key={m.id} value={m.id}>{machineLabel(m)}</option>
-              ))}
-            </select>
+            <Combobox id="link-machine" value={machineId} onChange={setMachineId} placeholder={t('Escolha…')} options={available.map((m) => ({ value: m.id, label: machineLabel(m) }))} />
           </div>
           <div>
             <label className="label" htmlFor="link-cwd">
