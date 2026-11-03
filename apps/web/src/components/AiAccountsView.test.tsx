@@ -66,6 +66,12 @@ async function openNew() {
   return within(screen.getByRole('dialog'));
 }
 
+/** The list opens over the page, outside the dialog. */
+function pickExclusive(form: ReturnType<typeof within>) {
+  fireEvent.click(form.getByLabelText('Exclusiva de um projeto'));
+  fireEvent.click(screen.getByRole('option', { name: 'DR Horton' }));
+}
+
 describe('AiAccountsView: which login an account is (TER-499)', () => {
   it("adds the machine's default login when nothing else is chosen", async () => {
     const form = await openNew();
@@ -165,7 +171,7 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     await screen.findAllByRole('listitem');
     fireEvent.click(within(screen.getByRole('region', { name: 'hulk' })).getByRole('button', { name: 'Adicionar conta em hulk' }));
     const form = within(screen.getByRole('dialog'));
-    expect(form.getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
+    expect(form.getByLabelText('Máquina onde o CLI está logado')).toHaveTextContent('hulk');
     fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
     await waitFor(() => expect(createMock).toHaveBeenCalledWith(expect.objectContaining({ machine_id: 'm3' })));
   });
@@ -174,7 +180,7 @@ describe('AiAccountsView: accounts grouped by machine (TER-640)', () => {
     listMock.mockResolvedValue({ accounts: [account({ id: 'b', machine_id: 'm3' })] });
     render(<AiAccountsView />);
     fireEvent.click(await within(await screen.findByRole('region', { name: 'hulk' })).findByTitle('Editar'));
-    expect(within(screen.getByRole('dialog')).getByLabelText('Máquina onde o CLI está logado')).toHaveValue('m3');
+    expect(within(screen.getByRole('dialog')).getByLabelText('Máquina onde o CLI está logado')).toHaveTextContent('hulk');
   });
 });
 
@@ -192,19 +198,19 @@ describe('AiAccountsView: accounts exclusive to a project (TER-990)', () => {
     render(<AiAccountsView />);
     fireEvent.click(await screen.findByTitle('Editar'));
     let form = within(screen.getByRole('dialog'));
-    expect(form.getByLabelText('Exclusiva de um projeto')).toHaveValue('');
+    expect(form.getByLabelText('Exclusiva de um projeto')).toHaveTextContent('Não: qualquer projeto pode usar');
     fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null }));
     fireEvent.click(await screen.findByTitle('Editar'));
     form = within(screen.getByRole('dialog'));
-    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    pickExclusive(form);
     fireEvent.click(form.getByRole('button', { name: 'Salvar' }));
     await waitFor(() => expect(updateMock).toHaveBeenLastCalledWith('drh', { label: 'drh', machine_id: 'm1', config_dir: null, exclusive_project_id: 'p9' }));
   });
 
   it('a new account is created free, then marked exclusive', async () => {
     const form = await openNew();
-    fireEvent.change(form.getByLabelText('Exclusiva de um projeto'), { target: { value: 'p9' } });
+    pickExclusive(form);
     fireEvent.click(form.getByRole('button', { name: 'Adicionar' }));
     await waitFor(() => expect(updateMock).toHaveBeenCalledWith('new', { exclusive_project_id: 'p9' }));
     expect(createMock).toHaveBeenCalledWith({ provider: 'claude', label: 'Claude', machine_id: 'm1', config_dir: null });

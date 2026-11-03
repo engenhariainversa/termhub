@@ -5,6 +5,7 @@ import type { UploadEntry, UploadMachineStatus } from '../lib/types';
 import { ConfirmDialog } from './Modal';
 import { formatDate as localDate, formatNumber, formatTime } from '../lib/format';
 import { i18n, tk, Trans, useTranslation } from '../i18n';
+import { Combobox } from './Combobox';
 
 /**
  * Settings → Arquivos: what is sitting in ~/.cache/termhub/paste/ on every machine (files pasted or
@@ -237,14 +238,13 @@ export function UploadsView() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
-            <select className="input w-auto py-1" value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
-              <option value="">{t('Todos os usuários')}</option>
-              {byUser.map((row) => (
-                <option key={row.key} value={row.key}>
-                  {row.label}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              className="w-auto py-1"
+              aria-label={t('Usuário')}
+              value={userFilter}
+              onChange={setUserFilter}
+              options={[{ value: '', label: t('Todos os usuários') }, ...byUser.map((row) => ({ value: row.key, label: row.label }))]}
+            />
             <select className="input w-auto py-1" value={kindFilter} onChange={(e) => setKindFilter(e.target.value as Kind | '')}>
               <option value="">{t('Todos os tipos')}</option>
               {byKind.map((row) => (
@@ -253,14 +253,13 @@ export function UploadsView() {
                 </option>
               ))}
             </select>
-            <select className="input w-auto py-1" value={machineFilter} onChange={(e) => setMachineFilter(e.target.value)}>
-              <option value="">{t('Todas as máquinas')}</option>
-              {machines.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              className="w-auto py-1"
+              aria-label={t('Máquina')}
+              value={machineFilter}
+              onChange={setMachineFilter}
+              options={[{ value: '', label: t('Todas as máquinas') }, ...machines.map((m) => ({ value: m.id, label: m.name }))]}
+            />
             {(userFilter || kindFilter || machineFilter) && (
               <button
                 className="text-fg-muted hover:text-fg hover:underline"

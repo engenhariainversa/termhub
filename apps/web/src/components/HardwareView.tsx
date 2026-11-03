@@ -4,6 +4,7 @@ import { useData } from '../lib/data';
 import type { HardwareSnapshot } from '../lib/types';
 import { formatNumber } from '../lib/format';
 import { i18n, useTranslation } from '../i18n';
+import { Combobox } from './Combobox';
 
 /**
  * Home "Hardware" tab: live CPU / memory / disks / temps / GPU / top processes of a machine.
@@ -154,14 +155,13 @@ export function HardwareView() {
         </div>
         <span className="ml-auto flex items-center gap-2">
           {loading && <span className="text-xs text-fg-dim">{t('atualizando…')}</span>}
-          <select className="input w-auto py-1 text-xs" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
-            {machines.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-                {statuses[m.id] === 'offline' ? t(' (offline)') : ''}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            className="w-auto py-1 text-xs"
+            aria-label={t('Máquina')}
+            value={machineId}
+            onChange={setMachineId}
+            options={machines.map((m) => ({ value: m.id, label: `${m.name}${statuses[m.id] === 'offline' ? t(' (offline)') : ''}` }))}
+          />
         </span>
       </div>
 

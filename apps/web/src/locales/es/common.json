@@ -42,5 +42,11 @@
   "Ver": "Ver",
   "Termos de uso": "Términos de uso",
   "Política de privacidade": "Política de privacidad",
-  "Documentos legais": "Documentos legales"
+  "Documentos legais": "Documentos legales",
+  "Filtrar: {{field}}": "Filtrar: {{field}}",
+  "Filtrar ou digitar…": "Filtrar o escribir…",
+  "Filtrar…": "Filtrar…",
+  "Fonte": "Fuente",
+  "Nada encontrado": "No se encontró nada",
+  "Usar \"{{value}}\"": "Usar \"{{value}}\""
 }

@@ -5,6 +5,7 @@ import { useData } from '../lib/data';
 import { taskStatusLabel } from '../lib/board';
 import { Trans, useTranslation } from '../i18n';
 import { PROVIDER_LABEL, type Integration, type Project, type ProjectSetup, type SourceSync, type TaskStatus, type Ticket } from '../lib/types';
+import { Combobox } from './Combobox';
 
 interface Props {
   project: Project;
@@ -138,14 +139,13 @@ export function TicketsView({ project }: Props) {
           ))}
         </select>
         {sources.length > 1 && (
-          <select className="input w-auto py-1" value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="all">{t('todas as fontes')}</option>
-            {sources.map((s) => (
-              <option key={`${s.integration_id}:${s.scope}`} value={s.scope}>
-                {s.scope}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            className="w-auto py-1"
+            aria-label={t('Fonte')}
+            value={source}
+            onChange={setSource}
+            options={[{ value: 'all', label: t('todas as fontes') }, ...sources.filter((s, i) => sources.findIndex((o) => o.scope === s.scope) === i).map((s) => ({ value: s.scope }))]}
+          />
         )}
         <label className="flex items-center gap-1 text-fg-muted">
           <input type="checkbox" checked={hideImported} onChange={(e) => setHideImported(e.target.checked)} className="accent-accent" /> {t('ocultar já no board')}

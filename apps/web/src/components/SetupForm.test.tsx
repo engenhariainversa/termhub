@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Integration, Project, ProjectSetupData } from '../lib/types';
 
@@ -8,6 +8,7 @@ const getMock = vi.fn();
 const saveMock = vi.fn();
 const integrationsListMock = vi.fn();
 const syncTicketsMock = vi.fn();
+const testMock = vi.fn();
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
@@ -23,7 +24,7 @@ vi.mock('../lib/api', () => {
       },
       integrations: {
         list: (...a: unknown[]) => integrationsListMock(...a),
-        test: () => Promise.resolve({ ok: true, options: {} }),
+        test: (...a: unknown[]) => testMock(...a),
       },
     },
   };
@@ -52,11 +53,15 @@ const integration: Integration = { id: 'g', provider: 'github', name: 'GitHub pr
 
 const project = { id: 'p1', key: 'P1', name: 'p1', machines: [] } as unknown as Project;
 
+/** Native selects are comboboxes too: this is the open field's filter. */
+const scopeFilter = () => screen.getByRole('combobox', { name: 'Filtrar: Repositório' });
+
 const mount = () => render(<SetupForm project={project} />);
 
 beforeEach(() => {
   getMock.mockResolvedValue({ setup: { project_id: 'p1', version: 2, data: setupData(), updated_at: null } });
   integrationsListMock.mockResolvedValue({ integrations: [integration] });
+  testMock.mockResolvedValue({ ok: true, options: {} });
   saveMock.mockImplementation((_id: string, data: ProjectSetupData) => Promise.resolve({ setup: { project_id: 'p1', version: 2, data, updated_at: 'now' } }));
 });
 
@@ -72,19 +77,69 @@ describe('SetupForm — ticket sources', () => {
     expect(screen.getAllByRole('button', { name: 'Remover' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar fonte' }));
     expect(screen.getAllByRole('button', { name: 'Remover' })).toHaveLength(2);
-    const scopeInputs = screen.getAllByPlaceholderText('owner/repo');
-    expect(scopeInputs).toHaveLength(2);
-    expect((scopeInputs[1] as HTMLInputElement).value).toBe('');
+    const scopes = screen.getAllByRole('button', { name: 'Repositório' });
+    expect(scopes).toHaveLength(2);
+    expect(scopes[1]).toHaveTextContent('owner/repo');
   });
 
   it('typing a scope that repeats another source shows "Fonte repetida" and disables Salvar', async () => {
     mount();
     await screen.findByRole('button', { name: 'Adicionar fonte' });
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar fonte' }));
-    const scopeInputs = screen.getAllByPlaceholderText('owner/repo');
-    fireEvent.change(scopeInputs[1], { target: { value: 'acme/api' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Repositório' })[1]);
+    fireEvent.change(scopeFilter(), { target: { value: 'acme/api' } });
+    fireEvent.keyDown(scopeFilter(), { key: 'Enter' });
     expect(await screen.findByText('Fonte repetida')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Salvar setup' })).toBeDisabled();
+  });
+
+  describe('the scope field', () => {
+    const repos = [
+      { id: 'the-door-app/ccroad', name: 'the-door-app/ccroad' },
+      { id: 'a-supernova/financeiro', name: 'a-supernova/financeiro' },
+      { id: 'a-supernova/financeiro-api', name: 'a-supernova/financeiro-api' },
+    ];
+
+    it('has no datalist: typing "fin" filters the listed repositories and Enter fills the field', async () => {
+      testMock.mockResolvedValue({ ok: true, options: { repos } });
+      mount();
+      const field = await screen.findByRole('button', { name: 'Repositório' });
+      expect(document.querySelector('datalist')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'listar' }));
+      await waitFor(() => expect(testMock).toHaveBeenCalledTimes(1));
+      fireEvent.click(field);
+      expect(await screen.findByRole('option', { name: 'the-door-app/ccroad' })).toBeInTheDocument();
+      expect(scopeFilter()).toHaveAttribute('autocomplete', 'off');
+      fireEvent.change(scopeFilter(), { target: { value: 'fin' } });
+      const listed = within(screen.getByRole('listbox')).getAllByRole('option');
+      expect(listed.map((o) => o.textContent)).toEqual(['a-supernova/financeiro', 'a-supernova/financeiro-api', 'Usar "fin"']);
+      fireEvent.keyDown(scopeFilter(), { key: 'Enter' });
+      expect(field).toHaveTextContent('a-supernova/financeiro');
+      expect(testMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('loads the list the first time it opens, and a repository off the list can be typed', async () => {
+      testMock.mockResolvedValue({ ok: true, options: { repos } });
+      mount();
+      const field = await screen.findByRole('button', { name: 'Repositório' });
+      fireEvent.click(field);
+      expect(await screen.findByRole('option', { name: 'a-supernova/financeiro' })).toBeInTheDocument();
+      expect(testMock).toHaveBeenCalledTimes(1);
+      fireEvent.change(scopeFilter(), { target: { value: 'owner/novo' } });
+      fireEvent.keyDown(scopeFilter(), { key: 'Enter' });
+      expect(field).toHaveTextContent('owner/novo');
+    });
+
+    it('shows why the list failed and still takes a typed repository', async () => {
+      testMock.mockResolvedValue({ ok: false, error: 'token inválido' });
+      mount();
+      const field = await screen.findByRole('button', { name: 'Repositório' });
+      fireEvent.click(field);
+      expect(await screen.findByText('token inválido')).toBeInTheDocument();
+      fireEvent.change(scopeFilter(), { target: { value: 'owner/novo' } });
+      fireEvent.keyDown(scopeFilter(), { key: 'Enter' });
+      expect(field).toHaveTextContent('owner/novo');
+    });
   });
 
   it('"Remover" on the second row removes just that row', async () => {
@@ -95,7 +150,7 @@ describe('SetupForm — ticket sources', () => {
     const removeButtons = screen.getAllByRole('button', { name: 'Remover' });
     fireEvent.click(removeButtons[1]);
     expect(screen.getAllByRole('button', { name: 'Remover' })).toHaveLength(1);
-    expect(screen.getAllByPlaceholderText('owner/repo')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Repositório' })).toHaveLength(1);
   });
 
   it('saving sends ticket_sources with the one configured source', async () => {

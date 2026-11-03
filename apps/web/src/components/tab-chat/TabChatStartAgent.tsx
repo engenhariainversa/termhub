@@ -3,6 +3,7 @@ import { useTranslation } from '../../i18n';
 import { api, ApiError } from '../../lib/api';
 import { choiceClis, choiceModel, cliName, rememberStartedAgent, startAgentPlan, startedAgentLine, type StartedAgent } from '../../lib/tab-chat';
 import type { TabAgentChoice, TabAgentOptions } from '../../lib/types';
+import { Combobox } from '../Combobox';
 
 export interface TabChatStartAgentProps {
   tabId: string;
@@ -46,13 +47,14 @@ function ChooseAgent({ choices, preselected, starting, onStart }: { choices: Tab
       {ofCli.length > 1 ? (
         <label className="flex items-center gap-2 text-xs text-fg-dim">
           {t('Conta')}
-          <select className="input max-w-xs text-sm" value={choice.account_id} disabled={starting !== null} onChange={(e) => setPicked(e.target.value)} data-testid="tab-chat-account">
-            {ofCli.map((c) => (
-              <option key={c.account_id} value={c.account_id}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            className="max-w-xs text-sm"
+            testId="tab-chat-account"
+            value={choice.account_id}
+            disabled={starting !== null}
+            onChange={setPicked}
+            options={ofCli.map((c) => ({ value: c.account_id, label: c.label }))}
+          />
         </label>
       ) : (
         <p className="text-xs text-fg-dim">{t('Conta {{account}}', { account: choice.label })}</p>
