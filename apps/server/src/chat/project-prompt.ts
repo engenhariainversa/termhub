@@ -30,6 +30,15 @@ export const defaultsLine = (defaults: DefaultAllowKind[]): string => {
   return `\nLiberado sem confirmação por padrão (o usuário pode restringir em Permissões do chat): ${labels}; leituras nunca pedem. Continuam pedindo confirmação: delete_task, run_command fora dos comandos só de leitura e das regras de comando (list_command_rules), responder permissões, texto com "!" ou caracteres de controle, as teclas C-c e Escape, fechar aba trabalhando, integrações, push_ticket_status, set_project_repo, ligar máquinas ao projeto e refazer o login de uma conta de IA (start_ai_login, submit_ai_login_code).`;
 };
 
+/**
+ * How the person lifts a confirmation, and what each kind of rule covers (TER-1164). Always told, even
+ * when every default is restricted: without it the chat told a person in a new project that typing in a
+ * tab "cannot be turned off" and that "the rules only cover commands". The model cannot change a
+ * permission itself; it points the person at the card's buttons and at "Permissões do chat".
+ */
+export const HOW_TO_LIFT_LINE =
+  '\nComo o usuário libera (você não muda permissões, só diz onde): nos botões do card de confirmação ("Permitir sempre…", "Liberar…") ou em Configurações › Permissões do chat. Regras de comando cobrem só run_command; texto e teclas nas abas são cobertos pelas liberações e pelo padrão. Responder a uma permissão do CLI nunca é liberado.';
+
 /** The most the command rules line takes of the prompt; past it, the rules that do not fit are dropped
  *  whole and "…" says so — list_command_rules has them all. */
 const COMMAND_RULES_MAX = 500;
@@ -146,7 +155,7 @@ export function projectSystemPrompt(
   // protocol's cap makes the agent drop the whole open frame (the chat then read "machine offline").
   // When they crowd out the machine list, they give way in this order: groups, command rules, the
   // rules block (trimmed line by line), the standing grants, the default allowances.
-  const fixed = head.length + tail.length + MACHINES_PREFIX.length + Math.min(where.length, MACHINES_MIN);
+  const fixed = head.length + tail.length + HOW_TO_LIFT_LINE.length + MACHINES_PREFIX.length + Math.min(where.length, MACHINES_MIN);
   const lines = {
     group: groupsLine(groups),
     command: commandRulesLine(commandRules),
@@ -160,7 +169,7 @@ export function projectSystemPrompt(
   if (over() > 0) lines.rules = trimRules(lines.rules, lines.rules.length - over());
   if (over() > 0) lines.standing = '';
   if (over() > 0) lines.defaults = '';
-  const standingLine = lines.standing + lines.defaults + lines.command;
+  const standingLine = lines.standing + lines.defaults + lines.command + HOW_TO_LIFT_LINE;
   const groupLine = lines.group;
   const rulesLine = lines.rules;
   const room = MAX - head.length - tail.length - standingLine.length - groupLine.length - rulesLine.length - MACHINES_PREFIX.length;
