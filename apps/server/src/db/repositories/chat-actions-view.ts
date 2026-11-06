@@ -182,6 +182,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       const until = typeof args.expires_at === 'string' ? `, até ${args.expires_at.slice(0, 10)}` : '';
       return `liberar sem confirmação ${what} no run_command${args.project_id ? '' : ', em todos os projetos'}${machines}${until}`;
     }
+    case 'unblock_action':
+      return `tirar o bloqueio \`${asString(args.block_id)}\` (o chat volta a fazer isso sem pedir)`;
     case 'send_key':
       return `enviar a tecla \`${asString(args.key)}\``;
     case 'open_tab':

@@ -394,3 +394,24 @@ describe('commandRulesLine (TER-1081)', () => {
     expect(projectSystemPrompt({ name: 'App', key: 'APP' }, [], [], [], [], rules).length).toBeLessThanOrEqual(4000);
   });
 });
+
+// TER-1164: with the open model on, the chat is told the core and the blocks instead of the grants.
+describe('open permissions line (TER-1164)', () => {
+  it('replaces the grants, defaults, command rules and how-to-lift lines', () => {
+    const text = projectSystemPrompt({ name: 'X', key: 'X' }, [], ['terminal'], [], ['board'], [{ pattern: 'git status', match: 'exact' }], null, ['rodar «git push…» no projeto X (pedir antes; id b1)']);
+    expect(text).toContain('Permissões: liberado por padrão');
+    expect(text).toContain('Sempre pedem confirmação: apagar card');
+    expect(text).toContain('rodar «git push…» no projeto X (pedir antes; id b1)');
+    expect(text).toContain('block_action');
+    for (const s of ['Liberado sem confirmação neste projeto', 'Liberado sem confirmação por padrão', 'run_command roda sem confirmação', 'Como o usuário libera']) expect(text).not.toContain(s);
+  });
+
+  it('says there is no block when there is none, and stays under the cap with many', () => {
+    expect(projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], [], [], null, [])).toContain('Bloqueios do usuário (pedir antes = card; nunca = recusado): nenhum.');
+    const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
+    const many = Array.from({ length: 100 }, (_, i) => `rodar «cmd-${i}…» em todos os projetos (pedir antes; id b${i})`);
+    const text = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links, [], [], [], [], null, many);
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+  });
+});

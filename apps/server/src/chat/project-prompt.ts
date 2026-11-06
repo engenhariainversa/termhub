@@ -1,5 +1,6 @@
 import { STANDING_GRANT_KINDS, STANDING_KIND_LABEL, type StandingGrantKind } from '@termhub/mobile-api';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL, type DefaultAllowKind } from './gate.js';
+import { OPEN_CORE_TEXT } from './open-permissions.js';
 
 /** The protocol's cap on `append_system_prompt` (packages/agent-protocol, claudeOpenParams). */
 const MAX = 4000;
@@ -38,6 +39,19 @@ export const defaultsLine = (defaults: DefaultAllowKind[]): string => {
  */
 export const HOW_TO_LIFT_LINE =
   '\nComo o usuário libera (você não muda permissões, só diz onde): nos botões do card de confirmação ("Permitir sempre…", "Liberar…") ou em Configurações › Permissões do chat. Regras de comando cobrem só run_command; texto e teclas nas abas são cobertos pelas liberações e pelo padrão. Responder a uma permissão do CLI nunca é liberado.';
+
+/** The most the blocks take of the open model's line (TER-1164); past it, list_blocks has them all. */
+const BLOCKS_MAX_CHARS = 600;
+
+/**
+ * What the chat is told under the open model (TER-1164, flag `chat_open_permissions`) in place of the
+ * grants, defaults, command rules and how-to-lift lines: it acts without asking except for the fixed core
+ * and the person's blocks, and how a block is added or lifted.
+ */
+export const openPermissionsLine = (blocks: string[]): string => {
+  const list = blocks.length ? fit(blocks, '; ', BLOCKS_MAX_CHARS) : 'nenhum';
+  return `\nPermissões: liberado por padrão — você age sem pedir confirmação, dentro das cotas por hora. Sempre pedem confirmação: ${OPEN_CORE_TEXT}. Bloqueios do usuário (pedir antes = card; nunca = recusado): ${list}. Quando o usuário disser o que você não pode fazer, registre com block_action; para tirar um bloqueio, unblock_action (vira card) ou Configurações › Permissões do chat.`;
+};
 
 /** The most the command rules line takes of the prompt; past it, the rules that do not fit are dropped
  *  whole and "…" says so — list_command_rules has them all. */
@@ -147,6 +161,8 @@ export function projectSystemPrompt(
   defaults: DefaultAllowKind[] = [],
   commandRules: { pattern: string; match: 'exact' | 'prefix' }[] = [],
   rules: string | null = null,
+  /** TER-1164: the person's blocks, described, when the open model is on; null = the grants model. */
+  open: string[] | null = null,
 ): string {
   const where = links.length ? links.map((l) => `${l.machine} → ${l.cwd}`).join('; ') : 'no machine linked yet';
   const head = `You are the termhub chat for the project "${project.name}" (key ${project.key}).\n`;
@@ -155,13 +171,14 @@ export function projectSystemPrompt(
   // protocol's cap makes the agent drop the whole open frame (the chat then read "machine offline").
   // When they crowd out the machine list, they give way in this order: groups, command rules, the
   // rules block (trimmed line by line), the standing grants, the default allowances.
-  const fixed = head.length + tail.length + HOW_TO_LIFT_LINE.length + MACHINES_PREFIX.length + Math.min(where.length, MACHINES_MIN);
+  const permissions = open ? openPermissionsLine(open) : HOW_TO_LIFT_LINE;
+  const fixed = head.length + tail.length + permissions.length + MACHINES_PREFIX.length + Math.min(where.length, MACHINES_MIN);
   const lines = {
     group: groupsLine(groups),
-    command: commandRulesLine(commandRules),
+    command: open ? '' : commandRulesLine(commandRules),
     rules: rules ? `\n${rules}` : '',
-    standing: standingGrantsLine(standing),
-    defaults: defaultsLine(defaults),
+    standing: open ? '' : standingGrantsLine(standing),
+    defaults: open ? '' : defaultsLine(defaults),
   };
   const over = () => fixed + Object.values(lines).reduce((sum, l) => sum + l.length, 0) - MAX;
   if (over() > 0) lines.group = '';
@@ -169,7 +186,7 @@ export function projectSystemPrompt(
   if (over() > 0) lines.rules = trimRules(lines.rules, lines.rules.length - over());
   if (over() > 0) lines.standing = '';
   if (over() > 0) lines.defaults = '';
-  const standingLine = lines.standing + lines.defaults + lines.command + HOW_TO_LIFT_LINE;
+  const standingLine = lines.standing + lines.defaults + lines.command + permissions;
   const groupLine = lines.group;
   const rulesLine = lines.rules;
   const room = MAX - head.length - tail.length - standingLine.length - groupLine.length - rulesLine.length - MACHINES_PREFIX.length;

@@ -173,5 +173,11 @@
   "O card {{ref}} tem PR aberto, não mesclado: {{prs}}; repita com confirm: true para mover para Feito mesmo assim": "La tarjeta {{ref}} tiene un PR abierto, sin fusionar: {{prs}}; repite con confirm: true para moverla a Hecho de todos modos",
   "Não encontrei o grupo {{group}} entre os seus grupos; veja os nomes com list_project_groups ou deixe group de fora": "No encontré el grupo {{group}} entre tus grupos; consulta los nombres con list_project_groups o deja group fuera",
   "machine_id e cwd vêm juntos: passe os dois para já ligar uma máquina, ou nenhum": "machine_id y cwd van juntos: pasa los dos para vincular una máquina de inmediato, o ninguno",
-  "A chave sugerida {{key}} já está em uso; repita com outra chave em key": "La clave sugerida {{key}} ya está en uso; repite con otra clave en key"
+  "A chave sugerida {{key}} já está em uso; repita com outra chave em key": "La clave sugerida {{key}} ya está en uso; repite con otra clave en key",
+  "Bloqueios só valem com o modelo \"liberado por padrão\", que não está ligado para esta pessoa. As permissões dela estão em Configurações › Permissões do chat.": "Los bloqueos solo valen con el modelo \"permitido por defecto\", que no está activado para esta persona. Sus permisos están en Configuración › Permisos del chat.",
+  "command só vale para kind run_command.": "command solo vale para kind run_command.",
+  "command deve ser o começo de um comando simples, como «git push» ou «docker compose down».": "command debe ser el comienzo de un comando simple, como «git push» o «docker compose down».",
+  "A pessoa já tem {{max}} bloqueios; peça para ela revisar a lista em Permissões do chat.": "La persona ya tiene {{max}} bloqueos; pídele que revise la lista en Permisos del chat.",
+  "Este bloqueio vem de uma ação que a pessoa desmarcou em \"Liberadas por padrão\": ela o tira em Configurações › Permissões do chat.": "Este bloqueo viene de una acción que la persona desmarcó en \"Permitidas por defecto\": la quita en Configuración › Permisos del chat.",
+  "Bloqueio não encontrado (ou já tirado). Veja os bloqueios com list_blocks.": "Bloqueo no encontrado (o ya quitado). Mira los bloqueos con list_blocks."
 }

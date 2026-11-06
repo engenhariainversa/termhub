@@ -7,6 +7,8 @@ import { chatRoutes } from './chat.js';
 const pendingAction = { id: 'act1', conversation_id: 'c1', tool: 'send_input', args: { tab_id: 't1' }, class: 'write', tab_id: 't1', machine_id: null, project_id: null };
 
 function build(opts: {
+  /** TER-1164: the flag chat_open_permissions on for the caller. */
+  openOn?: boolean;
   send?: ReturnType<typeof vi.fn>;
   start?: ReturnType<typeof vi.fn>;
   startAfterDecision?: ReturnType<typeof vi.fn>;
@@ -132,6 +134,15 @@ function build(opts: {
     chatDefaultRestrictions: {
       stateForUser: vi.fn(async () => ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab'].map((kind) => ({ kind, allowed: kind !== 'terminal' }))),
       setAllowed: vi.fn(async () => {}),
+      listForUser: vi.fn(async () => new Set(['terminal'])),
+    },
+    // TER-1164: the open model's flag and blocks.
+    featureFlags: { overrideFor: vi.fn(async () => (opts.openOn ? true : null)), instanceValue: vi.fn(async () => null) },
+    chatBlocks: {
+      listActive: vi.fn(async () => [{ id: 'b1', user_id: 'u1', project_id: 'p1', kind: 'run_command', words: ['git', 'push'], effect: 'ask', conversation_id: null, created_at: '2026-11-06T10:00:00.000Z', revoked_at: null }]),
+      countActive: vi.fn(async () => 1),
+      create: vi.fn(async (input: { user_id: string; project_id: string | null; kind: string; words: string[]; effect: string }) => ({ block: { id: 'b2', conversation_id: null, created_at: '2026-11-06T11:00:00.000Z', revoked_at: null, ...input }, created: true })),
+      revoke: vi.fn(async (id: string, userId: string) => (id === 'b1' && userId === 'u1' ? { id, revoked_at: '2026-11-06T12:00:00.000Z' } : undefined)),
     },
     // Watches (TER-1099): none by default.
     chatWatches: { listOpen: vi.fn(async () => []), cancel: vi.fn(async (): Promise<unknown> => null) },
@@ -1272,6 +1283,61 @@ describe('default allowances (TER-627)', () => {
     const res = await app.inject({ method: 'PUT', url, payload });
     expect(res.statusCode).toBe(400);
     expect(repos.chatDefaultRestrictions.setAllowed).not.toHaveBeenCalled();
+  });
+});
+
+describe('blocks of the open model (TER-1164)', () => {
+  it.each([
+    ['GET', '/chat/blocks', undefined],
+    ['POST', '/chat/blocks', { kind: 'board' }],
+    ['DELETE', '/chat/blocks/b1', undefined],
+  ] as const)('%s %s is a 404 while the flag is off, and touches nothing', async (method, url, payload) => {
+    const { app, repos } = build();
+    const res = await app.inject({ method, url, ...(payload ? { payload } : {}) });
+    expect(res.statusCode).toBe(404);
+    expect(repos.chatBlocks.create).not.toHaveBeenCalled();
+    expect(repos.chatBlocks.revoke).not.toHaveBeenCalled();
+  });
+
+  it('GET lists the blocks, a restricted default among them, and the fixed core', async () => {
+    const { app } = build({ openOn: true });
+    const res = await app.inject({ method: 'GET', url: '/chat/blocks' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().always_asks).toContain('apagar card');
+    expect(res.json().blocks).toContainEqual(expect.objectContaining({ id: 'b1', kind: 'run_command', words: ['git', 'push'], source: 'block' }));
+    expect(res.json().blocks).toContainEqual(expect.objectContaining({ id: 'restriction:terminal', kind: 'terminal', project_id: null, source: 'restriction' }));
+  });
+
+  it('POST adds a block for a project of the caller, a command block parsed into words', async () => {
+    const { app, repos } = build({ openOn: true, projects: [{ id: 'p1', name: 'P1' }] as never });
+    const res = await app.inject({ method: 'POST', url: '/chat/blocks', payload: { kind: 'run_command', project_id: 'p1', command: 'git push', effect: 'never' } });
+    expect(res.statusCode).toBe(201);
+    expect(repos.chatBlocks.create).toHaveBeenCalledWith({ user_id: 'u1', project_id: 'p1', kind: 'run_command', words: ['git', 'push'], effect: 'never' });
+  });
+
+  it.each([
+    [{ kind: 'delete_task' }],
+    [{ kind: 'board', command: 'git push' }],
+    [{ kind: 'board', effect: 'maybe' }],
+    [{ kind: 'run_command', command: 'ls | wc' }],
+  ])('POST %j is a 400 and adds nothing', async (payload) => {
+    const { app, repos } = build({ openOn: true });
+    const res = await app.inject({ method: 'POST', url: '/chat/blocks', payload });
+    expect(res.statusCode).toBe(400);
+    expect(repos.chatBlocks.create).not.toHaveBeenCalled();
+  });
+
+  it('POST for a project outside the caller\'s scope is a 404', async () => {
+    const { app, repos } = build({ openOn: true });
+    const res = await app.inject({ method: 'POST', url: '/chat/blocks', payload: { kind: 'board', project_id: 'stranger' } });
+    expect(res.statusCode).toBe(404);
+    expect(repos.chatBlocks.create).not.toHaveBeenCalled();
+  });
+
+  it('DELETE lifts the caller\'s own block, 404 for any other', async () => {
+    const { app } = build({ openOn: true });
+    expect((await app.inject({ method: 'DELETE', url: '/chat/blocks/b1' })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'DELETE', url: '/chat/blocks/other' })).statusCode).toBe(404);
   });
 });
 
