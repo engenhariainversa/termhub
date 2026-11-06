@@ -1573,6 +1573,21 @@ export interface ChatDefault {
   allowed: boolean;
 }
 
+/** TER-1164 (flag chat_open_permissions): something the chat must not do on its own. */
+export type ChatBlockKind = 'open_tab' | 'close_tab' | 'start_agent' | 'board' | 'link_tab_task' | 'terminal' | 'run_command' | 'share_file' | 'machines' | 'tickets' | 'automation';
+export interface ChatBlock {
+  /** `restriction:<default kind>` for a default the person unchecked before the open model. */
+  id: string;
+  kind: ChatBlockKind;
+  project_id: string | null;
+  project_name: string | null;
+  /** run_command only: the commands that start with these words; empty = every command. */
+  words: string[];
+  effect: 'ask' | 'never';
+  source: 'block' | 'restriction';
+  created_at: string | null;
+}
+
 export interface ChatGrantListItem {
   kind: 'tab' | 'project' | 'standing';
   /** The standing grant's kind; null for a tab or project row. */

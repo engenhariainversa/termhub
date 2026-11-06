@@ -19,6 +19,8 @@ import { AiAccountsView } from '../components/AiAccountsView';
 import { HardwareView } from '../components/HardwareView';
 import { WaitlistView } from '../components/WaitlistView';
 import { ChatGrantsView } from '../components/ChatGrantsView';
+import { ChatBlocksView } from '../components/ChatBlocksView';
+import { FeatureGate } from '../lib/feature-flags';
 import { SecurityEventsView } from '../components/SecurityEventsView';
 import { FeatureFlagsView } from '../components/FeatureFlagsView';
 import { PageFrame } from '../components/PageHeader';
@@ -77,7 +79,10 @@ export function SettingsPage() {
     case 'chat-grants':
       return (
         <PageFrame title={t(current.label)}>
-          <ChatGrantsView />
+          {/* TER-1164: under "liberado por padrão" the person lists blocks instead of grants. */}
+          <FeatureGate flag="chat_open_permissions" fallback={<ChatGrantsView />}>
+            <ChatBlocksView />
+          </FeatureGate>
         </PageFrame>
       );
     case 'permissions':
