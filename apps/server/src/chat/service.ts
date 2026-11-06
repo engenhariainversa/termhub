@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { describeBlock, effectiveBlocks, openPermissionsOn } from './blocks.js';
 import { CAPABILITY_CLAUDE_STREAM_INPUT, CAPABILITY_CLAUDE_SYSTEM_PROMPT } from '@termhub/agent-protocol';
 import { STANDING_KIND_LABEL, replyExcerpt, tabQuestionReplyText, type ChatAttachment, type ReplyCardRef } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
@@ -1369,7 +1370,11 @@ export class ChatService {
       .map((g) => ({ name: g.name, siblings: g.projects.filter((m) => m.id !== project.id && m.status !== 'archived').map((m) => m.name) }));
     // TER-1011: the project's current rules (no superseded, wrong or expired note), read per run like the rest.
     const rules = await currentRulesBlock(this.deps.repos, user.id, project.id, CONCIERGE_RULES_MAX);
-    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules, rules);
+    // TER-1164: under the open model the chat is told the core and the blocks that apply here instead.
+    const open = (await openPermissionsOn(this.deps.repos, user.id))
+      ? (await effectiveBlocks(this.deps.repos, user.id)).filter((b) => b.project_id === null || b.project_id === project.id).map((b) => describeBlock(b, b.project_id ? project.name : null))
+      : null;
+    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules, rules, open);
   }
 
   /** The tabs' answered questions this conversation's model was not told yet, as the lines to prepend,

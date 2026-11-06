@@ -100,5 +100,8 @@
   "A decisão usada foi substituída": "The decision used was replaced",
   "Você pediu o status há pouco. Espere {{seconds}} s e tente de novo.": "You asked for the status a moment ago. Wait {{seconds}} s and try again.",
   "Mensagem grande demais: {{length}} de {{max}} caracteres. Envie o texto como anexo .txt": "Message too long: {{length}} of {{max}} characters. Send the text as a .txt attachment",
-  "Essa conta não está nas contas do Claude do projeto (Setup → Contas de IA e modelo)": "That account is not one of the project's Claude accounts (Setup → AI accounts and model)"
+  "Essa conta não está nas contas do Claude do projeto (Setup → Contas de IA e modelo)": "That account is not one of the project's Claude accounts (Setup → AI accounts and model)",
+  "Comando inválido para o bloqueio: use o começo de um comando simples, como «git push».": "Invalid command for the block: use the start of a simple command, such as «git push».",
+  "Limite de bloqueios atingido: tire algum antes de criar outro.": "Block limit reached: lift one before adding another.",
+  "Bloqueio não encontrado": "Block not found"
 }

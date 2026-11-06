@@ -128,6 +128,10 @@ const WRAPPER_PROGRAMS = new Set([
   'command', 'builtin', 'chroot', 'flock', 'npx', 'pnpx', 'bunx',
 ]);
 
+/** Whether the command runs another program (a shell, ssh, xargs, npx…): what it really runs is not in
+ *  its words, so the open model (TER-1164) never lets it through without a card. */
+export const isWrapperCommand = (words: readonly string[]): boolean => words.length > 0 && WRAPPER_PROGRAMS.has(programOf(words));
+
 const isShortCluster = (w: string, letter: string): boolean => /^-[A-Za-z]+$/.test(w) && w.includes(letter);
 
 /** `git push --force` (any spelling of it, a forced or deleting refspec), `git reset --hard`, `git clean`,

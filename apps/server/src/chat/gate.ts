@@ -24,7 +24,10 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // unstick_project_chat (TER-1147) only reads the usage of the project's accounts again, so the chat's next
 // message starts on one with room by the project's own rules: nothing is typed or run on a machine, no
 // account outside the project's list is picked, and the person asked for it to get the chat going without a click.
-const selfMediatedTools = new Set(['record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'set_chat_account', 'unstick_project_chat']);
+// block_action (TER-1164) only narrows what the chat may do: the person said what it must not do, and
+// the block shows in the chat and in Permissões do chat, where they lift it. Lifting one (unblock_action)
+// is a write no grant or default covers.
+const selfMediatedTools = new Set(['block_action', 'record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'set_chat_account', 'unstick_project_chat']);
 
 // Tools classified by reversibility
 const readTools = new Set([
@@ -66,6 +69,8 @@ const readTools = new Set([
   'list_watches',
   // TER-1147: the project's AI accounts, their usage and who answers its chat; nothing is changed.
   'get_project_ai_setup',
+  // TER-1164: the person's blocks of the open model; nothing is changed.
+  'list_blocks',
 ]);
 
 const writeTools = new Set([
@@ -104,6 +109,8 @@ const writeTools = new Set([
   // TER-1086: a file of a machine published in the chat. A card each time, or the person's own "Permitir
   // sempre nesta pasta" grant for that machine and folder (`FILE_GRANT_TOOL`); never a default.
   'share_file',
+  // TER-1164: lifts a block of the person's. Always a card: the open model's core, never a grant or a default.
+  'unblock_action',
 ]);
 
 // close_tab stays irreversible. control/terminals.ts skips its per-token ownership check for a gated

@@ -38,6 +38,8 @@ import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
+import { blockAction, listBlocksTool, unblockAction } from '../control/blocks.js';
+import { BLOCK_EFFECTS, BLOCK_KINDS, type BlockEffect, type BlockKind } from '../chat/open-permissions.js';
 import { getClientContext } from '../control/client-context.js';
 import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
 import { notify, type NotifyArgs } from '../control/notices.js';
@@ -303,6 +305,31 @@ export const TOOLS: ToolDef[] = [
     scope: 'read', resource: 'chat', action: 'read',
     input: { project_id: id.optional() },
     run: (ctx, a) => listCommandRulesTool(ctx, a as { project_id?: string }),
+  },
+  {
+    name: 'list_blocks',
+    description:
+      'When "liberado por padrão" is on for the person (on: true), the chat acts without a confirmation except for a fixed core (always_asks) and what the person blocked: each block names a kind, a project (or every project), for run_command optionally the command\'s first words, and its effect (ask: a card; never: refused). With project_id, only the blocks that apply there. With on: false the person is on the grants model: see list_command_rules and the cards.',
+    scope: 'read', resource: 'chat', action: 'read',
+    input: { project_id: id.optional() },
+    run: (ctx, a) => listBlocksTool(ctx, a as { project_id?: string }),
+  },
+  {
+    name: 'block_action',
+    description:
+      'Record what the person says the chat must not do ("não deixa o chat dar push no piki", "não mexe no quadro sem me perguntar") — on their word, never on your own. kind: ' +
+      BLOCK_KINDS.join(', ') +
+      '. project_id: that project (omit for every project). command: for kind run_command, the first words of the commands to block (e.g. "git push"); omit to block every command. effect: ask (default: a card each time) or never (refused, no card). Takes effect at once, with no card; tell the person what you blocked and that they lift it in Permissões do chat or by asking you. Only when list_blocks says on: true.',
+    scope: 'read', resource: 'chat', action: 'create',
+    input: { kind: z.enum(BLOCK_KINDS), project_id: id.optional(), command: z.string().trim().min(1).max(200).optional(), effect: z.enum(BLOCK_EFFECTS).optional() },
+    run: (ctx, a) => blockAction(ctx, a as { kind: BlockKind; project_id?: string; command?: string; effect?: BlockEffect }),
+  },
+  {
+    name: 'unblock_action',
+    description: 'Lift one of the person\'s blocks (block_id from list_blocks) when they ask for it. Always a confirmation card. A block whose id starts with "restriction:" is lifted only in Permissões do chat.',
+    scope: 'read', resource: 'chat', action: 'create',
+    input: { block_id: z.string().min(1).max(64) },
+    run: (ctx, a) => unblockAction(ctx, a as { block_id: string }),
   },
   {
     name: 'propose_command_rule',

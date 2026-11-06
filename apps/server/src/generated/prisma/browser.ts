@@ -303,6 +303,14 @@ export type ChatFileGrant = Prisma.ChatFileGrantModel
  */
 export type ChatDefaultRestriction = Prisma.ChatDefaultRestrictionModel
 /**
+ * Model ChatBlock
+ * TER-1164 (flag `chat_open_permissions`): something the chat must not do on its own — the person's
+ * "não pode". With the flag on the chat acts without a card unless a block (or the fixed core) says so.
+ * `kind` is one of `BLOCK_KINDS` (chat/open-permissions.ts); `words` narrows a run_command block to the
+ * commands that start with them (empty = every command). `effect`: ask (a card) | never (refused).
+ */
+export type ChatBlock = Prisma.ChatBlockModel
+/**
  * Model ChatCommandRule
  * A command the chat's run_command may type without a card (TER-1081, chat/command-rules.ts): the
  * command's words, matched exactly or as a prefix, in one project (or every project of the user when

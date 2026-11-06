@@ -106,6 +106,7 @@ model User {
   memoryWriteQueue        MemoryWriteQueue[]
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
+  chatBlocks              ChatBlock[]
   chatWatches             ChatWatch[]
   conciergeNotices        ConciergeNotice[]
   fileGrants             ChatFileGrant[]
@@ -338,6 +339,7 @@ model Project {
   pullRequests        TaskPullRequest[]
   standingGrants      ChatStandingGrant[]
   chatCommandRules    ChatCommandRule[]
+  chatBlocks          ChatBlock[]
   chatWatches         ChatWatch[]
   automationEvents    AutomationEvent[]
   automationRuns      AutomationRun[]
@@ -1359,6 +1361,29 @@ model ChatDefaultRestriction {
 
   @@id([userId, kind])
   @@map("chat_default_restrictions")
+}
+
+/// TER-1164 (flag `chat_open_permissions`): something the chat must not do on its own — the person's
+/// "não pode". With the flag on the chat acts without a card unless a block (or the fixed core) says so.
+/// `kind` is one of `BLOCK_KINDS` (chat/open-permissions.ts); `words` narrows a run_command block to the
+/// commands that start with them (empty = every command). `effect`: ask (a card) | never (refused).
+model ChatBlock {
+  id             String            @id
+  userId         String            @map("user_id")
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// null = every project of the user
+  projectId      String?           @map("project_id")
+  project        Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String
+  words          String[]          @default([])
+  effect         String            @default("ask")
+  conversationId String?           @map("conversation_id")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  revokedAt      DateTime?         @map("revoked_at")
+  revokedBy      String?           @map("revoked_by")
+
+  @@index([userId, revokedAt])
+  @@map("chat_blocks")
 }
 
 /// A command the chat's run_command may type without a card (TER-1081, chat/command-rules.ts): the

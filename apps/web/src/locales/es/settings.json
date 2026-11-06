@@ -586,5 +586,7 @@
   "O concierge precisa de você": "El concierge te necesita",
   "Precisa de você": "Te necesita",
   "Quando o concierge escreve sozinho (um acompanhamento, um lembrete, um resumo), ele avisa no celular e neste navegador conforme o nível. \"Só para saber\" fica só no chat.": "Cuando el concierge escribe por su cuenta (un seguimiento, un recordatorio, un resumen), te avisa en el celular y en este navegador según el nivel. \"Solo para saber\" queda solo en el chat.",
-  "Uma pergunta, uma aprovação ou um erro que bloqueia.": "Una pregunta, una aprobación o un error que bloquea."
+  "Uma pergunta, uma aprovação ou um erro que bloqueia.": "Una pregunta, una aprobación o un error que bloquea.",
+  "Chat: liberado por padrão": "Chat: permitido por defecto",
+  "O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.": "El chat actúa sin pedir confirmación y tú dices lo que no puede hacer (bloqueos por proyecto o para todos). Un núcleo fijo sigue pidiendo: borrar, push forzado, merge, integraciones, secretos y cuentas de IA. Desactivado, vale el modelo actual de permisos."
 }

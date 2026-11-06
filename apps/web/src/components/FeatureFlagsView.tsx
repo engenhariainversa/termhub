@@ -10,6 +10,10 @@ const FLAG_COPY: Record<FeatureFlagKey, { label: string; description: string }> 
     label: tk('Assinaturas'),
     description: tk('Planos, checkout, paywall e limites do período de teste. Desligado, nada disso aparece na web, no app nem na landing, as rotas de cobrança não existem e os webhooks do provedor de pagamento são ignorados.'),
   },
+  chat_open_permissions: {
+    label: tk('Chat: liberado por padrão'),
+    description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.'),
+  },
 };
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (next: boolean) => void }) {

@@ -586,5 +586,7 @@
   "O concierge precisa de você": "The concierge needs you",
   "Precisa de você": "Needs you",
   "Quando o concierge escreve sozinho (um acompanhamento, um lembrete, um resumo), ele avisa no celular e neste navegador conforme o nível. \"Só para saber\" fica só no chat.": "When the concierge writes on its own (something it follows, a reminder, a summary), it notifies you on your phone and in this browser by level. \"Just so you know\" stays in the chat.",
-  "Uma pergunta, uma aprovação ou um erro que bloqueia.": "A question, an approval or an error that blocks."
+  "Uma pergunta, uma aprovação ou um erro que bloqueia.": "A question, an approval or an error that blocks.",
+  "Chat: liberado por padrão": "Chat: allowed by default",
+  "O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.": "The chat acts without asking for confirmation and you say what it must not do (blocks per project or for every project). A fixed core still asks: deleting, force push, merge, integrations, secrets and AI accounts. While off, the current grants model applies."
 }

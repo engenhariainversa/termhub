@@ -52,6 +52,15 @@ off for a person:
 
 With the flag on for a test account (an override), the whole flow works for that account only.
 
+## Chat: allowed by default (`chat_open_permissions`, TER-1164)
+
+With the flag on for a person, the chat's gate inverts: the chat acts without a confirmation card and the
+person lists what it must not do (blocks, per project or for every project, "pedir antes" or "nunca"). A
+fixed core always asks (`OPEN_CORE_TEXT` in `apps/server/src/chat/open-permissions.ts`). With it off, the
+grants model applies as before. Server: `openPermissionsOn` in `apps/server/src/chat/blocks.ts`; the
+`/api/chat/blocks` routes answer 404 while off. Spec:
+`docs/superpowers/specs/2026-11-06-chat-open-permissions-design.md`.
+
 ## Impact on other users
 
 None while a flag is off, which is the default: no screen, route or limit changes for anyone. The
