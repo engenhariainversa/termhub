@@ -1,6 +1,6 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
-import type { AutomationFeedEvent, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
+import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { DataExportStatus } from './types';
 import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
@@ -405,6 +405,9 @@ export const api = {
     request<{ grants: ChatGrantListItem[]; next_cursor: string | null }>('GET', `/chat/grants?state=${q.state}${q.cursor ? `&cursor=${encodeURIComponent(q.cursor)}` : ''}&kinds=all_standing`),
   /** "Liberadas por padrão" (TER-627): the chat's default allowances and whether each is on for me. */
   /** "Pastas liberadas" (TER-1086): the folders of a machine the chat may share files from without asking. */
+  listChatBlocks: () => request<{ blocks: ChatBlock[] }>('GET', '/chat/blocks'),
+  createChatBlock: (input: { kind: ChatBlockKind; project_id?: string | null; command?: string; effect?: ChatBlock['effect'] }) => request<{ block: ChatBlock }>('POST', '/chat/blocks', input),
+  deleteChatBlock: (id: string) => request<{ block: { id: string; revoked_at: string | null } }>('DELETE', `/chat/blocks/${encodeURIComponent(id)}`),
   listChatFileGrants: () => request<{ grants: ChatFileGrant[] }>('GET', '/chat/file-grants'),
   revokeChatFileGrant: (id: string) => request<{ grant: { id: string; revoked_at: string | null } }>('DELETE', `/chat/file-grants/${encodeURIComponent(id)}`),
   listChatDefaults: () => request<{ defaults: ChatDefault[] }>('GET', '/chat/defaults'),
