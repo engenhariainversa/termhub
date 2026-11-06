@@ -67,6 +67,26 @@ it('stays under the protocol cap with a long name and many long paths, and keeps
   expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
 });
 
+// TER-1164: in a new project the chat said typing in a tab "cannot be turned off" and that the rules only
+// cover commands. The prompt always says where the person lifts a confirmation and what each rule covers.
+it('always says how the person lifts a confirmation, even with no default left on', () => {
+  for (const text of [projectSystemPrompt({ name: 'X', key: 'X' }, []), projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], ['terminal'])]) {
+    expect(text).toContain('Como o usuário libera (você não muda permissões, só diz onde)');
+    expect(text).toContain('Regras de comando cobrem só run_command');
+    expect(text).toContain('Configurações › Permissões do chat');
+    expect(text).toContain('Responder a uma permissão do CLI nunca é liberado');
+  }
+});
+
+it('keeps the how-to-lift line under the protocol cap with every optional line full', () => {
+  const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
+  const rules = Array.from({ length: 40 }, (_, i) => ({ pattern: `cmd-${'x'.repeat(30)}-${i}`, match: 'prefix' as const }));
+  const text = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links, ['open_tab', 'close_tab', 'start_agent', 'board', 'terminal'], [], ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab', 'read_commands'], rules, `Regras atuais:\n${'- regra longa\n'.repeat(80)}`);
+  expect(text.length).toBeLessThanOrEqual(4000);
+  expect(text).toContain('Como o usuário libera');
+  expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+});
+
 it('says nothing about standing grants when none are active', () => {
   const text = projectSystemPrompt({ name: 'X', key: 'X' }, []);
   expect(text).not.toContain('Liberado sem confirmação');
@@ -120,10 +140,11 @@ describe('every optional line at once (TER-1154)', () => {
   });
 
   it('gives up the groups and command rules first, keeping the rules whole when that is enough', () => {
-    const text = all();
+    // six rules: the how-to-lift line (TER-1164) is always told and takes the room of three more
+    const text = all(rulesOf(6));
     expect(text).not.toContain('Its sidebar groups');
     expect(text).not.toContain('run_command roda sem confirmação');
-    expect(text).toContain('- [note:8]');
+    expect(text).toContain('- [note:5]');
     expect(text).not.toContain('outras em search_memory');
     expect(text).toContain('Liberado sem confirmação neste projeto');
     expect(text).toContain('Liberado sem confirmação por padrão');
