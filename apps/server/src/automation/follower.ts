@@ -55,6 +55,11 @@ export const RETYPE_AFTER_MS = 10 * 60_000;
  * parked for them instead of being typed into.
  */
 export const TRUST_WAIT_MS = 3 * 60_000;
+/**
+ * TER-1148: a run's tab the monitor saw on a trust dialog it could not answer (a folder outside the project, the
+ * option off, "No" selected) is parked for the person after this long, so the run counts as blocked.
+ */
+export const TRUST_PROMPT_PARK_MS = 2 * 60_000;
 /** How long a start with no hook waits before the screen is read for the trust question (TER-1025). */
 export const TRUST_LOOK_MS = 30_000;
 /** Trust answers the server sends in one run: a question that keeps coming back goes to the person. */
@@ -847,6 +852,11 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
           if (pane === 'shell' || pane === 'dead') await parkAndEscalate(deps.repos, run, AGENT_NOT_STARTED, log);
           else await parkForTrust(deps.repos, run, log);
         }
+        return;
+      }
+      // TER-1148: the tab waits on a trust dialog the server did not answer: the person's, past a short wait
+      if (tab.state === 'trust_prompt') {
+        if (run.status === 'running' && sinceMs(deps, tab.state_at) >= TRUST_PROMPT_PARK_MS) await parkForTrust(deps.repos, run, log);
         return;
       }
       if (run.status === 'waiting' && run.waiting_reason === NEEDS_PERSON && !isAccountSwapState(tab.state_text)) {

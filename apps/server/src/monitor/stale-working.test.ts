@@ -24,6 +24,10 @@ function setup(tabs: Tab[], screen: string, opts: { online?: boolean; machine?: 
   const repos = {
     tabs: { listStaleWorking: vi.fn(async () => tabs), listUnreported: vi.fn(async () => tabs), recordEvent, readLastAnswer },
     machines: { findById: vi.fn(async () => opts.machine ?? machine()) },
+    // the folder trust rule (TER-1117, TER-1148): the project's link on m1, no run on the tab
+    projectSetup: { get: vi.fn(async () => ({ data: { agent: { trust_project_folder: true } } })) },
+    projectMachines: { find: vi.fn(async () => ({ project_id: 'p1', machine_id: 'm1', cwd: '/srv/api' })) },
+    automationRuns: { latestByTab: vi.fn(async () => null) },
   } as unknown as Repositories;
   const capture = vi.fn(async () => screen);
   // null by default: an agent older than 0.14.0 cannot tell, and the screen decides alone (TER-615)
@@ -266,7 +270,7 @@ describe('sweepStaleWorking / sweepUnreported — the trust dialog and the login
 
   it('a tab that never reported, with Claude Code on the trust dialog, is trust_prompt; with the login error, auth_required', async () => {
     publish.mockClear();
-    const unreported = tab({ state: null, state_at: null, state_tool: null });
+    const unreported = tab({ state: null, state_at: null, state_tool: null, cwd: '/elsewhere' });
     const trust = setup([unreported], TRUST, { pane: 'busy' });
     const l = log();
     await sweepUnreported(trust.repos, l as never, now, trust.deps);

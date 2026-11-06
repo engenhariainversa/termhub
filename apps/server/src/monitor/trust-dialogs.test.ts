@@ -33,11 +33,11 @@ const CODEX_APPROVAL = [
 
 describe('trustDialogOf — every CLI\'s folder trust dialog (TER-1122)', () => {
   it('reads each CLI\'s dialog with its trust option selected as one Enter answers', () => {
-    expect(trustDialogOf(CLAUDE)).toEqual({ cli: 'claude', acceptable: true });
-    expect(trustDialogOf(CODEX)).toEqual({ cli: 'codex', acceptable: true });
-    expect(trustDialogOf(CODEX_CONTENTS)).toEqual({ cli: 'codex', acceptable: true });
-    expect(trustDialogOf(CURSOR)).toEqual({ cli: 'cursor', acceptable: true });
-    expect(trustDialogOf(GEMINI)).toEqual({ cli: 'gemini', acceptable: true });
+    expect(trustDialogOf(CLAUDE)).toEqual({ cli: 'claude', acceptable: true, selected: true, changesPermissions: false });
+    expect(trustDialogOf(CODEX)).toEqual({ cli: 'codex', acceptable: true, selected: true, changesPermissions: false });
+    expect(trustDialogOf(CODEX_CONTENTS)).toEqual({ cli: 'codex', acceptable: true, selected: true, changesPermissions: false });
+    expect(trustDialogOf(CURSOR)).toEqual({ cli: 'cursor', acceptable: true, selected: true, changesPermissions: false });
+    expect(trustDialogOf(GEMINI)).toEqual({ cli: 'gemini', acceptable: true, selected: true, changesPermissions: false });
   });
 
   it('a dialog with another option selected is seen but left for the person', () => {
@@ -48,22 +48,22 @@ describe('trustDialogOf — every CLI\'s folder trust dialog (TER-1122)', () => 
       GEMINI.replace('● 1. Trust folder', '  1. Trust folder').replace('  3. Don\'t trust', '● 3. Don\'t trust'),
     ];
     expect(moved.map((s) => trustDialogOf(s))).toEqual([
-      { cli: 'claude', acceptable: false },
-      { cli: 'codex', acceptable: false },
-      { cli: 'cursor', acceptable: false },
-      { cli: 'gemini', acceptable: false },
+      { cli: 'claude', acceptable: false, selected: false, changesPermissions: false },
+      { cli: 'codex', acceptable: false, selected: false, changesPermissions: false },
+      { cli: 'cursor', acceptable: false, selected: false, changesPermissions: false },
+      { cli: 'gemini', acceptable: false, selected: false, changesPermissions: false },
     ]);
   });
 
   it("Codex's older dialog that also turns approvals off is never answered", () => {
-    expect(trustDialogOf(CODEX_APPROVAL)).toEqual({ cli: 'codex', acceptable: false });
+    expect(trustDialogOf(CODEX_APPROVAL)).toEqual({ cli: 'codex', acceptable: false, selected: true, changesPermissions: true });
   });
 
   it('a pane that still shows an earlier CLI\'s dialog above reads only the newest one', () => {
     // Claude Code answered and exited, then Codex opened in the same tab with "Quit" selected: never Enter
     const codexQuit = CODEX.replace('› 1. Trust and continue', '  1. Trust and continue').replace('  2. Quit', '› 2. Quit');
-    expect(trustDialogOf(`${CLAUDE}\nfake-claude trusted\n$ codex\n${codexQuit}`)).toEqual({ cli: 'codex', acceptable: false });
-    expect(trustDialogOf(`${CLAUDE}\n$ codex\n${CODEX}`)).toEqual({ cli: 'codex', acceptable: true });
+    expect(trustDialogOf(`${CLAUDE}\nfake-claude trusted\n$ codex\n${codexQuit}`)).toEqual({ cli: 'codex', acceptable: false, selected: false, changesPermissions: false });
+    expect(trustDialogOf(`${CLAUDE}\n$ codex\n${CODEX}`)).toEqual({ cli: 'codex', acceptable: true, selected: true, changesPermissions: false });
   });
 
   it('a transcript that only quotes a question, or any other screen, is no dialog', () => {
