@@ -15,6 +15,8 @@ import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
+import { createProject, type CreateProjectInput } from '../control/projects.js';
+import { PROJECT_KEY_RE } from '../lib/project-key.js';
 import { addSubtasks, createColumn, createTask, deleteTask, listTasks, moveTask, updateColumn, TASK_DESCRIPTION_MAX, TASK_POSITION_MAX, TASK_TITLE_MAX, updateTask, type CreatableType, type WorkType } from '../control/tasks.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
@@ -323,6 +325,22 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: { tab_id: id, force: z.boolean().optional() },
     run: (ctx, a) => closeTab(ctx, a as { tab_id: string; force?: boolean }),
+  },
+  {
+    name: 'create_project',
+    description:
+      'Create a project, as the Projetos screen does (same rules: the key is unique, 2 to 10 uppercase letters or digits starting with a letter, and never changes). Use it when the person asks for a new project instead of sending them to the screen. name: the project name. key: omit to use the suggestion from the name (initials, or the first three letters); say it to the person before calling. description: optional. group: optional, the id or name of one of the person\'s own groups (list_project_groups); the project goes at its end. machine_id + cwd (both or neither): link the first machine right away, with the same checks as link_project_machine (create_dir: true creates the folder empty). In the chat the person confirms on a card showing name, key, group and machine/folder. Answers the project (id, key, url), the group and the machine link.',
+    scope: 'terminals', resource: 'projects', action: 'create',
+    input: {
+      name: z.string().trim().min(1).max(120),
+      key: z.string().trim().regex(PROJECT_KEY_RE, 'key: 2 to 10 uppercase letters or digits, starting with a letter').optional(),
+      description: z.string().trim().max(2000).optional(),
+      group: z.string().trim().min(1).max(64).optional(),
+      machine_id: id.optional(),
+      cwd: PROJECT_CWD.optional(),
+      create_dir: z.boolean().optional(),
+    },
+    run: (ctx, a) => createProject(ctx, a as unknown as CreateProjectInput),
   },
   {
     name: 'link_project_machine',

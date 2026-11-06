@@ -170,5 +170,8 @@
   "Só a pessoa ou o concierge mudam as contas de IA de um projeto, nunca um agente numa aba": "Solo la persona o el conserje cambian las cuentas de IA de un proyecto, nunca un agente en una pestaña",
   "A máquina {{machine}} não está ligada ao projeto": "La máquina {{machine}} no está vinculada al proyecto",
   "Mudar as contas de IA ou o modelo de um projeto precisa da confirmação da pessoa no chat. Nada foi alterado: proponha a chamada de novo.": "Cambiar las cuentas de IA o el modelo de un proyecto necesita la confirmación de la persona en el chat. No se cambió nada: propón la llamada de nuevo.",
-  "O card {{ref}} tem PR aberto, não mesclado: {{prs}}; repita com confirm: true para mover para Feito mesmo assim": "La tarjeta {{ref}} tiene un PR abierto, sin fusionar: {{prs}}; repite con confirm: true para moverla a Hecho de todos modos"
+  "O card {{ref}} tem PR aberto, não mesclado: {{prs}}; repita com confirm: true para mover para Feito mesmo assim": "La tarjeta {{ref}} tiene un PR abierto, sin fusionar: {{prs}}; repite con confirm: true para moverla a Hecho de todos modos",
+  "Não encontrei o grupo {{group}} entre os seus grupos; veja os nomes com list_project_groups ou deixe group de fora": "No encontré el grupo {{group}} entre tus grupos; consulta los nombres con list_project_groups o deja group fuera",
+  "machine_id e cwd vêm juntos: passe os dois para já ligar uma máquina, ou nenhum": "machine_id y cwd van juntos: pasa los dos para vincular una máquina de inmediato, o ninguno",
+  "A chave sugerida {{key}} já está em uso; repita com outra chave em key": "La clave sugerida {{key}} ya está en uso; repite con otra clave en key"
 }

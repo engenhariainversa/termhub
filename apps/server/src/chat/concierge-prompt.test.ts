@@ -78,3 +78,7 @@ it('tells the concierge to come back at a set time with schedule_wakeup and conf
 it('tells the concierge to put a message for others in a draft fence', () => {
   expect(ORCHESTRATOR_PROMPT).toMatch(/message for the person to send to others .*```draft fence/);
 });
+
+it('tells the concierge to create a project itself with create_project (TER-1163)', () => {
+  expect(ORCHESTRATOR_PROMPT).toContain('Projects: create_project');
+});

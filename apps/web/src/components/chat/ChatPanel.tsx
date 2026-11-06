@@ -35,6 +35,7 @@ import { isActive, upsertSubagent } from '../../lib/subagents';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
+import { useOptionalData } from '../../lib/data';
 import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatCommandRule, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /** How often the panel's elapsed labels ("há N min") refresh while it is open. */
@@ -100,6 +101,9 @@ const TabSuggestionRow = memo(function TabSuggestionRow({
   return <TabSuggestionCard suggestion={suggestion} busy={busy} error={error} onSend={send} onDismiss={dismiss} />;
 });
 
+/** Chat tools whose run changes the projects list (a new project, a machine linked or unlinked). */
+const PROJECT_LIST_TOOLS = new Set(['create_project', 'link_project_machine', 'unlink_project_machine']);
+
 /**
  * The concierge chat: streamed live over /ws/chat and persisted over REST. `projectId === null` is the
  * account-wide chat (`/chat`, where the host is chosen); a project id is that project's own chat,
@@ -125,6 +129,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    * assume one row per proposal or per tool.
    */
   const [actions, setActions] = useState<ChatAction[]>([]);
+  // TER-1163: an approved create_project (or a link change) shows in the sidebar at once, not at the next focus.
+  const data = useOptionalData();
+  const actionsRef = useRef(actions);
+  const refreshData = useRef(data?.refresh);
+  useEffect(() => {
+    actionsRef.current = actions;
+    refreshData.current = data?.refresh;
+  });
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** A `queued: true` decision is not an error: the pt-BR note the server sent, shown under that card
@@ -414,6 +426,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // The gate ran it, or it failed or went stale (TER-477): the card reads so without a reload. An
         // id not on screen (outside the loaded window) is left to the next read.
         setActions((prev) => (prev.some((a) => a.id === e.action_id) ? prev.map((a) => (a.id === e.action_id ? { ...a, status: e.status, error_code: e.error_code } : a)) : prev));
+        const tool = actionsRef.current.find((a) => a.id === e.action_id)?.tool;
+        if (e.status === 'executed' && tool && PROJECT_LIST_TOOLS.has(tool)) void refreshData.current?.();
       } else if (e.type === 'grant') setGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && !(g.tab_id === e.grant.tab_id && g.tool === e.grant.tool)), e.grant]);
       else if (e.type === 'grant_revoked') setGrants((prev) => prev.filter((g) => g.id !== e.grant_id));
       else if (e.type === 'project_grant') setProjectGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && g.project_id !== e.grant.project_id), e.grant]);

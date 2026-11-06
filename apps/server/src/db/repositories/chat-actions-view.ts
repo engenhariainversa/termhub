@@ -7,6 +7,7 @@ import type { ChatProjectGrant, ChatProjectGrantWithConversation, ProjectGrantSc
 import type { ChatStandingGrant, ChatStandingGrantWithConversation, StandingGrantKind } from './chat-standing-grants.js';
 import type { Task, Ticket } from './types.js';
 import { commandRuleOffer } from '../../chat/command-rules.js';
+import { suggestProjectKey } from '../../lib/project-key.js';
 
 /**
  * The trimmed, human-facing shape of a chat action: what the card needs to read like a sentence
@@ -155,7 +156,19 @@ function projectAiPhrase(args: Record<string, unknown>): string {
   return `mudar as contas de IA e o modelo do projeto${parts.length ? ` (${parts.join('; ')})` : ''}`;
 }
 
-function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
+/** What a `create_project` card asks (TER-1163): the name, the key — the name's suggestion when none was given,
+ *  the same one the tool will use —, the group and the folder; the machine is the card's "where". A group
+ *  named by id reads by its name when it is one of the person's; otherwise as given. */
+function createProjectPhrase(args: Record<string, unknown>, groupNameById: Map<string, string>): string {
+  const name = asString(args.name);
+  const key = typeof args.key === 'string' ? `com a chave ${args.key}` : `com a chave ${suggestProjectKey(name)} (sugerida pelo nome)`;
+  const groupRef = asString(args.group);
+  const group = groupRef ? `, no grupo "${groupNameById.get(groupRef) ?? groupRef}"` : '';
+  const dir = typeof args.cwd === 'string' ? `, ligado à pasta \`${args.cwd}\`${args.create_dir === true ? ' (criando a pasta)' : ''}` : '';
+  return `criar o projeto "${name}" ${key}${group}${dir}`;
+}
+
+function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>, groupNameById: Map<string, string>): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
     case 'send_input':
@@ -175,6 +188,8 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
       return 'abrir uma aba nova';
     case 'close_tab':
       return 'fechar a aba';
+    case 'create_project':
+      return createProjectPhrase(args, groupNameById);
     case 'link_project_machine':
       return `vincular a pasta \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
     case 'set_project_machine_cwd':
@@ -319,8 +334,8 @@ function targetPhrase(loc: Location): string {
   return place ? `${place}, no ${loc.machine}` : `no ${loc.machine}`;
 }
 
-function summarize(action: ChatAction, task: Task | undefined, loc: Location, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>): string {
-  const verb = verbPhrase(action, task, ticketById, integrationById);
+function summarize(action: ChatAction, task: Task | undefined, loc: Location, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>, groupNameById: Map<string, string>): string {
+  const verb = verbPhrase(action, task, ticketById, integrationById, groupNameById);
   const where = targetPhrase(loc);
   return where ? `${verb} ${where}` : verb;
 }
@@ -408,6 +423,11 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
   // lookup, and none at all when no such card is in the batch).
   const integrations = actions.some((a) => a.tool === 'set_project_repo') ? await repos.integrations.list(ownerId) : [];
   const integrationById = new Map(integrations.map((i) => [i.id, i]));
+
+  // create_project only: a group named by id reads by its name (TER-1163). Groups are personal: the
+  // viewer's own, read only when such a card is in the batch.
+  const groups = actions.some((a) => a.tool === 'create_project' && asString((a.args as Record<string, unknown> | null)?.group)) ? await repos.projectGroups.read(ownerId) : [];
+  const groupNameById = new Map(groups.filter((g) => g.kind === 'custom').map((g) => [g.id, g.name]));
 
   // close_tab only: who opened the tab decides what the card says (TER-184), so the one confirmation
   // the gate now asks for (a gated token may close any of the user's tabs after this single "yes") is
@@ -505,7 +525,7 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
       loc = {};
     }
 
-    const summary = summarize(action, task, loc, ticketById, integrationById);
+    const summary = summarize(action, task, loc, ticketById, integrationById, groupNameById);
     const sa = action.subagent_id ? subById.get(action.subagent_id) : undefined;
     const subagent = sa && sa.conversation_id === action.conversation_id ? { id: sa.id, description: sa.description } : null;
     return toCard(action, summary, subagent, autoDecisions[index] ?? null, Boolean(loc.missing) || (Boolean(taskId) && !task));
