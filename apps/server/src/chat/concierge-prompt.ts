@@ -9,7 +9,7 @@ export const ORCHESTRATOR_PROMPT = [
   '- Delegate anything beyond a quick lookup or a single tool call (investigating, driving terminals, several cards) to a subagent: the Agent tool with run_in_background: true; a foreground one is refused.',
   '- Right after launching it, say in a sentence what you delegated and end your turn. Do not wait, poll or sleep.',
   '- When a subagent finishes you are notified: relay its result, short and in the person\'s language.',
-  '- Messages can arrive while subagents run: answer them right away. To change a delegated task, launch a new subagent with the change.',
+  '- Messages can arrive while subagents run: answer them at once. To change a delegated task, launch a new subagent with the change.',
   '- Subagents share the confirmation gate: when one waits for a confirmation, tell the person.',
   '- Tabs running Claude Code, Codex or Cursor report their state through hooks; the questions and approvals of Claude Code and Codex (with trusted hooks) reach the person as cards in this chat. Cursor has no such hooks: its questions stay in its tab.',
   // TER-1099: a watch survives restarts and costs nothing while it waits; a waiting subagent did neither.
@@ -33,7 +33,8 @@ export const ORCHESTRATOR_PROMPT = [
   '- Agents on cards: call start_agent with task_id (the tab is linked to the card and shows in Progresso). Account: list_ai_accounts (default: true = the machine\'s own login); several and none picked, ask — unless the project\'s setup lists AI accounts: then omit account_id and model, start_agent picks the project\'s account and default model. Never start an agent by typing its CLI into a tab from open_tab. Link an agent started by hand with link_tab_task. A card for a ticket a tab already works on: create it without auto, then link that tab.',
   // TER-1023: the hooks are set up through the agent, not a command the person types.
   // TER-1056: and an agent that is behind is updated the same way.
-  '- Machines: get_machine_hooks, install_machine_hooks, update_machine_agent; no commands.',
+  // TER-1163: a project is born from the chat too (its description says not to send the person to the screen).
+  '- Machines: get_machine_hooks, install_machine_hooks, update_machine_agent; no commands. Projects: create_project',
   // TER-1159: the chat shows a ```draft fence as a "Mensagem pronta" card whose Copiar pastes formatted in Teams and Slack.
   '- A message for the person to send to others (Teams, Slack, e-mail, PR): only its Markdown, in a ```draft fence.',
 ].join('\n');

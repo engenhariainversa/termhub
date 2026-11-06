@@ -79,6 +79,8 @@ vi.mock('../../lib/api', () => {
 // factory.
 const auth = vi.hoisted(() => ({ state: { user: { id: 'u1' }, viewAs: null } as { user: { id: string } | null; viewAs: unknown } }));
 vi.mock('../../lib/auth', () => ({ useAuth: () => auth.state }));
+const refreshDataMock = vi.fn(async () => {});
+vi.mock('../../lib/data', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../lib/data')>()), useOptionalData: () => ({ refresh: refreshDataMock }) }));
 vi.mock('../../lib/chat', () => ({ useChatStream: (...a: unknown[]) => streamMock(...a) }));
 
 const msg = (over: Partial<ChatMessage> & { id: string }): ChatMessage => ({
@@ -1661,6 +1663,18 @@ describe('pending cards at hand (TER-477)', () => {
     expect(screen.queryByRole('button', { name: 'Autorizar' })).toBeNull();
     // Nothing waits any more: the bar is gone.
     expect(screen.queryByRole('button', { name: /pendente/ })).toBeNull();
+  });
+
+  it('an executed create_project re-reads the projects, so the new one shows in the sidebar at once (TER-1163)', async () => {
+    mount([action({ id: 'a1', tool: 'create_project', args: { name: 'Piki', key: 'PIKI' } })]);
+    await screen.findByRole('button', { name: 'Autorizar' });
+    refreshDataMock.mockClear();
+    // an id not on screen, and a run that failed, read nothing again
+    act(() => onEvent({ type: 'action_status', conversation_id: 'c1', user_id: 'u1', action_id: 'a9', status: 'executed', error_code: null }));
+    act(() => onEvent({ type: 'action_status', conversation_id: 'c1', user_id: 'u1', action_id: 'a1', status: 'failed', error_code: null }));
+    expect(refreshDataMock).not.toHaveBeenCalled();
+    act(() => onEvent({ type: 'action_status', conversation_id: 'c1', user_id: 'u1', action_id: 'a1', status: 'executed', error_code: null }));
+    expect(refreshDataMock).toHaveBeenCalledTimes(1);
   });
 
   it('a confirmation for a card already on screen brings it to the end of the thread', async () => {

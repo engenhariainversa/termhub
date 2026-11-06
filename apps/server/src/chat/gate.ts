@@ -81,6 +81,8 @@ const writeTools = new Set([
   'create_column',
   'update_column',
   'link_tab_task',
+  // TER-1163: a new project (and maybe its first machine link). Always a card: no grant or default covers it.
+  'create_project',
   'link_project_machine',
   'set_project_machine_cwd',
   'sync_tickets',

@@ -9,6 +9,8 @@ vi.mock('../control/tickets.js', async (importOriginal) => ({
 
 import type { ControlContext } from '../control/context.js';
 import { allowedTools, inputSchemaOf, parseArgs, TOOLS } from './tools.js';
+import { TAB_TOKEN_TOOLS } from './tab-token.js';
+import { AUTOMATION_MCP_DENIED_TOOLS } from '../control/automation-tools.js';
 
 it('read_screen says what ⟦…⟧ means and what styled: false means', () => {
   const d = TOOLS.find((t) => t.name === 'read_screen')!.description;
@@ -32,6 +34,32 @@ it('link_project_machine, set_project_machine_cwd and unlink_project_machine are
   expect(unlink.scope).toBe('terminals');
   expect(unlink.resource).toBe('projects');
   expect(unlink.action).toBe('delete');
+});
+
+it('create_project needs projects:create, like the Projetos screen, and is never on a tab token (TER-1163)', async () => {
+  const tool = TOOLS.find((t) => t.name === 'create_project')!;
+  expect([tool.scope, tool.resource, tool.action]).toEqual(['terminals', 'projects', 'create']);
+  expect(TAB_TOKEN_TOOLS).not.toContain('create_project');
+  expect(AUTOMATION_MCP_DENIED_TOOLS).toContain('mcp__termhub__create_project');
+
+  const can = (granted: boolean) => vi.fn(async (resource: string, action: string) => granted || !(resource === 'projects' && action === 'create'));
+  const names = async (granted: boolean, token?: ControlContext['token']) => (await allowedTools({ can: can(granted), token } as unknown as ControlContext, ['read', 'tasks', 'terminals', 'memory'])).map((t) => t.name);
+  expect(await names(true)).toContain('create_project');
+  // without the grant (a role that cannot create projects) the tool is not there
+  expect(await names(false)).not.toContain('create_project');
+  // an agent tab's token never lists it, whatever its owner may do
+  expect(await names(true, { id: 'tk', scopes: ['read', 'memory'], tab: { id: 't1', project_id: 'p1' } })).not.toContain('create_project');
+});
+
+it('create_project validates the key and the folder like the screen does', () => {
+  const tool = TOOLS.find((t) => t.name === 'create_project')!;
+  expect(parseArgs(tool, { name: 'Piki' }).ok).toBe(true);
+  expect(parseArgs(tool, { name: 'Piki', key: 'PIKI', group: 'Clientes', machine_id: 'm1', cwd: '~/piki', create_dir: true }).ok).toBe(true);
+  expect(parseArgs(tool, { name: 'Piki', key: 'piki' }).ok).toBe(false);
+  expect(parseArgs(tool, { name: 'Piki', key: '1AB' }).ok).toBe(false);
+  expect(parseArgs(tool, { name: 'Piki', key: 'ABCDEFGHIJK' }).ok).toBe(false);
+  expect(parseArgs(tool, { name: '  ' }).ok).toBe(false);
+  expect(parseArgs(tool, { name: 'Piki', machine_id: 'm1', cwd: 'piki' }).ok).toBe(false);
 });
 
 it('link_project_machine and set_project_machine_cwd refuse a relative cwd and accept a ~ path', () => {

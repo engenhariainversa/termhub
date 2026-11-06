@@ -16,6 +16,7 @@ import { publishTabOpened, publishTabsRemoved } from '../monitor/tab-events.js';
 import { importAiMemoryForProject } from '../memory/ai-memory.js';
 import { defaultEmbedder } from '../chat/embeddings.js';
 import { announceLinked, PROJECT_CWD, removeProjectMachineLink, resolveLinkCwd } from '../control/project-links.js';
+import { createProjectRecord } from '../control/projects.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 const linkParams = z.object({ id: z.string().min(1).max(64), machineId: z.string().min(1).max(64) });
@@ -106,10 +107,9 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
       });
       resolvedCwd = (await resolveLinkCwd(machine, cwd, create_dir)).path;
     }
-    const project = await rule(() => repos.projects.create({ owner_id: request.scope.createAs, key: body.key, name: body.name, description: body.description, status: body.status }));
-    const machines =
-      machine && resolvedCwd ? [linkView(await rule(() => repos.projectMachines.link({ project_id: project.id, machine_id: machine!.id, cwd: resolvedCwd! })))] : [];
-    return reply.code(201).send({ project: { ...project, machines } });
+    // the same service the MCP create_project calls (TER-1163): one set of rules wherever a project is born
+    const { project, link } = await rule(() => createProjectRecord(repos, request.scope.createAs, body, machine && resolvedCwd ? { machine, cwd: resolvedCwd } : undefined));
+    return reply.code(201).send({ project: { ...project, machines: link ? [linkView(link)] : [] } });
   });
 
   app.get('/:id', async (request) => {
