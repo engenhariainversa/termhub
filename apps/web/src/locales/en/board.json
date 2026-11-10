@@ -511,5 +511,7 @@
   "falhou: publicação": "failed: release",
   "{{phase}} em {{date}}": "{{phase}} on {{date}}",
   "{{phase}} · desde {{date}}": "{{phase}} · since {{date}}",
-  "Branch do épico": "Epic branch"
+  "Branch do épico": "Epic branch",
+  "está presa num diálogo do CLI": "is stuck on a CLI dialog",
+  "preso num diálogo": "stuck on a dialog"
 }

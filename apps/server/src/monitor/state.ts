@@ -443,10 +443,10 @@ export function interpretHookEvent(tool: HookTool, raw: unknown): Interpreted | 
 
 /**
  * States in which the tool is waiting for the person (the "needs you" list): a question or a permission, a
- * login that expired and the folder trust dialog (TER-1046). `waiting_background` is not one, nor is
+ * login that expired and the folder trust dialog (TER-1046), a modal dialog of the CLI (TER-1166). `waiting_background` is not one, nor is
  * `finished` (the agent reported and asks nothing, TER-972) or `blocked` (automation or the chat acts).
  */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt', 'cli_dialog'];
 
 /**
  * States in which the agent is back at its prompt, its turn over: a wait for the person, a report (TER-972), or
@@ -461,7 +461,8 @@ export const STILL_WORKING: readonly TabState[] = ['working', 'waiting_backgroun
  * A tab state as the app's contract (`@termhub/mobile-api`, whose `state` enum predates the newer states)
  * carries it, so an app that predates each flag still shows something true: `waiting_background` travels as
  * `working` (TER-644), `finished` and `blocked` as `idle` (TER-972, TER-1046), `auth_required` as `error` and
- * `trust_prompt` as `waiting_input` (TER-1046), each with its flag.
+ * `trust_prompt` as `waiting_input` (TER-1046), each with its flag; `cli_dialog` as `waiting_input` with no flag
+ * of its own (TER-1166): the app shows the tab waiting, and the state text names the dialog.
  */
 export function contractStateOf(state: TabState | null): {
   state: 'working' | 'waiting_input' | 'waiting_permission' | 'idle' | 'error' | null;
@@ -487,6 +488,7 @@ export function contractStateOf(state: TabState | null): {
     case 'auth_required':
       return { state: 'error', ...flags };
     case 'trust_prompt':
+    case 'cli_dialog':
       return { state: 'waiting_input', ...flags };
     default:
       return { state, ...flags };

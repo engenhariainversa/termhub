@@ -23,6 +23,7 @@ const WATCH_EVENT_LABEL: Record<string, string> = {
   blocked: tk('bloqueio'),
   auth_required: tk('pedindo login'),
   trust_prompt: tk('pedindo confiança na pasta'),
+  cli_dialog: tk('presa num diálogo do CLI'),
   waiting_background: tk('esperando tarefa em segundo plano'),
   gone: tk('sumiu'),
   // card
@@ -58,6 +59,7 @@ const PLAIN_EVENT: Record<string, Record<string, string>> = {
     waiting_permission: tk('perguntar algo'),
     auth_required: tk('perguntar algo'),
     trust_prompt: tk('perguntar algo'),
+    cli_dialog: tk('ficar presa num diálogo'),
     error: tk('der erro'),
     blocked: tk('der erro'),
     idle: tk('ficar parada'),
@@ -90,6 +92,7 @@ const PAST_EVENT: Record<string, Record<string, string>> = {
     waiting_permission: tk('pediu permissão'),
     auth_required: tk('pediu login'),
     trust_prompt: tk('pediu confiança na pasta'),
+    cli_dialog: tk('ficou presa num diálogo'),
     error: tk('deu erro'),
     blocked: tk('travou'),
     idle: tk('ficou parada'),

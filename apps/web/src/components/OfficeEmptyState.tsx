@@ -174,6 +174,8 @@ const DOT: Record<string, string> = {
   blocked: 'bg-zinc-400',
   auth_required: 'bg-red-500',
   trust_prompt: 'bg-amber-500',
+  // TER-1166: a dialog of the CLI holds the tab's input (amber, like the trust dialog)
+  cli_dialog: 'bg-amber-500',
 };
 
 function StateDot({ tab }: { tab: Pick<Tab, 'alive' | 'state'> }) {

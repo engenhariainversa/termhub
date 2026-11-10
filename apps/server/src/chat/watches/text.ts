@@ -20,6 +20,7 @@ const TAB_STATES: Record<string, string> = {
   blocked: 'se declarou bloqueada',
   auth_required: 'precisa de login na conta da IA',
   trust_prompt: 'pergunta se confia na pasta',
+  cli_dialog: 'ficou presa num diálogo do CLI (o texto digitado nela se perde até alguém fechá-lo)',
   waiting_background: 'terminou o turno com trabalho em segundo plano rodando',
 };
 /** An ISO instant on the person's clock ("2026-10-21 18:00 America/Sao_Paulo"); as it came when unreadable. */

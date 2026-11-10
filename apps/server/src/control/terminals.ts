@@ -15,6 +15,8 @@ import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES,
 import { publicBus } from '../public/bus.js';
 import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
 import { msg } from '../i18n/index.js';
+import { cliDialogOf, DIALOG_CLI_LABEL, type CliDialog } from '../monitor/cli-dialogs.js';
+import { SCREEN_STATE_LINES } from '../monitor/screen-state.js';
 
 export { INPUT_MAX_CHARS };
 
@@ -42,6 +44,37 @@ async function terminal(ctx: ControlContext, tabId: string): Promise<{ tab: Tab;
   await assertReady(machine);
   return { tab, machine, cwd, session: tab.tmux_session };
 }
+
+/** How long send_key waits before it reads whether a dialog is still open (TER-1166): the CLI redraws in less. */
+const KEY_SETTLE_MS = 300;
+
+/**
+ * The modal dialog of the agent CLI the tab shows now (TER-1166), or null — also when the screen cannot be read:
+ * the check never blocks typing on its own failure. The screen is compared and dropped, never logged.
+ */
+async function openDialog(machine: Machine, session: string): Promise<CliDialog | null> {
+  try {
+    return cliDialogOf(await captureScreen(machine, session, SCREEN_STATE_LINES + 20));
+  } catch {
+    return null;
+  }
+}
+
+/** What send_key reports about a dialog still open after the key (TER-1166). */
+export interface DialogNotice {
+  cli: CliDialog['cli'];
+  id: string;
+  title: string | null;
+  note: string;
+}
+
+const dialogNotice = (d: CliDialog): DialogNotice => ({
+  cli: d.cli,
+  id: d.id,
+  title: d.title,
+  // for the caller (an agent, like the tools' descriptions), not for a person
+  note: `${d.title ? `The ${DIALOG_CLI_LABEL[d.cli]} dialog "${d.title}"` : `A ${DIALOG_CLI_LABEL[d.cli]} dialog`} is still open: text typed into this tab is lost until it closes. See its options with read_screen.`,
+});
 
 /** No hooks report state (or they never marked the tab "working" for this command): settle by
  * screen instead — two identical captures in a row mean nothing is moving. Mirrors the exact
@@ -127,6 +160,20 @@ export async function sendInput(
     );
   }
   await ensureSession(machine, session, cwd);
+  // TER-1166: a modal dialog of the CLI holds the input. The text would be lost — or, in Codex, its letters would
+  // move the dialog's selection and Enter pick an option — while the answer said "sent". An answer to a
+  // permission or a question (answering_permission) is typed into its dialog on purpose.
+  if (!input.answering_permission) {
+    const dialog = await openDialog(machine, session);
+    if (dialog) {
+      throw new ControlError(
+        'CLI_DIALOG_OPEN',
+        dialog.title
+          ? msg('Nada foi digitado: a aba está no diálogo "{{title}}" do {{cli}}, que segura a entrada e faria o texto se perder. Veja as opções com read_screen, feche-o com send_key (Escape costuma ser "agora não") ou peça à pessoa, e mande de novo.', { title: dialog.title, cli: DIALOG_CLI_LABEL[dialog.cli] })
+          : msg('Nada foi digitado: a aba mostra um diálogo do {{cli}}, que segura a entrada e faria o texto se perder. Veja o que ele pede com read_screen, feche-o com send_key ou peça à pessoa, e mande de novo.', { cli: DIALOG_CLI_LABEL[dialog.cli] }),
+      );
+    }
+  }
   const enter = input.enter ?? true;
   if (origin !== null) recordInputOrigin(tab.id, input.text, origin ?? deriveInputOrigin(ctx, onBehalfOf));
   // An embedded newline means a multi-line prompt: paste it so the TUI reads the newline as part
@@ -151,12 +198,18 @@ export async function typeCommandInTab(ctx: ControlContext, tabId: string, line:
   await typeCommandLine(machine, session, line);
 }
 
-/** Presses one key from the closed list in the tab. */
-export async function sendKey(ctx: ControlContext, input: { tab_id: string; key: TmuxKey }): Promise<{ tab_id: string; key: TmuxKey; sent: true }> {
+/**
+ * Presses one key from the closed list in the tab. A key is how a CLI dialog is closed, so it is never refused;
+ * when a dialog is still open after it (TER-1166), the answer says which, so the caller does not take the tab
+ * for ready to type into.
+ */
+export async function sendKey(ctx: ControlContext, input: { tab_id: string; key: TmuxKey }): Promise<{ tab_id: string; key: TmuxKey; sent: true; dialog?: DialogNotice }> {
   const { tab, machine, cwd, session } = await terminal(ctx, input.tab_id);
   await ensureSession(machine, session, cwd);
   await sendKeyToSession(machine, session, input.key);
-  return { tab_id: tab.id, key: input.key, sent: true };
+  await new Promise((r) => setTimeout(r, KEY_SETTLE_MS));
+  const dialog = await openDialog(machine, session);
+  return { tab_id: tab.id, key: input.key, sent: true, ...(dialog ? { dialog: dialogNotice(dialog) } : {}) };
 }
 
 /**

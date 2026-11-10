@@ -697,5 +697,8 @@
   "Mensagem pronta": "Mensaje listo",
   "Copiar mensagem": "Copiar mensaje",
   "Mensagem copiada": "Mensaje copiado",
-  "Não foi possível copiar a mensagem": "No se pudo copiar el mensaje"
+  "Não foi possível copiar a mensagem": "No se pudo copiar el mensaje",
+  "presa num diálogo do CLI": "atascada en un diálogo del CLI",
+  "ficar presa num diálogo": "quede atascada en un diálogo",
+  "ficou presa num diálogo": "quedó atascada en un diálogo"
 }

@@ -12,6 +12,7 @@ import { paneForeground } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
 import { SCREEN_STATE_LINES, claudeScreenState, trustDialogVisible, type ScreenState } from './screen-state.js';
 import { defaultTrustDeps, settleTrustDialog, type FolderTrustDeps } from './folder-trust.js';
+import { cliDialogOf, cliDialogText, type CliDialog } from './cli-dialogs.js';
 import { AUTH_REQUIRED_TEXT, TRUST_PROMPT_TEXT, cap } from './state.js';
 import { classifyTurnEnd } from './turn-end.js';
 
@@ -131,6 +132,7 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
       // TER-1122: Codex, Cursor and Gemini have no screen rule here but their folder trust dialog
       const other = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
       if (trustDialogVisible(other)) await settleTrustDialog(repos, log, tab, machine, other, deps.trust ?? defaultTrustDeps, ['working', 'waiting_background']);
+      else await recordDialog(repos, log, tab, machine, cliDialogOf(other), ['working', 'waiting_background']);
       return;
     }
     // A tab that waits on its background work (TER-644): its hooks went quiet on purpose, and a screen without
@@ -146,6 +148,9 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
       await settleTrustDialog(repos, log, tab, machine, raw, deps.trust ?? defaultTrustDeps, ['working', 'waiting_background']);
       return;
     }
+    // TER-1166: a named CLI dialog holds the tab (an unnamed one stays the permission wait it always read as)
+    const dialog = cliDialogOf(raw);
+    if (dialog && dialog.title && (await recordDialog(repos, log, tab, machine, dialog, ['working', 'waiting_background']))) return;
     const kind = screen ? WAIT_OF[screen] : undefined;
     if (!screen || !kind) return;
     if (screen === 'prompt' && (await restoreTurnEnd(repos, log, tab, machine))) return;
@@ -210,7 +215,12 @@ export async function sweepUnreported(repos: Repositories, log: Log, now = new D
       if (pane === 'shell' || pane === 'dead') continue;
       const raw = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
       const screen = claudeScreenState(raw);
-      if (screen !== 'trust' && screen !== 'auth') continue;
+      if (screen !== 'trust' && screen !== 'auth') {
+        // TER-1166: a named dialog of the CLI holds a tab that never reported ("Hooks need review")
+        const dialog = cliDialogOf(raw);
+        if (dialog?.title) await recordDialog(repos, log, tab, machine, dialog, [null]);
+        continue;
+      }
       if (screen === 'trust') {
         await settleTrustDialog(repos, log, { ...tab, tmux_session: tab.tmux_session }, machine, raw, deps.trust ?? defaultTrustDeps, [null]);
         continue;
@@ -226,6 +236,92 @@ export async function sweepUnreported(repos: Repositories, log: Log, now = new D
   // the map holds both sweeps' entries: drop this sweep's that left the list
   const listed = new Set(tabs.map((t) => `unreported:${t.id}`));
   for (const key of deps.checked.keys()) if (key.startsWith('unreported:') && !listed.has(key)) deps.checked.delete(key);
+}
+
+/**
+ * Records that a modal dialog of the CLI holds the tab (TER-1166): `cli_dialog`, its text naming the dialog,
+ * under the same `ifStateAt` condition as every screen reading (a hook that landed meanwhile wins). False when
+ * there is no dialog or the write was dropped. The screen is never logged; the dialog's id is.
+ */
+async function recordDialog(repos: Repositories, log: Log, tab: Tab, machine: Machine, dialog: CliDialog | null, ifStateIn: readonly (TabState | null)[]): Promise<boolean> {
+  if (!dialog) return false;
+  const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, {
+    kind: 'cli_dialog',
+    tool: tab.state_tool ?? dialog.cli,
+    text: cliDialogText(dialog),
+    meta: { event: 'ScreenCheck', screen: 'cli_dialog', dialog: dialog.id },
+    ifStateAt: tab.state_at,
+    ifStateIn,
+  });
+  log.info({ tabId: tab.id, machineId: machine.id, dialog: dialog.id, recorded: event !== null }, 'monitor: tab held by a CLI dialog');
+  if (event) publishTabChange(updated, tab.project_id, machine);
+  return event !== null;
+}
+
+/** States a Claude Code or Codex tab rests in, at its prompt, where a CLI dialog may open unnoticed (TER-1166). */
+export const RESTING_STATES: readonly TabState[] = ['finished', 'waiting_input', 'idle', 'blocked'];
+/** A tab whose state is older than this is no longer looked at for a dialog: a message typed into it is checked instead. */
+export const DIALOG_WINDOW_MS = 24 * 60 * 60_000;
+/** A tab that came to rest less than this ago is read at every sweep: the dialogs open right after a turn ends. */
+export const DIALOG_FRESH_MS = 30 * 60_000;
+/** An older resting tab is read again after this. */
+export const DIALOG_RECHECK_MS = 10 * 60_000;
+
+/**
+ * One pass over the Claude Code and Codex tabs at rest, and those held by a CLI dialog (TER-1166). A dialog the
+ * CLI opens on its own after a turn ("Teach auto mode about your environment?") or at launch takes the input
+ * over: a message typed into the tab is lost, no hook fires, and the tab keeps saying `finished`. Each resting
+ * tab is read at every sweep for DIALOG_FRESH_MS after its state, then every DIALOG_RECHECK_MS, for
+ * DIALOG_WINDOW_MS; a named dialog makes it `cli_dialog`. A `cli_dialog` tab is read at every sweep, and once the
+ * dialog is gone without a new turn it goes back to its turn end (`classifyTurnEnd` of its last answer, else
+ * `idle`), without alerting again. Never throws; logs ids and the dialog's id only, never the screen.
+ */
+export async function sweepDialogs(repos: Repositories, log: Log, now = new Date(), deps: StaleWorkingDeps = defaultDeps(BACKGROUND_TIMEOUT_MINUTES * 60_000)): Promise<void> {
+  const tabs = await repos.tabs.listResting(new Date(now.getTime() - DIALOG_WINDOW_MS), [...RESTING_STATES, 'cli_dialog']);
+  for (const tab of tabs) {
+    if (!tab.tmux_session || !tab.state_at) continue;
+    const key = `dialog:${tab.id}`;
+    const last = deps.checked.get(key);
+    const age = now.getTime() - Date.parse(tab.state_at);
+    const every = tab.state === 'cli_dialog' || age < DIALOG_FRESH_MS ? 0 : DIALOG_RECHECK_MS;
+    if (last && last.stateAt === tab.state_at && now.getTime() - last.at < every) continue;
+    deps.checked.set(key, { stateAt: tab.state_at, at: now.getTime() });
+    try {
+      const machine = await repos.machines.findById(tab.machine_id);
+      if (!machine || (machine.type === 'agent' && !deps.isOnline(machine.id))) continue;
+      const raw = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
+      const dialog = cliDialogOf(raw);
+      if (tab.state !== 'cli_dialog') {
+        if (dialog?.title) await recordDialog(repos, log, tab, machine, dialog, RESTING_STATES);
+        continue;
+      }
+      if (dialog || trustDialogVisible(raw)) continue;
+      await dialogClosed(repos, log, tab as Tab & { state_at: string }, machine);
+    } catch (err) {
+      log.warn({ tabId: tab.id, code: failureLabel(err) }, 'monitor: dialog check failed');
+    }
+  }
+  const listed = new Set(tabs.map((t) => `dialog:${t.id}`));
+  for (const key of deps.checked.keys()) if (key.startsWith('dialog:') && !listed.has(key)) deps.checked.delete(key);
+}
+
+/** The dialog closed and no turn began (TER-1166): back to the turn end its last answer reads as, else `idle`. */
+async function dialogClosed(repos: Repositories, log: Log, tab: Tab & { state_at: string }, machine: Machine): Promise<void> {
+  const answer = await repos.tabs.readLastAnswer(tab.id);
+  const fresh = answer && !answer.stale ? answer : null;
+  const kind: TabState = fresh ? classifyTurnEnd(fresh.text) : 'idle';
+  const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, {
+    kind,
+    tool: tab.state_tool ?? 'claude',
+    text: fresh ? cap(fresh.text) : null,
+    meta: { event: 'ScreenCheck', screen: 'cli_dialog_closed' },
+    continuesWait: true,
+    keepsWaitText: true,
+    ifStateAt: tab.state_at,
+    ifStateIn: ['cli_dialog'],
+  });
+  log.info({ tabId: tab.id, machineId: machine.id, kind, recorded: event !== null }, 'monitor: CLI dialog closed');
+  if (event) publishTabChange(updated, tab.project_id, machine);
 }
 
 /**
@@ -269,6 +365,7 @@ export function startStaleWorkingSweeper(repos: Repositories, log: Log, backgrou
     running = true;
     void sweepStaleWorking(repos, log, new Date(), deps)
       .then(() => sweepUnreported(repos, log, new Date(), deps))
+      .then(() => sweepDialogs(repos, log, new Date(), deps))
       .catch((err) => log.warn({ code: failureLabel(err) }, 'monitor: stale working sweep failed'))
       .finally(() => (running = false));
   }, STALE_SWEEP_MS);

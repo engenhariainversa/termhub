@@ -1,0 +1,14 @@
+● Pronto: o PR #812 está aberto e o CI passou.
+
+✻ Worked for 3m 12s · done 10:41 AM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Teach auto mode about your environment?
+
+ Auto mode works better when it knows your environment. Takes about a minute.
+
+ ❯ Yes
+   Not now
+   Don't show again
+
+ Enter to confirm · Esc to cancel

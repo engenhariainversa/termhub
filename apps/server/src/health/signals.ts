@@ -46,8 +46,14 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   done_unmerged: 'concierge',
 };
 
-/** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login. */
-export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required'] as const;
+/** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login, a CLI dialog. */
+export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required', 'cli_dialog'] as const;
+
+/**
+ * TER-1166: a tab held by a modal dialog of its CLI swallows every message typed into it, and nothing else
+ * says so: past this long it opens at once, whatever the `tab_waiting` minutes say.
+ */
+export const CLI_DIALOG_ALERT_MS = 2 * 60_000;
 
 /** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
 export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
@@ -233,7 +239,10 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   for (const tab of s.tabs) {
     if (!tab.state_at) continue;
     if (tab.state === 'working') add('tab_stuck', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
-    else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
+    else if (tab.state === 'cli_dialog') {
+      const due = s.now.getTime() - tab.state_at.getTime() >= CLI_DIALOG_ALERT_MS;
+      add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due);
+    } else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
   }
 
   // 5. a card in Doing nobody works on: no tab, no run, no PR to wait for, not parked on a blocked run (6 says that)

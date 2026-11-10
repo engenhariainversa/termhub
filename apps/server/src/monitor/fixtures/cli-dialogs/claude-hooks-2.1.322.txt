@@ -1,0 +1,45 @@
+
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  Opus 5.5 · Claude Ultra
+ ▝▝   ▝▝   /Users/someone/project
+
+  Fable 5.2 is here for your longest and toughest coding tasks. It draws down usage faster than Opus 5.5. You also get a free Fable limit reset to redeem at
+  clau.de/reset by March 8, 2027. Switch with /model.
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll ▔
+   Hooks
+   11 hooks on 9 events
+
+   This menu is read-only. To add or change a hook, edit settings.json or ask Claude. Learn more
+
+     PreToolUse  before tool execution
+   ❯ [User]   /Users/someone/.termhub/bin/termhub-hook clau…   * · command
+     [User]   python3 /Users/someone/.claude/hooks/guard.py…   Bash · command
+
+     Notification  when notifications are sent
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     UserPromptSubmit  when the user submits a prompt
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     SessionStart  when a new session is started
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+     [Plugin] "${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" sessio…   superpowers@superpowers-marketplace · startup|clear|compact · command
+
+     Stop  right before Claude concludes its response
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     StopFailure  when the turn ends due to an API error
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     SubagentStop  right before a subagent (Agent tool call) concludes its response
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     SessionEnd  when a session is ending
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   command
+
+     PermissionRequest  when a permission dialog is displayed
+     [User]   /Users/someone/.termhub/bin/termhub-hook clau…   * · command
+
+     All events
+
+   Enter to view · Esc to close
