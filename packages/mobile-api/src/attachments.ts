@@ -22,6 +22,11 @@ export const ATTACHMENT_LIMITS: Record<AttachmentKind, number> = {
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 /** A text file must be valid UTF-8 *and* be named like one: a body of text alone is not enough. */
 export const TEXT_EXTENSIONS: readonly string[] = ['.txt', '.md', '.csv', '.json', '.log', '.yaml', '.yml', '.ts', '.js', '.py'];
+/**
+ * A property list (TER-1167) is a text attachment too, XML or binary, but not one of `TEXT_EXTENSIONS`:
+ * the server takes it only when the bytes are a plist, never because of the name.
+ */
+export const PLIST_EXTENSION = '.plist';
 /** The stored MIME of the kinds with one fixed value; images, audio and video keep the sniffed one. */
 export const ATTACHMENT_MIMES = {
   pdf: 'application/pdf',
@@ -47,7 +52,7 @@ export function kindFromNameAndMime(name: string, mime: string): AttachmentKind 
   if (m === ATTACHMENT_MIMES.xlsx || lower.endsWith('.xlsx')) return 'xlsx';
   if (m.startsWith('audio/')) return 'audio';
   if (m.startsWith('video/')) return 'video';
-  if (hasTextExtension(name)) return 'text';
+  if (hasTextExtension(name) || lower.endsWith(PLIST_EXTENSION)) return 'text';
   return null;
 }
 

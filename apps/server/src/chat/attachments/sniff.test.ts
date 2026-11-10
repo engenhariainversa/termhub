@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildZip, minimalDocx, minimalPdf } from '../../../test/zip.js';
+import { buildBinaryPlist, samplePlist, XML_PLIST } from '../../../test/plist.js';
 import { sniff } from './sniff.js';
 
 const bytes = (...parts: (number[] | string | Buffer)[]) => Buffer.concat(parts.map((p) => (Buffer.isBuffer(p) ? p : typeof p === 'string' ? Buffer.from(p, 'latin1') : Buffer.from(p))));
@@ -87,5 +88,33 @@ describe('sniff: hostile input', () => {
       for (let k = 0; k < random.length; k++) random[k] = rnd(256);
       expect(() => sniff(random, names[rnd(names.length)])).not.toThrow();
     }
+  });
+});
+
+describe('sniff: property lists (TER-1167)', () => {
+  const PLIST = { kind: 'text', mime: 'application/x-plist' };
+
+  it('an XML plist is text, by its <plist> root', () => {
+    expect(sniff(Buffer.from(XML_PLIST), 'dev.termhub.agent.plist')).toEqual(PLIST);
+    expect(sniff(Buffer.from('<plist version="1.0"><array/></plist>'), 'Info.PLIST')).toEqual(PLIST);
+  });
+
+  it('a binary plist is text only when its object table parses', () => {
+    expect(sniff(samplePlist(), 'com.apple.dock.plist')).toEqual(PLIST);
+    expect(sniff(buildBinaryPlist([{ t: 'array', refs: [7] }]), 'quebrado.plist')).toBeNull();
+    expect(sniff(Buffer.concat([Buffer.from('bplist00', 'latin1'), Buffer.alloc(64)]), 'zeros.plist')).toBeNull();
+  });
+
+  it('the name alone never makes a .plist', () => {
+    expect(sniff(Buffer.from('Label = dev.termhub.agent\n'), 'texto.plist')).toBeNull();
+    expect(sniff(Buffer.from('<?xml version="1.0"?><html><script>x</script></html>'), 'pagina.plist')).toBeNull();
+    expect(sniff(Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0, 1, 2, 3]), 'binario.plist')).toBeNull();
+    expect(sniff(Buffer.from([0xc3, 0x28, 0x3c, 0x70, 0x6c]), 'latin.plist')).toBeNull();
+  });
+
+  it('bytes of another kind keep their kind under a .plist name, and plist bytes need the name', () => {
+    expect(sniff(PNG, 'foto.plist')).toEqual({ kind: 'image', mime: 'image/png' });
+    expect(sniff(Buffer.from(XML_PLIST), 'config.txt')).toEqual({ kind: 'text', mime: 'text/plain; charset=utf-8' });
+    expect(sniff(samplePlist(), 'config.bin')).toBeNull();
   });
 });

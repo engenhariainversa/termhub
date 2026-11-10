@@ -24,6 +24,11 @@ describe('kindFromNameAndMime', () => {
     ['notas.md', 'text/markdown', 'text'],
     ['dados.csv', '', 'text'],
     ['binario.exe', 'application/octet-stream', null],
+    // TER-1167: whatever MIME the picker reports for a property list, it uploads as text.
+    ['Info.plist', 'application/x-plist', 'text'],
+    ['com.apple.dock.PLIST', 'application/octet-stream', 'text'],
+    ['Info.plist', 'text/xml', 'text'],
+    ['Info.plist', 'application/xml', 'text'],
   ])('%s (%s) → %s', (name, mime, kind) => {
     expect(kindFromNameAndMime(name, mime)).toBe(kind);
   });
@@ -32,6 +37,8 @@ describe('kindFromNameAndMime', () => {
     expect(kindFromNameAndMime('a.bin', 'IMAGE/JPEG; charset=binary')).toBe('image');
     expect(hasTextExtension('NOTAS.TXT')).toBe(true);
     expect(hasTextExtension('notas.txt.exe')).toBe(false);
+    // A .plist is not a plain text name: the server accepts it only by its plist content.
+    expect(hasTextExtension('Info.plist')).toBe(false);
   });
 });
 

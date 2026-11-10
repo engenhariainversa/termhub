@@ -4,6 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AttachmentRow, CreateAttachmentInput } from '../db/repositories/chat-attachments.js';
 import { applyErrorHandler } from '../lib/errors.js';
 import type { AttachmentStore } from '../chat/attachments/store.js';
+import { samplePlist, XML_PLIST } from '../../test/plist.js';
 import { chatAttachmentRoutes } from './chat-attachments.js';
 
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(16)]);
@@ -165,6 +166,20 @@ describe('POST /chat/attachments', () => {
     // Malformed JSON under the JSON content type is bytes too, not a parser error.
     const broken = await upload(app, '{not json', 'notas.json', 'application/json');
     expect(broken.statusCode).toBe(201);
+  });
+
+  it('stores a .plist, XML or binary, whatever content type the client sends, and refuses one that is not a plist (TER-1167)', async () => {
+    const { app, chatAttachments, queue } = build();
+    for (const [body, type] of [[Buffer.from(XML_PLIST), 'text/xml'], [Buffer.from(XML_PLIST), 'application/xml'], [samplePlist(), 'application/x-plist'], [samplePlist(), 'application/octet-stream']] as const) {
+      const res = await upload(app, body, 'com.apple.dock.plist', type);
+      expect(res.statusCode).toBe(201);
+      expect(res.json().attachment).toMatchObject({ kind: 'text', mime: 'application/x-plist', name: 'com.apple.dock.plist', bytes: body.length });
+    }
+    expect(queue.enqueue).toHaveBeenCalledTimes(4);
+    const fake = await upload(app, 'apenas texto', 'falso.plist', 'application/x-plist');
+    expect(fake.statusCode).toBe(415);
+    expect(fake.json()).toMatchObject({ code: 'ATTACHMENT_TYPE' });
+    expect(chatAttachments.create).toHaveBeenCalledTimes(4);
   });
 
   it('keeps the name for display with control characters and separators replaced', async () => {

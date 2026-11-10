@@ -83,6 +83,8 @@ describe('pathRefusal', () => {
     expect(pathRefusal('~/bin/run.sh')).toMatch(/Tipo de arquivo/);
     expect(pathRefusal('~/app.exe')).toMatch(/Tipo de arquivo/);
     expect(pathRefusal('~/termhub-linkedin/post.png')).toBeNull();
+    // TER-1167 accepts .plist uploads, not shares: config plists can hold tokens, so a machine's stay put.
+    expect(pathRefusal('~/Library/Preferences/com.apple.dock.plist')).toMatch(/Tipo de arquivo/);
   });
 });
 

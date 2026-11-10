@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { type Server, createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { PassThrough } from 'node:stream';
+import { buildBinaryPlist, samplePlist, XML_PLIST } from '../../../test/plist.js';
 import { buildZip, minimalDocx, minimalPdf, withUnlistedEntry } from '../../../test/zip.js';
 import { ExtractError, TEXT_CAP, XLSX_MAX_COLS, XLSX_MAX_ROWS, extract, imageDimensions } from './extract.js';
 
@@ -58,6 +59,15 @@ describe('extract: image and text', () => {
     const big = await extract('text', Buffer.from('a'.repeat(TEXT_CAP + 5)), 'text/plain; charset=utf-8', noWhisper);
     expect(big.text).toHaveLength(TEXT_CAP);
     expect(big.meta).toEqual({ truncated: true });
+  });
+  it('an XML plist is its own text; a binary one is converted to XML first (TER-1167)', async () => {
+    expect(await extract('text', Buffer.from(XML_PLIST), 'application/x-plist', noWhisper)).toEqual({ text: XML_PLIST, meta: { truncated: false } });
+    const bin = await extract('text', samplePlist(), 'application/x-plist', noWhisper);
+    expect(bin.meta).toEqual({ truncated: false, plist: 'binary' });
+    expect(bin.text).toContain('<plist version="1.0">\n<dict>\n\t<key>Nome</key>\n\t<string>termhub &lt;&amp;&gt;</string>');
+  });
+  it('a binary plist that no longer parses is an invalid attachment', async () => {
+    expect(await code(extract('text', buildBinaryPlist([{ t: 'array', refs: [1] }, { t: 'array', refs: [0] }]), 'application/x-plist', noWhisper))).toBe('ATTACHMENT_INVALID');
   });
 });
 

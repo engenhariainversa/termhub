@@ -79,6 +79,7 @@ export function describeAttachment(row: AttachmentRow): string {
   else if (row.kind === 'image' && width !== null && height !== null) out += ` ${width}×${height}`;
   else if (row.kind === 'xlsx' && sheets !== null) out += `, ${plural(sheets, 'aba', 'abas')}`;
   else if (isTranscribed(row) && duration !== null) out += `, ${Math.round(duration)} s`;
+  else if (row.kind === 'text' && meta.plist === 'binary') out += ', plist binário convertido para XML';
   if (meta.truncated === true) out += ' (truncado em 200 mil caracteres)';
   return out;
 }

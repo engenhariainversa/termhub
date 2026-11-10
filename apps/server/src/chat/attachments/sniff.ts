@@ -1,4 +1,5 @@
 import { ATTACHMENT_MIMES, hasTextExtension, type AttachmentKind } from '@termhub/mobile-api';
+import { PLIST_MIME, PlistError, binaryPlistToXml, hasPlistExtension, isBinaryPlist, isXmlPlist } from './plist.js';
 import { readZipDirectory } from './zip.js';
 
 /** What the bytes are (spec 2026-09-26 §5.2), or why they are refused. Null = not accepted at all. */
@@ -54,6 +55,9 @@ export function sniff(bytes: Uint8Array, name: string): Sniffed {
     if (AUDIO_BRANDS.has(brand)) return { kind: 'audio', mime: 'audio/mp4' };
     return { kind: 'video', mime: brand === 'qt  ' ? 'video/quicktime' : 'video/mp4' };
   }
+  // A property list (TER-1167) is read as text: an XML one by its `<plist>` root, a binary one only when its
+  // object table really parses. The name alone never makes a .plist: anything else under it is refused.
+  if (hasPlistExtension(name)) return sniffPlist(bytes);
   if (hasTextExtension(name) && !bytes.includes(0)) {
     try {
       utf8.decode(bytes);
@@ -63,4 +67,25 @@ export function sniff(bytes: Uint8Array, name: string): Sniffed {
     }
   }
   return null;
+}
+
+/** How much of a binary plist is converted to accept it: the same cap the extractor keeps. */
+const PLIST_SNIFF_CHARS = 200_000;
+
+function sniffPlist(bytes: Uint8Array): Sniffed {
+  if (isBinaryPlist(bytes)) {
+    try {
+      binaryPlistToXml(bytes, PLIST_SNIFF_CHARS);
+      return { kind: 'text', mime: PLIST_MIME };
+    } catch (err) {
+      if (err instanceof PlistError) return null;
+      throw err;
+    }
+  }
+  if (bytes.includes(0)) return null;
+  try {
+    return isXmlPlist(utf8.decode(bytes)) ? { kind: 'text', mime: PLIST_MIME } : null;
+  } catch {
+    return null;
+  }
 }
