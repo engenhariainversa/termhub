@@ -23,6 +23,13 @@ interface Props {
    * was typed, and only Esc discards it.
    */
   allowFreeText?: boolean;
+  /**
+   * Shows the text filter (default). Off, for a short fixed list (TER-1165): the panel is just the list,
+   * walked with the arrows, Home/End and type-ahead like a native `<select>`, but placed next to the field
+   * by the page instead of by the browser or the system, which on macOS with several screens can draw a
+   * native list on another monitor. Ignored with `allowFreeText`.
+   */
+  searchable?: boolean;
   /** Shown on the closed field when the value is empty and no option has an empty value. */
   placeholder?: string;
   /** Called each time the panel opens, so a caller can load the options only when someone wants them. */
@@ -75,10 +82,15 @@ export function matchRange(text: string, foldedQuery: string): [number, number] 
  * Fixed-position box of the panel for a field at `rect`: under it when the panel fits or when there is at
  * least as much room below as above, otherwise over it, and never past the viewport's edges.
  */
-export function placePanel(rect: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'width'>, rows: number, viewport: { width: number; height: number }): CSSProperties {
+export function placePanel(
+  rect: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'width'>,
+  rows: number,
+  viewport: { width: number; height: number },
+  withFilter = true,
+): CSSProperties {
   const width = Math.min(Math.max(rect.width, MIN_WIDTH), viewport.width - 2 * EDGE);
   const left = Math.max(EDGE, Math.min(rect.left, viewport.width - width - EDGE));
-  const wanted = Math.min(MAX_HEIGHT, FILTER_HEIGHT + Math.max(rows, 1) * ROW_HEIGHT);
+  const wanted = Math.min(MAX_HEIGHT, (withFilter ? FILTER_HEIGHT : 8) + Math.max(rows, 1) * ROW_HEIGHT);
   const below = viewport.height - rect.bottom - GAP - EDGE;
   const above = rect.top - GAP - EDGE;
   if (below >= wanted || below >= above) return { left, width, top: rect.bottom + GAP, maxHeight: Math.min(MAX_HEIGHT, below) };
@@ -86,6 +98,23 @@ export function placePanel(rect: Pick<DOMRect, 'top' | 'bottom' | 'left' | 'widt
 }
 
 const labelOf = (o: ComboboxOption) => o.label ?? o.value;
+
+/** How long the letters typed on a list without filter add up to one search, like a native select's. */
+const TYPEAHEAD_MS = 700;
+
+/** The option `typed` (already folded) jumps to: the next one whose label starts with it, from `from`. */
+export function typeaheadIndex(options: ComboboxOption[], typed: string, from: number): number {
+  if (!typed || options.length === 0) return -1;
+  // Repeating one letter cycles through the options that start with it, as in a native select.
+  const cycling = typed.length > 1 && [...typed].every((c) => c === typed[0]);
+  const prefix = cycling ? typed[0]! : typed;
+  const start = cycling || typed.length === 1 ? from + 1 : from;
+  for (let k = 0; k < options.length; k++) {
+    const i = (((start + k) % options.length) + options.length) % options.length;
+    if (foldText(labelOf(options[i]!)).startsWith(prefix)) return i;
+  }
+  return -1;
+}
 
 function Highlighted({ text, query }: { text: string; query: string }) {
   const range = matchRange(text, query);
@@ -106,12 +135,15 @@ function Highlighted({ text, query }: { text: string; query: string }) {
  * bubble to the opener's tree, which keeps a modal's focus wrap working, and it joins the same Escape stack
  * as the modals, so Esc closes the panel and not the modal under it.
  */
-export function Combobox({ value, onChange, options, loading = false, allowFreeText = false, placeholder, onOpen, disabled, id, 'aria-label': ariaLabel, mono = false, className = '', testId }: Props) {
+export function Combobox({ value, onChange, options, loading = false, allowFreeText = false, searchable = true, placeholder, onOpen, disabled, id, 'aria-label': ariaLabel, mono = false, className = '', testId }: Props) {
   const { t } = useTranslation();
   const baseId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const withFilter = searchable || allowFreeText;
+  const typeahead = useRef({ text: '', at: 0 });
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   // In free-text mode the filter opens holding the current value, which must not hide the rest of the
@@ -139,11 +171,30 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
 
   const measure = useCallback(() => {
     const rect = triggerRef.current?.getBoundingClientRect();
-    if (rect) setPlace(placePanel(rect, options.length + (loading ? 1 : 0), { width: window.innerWidth, height: window.innerHeight }));
-  }, [options.length, loading]);
+    if (rect) setPlace(placePanel(rect, options.length + (loading ? 1 : 0), { width: window.innerWidth, height: window.innerHeight }, withFilter));
+  }, [options.length, loading, withFilter]);
+
+  /** The index a letter typed on a list without filter moves to, or -1 when no label starts so. */
+  const typeTo = (key: string, from: number) => {
+    const now = Date.now();
+    const text = now - typeahead.current.at < TYPEAHEAD_MS ? typeahead.current.text + foldText(key) : foldText(key);
+    typeahead.current = { text, at: now };
+    return typeaheadIndex(options, text, from);
+  };
 
   const openPanel = (seed?: string) => {
     if (disabled || open) return;
+    if (!withFilter) {
+      const at = options.findIndex((o) => o.value === value);
+      const typedTo = seed !== undefined ? typeTo(seed, at) : -1;
+      setQuery('');
+      setTouched(false);
+      setActive(typedTo >= 0 ? typedTo : at >= 0 ? at : 0);
+      measure();
+      setOpen(true);
+      onOpen?.();
+      return;
+    }
     const typedFirst = seed !== undefined;
     setQuery(seed ?? (allowFreeText ? value : ''));
     setTouched(typedFirst);
@@ -184,6 +235,10 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
 
   useLayoutEffect(() => {
     if (!open) return;
+    if (!withFilter) {
+      listRef.current?.focus({ preventScroll: true });
+      return;
+    }
     filterRef.current?.focus({ preventScroll: true });
     if (selectOnOpen.current) filterRef.current?.select();
   }, [open]);
@@ -235,6 +290,7 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
       e.preventDefault();
       openPanel();
     } else if (e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      // With a filter the letter starts the search; without one it jumps to the option, as type-ahead.
       e.preventDefault();
       openPanel(e.key);
     }
@@ -254,6 +310,31 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
       // which sees this same key next) moves on from where the person actually is on the page.
       keepTyped();
       close(true);
+    }
+  };
+
+  /** The keys of the list itself when there is no filter: the ones a native select's open list takes. */
+  const onListKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (rowCount === 0) return;
+      // A native list stops at the ends instead of wrapping.
+      setActive(e.key === 'ArrowDown' ? Math.min(activeIndex + 1, rowCount - 1) : Math.max(activeIndex - 1, 0));
+    } else if (e.key === 'Home' || e.key === 'PageUp') {
+      e.preventDefault();
+      setActive(0);
+    } else if (e.key === 'End' || e.key === 'PageDown') {
+      e.preventDefault();
+      setActive(rowCount - 1);
+    } else if (e.key === 'Enter' || (e.key === ' ' && Date.now() - typeahead.current.at >= TYPEAHEAD_MS)) {
+      e.preventDefault();
+      choose(activeIndex);
+    } else if (e.key === 'Tab') {
+      close(true);
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const to = typeTo(e.key, activeIndex);
+      if (to >= 0) setActive(to);
     }
   };
 
@@ -290,6 +371,7 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
       {open &&
         createPortal(
           <div ref={panelRef} style={place} className="fixed z-[60] flex flex-col rounded-md border border-line bg-bg-2 shadow-xl" data-testid={testId ? `${testId}-panel` : undefined}>
+            {withFilter && (
             <input
               ref={filterRef}
               type="text"
@@ -312,7 +394,18 @@ export function Combobox({ value, onChange, options, loading = false, allowFreeT
               onChange={(e) => onFilterChange(e.target.value)}
               onKeyDown={onFilterKeyDown}
             />
-            <ul id={listId} role="listbox" aria-label={ariaLabel} className="min-h-0 flex-1 overflow-y-auto py-1 text-sm">
+            )}
+            <ul
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-label={ariaLabel}
+              // Without a filter the list holds the focus, and points at the row the arrows are on.
+              tabIndex={withFilter ? undefined : -1}
+              aria-activedescendant={!withFilter && activeIndex >= 0 ? `${baseId}-opt-${activeIndex}` : undefined}
+              onKeyDown={withFilter ? undefined : onListKeyDown}
+              className={`min-h-0 flex-1 overflow-y-auto py-1 text-sm focus:outline-none ${withFilter ? '' : 'rounded-md'}`}
+            >
               {rows.found.map((o, i) => (
                 <li
                   key={o.value}

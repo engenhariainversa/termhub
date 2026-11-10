@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Combobox, foldText, matchRange, placePanel, type ComboboxOption } from './Combobox';
+import { Combobox, foldText, matchRange, placePanel, typeaheadIndex, type ComboboxOption } from './Combobox';
 import { Modal } from './Modal';
 
 const REPOS: ComboboxOption[] = [
@@ -223,6 +223,72 @@ describe('Combobox', () => {
     });
   });
 
+  describe('without filter (TER-1165)', () => {
+    const LEVELS: ComboboxOption[] = [
+      { value: 'pr', label: 'Só código e PR' },
+      { value: 'merge', label: 'Merge com CI verde' },
+      { value: 'deploy', label: 'Deploy' },
+      { value: 'release', label: 'Publicação (npm, OTA)' },
+    ];
+    const list = () => screen.getByRole('listbox');
+
+    it('opens just the list, focused on it, with the current value active', () => {
+      render(<Field options={LEVELS} searchable={false} value="merge" />);
+      fireEvent.click(trigger());
+      expect(screen.queryByRole('combobox')).toBeNull();
+      expect(list()).toHaveFocus();
+      expect(list()).toHaveAttribute('aria-activedescendant', screen.getByRole('option', { name: 'Merge com CI verde' }).id);
+    });
+
+    it('arrows stop at the ends, Home/End jump, Enter and Space pick', () => {
+      render(<Field options={LEVELS} searchable={false} value="pr" />);
+      fireEvent.click(trigger());
+      fireEvent.keyDown(list(), { key: 'ArrowUp' });
+      fireEvent.keyDown(list(), { key: 'Enter' });
+      expect(onChange).not.toHaveBeenCalled();
+      fireEvent.click(trigger());
+      fireEvent.keyDown(list(), { key: 'End' });
+      fireEvent.keyDown(list(), { key: 'ArrowDown' });
+      fireEvent.keyDown(list(), { key: 'Enter' });
+      expect(onChange).toHaveBeenLastCalledWith('release');
+      expect(trigger()).toHaveFocus();
+      fireEvent.click(trigger());
+      fireEvent.keyDown(list(), { key: 'Home' });
+      fireEvent.keyDown(list(), { key: ' ' });
+      expect(onChange).toHaveBeenLastCalledWith('pr');
+    });
+
+    it('a letter jumps to the option it starts, also from the closed field', () => {
+      render(<Field options={LEVELS} searchable={false} value="pr" />);
+      fireEvent.keyDown(trigger(), { key: 'd' });
+      expect(list()).toHaveAttribute('aria-activedescendant', screen.getByRole('option', { name: 'Deploy' }).id);
+      fireEvent.keyDown(list(), { key: 'Enter' });
+      expect(onChange).toHaveBeenLastCalledWith('deploy');
+    });
+
+    it('Esc and Tab close without choosing', () => {
+      render(<Field options={LEVELS} searchable={false} value="pr" />);
+      fireEvent.click(trigger());
+      fireEvent.keyDown(list(), { key: 'ArrowDown' });
+      fireEvent.keyDown(list(), { key: 'Escape' });
+      expect(screen.queryByRole('listbox')).toBeNull();
+      fireEvent.click(trigger());
+      fireEvent.keyDown(list(), { key: 'ArrowDown' });
+      fireEvent.keyDown(list(), { key: 'Tab' });
+      expect(screen.queryByRole('listbox')).toBeNull();
+      expect(onChange).not.toHaveBeenCalled();
+      expect(trigger()).toHaveFocus();
+    });
+
+    it('does nothing when disabled', () => {
+      render(<Field options={LEVELS} searchable={false} value="pr" disabled />);
+      expect(trigger()).toBeDisabled();
+      fireEvent.click(trigger());
+      fireEvent.keyDown(trigger(), { key: 'ArrowDown' });
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+  });
+
   it('inside a modal: Esc closes only the panel, and a click in the panel stays in the modal', () => {
     const onClose = vi.fn();
     render(
@@ -279,6 +345,17 @@ describe('placePanel', () => {
   it('never leaves the viewport sideways, and a narrow field gets a usable width', () => {
     expect(placePanel(rect(100, 900, 80), 1, viewport)).toMatchObject({ left: 792, width: 200 });
     expect(placePanel(rect(100, 0, 500), 1, { width: 320, height: 800 })).toMatchObject({ left: 8, width: 304 });
+  });
+});
+
+describe('typeaheadIndex', () => {
+  const OPTS: ComboboxOption[] = [{ value: 'pr', label: 'Só código' }, { value: 'd1', label: 'Deploy' }, { value: 'd2', label: 'Dev' }, { value: 'm', label: 'Merge' }];
+  it('finds the next label starting with the letters, ignoring accents, and cycles on repeats', () => {
+    expect(typeaheadIndex(OPTS, 's', 2)).toBe(0);
+    expect(typeaheadIndex(OPTS, 'd', 0)).toBe(1);
+    expect(typeaheadIndex(OPTS, 'dd', 1)).toBe(2);
+    expect(typeaheadIndex(OPTS, 'dev', 1)).toBe(2);
+    expect(typeaheadIndex(OPTS, 'x', 0)).toBe(-1);
   });
 });
 
