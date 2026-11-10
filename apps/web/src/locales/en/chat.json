@@ -697,5 +697,8 @@
   "Mensagem pronta": "Ready to send",
   "Copiar mensagem": "Copy message",
   "Mensagem copiada": "Message copied",
-  "Não foi possível copiar a mensagem": "Could not copy the message"
+  "Não foi possível copiar a mensagem": "Could not copy the message",
+  "presa num diálogo do CLI": "stuck on a CLI dialog",
+  "ficar presa num diálogo": "get stuck on a dialog",
+  "ficou presa num diálogo": "got stuck on a dialog"
 }

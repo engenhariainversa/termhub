@@ -55,6 +55,13 @@ describe('trustDialogOf — every CLI\'s folder trust dialog (TER-1122)', () => 
     ]);
   });
 
+  it('Claude Code 2.1.322: unnumbered options with "No, exit" first and selected — seen, not answered by Enter (TER-1166)', () => {
+    const v322 = fixture('claude-screens/trust-2.1.322.txt');
+    expect(trustDialogOf(v322)).toEqual({ cli: 'claude', acceptable: false });
+    const yes = v322.replace(' ❯ No, exit', '   No, exit').replace('   Yes, I trust this folder', ' ❯ Yes, I trust this folder');
+    expect(trustDialogOf(yes)).toEqual({ cli: 'claude', acceptable: true });
+  });
+
   it("Codex's older dialog that also turns approvals off is never answered", () => {
     expect(trustDialogOf(CODEX_APPROVAL)).toEqual({ cli: 'codex', acceptable: false });
   });

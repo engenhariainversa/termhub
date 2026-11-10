@@ -37,7 +37,8 @@ export type TabState =
   | 'finished'
   | 'blocked'
   | 'auth_required'
-  | 'trust_prompt';
+  | 'trust_prompt'
+  | 'cli_dialog';
 /** What a working agent is doing, from the tool it is about to call (monitor/activity.ts). */
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 export const TAB_ACTIVITIES: readonly TabActivity[] = ['coding', 'reading', 'researching', 'planning', 'terminal', 'working'];

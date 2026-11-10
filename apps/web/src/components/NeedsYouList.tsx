@@ -30,6 +30,7 @@ function stateStyle(state: TabState | null): string {
     case 'auth_required':
       return 'bg-danger/15 text-danger';
     case 'trust_prompt':
+    case 'cli_dialog':
       return 'bg-attention/15 text-attention';
     case 'blocked':
       return 'bg-bg-4 text-fg-muted';

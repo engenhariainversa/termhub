@@ -92,7 +92,7 @@ const HINT: Record<HealthSignal, string> = {
   base_red: 'o workflow que falha (ou que nunca termina, por exemplo sem runner) precisa de conserto ou sair dos checks e entregas do Setup; enquanto isso nenhum PR é mesclado',
   queue_stalled: 'list_automation_queue diz o motivo de cada card (conta, máquina, backoff); destrave o que estiver ao seu alcance',
   tab_stuck: 'read_screen na aba diz se ela está mesmo trabalhando (um build longo) ou travada; travada, send_key ou send_input dentro das regras, senão avise',
-  tab_waiting: 'list_tab_questions e read_screen mostram o que ela espera; responda se uma regra da pessoa cobrir, senão avise',
+  tab_waiting: 'list_tab_questions e read_screen mostram o que ela espera; responda se uma regra da pessoa cobrir, senão avise. Em cli_dialog um diálogo do CLI segura a aba (o texto digitado nela se perde): read_screen mostra qual, send_key fecha (Esc costuma ser "agora não"); diga à pessoa o que fechou e reenvie o que se perdeu',
   card_orphan: 'se o trabalho não acabou, start_agent no card; se acabou, mova o card',
   run_blocked: 'list_automation_events mostra o motivo; resume_automation_run depois de destravado, ou a pessoa decide',
   machine_offline: 'wake_machine se ela acorda pela rede; senão a pessoa liga a máquina',

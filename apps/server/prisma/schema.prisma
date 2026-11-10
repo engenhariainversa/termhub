@@ -481,6 +481,9 @@ enum TabState {
   auth_required
   /// Claude Code asks whether the folder is trusted, before any hook fires (TER-1046).
   trust_prompt
+  /// A modal dialog of the agent CLI holds its input ("Teach auto mode", "Hooks need review"): text typed
+  /// into the tab is lost until it closes (TER-1166). Read off the screen; the text names the dialog.
+  cli_dialog
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).

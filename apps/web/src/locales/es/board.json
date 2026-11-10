@@ -511,5 +511,7 @@
   "falhou: publicação": "falló: publicación",
   "{{phase}} em {{date}}": "{{phase}} el {{date}}",
   "{{phase}} · desde {{date}}": "{{phase}} · desde {{date}}",
-  "Branch do épico": "Rama de la épica"
+  "Branch do épico": "Rama de la épica",
+  "está presa num diálogo do CLI": "está atascada en un diálogo del CLI",
+  "preso num diálogo": "atascado en un diálogo"
 }

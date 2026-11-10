@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from '../lib/errors.js';
 
@@ -25,6 +26,10 @@ vi.mock('./screen.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./screen.js')>();
   return { ...actual, waitForState };
 });
+
+const dialogFixture = (name: string) => readFileSync(new URL(`../monitor/fixtures/cli-dialogs/${name}.txt`, import.meta.url), 'utf8');
+const TEACH = dialogFixture('claude-teach-auto-mode-2.1.322');
+const HOOKS_REVIEW = dialogFixture('codex-hooks-review-0.159.3');
 
 const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey, typeCommandInTab } = await import('./terminals.js');
 const { resetInputOrigins, takeInputOrigin } = await import('../terminal/input-origin.js');
@@ -189,6 +194,30 @@ describe('sendInput', () => {
     await expect(sendInput(ctx, { tab_id: 't1', text: 'sim', answering_permission: true })).resolves.toMatchObject({ sent: true });
   });
 
+  // TER-1166: a modal dialog of the CLI holds the input; the text would be lost while the answer said "sent"
+  it('refuses to type into a tab held by a CLI dialog, naming it, and types nothing', async () => {
+    captureScreen.mockResolvedValueOnce(TEACH);
+    await expect(sendInput(ctxWith({ tab: tab({ state: 'finished' }) }), { tab_id: 't1', text: 'reenvia o resumo' })).rejects.toMatchObject({
+      code: 'CLI_DIALOG_OPEN',
+      message: expect.stringContaining('Teach auto mode about your environment?'),
+    });
+    captureScreen.mockResolvedValueOnce(HOOKS_REVIEW);
+    await expect(sendInput(ctxWith(), { tab_id: 't1', text: 'oi', enter: false })).rejects.toMatchObject({ code: 'CLI_DIALOG_OPEN', message: expect.stringContaining('Hooks need review') });
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('types as before when the screen shows no dialog, cannot be read, or the text answers a dialog on purpose', async () => {
+    captureScreen.mockResolvedValueOnce('● Pronto.\n\n────────────\n❯ \n────────────');
+    await expect(sendInput(ctxWith(), { tab_id: 't1', text: 'oi' })).resolves.toMatchObject({ sent: true });
+    captureScreen.mockRejectedValueOnce(new Error('rpc timeout'));
+    await expect(sendInput(ctxWith(), { tab_id: 't1', text: 'oi' })).resolves.toMatchObject({ sent: true });
+    // an answer typed into a permission or question dialog on purpose: the screen is not even read
+    captureScreen.mockClear();
+    await expect(sendInput(ctxWith(), { tab_id: 't1', text: '2', enter: false, answering_permission: true })).resolves.toMatchObject({ sent: true });
+    expect(captureScreen).not.toHaveBeenCalled();
+    expect(sendTextToSession).toHaveBeenCalledTimes(3);
+  });
+
   it('refuses text over the cap instead of cutting it', async () => {
     await expect(sendInput(ctxWith(), { tab_id: 't1', text: 'x'.repeat(4001) })).rejects.toMatchObject({ code: 'TEXT_TOO_LONG' });
   });
@@ -303,6 +332,15 @@ describe('sendKey', () => {
   it('presses the key in the session', async () => {
     await expect(sendKey(ctxWith(), { tab_id: 't1', key: 'C-c' })).resolves.toMatchObject({ key: 'C-c', sent: true });
     expect(sendKeyToSession).toHaveBeenCalledWith(machine, 'termhub-p1-t1', 'C-c');
+  });
+
+  it('says which CLI dialog is still open after the key, and nothing when it closed (TER-1166)', async () => {
+    captureScreen.mockResolvedValueOnce(TEACH);
+    const open = await sendKey(ctxWith(), { tab_id: 't1', key: 'Down' });
+    expect(open).toMatchObject({ sent: true, dialog: { cli: 'claude', id: 'claude_auto_mode_setup', title: 'Teach auto mode about your environment?', note: expect.stringContaining('still open') } });
+    captureScreen.mockResolvedValueOnce('● Pronto.\n\n────────────\n❯ \n────────────');
+    const closed = await sendKey(ctxWith(), { tab_id: 't1', key: 'Escape' });
+    expect(closed).toEqual({ tab_id: 't1', key: 'Escape', sent: true });
   });
 });
 

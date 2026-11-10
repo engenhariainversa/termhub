@@ -814,6 +814,7 @@ export interface Tab {
  * `blocked`: the tab's automatic run reported itself blocked; automation or the chat acts (TER-1046).
  * `auth_required`: Claude Code's login expired, the person has to run /login (TER-1046).
  * `trust_prompt`: Claude Code asks whether the folder is trusted, before it starts (TER-1046).
+ * `cli_dialog`: a dialog of the CLI holds its input ("Teach auto mode", "Hooks need review"); the state text names it (TER-1166).
  */
 export type TabState =
   | 'working'
@@ -825,7 +826,8 @@ export type TabState =
   | 'finished'
   | 'blocked'
   | 'auth_required'
-  | 'trust_prompt';
+  | 'trust_prompt'
+  | 'cli_dialog';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -841,10 +843,11 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   blocked: tk('bloqueado'),
   auth_required: tk('login expirado'),
   trust_prompt: tk('confiar na pasta?'),
+  cli_dialog: tk('preso num diálogo'),
 };
 
-/** States in which the tool is waiting for the person: the yellow ones and the expired login (TER-1046). */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+/** States in which the tool is waiting for the person: the yellow ones, the expired login (TER-1046), a CLI dialog (TER-1166). */
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt', 'cli_dialog'];
 
 /** States a quick reply answers: typing text into a login or trust dialog would do nothing good. */
 export const ANSWERABLE: readonly TabState[] = ['waiting_input', 'waiting_permission'];

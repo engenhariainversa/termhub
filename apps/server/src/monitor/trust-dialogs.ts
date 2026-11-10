@@ -9,7 +9,8 @@ import { lastNonBlankLines } from '../chat/permission-dialog.js';
  * answered by the server: the person decides. The screen is compared and dropped, never logged.
  *
  * Checked against:
- * - Claude Code 2.1.289 (fixtures/claude-screens/trust-2.1.289.txt): "❯ 1. Yes, I trust this folder";
+ * - Claude Code 2.1.289 (fixtures/claude-screens/trust-2.1.289.txt): "❯ 1. Yes, I trust this folder"; 2.1.322
+ *   (trust-2.1.322.txt): "❯ No, exit" / "Yes, I trust this folder", no numbers, "No" first and selected;
  * - Codex 0.159.3 (fixtures/trust-screens/codex-0.159.3.txt): "Trust this folder?" / "› 1. Trust and continue",
  *   and the earlier "Do you trust the contents of this directory?" / "› 1. Yes, continue";
  * - Cursor CLI (fixtures/trust-screens/cursor.txt, from a public capture: the CLI is not open source):
@@ -44,8 +45,9 @@ const RULES: readonly Rule[] = [
   {
     cli: 'claude',
     question: /one you trust|trust this folder|trust the files in this folder/i,
-    option: /^\s*(?:❯\s*)?1\.\s*Yes, I trust this folder/,
-    selected: /❯\s*1\.\s*Yes, I trust this folder/,
+    // 2.1.322 dropped the numbers and lists "No, exit" first, selected (fixtures/claude-screens/trust-2.1.322.txt)
+    option: /^\s*(?:❯\s*)?(?:\d\.\s*)?Yes, I trust this folder/,
+    selected: /❯\s*(?:\d\.\s*)?Yes, I trust this folder/,
   },
   {
     cli: 'codex',

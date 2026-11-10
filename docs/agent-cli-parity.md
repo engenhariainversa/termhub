@@ -10,6 +10,7 @@ First written for TER-1122 (2026-10-27) from a read of the code on `main` plus t
 | Feature | Claude Code | Codex | Cursor | Gemini | Where | Card |
 |---|---|---|---|---|---|---|
 | Folder trust dialog answered in the project's folder, else `trust_prompt` + push + chat woken | ✅ | ✅ | ✅ (after its `sessionStart`, or by the sweep) | ✅ (by the sweep of tabs with no state) | `monitor/trust-dialogs.ts`, `monitor/folder-trust.ts` | TER-1117, TER-1122; real Cursor/Gemini captures: TER-1131 |
+| Modal CLI dialog ("Teach auto mode", "Hooks need review"…) read from the screen: `cli_dialog`, send_input refuses (`CLI_DIALOG_OPEN`), health alert after 2 min | ✅ | ✅ | ❌ no capture of its dialogs yet | ❌ | `monitor/cli-dialogs.ts`, `monitor/stale-working.ts` `sweepDialogs` | TER-1166 |
 | `start_agent` / "Iniciar sessão" | ✅ | ✅ | ❌ not an account provider | ❌ `PROVIDER_UNSUPPORTED` | `control/agents.ts` `LAUNCH` | TER-1124 (Gemini), TER-1125 (Cursor) |
 | AI account | ✅ | ✅ | ❌ no account type | ⚠️ registered and usage read; cannot be listed in a project or started | `routes/ai-accounts.ts`, `ai/project-accounts.ts` | TER-1124, TER-1125 |
 | Project AI Setup through MCP (`get_project_ai_setup`, `set_project_ai_setup`, `unstick_project_chat`) | ✅ accounts, model, the project chat's account | ✅ accounts and model (the chat runs on Claude only) | ❌ not an account provider | ❌ cannot be listed in a project | `control/project-ai.ts` | TER-1147; TER-1124, TER-1125 |

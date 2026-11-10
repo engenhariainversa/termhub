@@ -12,9 +12,9 @@ export const MAX_WORKING_INTERVAL_S = 7200;
 /**
  * States that mean a tool is mid-task in that tab — as opposed to `idle`, `error` or never seen. `finished`
  * counts like `waiting_input`: the agent is still open at its prompt (TER-972), and so do `blocked`,
- * `auth_required` and `trust_prompt` (TER-1046).
+ * `auth_required` and `trust_prompt` (TER-1046), and `cli_dialog` (TER-1166).
  */
-const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished', 'blocked', 'auth_required', 'trust_prompt'];
+const BUSY_STATES: TabState[] = ['working', 'waiting_input', 'waiting_permission', 'waiting_background', 'finished', 'blocked', 'auth_required', 'trust_prompt', 'cli_dialog'];
 
 /** How many tabs one pass of the stale working sweep lists (`listStaleWorking`). */
 export const STALE_WORKING_LIMIT = 500;
@@ -145,6 +145,20 @@ export class TabsRepository {
     const rows = await this.db.tab.findMany({
       where: { kind: 'terminal', tmuxSession: { not: null }, state: { in: ['working', 'waiting_background'] }, stateTool: { in: ['claude', 'codex'] }, stateAt: { lt: before } },
       orderBy: [{ stateAt: 'asc' }],
+      take: limit,
+    });
+    return rows.map(mapTab);
+  }
+
+  /**
+   * Claude Code and Codex tabs at rest or held by a CLI dialog (`states`) whose state is newer than `since`, newest
+   * first, at most `limit` (TER-1166): a modal dialog of the CLI opens after the turn ended ("Teach auto mode")
+   * or before it began, no hook says so, and the monitor reads their screen (monitor/stale-working.ts).
+   */
+  async listResting(since: Date, states: readonly TabState[], limit = STALE_WORKING_LIMIT): Promise<Tab[]> {
+    const rows = await this.db.tab.findMany({
+      where: { kind: 'terminal', tmuxSession: { not: null }, state: { in: [...states] }, stateTool: { in: ['claude', 'codex'] }, stateAt: { gte: since } },
+      orderBy: [{ stateAt: 'desc' }],
       take: limit,
     });
     return rows.map(mapTab);

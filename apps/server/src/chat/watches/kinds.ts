@@ -13,7 +13,7 @@ export type WatchKind = (typeof STORED_WATCH_KINDS)[number];
 export const isWatchKind = (v: unknown): v is WatchKind => (STORED_WATCH_KINDS as readonly string[]).includes(v as string);
 
 /** A tab's stops (its monitor states other than `working`), and `gone`: the tab was closed or its session died. */
-export const TAB_EVENTS = ['finished', 'waiting_input', 'waiting_permission', 'idle', 'error', 'blocked', 'auth_required', 'trust_prompt', 'waiting_background', 'gone'] as const;
+export const TAB_EVENTS = ['finished', 'waiting_input', 'waiting_permission', 'idle', 'error', 'blocked', 'auth_required', 'trust_prompt', 'cli_dialog', 'waiting_background', 'gone'] as const;
 /** What "the tab stopped" means when the concierge names no event: every stop but background work still running. */
 export const TAB_DEFAULT_EVENTS: readonly TabWatchEvent[] = TAB_EVENTS.filter((e) => e !== 'waiting_background');
 export type TabWatchEvent = (typeof TAB_EVENTS)[number];

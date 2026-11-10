@@ -61,6 +61,7 @@ const STATE_LABEL: Record<TabState, string> = {
   blocked: tk('bloqueado'),
   auth_required: tk('login expirado'),
   trust_prompt: tk('confiar na pasta?'),
+  cli_dialog: tk('preso num diálogo'),
 };
 
 type StateFlags = Partial<Pick<AgentOnCard, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt'>>;
@@ -92,7 +93,7 @@ export function withLiveTab(agent: AgentOnCard, live: Tab | undefined): AgentOnC
   return {
     ...agent,
     // the shape the server sends (TER-644, TER-972, TER-1046): each newer state as an older one, flagged
-    state: s === 'waiting_background' ? 'working' : s === 'finished' || s === 'blocked' ? 'idle' : s === 'auth_required' ? 'error' : s === 'trust_prompt' ? 'waiting_input' : s,
+    state: s === 'waiting_background' ? 'working' : s === 'finished' || s === 'blocked' ? 'idle' : s === 'auth_required' ? 'error' : s === 'trust_prompt' || s === 'cli_dialog' ? 'waiting_input' : s,
     state_at: live.state_at,
     background: s === 'waiting_background',
     finished: s === 'finished',
