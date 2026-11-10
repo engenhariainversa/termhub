@@ -4,7 +4,7 @@
  * so nothing here ever talks to it. Skipped when tmux is not installed.
  */
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -47,11 +47,15 @@ let session: string;
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), 'scroll-script-'));
-  const cat = execFileSync('/bin/sh', ['-c', 'command -v cat'], { encoding: 'utf8' }).trim();
-  // A process whose name is `codex` (what `ps -o comm=` shows for the real Codex binary) and one
-  // that is not: both are `cat`, so any arrow that reaches them is echoed on the pane.
-  symlinkSync(cat, join(dir, 'codex'));
-  symlinkSync(cat, join(dir, 'pager'));
+  // A process whose name is `codex` (what `ps -o comm=` shows for the real Codex binary) and one that is
+  // not: both echo every byte they read the way `cat -v` shows an escape, so any arrow that reaches them is
+  // on the pane. Perl, not a symlink to `cat`: uutils coreutils (the default `cat` of recent Ubuntu, 26.04 on the CI runner) is one
+  // multicall binary that picks the program by its own file name and exits on "codex" or "pager"
+  // (docs/lessons/2026-11-10-fake-cat-symlink-under-multicall-coreutils.md).
+  const perl = execFileSync('/bin/sh', ['-c', 'command -v perl'], { encoding: 'utf8' }).trim();
+  symlinkSync(perl, join(dir, 'codex'));
+  symlinkSync(perl, join(dir, 'pager'));
+  writeFileSync(join(dir, 'echo.pl'), '$| = 1; while (sysread STDIN, my $c, 1) { $c =~ s/\\e/^[/; print $c }\n');
 });
 
 afterAll(() => {
@@ -76,9 +80,9 @@ async function start(cmd: string, ready: (s: string) => boolean): Promise<string
 
 /** Normal screen: 200 lines of history, then a raw-mode `cat -v` that shows any key it reads. */
 const normalScreen = () => start(`seq 1 200; stty raw -echo; echo READY; exec cat -v`, (s) => screen(s).includes('READY'));
-/** Alternate screen with `bin` (a `cat -v`) in the foreground. */
+/** Alternate screen with `bin` (an echo like `cat -v`) in the foreground. */
 const altScreen = (bin: string) =>
-  start(`printf '\\033[?1049h'; stty raw -echo; echo READY; exec ${join(dir, bin)} -v`, (s) => screen(s).includes('READY') && fmt(s, '#{alternate_on}') === '1');
+  start(`printf '\\033[?1049h'; stty raw -echo; echo READY; exec ${join(dir, bin)} ${join(dir, 'echo.pl')}`, (s) => screen(s).includes('READY') && fmt(s, '#{alternate_on}') === '1');
 
 describe('buildScrollScript', () => {
   it('refuses a session name that is not ours and a line count out of range', () => {
