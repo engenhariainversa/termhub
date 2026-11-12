@@ -71,6 +71,15 @@ answer `TAB_GC_OFF` while `tab_gc` is off; `run_gc` with `dry_run: false` answer
 while `tab_gc_live` is off. Server: `monitor/tab-gc/`. Spec:
 `docs/superpowers/specs/2026-11-11-agent-tab-gc-design.md`.
 
+## Personal runs API (`runs_api`, TER-1176)
+
+`runs_api` turns on the personal runs API for a person: the `runs` token scope (Configurações › Tokens
+de API refuses it with `422` while off), the bearer-only `/api/v1/runs` routes and "Runs da API" in
+Progresso (`GET /api/runs`). While it is off every `/api/v1` route answers `404 NOT_FOUND` for that
+person's tokens, the same as a route that does not exist. `runs` is never granted to a gated (concierge)
+or tab token, flag or not. Server: `apps/server/src/runs/`, `routes/runs-v1.ts`, `routes/runs-web.ts`.
+Spec: `docs/superpowers/specs/2026-11-11-personal-runs-api-design.md`.
+
 ## Impact on other users
 
 None while a flag is off, which is the default: no screen, route or limit changes for anyone. The

@@ -459,6 +459,7 @@ export type UserWhereInput = {
   integrations?: Prisma.IntegrationListRelationFilter
   uploads?: Prisma.UploadListRelationFilter
   apiTokens?: Prisma.ApiTokenListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   projectGroups?: Prisma.ProjectGroupListRelationFilter
   deviceRequests?: Prisma.DeviceRequestListRelationFilter
@@ -528,6 +529,7 @@ export type UserOrderByWithRelationInput = {
   integrations?: Prisma.IntegrationOrderByRelationAggregateInput
   uploads?: Prisma.UploadOrderByRelationAggregateInput
   apiTokens?: Prisma.ApiTokenOrderByRelationAggregateInput
+  apiRuns?: Prisma.ApiRunOrderByRelationAggregateInput
   chatConversations?: Prisma.ChatConversationOrderByRelationAggregateInput
   projectGroups?: Prisma.ProjectGroupOrderByRelationAggregateInput
   deviceRequests?: Prisma.DeviceRequestOrderByRelationAggregateInput
@@ -600,6 +602,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   integrations?: Prisma.IntegrationListRelationFilter
   uploads?: Prisma.UploadListRelationFilter
   apiTokens?: Prisma.ApiTokenListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   projectGroups?: Prisma.ProjectGroupListRelationFilter
   deviceRequests?: Prisma.DeviceRequestListRelationFilter
@@ -752,6 +755,7 @@ export type UserCreateInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -820,6 +824,7 @@ export type UserUncheckedCreateInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -888,6 +893,7 @@ export type UserUpdateInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -956,6 +962,7 @@ export type UserUncheckedUpdateInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -1426,6 +1433,20 @@ export type UserUpdateOneRequiredWithoutApiTokensNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutApiTokensInput, Prisma.UserUpdateWithoutApiTokensInput>, Prisma.UserUncheckedUpdateWithoutApiTokensInput>
 }
 
+export type UserCreateNestedOneWithoutApiRunsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutApiRunsInput, Prisma.UserUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutApiRunsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutApiRunsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutApiRunsInput, Prisma.UserUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutApiRunsInput
+  upsert?: Prisma.UserUpsertWithoutApiRunsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutApiRunsInput, Prisma.UserUpdateWithoutApiRunsInput>, Prisma.UserUncheckedUpdateWithoutApiRunsInput>
+}
+
 export type UserCreateNestedOneWithoutChatConversationsInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutChatConversationsInput, Prisma.UserUncheckedCreateWithoutChatConversationsInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutChatConversationsInput
@@ -1807,6 +1828,7 @@ export type UserCreateWithoutRoleRefInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -1874,6 +1896,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -2008,6 +2031,7 @@ export type UserCreateWithoutSessionsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -2075,6 +2099,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -2158,6 +2183,7 @@ export type UserUpdateWithoutSessionsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -2225,6 +2251,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -2292,6 +2319,7 @@ export type UserCreateWithoutMachinesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -2359,6 +2387,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -2442,6 +2471,7 @@ export type UserUpdateWithoutMachinesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -2509,6 +2539,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -2576,6 +2607,7 @@ export type UserCreateWithoutProjectsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -2643,6 +2675,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -2726,6 +2759,7 @@ export type UserUpdateWithoutProjectsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -2793,6 +2827,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -2860,6 +2895,7 @@ export type UserCreateWithoutIntegrationsInput = {
   projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -2927,6 +2963,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -3010,6 +3047,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -3077,6 +3115,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -3144,6 +3183,7 @@ export type UserCreateWithoutUploadsInput = {
   projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -3211,6 +3251,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -3294,6 +3335,7 @@ export type UserUpdateWithoutUploadsInput = {
   projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -3361,6 +3403,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -3428,6 +3471,7 @@ export type UserCreateWithoutApiTokensInput = {
   projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -3495,6 +3539,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -3578,6 +3623,7 @@ export type UserUpdateWithoutApiTokensInput = {
   projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -3645,6 +3691,295 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUncheckedUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUncheckedUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutVerifierNestedInput
+  memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutOwnerNestedInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUncheckedUpdateManyWithoutOwnerNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutUserNestedInput
+  chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutUserNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutUserNestedInput
+  conciergeNotices?: Prisma.ConciergeNoticeUncheckedUpdateManyWithoutUserNestedInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUncheckedUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedUpdateManyWithoutUserNestedInput
+}
+
+export type UserCreateWithoutApiRunsInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
+  pushTabFinished?: boolean
+  conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  aiLoginWarnDays?: number | null
+  locale?: string | null
+  roleRef?: Prisma.RoleCreateNestedOneWithoutUsersInput
+  sessions?: Prisma.SessionCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemCreateNestedManyWithoutVerifierInput
+  memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutOwnerInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueCreateNestedManyWithoutOwnerInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutUserInput
+  chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutUserInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutUserInput
+  conciergeNotices?: Prisma.ConciergeNoticeCreateNestedManyWithoutUserInput
+  fileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceCreateNestedManyWithoutUserInput
+}
+
+export type UserUncheckedCreateWithoutApiRunsInput = {
+  id: string
+  email: string
+  name: string
+  avatarUrl?: string | null
+  nickname?: string | null
+  cityShortUrlPartner?: string | null
+  cityShortUrlCustom?: string | null
+  passwordHash?: string | null
+  googleId?: string | null
+  role?: $Enums.UserRole
+  roleId?: string | null
+  invitedAt?: Date | string | null
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  reviewEnabledUntil?: Date | string | null
+  reviewEnabledBy?: string | null
+  chatSuggestions?: boolean
+  chatAutodecide?: boolean
+  chatAutoHigh?: number | null
+  chatAutoLow?: number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: boolean
+  chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
+  pushTabFinished?: boolean
+  conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatContextLimit?: number | null
+  chatBlockedModels?: Prisma.UserCreatechatBlockedModelsInput | string[]
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  deletionRequestedAt?: Date | string | null
+  deletionScheduledAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  timeZone?: string | null
+  aiLoginWarnDays?: number | null
+  locale?: string | null
+  sessions?: Prisma.SessionUncheckedCreateNestedManyWithoutUserInput
+  machines?: Prisma.MachineUncheckedCreateNestedManyWithoutOwnerInput
+  projects?: Prisma.ProjectUncheckedCreateNestedManyWithoutOwnerInput
+  integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
+  apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
+  projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
+  deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
+  devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
+  notifications?: Prisma.UserNotificationUncheckedCreateNestedManyWithoutUserInput
+  chatAttachments?: Prisma.ChatAttachmentUncheckedCreateNestedManyWithoutUserInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutUserInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUncheckedCreateNestedManyWithoutUserInput
+  chatFocus?: Prisma.ChatFocusUncheckedCreateNestedManyWithoutUserInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutOwnerInput
+  verifiedMemoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutVerifierInput
+  memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutOwnerInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUncheckedCreateNestedManyWithoutOwnerInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutUserInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutUserInput
+  chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutUserInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutUserInput
+  conciergeNotices?: Prisma.ConciergeNoticeUncheckedCreateNestedManyWithoutUserInput
+  fileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutUserInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUncheckedCreateNestedManyWithoutUserInput
+  automationSummaries?: Prisma.AutomationSummaryUncheckedCreateNestedManyWithoutUserInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUncheckedCreateNestedManyWithoutUserInput
+  dataExports?: Prisma.DataExportUncheckedCreateNestedManyWithoutUserInput
+  legalAcceptances?: Prisma.LegalAcceptanceUncheckedCreateNestedManyWithoutUserInput
+}
+
+export type UserCreateOrConnectWithoutApiRunsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutApiRunsInput, Prisma.UserUncheckedCreateWithoutApiRunsInput>
+}
+
+export type UserUpsertWithoutApiRunsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutApiRunsInput, Prisma.UserUncheckedUpdateWithoutApiRunsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutApiRunsInput, Prisma.UserUncheckedCreateWithoutApiRunsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutApiRunsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutApiRunsInput, Prisma.UserUncheckedUpdateWithoutApiRunsInput>
+}
+
+export type UserUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  roleRef?: Prisma.RoleUpdateOneWithoutUsersNestedInput
+  sessions?: Prisma.SessionUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
+  projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
+  deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
+  devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
+  notifications?: Prisma.UserNotificationUpdateManyWithoutUserNestedInput
+  chatAttachments?: Prisma.ChatAttachmentUpdateManyWithoutUserNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutUserNestedInput
+  chatAutoSamples?: Prisma.ChatAutoSampleUpdateManyWithoutUserNestedInput
+  chatFocus?: Prisma.ChatFocusUpdateManyWithoutUserNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutOwnerNestedInput
+  verifiedMemoryItems?: Prisma.MemoryItemUpdateManyWithoutVerifierNestedInput
+  memoryRules?: Prisma.MemoryRuleUpdateManyWithoutOwnerNestedInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUpdateManyWithoutOwnerNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutUserNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutUserNestedInput
+  chatBlocks?: Prisma.ChatBlockUpdateManyWithoutUserNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutUserNestedInput
+  conciergeNotices?: Prisma.ConciergeNoticeUpdateManyWithoutUserNestedInput
+  fileGrants?: Prisma.ChatFileGrantUpdateManyWithoutUserNestedInput
+  chatDefaultRestrictions?: Prisma.ChatDefaultRestrictionUpdateManyWithoutUserNestedInput
+  automationSummaries?: Prisma.AutomationSummaryUpdateManyWithoutUserNestedInput
+  featureFlagOverrides?: Prisma.FeatureFlagOverrideUpdateManyWithoutUserNestedInput
+  dataExports?: Prisma.DataExportUpdateManyWithoutUserNestedInput
+  legalAcceptances?: Prisma.LegalAcceptanceUpdateManyWithoutUserNestedInput
+}
+
+export type UserUncheckedUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  avatarUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  nickname?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlPartner?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cityShortUrlCustom?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  googleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  roleId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  invitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  reviewEnabledUntil?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  reviewEnabledBy?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  chatSuggestions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutodecide?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatAutoHigh?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoLow?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
+  chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  chatBlockedModels?: Prisma.UserUpdatechatBlockedModelsInput | string[]
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  deletionRequestedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  deletionScheduledAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  timeZone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  aiLoginWarnDays?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  locale?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sessions?: Prisma.SessionUncheckedUpdateManyWithoutUserNestedInput
+  machines?: Prisma.MachineUncheckedUpdateManyWithoutOwnerNestedInput
+  projects?: Prisma.ProjectUncheckedUpdateManyWithoutOwnerNestedInput
+  integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
+  apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -3713,6 +4048,7 @@ export type UserCreateWithoutChatConversationsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
@@ -3780,6 +4116,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
@@ -3863,6 +4200,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
@@ -3930,6 +4268,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
@@ -3997,6 +4336,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -4064,6 +4404,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -4147,6 +4488,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -4214,6 +4556,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -4281,6 +4624,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -4348,6 +4692,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -4431,6 +4776,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -4498,6 +4844,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -4565,6 +4912,7 @@ export type UserCreateWithoutFileGrantsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -4632,6 +4980,7 @@ export type UserUncheckedCreateWithoutFileGrantsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -4715,6 +5064,7 @@ export type UserUpdateWithoutFileGrantsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -4782,6 +5132,7 @@ export type UserUncheckedUpdateWithoutFileGrantsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -4849,6 +5200,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -4916,6 +5268,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -4999,6 +5352,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -5066,6 +5420,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -5133,6 +5488,7 @@ export type UserCreateWithoutChatBlocksInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -5200,6 +5556,7 @@ export type UserUncheckedCreateWithoutChatBlocksInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -5283,6 +5640,7 @@ export type UserUpdateWithoutChatBlocksInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -5350,6 +5708,7 @@ export type UserUncheckedUpdateWithoutChatBlocksInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -5417,6 +5776,7 @@ export type UserCreateWithoutChatCommandRulesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -5484,6 +5844,7 @@ export type UserUncheckedCreateWithoutChatCommandRulesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -5567,6 +5928,7 @@ export type UserUpdateWithoutChatCommandRulesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -5634,6 +5996,7 @@ export type UserUncheckedUpdateWithoutChatCommandRulesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -5701,6 +6064,7 @@ export type UserCreateWithoutChatWatchesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -5768,6 +6132,7 @@ export type UserUncheckedCreateWithoutChatWatchesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -5851,6 +6216,7 @@ export type UserUpdateWithoutChatWatchesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -5918,6 +6284,7 @@ export type UserUncheckedUpdateWithoutChatWatchesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -5985,6 +6352,7 @@ export type UserCreateWithoutConciergeNoticesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -6052,6 +6420,7 @@ export type UserUncheckedCreateWithoutConciergeNoticesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -6135,6 +6504,7 @@ export type UserUpdateWithoutConciergeNoticesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -6202,6 +6572,7 @@ export type UserUncheckedUpdateWithoutConciergeNoticesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -6269,6 +6640,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -6336,6 +6708,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -6419,6 +6792,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -6486,6 +6860,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -6553,6 +6928,7 @@ export type UserCreateWithoutChatFocusInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -6620,6 +6996,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -6703,6 +7080,7 @@ export type UserUpdateWithoutChatFocusInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -6770,6 +7148,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -6837,6 +7216,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -6904,6 +7284,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -6987,6 +7368,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -7054,6 +7436,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -7121,6 +7504,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -7188,6 +7572,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -7260,6 +7645,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -7327,6 +7713,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -7410,6 +7797,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -7477,6 +7865,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -7555,6 +7944,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -7622,6 +8012,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -7689,6 +8080,7 @@ export type UserCreateWithoutMemoryWriteQueueInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -7756,6 +8148,7 @@ export type UserUncheckedCreateWithoutMemoryWriteQueueInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -7839,6 +8232,7 @@ export type UserUpdateWithoutMemoryWriteQueueInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -7906,6 +8300,7 @@ export type UserUncheckedUpdateWithoutMemoryWriteQueueInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -7973,6 +8368,7 @@ export type UserCreateWithoutMemoryRulesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -8040,6 +8436,7 @@ export type UserUncheckedCreateWithoutMemoryRulesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -8123,6 +8520,7 @@ export type UserUpdateWithoutMemoryRulesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -8190,6 +8588,7 @@ export type UserUncheckedUpdateWithoutMemoryRulesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -8257,6 +8656,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
@@ -8324,6 +8724,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
@@ -8407,6 +8808,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
@@ -8474,6 +8876,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
@@ -8541,6 +8944,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceCreateNestedManyWithoutUserInput
@@ -8608,6 +9012,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   devices?: Prisma.DeviceUncheckedCreateNestedManyWithoutUserInput
@@ -8691,6 +9096,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUpdateManyWithoutUserNestedInput
@@ -8758,6 +9164,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   devices?: Prisma.DeviceUncheckedUpdateManyWithoutUserNestedInput
@@ -8825,6 +9232,7 @@ export type UserCreateWithoutDevicesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -8892,6 +9300,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -8975,6 +9384,7 @@ export type UserUpdateWithoutDevicesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -9042,6 +9452,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -9109,6 +9520,7 @@ export type UserCreateWithoutNotificationsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -9176,6 +9588,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -9259,6 +9672,7 @@ export type UserUpdateWithoutNotificationsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -9326,6 +9740,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -9393,6 +9808,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -9460,6 +9876,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -9543,6 +9960,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -9610,6 +10028,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -9677,6 +10096,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -9744,6 +10164,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -9827,6 +10248,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -9894,6 +10316,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -9961,6 +10384,7 @@ export type UserCreateWithoutDataExportsInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -10028,6 +10452,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -10111,6 +10536,7 @@ export type UserUpdateWithoutDataExportsInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -10178,6 +10604,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -10245,6 +10672,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   integrations?: Prisma.IntegrationCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestCreateNestedManyWithoutUserInput
@@ -10312,6 +10740,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   integrations?: Prisma.IntegrationUncheckedCreateNestedManyWithoutOwnerInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutUserInput
   apiTokens?: Prisma.ApiTokenUncheckedCreateNestedManyWithoutUserInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutUserInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutUserInput
   projectGroups?: Prisma.ProjectGroupUncheckedCreateNestedManyWithoutUserInput
   deviceRequests?: Prisma.DeviceRequestUncheckedCreateNestedManyWithoutUserInput
@@ -10395,6 +10824,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -10462,6 +10892,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -10565,6 +10996,7 @@ export type UserUpdateWithoutRoleRefInput = {
   integrations?: Prisma.IntegrationUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUpdateManyWithoutUserNestedInput
@@ -10632,6 +11064,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   integrations?: Prisma.IntegrationUncheckedUpdateManyWithoutOwnerNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutUserNestedInput
   apiTokens?: Prisma.ApiTokenUncheckedUpdateManyWithoutUserNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutUserNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutUserNestedInput
   projectGroups?: Prisma.ProjectGroupUncheckedUpdateManyWithoutUserNestedInput
   deviceRequests?: Prisma.DeviceRequestUncheckedUpdateManyWithoutUserNestedInput
@@ -10707,6 +11140,7 @@ export type UserCountOutputType = {
   integrations: number
   uploads: number
   apiTokens: number
+  apiRuns: number
   chatConversations: number
   projectGroups: number
   deviceRequests: number
@@ -10740,6 +11174,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   integrations?: boolean | UserCountOutputTypeCountIntegrationsArgs
   uploads?: boolean | UserCountOutputTypeCountUploadsArgs
   apiTokens?: boolean | UserCountOutputTypeCountApiTokensArgs
+  apiRuns?: boolean | UserCountOutputTypeCountApiRunsArgs
   chatConversations?: boolean | UserCountOutputTypeCountChatConversationsArgs
   projectGroups?: boolean | UserCountOutputTypeCountProjectGroupsArgs
   deviceRequests?: boolean | UserCountOutputTypeCountDeviceRequestsArgs
@@ -10816,6 +11251,13 @@ export type UserCountOutputTypeCountUploadsArgs<ExtArgs extends runtime.Types.Ex
  */
 export type UserCountOutputTypeCountApiTokensArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.ApiTokenWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountApiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ApiRunWhereInput
 }
 
 /**
@@ -11030,6 +11472,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   integrations?: boolean | Prisma.User$integrationsArgs<ExtArgs>
   uploads?: boolean | Prisma.User$uploadsArgs<ExtArgs>
   apiTokens?: boolean | Prisma.User$apiTokensArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.User$apiRunsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.User$chatConversationsArgs<ExtArgs>
   projectGroups?: boolean | Prisma.User$projectGroupsArgs<ExtArgs>
   deviceRequests?: boolean | Prisma.User$deviceRequestsArgs<ExtArgs>
@@ -11182,6 +11625,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   integrations?: boolean | Prisma.User$integrationsArgs<ExtArgs>
   uploads?: boolean | Prisma.User$uploadsArgs<ExtArgs>
   apiTokens?: boolean | Prisma.User$apiTokensArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.User$apiRunsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.User$chatConversationsArgs<ExtArgs>
   projectGroups?: boolean | Prisma.User$projectGroupsArgs<ExtArgs>
   deviceRequests?: boolean | Prisma.User$deviceRequestsArgs<ExtArgs>
@@ -11225,6 +11669,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     integrations: Prisma.$IntegrationPayload<ExtArgs>[]
     uploads: Prisma.$UploadPayload<ExtArgs>[]
     apiTokens: Prisma.$ApiTokenPayload<ExtArgs>[]
+    apiRuns: Prisma.$ApiRunPayload<ExtArgs>[]
     chatConversations: Prisma.$ChatConversationPayload<ExtArgs>[]
     projectGroups: Prisma.$ProjectGroupPayload<ExtArgs>[]
     deviceRequests: Prisma.$DeviceRequestPayload<ExtArgs>[]
@@ -11770,6 +12215,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   integrations<T extends Prisma.User$integrationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$integrationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$IntegrationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   uploads<T extends Prisma.User$uploadsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$uploadsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UploadPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   apiTokens<T extends Prisma.User$apiTokensArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$apiTokensArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ApiTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  apiRuns<T extends Prisma.User$apiRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$apiRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ApiRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatConversations<T extends Prisma.User$chatConversationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$chatConversationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatConversationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   projectGroups<T extends Prisma.User$projectGroupsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$projectGroupsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProjectGroupPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   deviceRequests<T extends Prisma.User$deviceRequestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$deviceRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DeviceRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -12419,6 +12865,30 @@ export type User$apiTokensArgs<ExtArgs extends runtime.Types.Extensions.Internal
   take?: number
   skip?: number
   distinct?: Prisma.ApiTokenScalarFieldEnum | Prisma.ApiTokenScalarFieldEnum[]
+}
+
+/**
+ * User.apiRuns
+ */
+export type User$apiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ApiRun
+   */
+  select?: Prisma.ApiRunSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ApiRun
+   */
+  omit?: Prisma.ApiRunOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ApiRunInclude<ExtArgs> | null
+  where?: Prisma.ApiRunWhereInput
+  orderBy?: Prisma.ApiRunOrderByWithRelationInput | Prisma.ApiRunOrderByWithRelationInput[]
+  cursor?: Prisma.ApiRunWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ApiRunScalarFieldEnum | Prisma.ApiRunScalarFieldEnum[]
 }
 
 /**

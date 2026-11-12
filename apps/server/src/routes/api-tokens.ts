@@ -5,6 +5,9 @@ import { API_TOKEN_EVENT_RETENTION_DAYS, API_TOKEN_SCOPES, MAX_ACTIVE_TOKENS_PER
 import { conflict, notFound } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
 import { audit } from '../auth/audit.js';
+import { isEnabled } from '../features/flags.js';
+import { HttpError } from '../lib/errors.js';
+import { tk } from '../i18n/index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -26,6 +29,10 @@ export async function apiTokenRoutes(app: FastifyInstance, repos: Repositories, 
   app.post('/', async (request, reply) => {
     const body = createBody.parse(request.body ?? {});
     const userId = request.user!.id;
+    // `runs` (TER-1176) exists only for whoever has the runs API on: while it is off the scope is unknown.
+    if (body.scopes.includes('runs') && !(await isEnabled('runs_api', { repos, userId }))) {
+      throw new HttpError(422, tk('Escopo indisponível: runs'), 'VALIDATION');
+    }
     if ((await repos.apiTokens.countActive(userId)) >= MAX_ACTIVE_TOKENS_PER_USER) {
       throw conflict(msg('Limite de {{max}} tokens ativos: revogue um antes de criar outro', { max: MAX_ACTIVE_TOKENS_PER_USER }));
     }

@@ -43,7 +43,7 @@ export interface User {
 }
 
 /** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
-export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live';
+export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live' | 'runs_api';
 
 /** One person's own value for a flag (Configurações → Recursos em teste). */
 export interface FeatureFlagOverride {
@@ -2069,7 +2069,7 @@ export interface DevicesSummary {
   active_devices: number;
 }
 
-export type ApiTokenScope = 'read' | 'tasks' | 'terminals' | 'memory';
+export type ApiTokenScope = 'read' | 'tasks' | 'terminals' | 'memory' | 'runs';
 
 /** Personal API token as the server lists it (never the secret). */
 /** One web session of the signed-in person (GET /auth/sessions). */

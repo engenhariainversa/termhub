@@ -70,7 +70,7 @@ describe('GET /auth/me', () => {
 
   it('carries the feature flags resolved for this person, off by default (TER-1040)', async () => {
     const res = await buildApp(user).inject({ url: '/auth/me' });
-    expect(res.json().user.features).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false });
+    expect(res.json().user.features).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, runs_api: false });
   });
 });
 

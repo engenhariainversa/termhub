@@ -622,5 +622,10 @@
   "Coletor de abas (teste)": "Tab collector (test)",
   "Procura abas de agente paradas há muito tempo (24 h; com erro, 6 h) ou cuja sessão do terminal não existe mais, e registra no feed do projeto o que fecharia. Não fecha nada: é a semana de teste.": "Looks for agent tabs idle for long (24 h; in error, 6 h) or whose terminal session no longer exists, and records in the project feed what it would close. Closes nothing: this is the test week.",
   "Coletor de abas: fechar de verdade": "Tab collector: close for real",
-  "Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o \"Fechar abas paradas\" das máquinas.": "With the collector on, it warns 30 min ahead and closes idle tabs, keeping the agent's last answer. It never closes a tab that is working, waiting on you, running an automatic run, whose card is in progress, or pinned. Replaces the machines' \"Close idle tabs\"."
+  "Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o \"Fechar abas paradas\" das máquinas.": "With the collector on, it warns 30 min ahead and closes idle tabs, keeping the agent's last answer. It never closes a tab that is working, waiting on you, running an automatic run, whose card is in progress, or pinned. Replaces the machines' \"Close idle tabs\".",
+  "API de runs": "Runs API",
+  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Lets you create tokens with the runs scope and run prompts through the API (/api/v1/runs) on your own AI accounts and machines, and shows the API runs in Progress. Off, the routes do not exist and the scope does not show.",
+  "Criou uma run pela API": "Created a run through the API",
+  "Cancelou uma run da API": "Cancelled an API run",
+  "Runs da API": "API runs"
 }

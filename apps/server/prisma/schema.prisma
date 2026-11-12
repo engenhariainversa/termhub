@@ -61,6 +61,7 @@ model User {
   integrations            Integration[]            @relation("IntegrationOwner")
   uploads                 Upload[]
   apiTokens               ApiToken[]
+  apiRuns                 ApiRun[]
   chatConversations       ChatConversation[]
   projectGroups           ProjectGroup[]
   /// Store-review switch (spec §10.2): a device request for this e-mail auto-approves while this is in the future.
@@ -295,6 +296,8 @@ model Machine {
   chatConversations     ChatConversation[]
   /// Rule pages termhub wrote to ai-memory on this machine (TER-1019).
   aiMemoryPages         AiMemoryPage[]
+  /// API runs that ran here (TER-1176); deleting the machine nulls the column, the run row stays.
+  apiRuns               ApiRun[]
 
   @@index([ownerId])
   @@map("machines")
@@ -341,6 +344,7 @@ model Project {
   memoryItems         MemoryItem[]
   memoryRules         MemoryRule[]
   memoryWriteQueue    MemoryWriteQueue[]
+  apiRuns             ApiRun[]
   agentColumn         TaskColumn?         @relation("ProjectAgentColumn", fields: [agentColumnId], references: [id], onDelete: SetNull)
   /// The project's board columns, in `position` order.
   columns             TaskColumn[]        @relation("ProjectColumns")
@@ -974,6 +978,8 @@ model AiAccount {
   tabs               Tab[]
   /// Set while the account is at its usage limit (automatic work skips it).
   exhaustion         AiAccountExhaustion?
+  /// API runs this account ran (TER-1176); deleting the account nulls the column.
+  apiRuns            ApiRun[]
 
   @@index([machineId])
   @@index([exclusiveProjectId])
@@ -1045,6 +1051,8 @@ model ApiToken {
   revokedAt          DateTime?         @map("revoked_at")
   createdAt          DateTime          @default(now()) @map("created_at")
   events             ApiTokenEvent[]
+  /// Runs created with this token (TER-1176); deleting the token nulls the column, the run row stays.
+  apiRuns            ApiRun[]
   /// A token whose writes pass the chat's confirmation gate — the concierge's, never a person's own.
   gated              Boolean           @default(false)
   /// The chat conversation a concierge token runs for. Null on a person's own tokens.
@@ -1081,6 +1089,64 @@ model ApiTokenEvent {
   @@index([tokenId, createdAt])
   @@index([createdAt])
   @@map("api_token_events")
+}
+
+/// One prompt run through the personal runs API (TER-1176, `/api/v1/runs`, behind the `runs_api` flag),
+/// on the owner's own machine and AI account. The row keeps status, usage and the final text; its events
+/// are pruned after 7 days. Never the prompt.
+model ApiRun {
+  id             String        @id
+  userId         String        @map("user_id")
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenId        String?       @map("token_id")
+  token          ApiToken?     @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  projectId      String        @map("project_id")
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  machineId      String?       @map("machine_id")
+  machine        Machine?      @relation(fields: [machineId], references: [id], onDelete: SetNull)
+  accountId      String?       @map("account_id")
+  account        AiAccount?    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  /// claude | codex; null until routed
+  provider       String?
+  model          String?
+  /// subset of read | edit | run_commands
+  capabilities   String[]
+  /// queued | running | succeeded | failed | cancelled
+  status         String        @default("queued")
+  /// { kind: project | worktree, path, branch }
+  workspace      Json?
+  result         String?
+  /// { input_tokens, output_tokens, cost_usd? }
+  usage          Json?
+  errorCode      String?       @map("error_code")
+  errorMessage   String?       @map("error_message")
+  idempotencyKey String?       @map("idempotency_key")
+  timeoutMs      Int           @map("timeout_ms")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  startedAt      DateTime?     @map("started_at")
+  endedAt        DateTime?     @map("ended_at")
+  events         ApiRunEvent[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([tokenId, status])
+  @@index([userId, status])
+  @@index([projectId, createdAt])
+  @@map("api_runs")
+}
+
+/// One normalized event of an API run (`runs/events.ts`), in `seq` order. Owner's data: never logged.
+model ApiRunEvent {
+  runId   String   @map("run_id")
+  run     ApiRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
+  seq     Int
+  type    String
+  payload Json
+  at      DateTime @default(now())
+
+  @@id([runId, seq])
+  @@index([at])
+  @@map("api_run_events")
 }
 
 /// One chat with the concierge: the account-wide one (projectId null) or one project's (spec

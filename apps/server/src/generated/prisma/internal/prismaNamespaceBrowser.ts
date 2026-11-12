@@ -86,6 +86,8 @@ export const ModelName = {
   Upload: 'Upload',
   ApiToken: 'ApiToken',
   ApiTokenEvent: 'ApiTokenEvent',
+  ApiRun: 'ApiRun',
+  ApiRunEvent: 'ApiRunEvent',
   ChatConversation: 'ChatConversation',
   ChatMessage: 'ChatMessage',
   ChatAttachment: 'ChatAttachment',
@@ -745,6 +747,43 @@ export const ApiTokenEventScalarFieldEnum = {
 } as const
 
 export type ApiTokenEventScalarFieldEnum = (typeof ApiTokenEventScalarFieldEnum)[keyof typeof ApiTokenEventScalarFieldEnum]
+
+
+export const ApiRunScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tokenId: 'tokenId',
+  projectId: 'projectId',
+  machineId: 'machineId',
+  accountId: 'accountId',
+  provider: 'provider',
+  model: 'model',
+  capabilities: 'capabilities',
+  status: 'status',
+  workspace: 'workspace',
+  result: 'result',
+  usage: 'usage',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  idempotencyKey: 'idempotencyKey',
+  timeoutMs: 'timeoutMs',
+  createdAt: 'createdAt',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ApiRunScalarFieldEnum = (typeof ApiRunScalarFieldEnum)[keyof typeof ApiRunScalarFieldEnum]
+
+
+export const ApiRunEventScalarFieldEnum = {
+  runId: 'runId',
+  seq: 'seq',
+  type: 'type',
+  payload: 'payload',
+  at: 'at'
+} as const
+
+export type ApiRunEventScalarFieldEnum = (typeof ApiRunEventScalarFieldEnum)[keyof typeof ApiRunEventScalarFieldEnum]
 
 
 export const ChatConversationScalarFieldEnum = {

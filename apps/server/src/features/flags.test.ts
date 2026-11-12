@@ -37,8 +37,8 @@ describe('isEnabled', () => {
   });
 
   it('featuresFor resolves every flag', async () => {
-    expect(await featuresFor({ repos: fakeFlags(), userId: 'u1' })).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false });
-    expect(await featuresFor({ repos: fakeFlags({}, { subscriptions: { u1: true } }), userId: 'u1' })).toEqual({ subscriptions: true, chat_open_permissions: false, tab_gc: false, tab_gc_live: false });
+    expect(await featuresFor({ repos: fakeFlags(), userId: 'u1' })).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, runs_api: false });
+    expect(await featuresFor({ repos: fakeFlags({}, { subscriptions: { u1: true } }), userId: 'u1' })).toEqual({ subscriptions: true, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, runs_api: false });
   });
 });
 

@@ -21,6 +21,7 @@ import { RolesRepository } from './roles.js';
 import { MachineHooksRepository } from './machine-hooks.js';
 import { UploadsRepository } from './uploads.js';
 import { ApiTokensRepository } from './api-tokens.js';
+import { ApiRunsRepository } from './api-runs.js';
 import { ChatRepository } from './chat.js';
 import { ChatActionsRepository } from './chat-actions.js';
 import { ChatGrantsRepository } from './chat-grants.js';
@@ -93,6 +94,7 @@ export interface Repositories {
   roles: RolesRepository;
   uploads: UploadsRepository;
   apiTokens: ApiTokensRepository;
+  apiRuns: ApiRunsRepository;
   chat: ChatRepository;
   chatActions: ChatActionsRepository;
   chatGrants: ChatGrantsRepository;
@@ -170,6 +172,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     roles: new RolesRepository(db),
     uploads: new UploadsRepository(db),
     apiTokens: new ApiTokensRepository(db),
+    apiRuns: new ApiRunsRepository(db),
     chat: new ChatRepository(db),
     chatActions: new ChatActionsRepository(db),
     chatGrants: new ChatGrantsRepository(db),
