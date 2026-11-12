@@ -453,6 +453,7 @@ export function createTabChatStore(deps: TabChatDeps) {
           const res = await api.tabAction(session().auth(), tabId, action);
           if (gen !== generation) return;
           if (action === 'cycle_mode' && res.mode !== null && res.mode !== 'unknown') set({ mode: res.mode });
+          if (action === 'trust_hooks') set({ emptyReason: null });
         } catch (e) {
           if (handled(gen, e)) return;
           // The server explains its refusals (a dialog open, an old agent, the machine offline) in pt-BR.

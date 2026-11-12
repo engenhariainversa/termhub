@@ -13,6 +13,7 @@ const fixture = (name: string) => readFileSync(new URL(`./fixtures/cli-dialogs/$
 const TEACH = fixture('claude-teach-auto-mode-2.1.322');
 const HOOKS_REVIEW = fixture('codex-hooks-review-0.159.3');
 const HOOKS_MENU = fixture('claude-hooks-2.1.322');
+const HOOKS_ON_TRUST = HOOKS_REVIEW.replace('› 1. Review hooks', '  1. Review hooks').replace('  2. Trust all and continue', '› 2. Trust all and continue');
 const PROMPT = '● Pronto.\n\n✻ Brewed for 3s\n\n────────────\n❯ \n────────────';
 
 const AT = '2026-11-10T10:41:00.000Z';
@@ -153,5 +154,43 @@ describe('the other sweeps also read a named CLI dialog (TER-1166)', () => {
     const { repos, recordEvent, deps } = setup([tab({ state: 'working', state_tool: 'codex' })], HOOKS_REVIEW);
     await sweepStaleWorking(repos, log() as never, new Date(Date.parse(AT) + STALE_WORKING_MS + 1), deps);
     expect(recordEvent).toHaveBeenCalledWith('t1', expect.objectContaining({ kind: 'cli_dialog', tool: 'codex' }));
+  });
+});
+
+// TER-1162: in the project's folder, with the project's option on, the server answers the review itself
+describe('Codex hooks review answered by the server (TER-1162)', () => {
+  function trusting(tabs: Tab[], on = true) {
+    const s = setup(tabs, HOOKS_REVIEW);
+    Object.assign(s.repos, {
+      projectSetup: { get: vi.fn(async () => ({ data: { agent: { trust_project_folder: on } } })) },
+      projectMachines: { find: vi.fn(async () => ({ project_id: 'p1', machine_id: 'm1', cwd: '/srv/api' })) },
+      automationRuns: { latestByTab: vi.fn(async () => null) },
+    });
+    const trust = { capture: vi.fn(async () => HOOKS_ON_TRUST), sendEnter: vi.fn(async () => {}), sendUp: vi.fn(async () => {}), sendDown: vi.fn(async () => {}), pause: vi.fn(async () => {}), now: () => Date.now() };
+    return { ...s, deps: { ...s.deps, trust }, trust };
+  }
+  const unreported = () => tab({ id: `u${Math.random()}`, state: null, state_at: null, state_tool: null, cwd: null, created_at: AT } as Partial<Tab>);
+
+  it('a tab that never reported gets "Trust all and continue" and is not marked cli_dialog', async () => {
+    const { repos, recordEvent, deps, trust } = trusting([unreported()]);
+    await sweepUnreported(repos, log() as never, new Date(Date.parse(AT) + UNREPORTED_AFTER_MS + 1), deps);
+    expect(trust.sendDown).toHaveBeenCalledTimes(1);
+    expect(trust.sendEnter).toHaveBeenCalledTimes(1);
+    expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('a tab already held as cli_dialog (from before this change) is answered too', async () => {
+    const { repos, recordEvent, deps, trust } = trusting([tab({ id: 'held', state: 'cli_dialog', state_tool: 'codex', cwd: null } as Partial<Tab>)]);
+    await sweepDialogs(repos, log() as never, new Date(Date.parse(AT) + 60_000), deps);
+    expect(trust.sendEnter).toHaveBeenCalledTimes(1);
+    expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('with the option off the tab stays with the person: cli_dialog, no key pressed', async () => {
+    const { repos, recordEvent, deps, trust } = trusting([unreported()], false);
+    await sweepUnreported(repos, log() as never, new Date(Date.parse(AT) + UNREPORTED_AFTER_MS + 1), deps);
+    expect(trust.sendDown).not.toHaveBeenCalled();
+    expect(trust.sendEnter).not.toHaveBeenCalled();
+    expect(recordEvent).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ kind: 'cli_dialog', meta: expect.objectContaining({ dialog: 'codex_hooks_review' }) }));
   });
 });

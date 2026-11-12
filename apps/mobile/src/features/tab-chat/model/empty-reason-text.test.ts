@@ -7,6 +7,7 @@ it.each([
   ['transcript_missing', 'O histórico desta sessão não está mais na máquina', null],
   ['new_session', 'Nenhuma mensagem nesta sessão ainda', null],
   ['codex_untrusted', 'O Codex ainda não confia nos hooks do termhub', null],
+  ['codex_hooks_review', 'O Codex parou para revisar hooks', null],
   ['no_agent', 'Esta aba é um terminal sem agente', null],
 ])('%s reads "%s"', (reason, title, install) => {
   const text = emptyReasonText(reason, 'box');
@@ -45,4 +46,13 @@ it("a Codex tab gets Codex's wording, never Claude's (TER-1102)", () => {
   // the reasons with no Codex wording of their own keep theirs
   expect(emptyReasonText('codex_untrusted', 'box', 'codex').title).toBe('O Codex ainda não confia nos hooks do termhub');
   for (const reason of TAB_CHAT_EMPTY_REASONS) expect(emptyReasonText(reason, 'box', 'codex').hint).not.toMatch(/Claude/);
+});
+
+test('the hooks review says what trusting covers, for a tab that reported nothing yet too (TER-1162)', () => {
+  for (const agent of [null, 'codex']) {
+    const text = emptyReasonText('codex_hooks_review', 'box', agent);
+    expect(text.title).toBe('O Codex parou para revisar hooks');
+    expect(text.hint).toContain('em box');
+    expect(text.hint).toContain('plugins');
+  }
 });

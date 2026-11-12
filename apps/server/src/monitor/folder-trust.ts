@@ -9,6 +9,8 @@ import type { Machine, Tab, TabState } from '../db/repositories/types.js';
 import { sendKeyToSession } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
 import { SCREEN_STATE_LINES } from './screen-state.js';
+import { lastNonBlankLines } from '../chat/permission-dialog.js';
+import { cliDialogOf } from './cli-dialogs.js';
 import { trustPromptText } from './state.js';
 import { TRUST_CLI_LABEL, trustDialogOf } from './trust-dialogs.js';
 
@@ -31,6 +33,12 @@ import { TRUST_CLI_LABEL, trustDialogOf } from './trust-dialogs.js';
  * Claude account of the machine (`pretrustFolder`, agent 0.38.0), since the trust is kept per account; and a
  * dialog whose cursor starts on "No" gets the selection moved up to the trust option first, Enter only once
  * the screen shows it there.
+ *
+ * TER-1162: Codex's "Hooks need review" (a CLI dialog, cli-dialogs.ts) holds a new tab the same way, before its
+ * first message and before any hook, whenever any hook is new or changed — termhub's after an update, a plugin's
+ * as much. Under the same option, in the same folders, the server picks "Trust all and continue" (the person's
+ * decision on that card: every pending hook, a plugin's too) and the feed says so each time. Option off or
+ * another folder: the tab stays `cli_dialog` (TER-1166) and the conversation offers the same answer as a button.
  */
 
 type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
@@ -40,6 +48,8 @@ export interface FolderTrustDeps {
   sendEnter: (machine: Machine, session: string) => Promise<void>;
   /** Moves the dialog's selection one option up (TER-1148). */
   sendUp: (machine: Machine, session: string) => Promise<void>;
+  /** Moves it one option down (TER-1162: Codex's hooks review starts on "Review hooks", above the trust option). */
+  sendDown: (machine: Machine, session: string) => Promise<void>;
   /** A short wait for the CLI to redraw after a key. */
   pause: (ms: number) => Promise<void>;
   now: () => number;
@@ -49,6 +59,7 @@ export const defaultTrustDeps: FolderTrustDeps = {
   capture: captureScreen,
   sendEnter: (machine, session) => sendKeyToSession(machine, session, 'Enter'),
   sendUp: (machine, session) => sendKeyToSession(machine, session, 'Up'),
+  sendDown: (machine, session) => sendKeyToSession(machine, session, 'Down'),
   pause: (ms) => new Promise((r) => setTimeout(r, ms)),
   now: () => Date.now(),
 };
@@ -183,6 +194,79 @@ export async function settleTrustDialog(
   return 'reported';
 }
 
+/** The id cli-dialogs.ts gives Codex's "Hooks need review" (TER-1166). */
+export const HOOKS_REVIEW_DIALOG = 'codex_hooks_review';
+/** Its trust option, "2. Trust all and continue" (Codex 0.159.3 and 0.164.0, fixtures/cli-dialogs). */
+const HOOKS_TRUST_OPTION = /^\s*(?:›\s*)?2\.\s*Trust all and continue\b/;
+/** The option the selection mark is on, by its number. */
+const CODEX_MARKED = /^\s*›\s*(\d)\.\s/;
+
+/**
+ * Where the selection of Codex's hooks review shown on `screen` is: `trust` on "Trust all and continue", `above`
+ * or `below` it, null when the screen shows no review (or one whose trust option is not where it was checked).
+ */
+export function hooksReviewSelection(screen: string): 'trust' | 'above' | 'below' | null {
+  if (cliDialogOf(screen)?.id !== HOOKS_REVIEW_DIALOG) return null;
+  const lines = lastNonBlankLines(screen, 30).split('\n');
+  if (!lines.some((l) => HOOKS_TRUST_OPTION.test(l))) return null;
+  let marked: number | null = null;
+  for (const l of lines) {
+    const m = CODEX_MARKED.exec(l);
+    if (m) marked = Number(m[1]);
+  }
+  if (marked === null) return null;
+  return marked === 2 ? 'trust' : marked < 2 ? 'above' : 'below';
+}
+
+/**
+ * Answers Codex's hooks review shown on `screen` with "Trust all and continue": the selection is moved onto it
+ * (it starts on "Review hooks"), and Enter goes only once the screen shows it there, so a stray key can never
+ * confirm "Review hooks" or "Continue without trusting". False when there is no review, or the selection did
+ * not land on the trust option.
+ */
+export async function answerHooksReview(machine: Machine, session: string, screen: string, deps: FolderTrustDeps = defaultTrustDeps): Promise<boolean> {
+  let at = hooksReviewSelection(screen);
+  for (let moves = 0; (at === 'above' || at === 'below') && moves < MAX_MOVES; moves++) {
+    await (at === 'above' ? deps.sendDown : deps.sendUp)(machine, session);
+    await deps.pause(MOVE_SETTLE_MS);
+    at = hooksReviewSelection(await deps.capture(machine, session, SCREEN_STATE_LINES + 20));
+  }
+  if (at !== 'trust') return false;
+  await deps.sendEnter(machine, session);
+  return true;
+}
+
+/**
+ * The tab's screen (`screen`, already read) shows Codex's hooks review: in a folder the server may trust
+ * (`trustedFolderOf`, the same option as the folder dialog) it is answered "Trust all and continue" and the feed
+ * gets `trust_auto_accepted` with `hooks: true`. `off`: the option is off or the folder is not the project's —
+ * the caller leaves the tab to the person (`cli_dialog`). `unchanged`: answered a moment ago, or the selection
+ * never reached the trust option.
+ */
+export async function settleHooksReview(
+  repos: Repositories,
+  log: Log,
+  tab: Tab & { tmux_session: string },
+  machine: Machine,
+  screen: string,
+  deps: FolderTrustDeps = defaultTrustDeps,
+): Promise<'accepted' | 'off' | 'unchanged'> {
+  if (!hooksReviewSelection(screen)) return 'unchanged';
+  const key = `${tab.id}:hooks`;
+  const last = answered.get(key);
+  if (last !== undefined && deps.now() - last < ANSWERED_HOLD_MS) return 'unchanged';
+  const folder = await trustedFolderOf(repos, tab);
+  if (!folder) return 'off';
+  if (!(await answerHooksReview(machine, tab.tmux_session, screen, deps))) return 'unchanged';
+  if (answered.size > 1000) answered.clear();
+  answered.set(key, deps.now());
+  log.info({ tabId: tab.id, machineId: machine.id, folder: folder.kind }, 'monitor: Codex hooks review answered in the project folder');
+  await recordEvent(repos, { project_id: tab.project_id, kind: 'trust_auto_accepted', payload: { tab_id: tab.id, tab_name: tab.name, folder: folder.kind, cli: 'codex', hooks: true } }).catch((err: unknown) =>
+    log.warn({ tabId: tab.id, code: failureLabel(err) }, 'monitor: trust_auto_accepted not recorded'),
+  );
+  return 'accepted';
+}
+
 /**
  * Right after termhub typed an agent CLI's line into a tab (start_agent, "Iniciar sessão"), reads its screen
  * a few times (`LAUNCH_CHECKS_MS`) for the trust dialog and settles it, instead of leaving it to the sweeps
@@ -213,8 +297,17 @@ export async function checkLaunch(repos: Repositories, log: Log, tabId: string, 
   if (!tab || !tab.tmux_session) return true;
   if (tab.state === 'trust_prompt') return true;
   const screen = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
-  if (!trustDialogOf(screen)) return false;
-  return (await settleTrustDialog(repos, log, tab as Tab & { tmux_session: string }, machine, screen, deps)) !== 'unchanged';
+  const target = tab as Tab & { tmux_session: string };
+  const dialog = trustDialogOf(screen);
+  if (!dialog) {
+    // TER-1162: Codex's hooks review, at launch or right after its folder dialog
+    if (!hooksReviewSelection(screen)) return false;
+    return (await settleHooksReview(repos, log, target, machine, screen, deps)) !== 'unchanged';
+  }
+  const outcome = await settleTrustDialog(repos, log, target, machine, screen, deps);
+  // TER-1162: Codex's hooks review may come right after its folder dialog: keep reading
+  if (outcome === 'accepted' && dialog.cli === 'codex') return false;
+  return outcome !== 'unchanged';
 }
 
 /** Tests only: forgets the Enters already sent. */

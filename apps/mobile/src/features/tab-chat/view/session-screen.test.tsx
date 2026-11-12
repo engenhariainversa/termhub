@@ -77,6 +77,38 @@ async function renderSession(tabId = 't-api') {
   return view;
 }
 
+describe('Codex stopped on its hooks review (TER-1162)', () => {
+  const review = () => act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason: 'codex_hooks_review', availability: 'no_session' }));
+
+  it('says so, in place of the empty state, and offers the answer', async () => {
+    await renderSession();
+    const a = jest.fn(async () => undefined);
+    await act(() => current().setState({ act: a }));
+    await review();
+    expect(screen.getByText('O Codex parou para revisar hooks')).toBeTruthy();
+    expect(screen.queryByTestId('session-empty')).toBeNull();
+    fireEvent.press(screen.getByTestId('session-trust-hooks'));
+    expect(a).toHaveBeenCalledWith('trust_hooks');
+  });
+
+  it('a session opened from the app still shows it, with its first message "sent" below', async () => {
+    await renderSession();
+    await review();
+    await act(() => stores.sessions.setState({ firstPrompts: { 't-api': 'revisa o PR' } }));
+    expect(screen.getByTestId('session-first-prompt')).toBeTruthy();
+    expect(screen.getByTestId('session-trust-hooks')).toBeTruthy();
+    await act(() => stores.sessions.setState({ firstPrompts: {} }));
+  });
+
+  it('a machine that is offline offers nothing to press', async () => {
+    await renderSession();
+    await setAvailability('offline');
+    await act(() => current().setState({ emptyReason: 'codex_hooks_review' }));
+    expect(screen.getByTestId('session-availability')).toBeTruthy();
+    expect(screen.queryByTestId('session-trust-hooks')).toBeNull();
+  });
+});
+
 describe('an empty conversation says why (TER-1091)', () => {
   const empty = (emptyReason: string, availability = 'no_session') => act(() => current().setState({ items: [], questions: [], suggestions: [], emptyReason, availability }));
 

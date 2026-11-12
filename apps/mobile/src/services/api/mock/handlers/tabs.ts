@@ -219,6 +219,7 @@ export function registerTabRoutes(router: MockRouter, state: MockState): void {
     const tab = load(ctx.params.id!);
     const { action } = tabActionBody.parse(ctx.body);
     const at = new Date(ctx.now()).toISOString();
+    if (action === 'trust_hooks') return { status: 200, body: { done: true, mode: null } };
     if (action === 'cycle_mode') {
       tab.mode = MODES[(MODES.indexOf(tab.mode ?? '') + 1) % MODES.length]!;
       return { status: 200, body: { done: true, mode: tab.mode } };

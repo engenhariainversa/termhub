@@ -250,5 +250,7 @@
   "não deu para ler os checks do PR": "no se pudieron leer los checks del PR",
   "a branch base tem regra de proteção exigindo checks ou revisão": "la rama base tiene una regla de protección que exige checks o revisión",
   "não deu para ler as regras de proteção da branch base": "no se pudieron leer las reglas de protección de la rama base",
-  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Pestaña {{label}} esperando trabajo en segundo plano sin ningún evento desde hace {{duration}}"
+  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Pestaña {{label}} esperando trabajo en segundo plano sin ningún evento desde hace {{duration}}",
+  "Aba {{tab}}: hooks novos ou alterados do Codex confiados sozinhos": "Pestaña {{tab}}: hooks nuevos o modificados de Codex confiados automáticamente",
+  "O Codex não está mais pedindo a revisão dos hooks nesta aba": "Codex ya no pide revisar los hooks en esta pestaña"
 }

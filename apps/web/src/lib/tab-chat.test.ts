@@ -73,6 +73,9 @@ describe('labels', () => {
 
   it('says why a tab cannot be read, and an old agent is told to update', () => {
     expect(availabilityText('ready')).toBeNull();
+    // TER-1162: Codex holding the first message on its hooks review, with or without a session
+    expect(availabilityText('no_session', 'codex_hooks_review')).toContain('revisar um hook');
+    expect(availabilityText('ready', 'codex_hooks_review')).toContain('plugins');
     expect(availabilityText('agent_outdated')).toBe('Atualize o agente desta máquina');
     expect(availabilityText('something_new')).toBe('Indisponível no momento');
     // TER-1095: a Codex tab with untrusted hooks says how to trust them; any other reason keeps the line

@@ -13,3 +13,7 @@ machine's.
 - `codex-hooks-review-0.159.3.txt`, `codex-update-0.159.3.txt`, `codex-daemon-settings-0.159.3.txt`,
   `codex-composer-0.159.3.txt`: captured from Codex CLI 0.159.3 in tmux, in the order it showed them on
   launch (the composer is the screen after the last one was skipped).
+- `codex-hooks-review-0.164.0.txt`: Codex CLI 0.164.0's "Hooks need review", in tmux, launched with a first
+  message (`codex --no-alt-screen 'first message'`), which it holds until the screen is answered (TER-1162).
+  `codex-hooks-review-answered-0.164.0.txt`: the same pane after "Trust all and continue": the screen stays in
+  the history above the composer, and must not read as the dialog.

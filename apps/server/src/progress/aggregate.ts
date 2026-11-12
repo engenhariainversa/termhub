@@ -338,6 +338,7 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'tab_gc_warned' || e.kind === 'tab_gc_kept' || e.kind === 'tab_collected') return tabGcTextOf(e, p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
+  if (e.kind === 'trust_auto_accepted' && p.hooks === true) return t(locale, 'Aba {{tab}}: hooks novos ou alterados do Codex confiados sozinhos', { tab: str(p.tab_name) ?? '—' });
   if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });
   // TER-1148: the same in the worktree of the tab's run (after an account swap, say)
   if (e.kind === 'trust_auto_accepted' && p.folder === 'worktree') return t(locale, 'Aba {{tab}}: worktree do card confiada sozinha', { tab: str(p.tab_name) ?? '—' });

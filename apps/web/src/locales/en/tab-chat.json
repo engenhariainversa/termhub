@@ -85,5 +85,7 @@
   "Modelo: {{model}}": "Model: {{model}}",
   "Iniciado com {{cli}} · conta {{account}} · modelo {{model}}": "Started with {{cli}} · account {{account}} · model {{model}}",
   "padrão do CLI": "CLI default",
-  "Mensagem grande demais: {{length}} de {{max}} caracteres; vai como anexo .txt": "Message too long: {{length}} of {{max}} characters; it goes as a .txt attachment"
+  "Mensagem grande demais: {{length}} de {{max}} caracteres; vai como anexo .txt": "Message too long: {{length}} of {{max}} characters; it goes as a .txt attachment",
+  "O Codex parou para revisar um hook novo ou alterado e segura a primeira mensagem. Confiar vale para todos os hooks pendentes, inclusive os de plugins, e eles rodam fora do sandbox. Para ver quais são, abra Ver tela.": "Codex stopped to review a new or changed hook and is holding the first message. Trusting covers every pending hook, plugin hooks included, and they run outside the sandbox. To see which ones, open View screen.",
+  "Confiar nos hooks e continuar": "Trust the hooks and continue"
 }

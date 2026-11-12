@@ -297,6 +297,7 @@ export function useTabChat(tabId: string, enabled: boolean): TabChat {
       try {
         const res = await api.tabChat.action(tabId, action);
         if (action === 'cycle_mode' && res.mode !== null && res.mode !== 'unknown') set({ mode: res.mode });
+        if (action === 'trust_hooks') set({ emptyReason: null });
       } catch (e) {
         // The server explains its refusals (a dialog open, an old agent, the machine offline).
         set({ error: errorText(e, i18n.t('Não foi possível enviar o comando. Tente de novo.')) });
