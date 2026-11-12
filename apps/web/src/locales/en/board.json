@@ -475,7 +475,6 @@
   "Execução bloqueada sem resposta": "Blocked run with no answer",
   "Deploy ou release com falha": "Failed deploy or release",
   "Agente abaixo do mínimo": "Agent below the minimum",
-  "Aba \"trabalhando\" sem nenhum evento": "Tab \"working\" with no event",
   "Aba esperando resposta (pergunta, permissão, confiança, login)": "Tab waiting for an answer (question, permission, trust, login)",
   "Máquina offline com trabalho do projeto": "Machine offline with project work",
   "O termhub percebe sozinho quando o trabalho para e avisa: um push quando só você pode destravar e o concierge do projeto acordado para resolver o resto. Abas e máquinas valem em todo projeto; o resto, só com o automático ligado. Horário de silêncio e níveis de push seguem os seus avisos do concierge.": "termhub notices on its own when work stalls and tells you: a push when only you can unblock it, and the project's concierge woken to resolve the rest. Tabs and machines count in every project; the rest only with automatic work on. Quiet hours and push levels follow your concierge notices.",
@@ -537,5 +536,6 @@
   "Quando o repositório não roda nenhum workflow em pull_request.": "When the repository runs no workflow on pull_request.",
   "Esperar a pessoa (um card no chat pede a confirmação)": "Wait for a person (a card in the chat asks for confirmation)",
   "Mesclar quando o repositório não tem CI nem regra de proteção": "Merge when the repository has no CI and no protection rule",
-  "O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.": "termhub merges 2 minutes after the last push, if the PR has no check and the base branch has no protection or ruleset requiring checks or review."
+  "O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.": "termhub merges 2 minutes after the last push, if the PR has no check and the base branch has no protection or ruleset requiring checks or review.",
+  "Aba \"trabalhando\" ou esperando segundo plano sem nenhum evento": "Tab \"working\" or waiting on background work with no event"
 }

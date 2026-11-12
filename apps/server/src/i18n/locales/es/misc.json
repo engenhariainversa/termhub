@@ -249,5 +249,6 @@
   "o PR tem checks de outro app": "el PR tiene checks de otra app",
   "não deu para ler os checks do PR": "no se pudieron leer los checks del PR",
   "a branch base tem regra de proteção exigindo checks ou revisão": "la rama base tiene una regla de protección que exige checks o revisión",
-  "não deu para ler as regras de proteção da branch base": "no se pudieron leer las reglas de protección de la rama base"
+  "não deu para ler as regras de proteção da branch base": "no se pudieron leer las reglas de protección de la rama base",
+  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Pestaña {{label}} esperando trabajo en segundo plano sin ningún evento desde hace {{duration}}"
 }

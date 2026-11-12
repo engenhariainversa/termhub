@@ -204,3 +204,11 @@ describe('approval_stalled (TER-1168)', () => {
     expect(signals(snap({ pending_cards: [card] }), off)).toEqual([]);
   });
 });
+
+describe('tab_stuck in waiting_background (TER-1168)', () => {
+  it('a tab left waiting on background work with no event is stuck too', () => {
+    const tab = { id: 't1', name: 'APPS-456', state: 'waiting_background', state_at: ago(40), machine_id: 'm1', run: false };
+    const [o] = observe(snap({ automation: false, tabs: [tab] }), config());
+    expect(o).toMatchObject({ signal: 'tab_stuck', subject: 't1', detail: { state: 'waiting_background' } });
+  });
+});

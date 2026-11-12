@@ -155,7 +155,7 @@ function capped(w: Watch, ev: Evaluation | null): Evaluation | null {
 async function evaluateKind(probe: WatchProbe, w: Watch, now: Date): Promise<Evaluation | null> {
   switch (w.kind) {
     case 'tab':
-      return evaluateTab(probe, w);
+      return evaluateTab(probe, w, now);
     case 'card':
       return evaluateCard(probe, w);
     case 'pr':
@@ -200,7 +200,28 @@ async function tabDown(probe: WatchProbe, w: Watch, tab: ProbeTab, cursor: Date)
   return agentDown(w, tab, 'not_delivered', u.at.toISOString(), u.reason);
 }
 
-async function evaluateTab(probe: WatchProbe, w: Watch): Promise<Evaluation | null> {
+/**
+ * TER-1168: a tab that ended its turn waiting on its own background work (`waiting_background`) and then wrote
+ * nothing more. Claude Code writes no hook when that work ends unless it starts a turn, so the tab can sit
+ * there for hours with nothing left to do (drhorton, 12/11: 14 h). Past this long without an event it is a
+ * stop like any other, whatever events the watch asked for.
+ */
+export const BACKGROUND_QUIET_MS = 20 * 60_000;
+
+function quietBackground(w: Watch, tab: ProbeTab, now: Date): Evaluation | null {
+  if (tab.state !== 'waiting_background' || !tab.state_at) return null;
+  const since = Date.parse(tab.state_at);
+  if (now.getTime() - since < BACKGROUND_QUIET_MS) return null;
+  // told once per stretch: a new event in the tab starts another one
+  if (w.baseline.quiet === tab.state_at) return null;
+  return {
+    events: [{ key: `tab:quiet:${tab.state_at}`, event: 'waiting_background', payload: { tab_id: tab.id, tab_name: tab.name, project_id: tab.project_id, machine_id: tab.machine_id, state: 'waiting_background', at: tab.state_at, state_now: tab.state, quiet_minutes: Math.floor((now.getTime() - since) / 60_000) } }],
+    baseline: { ...w.baseline, quiet: tab.state_at },
+    close: done(w),
+  };
+}
+
+async function evaluateTab(probe: WatchProbe, w: Watch, now = new Date()): Promise<Evaluation | null> {
   const tabId = w.target_id!;
   const tab = await probe.tab(tabId);
   // Closed, or its session died and the tab went with it: always told, whatever the events asked.
@@ -210,7 +231,7 @@ async function evaluateTab(probe: WatchProbe, w: Watch): Promise<Evaluation | nu
   const down = await tabDown(probe, w, tab, cursor);
   if (down) return down;
   const events = await probe.tabEventsAfter(tabId, cursor, kinds);
-  if (events.length === 0) return null;
+  if (events.length === 0) return quietBackground(w, tab, now);
   // Once: the first stop after the watch began is the one asked about. Recurring: the newest, since a
   // cooldown may have let several pass.
   const ev = w.recurring ? events[events.length - 1] : events[0];

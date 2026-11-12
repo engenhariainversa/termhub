@@ -261,3 +261,27 @@ describe('agent release watches', () => {
 it('an expired watch is told once and closes', () => {
   expect(expiredEvaluation(watch({}))).toMatchObject({ events: [{ key: 'expired', event: 'expired' }], close: 'expired' });
 });
+
+// TER-1168: drhorton, 12/11 — APPS-456 stopped in waiting_background at 03:06 UTC and wrote nothing for 14 h;
+// both open watches asked the default events (every stop but waiting_background) and never fired
+describe('a tab left in waiting_background (TER-1168)', () => {
+  const stopped = '2026-10-21T12:06:00.000Z';
+  const tab: ProbeTab = { id: 't1', name: 'APPS-456', project_id: 'p1', machine_id: 'm1', state: 'waiting_background', state_at: stopped };
+  const w = watch({ params: { events: ['finished', 'waiting_input', 'idle'] }, baseline: { cursor: '2026-10-21T12:00:00.000Z' } });
+  const later = (min: number) => new Date(Date.parse(stopped) + min * 60_000);
+
+  it('is quiet for 20 min, then told once as a stop, whatever the events asked', async () => {
+    expect(await evaluateWatch(probe({ tab }), w, later(19))).toBeNull();
+    const ev = await evaluateWatch(probe({ tab }), w, later(20));
+    expect(ev?.events).toEqual([expect.objectContaining({ key: `tab:quiet:${stopped}`, event: 'waiting_background', payload: expect.objectContaining({ tab_id: 't1', at: stopped, quiet_minutes: 20 }) })]);
+    expect(ev?.close).toBe('done');
+    // a recurring watch keeps the mark: the same stretch is not told again
+    const r = watch({ ...w, recurring: true, baseline: { ...w.baseline, quiet: stopped } });
+    expect(await evaluateWatch(probe({ tab }), r, later(60))).toBeNull();
+  });
+
+  it('a tab still working, or one that reported since, is not', async () => {
+    expect(await evaluateWatch(probe({ tab: { ...tab, state: 'working' } }), w, later(60))).toBeNull();
+    expect(await evaluateWatch(probe({ tab: { ...tab, state_at: later(50).toISOString() } }), w, later(60))).toBeNull();
+  });
+});
