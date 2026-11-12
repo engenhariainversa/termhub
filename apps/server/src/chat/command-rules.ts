@@ -251,9 +251,11 @@ export function commandRuleOffer(command: unknown): { exact: string; prefix: str
 // ---------------------------------------------------------------------------------------------------
 // The read-only default list ("Comandos só de leitura", on for every user unless restricted).
 
-const GIT_READ = new Set(['status', 'log', 'diff', 'show']);
+const GIT_READ = new Set(['status', 'log', 'diff', 'show', 'shortlog', 'rev-list', 'blame', 'ls-files']);
+/** git's own switches that only turn the pager off (TER-1168): `git --no-pager log` is still `git log`. */
+const GIT_NO_PAGER = new Set(['--no-pager', '-P']);
 const GIT_BRANCH_FLAGS = new Set(['-a', '-r', '-v', '-vv', '-l', '--list', '--all', '--remotes', '--verbose', '--show-current', '--no-color', '--color']);
-const GH_READ = new Set(['pr view', 'pr checks', 'pr list', 'run view', 'run list']);
+const GH_READ = new Set(['pr view', 'pr checks', 'pr list', 'pr diff', 'run view', 'run list']);
 const ANY_ARGS = new Set(['ls', 'pwd', 'df', 'du', 'ps', 'uptime', 'which', 'whoami', 'uname']);
 const PROJECT_FILE_READERS = new Set(['cat', 'head', 'tail']);
 const VERSION_PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/;
@@ -263,8 +265,9 @@ const projectRelative = (w: string): boolean => !w.startsWith('/') && !w.split('
 
 /**
  * Whether eligible words are one of the read-only commands every user gets without a card: `git
- * status/log/diff/show/branch` (no `--output`, `branch` with listing flags only), `gh pr view/checks/list`,
- * `gh run view/list`, `ls`, `pwd`, `df`, `du`, `ps`, `uptime`, `which`, `whoami`, `uname`, `cat`/`head`/
+ * status/log/diff/show/shortlog/rev-list/blame/ls-files/branch/remote` (no `--output`, `branch` with listing
+ * flags only, `remote` alone or `-v`), each also after `--no-pager`/`-P`, `gh pr view/checks/list/diff`,
+ * `gh run view/list` (`--log`, `--log-failed` included), `ls`, `pwd`, `df`, `du`, `ps`, `uptime`, `which`, `whoami`, `uname`, `cat`/`head`/
  * `tail` of files under the tab's directory, and `<program> --version`. Exact program names: `/bin/ls` is
  * not `ls` here.
  */
@@ -275,11 +278,41 @@ export function isReadOnlyCommand(words: readonly string[]): boolean {
   if (ANY_ARGS.has(program)) return true;
   if (PROJECT_FILE_READERS.has(program)) return args.every((a) => a.startsWith('-') || projectRelative(a));
   if (program === 'git') {
-    const [sub, ...rest] = args;
+    const [sub, ...rest] = GIT_NO_PAGER.has(args[0] ?? '') ? args.slice(1) : args;
     if (sub && GIT_READ.has(sub)) return !rest.some((a) => a.startsWith('--output') || a === '-o');
     if (sub === 'branch') return rest.every((a) => GIT_BRANCH_FLAGS.has(a));
+    if (sub === 'remote') return rest.length === 0 || (rest.length === 1 && (rest[0] === '-v' || rest[0] === '--verbose'));
     return false;
   }
   if (program === 'gh') return args.length >= 2 && GH_READ.has(`${args[0]} ${args[1]}`);
   return false;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// TER-1168: the "trimming" shape. A chat that wants a clean, short screen writes `clear; gh run view 1
+// --log-failed | tail -40`: the `;` and the `|` put a plain read on the core that always asks, and the card
+// waited an hour for nobody. run_command already returns only the last `lines` of the screen, so the
+// trimming is never needed: the gate refuses it with the simple form instead of asking the person.
+
+const CLEAR_FIRST = /^\s*clear\s*(?:;|&&)\s*/;
+const STDERR_TO_OUT = /\s+2>&1(?=\s*(?:\||$))/;
+const TRIM_LAST = /\s*\|\s*(?:(?:tail|head)(?:\s+(?:-n\s*)?-?\d+|\s+-n\d+)?|cat)\s*$/;
+
+/**
+ * The command without the trimming around it — a leading `clear;`/`clear &&`, a trailing `| tail -N`,
+ * `| head -N` or `| cat`, and a `2>&1` before it — when there was some and what is left is one simple
+ * command no "never" rule refuses; null otherwise. Nothing else is taken off: a pipe into anything else
+ * (`| grep`, `| sh`) stays the command it is, and asks.
+ */
+export function untrimmedCommand(command: string): string | null {
+  let rest = command.replace(CLEAR_FIRST, '');
+  for (let i = 0; i < 3; i++) {
+    const next = rest.replace(TRIM_LAST, '').replace(STDERR_TO_OUT, '');
+    if (next === rest) break;
+    rest = next;
+  }
+  rest = rest.trim();
+  if (rest === command.trim() || rest.length === 0) return null;
+  const parsed = ruleEligible(rest);
+  return parsed.ok ? formatWords(parsed.words) : null;
 }

@@ -246,3 +246,37 @@ describe('the watcher (TER-1121)', () => {
     expect(stuck.wake).toHaveBeenCalledTimes(1);
   });
 });
+
+// TER-1168: a card of the chat nobody answered — the PDA case, a log read waiting an hour on a card
+describe('approval_stalled (TER-1168)', () => {
+  const project = { id: 'p', owner_id: 'u', name: 'pda' } as Project;
+  const owner = { id: 'u', locale: 'pt-BR' } as User;
+  const card = { action_id: 'a1', conversation_id: 'c9', tool: 'run_command', summary: 'rodar o comando `gh run view 1 --log-failed` na aba Hugo', created_at: t0 };
+
+  it('wakes the card\'s own conversation once, also without automatic work, and pushes nothing by itself', async () => {
+    const store = memoryStore();
+    const notices: unknown[] = [];
+    let clock = t0;
+    const wake = vi.fn(async () => ({ done: Promise.resolve() }));
+    const repos = {
+      healthAlerts: store,
+      users: { findById: async () => owner },
+      projects: { list: async () => [project] },
+      projectSetup: { get: async () => ({ data: setupSchema.parse({}) }) },
+      chat: { findLatestActiveForProject: async () => ({ id: 'c1' }), getOrCreateForProject: async () => ({ id: 'c1' }) },
+      conciergeNotices: { create: async (n: unknown) => void notices.push(n) },
+    } as unknown as Repositories;
+    const watcher = createHealthWatcher({ repos, chat: { wake } as never, log: { info: vi.fn(), warn: vi.fn() }, now: () => clock, snapshot: async (_p, _o, _s, now) => empty(now, { automation: false, pending_cards: [card] }) });
+    for (const min of [5, 10, 15, 20]) {
+      clock = at(min);
+      await watcher.sweep();
+    }
+    expect(wake).toHaveBeenCalledTimes(1);
+    const [, conversationId, text] = wake.mock.calls[0] as unknown as [unknown, string, string];
+    expect(conversationId).toBe('c9');
+    expect(text).toContain('[approval_stalled]');
+    expect(text).toContain('action_id a1');
+    expect(text).toContain('não repita a mesma chamada');
+    expect(notices).toEqual([]);
+  });
+});

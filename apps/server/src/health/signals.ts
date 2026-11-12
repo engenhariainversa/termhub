@@ -29,7 +29,7 @@ export interface Observation {
 export const PERSON_WAITS: readonly string[] = ['merge_person_card'];
 
 /** Signs that run on every project: a person's own tabs and machines stall too. The rest need automation on. */
-export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited'];
+export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited', 'approval_stalled'];
 
 export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   pr_ready: 'needs_you',
@@ -45,6 +45,7 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   epic_zombie: 'concierge',
   done_unmerged: 'concierge',
   agent_exited: 'concierge',
+  approval_stalled: 'concierge',
 };
 
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login, a CLI dialog. */
@@ -99,6 +100,16 @@ export interface SnapshotTab {
   card_ref?: string | null;
   /** TER-1168: an open watch of a chat follows it: that watch already wakes the chat about the exit */
   watched?: boolean;
+}
+
+/** TER-1168: a confirmation card of the chat (a pending `chat_actions` row) nobody has answered. */
+export interface SnapshotPendingCard {
+  action_id: string;
+  conversation_id: string;
+  tool: string;
+  /** the card's sentence, as the chat shows it */
+  summary: string;
+  created_at: Date;
 }
 
 export interface SnapshotCard {
@@ -190,6 +201,8 @@ export interface HealthSnapshot {
   /** TER-1150; absent from a snapshot built before it */
   epics?: SnapshotEpic[];
   done_unmerged?: SnapshotDoneUnmerged[];
+  /** TER-1168; absent from a snapshot built before it */
+  pending_cards?: SnapshotPendingCard[];
 }
 
 const AUTONOMY_ORDER: AutonomyLevel[] = ['pr', 'merge', 'deploy', 'release'];
@@ -301,6 +314,13 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // 11. a card in Feito whose PR is still open: done on the board, not in the code (TER-1150)
   for (const d of s.done_unmerged ?? []) {
     add('done_unmerged', `${d.url}#${d.task_id}`, d.since, { label: d.ref, url: d.url, pr: `#${d.number}`, ci: d.ci_state });
+  }
+
+  // 13. TER-1168: a confirmation card of the chat nobody answered. The chat promised something that waits on it
+  // (it asked, and its turn ended there): past the minutes it is woken once per card, in the card's own
+  // conversation, to take a path that needs no card or to tell the person what is stuck.
+  for (const c of s.pending_cards ?? []) {
+    add('approval_stalled', c.action_id, c.created_at, { label: c.summary, tool: c.tool, conversation_id: c.conversation_id });
   }
   return out;
 }

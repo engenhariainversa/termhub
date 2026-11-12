@@ -4,6 +4,7 @@ vi.mock('../automation/pause.js', () => ({ isPaused: vi.fn(async () => false) })
 vi.mock('../automation/queue.js', () => ({ automationQueue: vi.fn(async () => []) }));
 vi.mock('../automation/merge-wait.js', () => ({ baseReadingOf: vi.fn(() => null), mergeWaitOf: vi.fn(() => null), mergeWaitEntryOf: vi.fn(() => null) }));
 vi.mock('../control/context.js', () => ({ controlContextFor: vi.fn(() => ({})) }));
+vi.mock('../db/repositories/chat-actions-view.js', () => ({ describeActions: vi.fn(async (_r: unknown, rows: { tool: string }[]) => rows.map((r) => ({ summary: `card ${r.tool}` }))) }));
 
 import type { Repositories } from '../db/repositories/index.js';
 import type { Project, User } from '../db/repositories/types.js';
@@ -21,6 +22,7 @@ describe('buildSnapshot (TER-1134)', () => {
       automationRuns: { activeByProject: vi.fn(async () => []), lastStartedAt: vi.fn(async () => null), latestOfTask: vi.fn(async () => null) },
       projectMachines: { listByProject: vi.fn(async () => []) },
       taskPullRequests: { listForHealth: vi.fn(async () => []) },
+      chatActions: { listPendingForHealth: vi.fn(async () => []) },
     } as unknown as Repositories;
     const setup = setupSchema.parse({ automation: { enabled: true } });
     const s = await buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setup, new Date('2026-10-27T12:00:00Z'));
@@ -44,6 +46,7 @@ describe('buildSnapshot (TER-1134)', () => {
         automationRuns: { activeByProject: vi.fn(async () => []), lastStartedAt: vi.fn(async () => null), latestOfTask: vi.fn(async () => null) },
         projectMachines: { listByProject: vi.fn(async () => []) },
         taskPullRequests: { listForHealth: vi.fn(async () => prs) },
+        chatActions: { listPendingForHealth: vi.fn(async () => []) },
       } as unknown as Repositories;
       const setup = setupSchema.parse({ repo: { integration_id: 'i1', full_name: 'o/r', deploy_workflow: 'deploy.yml' }, automation: { enabled: true } });
       return buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setup, now);
@@ -67,6 +70,7 @@ describe('buildSnapshot (TER-1134)', () => {
       automationRuns: { activeByProject: vi.fn(async () => []), lastStartedAt: vi.fn(async () => null), latestOfTask: vi.fn(async () => null) },
       projectMachines: { listByProject: vi.fn(async () => []) },
       taskPullRequests: { listForHealth: vi.fn(async () => []) },
+      chatActions: { listPendingForHealth: vi.fn(async () => []) },
     } as unknown as Repositories;
     const s = await buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setupSchema.parse({}), new Date('2026-11-11T12:00:00Z'));
     const byId = Object.fromEntries(s.tabs.map((x) => [x.id, x]));
@@ -75,5 +79,27 @@ describe('buildSnapshot (TER-1134)', () => {
     // an idle that is no exit; a gone agent nobody counts on
     expect(byId.c.agent_gone).toBeUndefined();
     expect(byId.d.agent_gone).toBeUndefined();
+  });
+
+  // TER-1168
+  it('lists the chat\'s cards waiting past the approval_stalled minutes, with their sentence; none with the sign off', async () => {
+    const listPendingForHealth = vi.fn(async () => [{ id: 'a1', conversation_id: 'c1', tool: 'run_command', created_at: '2026-11-12T03:21:00.000Z' }]);
+    const repos = {
+      tasks: { listByProject: vi.fn(async () => []) },
+      taskColumns: { list: vi.fn(async () => []) },
+      tabs: { listByProject: vi.fn(async () => []) },
+      automationRuns: { activeByProject: vi.fn(async () => []), lastStartedAt: vi.fn(async () => null), latestOfTask: vi.fn(async () => null) },
+      projectMachines: { listByProject: vi.fn(async () => []) },
+      taskPullRequests: { listForHealth: vi.fn(async () => []) },
+      chatActions: { listPendingForHealth },
+    } as unknown as Repositories;
+    const now = new Date('2026-11-12T04:00:00Z');
+    const s = await buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setupSchema.parse({}), now);
+    expect(listPendingForHealth).toHaveBeenCalledWith('p1', 'u1', new Date('2026-11-12T03:50:00Z'));
+    expect(s.pending_cards).toEqual([{ action_id: 'a1', conversation_id: 'c1', tool: 'run_command', summary: 'card run_command', created_at: new Date('2026-11-12T03:21:00.000Z') }]);
+    listPendingForHealth.mockClear();
+    const off = await buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setupSchema.parse({ health: { signals: { approval_stalled: { enabled: false } } } }), now);
+    expect(off.pending_cards).toEqual([]);
+    expect(listPendingForHealth).not.toHaveBeenCalled();
   });
 });
