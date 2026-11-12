@@ -27,7 +27,7 @@ vi.mock('../lib/api', () => {
 });
 vi.mock('../lib/auth', () => ({ useAuth: () => authMock }));
 
-const flag = (over: Partial<FeatureFlagInfo> = {}): FeatureFlagInfo => ({ key: 'subscriptions', default: false, enabled: false, updated_at: null, overrides: [], ...over });
+const flag = (over: Partial<FeatureFlagInfo> = {}): FeatureFlagInfo => ({ key: 'subscriptions', title: 'Assinaturas', description: 'Planos, checkout, paywall e limites do período de teste.', card: 'TER-645', default: false, enabled: false, updated_at: null, overrides: [], ...over });
 
 beforeEach(() => {
   setMock.mockResolvedValue({});
@@ -67,6 +67,23 @@ describe('FeatureFlagsView', () => {
     await waitFor(() => expect(setOverrideMock).toHaveBeenCalledWith('subscriptions', 'bia@gmail.com', true));
     fireEvent.click(await screen.findByRole('button', { name: 'Remover' }));
     await waitFor(() => expect(removeOverrideMock).toHaveBeenCalledWith('subscriptions', 'u2'));
+  });
+
+  it('shows the title, the key, the card and the description the server sends (TER-1187)', async () => {
+    listMock.mockResolvedValue({ flags: [flag({ key: 'tab_gc', title: 'Coletor de abas (teste)', description: 'Procura abas de agente paradas.', card: 'TER-1171' })] });
+    render(<FeatureFlagsView />);
+    expect(await screen.findByText('Coletor de abas (teste)')).toBeTruthy();
+    expect(screen.getByText('tab_gc')).toBeTruthy();
+    expect(screen.getByText('TER-1171')).toBeTruthy();
+    expect(screen.getByText('Procura abas de agente paradas.')).toBeTruthy();
+    expect(screen.getByRole('switch', { name: 'Coletor de abas (teste) para todos' })).toBeTruthy();
+  });
+
+  it('falls back to the key once, without a title from an older server', async () => {
+    listMock.mockResolvedValue({ flags: [flag({ key: 'tab_gc', title: undefined, description: undefined, card: undefined })] });
+    render(<FeatureFlagsView />);
+    await screen.findByRole('switch', { name: 'tab_gc para todos' });
+    expect(screen.getAllByText('tab_gc')).toHaveLength(1);
   });
 
   it('is read-only without feature_flags:update', async () => {

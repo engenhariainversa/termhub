@@ -43,7 +43,7 @@ describe('feature flag admin routes', () => {
     const { app } = buildApp();
     const r = await app.inject({ url: '/feature-flags' });
     expect(r.statusCode).toBe(200);
-    expect(r.json().flags).toEqual([
+    expect(r.json().flags.map(({ key, default: d, enabled, updated_at, overrides }: Record<string, unknown>) => ({ key, default: d, enabled, updated_at, overrides }))).toEqual([
       { key: 'subscriptions', default: false, enabled: false, updated_at: null, overrides: [] },
       { key: 'chat_open_permissions', default: false, enabled: false, updated_at: null, overrides: [] },
       { key: 'tab_gc', default: false, enabled: false, updated_at: null, overrides: [] },
@@ -51,6 +51,15 @@ describe('feature flag admin routes', () => {
       { key: 'sequential_epics', default: false, enabled: false, updated_at: null, overrides: [] },
       { key: 'runs_api', default: false, enabled: false, updated_at: null, overrides: [] },
     ]);
+  });
+
+  it("sends each flag's title, description and card in the reader's language (TER-1187)", async () => {
+    const { app } = buildApp();
+    const pt = (await app.inject({ url: '/feature-flags' })).json().flags;
+    expect(pt.find((f: { key: string }) => f.key === 'tab_gc')).toMatchObject({ title: 'Coletor de abas (teste)', card: 'TER-1171' });
+    const en = (await app.inject({ url: '/feature-flags', headers: { 'accept-language': 'en' } })).json().flags;
+    expect(en.find((f: { key: string }) => f.key === 'tab_gc')).toMatchObject({ title: 'Tab collector (test)', card: 'TER-1171' });
+    expect(en.find((f: { key: string }) => f.key === 'sequential_epics').description).toMatch(/^Shows the "Run in order" option/);
   });
 
   it('turns the flag on for the instance and audits it', async () => {

@@ -32,11 +32,15 @@ shows a gated screen.
 
 ## Adding a flag
 
-1. Add it to `FEATURE_FLAGS` (server), with `default: false`.
-2. Add the key to `FeatureFlagKey` (web `lib/types.ts`), its label and description to `FLAG_COPY`
-   in `apps/web/src/components/FeatureFlagsView.tsx` (through `tk()`, English in
-   `locales/en/settings.json`), to `meResponse.features` (mobile contract, defaulted to `false`) and,
-   when the landing needs it, to `FeatureFlag` in `apps/landing/src/features.ts`.
+1. Add it to `FEATURE_FLAGS` (server), with `default: false`, a **`title`** (a short readable name) and a
+   **`description`** (what changes for whoever turns it on, and any risk), both pt-BR keys through `tk()`
+   with English and Spanish in `apps/server/src/i18n/locales/{en,es}/misc.json`, and the **`card`** it
+   came from (`TER-1171`). The type requires all three and `features/flags.test.ts` fails on a flag
+   without them or without its translations, so no flag reaches Recursos em teste as its bare key
+   (TER-1187). The screen reads them, already translated, from `GET /api/feature-flags`: the web keeps
+   no copy of its own.
+2. Add the key to `FeatureFlagKey` (web `lib/types.ts`), to `meResponse.features` (mobile contract,
+   defaulted to `false`) and, when the landing needs it, to `FeatureFlag` in `apps/landing/src/features.ts`.
 3. Gate every screen, route, webhook and job of the feature behind it, with tests for both values.
 4. Give it a pt-BR name and description in `FEATURE_FLAG_COPY` (server, the screen's copy): the chat lists it
    with `list_feature_flags`. A flag the chat must never switch goes into `MCP_HIDDEN_FLAGS`.

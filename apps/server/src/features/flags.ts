@@ -10,22 +10,61 @@ import { tk } from '../i18n/index.js';
  * and, for the landing, `/api/public/features`.
  *
  * `default` is the value when no admin has touched the flag: off, so a new flag never shows up on an
- * instance by surprise.
+ * instance by surprise. `title` and `description` (pt-BR keys, translated in `i18n/locales`) are what
+ * Configurações → Recursos em teste shows, and `card` is where the flag came from (TER-1187): the screen
+ * reads them from `GET /api/feature-flags`, so a new flag never shows up there as its bare key.
  */
+interface FlagDefinition {
+  default: boolean;
+  title: string;
+  description: string;
+  card: `TER-${number}`;
+}
+
 export const FEATURE_FLAGS = {
   /** Subscriptions (epic TER-645): plans, checkout, paywall, trial limits and the provider's webhooks. */
-  subscriptions: { default: false },
+  subscriptions: {
+    default: false,
+    title: tk('Assinaturas'),
+    description: tk('Planos, checkout, paywall e limites do período de teste. Desligado, nada disso aparece na web, no app nem na landing, as rotas de cobrança não existem e os webhooks do provedor de pagamento são ignorados.'),
+    card: 'TER-645',
+  },
   /** TER-1164: the chat acts without a card by default and the person lists what it must not do. */
-  chat_open_permissions: { default: false },
+  chat_open_permissions: {
+    default: false,
+    title: tk('Chat: liberado por padrão'),
+    description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.'),
+    card: 'TER-1164',
+  },
   /** TER-1171: the agent tab GC runs for the person, in dry run (records what it would close, closes nothing). */
-  tab_gc: { default: false },
+  tab_gc: {
+    default: false,
+    title: tk('Coletor de abas (teste)'),
+    description: tk('Procura abas de agente paradas há muito tempo (24 h; com erro, 6 h) ou cuja sessão do terminal não existe mais, e registra no feed do projeto o que fecharia. Não fecha nada: é a semana de teste.'),
+    card: 'TER-1171',
+  },
   /** TER-1171: with `tab_gc` on, the GC warns, keeps and closes for real (and the TER-1138 timer steps aside). */
-  tab_gc_live: { default: false },
+  tab_gc_live: {
+    default: false,
+    title: tk('Coletor de abas: fechar de verdade'),
+    description: tk('Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Sem esta, o coletor só simula. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o "Fechar abas paradas" das máquinas.'),
+    card: 'TER-1171',
+  },
   /** TER-1170: the "Executar em ordem" option of an epic on the board (the MCP and the dispatcher take it anyway). */
-  sequential_epics: { default: false },
+  sequential_epics: {
+    default: false,
+    title: tk('Épico em ordem'),
+    description: tk('Mostra a opção "Executar em ordem" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.'),
+    card: 'TER-1170',
+  },
   /** TER-1176: the personal runs API (`/api/v1/runs`), the `runs` token scope and "Runs da API" in Progresso. */
-  runs_api: { default: false },
-} as const;
+  runs_api: {
+    default: false,
+    title: tk('API de runs'),
+    description: tk('Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.'),
+    card: 'TER-1176',
+  },
+} as const satisfies Record<string, FlagDefinition>;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
 export const FEATURE_FLAG_KEYS = Object.keys(FEATURE_FLAGS) as FeatureFlag[];
