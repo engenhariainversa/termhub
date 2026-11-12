@@ -33,14 +33,19 @@ declare module 'fastify' {
   }
 }
 
-export class V1Error extends HttpError {}
+export class V1Error extends HttpError {
+  /** Sent as `Retry-After` (seconds), for a 429. */
+  retryAfterS?: number;
+  /** Extra fields inside `error` (e.g. the reason per account of a 409 NO_ACCOUNT_AVAILABLE). */
+  details?: Record<string, unknown>;
+}
 
 const err = (status: number, code: string, message: Message) => new V1Error(status, message, code);
 
 /** Sends the v1 error shape, translated with the caller's language; never anything of the run. */
-function sendV1(request: FastifyRequest, reply: FastifyReply, status: number, code: string, message: Message) {
+function sendV1(request: FastifyRequest, reply: FastifyReply, status: number, code: string, message: Message, details: Record<string, unknown> = {}) {
   request.runsErrorCode = code;
-  return reply.code(status).send({ error: { code, message: t(requestLocale(request), message) } });
+  return reply.code(status).send({ error: { code, message: t(requestLocale(request), message), ...details } });
 }
 
 /**
@@ -50,9 +55,10 @@ function sendV1(request: FastifyRequest, reply: FastifyReply, status: number, co
 export function installV1Auth(app: FastifyInstance, repos: Repositories): void {
   app.setErrorHandler((e, request, reply) => {
     if (e instanceof ZodError) return sendV1(request, reply, 422, 'VALIDATION', tk('Dados inválidos'));
+    if (e instanceof V1Error && e.retryAfterS !== undefined) void reply.header('retry-after', String(e.retryAfterS));
     if (e instanceof HttpError) {
       const code = e.code === 'UNAUTHORIZED' ? 'UNAUTHENTICATED' : (e.code ?? 'ERROR');
-      return sendV1(request, reply, e.statusCode, code, e.localized);
+      return sendV1(request, reply, e.statusCode, code, e.localized, e instanceof V1Error ? e.details : undefined);
     }
     const status = (e as { statusCode?: number }).statusCode ?? 500;
     if (status >= 500) {
@@ -86,21 +92,24 @@ export function installV1Auth(app: FastifyInstance, repos: Repositories): void {
   });
 
   // One ApiTokenEvent per call made with a valid token: method and route pattern, status, duration.
-  app.addHook('onResponse', async (request, reply) => {
-    const token = request.runsAuth?.token;
-    if (!token) return;
-    const pattern = request.routeOptions.url ?? '*';
-    const route = pattern.startsWith('/api/v1') ? pattern.slice('/api/v1'.length) || '/' : pattern;
-    const ok = reply.statusCode < 400;
-    void repos.apiTokens
-      .recordEvent({
-        token_id: token.id,
-        tool: `REST ${request.method} ${route}`.slice(0, 64),
-        project_id: request.runsProjectId ?? null,
-        ok,
-        error_code: ok ? null : (request.runsErrorCode ?? 'ERROR'),
-        duration_ms: Math.round(reply.elapsedTime),
-      })
-      .catch((e: unknown) => request.log.warn({ err: e }, 'runs v1: recordEvent failed'));
-  });
+  app.addHook('onResponse', async (request, reply) => recordV1Call(repos, request, reply.statusCode, reply.elapsedTime));
+}
+
+/** The call's ApiTokenEvent (metadata only). A hijacked reply (the SSE stream) records its own, as it opens. */
+export function recordV1Call(repos: Repositories, request: FastifyRequest, status: number, elapsedMs: number): void {
+  const token = request.runsAuth?.token;
+  if (!token) return;
+  const pattern = request.routeOptions.url ?? '*';
+  const route = pattern.startsWith('/api/v1') ? pattern.slice('/api/v1'.length) || '/' : pattern;
+  const ok = status < 400;
+  void repos.apiTokens
+    .recordEvent({
+      token_id: token.id,
+      tool: `REST ${request.method} ${route}`.slice(0, 64),
+      project_id: request.runsProjectId ?? null,
+      ok,
+      error_code: ok ? null : (request.runsErrorCode ?? 'ERROR'),
+      duration_ms: Math.round(elapsedMs),
+    })
+    .catch((e: unknown) => request.log.warn({ err: e }, 'runs v1: recordEvent failed'));
 }

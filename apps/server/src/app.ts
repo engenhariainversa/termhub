@@ -82,6 +82,8 @@ import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
 import { runsV1Routes } from './routes/runs-v1.js';
+import { RunService } from './runs/service.js';
+import { startRunSweeper } from './runs/sweeper.js';
 import { runsWebRoutes } from './routes/runs-web.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
@@ -393,7 +395,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes }, postRunWaker: waker }));
 
   // --- Personal runs API (/api/v1, TER-1176): outside /api, so no cookie, CSRF or view-as; a `runs` token only ---
-  await fastify.register((a) => runsV1Routes(a, repos), { prefix: '/api/v1' });
+  // Runs live in this process; the sweeper prunes events and old worktrees and ends orphans (a crash).
+  const runService = new RunService({ repos, agents, log: fastify.log });
+  const stopRunSweeper = startRunSweeper({ repos, log: fastify.log, holds: (id) => runService.holds(id), active: () => !lifecycle.draining });
+  await fastify.register((a) => runsV1Routes(a, repos, { service: runService }), { prefix: '/api/v1' });
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
   if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));
@@ -576,6 +581,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopCiSync();
     stopSummaries();
     stopAiLoginChecks();
+    stopRunSweeper();
     stopAgentUpdates();
     stopTabQuestionExpiry();
     stopTabGoneActionExpiry();
@@ -590,6 +596,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     // Before the database closes: a send in flight finishes (or records its failure) first.
     await stopAutoAnswerSweeper();
     await automation.stop();
+    // A close without the SIGTERM drain (tests, a crash path): the runs still end before the database closes.
+    await runService.shutdown();
     stopTabSuggestions();
     tabChat.close();
     await simulators.shutdownAll();
@@ -605,7 +613,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     drain: () =>
       drain({
         lifecycle,
-        suspend: () => chat.suspendAll(),
+        // API runs cannot move to the next color (v1): they end `failed` before the agents are sent away.
+        suspend: async () => {
+          await Promise.all([chat.suspendAll(), runService.shutdown()]);
+        },
         closeAgents: () => agents.closeAll(RESTART_CLOSE, 'service restart'),
         servers: sockets,
         log: fastify.log,
