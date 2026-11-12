@@ -199,26 +199,28 @@ describe('pretrustFolder — the folder trusted before Claude Code opens it (TER
   it("marks the project's folder in the machine's Claude accounts, naming the account that starts", async () => {
     const { repos } = setup();
     const rpc = vi.fn(async () => 1);
-    expect(await pretrustFolder(repos, log() as never, tab(), agentMachine('0.37.0'), ['~/.claude_work', null, '~/.claude_work'], rpc)).toBe(true);
+    expect(await pretrustFolder(repos, log() as never, tab(), agentMachine('0.38.0'), ['~/.claude_work', null, '~/.claude_work'], rpc)).toBe(true);
     expect(rpc).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), LINK_CWD, ['~/.claude_work']);
   });
 
   it("a run's worktree, but never a folder outside the project, the option off, an older agent or an ssh machine", async () => {
     const wt = setup({ worktree: WORKTREE });
     const rpc = vi.fn(async () => 0);
-    expect(await pretrustFolder(wt.repos, log() as never, tab({ cwd: WORKTREE }), agentMachine('0.37.0'), [], rpc)).toBe(true);
+    expect(await pretrustFolder(wt.repos, log() as never, tab({ cwd: WORKTREE }), agentMachine('0.38.0'), [], rpc)).toBe(true);
     expect(rpc).toHaveBeenLastCalledWith(expect.anything(), WORKTREE, []);
     rpc.mockClear();
-    expect(await pretrustFolder(setup().repos, log() as never, tab({ cwd: '/elsewhere' }), agentMachine('0.37.0'), [], rpc)).toBe(false);
-    expect(await pretrustFolder(setup({ trustProjectFolder: false }).repos, log() as never, tab(), agentMachine('0.37.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup().repos, log() as never, tab({ cwd: '/elsewhere' }), agentMachine('0.38.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup({ trustProjectFolder: false }).repos, log() as never, tab(), agentMachine('0.38.0'), [], rpc)).toBe(false);
     expect(await pretrustFolder(setup().repos, log() as never, tab(), agentMachine('0.36.0'), [], rpc)).toBe(false);
-    expect(await pretrustFolder(setup().repos, log() as never, tab(), { ...agentMachine('0.37.0'), type: 'ssh' } as Machine, [], rpc)).toBe(false);
+    // 0.37.0 went out from main (TER-1178) without claude.trustFolder: it would only answer "unknown method"
+    expect(await pretrustFolder(setup().repos, log() as never, tab(), agentMachine('0.37.0'), [], rpc)).toBe(false);
+    expect(await pretrustFolder(setup().repos, log() as never, tab(), { ...agentMachine('0.38.0'), type: 'ssh' } as Machine, [], rpc)).toBe(false);
     expect(rpc).not.toHaveBeenCalled();
   });
 
   it('a failed call is logged by code and never thrown: the screen is still followed', async () => {
     const l = log();
-    expect(await pretrustFolder(setup().repos, l as never, tab(), agentMachine('0.37.0'), [], vi.fn(async () => Promise.reject(new Error('boom'))))).toBe(false);
+    expect(await pretrustFolder(setup().repos, l as never, tab(), agentMachine('0.38.0'), [], vi.fn(async () => Promise.reject(new Error('boom'))))).toBe(false);
     expect(l.warn).toHaveBeenCalledTimes(1);
   });
 });
