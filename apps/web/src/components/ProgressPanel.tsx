@@ -6,6 +6,8 @@ import { UsageCost } from './UsageCost';
 import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
 import { ProjectHealthPanel } from './ProjectHealthPanel';
+import { ApiRunsList } from './ApiRunsList';
+import { useFeatureFlag } from '../lib/feature-flags';
 import { feedLine, feedWhy } from '../lib/automation-feed';
 import { useMonitor } from '../lib/monitor';
 import { basisLabel, ciLabel, epicCiLine, formatEstimate, lifecycleLine, needsYouAgents, releaseLabel, fullStateOf, stateLabel, withLiveTab } from '../lib/progress';
@@ -250,6 +252,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [usage, setUsage] = useState<AutomationUsage | null>(null);
   const { tabState } = useMonitor();
+  const runsApi = useFeatureFlag('runs_api');
   // Only the latest request may write: a "Só ativos"/"Todos" toggle or a poll can overtake one in flight.
   const latest = useRef(0);
 
@@ -320,6 +323,7 @@ export function ProgressPanel({ projectId }: { projectId: string }) {
       {epics.map((e) => (
         <EpicBlock key={e.id} epic={e} projectId={projectId} />
       ))}
+      {runsApi && <ApiRunsList projectId={projectId} refreshMs={PROGRESS_REFRESH_MS} />}
     </div>
   );
 }
