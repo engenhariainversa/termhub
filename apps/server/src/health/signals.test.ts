@@ -189,3 +189,18 @@ describe('agent_exited (TER-1168)', () => {
     expect(signals(snap({ tabs: [tab()] }), off)).toEqual([]);
   });
 });
+
+describe('approval_stalled (TER-1168)', () => {
+  const card = { action_id: 'a1', conversation_id: 'c1', tool: 'run_command', summary: 'rodar o comando `gh run view 1`', created_at: ago(15) };
+
+  it('a pending card of the chat is a light sign for the concierge, since it was asked', () => {
+    const [o] = observe(snap({ automation: false, pending_cards: [card] }), config());
+    expect(o).toMatchObject({ signal: 'approval_stalled', subject: 'a1', level: 'concierge', since: ago(15), detail: { label: card.summary, conversation_id: 'c1', tool: 'run_command' } });
+  });
+
+  it('nothing with the signal off', () => {
+    const off = config();
+    off.signals.approval_stalled.enabled = false;
+    expect(signals(snap({ pending_cards: [card] }), off)).toEqual([]);
+  });
+});
