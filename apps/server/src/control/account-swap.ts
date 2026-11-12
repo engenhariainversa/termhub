@@ -6,6 +6,7 @@ import { getAccountUsage, type AiAccountUsage, type AiUsageWindow } from '../ai/
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, Tab } from '../db/repositories/types.js';
 import { monitorBus } from '../monitor/bus.js';
+import { followLaunch, pretrustFolder } from '../monitor/folder-trust.js';
 import { applyState } from '../monitor/ingest.js';
 import { sendKeyToSession, sendTextToSession, typeCommandLine } from '../terminal/session-ops.js';
 import { installRunGuard, RESUME_PROMPT, resumeLine } from './agents.js';
@@ -247,13 +248,17 @@ export async function swapAccount(
     }
     // Recorded before the line is typed, so the resumed session's first hooks (or a fast StopFailure)
     // land after it and are not overwritten. Workspace trust is stored per account: the resumed Claude
-    // may ask whether to trust the folder, and that answer belongs to the person — so the tab waits on
-    // them until the resumed session's SessionStart (run only once trusted) moves it to working. Should
-    // typing fail, the tab already names the account the linked session will be resumed under.
+    // may ask whether to trust the folder. In the project's own folder or the run's worktree the server
+    // marks it trusted in the new account first and answers the dialog should it still come (TER-1148);
+    // anywhere else that answer belongs to the person — so the tab waits on them until the resumed
+    // session's SessionStart (run only once trusted) moves it to working. Should typing fail, the tab
+    // already names the account the linked session will be resumed under.
     const updated = (await repos.tabs.setAgentFields(tab.id, { ai_account_id: to.id, rate_limited_at: null })) ?? tab;
     const text = `${opts.auto ? ACCOUNT_SWAP_AUTO_TEXT : ACCOUNT_SWAP_TEXT}: ${from?.label ?? 'conta desconhecida'} → ${to.label}. Se o Claude pedir para confiar na pasta, confirme na aba.`;
     await applyState(repos, log, updated, 'claude', { kind: 'waiting_input', text, meta: { event: 'AccountSwap', from: from?.id ?? null, to: to.id, auto: opts.auto } });
+    await pretrustFolder(repos, log, tab, machine, [to.config_dir]);
     await typeCommandLine(machine, session, line);
+    followLaunch(repos, log, tab.id, machine);
 
     log.info({ tabId: tab.id, machineId: machine.id, from: from?.id ?? null, to: to.id, auto: opts.auto }, 'account swap: done');
     return { from: from && { id: from.id, label: from.label }, to: { id: to.id, label: to.label } };
