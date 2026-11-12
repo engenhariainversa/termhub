@@ -5,7 +5,7 @@ import type { Machine, Tab } from '../db/repositories/types.js';
 
 const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
-vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', notifyAgentExited: vi.fn() }));
+vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', AGENT_LEFT_TEXT: 'Agente encerrado', notifyAgentExited: vi.fn() }));
 
 const { BACKGROUND_TIMEOUT_MINUTES, STALE_WORKING_MS, UNREPORTED_AFTER_MS, UNREPORTED_RECHECK_MS, sweepStaleWorking, sweepUnreported } = await import('./stale-working.js');
 

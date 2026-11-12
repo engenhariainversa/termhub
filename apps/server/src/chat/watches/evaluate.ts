@@ -11,6 +11,8 @@ import type { ChatWatch } from '../../db/repositories/chat-watches.js';
 import type { TabState } from '../../db/repositories/types.js';
 import { versionAtLeast } from '../../agent/errors.js';
 import { REMINDER_LIMITS, SEMVER, TAB_EVENTS, WATCH_LIMITS, type CardStatus, type WatchStatus } from './kinds.js';
+import { AGENT_GONE_EVENTS, eventNameOf } from '../../monitor/agent-gone.js';
+import type { Undelivered } from '../../terminal/deliveries.js';
 
 /** How long a machine must stay offline before `offline` fires: a deploy moves every agent between colours. */
 export const OFFLINE_GRACE_MS = 3 * 60_000;
@@ -21,6 +23,10 @@ export interface ProbeTab {
   project_id: string;
   machine_id: string;
   state: TabState | null;
+  /** when the state was reached (ISO); absent in probes that do not read it */
+  state_at?: string | null;
+  /** TER-1168: its agent is gone (`agentGone`, monitor/agent-gone.ts); absent = not known to be */
+  agent_gone?: boolean;
 }
 export interface ProbeTask {
   id: string;
@@ -41,7 +47,9 @@ export interface ProbeMachine {
 /** The reads a watch is evaluated with. Scoped by the ids the watch was created with (checked then, owner-scoped). */
 export interface WatchProbe {
   tab(id: string): Promise<ProbeTab | null>;
-  tabEventsAfter(tabId: string, after: Date, kinds: readonly TabState[]): Promise<{ id: string; kind: TabState; created_at: string }[]>;
+  tabEventsAfter(tabId: string, after: Date, kinds: readonly TabState[]): Promise<{ id: string; kind: TabState; created_at: string; meta?: Record<string, unknown> }[]>;
+  /** TER-1168: the last text typed into the tab that started no turn (terminal/deliveries.ts); absent = none known */
+  undelivered?(tabId: string): Undelivered | null;
   task(id: string): Promise<ProbeTask | null>;
   pullRequests(watch: Pick<ChatWatch, 'user_id' | 'target_id' | 'params'>): Promise<ProbePr[]>;
   machine(id: string): Promise<ProbeMachine | null>;
@@ -163,6 +171,35 @@ async function evaluateKind(probe: WatchProbe, w: Watch, now: Date): Promise<Eva
 
 const gone = (w: Watch, payload: Record<string, unknown>): Evaluation => ({ events: [{ key: 'gone', event: 'gone', payload }], baseline: w.baseline, close: 'gone' });
 
+/** A text typed this long before the watch was created still counts as what the watch is about (TER-1168). */
+export const UNDELIVERED_BEFORE_WATCH_MS = 5 * 60_000;
+/** Events that show the tab started a turn: a text typed before them did reach the agent. */
+const TURN_STARTED: readonly TabState[] = ['working', 'waiting_permission', 'error'];
+
+/**
+ * TER-1168: the watch waits for a stop that will never come — always told, whatever the events asked, like a
+ * closed tab: the agent left (before the watch was created, or after), or the text the watch is about never
+ * started a turn. The watch closes `gone`.
+ */
+const agentDown = (w: Watch, tab: ProbeTab, reason: 'agent_exited' | 'not_delivered', at: string | null, why?: string): Evaluation =>
+  ({
+    events: [{ key: `${reason}:${at ?? ''}`, event: 'gone', payload: { tab_id: tab.id, tab_name: tab.name, project_id: tab.project_id, machine_id: tab.machine_id, reason, at, ...(why ? { why } : {}), state_now: tab.state } }],
+    baseline: w.baseline,
+    close: 'gone',
+  });
+
+async function tabDown(probe: WatchProbe, w: Watch, tab: ProbeTab, cursor: Date): Promise<Evaluation | null> {
+  const exits = await probe.tabEventsAfter(tab.id, cursor, ['idle']);
+  const exit = exits.find((e) => AGENT_GONE_EVENTS.has(eventNameOf(e.meta) ?? ''));
+  if (exit) return agentDown(w, tab, 'agent_exited', exit.created_at);
+  // gone before the watch began: nothing it waits for can happen
+  if (tab.agent_gone && (!tab.state_at || Date.parse(tab.state_at) <= cursor.getTime())) return agentDown(w, tab, 'agent_exited', tab.state_at ?? null);
+  const u = probe.undelivered?.(tab.id);
+  if (!u || u.at.getTime() < Date.parse(w.created_at) - UNDELIVERED_BEFORE_WATCH_MS) return null;
+  if ((await probe.tabEventsAfter(tab.id, u.at, TURN_STARTED)).length > 0) return null;
+  return agentDown(w, tab, 'not_delivered', u.at.toISOString(), u.reason);
+}
+
 async function evaluateTab(probe: WatchProbe, w: Watch): Promise<Evaluation | null> {
   const tabId = w.target_id!;
   const tab = await probe.tab(tabId);
@@ -170,6 +207,8 @@ async function evaluateTab(probe: WatchProbe, w: Watch): Promise<Evaluation | nu
   if (!tab) return gone(w, { tab_id: tabId });
   const cursor = new Date(typeof w.baseline.cursor === 'string' ? w.baseline.cursor : w.created_at);
   const kinds = w.params.events.filter((e): e is TabState => e !== 'gone' && (TAB_EVENTS as readonly string[]).includes(e));
+  const down = await tabDown(probe, w, tab, cursor);
+  if (down) return down;
   const events = await probe.tabEventsAfter(tabId, cursor, kinds);
   if (events.length === 0) return null;
   // Once: the first stop after the watch began is the one asked about. Recurring: the newest, since a

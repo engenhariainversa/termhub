@@ -8,7 +8,9 @@ import { nextTerminalName } from '../lib/tab-names.js';
 import { killTmuxSession } from '../terminal/machine-exec.js';
 import { removeTabMcp } from '../terminal/tab-mcp.js';
 import { recordInputOrigin, type InputOrigin } from '../terminal/input-origin.js';
-import { ensureSession, INPUT_MAX_CHARS, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION, typeCommandLine } from '../terminal/session-ops.js';
+import { ensureSession, INPUT_MAX_CHARS, paneForeground, sendKeyToSession, sendTextToSession, TERMINAL_RPC_MIN_AGENT_VERSION, typeCommandLine } from '../terminal/session-ops.js';
+import { clearUndelivered, recordUndelivered, type UndeliveredReason } from '../terminal/deliveries.js';
+import { isAgentTab, paneLeft } from '../monitor/agent-gone.js';
 import { ControlError, type ControlContext } from './context.js';
 import { deriveInputOrigin, verifyOnBehalfOf } from './input-origin.js';
 import { assertTerminal, clamp, offline, SCREEN_DEFAULT_LINES, SCREEN_MAX_LINES, waitForState } from './screen.js';
@@ -17,6 +19,7 @@ import { publishTabOpened, publishTabRemoved } from '../monitor/tab-events.js';
 import { msg } from '../i18n/index.js';
 import { cliDialogOf, DIALOG_CLI_LABEL, type CliDialog } from '../monitor/cli-dialogs.js';
 import { SCREEN_STATE_LINES } from '../monitor/screen-state.js';
+import type { PaneForeground } from '@termhub/machine-ops';
 
 export { INPUT_MAX_CHARS };
 
@@ -93,6 +96,86 @@ async function settleByScreen(machine: Machine, session: string, lines: number, 
 }
 
 /**
+ * What the tab's pane runs in front (TER-1168), or null when it cannot tell (an agent older than 0.14.0, a failed
+ * call): the check never blocks typing on its own failure.
+ */
+async function foregroundOf(machine: Machine, session: string): Promise<PaneForeground | null> {
+  try {
+    return await paneForeground(machine, session);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * TER-1168: an agent tab whose CLI exited is back at its shell. Text typed there runs as shell commands (the
+ * concierge's request answered with syntax errors) while the answer said "sent". Refused before anything is
+ * typed, unless the caller means the shell (`to_shell` in the tools). A shell tab that never ran an agent is
+ * never checked: typing into it is the point.
+ */
+async function assertAgentInFront(tab: Tab, machine: Machine, session: string): Promise<void> {
+  if (!isAgentTab(tab)) return;
+  if (!paneLeft(await foregroundOf(machine, session))) return;
+  throw new ControlError(
+    'AGENT_NOT_RUNNING',
+    msg('Nada foi enviado: o agente desta aba não está mais rodando (o terminal voltou ao shell) e o que fosse digitado iria para o shell. Retome o agente (o card de agente encerrado no chat, ou start_agent com o card) ou avise a pessoa. Se quer mesmo usar o shell, repita com to_shell: true.'),
+  );
+}
+
+/** How long `send_input` waits for an agent tab to start a turn on what it typed (TER-1168). */
+export const DELIVERY_WAIT_MS = 15_000;
+const DELIVERY_POLL_MS = 500;
+/** Events that show a turn began after the text was typed (a fast turn may already be past `working`). */
+const TURN_STARTED: readonly TabState[] = ['working', 'waiting_permission', 'error'];
+
+/** What `send_input` says about a text it could not see reach the agent (for the caller, an agent). */
+const UNDELIVERED_NOTE: Record<UndeliveredReason, (seconds: number) => string> = {
+  agent_exited: () => 'Not delivered: the agent of this tab exited and the text landed in its shell. Do not promise the person to report back; tell them now.',
+  cli_dialog: () => 'Not delivered: a dialog of the CLI took the input and the text was lost. See it with read_screen, close it with send_key, send again; do not promise to report back before that.',
+  no_reaction: (s) => `Not confirmed: the tab started no turn within ${s} s. The text may not have reached the agent: check with read_screen before promising the person to report back, and tell them if it did not.`,
+};
+
+export interface DeliveryResult {
+  /** true: the tab started a turn after the text; false: it did not (see reason). Absent when not checked. */
+  delivered?: boolean;
+  reason?: UndeliveredReason;
+  note?: string;
+}
+
+/**
+ * TER-1168: after typing into an agent tab at rest, whether it started a turn within `waitMs`. When it did
+ * not, the reason (the agent left, a CLI dialog, no reaction) is kept for the tab's watches (terminal/deliveries.ts),
+ * so one created around this send wakes the chat instead of waiting for a stop that never comes.
+ */
+async function confirmDelivery(ctx: ControlContext, tab: Tab, machine: Machine, session: string, sentAt: Date, waitMs: number, pollMs: number): Promise<DeliveryResult> {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const events = await ctx.repos.tabs.eventsAfter(tab.id, sentAt, TURN_STARTED, 1).catch(() => []);
+    if (events.length > 0) {
+      clearUndelivered(tab.id);
+      return { delivered: true };
+    }
+    if (Date.now() + pollMs > deadline) break;
+    await new Promise((r) => setTimeout(r, pollMs));
+  }
+  const reason: UndeliveredReason = paneLeft(await foregroundOf(machine, session)) ? 'agent_exited' : (await openDialog(machine, session)) ? 'cli_dialog' : 'no_reaction';
+  recordUndelivered(tab.id, reason);
+  ctx.log?.info({ tabId: tab.id, machineId: machine.id, reason }, 'send_input: delivery not confirmed');
+  return { delivered: false, reason, note: UNDELIVERED_NOTE[reason](Math.ceil(waitMs / 1000)) };
+}
+
+/** What a caller of `sendInput` / `sendKey` asks for beyond typing (TER-1168). */
+export interface SendOptions {
+  /** refuse an agent tab whose CLI exited (AGENT_NOT_RUNNING) instead of typing into its shell */
+  requireAgent?: boolean;
+  /** wait for the agent tab to start a turn and say whether it did (`delivered`) */
+  confirm?: boolean;
+  /** tests only */
+  deliveryWaitMs?: number;
+  deliveryPollMs?: number;
+}
+
+/**
  * Opens a tab and starts its tmux session detached, so it is alive without a browser attached.
  * `internal.cwd` (server callers only — the MCP tool's input has no such field): the session starts there
  * instead of the project's folder, and the tab keeps it, so a recreated session reopens there too
@@ -147,7 +230,8 @@ export async function sendInput(
   ctx: ControlContext,
   input: { tab_id: string; text: string; enter?: boolean; answering_permission?: boolean; on_behalf_of?: string[] },
   origin?: InputOrigin | null,
-): Promise<{ tab_id: string; sent: true }> {
+  opts: SendOptions = {},
+): Promise<{ tab_id: string; sent: true } & DeliveryResult> {
   if (input.text.length > INPUT_MAX_CHARS) throw new ControlError('TEXT_TOO_LONG', msg('Texto longo demais: {{length}} caracteres, máximo {{max}}', { length: input.text.length, max: INPUT_MAX_CHARS }));
   const onBehalfOf = await verifyOnBehalfOf(ctx, input.on_behalf_of);
   const { tab, machine, cwd, session } = await terminal(ctx, input.tab_id);
@@ -160,6 +244,7 @@ export async function sendInput(
     );
   }
   await ensureSession(machine, session, cwd);
+  if (opts.requireAgent && !input.answering_permission) await assertAgentInFront(tab, machine, session);
   // TER-1166: a modal dialog of the CLI holds the input. The text would be lost — or, in Codex, its letters would
   // move the dialog's selection and Enter pick an option — while the answer said "sent". An answer to a
   // permission or a question (answering_permission) is typed into its dialog on purpose.
@@ -175,6 +260,9 @@ export async function sendInput(
     }
   }
   const enter = input.enter ?? true;
+  // TER-1168: a text submitted to an agent at rest must start a turn; one typed while it works is queued by the CLI
+  const confirm = opts.confirm && enter && !input.answering_permission && !!tab.state_tool && tab.state !== 'working' && tab.state !== 'waiting_permission';
+  const sentAt = new Date();
   if (origin !== null) recordInputOrigin(tab.id, input.text, origin ?? deriveInputOrigin(ctx, onBehalfOf));
   // An embedded newline means a multi-line prompt: paste it so the TUI reads the newline as part
   // of the text, not as Enter submitting a half-typed line (spec: bracketed paste).
@@ -183,7 +271,8 @@ export async function sendInput(
   } else {
     await sendTextToSession(machine, session, input.text, enter);
   }
-  return { tab_id: tab.id, sent: true };
+  if (!confirm) return { tab_id: tab.id, sent: true };
+  return { tab_id: tab.id, sent: true, ...(await confirmDelivery(ctx, tab, machine, session, sentAt, opts.deliveryWaitMs ?? DELIVERY_WAIT_MS, opts.deliveryPollMs ?? DELIVERY_POLL_MS)) };
 }
 
 /**
@@ -203,9 +292,10 @@ export async function typeCommandInTab(ctx: ControlContext, tabId: string, line:
  * when a dialog is still open after it (TER-1166), the answer says which, so the caller does not take the tab
  * for ready to type into.
  */
-export async function sendKey(ctx: ControlContext, input: { tab_id: string; key: TmuxKey }): Promise<{ tab_id: string; key: TmuxKey; sent: true; dialog?: DialogNotice }> {
+export async function sendKey(ctx: ControlContext, input: { tab_id: string; key: TmuxKey }, opts: Pick<SendOptions, 'requireAgent'> = {}): Promise<{ tab_id: string; key: TmuxKey; sent: true; dialog?: DialogNotice }> {
   const { tab, machine, cwd, session } = await terminal(ctx, input.tab_id);
   await ensureSession(machine, session, cwd);
+  if (opts.requireAgent) await assertAgentInFront(tab, machine, session);
   await sendKeyToSession(machine, session, input.key);
   await new Promise((r) => setTimeout(r, KEY_SETTLE_MS));
   const dialog = await openDialog(machine, session);

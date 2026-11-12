@@ -151,3 +151,28 @@ describe('observe (TER-1121)', () => {
     expect(isDue('pr_ready', config(), ago(120), now)).toBe(true);
   });
 });
+
+// TER-1168: an agent that left a tab someone counts on (a card in Fazendo, a watch of the chat)
+describe('agent_exited (TER-1168)', () => {
+  const tab = (patch: Partial<HealthSnapshot['tabs'][number]> = {}): HealthSnapshot['tabs'][number] => ({ id: 't1', name: 'pda', state: 'idle', state_at: ago(10), machine_id: 'm1', run: false, agent_gone: true, card_ref: 'PDA-7', ...patch });
+
+  it('a card\'s tab whose agent left alerts the concierge, also without automatic work', () => {
+    const [o] = observe(snap({ automation: false, tabs: [tab()] }), config());
+    expect(o).toMatchObject({ signal: 'agent_exited', subject: 't1', level: 'concierge', since: ago(10), detail: { label: 'pda', ref: 'PDA-7' } });
+    expect(o.detail.told_elsewhere).toBeUndefined();
+  });
+
+  it('a watched tab is shown and kept quiet: its watch already wakes the chat', () => {
+    const [o] = observe(snap({ tabs: [tab({ card_ref: null, watched: true })] }), config());
+    expect(o).toMatchObject({ signal: 'agent_exited', detail: { told_elsewhere: 1 } });
+  });
+
+  it('nothing for a live agent, a tab nobody counts on, a run\'s own tab, or the signal off', () => {
+    expect(signals(snap({ tabs: [tab({ agent_gone: false })] }))).toEqual([]);
+    expect(signals(snap({ tabs: [tab({ card_ref: null })] }))).toEqual([]);
+    expect(signals(snap({ tabs: [tab({ run: true })] }))).toEqual([]);
+    const off = config();
+    off.signals.agent_exited.enabled = false;
+    expect(signals(snap({ tabs: [tab()] }), off)).toEqual([]);
+  });
+});

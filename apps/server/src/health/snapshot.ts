@@ -10,18 +10,38 @@ import { isPaused } from '../automation/pause.js';
 import { automationQueue } from '../automation/queue.js';
 import { controlContextFor } from '../control/context.js';
 import type { Repositories } from '../db/repositories/index.js';
-import type { Project, User } from '../db/repositories/types.js';
+import type { Project, Tab, Task, User } from '../db/repositories/types.js';
+import { agentGone, eventNameOf } from '../monitor/agent-gone.js';
 import { localeOf } from '../i18n/index.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { deliveryOf } from '../automation/epic-phase.js';
 import { WATCH_MERGED_FOR_MS } from '../db/repositories/task-pull-requests.js';
-import type { HealthSnapshot, SnapshotCard, SnapshotDoneUnmerged, SnapshotEpic, SnapshotMachine, SnapshotPr, SnapshotRun } from './signals.js';
+import type { HealthSnapshot, SnapshotCard, SnapshotDoneUnmerged, SnapshotEpic, SnapshotMachine, SnapshotPr, SnapshotRun, SnapshotTab } from './signals.js';
 
 /** Merged PRs older than this no longer count for a failed deploy or release. */
 export const DELIVERY_LOOKBACK_MS = 3 * 24 * 3600_000;
 
 const date = (v: string | Date | null | undefined): Date | null => (v ? new Date(v) : null);
 const later = (a: Date | null, b: Date | null) => (a && b ? (a > b ? a : b) : (a ?? b));
+
+/**
+ * TER-1168: the tabs whose agent is gone (`agentGone`) that someone counts on — a card in Fazendo points at it,
+ * or an open watch follows it. Only idle terminal tabs are looked at, one event read each: a project has few.
+ */
+async function goneAgents(repos: Repositories, tabs: Tab[], tasks: Task[]): Promise<Map<string, Pick<SnapshotTab, 'agent_gone' | 'card_ref' | 'watched'>>> {
+  const out = new Map<string, Pick<SnapshotTab, 'agent_gone' | 'card_ref' | 'watched'>>();
+  const cardOf = new Map<string, string>();
+  for (const t of tasks) if (t.tab_id && t.status === 'doing' && t.parent_id === null && t.type !== 'epic') cardOf.set(t.tab_id, t.ref);
+  for (const tab of tabs) {
+    if (tab.kind !== 'terminal' || tab.state !== 'idle') continue;
+    const [last] = await repos.tabs.listEvents(tab.id, 1);
+    if (!agentGone(tab.state, eventNameOf(last?.meta))) continue;
+    const watched = (await repos.chatWatches.listAllOpen({ kind: 'tab', targetId: tab.id }, 1)).length > 0;
+    const card = cardOf.get(tab.id) ?? null;
+    if (card || watched) out.set(tab.id, { agent_gone: true, card_ref: card, watched });
+  }
+  return out;
+}
 
 export async function buildSnapshot(repos: Repositories, project: Project, owner: User, setup: ProjectSetupData, now = new Date()): Promise<HealthSnapshot> {
   const automationOn = setup.automation.enabled && !(await isPaused(repos, project.owner_id, project.id));
@@ -123,6 +143,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     });
   }
 
+  const gone = await goneAgents(repos, tabs, tasks);
   const base = automationOn ? baseReadingOf(project.id, now) : null;
   return {
     now,
@@ -134,7 +155,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     queued,
     active_runs: active.length,
     last_run_at: lastRunAt,
-    tabs: tabs.filter((t) => t.kind === 'terminal').map((t) => ({ id: t.id, name: t.name, state: t.state, state_at: date(t.state_at), machine_id: t.machine_id, run: runTabs.has(t.id) })),
+    tabs: tabs.filter((t) => t.kind === 'terminal').map((t) => ({ id: t.id, name: t.name, state: t.state, state_at: date(t.state_at), machine_id: t.machine_id, run: runTabs.has(t.id), ...(gone.get(t.id) ?? {}) })),
     doing,
     runs,
     machines,

@@ -3,7 +3,8 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { PaneForeground } from '@termhub/machine-ops';
 import { agents } from '../agent/registry.js';
 import { captureScreen } from '../agent/screen.js';
-import { AGENT_EXITED_TEXT, notifyAgentExited } from '../chat/agent-exited.js';
+import { AGENT_EXITED_TEXT, AGENT_LEFT_TEXT, notifyAgentExited } from '../chat/agent-exited.js';
+import { paneLeft } from './agent-gone.js';
 import { failureLabel } from '../chat/service.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { STALE_WORKING_LIMIT } from '../db/repositories/tabs.js';
@@ -274,7 +275,9 @@ export const DIALOG_RECHECK_MS = 10 * 60_000;
  * tab is read at every sweep for DIALOG_FRESH_MS after its state, then every DIALOG_RECHECK_MS, for
  * DIALOG_WINDOW_MS; a named dialog makes it `cli_dialog`. A `cli_dialog` tab is read at every sweep, and once the
  * dialog is gone without a new turn it goes back to its turn end (`classifyTurnEnd` of its last answer, else
- * `idle`), without alerting again. Never throws; logs ids and the dialog's id only, never the screen.
+ * `idle`), without alerting again. Before the screen, the pane (TER-1168): a resting tab whose agent left with no
+hook (killed, crashed) becomes `idle` with AGENT_LEFT_TEXT, so its watches and the health watcher see it. Never
+throws; logs ids and the dialog's id only, never the screen.
  */
 export async function sweepDialogs(repos: Repositories, log: Log, now = new Date(), deps: StaleWorkingDeps = defaultDeps(BACKGROUND_TIMEOUT_MINUTES * 60_000)): Promise<void> {
   const tabs = await repos.tabs.listResting(new Date(now.getTime() - DIALOG_WINDOW_MS), [...RESTING_STATES, 'cli_dialog']);
@@ -289,6 +292,9 @@ export async function sweepDialogs(repos: Repositories, log: Log, now = new Date
     try {
       const machine = await repos.machines.findById(tab.machine_id);
       if (!machine || (machine.type === 'agent' && !deps.isOnline(machine.id))) continue;
+      // TER-1168: the agent may have left while the tab rested (killed, crashed: no SessionEnd). Its shell is in
+      // front, and a message typed into the tab would run there while the tab still read as an agent at its prompt.
+      if (tab.state !== 'cli_dialog' && tab.state !== 'idle' && (await agentLeftAtRest(repos, log, tab as Tab & { tmux_session: string; state_at: string }, machine, deps))) continue;
       const raw = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
       const dialog = cliDialogOf(raw);
       if (tab.state !== 'cli_dialog') {
@@ -303,6 +309,22 @@ export async function sweepDialogs(repos: Repositories, log: Log, now = new Date
   }
   const listed = new Set(tabs.map((t) => `dialog:${t.id}`));
   for (const key of deps.checked.keys()) if (key.startsWith('dialog:') && !listed.has(key)) deps.checked.delete(key);
+}
+
+/**
+ * A resting tab whose pane is back at its shell, or dead (TER-1168): `idle` with AGENT_LEFT_TEXT, under the same
+ * `ifStateAt` condition (a hook that landed meanwhile wins). The turn had ended, so no resume card opens (that is
+ * `notifyAgentExited`, for an agent cut mid-turn); the change is what the tab's watches and the health watcher
+ * read. True when the pane said the agent left, whether or not the write was kept.
+ */
+async function agentLeftAtRest(repos: Repositories, log: Log, tab: Tab & { tmux_session: string; state_at: string }, machine: Machine, deps: StaleWorkingDeps): Promise<boolean> {
+  const pane = await deps.foreground(machine, tab.tmux_session);
+  if (!paneLeft(pane)) return false;
+  const tool = tab.state_tool ?? 'claude';
+  const { tab: updated, event } = await repos.tabs.recordEvent(tab.id, { kind: 'idle', tool, text: AGENT_LEFT_TEXT, meta: { event: 'AgentExited', pane, resting: true }, ifStateAt: tab.state_at, ifStateIn: RESTING_STATES });
+  log.info({ tabId: tab.id, machineId: machine.id, tool, pane, recorded: event !== null }, 'monitor: agent left a resting tab without a hook');
+  if (event) publishTabChange(updated, tab.project_id, machine);
+  return true;
 }
 
 /** The dialog closed and no turn began (TER-1166): back to the turn end its last answer reads as, else `idle`. */

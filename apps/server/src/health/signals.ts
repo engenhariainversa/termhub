@@ -29,7 +29,7 @@ export interface Observation {
 export const PERSON_WAITS: readonly string[] = ['merge_person_card'];
 
 /** Signs that run on every project: a person's own tabs and machines stall too. The rest need automation on. */
-export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline'];
+export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited'];
 
 export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   pr_ready: 'needs_you',
@@ -44,6 +44,7 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   agent_outdated: 'needs_you',
   epic_zombie: 'concierge',
   done_unmerged: 'concierge',
+  agent_exited: 'concierge',
 };
 
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login, a CLI dialog. */
@@ -92,6 +93,12 @@ export interface SnapshotTab {
   machine_id: string;
   /** an automatic run drives it */
   run: boolean;
+  /** TER-1168: its agent is gone (`agentGone`, monitor/agent-gone.ts); absent = not known to be */
+  agent_gone?: boolean;
+  /** TER-1168: a card in Fazendo points at it */
+  card_ref?: string | null;
+  /** TER-1168: an open watch of a chat follows it: that watch already wakes the chat about the exit */
+  watched?: boolean;
 }
 
 export interface SnapshotCard {
@@ -243,6 +250,12 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
       const due = s.now.getTime() - tab.state_at.getTime() >= CLI_DIALOG_ALERT_MS;
       add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due);
     } else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
+    // 12. TER-1168: the agent of a tab someone counts on left — a card in Fazendo points at it, or a watch follows
+    // it. A watch already wakes the chat about it (chat/watches/evaluate.ts): shown, quiet (`told_elsewhere`).
+    // A run's own tab is its follower's to bring back (AgentExited mid-turn), so it is left out.
+    if (tab.agent_gone && !tab.run && (tab.card_ref || tab.watched)) {
+      add('agent_exited', tab.id, tab.state_at, { label: tab.name, ref: tab.card_ref ?? null, ...(tab.watched ? { told_elsewhere: 1 } : {}) });
+    }
   }
 
   // 5. a card in Doing nobody works on: no tab, no run, no PR to wait for, not parked on a blocked run (6 says that)

@@ -23,6 +23,12 @@ const TAB_STATES: Record<string, string> = {
   cli_dialog: 'ficou presa num diálogo do CLI (o texto digitado nela se perde até alguém fechá-lo)',
   waiting_background: 'terminou o turno com trabalho em segundo plano rodando',
 };
+/** TER-1168: why a text typed into a tab started no turn (terminal/deliveries.ts). */
+const UNDELIVERED_WHY: Record<string, string> = {
+  agent_exited: 'o agente saiu e o texto caiu no shell',
+  cli_dialog: 'um diálogo do CLI segurou a entrada e o texto se perdeu',
+  no_reaction: 'a aba não reagiu ao texto',
+};
 /** An ISO instant on the person's clock ("2026-10-21 18:00 America/Sao_Paulo"); as it came when unreadable. */
 const onClock = (iso: unknown, zone: unknown): string => {
   const at = new Date(String(iso ?? ''));
@@ -49,6 +55,9 @@ export function describeFire(w: Pick<ChatWatch, 'kind' | 'label'>, f: Pick<ChatW
   if (f.event === 'expired') return `a assinatura venceu (${s(p.expires_at)}) sem o evento acontecer.`;
   switch (w.kind) {
     case 'tab':
+      // TER-1168: what the watch waited for will not happen; the person did not hear it from anyone yet
+      if (f.event === 'gone' && p.reason === 'agent_exited') return `o agente da aba ${q(p.tab_name ?? w.label)} (tab_id ${s(p.tab_id)}) saiu (o terminal voltou ao shell${p.at ? `, ${s(p.at)}` : ''}): nada do que for mandado a ela chega a ele, e o que esta assinatura esperava não vai acontecer. Conte à pessoa agora; retomar o agente é com ela (o card de agente encerrado) ou start_agent no card.`;
+      if (f.event === 'gone' && p.reason === 'not_delivered') return `a mensagem mandada à aba ${q(p.tab_name ?? w.label)} (tab_id ${s(p.tab_id)}) às ${s(p.at)} não começou nenhum turno (${UNDELIVERED_WHY[String(p.why)] ?? 'motivo desconhecido'}): o que esta assinatura esperava não vai acontecer. Veja a aba com read_screen e conte à pessoa agora.`;
       if (f.event === 'gone') return `a aba ${q(w.label)} (tab_id ${s(p.tab_id)}) foi fechada ou a sessão dela terminou.`;
       return `a aba ${q(p.tab_name ?? w.label)} (tab_id ${s(p.tab_id)}) ${TAB_STATES[f.event] ?? s(f.event)} (${s(p.at)}).`;
     case 'card':

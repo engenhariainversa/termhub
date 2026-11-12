@@ -23,6 +23,7 @@ const TEXT: Record<HealthSignal, string> = {
   agent_outdated: tk('Máquina {{label}} com o agente {{version}}, abaixo do mínimo {{min}}'),
   epic_zombie: tk('Épico {{label}} em andamento sem história ativa nem PR há {{duration}}'),
   done_unmerged: tk('Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}'),
+  agent_exited: tk('Agente da aba {{label}} fora do ar há {{duration}}'),
 };
 const BASE_PENDING = tk('Branch base {{label}} com a CI sem terminar há {{duration}}');
 const FAILING = tk('falhando: {{names}}');
@@ -45,6 +46,7 @@ export const SIGNAL_NAME: Record<HealthSignal, string> = {
   agent_outdated: tk('Agente abaixo do mínimo'),
   epic_zombie: tk('Épico parado em andamento'),
   done_unmerged: tk('Card em Feito com PR não mesclado'),
+  agent_exited: tk('Agente fora do ar em aba acompanhada'),
 };
 
 /** "45 min", "3 h", "2 d". */
@@ -100,6 +102,7 @@ const HINT: Record<HealthSignal, string> = {
   agent_outdated: 'update_machine_agent atualiza o agente; sem isso o automático pode deixar de iniciar execuções',
   epic_zombie: 'list_tasks mostra as histórias do épico; se falta trabalho, ponha a próxima história em A fazer; se o épico já está na main e entregue, mova-o para Feito; se foi abandonado, a pessoa decide',
   done_unmerged: 'o card está em Feito mas o PR não foi mesclado: veja o PR (CI vermelha, conflito, aprovação); se o trabalho não acabou, mova o card de volta para Em andamento, senão a pessoa mescla ou fecha o PR',
+  agent_exited: 'o terminal da aba voltou ao shell: o que for mandado a ela não chega a nenhum agente; conte à pessoa, que retoma pelo card de agente encerrado, ou start_agent no card se o trabalho não acabou',
 };
 
 const q = (v: unknown): string => `«${sanitisePromptText(str(v)).slice(0, 200)}»`;
@@ -109,7 +112,7 @@ const s = (v: unknown): string => sanitisePromptText(str(v)).slice(0, 300);
 export function healthWakeText(alerts: HealthAlert[], noticed: ReadonlySet<string>, now: Date, rules: string | null = null): string {
   const lines = alerts.map((a) => {
     const d = a.detail;
-    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' || a.signal === 'epic_zombie' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null]
+    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') || a.signal === 'agent_exited' ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' || a.signal === 'epic_zombie' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null]
       .filter(Boolean)
       .join(', ');
     const said = noticed.has(a.id) ? ' A pessoa já recebeu push sobre isto.' : '';

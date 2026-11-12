@@ -54,4 +54,26 @@ describe('buildSnapshot (TER-1134)', () => {
     const s = await build([pr({ task_id: '2', state: 'open', merged_at: null, ci_state: 'failed', number: 12, url: 'u12' })]);
     expect(s.done_unmerged).toEqual([expect.objectContaining({ task_id: '2', ref: 'TER-2', number: 12, ci_state: 'failed' })]);
   });
+
+  // TER-1168
+  it('marks the idle tabs whose agent left, when a card in Doing points at them or a watch follows them', async () => {
+    const t = (id: string) => ({ id, name: id, kind: 'terminal', state: 'idle', state_at: '2026-11-11T10:00:00.000Z', machine_id: 'm1' });
+    const events: Record<string, { meta: Record<string, unknown> }[]> = { a: [{ meta: { event: 'SessionEnd' } }], b: [{ meta: { event: 'AgentExited' } }], c: [{ meta: { event: 'ScreenCheck' } }], d: [{ meta: { event: 'SessionEnd' } }] };
+    const repos = {
+      tasks: { listByProject: vi.fn(async () => [{ ...card('1', 'doing'), tab_id: 'a' }]) },
+      taskColumns: { list: vi.fn(async () => [{ id: 'doing', category: 'doing', waiting: false }]) },
+      tabs: { listByProject: vi.fn(async () => [t('a'), t('b'), t('c'), t('d')]), listEvents: vi.fn(async (id: string) => events[id]) },
+      chatWatches: { listAllOpen: vi.fn(async (f: { targetId: string }) => (f.targetId === 'b' || f.targetId === 'c' ? [{ id: 'w1' }] : [])) },
+      automationRuns: { activeByProject: vi.fn(async () => []), lastStartedAt: vi.fn(async () => null), latestOfTask: vi.fn(async () => null) },
+      projectMachines: { listByProject: vi.fn(async () => []) },
+      taskPullRequests: { listForHealth: vi.fn(async () => []) },
+    } as unknown as Repositories;
+    const s = await buildSnapshot(repos, { id: 'p1', owner_id: 'u1' } as Project, { id: 'u1', locale: 'pt-BR' } as User, setupSchema.parse({}), new Date('2026-11-11T12:00:00Z'));
+    const byId = Object.fromEntries(s.tabs.map((x) => [x.id, x]));
+    expect(byId.a).toMatchObject({ agent_gone: true, card_ref: 'TER-1', watched: false });
+    expect(byId.b).toMatchObject({ agent_gone: true, card_ref: null, watched: true });
+    // an idle that is no exit; a gone agent nobody counts on
+    expect(byId.c.agent_gone).toBeUndefined();
+    expect(byId.d.agent_gone).toBeUndefined();
+  });
 });
