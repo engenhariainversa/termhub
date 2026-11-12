@@ -100,5 +100,9 @@
   "Nenhum projeto desta proposta continua seu": "Ningún proyecto de esta propuesta sigue siendo tuyo",
   "A página continua no ai-memory da máquina; se ela mudar, volta como lição não verificada": "La página sigue en el ai-memory de la máquina; si cambia, vuelve como lección no verificada",
   "Assinatura não encontrada": "Suscripción no encontrada",
-  "Projeto inexistente": "El proyecto no existe"
+  "Projeto inexistente": "El proyecto no existe",
+  "Escopo indisponível: runs": "Alcance no disponible: runs",
+  "Run não encontrada": "Ejecución no encontrada",
+  "Este token não tem o escopo runs": "Este token no tiene el alcance runs",
+  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "El alcance runs solo vale para tokens personales, nunca para el chat ni para una pestaña"
 }

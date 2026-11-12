@@ -18,7 +18,7 @@ const token = (over: Partial<ApiToken> & { id: string }): ApiToken => ({
 });
 
 /** Routes over a stubbed repository. `viewAs` simulates an admin viewing as another user. */
-function buildApp(opts: { active?: number; viewAs?: string } = {}) {
+function buildApp(opts: { active?: number; viewAs?: string; runsApi?: boolean } = {}) {
   const app = Fastify();
   applyErrorHandler(app);
   app.addHook('preHandler', async (request) => {
@@ -39,7 +39,8 @@ function buildApp(opts: { active?: number; viewAs?: string } = {}) {
     listEvents: vi.fn(async (id: string, userId: string) => (id === 't1' && userId === 'u1' ? [{ id: 'e1', tool: 'read_screen', ok: true }] : undefined)),
   };
   const securityEvents = { record: vi.fn(async () => {}) };
-  app.register((a) => apiTokenRoutes(a, { apiTokens, securityEvents } as unknown as Repositories, { mcpUrl: 'https://termhub.dev/mcp' }), { prefix: '/api-tokens' });
+  const featureFlags = { overrideFor: vi.fn(async () => null), instanceValue: vi.fn(async (flag: string) => (flag === 'runs_api' ? (opts.runsApi ?? false) : null)) };
+  app.register((a) => apiTokenRoutes(a, { apiTokens, securityEvents, featureFlags } as unknown as Repositories, { mcpUrl: 'https://termhub.dev/mcp' }), { prefix: '/api-tokens' });
   return { app, apiTokens, securityEvents };
 }
 
@@ -68,6 +69,21 @@ describe('api token routes', () => {
     expect(r.statusCode).toBe(201);
     expect(r.json().api_token.gated).toBe(false);
     expect(apiTokens.create.mock.calls[0][1]).not.toHaveProperty('gated');
+  });
+
+  it('refuses the runs scope while the runs_api flag is off for the person (TER-1176)', async () => {
+    const { app, apiTokens } = buildApp();
+    const r = await app.inject({ method: 'POST', url: '/api-tokens', payload: { name: 'ci', scopes: ['read', 'runs'] } });
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe('VALIDATION');
+    expect(apiTokens.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a personal token with the runs scope once the flag is on', async () => {
+    const { app } = buildApp({ runsApi: true });
+    const r = await app.inject({ method: 'POST', url: '/api-tokens', payload: { name: 'ci', scopes: ['runs'] } });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().api_token.scopes).toEqual(['runs']);
   });
 
   it('creates a token without expiry', async () => {

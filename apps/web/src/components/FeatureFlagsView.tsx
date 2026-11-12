@@ -26,6 +26,10 @@ const FLAG_COPY: Record<FeatureFlagKey, { label: string; description: string }> 
     label: tk('Épico em ordem'),
     description: tk('Mostra a opção "Executar em ordem" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.'),
   },
+  runs_api: {
+    label: tk('API de runs'),
+    description: tk('Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.'),
+  },
 };
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (next: boolean) => void }) {

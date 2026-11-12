@@ -81,6 +81,8 @@ import { roleRoutes } from './routes/roles.js';
 import { userRoutes } from './routes/users.js';
 import { uploadRoutes } from './routes/uploads.js';
 import { apiTokenRoutes } from './routes/api-tokens.js';
+import { runsV1Routes } from './routes/runs-v1.js';
+import { runsWebRoutes } from './routes/runs-web.js';
 import { deviceRoutes } from './routes/devices.js';
 import { securityEventRoutes } from './routes/security-events.js';
 import { adminTroubleshootRoutes } from './routes/admin-troubleshoot.js';
@@ -364,6 +366,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('uploads', (a) => uploadRoutes(a, repos), '/uploads');
       await guarded('api_tokens', (a) => apiTokenRoutes(a, repos, { mcpUrl: config.mcpUrl }), '/api-tokens');
       await guarded('feature_flags', (a) => featureFlagRoutes(a, repos), '/feature-flags');
+      // "Runs da API" in Progresso (TER-1176): the session user's own runs, 404 while runs_api is off.
+      await guarded('runs', (a) => runsWebRoutes(a, repos), '/runs');
       await guarded('security_events', (a) => securityEventRoutes(a, repos, { retentionDays: config.securityEventRetentionDays }), '/security-events');
       // Support troubleshooting of one user (TER-1092): admins only, checked by the plugin itself, never a grant.
       await api.register((a) => adminTroubleshootRoutes(a, repos), { prefix: '/admin/troubleshoot' });
@@ -387,6 +391,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
 
   // --- MCP endpoint for the global terminal (public route: a personal API token authenticates each call) ---
   await fastify.register((a) => mcpRoutes(a, { repos, version: SERVER_VERSION, attachments: attachmentStore, chatFiles: { queue: extraction, quotaBytes: config.chatFiles.quotaBytes }, postRunWaker: waker }));
+
+  // --- Personal runs API (/api/v1, TER-1176): outside /api, so no cookie, CSRF or view-as; a `runs` token only ---
+  await fastify.register((a) => runsV1Routes(a, repos), { prefix: '/api/v1' });
 
   // --- Mobile app API (/api/m/v1): outside /api, so only its device-token + DPoP hook runs on it ---
   if (config.mobile && mobile) sockets.push(...(await registerMobileApi(fastify, mobile, mobileDeps)));

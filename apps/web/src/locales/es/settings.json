@@ -624,5 +624,10 @@
   "Coletor de abas: fechar de verdade": "Recolector de pestañas: cerrar de verdad",
   "Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o \"Fechar abas paradas\" das máquinas.": "Con el recolector activo, avisa 30 min antes y cierra las pestañas inactivas, guardando la última respuesta del agente. Nunca cierra una pestaña que está trabajando, esperándote, con una ejecución automática, con la tarjeta en curso o fijada. Sustituye el \"Cerrar pestañas inactivas\" de las máquinas.",
   "Épico em ordem": "Épica en orden",
-  "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Muestra la opción \"Ejecutar en orden\" en la épica: el trabajo automático toma una tarjeta a la vez, en el orden del tablero, y solo pasa a la siguiente cuando la anterior está en Hecho con su PR fusionado."
+  "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Muestra la opción \"Ejecutar en orden\" en la épica: el trabajo automático toma una tarjeta a la vez, en el orden del tablero, y solo pasa a la siguiente cuando la anterior está en Hecho con su PR fusionado.",
+  "API de runs": "API de ejecuciones",
+  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Permite crear tokens con el alcance runs y ejecutar prompts por la API (/api/v1/runs) en tus propias cuentas de IA y máquinas, y muestra las ejecuciones de la API en Progreso. Desactivado, las rutas no existen y el alcance no aparece.",
+  "Criou uma run pela API": "Creó una ejecución por la API",
+  "Cancelou uma run da API": "Canceló una ejecución de la API",
+  "Runs da API": "Ejecuciones de la API"
 }

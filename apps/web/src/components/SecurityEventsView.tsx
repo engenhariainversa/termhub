@@ -37,6 +37,8 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'feature_flag.update': tk('Ligou ou desligou um recurso em teste'),
   'feature_flag.override': tk('Mudou um recurso em teste para uma pessoa'),
   'support.troubleshoot': tk('Consultou dados de suporte de um usuário'),
+  'api_run.create': tk('Criou uma run pela API'),
+  'api_run.cancel': tk('Cancelou uma run da API'),
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -50,6 +52,7 @@ const GROUP_LABELS: Record<string, string> = {
   audit: tk('Auditoria'),
   feature_flag: tk('Recursos em teste'),
   support: tk('Suporte'),
+  api_run: tk('Runs da API'),
 };
 
 /** A local calendar day (`2026-10-07`) as the instant it starts; `plusDays` 1 gives the exclusive end of the day. */

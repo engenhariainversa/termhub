@@ -1563,7 +1563,7 @@ describe('GET /me', () => {
     expect(res.json()).toEqual({
       user: { id: 'u1', email: 'ana@example.com', name: 'Ana', nickname: 'ana' },
       permissions: [],
-      features: { subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, sequential_epics: false },
+      features: { subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, sequential_epics: false, runs_api: false },
       device: { id: 'd1', name: 'iPhone de Ana', platform: 'ios', model: 'iPhone 15', created_at: '2026-09-19T00:00:00.000Z', last_seen_at: '2026-09-20T00:00:00.000Z' },
       unread_notifications: 3,
     });
@@ -1574,7 +1574,7 @@ describe('GET /me', () => {
 
   it('carries the subscriptions flag on for a tester (TER-1040)', async () => {
     const { app } = build({ testers: ['u1'] });
-    expect((await app.inject({ method: 'GET', url: '/me' })).json().features).toEqual({ subscriptions: true, chat_open_permissions: true, tab_gc: true, tab_gc_live: true, sequential_epics: true });
+    expect((await app.inject({ method: 'GET', url: '/me' })).json().features).toEqual({ subscriptions: true, chat_open_permissions: true, tab_gc: true, tab_gc_live: true, sequential_epics: true, runs_api: true });
   });
 });
 
