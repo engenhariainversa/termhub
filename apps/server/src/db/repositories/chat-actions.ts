@@ -484,6 +484,20 @@ export class ChatActionsRepository {
     return moved.map(mapAction);
   }
 
+  /**
+   * TER-1168: the project's confirmation cards still waiting on its owner, in a conversation not archived, asked
+   * before `before`. A card the server asked by itself (`askForAutomation`) is born injected and left out: the
+   * merge executor already pushed and woke the chat about it.
+   */
+  async listPendingForHealth(projectId: string, ownerId: string, before: Date, limit = 20): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: { projectId, status: 'pending' satisfies ChatActionStatus, injectedAt: null, createdAt: { lt: before }, conversation: { userId: ownerId, archivedAt: null } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
+    return rows.map(mapAction);
+  }
+
   async countPendingByConversation(ids: string[]): Promise<Map<string, number>> {
     if (ids.length === 0) return new Map();
     const rows = await this.db.chatAction.groupBy({ by: ['conversationId'], where: { conversationId: { in: ids }, status: 'pending' satisfies ChatActionStatus }, _count: { _all: true } });

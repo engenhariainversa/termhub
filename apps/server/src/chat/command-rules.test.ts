@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { commandRuleOffer, formatWords, isReadOnlyCommand, neverReason, parseCommand, ruleEligible, ruleMatches, ruleWordsAllowed, suggestPrefix, type CommandRuleShape } from './command-rules.js';
+import { commandRuleOffer, formatWords, isReadOnlyCommand, untrimmedCommand, neverReason, parseCommand, ruleEligible, ruleMatches, ruleWordsAllowed, suggestPrefix, type CommandRuleShape } from './command-rules.js';
 
 const words = (command: string): string[] => {
   const p = parseCommand(command);
@@ -318,5 +318,26 @@ describe('isReadOnlyCommand: the default list', () => {
   ])('%s is not', (command) => {
     const p = ruleEligible(command);
     expect(p.ok && isReadOnlyCommand(p.words)).toBe(false);
+  });
+});
+
+describe('TER-1168: reads the chat writes', () => {
+  const ro = (c: string) => isReadOnlyCommand(words(c));
+  it('lists commits and diffs, also without the pager', () => {
+    for (const c of ['git --no-pager log --oneline -20', 'git -P diff HEAD~1', 'git shortlog -sn', 'git rev-list --count HEAD', 'git blame src/a.ts', 'git ls-files', 'git remote -v', 'git remote', 'gh pr diff 12', 'gh run view 1 --log-failed']) expect(ro(c)).toBe(true);
+    for (const c of ['git --no-pager diff --output=x', 'git remote add o u', 'git remote set-url o u', 'git --no-pager push']) expect(ro(c)).toBe(false);
+  });
+
+  it('untrimmedCommand takes off only clear and a trailing tail/head/cat', () => {
+    expect(untrimmedCommand('clear; gh run view 1 --log-failed | tail -40')).toBe('gh run view 1 --log-failed');
+    expect(untrimmedCommand('clear && git log --oneline 2>&1 | head -n 20')).toBe('git log --oneline');
+    expect(untrimmedCommand('git diff | cat')).toBe('git diff');
+    expect(untrimmedCommand('gh run view 1 --log | tail -n40')).toBe('gh run view 1 --log');
+    // nothing to take off, another pipe, or what is left is still not one simple command
+    expect(untrimmedCommand('git log')).toBeNull();
+    expect(untrimmedCommand('git log | grep x')).toBeNull();
+    expect(untrimmedCommand('clear; git log | grep x | tail -5')).toBeNull();
+    expect(untrimmedCommand('clear; rm -r build')).toBeNull();
+    expect(untrimmedCommand('clear')).toBeNull();
   });
 });

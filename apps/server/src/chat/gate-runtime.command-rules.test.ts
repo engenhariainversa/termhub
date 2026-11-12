@@ -248,3 +248,26 @@ describe('run_command under a command rule of the person\'s (TER-1081)', () => {
     expect(run).not.toHaveBeenCalled();
   });
 });
+
+// TER-1168: the PDA case — `clear; gh run view … --log-failed | tail -40` waited an hour on a card nobody saw
+describe('the trimming shape (TER-1168)', () => {
+  it('is refused with the simple form, no card and nothing run', async () => {
+    const out = await call('clear; gh run view 43011412477 --repo o/r --log-failed | tail -40');
+    expect(out).toMatchObject({ ok: false, code: 'COMMAND_TRIMMED' });
+    expect((out as { message: string }).message).toContain('`gh run view 43011412477 --repo o/r --log-failed`');
+    expect(actions.rows).toEqual([]);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('the simple form then runs under the default list', async () => {
+    await expectRuns('gh run view 43011412477 --log-failed', READ);
+    await expectRuns('git --no-pager log --oneline -20', READ);
+    await expectRuns('gh pr diff 12', READ);
+  });
+
+  it('any other pipe or chain still asks, as before', async () => {
+    await expectAsks('gh run view 1 --log | grep error');
+    await expectAsks('git log | sh');
+    await expectAsks('clear; rm -r build');
+  });
+});

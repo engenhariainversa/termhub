@@ -16,7 +16,8 @@ import { localeOf } from '../i18n/index.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { deliveryOf } from '../automation/epic-phase.js';
 import { WATCH_MERGED_FOR_MS } from '../db/repositories/task-pull-requests.js';
-import type { HealthSnapshot, SnapshotCard, SnapshotDoneUnmerged, SnapshotEpic, SnapshotMachine, SnapshotPr, SnapshotRun, SnapshotTab } from './signals.js';
+import { describeActions } from '../db/repositories/chat-actions-view.js';
+import type { HealthSnapshot, SnapshotCard, SnapshotDoneUnmerged, SnapshotEpic, SnapshotMachine, SnapshotPendingCard, SnapshotPr, SnapshotRun, SnapshotTab } from './signals.js';
 
 /** Merged PRs older than this no longer count for a failed deploy or release. */
 export const DELIVERY_LOOKBACK_MS = 3 * 24 * 3600_000;
@@ -41,6 +42,19 @@ async function goneAgents(repos: Repositories, tabs: Tab[], tasks: Task[]): Prom
     if (card || watched) out.set(tab.id, { agent_gone: true, card_ref: card, watched });
   }
   return out;
+}
+
+/**
+ * TER-1168: the chat's confirmation cards of the project still waiting on its owner past the `approval_stalled`
+ * minutes, with the sentence the chat shows. Off when the sign is off: nothing is read.
+ */
+async function pendingCards(repos: Repositories, project: Project, setup: ProjectSetupData, now: Date): Promise<SnapshotPendingCard[]> {
+  const sign = setup.health.signals.approval_stalled;
+  if (!sign.enabled || !project.owner_id) return [];
+  const rows = await repos.chatActions.listPendingForHealth(project.id, project.owner_id, new Date(now.getTime() - sign.minutes * 60_000));
+  if (!rows.length) return [];
+  const cards = await describeActions(repos, rows, project.owner_id);
+  return rows.map((r, i) => ({ action_id: r.id, conversation_id: r.conversation_id, tool: r.tool, summary: cards[i]?.summary ?? r.tool, created_at: new Date(r.created_at) }));
 }
 
 export async function buildSnapshot(repos: Repositories, project: Project, owner: User, setup: ProjectSetupData, now = new Date()): Promise<HealthSnapshot> {
@@ -144,6 +158,7 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
   }
 
   const gone = await goneAgents(repos, tabs, tasks);
+  const pending = await pendingCards(repos, project, setup, now);
   const base = automationOn ? baseReadingOf(project.id, now) : null;
   return {
     now,
@@ -162,5 +177,6 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
     min_agent_version: MIN_AGENT_VERSION,
     epics,
     done_unmerged: doneUnmerged,
+    pending_cards: pending,
   };
 }

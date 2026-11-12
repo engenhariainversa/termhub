@@ -227,5 +227,7 @@
   "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Pestaña {{tab}} eliminada: su sesión de terminal en {{machine}} ya no existe",
   "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Pestaña {{tab}} cerrada por el recolector en {{machine}}: {{why}} desde hace {{hours}} h",
   "Teste do coletor de abas, nada foi fechado: {{line}}": "Prueba del recolector de pestañas, no se cerró nada: {{line}}",
-  "O épico executa em ordem; este card espera o anterior ficar pronto": "La épica se ejecuta en orden; esta tarjeta espera a que la anterior esté lista"
+  "O épico executa em ordem; este card espera o anterior ficar pronto": "La épica se ejecuta en orden; esta tarjeta espera a que la anterior esté lista",
+  "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Confirmación del chat sin respuesta desde hace {{duration}}: {{label}}",
+  "Confirmação do chat sem resposta": "Confirmación del chat sin respuesta"
 }
