@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, s
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { claudeConfigFiles, trustIn, trustWorktree } from './claude-trust.js';
+import { claudeConfigFiles, trustFolder, trustIn, trustWorktree } from './claude-trust.js';
 
 let home: string;
 beforeEach(() => {
@@ -63,5 +63,34 @@ describe('trusting a termhub worktree in Claude Code (TER-1025)', () => {
     for (const f of [path.join(home, '.claude.json'), path.join(home, '.claude_work', '.claude.json')]) {
       expect(Object.keys(read(f).projects!).sort()).toEqual([shown, real].sort());
     }
+  });
+});
+
+describe("trusting a project's own folder before Claude opens it (TER-1148)", () => {
+  it('marks the folder in every account here, plus an account dir the server names outside the home', async () => {
+    const outside = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'th-trust-acct-')));
+    try {
+      writeFileSync(path.join(home, '.claude.json'), '{}');
+      mkdirSync(path.join(home, '.claude_work'));
+      writeFileSync(path.join(home, '.claude_work', 'settings.json'), '{}');
+      writeFileSync(path.join(home, '.claude_work', '.claude.json'), '{}');
+      writeFileSync(path.join(outside, '.claude.json'), '{}');
+      mkdirSync(path.join(home, 'projects', 'app'), { recursive: true });
+      const dir = path.join(home, 'projects', 'app');
+      expect(await trustFolder('~/projects/app', home, [outside])).toBe(3);
+      for (const f of [path.join(home, '.claude.json'), path.join(home, '.claude_work', '.claude.json'), path.join(outside, '.claude.json')]) {
+        expect(read(f).projects![dir]).toMatchObject({ hasTrustDialogAccepted: true });
+      }
+      // a second call changes nothing
+      expect(await trustFolder(dir, home, [outside])).toBe(0);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('a path that is not a folder here is refused, and no file is touched', async () => {
+    writeFileSync(path.join(home, '.claude.json'), '{}');
+    expect(await trustFolder(path.join(home, 'missing'), home)).toBeNull();
+    expect(read(path.join(home, '.claude.json')).projects).toBeUndefined();
   });
 });
