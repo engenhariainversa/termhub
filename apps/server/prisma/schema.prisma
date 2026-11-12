@@ -648,6 +648,9 @@ model Task {
   activeSeconds Int        @default(0) @map("active_seconds")
   /// Tagged "automático": eligible for automatic work. On an epic, setAuto propagates to its top-level cards. Never on subtasks.
   auto          Boolean    @default(false)
+  /// Epics only (TER-1170): the automatic work takes its cards one at a time, in board order, and waits for
+  /// each one to be done (its PR merged) before the next.
+  sequential    Boolean    @default(false)
   project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   /// chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync

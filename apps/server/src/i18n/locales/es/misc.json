@@ -225,5 +225,6 @@
   "Aba {{tab}} em {{machine}} será fechada em {{minutes}} min: {{why}} há {{hours}} h": "La pestaña {{tab}} en {{machine}} se cerrará en {{minutes}} min: {{why}} desde hace {{hours}} h",
   "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Pestaña {{tab}} eliminada: su sesión de terminal en {{machine}} ya no existe",
   "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Pestaña {{tab}} cerrada por el recolector en {{machine}}: {{why}} desde hace {{hours}} h",
-  "Teste do coletor de abas, nada foi fechado: {{line}}": "Prueba del recolector de pestañas, no se cerró nada: {{line}}"
+  "Teste do coletor de abas, nada foi fechado: {{line}}": "Prueba del recolector de pestañas, no se cerró nada: {{line}}",
+  "O épico executa em ordem; este card espera o anterior ficar pronto": "La épica se ejecuta en orden; esta tarjeta espera a que la anterior esté lista"
 }

@@ -19,6 +19,9 @@ import {
   STREAM_END_INPUT_LINE,
   streamUserMessageLine,
   tcpOpenParams,
+  runOpenParams,
+  CAPABILITY_RUN_HEADLESS,
+  RUN_HEADLESS_MIN_AGENT_VERSION,
   PROTOCOL_VERSION,
 } from './messages.js';
 
@@ -181,4 +184,53 @@ it('names the worktree capability once, with the agent version that ships it', (
 it('names the repo scan capability once, with the agent version that ships it', () => {
   expect(CAPABILITY_REPO_SCAN).toBe('repo_scan');
   expect(REPO_SCAN_MIN_AGENT_VERSION).toBe('0.29.0');
+});
+
+describe('the run channel kind (TER-1178)', () => {
+  const claudeRun = { provider: 'claude', config_dir: null, cwd: '/home/p/proj', model: 'sonnet', tools: ['Read', 'Grep', 'Glob'], timeout_ms: 600_000, guard: null };
+  const codexRun = { provider: 'codex', config_dir: '~/.codex', cwd: '/home/p/proj', model: null, sandbox: 'read-only', timeout_ms: 600_000, guard: null };
+
+  it('names the capability once, with the agent version that ships it', () => {
+    expect(CAPABILITY_RUN_HEADLESS).toBe('run.headless');
+    expect(RUN_HEADLESS_MIN_AGENT_VERSION).toBe('0.37.0');
+  });
+  it('accepts a claude and a codex run', () => {
+    expect(runOpenParams.parse(claudeRun)).toEqual(claudeRun);
+    expect(runOpenParams.parse(codexRun)).toEqual(codexRun);
+    expect(runOpenParams.safeParse({ ...claudeRun, guard: { branch: 'run-abc', worktree: '/w/run-abc' } }).success).toBe(true);
+  });
+  it('rejects a raw argv, or any unknown key', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, argv: ['--dangerously-skip-permissions'] }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...claudeRun, guard: { branch: 'b', worktree: '/w', extra: 1 } }).success).toBe(false);
+  });
+  it('rejects a relative cwd', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, cwd: 'proj' }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...claudeRun, cwd: '../etc' }).success).toBe(false);
+  });
+  it('rejects a timeout over 60 minutes or under 10 seconds', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, timeout_ms: 3_600_001 }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...claudeRun, timeout_ms: 3_600_000 }).success).toBe(true);
+    expect(runOpenParams.safeParse({ ...claudeRun, timeout_ms: 9_999 }).success).toBe(false);
+  });
+  it('rejects tools outside the closed list and a full-access sandbox', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, tools: ['Read', 'WebFetch'] }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...codexRun, sandbox: 'danger-full-access' }).success).toBe(false);
+  });
+  it('keeps each provider to its own fields', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, sandbox: 'read-only' }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...codexRun, tools: ['Read'] }).success).toBe(false);
+  });
+  it('rejects a model that could read as a flag or carry a space', () => {
+    expect(runOpenParams.safeParse({ ...claudeRun, model: 'sonnet --x' }).success).toBe(false);
+    expect(runOpenParams.safeParse({ ...claudeRun, model: 'claude-opus-4-1[1m]' }).success).toBe(true);
+  });
+  it('opens as kind run in the server message union, and kind and params stay paired', () => {
+    expect(serverMessage.parse({ type: 'open', ch: 3, kind: 'run', params: codexRun })).toMatchObject({ kind: 'run' });
+    expect(serverMessage.safeParse({ type: 'open', ch: 3, kind: 'claude', params: codexRun }).success).toBe(false);
+    expect(serverMessage.safeParse({ type: 'open', ch: 3, kind: 'run', params: { ...codexRun, argv: [] } }).success).toBe(false);
+  });
+  it('closes with timeout and usage_limit', () => {
+    expect(agentMessage.parse({ type: 'closed', ch: 3, code: null, reason: 'timeout' })).toMatchObject({ reason: 'timeout' });
+    expect(agentMessage.parse({ type: 'closed', ch: 3, code: 1, reason: 'usage_limit' })).toMatchObject({ reason: 'usage_limit' });
+  });
 });

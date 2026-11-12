@@ -34,6 +34,7 @@ First written for TER-1122 (2026-10-27) from a read of the code on `main` plus t
 | Token metering on the board | ✅ | ⚠️ shows "—" | ❌ | ❌ | `automation/usage.ts` | TER-1128 (Codex) |
 | Idle tabs closed by themselves (TER-1138) | ✅ state from hooks + screen at its prompt | ✅ state from hooks (trusted), last hook a turn end | ⚠️ state from hooks only, no screen check | ❌ reports no state, so never closed | `monitor/idle-tabs.ts` | TER-1124 (Gemini) |
 | Suggested next prompt / permission mode toggle | ✅ | ⚠️ reply card instead; no mode toggle | ❌ | ❌ | `chat/tab-suggestions.ts`, `routes/m-tabs.ts` | |
+| Headless API run on the machine (agent `run` channel of the personal runs API; server side in TER-1181) | ✅ `claude -p` stream-json, closed tool list, no MCP | ✅ `codex exec --json --ephemeral`, sandbox per capability | ❌ not an account provider | ❌ cannot be listed in a project | `apps/agent/src/run/headless.ts`, `packages/claude-cli/src/index.ts` | TER-1178; TER-1184 (Cursor, Gemini) |
 
 Antigravity (`agy`) is like Gemini, minus the trust dialog (its screen has no rule yet): accounts and usage only.
 

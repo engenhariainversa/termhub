@@ -38,7 +38,7 @@
   "Informe keys ou ticket_ids (um dos dois)": "Indica keys o ticket_ids (uno de los dos)",
   "Informe o que procurar": "Indica qué buscar",
   "Informe project_id ou machine_id": "Indica project_id o machine_id",
-  "Informe title, description, status, type, epic_id ou auto": "Indica title, description, status, type, epic_id o auto",
+  "Informe title, description, status, type, epic_id, auto ou sequential": "Indica title, description, status, type, epic_id, auto o sequential",
   "Iniciar um agente {{provider}} ainda não é suportado; por enquanto só claude e chatgpt (Codex)": "Iniciar un agente {{provider}} todavía no es compatible; por ahora solo claude y chatgpt (Codex)",
   "Integração sem credencial": "Integración sin credenciales",
   "Isso exclui a subtarefa \"{{title}}\" e {{count}} subtarefas; repita com confirm: true para confirmar_one": "Esto elimina la subtarea \"{{title}}\" y {{count}} subtarea; repite con confirm: true para confirmar",
