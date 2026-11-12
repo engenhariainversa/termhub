@@ -35,7 +35,7 @@ export async function listCommandRulesTool(ctx: ControlContext, input: { project
     read_only_default: {
       on: !restricted.has('read_commands'),
       per_hour: DEFAULT_ALLOW_BUDGETS.read_commands,
-      commands: 'git status/log/diff/show, git branch (só listar), gh pr view/checks/list, gh run view/list, ls, pwd, df, du, ps, uptime, which, whoami, uname, cat/head/tail de arquivos dentro do diretório da aba, <programa> --version',
+      commands: 'git status/log/diff/show/shortlog/rev-list/blame/ls-files (também com --no-pager), git branch (só listar), git remote [-v], gh pr view/checks/list/diff, gh run view/list (com --log/--log-failed), ls, pwd, df, du, ps, uptime, which, whoami, uname, cat/head/tail de arquivos dentro do diretório da aba, <programa> --version',
     },
     per_rule_per_hour: COMMAND_RULE_BUDGET,
     never: NEVER,
