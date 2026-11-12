@@ -19,6 +19,7 @@ describe('isEnabled', () => {
   it('is off by default: subscriptions ships dark', async () => {
     expect(FEATURE_FLAGS.subscriptions.default).toBe(false);
     expect(FEATURE_FLAGS.chat_open_permissions.default).toBe(false);
+    expect(FEATURE_FLAGS.sequential_epics.default).toBe(false);
     expect(await isEnabled('subscriptions', { repos: fakeFlags() })).toBe(false);
     expect(await isEnabled('subscriptions', { repos: fakeFlags(), userId: 'u1' })).toBe(false);
   });
@@ -37,8 +38,8 @@ describe('isEnabled', () => {
   });
 
   it('featuresFor resolves every flag', async () => {
-    expect(await featuresFor({ repos: fakeFlags(), userId: 'u1' })).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false });
-    expect(await featuresFor({ repos: fakeFlags({}, { subscriptions: { u1: true } }), userId: 'u1' })).toEqual({ subscriptions: true, chat_open_permissions: false, tab_gc: false, tab_gc_live: false });
+    expect(await featuresFor({ repos: fakeFlags(), userId: 'u1' })).toEqual({ subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, sequential_epics: false });
+    expect(await featuresFor({ repos: fakeFlags({}, { subscriptions: { u1: true } }), userId: 'u1' })).toEqual({ subscriptions: true, chat_open_permissions: false, tab_gc: false, tab_gc_live: false, sequential_epics: false });
   });
 });
 

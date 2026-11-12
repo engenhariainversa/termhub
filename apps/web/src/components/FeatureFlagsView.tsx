@@ -22,6 +22,10 @@ const FLAG_COPY: Record<FeatureFlagKey, { label: string; description: string }> 
     label: tk('Coletor de abas: fechar de verdade'),
     description: tk('Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o "Fechar abas paradas" das máquinas.'),
   },
+  sequential_epics: {
+    label: tk('Épico em ordem'),
+    description: tk('Mostra a opção "Executar em ordem" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.'),
+  },
 };
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (next: boolean) => void }) {

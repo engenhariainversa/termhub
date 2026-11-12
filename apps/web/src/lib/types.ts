@@ -43,7 +43,7 @@ export interface User {
 }
 
 /** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
-export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live';
+export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live' | 'sequential_epics';
 
 /** One person's own value for a flag (Configurações → Recursos em teste). */
 export interface FeatureFlagOverride {
@@ -310,6 +310,8 @@ export interface Task {
   column_id: string | null;
   /** tagged for automatic work ("Trabalho automático"); absent from an older server */
   auto?: boolean;
+  /** epics only (TER-1170): "Executar em ordem"; absent from an older server */
+  sequential?: boolean;
   /** Only on top-level cards from the list endpoint. */
   subtasks?: Task[];
   subtask_counts?: { done: number; total: number };
@@ -354,6 +356,8 @@ export interface TaskPatchInput {
   epic_id?: string | null;
   /** tag for automatic work; on an epic it is the whole epic (new cards included) */
   auto?: boolean;
+  /** epics only (TER-1170): the automatic work takes the cards one at a time, in board order */
+  sequential?: boolean;
 }
 
 /** Where a move sends a card: a column, or a status (backlog, or the first column of a category). */

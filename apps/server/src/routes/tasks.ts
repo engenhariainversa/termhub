@@ -34,7 +34,7 @@ const createBody = z.object({
   auto: z.boolean().optional(),
 });
 /** No parent_id and no column_id: a task is never reparented, and a column change is a move (zod strips both). */
-const patchBody = z.object({ ...taskFields, type: typeSchema, epic_id: rowId.nullable(), auto: z.boolean() }).partial();
+const patchBody = z.object({ ...taskFields, type: typeSchema, epic_id: rowId.nullable(), auto: z.boolean(), sequential: z.boolean() }).partial();
 /** Exactly one target: strict objects make `{ column_id, status, … }` match neither branch. */
 const moveBody = z.union([z.object({ column_id: rowId, position }).strict(), z.object({ status: statusSchema, position }).strict()]);
 const subtasksBody = z.object({
@@ -88,13 +88,17 @@ export async function taskRoutes(app: FastifyInstance, repos: Repositories) {
     const { id } = idParam.parse(request.params);
     const body = patchBody.parse(request.body);
     await scoped(repos, request).task(id);
-    const { auto, ...fields } = body;
+    const { auto, sequential, ...fields } = body;
     let task = Object.keys(fields).length > 0 ? await taskRules(() => repos.tasks.update(id, fields)) : await repos.tasks.findById(id);
     if (task && auto !== undefined) {
       const { changed } = await taskRules(() => repos.tasks.setAuto(id, auto));
       await recordTagChange(repos, task, auto, changed, 'web');
       if (auto) dispatchTriggers.poke('tag_set');
       task = await repos.tasks.findById(id);
+    }
+    if (task && sequential !== undefined) {
+      task = await taskRules(() => repos.tasks.setSequential(id, sequential));
+      if (!sequential) dispatchTriggers.poke('tag_set');
     }
     if (!task) throw notFound('Task não encontrada');
     return { task };

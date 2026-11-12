@@ -194,7 +194,7 @@ describe('updateTask', () => {
 
   it('requires at least one field', async () => {
     const { c, repos } = ctx();
-    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto'));
+    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, auto ou sequential'));
     expect(repos.tasks.update).not.toHaveBeenCalled();
   });
 
