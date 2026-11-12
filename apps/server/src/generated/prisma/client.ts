@@ -156,6 +156,12 @@ export type TaskPullRequest = Prisma.TaskPullRequestModel
  */
 export type AutomationEvent = Prisma.AutomationEventModel
 /**
+ * Model TabGcArchive
+ * TER-1171: what the tab GC kept of an agent tab it collected: the agent's last answer and the tab's metadata,
+ * so the card and the project still show it once the tab is gone. Goes away with the project.
+ */
+export type TabGcArchive = Prisma.TabGcArchiveModel
+/**
  * Model AutomationRun
  * One automatic run on a card (agentic board, spec D11): who claimed it (`claimed_by`, the server
  * instance — blue or green), what it is doing, and where (tab, machine, account, worktree).

@@ -349,6 +349,7 @@ export type TaskWhereInput = {
   column?: Prisma.XOR<Prisma.TaskColumnNullableScalarRelationFilter, Prisma.TaskColumnWhereInput> | null
   pullRequests?: Prisma.TaskPullRequestListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
+  tabGcArchive?: Prisma.TabGcArchiveListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
 }
@@ -383,6 +384,7 @@ export type TaskOrderByWithRelationInput = {
   column?: Prisma.TaskColumnOrderByWithRelationInput
   pullRequests?: Prisma.TaskPullRequestOrderByRelationAggregateInput
   automationEvents?: Prisma.AutomationEventOrderByRelationAggregateInput
+  tabGcArchive?: Prisma.TabGcArchiveOrderByRelationAggregateInput
   automationRuns?: Prisma.AutomationRunOrderByRelationAggregateInput
   tabUsageDays?: Prisma.TabUsageDayOrderByRelationAggregateInput
 }
@@ -422,6 +424,7 @@ export type TaskWhereUniqueInput = Prisma.AtLeast<{
   column?: Prisma.XOR<Prisma.TaskColumnNullableScalarRelationFilter, Prisma.TaskColumnWhereInput> | null
   pullRequests?: Prisma.TaskPullRequestListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
+  tabGcArchive?: Prisma.TabGcArchiveListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
 }, "id" | "projectId_externalKey" | "projectId_number">
@@ -505,6 +508,7 @@ export type TaskCreateInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -534,6 +538,7 @@ export type TaskUncheckedCreateInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -563,6 +568,7 @@ export type TaskUpdateInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -592,6 +598,7 @@ export type TaskUncheckedUpdateInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -1045,6 +1052,22 @@ export type TaskUpdateOneWithoutAutomationEventsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TaskUpdateToOneWithWhereWithoutAutomationEventsInput, Prisma.TaskUpdateWithoutAutomationEventsInput>, Prisma.TaskUncheckedUpdateWithoutAutomationEventsInput>
 }
 
+export type TaskCreateNestedOneWithoutTabGcArchiveInput = {
+  create?: Prisma.XOR<Prisma.TaskCreateWithoutTabGcArchiveInput, Prisma.TaskUncheckedCreateWithoutTabGcArchiveInput>
+  connectOrCreate?: Prisma.TaskCreateOrConnectWithoutTabGcArchiveInput
+  connect?: Prisma.TaskWhereUniqueInput
+}
+
+export type TaskUpdateOneWithoutTabGcArchiveNestedInput = {
+  create?: Prisma.XOR<Prisma.TaskCreateWithoutTabGcArchiveInput, Prisma.TaskUncheckedCreateWithoutTabGcArchiveInput>
+  connectOrCreate?: Prisma.TaskCreateOrConnectWithoutTabGcArchiveInput
+  upsert?: Prisma.TaskUpsertWithoutTabGcArchiveInput
+  disconnect?: Prisma.TaskWhereInput | boolean
+  delete?: Prisma.TaskWhereInput | boolean
+  connect?: Prisma.TaskWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.TaskUpdateToOneWithWhereWithoutTabGcArchiveInput, Prisma.TaskUpdateWithoutTabGcArchiveInput>, Prisma.TaskUncheckedUpdateWithoutTabGcArchiveInput>
+}
+
 export type TaskCreateNestedOneWithoutAutomationRunsInput = {
   create?: Prisma.XOR<Prisma.TaskCreateWithoutAutomationRunsInput, Prisma.TaskUncheckedCreateWithoutAutomationRunsInput>
   connectOrCreate?: Prisma.TaskCreateOrConnectWithoutAutomationRunsInput
@@ -1101,6 +1124,7 @@ export type TaskCreateWithoutProjectInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1129,6 +1153,7 @@ export type TaskUncheckedCreateWithoutProjectInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1209,6 +1234,7 @@ export type TaskCreateWithoutTabInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1237,6 +1263,7 @@ export type TaskUncheckedCreateWithoutTabInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1291,6 +1318,7 @@ export type TaskCreateWithoutColumnInput = {
   epicCards?: Prisma.TaskCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1319,6 +1347,7 @@ export type TaskUncheckedCreateWithoutColumnInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1373,6 +1402,7 @@ export type TaskCreateWithoutSubtasksInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1401,6 +1431,7 @@ export type TaskUncheckedCreateWithoutSubtasksInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1434,6 +1465,7 @@ export type TaskCreateWithoutParentInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1462,6 +1494,7 @@ export type TaskUncheckedCreateWithoutParentInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1500,6 +1533,7 @@ export type TaskCreateWithoutEpicCardsInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1528,6 +1562,7 @@ export type TaskUncheckedCreateWithoutEpicCardsInput = {
   subtasks?: Prisma.TaskUncheckedCreateNestedManyWithoutParentInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1561,6 +1596,7 @@ export type TaskCreateWithoutEpicInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1589,6 +1625,7 @@ export type TaskUncheckedCreateWithoutEpicInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1638,6 +1675,7 @@ export type TaskUpdateWithoutSubtasksInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -1666,6 +1704,7 @@ export type TaskUncheckedUpdateWithoutSubtasksInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -1721,6 +1760,7 @@ export type TaskUpdateWithoutEpicCardsInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -1749,6 +1789,7 @@ export type TaskUncheckedUpdateWithoutEpicCardsInput = {
   subtasks?: Prisma.TaskUncheckedUpdateManyWithoutParentNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -1793,6 +1834,7 @@ export type TaskCreateWithoutPullRequestsInput = {
   epicCards?: Prisma.TaskCreateNestedManyWithoutEpicInput
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1821,6 +1863,7 @@ export type TaskUncheckedCreateWithoutPullRequestsInput = {
   subtasks?: Prisma.TaskUncheckedCreateNestedManyWithoutParentInput
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1865,6 +1908,7 @@ export type TaskUpdateWithoutPullRequestsInput = {
   epicCards?: Prisma.TaskUpdateManyWithoutEpicNestedInput
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -1893,6 +1937,7 @@ export type TaskUncheckedUpdateWithoutPullRequestsInput = {
   subtasks?: Prisma.TaskUncheckedUpdateManyWithoutParentNestedInput
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -1921,6 +1966,7 @@ export type TaskCreateWithoutAutomationEventsInput = {
   epicCards?: Prisma.TaskCreateNestedManyWithoutEpicInput
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
@@ -1949,6 +1995,7 @@ export type TaskUncheckedCreateWithoutAutomationEventsInput = {
   subtasks?: Prisma.TaskUncheckedCreateNestedManyWithoutParentInput
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
@@ -1993,6 +2040,7 @@ export type TaskUpdateWithoutAutomationEventsInput = {
   epicCards?: Prisma.TaskUpdateManyWithoutEpicNestedInput
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2021,6 +2069,139 @@ export type TaskUncheckedUpdateWithoutAutomationEventsInput = {
   subtasks?: Prisma.TaskUncheckedUpdateManyWithoutParentNestedInput
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
+  automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
+}
+
+export type TaskCreateWithoutTabGcArchiveInput = {
+  id: string
+  title: string
+  description?: string | null
+  status?: $Enums.TaskStatus
+  type?: $Enums.TaskType
+  number?: number
+  position?: number
+  externalRef?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  startedAt?: Date | string | null
+  doneAt?: Date | string | null
+  activeSeconds?: number
+  auto?: boolean
+  externalKey?: string | null
+  project: Prisma.ProjectCreateNestedOneWithoutTasksInput
+  tab?: Prisma.TabCreateNestedOneWithoutTasksInput
+  parent?: Prisma.TaskCreateNestedOneWithoutSubtasksInput
+  subtasks?: Prisma.TaskCreateNestedManyWithoutParentInput
+  epic?: Prisma.TaskCreateNestedOneWithoutEpicCardsInput
+  epicCards?: Prisma.TaskCreateNestedManyWithoutEpicInput
+  column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
+  pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
+  automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
+  tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
+}
+
+export type TaskUncheckedCreateWithoutTabGcArchiveInput = {
+  id: string
+  projectId: string
+  title: string
+  description?: string | null
+  status?: $Enums.TaskStatus
+  type?: $Enums.TaskType
+  number?: number
+  position?: number
+  externalRef?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  startedAt?: Date | string | null
+  doneAt?: Date | string | null
+  activeSeconds?: number
+  auto?: boolean
+  externalKey?: string | null
+  tabId?: string | null
+  parentId?: string | null
+  epicId?: string | null
+  columnId?: string | null
+  subtasks?: Prisma.TaskUncheckedCreateNestedManyWithoutParentInput
+  epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
+  automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
+}
+
+export type TaskCreateOrConnectWithoutTabGcArchiveInput = {
+  where: Prisma.TaskWhereUniqueInput
+  create: Prisma.XOR<Prisma.TaskCreateWithoutTabGcArchiveInput, Prisma.TaskUncheckedCreateWithoutTabGcArchiveInput>
+}
+
+export type TaskUpsertWithoutTabGcArchiveInput = {
+  update: Prisma.XOR<Prisma.TaskUpdateWithoutTabGcArchiveInput, Prisma.TaskUncheckedUpdateWithoutTabGcArchiveInput>
+  create: Prisma.XOR<Prisma.TaskCreateWithoutTabGcArchiveInput, Prisma.TaskUncheckedCreateWithoutTabGcArchiveInput>
+  where?: Prisma.TaskWhereInput
+}
+
+export type TaskUpdateToOneWithWhereWithoutTabGcArchiveInput = {
+  where?: Prisma.TaskWhereInput
+  data: Prisma.XOR<Prisma.TaskUpdateWithoutTabGcArchiveInput, Prisma.TaskUncheckedUpdateWithoutTabGcArchiveInput>
+}
+
+export type TaskUpdateWithoutTabGcArchiveInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
+  type?: Prisma.EnumTaskTypeFieldUpdateOperationsInput | $Enums.TaskType
+  number?: Prisma.IntFieldUpdateOperationsInput | number
+  position?: Prisma.IntFieldUpdateOperationsInput | number
+  externalRef?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  project?: Prisma.ProjectUpdateOneRequiredWithoutTasksNestedInput
+  tab?: Prisma.TabUpdateOneWithoutTasksNestedInput
+  parent?: Prisma.TaskUpdateOneWithoutSubtasksNestedInput
+  subtasks?: Prisma.TaskUpdateManyWithoutParentNestedInput
+  epic?: Prisma.TaskUpdateOneWithoutEpicCardsNestedInput
+  epicCards?: Prisma.TaskUpdateManyWithoutEpicNestedInput
+  column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
+  pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
+  automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
+}
+
+export type TaskUncheckedUpdateWithoutTabGcArchiveInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.StringFieldUpdateOperationsInput | string
+  title?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.EnumTaskStatusFieldUpdateOperationsInput | $Enums.TaskStatus
+  type?: Prisma.EnumTaskTypeFieldUpdateOperationsInput | $Enums.TaskType
+  number?: Prisma.IntFieldUpdateOperationsInput | number
+  position?: Prisma.IntFieldUpdateOperationsInput | number
+  externalRef?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  doneAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  activeSeconds?: Prisma.IntFieldUpdateOperationsInput | number
+  auto?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  externalKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  parentId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  epicId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  columnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  subtasks?: Prisma.TaskUncheckedUpdateManyWithoutParentNestedInput
+  epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
+  automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2050,6 +2231,7 @@ export type TaskCreateWithoutAutomationRunsInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutTaskInput
 }
 
@@ -2078,6 +2260,7 @@ export type TaskUncheckedCreateWithoutAutomationRunsInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutTaskInput
 }
 
@@ -2122,6 +2305,7 @@ export type TaskUpdateWithoutAutomationRunsInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
 
@@ -2150,6 +2334,7 @@ export type TaskUncheckedUpdateWithoutAutomationRunsInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
 
@@ -2178,6 +2363,7 @@ export type TaskCreateWithoutTabUsageDaysInput = {
   column?: Prisma.TaskColumnCreateNestedOneWithoutTasksInput
   pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutTaskInput
 }
 
@@ -2206,6 +2392,7 @@ export type TaskUncheckedCreateWithoutTabUsageDaysInput = {
   epicCards?: Prisma.TaskUncheckedCreateNestedManyWithoutEpicInput
   pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutTaskInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutTaskInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutTaskInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutTaskInput
 }
 
@@ -2250,6 +2437,7 @@ export type TaskUpdateWithoutTabUsageDaysInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
 }
 
@@ -2278,6 +2466,7 @@ export type TaskUncheckedUpdateWithoutTabUsageDaysInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
 }
 
@@ -2327,6 +2516,7 @@ export type TaskUpdateWithoutProjectInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2355,6 +2545,7 @@ export type TaskUncheckedUpdateWithoutProjectInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2427,6 +2618,7 @@ export type TaskUpdateWithoutTabInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2455,6 +2647,7 @@ export type TaskUncheckedUpdateWithoutTabInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2527,6 +2720,7 @@ export type TaskUpdateWithoutColumnInput = {
   epicCards?: Prisma.TaskUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2555,6 +2749,7 @@ export type TaskUncheckedUpdateWithoutColumnInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2649,6 +2844,7 @@ export type TaskUpdateWithoutParentInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2677,6 +2873,7 @@ export type TaskUncheckedUpdateWithoutParentInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2727,6 +2924,7 @@ export type TaskUpdateWithoutEpicInput = {
   column?: Prisma.TaskColumnUpdateOneWithoutTasksNestedInput
   pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutTaskNestedInput
 }
@@ -2755,6 +2953,7 @@ export type TaskUncheckedUpdateWithoutEpicInput = {
   epicCards?: Prisma.TaskUncheckedUpdateManyWithoutEpicNestedInput
   pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutTaskNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutTaskNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutTaskNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutTaskNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutTaskNestedInput
 }
@@ -2791,6 +2990,7 @@ export type TaskCountOutputType = {
   epicCards: number
   pullRequests: number
   automationEvents: number
+  tabGcArchive: number
   automationRuns: number
   tabUsageDays: number
 }
@@ -2800,6 +3000,7 @@ export type TaskCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   epicCards?: boolean | TaskCountOutputTypeCountEpicCardsArgs
   pullRequests?: boolean | TaskCountOutputTypeCountPullRequestsArgs
   automationEvents?: boolean | TaskCountOutputTypeCountAutomationEventsArgs
+  tabGcArchive?: boolean | TaskCountOutputTypeCountTabGcArchiveArgs
   automationRuns?: boolean | TaskCountOutputTypeCountAutomationRunsArgs
   tabUsageDays?: boolean | TaskCountOutputTypeCountTabUsageDaysArgs
 }
@@ -2840,6 +3041,13 @@ export type TaskCountOutputTypeCountPullRequestsArgs<ExtArgs extends runtime.Typ
  */
 export type TaskCountOutputTypeCountAutomationEventsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.AutomationEventWhereInput
+}
+
+/**
+ * TaskCountOutputType without action
+ */
+export type TaskCountOutputTypeCountTabGcArchiveArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TabGcArchiveWhereInput
 }
 
 /**
@@ -2887,6 +3095,7 @@ export type TaskSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   column?: boolean | Prisma.Task$columnArgs<ExtArgs>
   pullRequests?: boolean | Prisma.Task$pullRequestsArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Task$automationEventsArgs<ExtArgs>
+  tabGcArchive?: boolean | Prisma.Task$tabGcArchiveArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Task$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Task$tabUsageDaysArgs<ExtArgs>
   _count?: boolean | Prisma.TaskCountOutputTypeDefaultArgs<ExtArgs>
@@ -2982,6 +3191,7 @@ export type TaskInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   column?: boolean | Prisma.Task$columnArgs<ExtArgs>
   pullRequests?: boolean | Prisma.Task$pullRequestsArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Task$automationEventsArgs<ExtArgs>
+  tabGcArchive?: boolean | Prisma.Task$tabGcArchiveArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Task$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Task$tabUsageDaysArgs<ExtArgs>
   _count?: boolean | Prisma.TaskCountOutputTypeDefaultArgs<ExtArgs>
@@ -3013,6 +3223,7 @@ export type $TaskPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     column: Prisma.$TaskColumnPayload<ExtArgs> | null
     pullRequests: Prisma.$TaskPullRequestPayload<ExtArgs>[]
     automationEvents: Prisma.$AutomationEventPayload<ExtArgs>[]
+    tabGcArchive: Prisma.$TabGcArchivePayload<ExtArgs>[]
     automationRuns: Prisma.$AutomationRunPayload<ExtArgs>[]
     tabUsageDays: Prisma.$TabUsageDayPayload<ExtArgs>[]
   }
@@ -3477,6 +3688,7 @@ export interface Prisma__TaskClient<T, Null = never, ExtArgs extends runtime.Typ
   column<T extends Prisma.Task$columnArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$columnArgs<ExtArgs>>): Prisma.Prisma__TaskColumnClient<runtime.Types.Result.GetResult<Prisma.$TaskColumnPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   pullRequests<T extends Prisma.Task$pullRequestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$pullRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TaskPullRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationEvents<T extends Prisma.Task$automationEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$automationEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  tabGcArchive<T extends Prisma.Task$tabGcArchiveArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$tabGcArchiveArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabGcArchivePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationRuns<T extends Prisma.Task$automationRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$automationRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabUsageDays<T extends Prisma.Task$tabUsageDaysArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Task$tabUsageDaysArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabUsageDayPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
@@ -4098,6 +4310,30 @@ export type Task$automationEventsArgs<ExtArgs extends runtime.Types.Extensions.I
   take?: number
   skip?: number
   distinct?: Prisma.AutomationEventScalarFieldEnum | Prisma.AutomationEventScalarFieldEnum[]
+}
+
+/**
+ * Task.tabGcArchive
+ */
+export type Task$tabGcArchiveArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TabGcArchive
+   */
+  select?: Prisma.TabGcArchiveSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TabGcArchive
+   */
+  omit?: Prisma.TabGcArchiveOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabGcArchiveInclude<ExtArgs> | null
+  where?: Prisma.TabGcArchiveWhereInput
+  orderBy?: Prisma.TabGcArchiveOrderByWithRelationInput | Prisma.TabGcArchiveOrderByWithRelationInput[]
+  cursor?: Prisma.TabGcArchiveWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TabGcArchiveScalarFieldEnum | Prisma.TabGcArchiveScalarFieldEnum[]
 }
 
 /**

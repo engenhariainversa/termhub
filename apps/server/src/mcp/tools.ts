@@ -13,6 +13,7 @@ import { setAccountExclusive } from '../control/account-exclusive.js';
 import { getProjectAiSetup, setProjectAiSetup, unstickProjectChat, type SetProjectAiInput } from '../control/project-ai.js';
 import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
+import { listGcCandidates, runGc } from '../control/tab-gc.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { createProject, type CreateProjectInput } from '../control/projects.js';
@@ -361,9 +362,25 @@ export const TOOLS: ToolDef[] = [
     run: (ctx, a) => closeTab(ctx, a as { tab_id: string; force?: boolean }),
   },
   {
+    name: 'list_gc_candidates',
+    description:
+      "The agent tab collector (TER-1171, feature tab_gc): what it would do now with each agent tab of the person's (or of project_id / machine_id) and why. action: warn (it would warn now and close after the grace period, closes_at), warned (warned, closes at closes_at unless it gets active or the person keeps it), collect (it would close it now), remove (its tmux session no longer exists: removed at once). reason: idle (finished/idle past X hours, card done or none), error (in error past Y hours), over_cap / no_room (the machine holds too many agent tabs or is short of room), session_gone; with all: true also the kept tabs, with why (busy, needs_you, run_active, card_in_progress, pinned, recent, not_quiet, machine_offline, rate_limited, disabled). live: false = the collector is in its test week (dry run: it closes nothing). Writes nothing.",
+    scope: 'read', resource: 'terminals', action: 'read',
+    input: { project_id: id.optional(), machine_id: id.optional(), all: z.boolean().optional() },
+    run: (ctx, a) => listGcCandidates(ctx, a as { project_id?: string; machine_id?: string; all?: boolean }),
+  },
+  {
+    name: 'run_gc',
+    description:
+      "Run one pass of the agent tab collector now (TER-1171, feature tab_gc) over the person's tabs, or project_id / machine_id. dry_run (default true) answers what the pass would do and writes nothing. dry_run: false warns, keeps and closes for real (same rules and 30-minute warning as the scheduled pass, never a tab working, waiting on the person, running an automatic run, with its card in doing, or pinned); it needs the tab_gc_live feature (else TAB_GC_NOT_LIVE) and, in the chat, the person's confirmation.",
+    scope: 'terminals', resource: 'terminals', action: 'write',
+    input: { project_id: id.optional(), machine_id: id.optional(), dry_run: z.boolean().optional() },
+    run: (ctx, a) => runGc(ctx, a as { project_id?: string; machine_id?: string; dry_run?: boolean }),
+  },
+  {
     name: 'create_project',
     description:
-      'Create a project, as the Projetos screen does (same rules: the key is unique, 2 to 10 uppercase letters or digits starting with a letter, and never changes). Use it when the person asks for a new project instead of sending them to the screen. name: the project name. key: omit to use the suggestion from the name (initials, or the first three letters); say it to the person before calling. description: optional. group: optional, the id or name of one of the person\'s own groups (list_project_groups); the project goes at its end. machine_id + cwd (both or neither): link the first machine right away, with the same checks as link_project_machine (create_dir: true creates the folder empty). In the chat the person confirms on a card showing name, key, group and machine/folder. Answers the project (id, key, url), the group and the machine link.',
+      'Create a project, as the Projetos screen does (same rules: the key is unique, 2 to 10 uppercase letters or digits starting with a letter, and never changes). Use it when the person asks for a new project instead of sending them to the screen. name: the project name. key: omit to use the suggestion from the name (initials, or the first three letters); say it to the person before calling. description: optional. group: optional, the id or name of one of the person\'s own groups (list_project_groups); the project goes at its end. machine_id + cwd (both or neither): link the first machine right away, with the same checks as link_project_machine (create_dir: true creates the folder empty). inherit_rules_from: optional, the id of one of the person\'s projects (find): the new project starts with a copy of that project\'s current rules (Regras vigentes scoped to it; the account-wide ones already hold everywhere) — offer it when the new project resembles an existing one. In the chat the person confirms on a card showing name, key, group, machine/folder and the project the rules come from. Answers the project (id, key, url), the group, the machine link and inherited_rules (from, count).',
     scope: 'terminals', resource: 'projects', action: 'create',
     input: {
       name: z.string().trim().min(1).max(120),
@@ -373,6 +390,7 @@ export const TOOLS: ToolDef[] = [
       machine_id: id.optional(),
       cwd: PROJECT_CWD.optional(),
       create_dir: z.boolean().optional(),
+      inherit_rules_from: id.optional(),
     },
     run: (ctx, a) => createProject(ctx, a as unknown as CreateProjectInput),
   },
@@ -859,11 +877,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card in a column (default the first todo column; an epic defaults to the backlog), at the top unless position says otherwise (0 = top; ${TASK_POSITION_MAX} or any number past the last card = the end, so a batch created in its natural order with position ${TASK_POSITION_MAX} keeps that order), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',

@@ -72,6 +72,7 @@ export const ModelName = {
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
+  TabGcArchive: 'TabGcArchive',
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
@@ -176,6 +177,7 @@ export const UserScalarFieldEnum = {
   conciergePush: 'conciergePush',
   chatContextLimit: 'chatContextLimit',
   chatBlockedModels: 'chatBlockedModels',
+  tabGc: 'tabGc',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
@@ -286,6 +288,7 @@ export const MachineScalarFieldEnum = {
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
   idleTabCloseHours: 'idleTabCloseHours',
+  tabGc: 'tabGc',
   aiMemoryEnabled: 'aiMemoryEnabled',
   aiMemoryUrl: 'aiMemoryUrl',
   permissionHint: 'permissionHint',
@@ -377,6 +380,10 @@ export const TabScalarFieldEnum = {
   rateLimitedAt: 'rateLimitedAt',
   cwd: 'cwd',
   createdByTokenId: 'createdByTokenId',
+  gcPinned: 'gcPinned',
+  gcWarnedAt: 'gcWarnedAt',
+  gcWarnedStateAt: 'gcWarnedStateAt',
+  gcResetAt: 'gcResetAt',
   createdAt: 'createdAt'
 } as const
 
@@ -516,6 +523,27 @@ export const AutomationEventScalarFieldEnum = {
 } as const
 
 export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
+
+
+export const TabGcArchiveScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  tabId: 'tabId',
+  tabName: 'tabName',
+  machineId: 'machineId',
+  machineName: 'machineName',
+  tool: 'tool',
+  state: 'state',
+  reason: 'reason',
+  agentSessionId: 'agentSessionId',
+  cwd: 'cwd',
+  lastAnswer: 'lastAnswer',
+  lastAnswerAt: 'lastAnswerAt',
+  collectedAt: 'collectedAt'
+} as const
+
+export type TabGcArchiveScalarFieldEnum = (typeof TabGcArchiveScalarFieldEnum)[keyof typeof TabGcArchiveScalarFieldEnum]
 
 
 export const AutomationRunScalarFieldEnum = {

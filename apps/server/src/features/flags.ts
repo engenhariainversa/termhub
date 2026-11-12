@@ -17,6 +17,10 @@ export const FEATURE_FLAGS = {
   subscriptions: { default: false },
   /** TER-1164: the chat acts without a card by default and the person lists what it must not do. */
   chat_open_permissions: { default: false },
+  /** TER-1171: the agent tab GC runs for the person, in dry run (records what it would close, closes nothing). */
+  tab_gc: { default: false },
+  /** TER-1171: with `tab_gc` on, the GC warns, keeps and closes for real (and the TER-1138 timer steps aside). */
+  tab_gc_live: { default: false },
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;

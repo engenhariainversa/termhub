@@ -514,5 +514,8 @@
   "Branch do épico": "Epic branch",
   "está presa num diálogo do CLI": "is stuck on a CLI dialog",
   "preso num diálogo": "stuck on a dialog",
-  "Agente fora do ar em aba ligada a card ou acompanhada pelo chat": "Agent down in a tab linked to a card or followed by the chat"
+  "Agente fora do ar em aba ligada a card ou acompanhada pelo chat": "Agent down in a tab linked to a card or followed by the chat",
+  "Herdar regras de (opcional)": "Inherit rules from (optional)",
+  "Nenhum projeto": "No project",
+  "O projeto novo começa com uma cópia das regras vigentes desse projeto. Você pode mudar ou apagar cada uma depois, na Memória do chat.": "The new project starts with a copy of that project's current rules. You can change or delete each one later, in Chat memory."
 }

@@ -418,6 +418,7 @@ export const ModelName = {
   Task: 'Task',
   TaskPullRequest: 'TaskPullRequest',
   AutomationEvent: 'AutomationEvent',
+  TabGcArchive: 'TabGcArchive',
   AutomationRun: 'AutomationRun',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
@@ -490,7 +491,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2045,6 +2046,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.AutomationEventCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.AutomationEventCountAggregateOutputType> | number
+        }
+      }
+    }
+    TabGcArchive: {
+      payload: Prisma.$TabGcArchivePayload<ExtArgs>
+      fields: Prisma.TabGcArchiveFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.TabGcArchiveFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.TabGcArchiveFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        findFirst: {
+          args: Prisma.TabGcArchiveFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.TabGcArchiveFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        findMany: {
+          args: Prisma.TabGcArchiveFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>[]
+        }
+        create: {
+          args: Prisma.TabGcArchiveCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        createMany: {
+          args: Prisma.TabGcArchiveCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.TabGcArchiveCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>[]
+        }
+        delete: {
+          args: Prisma.TabGcArchiveDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        update: {
+          args: Prisma.TabGcArchiveUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        deleteMany: {
+          args: Prisma.TabGcArchiveDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.TabGcArchiveUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.TabGcArchiveUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>[]
+        }
+        upsert: {
+          args: Prisma.TabGcArchiveUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$TabGcArchivePayload>
+        }
+        aggregate: {
+          args: Prisma.TabGcArchiveAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateTabGcArchive>
+        }
+        groupBy: {
+          args: Prisma.TabGcArchiveGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabGcArchiveGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.TabGcArchiveCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.TabGcArchiveCountAggregateOutputType> | number
         }
       }
     }
@@ -6334,6 +6409,7 @@ export const UserScalarFieldEnum = {
   conciergePush: 'conciergePush',
   chatContextLimit: 'chatContextLimit',
   chatBlockedModels: 'chatBlockedModels',
+  tabGc: 'tabGc',
   deletionRequestedAt: 'deletionRequestedAt',
   deletionScheduledAt: 'deletionScheduledAt',
   automationPausedAt: 'automationPausedAt',
@@ -6444,6 +6520,7 @@ export const MachineScalarFieldEnum = {
   aiUsageQuery: 'aiUsageQuery',
   automationAllowed: 'automationAllowed',
   idleTabCloseHours: 'idleTabCloseHours',
+  tabGc: 'tabGc',
   aiMemoryEnabled: 'aiMemoryEnabled',
   aiMemoryUrl: 'aiMemoryUrl',
   permissionHint: 'permissionHint',
@@ -6535,6 +6612,10 @@ export const TabScalarFieldEnum = {
   rateLimitedAt: 'rateLimitedAt',
   cwd: 'cwd',
   createdByTokenId: 'createdByTokenId',
+  gcPinned: 'gcPinned',
+  gcWarnedAt: 'gcWarnedAt',
+  gcWarnedStateAt: 'gcWarnedStateAt',
+  gcResetAt: 'gcResetAt',
   createdAt: 'createdAt'
 } as const
 
@@ -6674,6 +6755,27 @@ export const AutomationEventScalarFieldEnum = {
 } as const
 
 export type AutomationEventScalarFieldEnum = (typeof AutomationEventScalarFieldEnum)[keyof typeof AutomationEventScalarFieldEnum]
+
+
+export const TabGcArchiveScalarFieldEnum = {
+  id: 'id',
+  projectId: 'projectId',
+  taskId: 'taskId',
+  tabId: 'tabId',
+  tabName: 'tabName',
+  machineId: 'machineId',
+  machineName: 'machineName',
+  tool: 'tool',
+  state: 'state',
+  reason: 'reason',
+  agentSessionId: 'agentSessionId',
+  cwd: 'cwd',
+  lastAnswer: 'lastAnswer',
+  lastAnswerAt: 'lastAnswerAt',
+  collectedAt: 'collectedAt'
+} as const
+
+export type TabGcArchiveScalarFieldEnum = (typeof TabGcArchiveScalarFieldEnum)[keyof typeof TabGcArchiveScalarFieldEnum]
 
 
 export const AutomationRunScalarFieldEnum = {
@@ -8089,6 +8191,7 @@ export type GlobalOmitConfig = {
   task?: Prisma.TaskOmit
   taskPullRequest?: Prisma.TaskPullRequestOmit
   automationEvent?: Prisma.AutomationEventOmit
+  tabGcArchive?: Prisma.TabGcArchiveOmit
   automationRun?: Prisma.AutomationRunOmit
   tabUsage?: Prisma.TabUsageOmit
   tabUsageDay?: Prisma.TabUsageDayOmit

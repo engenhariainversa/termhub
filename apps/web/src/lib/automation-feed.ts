@@ -74,6 +74,10 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'memory_dropped':
     // TER-1138: the server's line names the tab, the machine and why
     case 'tab_auto_closed':
+    // TER-1171: the tab GC's warning, keep and collection (the server's line says what and why)
+    case 'tab_gc_warned':
+    case 'tab_gc_kept':
+    case 'tab_collected':
       return e.reason_text;
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });

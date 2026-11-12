@@ -56,6 +56,10 @@ export type TabMinAggregateOutputType = {
   rateLimitedAt: Date | null
   cwd: string | null
   createdByTokenId: string | null
+  gcPinned: boolean | null
+  gcWarnedAt: Date | null
+  gcWarnedStateAt: Date | null
+  gcResetAt: Date | null
   createdAt: Date | null
 }
 
@@ -81,6 +85,10 @@ export type TabMaxAggregateOutputType = {
   rateLimitedAt: Date | null
   cwd: string | null
   createdByTokenId: string | null
+  gcPinned: boolean | null
+  gcWarnedAt: Date | null
+  gcWarnedStateAt: Date | null
+  gcResetAt: Date | null
   createdAt: Date | null
 }
 
@@ -106,6 +114,10 @@ export type TabCountAggregateOutputType = {
   rateLimitedAt: number
   cwd: number
   createdByTokenId: number
+  gcPinned: number
+  gcWarnedAt: number
+  gcWarnedStateAt: number
+  gcResetAt: number
   createdAt: number
   _all: number
 }
@@ -141,6 +153,10 @@ export type TabMinAggregateInputType = {
   rateLimitedAt?: true
   cwd?: true
   createdByTokenId?: true
+  gcPinned?: true
+  gcWarnedAt?: true
+  gcWarnedStateAt?: true
+  gcResetAt?: true
   createdAt?: true
 }
 
@@ -166,6 +182,10 @@ export type TabMaxAggregateInputType = {
   rateLimitedAt?: true
   cwd?: true
   createdByTokenId?: true
+  gcPinned?: true
+  gcWarnedAt?: true
+  gcWarnedStateAt?: true
+  gcResetAt?: true
   createdAt?: true
 }
 
@@ -191,6 +211,10 @@ export type TabCountAggregateInputType = {
   rateLimitedAt?: true
   cwd?: true
   createdByTokenId?: true
+  gcPinned?: true
+  gcWarnedAt?: true
+  gcWarnedStateAt?: true
+  gcResetAt?: true
   createdAt?: true
   _all?: true
 }
@@ -303,6 +327,10 @@ export type TabGroupByOutputType = {
   rateLimitedAt: Date | null
   cwd: string | null
   createdByTokenId: string | null
+  gcPinned: boolean
+  gcWarnedAt: Date | null
+  gcWarnedStateAt: Date | null
+  gcResetAt: Date | null
   createdAt: Date
   _count: TabCountAggregateOutputType | null
   _avg: TabAvgAggregateOutputType | null
@@ -351,6 +379,10 @@ export type TabWhereInput = {
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
+  gcPinned?: Prisma.BoolFilter<"Tab"> | boolean
+  gcWarnedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcWarnedStateAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcResetAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
   aiAccount?: Prisma.XOR<Prisma.AiAccountNullableScalarRelationFilter, Prisma.AiAccountWhereInput> | null
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
@@ -383,6 +415,10 @@ export type TabOrderByWithRelationInput = {
   rateLimitedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   cwd?: Prisma.SortOrderInput | Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcPinned?: Prisma.SortOrder
+  gcWarnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcWarnedStateAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcResetAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   aiAccount?: Prisma.AiAccountOrderByWithRelationInput
   project?: Prisma.ProjectOrderByWithRelationInput
@@ -418,6 +454,10 @@ export type TabWhereUniqueInput = Prisma.AtLeast<{
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
+  gcPinned?: Prisma.BoolFilter<"Tab"> | boolean
+  gcWarnedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcWarnedStateAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcResetAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
   aiAccount?: Prisma.XOR<Prisma.AiAccountNullableScalarRelationFilter, Prisma.AiAccountWhereInput> | null
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
@@ -450,6 +490,10 @@ export type TabOrderByWithAggregationInput = {
   rateLimitedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   cwd?: Prisma.SortOrderInput | Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcPinned?: Prisma.SortOrder
+  gcWarnedAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcWarnedStateAt?: Prisma.SortOrderInput | Prisma.SortOrder
+  gcResetAt?: Prisma.SortOrderInput | Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   _count?: Prisma.TabCountOrderByAggregateInput
   _avg?: Prisma.TabAvgOrderByAggregateInput
@@ -483,6 +527,10 @@ export type TabScalarWhereWithAggregatesInput = {
   rateLimitedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tab"> | Date | string | null
   cwd?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableWithAggregatesFilter<"Tab"> | string | null
+  gcPinned?: Prisma.BoolWithAggregatesFilter<"Tab"> | boolean
+  gcWarnedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tab"> | Date | string | null
+  gcWarnedStateAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tab"> | Date | string | null
+  gcResetAt?: Prisma.DateTimeNullableWithAggregatesFilter<"Tab"> | Date | string | null
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Tab"> | Date | string
 }
 
@@ -505,6 +553,10 @@ export type TabCreateInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -537,6 +589,10 @@ export type TabUncheckedCreateInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -563,6 +619,10 @@ export type TabUpdateInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -595,6 +655,10 @@ export type TabUncheckedUpdateInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -624,6 +688,10 @@ export type TabCreateManyInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -646,6 +714,10 @@ export type TabUpdateManyMutationInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -671,6 +743,10 @@ export type TabUncheckedUpdateManyInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -706,6 +782,10 @@ export type TabCountOrderByAggregateInput = {
   rateLimitedAt?: Prisma.SortOrder
   cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
+  gcPinned?: Prisma.SortOrder
+  gcWarnedAt?: Prisma.SortOrder
+  gcWarnedStateAt?: Prisma.SortOrder
+  gcResetAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -735,6 +815,10 @@ export type TabMaxOrderByAggregateInput = {
   rateLimitedAt?: Prisma.SortOrder
   cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
+  gcPinned?: Prisma.SortOrder
+  gcWarnedAt?: Prisma.SortOrder
+  gcWarnedStateAt?: Prisma.SortOrder
+  gcResetAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -760,6 +844,10 @@ export type TabMinOrderByAggregateInput = {
   rateLimitedAt?: Prisma.SortOrder
   cwd?: Prisma.SortOrder
   createdByTokenId?: Prisma.SortOrder
+  gcPinned?: Prisma.SortOrder
+  gcWarnedAt?: Prisma.SortOrder
+  gcWarnedStateAt?: Prisma.SortOrder
+  gcResetAt?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
 }
 
@@ -992,6 +1080,10 @@ export type TabCreateWithoutMachineInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1022,6 +1114,10 @@ export type TabUncheckedCreateWithoutMachineInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1080,6 +1176,10 @@ export type TabScalarWhereInput = {
   rateLimitedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   cwd?: Prisma.StringNullableFilter<"Tab"> | string | null
   createdByTokenId?: Prisma.StringNullableFilter<"Tab"> | string | null
+  gcPinned?: Prisma.BoolFilter<"Tab"> | boolean
+  gcWarnedAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcWarnedStateAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
+  gcResetAt?: Prisma.DateTimeNullableFilter<"Tab"> | Date | string | null
   createdAt?: Prisma.DateTimeFilter<"Tab"> | Date | string
 }
 
@@ -1102,6 +1202,10 @@ export type TabCreateWithoutProjectInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   machine: Prisma.MachineCreateNestedOneWithoutTabsInput
@@ -1132,6 +1236,10 @@ export type TabUncheckedCreateWithoutProjectInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1184,6 +1292,10 @@ export type TabCreateWithoutEventsInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1215,6 +1327,10 @@ export type TabUncheckedCreateWithoutEventsInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
@@ -1256,6 +1372,10 @@ export type TabUpdateWithoutEventsInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1287,6 +1407,10 @@ export type TabUncheckedUpdateWithoutEventsInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
@@ -1312,6 +1436,10 @@ export type TabCreateWithoutLastAnswerInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1343,6 +1471,10 @@ export type TabUncheckedCreateWithoutLastAnswerInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1384,6 +1516,10 @@ export type TabUpdateWithoutLastAnswerInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1415,6 +1551,10 @@ export type TabUncheckedUpdateWithoutLastAnswerInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -1440,6 +1580,10 @@ export type TabCreateWithoutTasksInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1471,6 +1615,10 @@ export type TabUncheckedCreateWithoutTasksInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedCreateNestedOneWithoutTabInput
@@ -1512,6 +1660,10 @@ export type TabUpdateWithoutTasksInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1543,6 +1695,10 @@ export type TabUncheckedUpdateWithoutTasksInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
   lastAnswer?: Prisma.TabLastAnswerUncheckedUpdateOneWithoutTabNestedInput
@@ -1568,6 +1724,10 @@ export type TabCreateWithoutUsageInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   aiAccount?: Prisma.AiAccountCreateNestedOneWithoutTabsInput
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
@@ -1599,6 +1759,10 @@ export type TabUncheckedCreateWithoutUsageInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1640,6 +1804,10 @@ export type TabUpdateWithoutUsageInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1671,6 +1839,10 @@ export type TabUncheckedUpdateWithoutUsageInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -1696,6 +1868,10 @@ export type TabCreateWithoutAiAccountInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutTabsInput
   machine: Prisma.MachineCreateNestedOneWithoutTabsInput
@@ -1726,6 +1902,10 @@ export type TabUncheckedCreateWithoutAiAccountInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
   tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutTabInput
   events?: Prisma.TabEventUncheckedCreateNestedManyWithoutTabInput
@@ -1780,6 +1960,10 @@ export type TabCreateManyMachineInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -1802,6 +1986,10 @@ export type TabUpdateWithoutMachineInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
@@ -1832,6 +2020,10 @@ export type TabUncheckedUpdateWithoutMachineInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -1860,6 +2052,10 @@ export type TabUncheckedUpdateManyWithoutMachineInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1884,6 +2080,10 @@ export type TabCreateManyProjectInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -1906,6 +2106,10 @@ export type TabUpdateWithoutProjectInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   aiAccount?: Prisma.AiAccountUpdateOneWithoutTabsNestedInput
   machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
@@ -1936,6 +2140,10 @@ export type TabUncheckedUpdateWithoutProjectInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -1964,6 +2172,10 @@ export type TabUncheckedUpdateManyWithoutProjectInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -1988,6 +2200,10 @@ export type TabCreateManyAiAccountInput = {
   rateLimitedAt?: Date | string | null
   cwd?: string | null
   createdByTokenId?: string | null
+  gcPinned?: boolean
+  gcWarnedAt?: Date | string | null
+  gcWarnedStateAt?: Date | string | null
+  gcResetAt?: Date | string | null
   createdAt?: Date | string
 }
 
@@ -2010,6 +2226,10 @@ export type TabUpdateWithoutAiAccountInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutTabsNestedInput
   machine?: Prisma.MachineUpdateOneRequiredWithoutTabsNestedInput
@@ -2040,6 +2260,10 @@ export type TabUncheckedUpdateWithoutAiAccountInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   tasks?: Prisma.TaskUncheckedUpdateManyWithoutTabNestedInput
   events?: Prisma.TabEventUncheckedUpdateManyWithoutTabNestedInput
@@ -2068,6 +2292,10 @@ export type TabUncheckedUpdateManyWithoutAiAccountInput = {
   rateLimitedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   cwd?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   createdByTokenId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  gcPinned?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  gcWarnedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcWarnedStateAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  gcResetAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
@@ -2133,6 +2361,10 @@ export type TabSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = ru
   rateLimitedAt?: boolean
   cwd?: boolean
   createdByTokenId?: boolean
+  gcPinned?: boolean
+  gcWarnedAt?: boolean
+  gcWarnedStateAt?: boolean
+  gcResetAt?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -2166,6 +2398,10 @@ export type TabSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extension
   rateLimitedAt?: boolean
   cwd?: boolean
   createdByTokenId?: boolean
+  gcPinned?: boolean
+  gcWarnedAt?: boolean
+  gcWarnedStateAt?: boolean
+  gcResetAt?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -2194,6 +2430,10 @@ export type TabSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extension
   rateLimitedAt?: boolean
   cwd?: boolean
   createdByTokenId?: boolean
+  gcPinned?: boolean
+  gcWarnedAt?: boolean
+  gcWarnedStateAt?: boolean
+  gcResetAt?: boolean
   createdAt?: boolean
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -2222,10 +2462,14 @@ export type TabSelectScalar = {
   rateLimitedAt?: boolean
   cwd?: boolean
   createdByTokenId?: boolean
+  gcPinned?: boolean
+  gcWarnedAt?: boolean
+  gcWarnedStateAt?: boolean
+  gcResetAt?: boolean
   createdAt?: boolean
 }
 
-export type TabOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "machineId" | "name" | "kind" | "tmuxSession" | "simulatorUdid" | "position" | "state" | "stateText" | "stateTool" | "stateAt" | "stateSeenAt" | "activity" | "activityVerb" | "agentSessionId" | "agentTranscriptPath" | "aiAccountId" | "rateLimitedAt" | "cwd" | "createdByTokenId" | "createdAt", ExtArgs["result"]["tab"]>
+export type TabOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "projectId" | "machineId" | "name" | "kind" | "tmuxSession" | "simulatorUdid" | "position" | "state" | "stateText" | "stateTool" | "stateAt" | "stateSeenAt" | "activity" | "activityVerb" | "agentSessionId" | "agentTranscriptPath" | "aiAccountId" | "rateLimitedAt" | "cwd" | "createdByTokenId" | "gcPinned" | "gcWarnedAt" | "gcWarnedStateAt" | "gcResetAt" | "createdAt", ExtArgs["result"]["tab"]>
 export type TabInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   aiAccount?: boolean | Prisma.Tab$aiAccountArgs<ExtArgs>
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -2313,6 +2557,20 @@ export type $TabPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
      * API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
      */
     createdByTokenId: string | null
+    /**
+     * TER-1171 tab GC (monitor/tab-gc): the person pinned the tab, the GC never collects it.
+     */
+    gcPinned: boolean
+    /**
+     * TER-1171: when the GC warned it would close the tab, and the tab's stateAt at that moment (a later
+     * stateAt = the agent ran again: the warning is dropped). Both null = not warned.
+     */
+    gcWarnedAt: Date | null
+    gcWarnedStateAt: Date | null
+    /**
+     * TER-1171: the GC's rest clock starts here ("manter", or a dry-run collection).
+     */
+    gcResetAt: Date | null
     createdAt: Date
   }, ExtArgs["result"]["tab"]>
   composites: {}
@@ -2765,6 +3023,10 @@ export interface TabFieldRefs {
   readonly rateLimitedAt: Prisma.FieldRef<"Tab", 'DateTime'>
   readonly cwd: Prisma.FieldRef<"Tab", 'String'>
   readonly createdByTokenId: Prisma.FieldRef<"Tab", 'String'>
+  readonly gcPinned: Prisma.FieldRef<"Tab", 'Boolean'>
+  readonly gcWarnedAt: Prisma.FieldRef<"Tab", 'DateTime'>
+  readonly gcWarnedStateAt: Prisma.FieldRef<"Tab", 'DateTime'>
+  readonly gcResetAt: Prisma.FieldRef<"Tab", 'DateTime'>
   readonly createdAt: Prisma.FieldRef<"Tab", 'DateTime'>
 }
     

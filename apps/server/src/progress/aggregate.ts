@@ -273,6 +273,8 @@ export const FEED_KINDS = [
   'memory_queued', 'memory_dropped',
   // TER-1138: an idle tab closed by itself (the app's feed skips it until it has a line)
   'tab_auto_closed',
+  // TER-1171: the tab GC (the app's feed skips them until it has a line)
+  'tab_gc_warned', 'tab_gc_kept', 'tab_collected',
   // TER-1150: an automatic epic's birth and death
   'epic_started', 'epic_done',
 ] as const satisfies readonly AutomationEvent['kind'][];
@@ -305,6 +307,26 @@ function tabClosedTextOf(p: Record<string, unknown>, locale: Locale): string {
   return `${head}. ${t(locale, 'A sessão pode ser retomada na mesma pasta (--continue)')}`;
 }
 
+/** TER-1171: why the tab GC collects a tab, as the feed says it. */
+const GC_WHY: Record<string, string> = {
+  idle: tk('parada'),
+  error: tk('com erro'),
+  over_cap: tk('acima do limite de abas da máquina'),
+  no_room: tk('máquina sem folga'),
+};
+
+/** TER-1171: the tab GC's lines. A dry run says nothing was closed. Names, reasons and counts only. */
+function tabGcTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string {
+  const why = str(p.reason) && GC_WHY[str(p.reason)!] ? t(locale, GC_WHY[str(p.reason)!]!) : '—';
+  const vars = { tab: str(p.tab) ?? '—', machine: str(p.machine) ?? '—', hours: num(p.hours) ?? 0, minutes: num(p.minutes) ?? 0, why };
+  let line: string;
+  if (e.kind === 'tab_gc_kept') line = p.why === 'activity' ? t(locale, 'Aba {{tab}} mantida: voltou a ter atividade', vars) : t(locale, 'Aba {{tab}} mantida', vars);
+  else if (e.kind === 'tab_gc_warned') line = t(locale, 'Aba {{tab}} em {{machine}} será fechada em {{minutes}} min: {{why}} há {{hours}} h', vars);
+  else if (p.reason === 'session_gone') line = t(locale, 'Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais', vars);
+  else line = `${t(locale, 'Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h', vars)}. ${t(locale, 'A sessão pode ser retomada na mesma pasta (--continue)')}`;
+  return p.dry_run === true ? t(locale, 'Teste do coletor de abas, nada foi fechado: {{line}}', { line }) : line;
+}
+
 /** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
  *  over (TER-1049), a cancel's (TER-974) or a card untagged because its ticket already had work (TER-1110). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
@@ -313,6 +335,7 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'memory_queued' || e.kind === 'memory_dropped') return memoryTextOf(e, p, locale);
   if (e.kind === 'run_done') return adoptedOf(p, locale);
   if (e.kind === 'tab_auto_closed') return tabClosedTextOf(p, locale);
+  if (e.kind === 'tab_gc_warned' || e.kind === 'tab_gc_kept' || e.kind === 'tab_collected') return tabGcTextOf(e, p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
   if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });

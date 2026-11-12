@@ -304,6 +304,7 @@ export type ProjectWhereInput = {
   chatBlocks?: Prisma.ChatBlockListRelationFilter
   chatWatches?: Prisma.ChatWatchListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
+  tabGcArchive?: Prisma.TabGcArchiveListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
   exclusiveAiAccounts?: Prisma.AiAccountListRelationFilter
@@ -349,6 +350,7 @@ export type ProjectOrderByWithRelationInput = {
   chatBlocks?: Prisma.ChatBlockOrderByRelationAggregateInput
   chatWatches?: Prisma.ChatWatchOrderByRelationAggregateInput
   automationEvents?: Prisma.AutomationEventOrderByRelationAggregateInput
+  tabGcArchive?: Prisma.TabGcArchiveOrderByRelationAggregateInput
   automationRuns?: Prisma.AutomationRunOrderByRelationAggregateInput
   tabUsageDays?: Prisma.TabUsageDayOrderByRelationAggregateInput
   exclusiveAiAccounts?: Prisma.AiAccountOrderByRelationAggregateInput
@@ -397,6 +399,7 @@ export type ProjectWhereUniqueInput = Prisma.AtLeast<{
   chatBlocks?: Prisma.ChatBlockListRelationFilter
   chatWatches?: Prisma.ChatWatchListRelationFilter
   automationEvents?: Prisma.AutomationEventListRelationFilter
+  tabGcArchive?: Prisma.TabGcArchiveListRelationFilter
   automationRuns?: Prisma.AutomationRunListRelationFilter
   tabUsageDays?: Prisma.TabUsageDayListRelationFilter
   exclusiveAiAccounts?: Prisma.AiAccountListRelationFilter
@@ -480,6 +483,7 @@ export type ProjectCreateInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -523,6 +527,7 @@ export type ProjectUncheckedCreateInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -566,6 +571,7 @@ export type ProjectUpdateInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -609,6 +615,7 @@ export type ProjectUncheckedUpdateInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -938,6 +945,20 @@ export type ProjectUpdateOneRequiredWithoutAutomationEventsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutAutomationEventsInput, Prisma.ProjectUpdateWithoutAutomationEventsInput>, Prisma.ProjectUncheckedUpdateWithoutAutomationEventsInput>
 }
 
+export type ProjectCreateNestedOneWithoutTabGcArchiveInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedCreateWithoutTabGcArchiveInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutTabGcArchiveInput
+  connect?: Prisma.ProjectWhereUniqueInput
+}
+
+export type ProjectUpdateOneRequiredWithoutTabGcArchiveNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectCreateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedCreateWithoutTabGcArchiveInput>
+  connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutTabGcArchiveInput
+  upsert?: Prisma.ProjectUpsertWithoutTabGcArchiveInput
+  connect?: Prisma.ProjectWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectUpdateToOneWithWhereWithoutTabGcArchiveInput, Prisma.ProjectUpdateWithoutTabGcArchiveInput>, Prisma.ProjectUncheckedUpdateWithoutTabGcArchiveInput>
+}
+
 export type ProjectCreateNestedOneWithoutAutomationRunsInput = {
   create?: Prisma.XOR<Prisma.ProjectCreateWithoutAutomationRunsInput, Prisma.ProjectUncheckedCreateWithoutAutomationRunsInput>
   connectOrCreate?: Prisma.ProjectCreateOrConnectWithoutAutomationRunsInput
@@ -1257,6 +1278,7 @@ export type ProjectCreateWithoutOwnerInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -1299,6 +1321,7 @@ export type ProjectUncheckedCreateWithoutOwnerInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -1386,6 +1409,7 @@ export type ProjectCreateWithoutMachinesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -1428,6 +1452,7 @@ export type ProjectUncheckedCreateWithoutMachinesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -1486,6 +1511,7 @@ export type ProjectUpdateWithoutMachinesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -1528,6 +1554,7 @@ export type ProjectUncheckedUpdateWithoutMachinesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -1570,6 +1597,7 @@ export type ProjectCreateWithoutRepositoriesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -1612,6 +1640,7 @@ export type ProjectUncheckedCreateWithoutRepositoriesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -1670,6 +1699,7 @@ export type ProjectUpdateWithoutRepositoriesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -1712,6 +1742,7 @@ export type ProjectUncheckedUpdateWithoutRepositoriesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -1754,6 +1785,7 @@ export type ProjectCreateWithoutTabsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -1796,6 +1828,7 @@ export type ProjectUncheckedCreateWithoutTabsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -1854,6 +1887,7 @@ export type ProjectUpdateWithoutTabsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -1896,6 +1930,7 @@ export type ProjectUncheckedUpdateWithoutTabsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -1938,6 +1973,7 @@ export type ProjectCreateWithoutTicketsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -1980,6 +2016,7 @@ export type ProjectUncheckedCreateWithoutTicketsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2038,6 +2075,7 @@ export type ProjectUpdateWithoutTicketsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2080,6 +2118,7 @@ export type ProjectUncheckedUpdateWithoutTicketsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2122,6 +2161,7 @@ export type ProjectCreateWithoutColumnsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2164,6 +2204,7 @@ export type ProjectUncheckedCreateWithoutColumnsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2211,6 +2252,7 @@ export type ProjectCreateWithoutAgentColumnInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2253,6 +2295,7 @@ export type ProjectUncheckedCreateWithoutAgentColumnInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2316,6 +2359,7 @@ export type ProjectUpdateWithoutColumnsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2358,6 +2402,7 @@ export type ProjectUncheckedUpdateWithoutColumnsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2416,6 +2461,7 @@ export type ProjectCreateWithoutTasksInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2458,6 +2504,7 @@ export type ProjectUncheckedCreateWithoutTasksInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2516,6 +2563,7 @@ export type ProjectUpdateWithoutTasksInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2558,6 +2606,7 @@ export type ProjectUncheckedUpdateWithoutTasksInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2600,6 +2649,7 @@ export type ProjectCreateWithoutPullRequestsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2642,6 +2692,7 @@ export type ProjectUncheckedCreateWithoutPullRequestsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2700,6 +2751,7 @@ export type ProjectUpdateWithoutPullRequestsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2742,6 +2794,7 @@ export type ProjectUncheckedUpdateWithoutPullRequestsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2784,6 +2837,7 @@ export type ProjectCreateWithoutAutomationEventsInput = {
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -2826,6 +2880,7 @@ export type ProjectUncheckedCreateWithoutAutomationEventsInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -2884,6 +2939,7 @@ export type ProjectUpdateWithoutAutomationEventsInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -2926,6 +2982,195 @@ export type ProjectUncheckedUpdateWithoutAutomationEventsInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
+  healthAlerts?: Prisma.ProjectHealthAlertUncheckedUpdateManyWithoutProjectNestedInput
+}
+
+export type ProjectCreateWithoutTabGcArchiveInput = {
+  id: string
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  aiMemoryLessons?: boolean
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutProjectsInput
+  machines?: Prisma.ProjectMachineCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryCreateNestedManyWithoutProjectInput
+  tickets?: Prisma.TicketCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemCreateNestedManyWithoutProjectInput
+  memoryRules?: Prisma.MemoryRuleCreateNestedManyWithoutProjectInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueCreateNestedManyWithoutProjectInput
+  agentColumn?: Prisma.TaskColumnCreateNestedOneWithoutAgentForInput
+  columns?: Prisma.TaskColumnCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantCreateNestedManyWithoutProjectInput
+  chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
+  chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
+  healthAlerts?: Prisma.ProjectHealthAlertCreateNestedManyWithoutProjectInput
+}
+
+export type ProjectUncheckedCreateWithoutTabGcArchiveInput = {
+  id: string
+  ownerId?: string | null
+  key: string
+  nextTaskNumber?: number
+  name: string
+  status?: $Enums.ProjectStatus
+  description?: string | null
+  isPublic?: boolean
+  agentColumnId?: string | null
+  lastTerminalAt?: Date | string | null
+  automationPausedAt?: Date | string | null
+  aiMemoryLessons?: boolean
+  createdAt?: Date | string
+  machines?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutProjectInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutProjectInput
+  tasks?: Prisma.TaskUncheckedCreateNestedManyWithoutProjectInput
+  note?: Prisma.NoteUncheckedCreateNestedOneWithoutProjectInput
+  setup?: Prisma.ProjectSetupUncheckedCreateNestedOneWithoutProjectInput
+  repositories?: Prisma.ProjectRepositoryUncheckedCreateNestedManyWithoutProjectInput
+  tickets?: Prisma.TicketUncheckedCreateNestedManyWithoutProjectInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutProjectInput
+  tabQuestions?: Prisma.TabQuestionUncheckedCreateNestedManyWithoutProjectInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedCreateNestedManyWithoutProjectInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedCreateNestedManyWithoutProjectInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryItems?: Prisma.MemoryItemUncheckedCreateNestedManyWithoutProjectInput
+  memoryRules?: Prisma.MemoryRuleUncheckedCreateNestedManyWithoutProjectInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUncheckedCreateNestedManyWithoutProjectInput
+  columns?: Prisma.TaskColumnUncheckedCreateNestedManyWithoutProjectInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedCreateNestedManyWithoutProjectInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedCreateNestedManyWithoutProjectInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
+  chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
+  chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
+  automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
+  tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
+  exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
+  healthAlerts?: Prisma.ProjectHealthAlertUncheckedCreateNestedManyWithoutProjectInput
+}
+
+export type ProjectCreateOrConnectWithoutTabGcArchiveInput = {
+  where: Prisma.ProjectWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedCreateWithoutTabGcArchiveInput>
+}
+
+export type ProjectUpsertWithoutTabGcArchiveInput = {
+  update: Prisma.XOR<Prisma.ProjectUpdateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedUpdateWithoutTabGcArchiveInput>
+  create: Prisma.XOR<Prisma.ProjectCreateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedCreateWithoutTabGcArchiveInput>
+  where?: Prisma.ProjectWhereInput
+}
+
+export type ProjectUpdateToOneWithWhereWithoutTabGcArchiveInput = {
+  where?: Prisma.ProjectWhereInput
+  data: Prisma.XOR<Prisma.ProjectUpdateWithoutTabGcArchiveInput, Prisma.ProjectUncheckedUpdateWithoutTabGcArchiveInput>
+}
+
+export type ProjectUpdateWithoutTabGcArchiveInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  aiMemoryLessons?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutProjectsNestedInput
+  machines?: Prisma.ProjectMachineUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUpdateManyWithoutProjectNestedInput
+  tickets?: Prisma.TicketUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUpdateManyWithoutProjectNestedInput
+  memoryRules?: Prisma.MemoryRuleUpdateManyWithoutProjectNestedInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUpdateManyWithoutProjectNestedInput
+  agentColumn?: Prisma.TaskColumnUpdateOneWithoutAgentForNestedInput
+  columns?: Prisma.TaskColumnUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUpdateManyWithoutProjectNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
+  chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
+  tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
+  exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
+  healthAlerts?: Prisma.ProjectHealthAlertUpdateManyWithoutProjectNestedInput
+}
+
+export type ProjectUncheckedUpdateWithoutTabGcArchiveInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  nextTaskNumber?: Prisma.IntFieldUpdateOperationsInput | number
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.EnumProjectStatusFieldUpdateOperationsInput | $Enums.ProjectStatus
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  isPublic?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  agentColumnId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  lastTerminalAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  automationPausedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  aiMemoryLessons?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  machines?: Prisma.ProjectMachineUncheckedUpdateManyWithoutProjectNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutProjectNestedInput
+  tasks?: Prisma.TaskUncheckedUpdateManyWithoutProjectNestedInput
+  note?: Prisma.NoteUncheckedUpdateOneWithoutProjectNestedInput
+  setup?: Prisma.ProjectSetupUncheckedUpdateOneWithoutProjectNestedInput
+  repositories?: Prisma.ProjectRepositoryUncheckedUpdateManyWithoutProjectNestedInput
+  tickets?: Prisma.TicketUncheckedUpdateManyWithoutProjectNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutProjectNestedInput
+  tabQuestions?: Prisma.TabQuestionUncheckedUpdateManyWithoutProjectNestedInput
+  tabLimitNotices?: Prisma.TabLimitNoticeUncheckedUpdateManyWithoutProjectNestedInput
+  chatDecisions?: Prisma.ChatDecisionUncheckedUpdateManyWithoutProjectNestedInput
+  groupItems?: Prisma.ProjectGroupItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryItems?: Prisma.MemoryItemUncheckedUpdateManyWithoutProjectNestedInput
+  memoryRules?: Prisma.MemoryRuleUncheckedUpdateManyWithoutProjectNestedInput
+  memoryWriteQueue?: Prisma.MemoryWriteQueueUncheckedUpdateManyWithoutProjectNestedInput
+  columns?: Prisma.TaskColumnUncheckedUpdateManyWithoutProjectNestedInput
+  pullRequests?: Prisma.TaskPullRequestUncheckedUpdateManyWithoutProjectNestedInput
+  standingGrants?: Prisma.ChatStandingGrantUncheckedUpdateManyWithoutProjectNestedInput
+  chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
+  chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
+  chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
+  automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -2969,6 +3214,7 @@ export type ProjectCreateWithoutAutomationRunsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
@@ -3011,6 +3257,7 @@ export type ProjectUncheckedCreateWithoutAutomationRunsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
@@ -3069,6 +3316,7 @@ export type ProjectUpdateWithoutAutomationRunsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
@@ -3111,6 +3359,7 @@ export type ProjectUncheckedUpdateWithoutAutomationRunsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
@@ -3153,6 +3402,7 @@ export type ProjectCreateWithoutTabUsageDaysInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
@@ -3195,6 +3445,7 @@ export type ProjectUncheckedCreateWithoutTabUsageDaysInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
@@ -3253,6 +3504,7 @@ export type ProjectUpdateWithoutTabUsageDaysInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
@@ -3295,6 +3547,7 @@ export type ProjectUncheckedUpdateWithoutTabUsageDaysInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
@@ -3337,6 +3590,7 @@ export type ProjectCreateWithoutAiMemoryPagesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -3379,6 +3633,7 @@ export type ProjectUncheckedCreateWithoutAiMemoryPagesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -3437,6 +3692,7 @@ export type ProjectUpdateWithoutAiMemoryPagesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -3479,6 +3735,7 @@ export type ProjectUncheckedUpdateWithoutAiMemoryPagesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -3520,6 +3777,7 @@ export type ProjectCreateWithoutNoteInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -3562,6 +3820,7 @@ export type ProjectUncheckedCreateWithoutNoteInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -3620,6 +3879,7 @@ export type ProjectUpdateWithoutNoteInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -3662,6 +3922,7 @@ export type ProjectUncheckedUpdateWithoutNoteInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -3704,6 +3965,7 @@ export type ProjectCreateWithoutSetupInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -3746,6 +4008,7 @@ export type ProjectUncheckedCreateWithoutSetupInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -3804,6 +4067,7 @@ export type ProjectUpdateWithoutSetupInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -3846,6 +4110,7 @@ export type ProjectUncheckedUpdateWithoutSetupInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -3889,6 +4154,7 @@ export type ProjectCreateWithoutExclusiveAiAccountsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutProjectInput
@@ -3931,6 +4197,7 @@ export type ProjectUncheckedCreateWithoutExclusiveAiAccountsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutProjectInput
@@ -3989,6 +4256,7 @@ export type ProjectUpdateWithoutExclusiveAiAccountsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutProjectNestedInput
@@ -4031,6 +4299,7 @@ export type ProjectUncheckedUpdateWithoutExclusiveAiAccountsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutProjectNestedInput
@@ -4072,6 +4341,7 @@ export type ProjectCreateWithoutChatConversationsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -4114,6 +4384,7 @@ export type ProjectUncheckedCreateWithoutChatConversationsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -4172,6 +4443,7 @@ export type ProjectUpdateWithoutChatConversationsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -4214,6 +4486,7 @@ export type ProjectUncheckedUpdateWithoutChatConversationsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -4256,6 +4529,7 @@ export type ProjectCreateWithoutStandingGrantsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -4298,6 +4572,7 @@ export type ProjectUncheckedCreateWithoutStandingGrantsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -4356,6 +4631,7 @@ export type ProjectUpdateWithoutStandingGrantsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -4398,6 +4674,7 @@ export type ProjectUncheckedUpdateWithoutStandingGrantsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -4440,6 +4717,7 @@ export type ProjectCreateWithoutChatBlocksInput = {
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -4482,6 +4760,7 @@ export type ProjectUncheckedCreateWithoutChatBlocksInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -4540,6 +4819,7 @@ export type ProjectUpdateWithoutChatBlocksInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -4582,6 +4862,7 @@ export type ProjectUncheckedUpdateWithoutChatBlocksInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -4624,6 +4905,7 @@ export type ProjectCreateWithoutChatCommandRulesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -4666,6 +4948,7 @@ export type ProjectUncheckedCreateWithoutChatCommandRulesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -4724,6 +5007,7 @@ export type ProjectUpdateWithoutChatCommandRulesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -4766,6 +5050,7 @@ export type ProjectUncheckedUpdateWithoutChatCommandRulesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -4808,6 +5093,7 @@ export type ProjectCreateWithoutChatWatchesInput = {
   chatCommandRules?: Prisma.ChatCommandRuleCreateNestedManyWithoutProjectInput
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -4850,6 +5136,7 @@ export type ProjectUncheckedCreateWithoutChatWatchesInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedCreateNestedManyWithoutProjectInput
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -4908,6 +5195,7 @@ export type ProjectUpdateWithoutChatWatchesInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUpdateManyWithoutProjectNestedInput
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -4950,6 +5238,7 @@ export type ProjectUncheckedUpdateWithoutChatWatchesInput = {
   chatCommandRules?: Prisma.ChatCommandRuleUncheckedUpdateManyWithoutProjectNestedInput
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -4992,6 +5281,7 @@ export type ProjectCreateWithoutTabLimitNoticesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5034,6 +5324,7 @@ export type ProjectUncheckedCreateWithoutTabLimitNoticesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -5092,6 +5383,7 @@ export type ProjectUpdateWithoutTabLimitNoticesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -5134,6 +5426,7 @@ export type ProjectUncheckedUpdateWithoutTabLimitNoticesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -5176,6 +5469,7 @@ export type ProjectCreateWithoutTabQuestionsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5218,6 +5512,7 @@ export type ProjectUncheckedCreateWithoutTabQuestionsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -5276,6 +5571,7 @@ export type ProjectUpdateWithoutTabQuestionsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -5318,6 +5614,7 @@ export type ProjectUncheckedUpdateWithoutTabQuestionsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -5360,6 +5657,7 @@ export type ProjectCreateWithoutChatDecisionsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5402,6 +5700,7 @@ export type ProjectUncheckedCreateWithoutChatDecisionsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -5460,6 +5759,7 @@ export type ProjectUpdateWithoutChatDecisionsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -5502,6 +5802,7 @@ export type ProjectUncheckedUpdateWithoutChatDecisionsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -5544,6 +5845,7 @@ export type ProjectCreateWithoutMemoryItemsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5586,6 +5888,7 @@ export type ProjectUncheckedCreateWithoutMemoryItemsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -5644,6 +5947,7 @@ export type ProjectUpdateWithoutMemoryItemsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -5686,6 +5990,7 @@ export type ProjectUncheckedUpdateWithoutMemoryItemsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -5728,6 +6033,7 @@ export type ProjectCreateWithoutMemoryWriteQueueInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5770,6 +6076,7 @@ export type ProjectUncheckedCreateWithoutMemoryWriteQueueInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -5828,6 +6135,7 @@ export type ProjectUpdateWithoutMemoryWriteQueueInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -5870,6 +6178,7 @@ export type ProjectUncheckedUpdateWithoutMemoryWriteQueueInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -5912,6 +6221,7 @@ export type ProjectCreateWithoutMemoryRulesInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -5954,6 +6264,7 @@ export type ProjectUncheckedCreateWithoutMemoryRulesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -6012,6 +6323,7 @@ export type ProjectUpdateWithoutMemoryRulesInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -6054,6 +6366,7 @@ export type ProjectUncheckedUpdateWithoutMemoryRulesInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -6096,6 +6409,7 @@ export type ProjectCreateWithoutGroupItemsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -6138,6 +6452,7 @@ export type ProjectUncheckedCreateWithoutGroupItemsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -6196,6 +6511,7 @@ export type ProjectUpdateWithoutGroupItemsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -6238,6 +6554,7 @@ export type ProjectUncheckedUpdateWithoutGroupItemsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -6281,6 +6598,7 @@ export type ProjectCreateWithoutHealthAlertsInput = {
   chatBlocks?: Prisma.ChatBlockCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountCreateNestedManyWithoutExclusiveProjectInput
@@ -6323,6 +6641,7 @@ export type ProjectUncheckedCreateWithoutHealthAlertsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedCreateNestedManyWithoutProjectInput
   chatWatches?: Prisma.ChatWatchUncheckedCreateNestedManyWithoutProjectInput
   automationEvents?: Prisma.AutomationEventUncheckedCreateNestedManyWithoutProjectInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedCreateNestedManyWithoutProjectInput
   automationRuns?: Prisma.AutomationRunUncheckedCreateNestedManyWithoutProjectInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedCreateNestedManyWithoutProjectInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutExclusiveProjectInput
@@ -6381,6 +6700,7 @@ export type ProjectUpdateWithoutHealthAlertsInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -6423,6 +6743,7 @@ export type ProjectUncheckedUpdateWithoutHealthAlertsInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -6479,6 +6800,7 @@ export type ProjectUpdateWithoutOwnerInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -6521,6 +6843,7 @@ export type ProjectUncheckedUpdateWithoutOwnerInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -6593,6 +6916,7 @@ export type ProjectUpdateWithoutAgentColumnInput = {
   chatBlocks?: Prisma.ChatBlockUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUpdateManyWithoutExclusiveProjectNestedInput
@@ -6635,6 +6959,7 @@ export type ProjectUncheckedUpdateWithoutAgentColumnInput = {
   chatBlocks?: Prisma.ChatBlockUncheckedUpdateManyWithoutProjectNestedInput
   chatWatches?: Prisma.ChatWatchUncheckedUpdateManyWithoutProjectNestedInput
   automationEvents?: Prisma.AutomationEventUncheckedUpdateManyWithoutProjectNestedInput
+  tabGcArchive?: Prisma.TabGcArchiveUncheckedUpdateManyWithoutProjectNestedInput
   automationRuns?: Prisma.AutomationRunUncheckedUpdateManyWithoutProjectNestedInput
   tabUsageDays?: Prisma.TabUsageDayUncheckedUpdateManyWithoutProjectNestedInput
   exclusiveAiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutExclusiveProjectNestedInput
@@ -6683,6 +7008,7 @@ export type ProjectCountOutputType = {
   chatBlocks: number
   chatWatches: number
   automationEvents: number
+  tabGcArchive: number
   automationRuns: number
   tabUsageDays: number
   exclusiveAiAccounts: number
@@ -6711,6 +7037,7 @@ export type ProjectCountOutputTypeSelect<ExtArgs extends runtime.Types.Extension
   chatBlocks?: boolean | ProjectCountOutputTypeCountChatBlocksArgs
   chatWatches?: boolean | ProjectCountOutputTypeCountChatWatchesArgs
   automationEvents?: boolean | ProjectCountOutputTypeCountAutomationEventsArgs
+  tabGcArchive?: boolean | ProjectCountOutputTypeCountTabGcArchiveArgs
   automationRuns?: boolean | ProjectCountOutputTypeCountAutomationRunsArgs
   tabUsageDays?: boolean | ProjectCountOutputTypeCountTabUsageDaysArgs
   exclusiveAiAccounts?: boolean | ProjectCountOutputTypeCountExclusiveAiAccountsArgs
@@ -6871,6 +7198,13 @@ export type ProjectCountOutputTypeCountAutomationEventsArgs<ExtArgs extends runt
 /**
  * ProjectCountOutputType without action
  */
+export type ProjectCountOutputTypeCountTabGcArchiveArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.TabGcArchiveWhereInput
+}
+
+/**
+ * ProjectCountOutputType without action
+ */
 export type ProjectCountOutputTypeCountAutomationRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   where?: Prisma.AutomationRunWhereInput
 }
@@ -6942,6 +7276,7 @@ export type ProjectSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   chatBlocks?: boolean | Prisma.Project$chatBlocksArgs<ExtArgs>
   chatWatches?: boolean | Prisma.Project$chatWatchesArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Project$automationEventsArgs<ExtArgs>
+  tabGcArchive?: boolean | Prisma.Project$tabGcArchiveArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
   exclusiveAiAccounts?: boolean | Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>
@@ -7028,6 +7363,7 @@ export type ProjectInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   chatBlocks?: boolean | Prisma.Project$chatBlocksArgs<ExtArgs>
   chatWatches?: boolean | Prisma.Project$chatWatchesArgs<ExtArgs>
   automationEvents?: boolean | Prisma.Project$automationEventsArgs<ExtArgs>
+  tabGcArchive?: boolean | Prisma.Project$tabGcArchiveArgs<ExtArgs>
   automationRuns?: boolean | Prisma.Project$automationRunsArgs<ExtArgs>
   tabUsageDays?: boolean | Prisma.Project$tabUsageDaysArgs<ExtArgs>
   exclusiveAiAccounts?: boolean | Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>
@@ -7077,6 +7413,7 @@ export type $ProjectPayload<ExtArgs extends runtime.Types.Extensions.InternalArg
     chatBlocks: Prisma.$ChatBlockPayload<ExtArgs>[]
     chatWatches: Prisma.$ChatWatchPayload<ExtArgs>[]
     automationEvents: Prisma.$AutomationEventPayload<ExtArgs>[]
+    tabGcArchive: Prisma.$TabGcArchivePayload<ExtArgs>[]
     automationRuns: Prisma.$AutomationRunPayload<ExtArgs>[]
     tabUsageDays: Prisma.$TabUsageDayPayload<ExtArgs>[]
     /**
@@ -7548,6 +7885,7 @@ export interface Prisma__ProjectClient<T, Null = never, ExtArgs extends runtime.
   chatBlocks<T extends Prisma.Project$chatBlocksArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$chatBlocksArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatBlockPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatWatches<T extends Prisma.Project$chatWatchesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$chatWatchesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatWatchPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationEvents<T extends Prisma.Project$automationEventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$automationEventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  tabGcArchive<T extends Prisma.Project$tabGcArchiveArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tabGcArchiveArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabGcArchivePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   automationRuns<T extends Prisma.Project$automationRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$automationRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   tabUsageDays<T extends Prisma.Project$tabUsageDaysArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$tabUsageDaysArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TabUsageDayPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   exclusiveAiAccounts<T extends Prisma.Project$exclusiveAiAccountsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Project$exclusiveAiAccountsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiAccountPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -8549,6 +8887,30 @@ export type Project$automationEventsArgs<ExtArgs extends runtime.Types.Extension
   take?: number
   skip?: number
   distinct?: Prisma.AutomationEventScalarFieldEnum | Prisma.AutomationEventScalarFieldEnum[]
+}
+
+/**
+ * Project.tabGcArchive
+ */
+export type Project$tabGcArchiveArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the TabGcArchive
+   */
+  select?: Prisma.TabGcArchiveSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the TabGcArchive
+   */
+  omit?: Prisma.TabGcArchiveOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.TabGcArchiveInclude<ExtArgs> | null
+  where?: Prisma.TabGcArchiveWhereInput
+  orderBy?: Prisma.TabGcArchiveOrderByWithRelationInput | Prisma.TabGcArchiveOrderByWithRelationInput[]
+  cursor?: Prisma.TabGcArchiveWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.TabGcArchiveScalarFieldEnum | Prisma.TabGcArchiveScalarFieldEnum[]
 }
 
 /**

@@ -157,6 +157,17 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TasksRepository (Postgres
       expect(await inBacklog(b1.epic_id!)).toEqual(['b2', 'b1']);
       expect(await inBacklog(other.id)).toEqual(['o1']);
     });
+
+    // TER-1170: a batch created in its natural order keeps it, instead of being written bottom-up
+    it('position puts a new card at that slot of its place, clamped to the end', async () => {
+      for (const title of ['B1', 'B2', 'B3']) await repo.create(projectId, { title, position: 10_000 });
+      await repo.create(projectId, { title: 'mid', position: 1 });
+      await repo.create(projectId, { title: 'top', position: 0 });
+      expect(await inColumn((await column('todo')).id)).toEqual(['top', 'B1', 'mid', 'B2', 'B3']);
+      const epic = await repo.create(projectId, { title: 'E', type: 'epic' });
+      for (const title of ['e1', 'e2']) await repo.createWithSubtasks(projectId, { title, status: 'backlog', epic_id: epic.id, position: 10_000 }, []);
+      expect(await inBacklog(epic.id)).toEqual(['e1', 'e2']);
+    });
   });
 
   describe('subtasks', () => {

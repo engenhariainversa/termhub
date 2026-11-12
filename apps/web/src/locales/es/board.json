@@ -514,5 +514,8 @@
   "Branch do épico": "Rama de la épica",
   "está presa num diálogo do CLI": "está atascada en un diálogo del CLI",
   "preso num diálogo": "atascado en un diálogo",
-  "Agente fora do ar em aba ligada a card ou acompanhada pelo chat": "Agente caído en una pestaña vinculada a una tarjeta o seguida por el chat"
+  "Agente fora do ar em aba ligada a card ou acompanhada pelo chat": "Agente caído en una pestaña vinculada a una tarjeta o seguida por el chat",
+  "Herdar regras de (opcional)": "Heredar reglas de (opcional)",
+  "Nenhum projeto": "Ningún proyecto",
+  "O projeto novo começa com uma cópia das regras vigentes desse projeto. Você pode mudar ou apagar cada uma depois, na Memória do chat.": "El proyecto nuevo empieza con una copia de las reglas vigentes de ese proyecto. Puedes cambiar o borrar cada una después, en la Memoria del chat."
 }

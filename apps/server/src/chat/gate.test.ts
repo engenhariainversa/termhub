@@ -62,6 +62,13 @@ it('treats an interrupting key as irreversible and an ordinary one as a write', 
   expect(actionClass('send_key', { tab_id: 't1', key: 'Enter' })).toBe('write');
 });
 
+it('TER-1171: list_gc_candidates and a dry run_gc only read; a real run_gc is the person\'s card', () => {
+  expect(actionClass('list_gc_candidates', {})).toBe('read');
+  expect(actionClass('run_gc', {})).toBe('read');
+  expect(actionClass('run_gc', { dry_run: true })).toBe('read');
+  expect(actionClass('run_gc', { dry_run: false })).toBe('irreversible');
+});
+
 it('pause_automation is the brake: self-mediated alone, a write with interrupt (it sends Escape); resume asks', () => {
   expect(actionClass('pause_automation', {})).toBe('self_mediated');
   expect(actionClass('pause_automation', { project_id: 'p1', interrupt: false })).toBe('self_mediated');

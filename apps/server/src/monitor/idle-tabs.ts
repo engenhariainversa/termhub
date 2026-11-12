@@ -10,6 +10,7 @@ import { controlContextFor, type ControlContext } from '../control/context.js';
 import { closeTab as closeTabFn } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { Machine, Tab } from '../db/repositories/types.js';
+import { isEnabled } from '../features/flags.js';
 import { paneForeground } from '../terminal/session-ops.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from './screen-state.js';
 import { classifyTurnEnd } from './turn-end.js';
@@ -55,6 +56,11 @@ export interface IdleTabsDeps {
   room: (machineId: string) => RoomReading | null;
   /** Closes the tab as the project's owner. Default: `closeTab` of the control layer, forced. */
   closeTab: (ctx: ControlContext, tabId: string) => Promise<void>;
+  /**
+   * TER-1171: whether the tab GC closes this owner's tabs for real (`tab_gc` and `tab_gc_live` on); this sweep
+   * then leaves them to it. Absent = never (tests written before the GC).
+   */
+  gcLive?: (repos: Repositories, ownerId: string) => Promise<boolean>;
 }
 
 export const defaultIdleTabsDeps: IdleTabsDeps = {
@@ -63,9 +69,10 @@ export const defaultIdleTabsDeps: IdleTabsDeps = {
   isOnline: (id) => agents.isOnline(id),
   room: lastRoomOf,
   closeTab: async (ctx, tabId) => void (await closeTabFn(ctx, { tab_id: tabId, force: true })),
+  gcLive: async (repos, userId) => (await isEnabled('tab_gc', { repos, userId })) && (await isEnabled('tab_gc_live', { repos, userId })),
 };
 
-const roomShort = (r: RoomReading | null, now: Date) => !!r && !r.ok && (r.limit === 'memory' || r.limit === 'load') && now.getTime() - Date.parse(r.at) < NO_ROOM_FRESH_MS;
+export const roomShort = (r: RoomReading | null, now: Date) => !!r && !r.ok && (r.limit === 'memory' || r.limit === 'load') && now.getTime() - Date.parse(r.at) < NO_ROOM_FRESH_MS;
 
 /** How long a tab must have been at rest on a machine closing after `hours`; null = its state never closes. */
 function restNeededMs(tab: Tab, hours: number): number | null {
@@ -81,7 +88,12 @@ function restNeededMs(tab: Tab, hours: number): number | null {
  * started after the agent left. Codex, Cursor and Gemini have no screen rule: an agent still in front counts when
  * its last hook was a turn end, not a session end.
  */
-async function quiet(repos: Repositories, deps: IdleTabsDeps, tab: Tab & { tmux_session: string }, machine: Machine): Promise<boolean> {
+export async function quiet(
+  repos: Repositories,
+  deps: Pick<IdleTabsDeps, 'foreground' | 'capture'>,
+  tab: Pick<Tab, 'id' | 'state' | 'state_text' | 'state_tool' | 'rate_limited_at'> & { tmux_session: string },
+  machine: Machine,
+): Promise<boolean> {
   if (tab.rate_limited_at) return false;
   if (await repos.automationRuns.activeByTab(tab.id)) return false;
   if (tab.state === 'waiting_input') {
@@ -109,6 +121,7 @@ export async function sweepIdleTabs(repos: Repositories, log: Log, now = new Dat
   const tabs = await repos.tabs.listIdleOnClosingMachines(new Date(now.getTime() - IDLE_TAB_CLOSE_MIN_HOURS * HOUR));
   const machines = new Map<string, Machine | undefined>();
   const noRoomLeft = new Map<string, number>();
+  const gcOwned = new Map<string, boolean>();
   let closed = 0;
   // oldest first (the list's order): with no room, the oldest go first
   for (const tab of tabs) {
@@ -124,8 +137,12 @@ export async function sweepIdleTabs(repos: Repositories, log: Log, now = new Dat
       let reason: IdleCloseReason | null = rest >= need ? 'idle' : null;
       if (!reason && rest >= IDLE_TAB_CLOSE_MIN_HOURS * HOUR && roomShort(deps.room(machine.id), now) && (noRoomLeft.get(machine.id) ?? NO_ROOM_CLOSE_PER_SWEEP) > 0) reason = 'no_room';
       if (!reason) continue;
-      if (!(await quiet(repos, deps, { ...tab, tmux_session: tab.tmux_session }, machine))) continue;
       const project = await repos.projects.findById(tab.project_id);
+      if (deps.gcLive && project?.owner_id) {
+        if (!gcOwned.has(project.owner_id)) gcOwned.set(project.owner_id, await deps.gcLive(repos, project.owner_id));
+        if (gcOwned.get(project.owner_id)) continue;
+      }
+      if (!(await quiet(repos, deps, { ...tab, tmux_session: tab.tmux_session }, machine))) continue;
       const owner = project?.owner_id ? await repos.users.findById(project.owner_id) : undefined;
       if (!owner) continue;
       await deps.closeTab(controlContextFor(repos, owner), tab.id);
