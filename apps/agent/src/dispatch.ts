@@ -1,4 +1,4 @@
-import type { ClaudeOpenParams, PtyOpenParams, RpcMethod, ServerMessage, TcpOpenParams } from '@termhub/agent-protocol';
+import type { ClaudeOpenParams, PtyOpenParams, RpcMethod, RunOpenParams, ServerMessage, TcpOpenParams } from '@termhub/agent-protocol';
 import { RPC } from '@termhub/agent-protocol';
 import type { AgentSocket } from './client.js';
 import { RpcFailure } from './exec.js';
@@ -41,11 +41,22 @@ export interface TcpManager {
   closeAll(): void;
 }
 
+/** Headless runs of the personal runs API (`src/run/headless.ts`, TER-1176): Claude Code or Codex
+ *  built from a structured spec. Same contract as the Claude manager: the first data frame is the prompt. */
+export interface RunManager {
+  open(ch: number, params: RunOpenParams, socket: AgentSocket): Promise<void>;
+  write(ch: number, data: Buffer): boolean;
+  close(ch: number): void;
+  closeAll(): void;
+}
+
 export interface DispatcherDeps {
   handlers: Handlers;
   pty: PtyManager;
   claude: ClaudeManager;
   tcp: TcpManager;
+  /** Absent: the agent does not advertise `run.headless`, and a `run` open is refused. */
+  run?: RunManager;
   log: (msg: string, meta?: object) => void;
 }
 
@@ -107,9 +118,14 @@ export function createDispatcher(deps: DispatcherDeps): (msg: ServerMessage, soc
         // The kind is the only thing this dispatcher knows about any of the three channels. Errors
         // are reported to the server by the manager itself (open_error / closed); this catch only
         // guards against an unexpected rejection leaking as an unhandled promise.
+        if (msg.kind === 'run' && !deps.run) {
+          socket.sendControl({ type: 'open_error', ch: msg.ch, error: { code: 'invalid', message: 'run channels are not supported' } });
+          break;
+        }
         const opened =
           msg.kind === 'claude' ? deps.claude.open(msg.ch, msg.params, socket)
           : msg.kind === 'tcp' ? deps.tcp.open(msg.ch, msg.params, socket)
+          : msg.kind === 'run' ? deps.run!.open(msg.ch, msg.params, socket)
           : deps.pty.open(msg.ch, msg.params, socket);
         opened.catch((err) => {
           deps.log(`${msg.kind}.open rejected unexpectedly`, { ch: msg.ch, error: err instanceof Error ? err.message : String(err) });
@@ -126,6 +142,7 @@ export function createDispatcher(deps: DispatcherDeps): (msg: ServerMessage, soc
         deps.pty.close(msg.ch);
         deps.claude.close(msg.ch);
         deps.tcp.close(msg.ch);
+        deps.run?.close(msg.ch);
         break;
       case 'probe_info':
         // Only a `probe` hello gets it (read by `checkServerConnection`); a live session never does.
