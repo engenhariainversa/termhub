@@ -36,7 +36,19 @@ export interface GithubWriteClient {
   openPulls(token: string, repo: string): Promise<Array<PullInfo & { title: string; head_ref: string }>>;
   /** The repository's branch names, at most `OPEN_LIST_PAGES` pages (TER-1110). */
   branchNames(token: string, repo: string): Promise<string[]>;
+  /**
+   * TER-1188: whether a branch protection or an active ruleset on `branch` asks for anything before a merge
+   * (status checks, reviews, deployments, a merge queue, required workflows or code scanning). `none` only
+   * when both were read and neither asks; any error throws, and the caller counts it as "may have a rule".
+   * Optional: a client without it never lets a PR with no CI merge by itself.
+   */
+  mergeRules?(token: string, repo: string, branch: string): Promise<'none' | 'rules'>;
+  /** TER-1188: how many check runs and commit statuses `sha` has (Actions or any other app). */
+  headChecks?(token: string, repo: string, sha: string): Promise<number>;
 }
+
+/** Ruleset rule types that hold a merge until something passes or someone approves (TER-1188). */
+const BLOCKING_RULES = new Set(['pull_request', 'required_status_checks', 'required_deployments', 'merge_queue', 'workflows', 'code_scanning', 'required_review_thread_resolution']);
 
 /** How many pages of 100 the work-in-progress check reads of a repository's pulls and branches. */
 export const OPEN_LIST_PAGES = 5;
@@ -156,6 +168,29 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
     },
     async branchNames(token, repo) {
       return (await list<{ name: string }>(token, `/repos/${repo}/branches?per_page=${PER_PAGE}`, OPEN_LIST_PAGES)).map((b) => b.name);
+    },
+    async mergeRules(token, repo, branch) {
+      // rulesets: the active rules that apply to the branch (readable with read access)
+      const rules = await list<{ type: string }>(token, `/repos/${repo}/rules/branches/${enc(branch)}?per_page=${PER_PAGE}`, OPEN_LIST_PAGES);
+      if (rules.some((r) => BLOCKING_RULES.has(r.type))) return 'rules';
+      // classic protection: the branch says whether it has one; its details need admin, so a 403 throws
+      const b = await call(token, 'GET', `/repos/${repo}/branches/${enc(branch)}`);
+      if (!b.ok) throw writeFailure(b);
+      if (!((await b.json()) as { protected?: boolean }).protected) return 'none';
+      const res = await call(token, 'GET', `/repos/${repo}/branches/${enc(branch)}/protection`);
+      // "Branch not protected": the flag came from a ruleset alone, already read above. Any other 404 may be a
+      // token that cannot see the protection: it throws below, and the caller assumes a rule.
+      if (res.status === 404 && /branch not protected/i.test(await res.clone().text().catch(() => ''))) return 'none';
+      if (!res.ok) throw writeFailure(res);
+      const p = (await res.json()) as { required_status_checks?: unknown; required_pull_request_reviews?: unknown; required_conversation_resolution?: { enabled?: boolean } };
+      return p.required_status_checks || p.required_pull_request_reviews || p.required_conversation_resolution?.enabled ? 'rules' : 'none';
+    },
+    async headChecks(token, repo, sha) {
+      const checks = await call(token, 'GET', `/repos/${repo}/commits/${encodeURIComponent(sha)}/check-runs?per_page=1`);
+      if (!checks.ok) throw writeFailure(checks);
+      const statuses = await call(token, 'GET', `/repos/${repo}/commits/${encodeURIComponent(sha)}/status?per_page=1`);
+      if (!statuses.ok) throw writeFailure(statuses);
+      return (((await checks.json()) as { total_count?: number }).total_count ?? 0) + (((await statuses.json()) as { total_count?: number }).total_count ?? 0);
     },
   };
 }

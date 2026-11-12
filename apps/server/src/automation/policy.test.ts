@@ -73,4 +73,9 @@ describe('policyText', () => {
     expect(t).toContain('apps/agent/**');
     expect(t).toContain('apps/mobile/app.json');
   });
+  it('says what a PR with no CI gets at merge level or above (TER-1188)', () => {
+    expect(policyText({ ...a, autonomy: 'pr' }, null)).not.toContain('PR sem CI');
+    expect(policyText({ ...a, autonomy: 'merge' }, null)).toContain('PR sem CI: o termhub não mescla sozinho');
+    expect(policyText({ ...a, autonomy: 'merge', no_ci_merge: 'merge' }, null)).toContain('o termhub mescla o PR 2 minutos depois do último push');
+  });
 });

@@ -73,6 +73,14 @@ export function policyText(a: ProjectAutomation, deployWorkflow: string | null):
   if (a.release_paths.length > 0) lines.push(`Mudanças nestes caminhos pedem o nível release: ${a.release_paths.join(', ')}.`);
   if (a.store_paths.length > 0) lines.push(`Mudanças nestes caminhos nunca são mescladas pelo termhub (build de loja): ${a.store_paths.join(', ')}.`);
   else lines.push('Builds de loja nunca são mesclados pelo termhub, em nenhum nível.');
+  // TER-1188: what a PR with no CI gets
+  if (a.autonomy !== 'pr') {
+    lines.push(
+      a.no_ci_merge === 'merge'
+        ? 'PR sem CI: quando o repositório não roda nenhum workflow em pull_request, o head não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão, o termhub mescla o PR 2 minutos depois do último push, como se o CI estivesse verde.'
+        : 'PR sem CI: o termhub não mescla sozinho; quando a branch base não tem regra de proteção, um card no chat pede a confirmação da pessoa para mesclar.',
+    );
+  }
   lines.push('O merge é feito pelo termhub quando o CI fica verde e a política permite; abra o PR e avise com report_card.');
   return lines.join('\n');
 }

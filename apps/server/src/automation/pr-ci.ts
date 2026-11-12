@@ -28,26 +28,32 @@ export async function projectPrCi(ctx: ControlContext, projectId: string, gh?: P
   const setup = (await ctx.repos.projectSetup.get(project.id)).data;
   const access = await githubAccess(ctx.repos, project, setup);
   if (!access) return 'unknown';
-  const hit = cache.get(access.repo);
+  return repoPrCi(access.token, access.repo, gh ?? (client ??= createGithubCiClient()), now);
+}
+
+/** The same reading for a repository and token already in hand (the merge executor, TER-1188). */
+export async function repoPrCi(token: string, repo: string, reader: Pick<GithubCiClient, 'hasRunsFor'>, now = Date.now()): Promise<PrCiState> {
+  const hit = cache.get(repo);
   if (hit && now - hit.at < TTL_MS) return hit.state;
-  const reader = gh ?? (client ??= createGithubCiClient());
   try {
     let state: 'present' | 'absent' = 'absent';
     for (const event of PR_EVENTS) {
-      if (await reader.hasRunsFor(access.token, access.repo, event)) {
+      if (await reader.hasRunsFor(token, repo, event)) {
         state = 'present';
         break;
       }
     }
-    cache.set(access.repo, { state, at: now });
+    cache.set(repo, { state, at: now });
     return state;
   } catch {
     return 'unknown';
   }
 }
 
-/** Merge level or above with no CI on pull requests: nothing would ever be merged. */
-export const needsPrCiWarning = (automation: Pick<ProjectAutomation, 'autonomy'>, state: PrCiState) => state === 'absent' && automation.autonomy !== 'pr';
+/** Merge level or above with no CI on pull requests: nothing would be merged by itself, unless the project
+ *  lets such PRs merge (TER-1188 `no_ci_merge`). */
+export const needsPrCiWarning = (automation: Pick<ProjectAutomation, 'autonomy'> & Partial<Pick<ProjectAutomation, 'no_ci_merge'>>, state: PrCiState) =>
+  state === 'absent' && automation.autonomy !== 'pr' && automation.no_ci_merge !== 'merge';
 
 /** Tests only. */
 export function resetPrCiCache(): void {

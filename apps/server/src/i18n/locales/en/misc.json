@@ -73,7 +73,6 @@
   "PR sem CI; o termhub não mescla sem CI verde": "PR without CI; termhub does not merge without a green CI",
   "O PR está verde, mas depende de um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque o card como automático ou tire o vínculo («Depende de», «Closes») do PR.": "The PR is green, but it depends on a manual card that is not Done yet, so automation does not merge it. Merge it by hand, mark the card automatic, or remove the link (“Depends on”, “Closes”) from the PR.",
   "O PR #{{pr}} está verde, mas depende de {{cards}}, card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque {{cards}} como automático ou tire o vínculo («Depende de», «Closes») do PR.": "PR #{{pr}} is green, but it depends on {{cards}}, a manual card that is not Done yet, so automation does not merge it. Merge it by hand, mark {{cards}} automatic, or remove the link (“Depends on”, “Closes”) from the PR.",
-  "O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.": "The PR has no CI running; termhub does not merge without a green CI. Add a pull_request workflow (or check its filters) or adjust the Setup.",
   "Nenhum workflow do repositório rodou em pull_request: o termhub não mescla sem CI verde, então os PRs vão ficar esperando. Adicione um workflow em pull_request ou use o nível PR.": "No workflow of the repository ran on pull_request: termhub does not merge without a green CI, so PRs will keep waiting. Add a pull_request workflow or use the PR level.",
   "Esperando a CI e a entrega da branch base": "Waiting for the base branch's CI and delivery",
   "Atualizando o PR com a branch base": "Updating the PR with the base branch",
@@ -241,5 +240,14 @@
   "API de runs": "Runs API",
   "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Lets you create tokens with the runs scope and run prompts through the API (/api/v1/runs) on your own AI accounts and machines, and shows the API runs in Progress. Off, the routes do not exist and the scope does not show.",
   "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Chat confirmation unanswered for {{duration}}: {{label}}",
-  "Confirmação do chat sem resposta": "Chat confirmation unanswered"
+  "Confirmação do chat sem resposta": "Chat confirmation unanswered",
+  "O PR não tem nenhum CI rodando, então o termhub não mescla sozinho. Se a branch base não tem regra de proteção, aprove o card de merge no chat ou ligue «PR sem CI: mesclar» no Setup; senão, adicione um workflow em pull_request (ou confira os filtros dele).": "The PR has no CI running, so termhub does not merge it by itself. If the base branch has no protection rule, approve the merge card in the chat or turn on «PR sem CI: mesclar» in Setup; otherwise, add a pull_request workflow (or check its filters).",
+  "Automático mesclou o PR #{{n}} de {{ref}} sem CI (o repositório não tem CI nem regra de proteção na branch base): {{url}}": "Automatic work merged PR #{{n}} of {{ref}} without CI (the repository has no CI and no protection rule on the base branch): {{url}}",
+  "aprove o card de merge no chat": "approve the merge card in the chat",
+  "o repositório tem CI em pull_request, mas ele não rodou neste PR": "the repository has pull_request CI, but it did not run on this PR",
+  "não deu para ler o CI do repositório": "could not read the repository's CI",
+  "o PR tem checks de outro app": "the PR has checks from another app",
+  "não deu para ler os checks do PR": "could not read the PR's checks",
+  "a branch base tem regra de proteção exigindo checks ou revisão": "the base branch has a protection rule requiring checks or review",
+  "não deu para ler as regras de proteção da branch base": "could not read the base branch's protection rules"
 }

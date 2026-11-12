@@ -135,6 +135,8 @@ function automationPolicyPhrase(args: Record<string, unknown>): string {
   if (args.release_workflows !== undefined) parts.push(`workflows de release: ${listOf(args.release_workflows)}`);
   if (args.required_checks !== undefined) parts.push(`checks obrigatórios: ${listOf(args.required_checks)}`);
   if (args.max_parallel !== undefined) parts.push(`máximo em paralelo: ${typeof args.max_parallel === 'number' ? args.max_parallel : 'sem limite'}`);
+  if (args.no_ci_merge === 'merge') parts.push('PR sem CI: mesclar quando o repositório não tem CI nem regra de proteção');
+  if (args.no_ci_merge === 'wait') parts.push('PR sem CI: esperar a pessoa');
   const what = parts.join('; ');
   return args.enabled === undefined ? `mudar o Setup do trabalho automático (${what})` : what;
 }
@@ -262,7 +264,9 @@ function verbPhrase(
       // The merge executor's own card (agentic board D7): args are the server's, never the concierge's.
       const n = typeof args.number === 'number' ? `#${args.number}` : 'um PR';
       const title = asString(args.title);
-      return `mesclar o PR ${n}${title ? ` "${title}"` : ''} de \`${asString(args.repo)}\` (${MERGE_NEED[asString(args.needed)] ?? 'acima do nível do projeto'})`;
+      // TER-1188: a PR with no CI, asked so the person can merge it without one
+      const why = args.no_ci === true && args.needed === 'merge' ? 'o PR não tem CI; aprovar mescla sem CI verde' : MERGE_NEED[asString(args.needed)] ?? 'acima do nível do projeto';
+      return `mesclar o PR ${n}${title ? ` "${title}"` : ''} de \`${asString(args.repo)}\` (${why}${args.no_ci === true && args.needed !== 'merge' ? '; e o PR não tem CI' : ''})`;
     }
     case 'sync_tickets':
       return 'sincronizar os tickets de todas as fontes';

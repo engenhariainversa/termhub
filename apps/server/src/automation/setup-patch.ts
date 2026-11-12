@@ -6,7 +6,7 @@ import { AUTONOMY_LEVELS, type AutonomyLevel, type ProjectAutomation } from '../
  */
 
 /** The Setup fields `set_automation_policy` changes; the rest of the block stays as the screen saved it. */
-export const AUTOMATION_PATCH_FIELDS = ['enabled', 'autonomy', 'release_paths', 'store_paths', 'release_workflows', 'required_checks', 'max_parallel'] as const;
+export const AUTOMATION_PATCH_FIELDS = ['enabled', 'autonomy', 'release_paths', 'store_paths', 'release_workflows', 'required_checks', 'max_parallel', 'no_ci_merge'] as const;
 export type AutomationPatchField = (typeof AUTOMATION_PATCH_FIELDS)[number];
 export type AutomationPatch = Partial<Pick<ProjectAutomation, AutomationPatchField>>;
 
@@ -36,8 +36,9 @@ export function changedFields(from: ProjectAutomation, to: ProjectAutomation): A
 /**
  * Whether going from `from` to `to` needs the person's confirmation on the concierge's token. Asks for:
  * turning it on, raising the level (any raise, also while off), changing release/store paths, release
- * workflows or required checks, and raising `max_parallel` (or lifting the cap). Never asks for a brake:
- * turning off, lowering the level, lowering `max_parallel`, or nothing changing.
+ * workflows or required checks, raising `max_parallel` (or lifting the cap), and letting PRs with no CI merge
+ * (`no_ci_merge`). Never asks for a brake: turning off, lowering the level, lowering `max_parallel`, waiting
+ * for the person on PRs with no CI, or nothing changing.
  */
 export function automationChangeWidens(from: ProjectAutomation, to: ProjectAutomation): boolean {
   return changedFields(from, to).some((f) => {
@@ -48,6 +49,9 @@ export function automationChangeWidens(from: ProjectAutomation, to: ProjectAutom
         return level(to.autonomy) > level(from.autonomy);
       case 'max_parallel':
         return parallelRank(to.max_parallel) > parallelRank(from.max_parallel);
+      case 'no_ci_merge':
+        // TER-1188: back to waiting for the person is a brake
+        return to.no_ci_merge === 'merge';
       default:
         return true;
     }
