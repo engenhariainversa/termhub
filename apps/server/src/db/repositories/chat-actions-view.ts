@@ -159,16 +159,26 @@ function projectAiPhrase(args: Record<string, unknown>): string {
 /** What a `create_project` card asks (TER-1163): the name, the key — the name's suggestion when none was given,
  *  the same one the tool will use —, the group and the folder; the machine is the card's "where". A group
  *  named by id reads by its name when it is one of the person's; otherwise as given. */
-function createProjectPhrase(args: Record<string, unknown>, groupNameById: Map<string, string>): string {
+function createProjectPhrase(args: Record<string, unknown>, groupNameById: Map<string, string>, projectNameById: Map<string, string>): string {
   const name = asString(args.name);
   const key = typeof args.key === 'string' ? `com a chave ${args.key}` : `com a chave ${suggestProjectKey(name)} (sugerida pelo nome)`;
   const groupRef = asString(args.group);
   const group = groupRef ? `, no grupo "${groupNameById.get(groupRef) ?? groupRef}"` : '';
   const dir = typeof args.cwd === 'string' ? `, ligado à pasta \`${args.cwd}\`${args.create_dir === true ? ' (criando a pasta)' : ''}` : '';
-  return `criar o projeto "${name}" ${key}${group}${dir}`;
+  // TER-1169: the project whose rules it starts with, by name when it is one of the person's own
+  const fromRef = asString(args.inherit_rules_from);
+  const inherit = fromRef ? `, herdando as regras do projeto "${projectNameById.get(fromRef) ?? fromRef}"` : '';
+  return `criar o projeto "${name}" ${key}${group}${dir}${inherit}`;
 }
 
-function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>, groupNameById: Map<string, string>): string {
+function verbPhrase(
+  action: ChatAction,
+  task: Task | undefined,
+  ticketById: Map<string, Ticket>,
+  integrationById: Map<string, { name: string }>,
+  groupNameById: Map<string, string>,
+  projectNameById: Map<string, string> = new Map(),
+): string {
   const args = (action.args ?? {}) as Record<string, unknown>;
   switch (action.tool) {
     case 'send_input':
@@ -191,7 +201,7 @@ function verbPhrase(action: ChatAction, task: Task | undefined, ticketById: Map<
     case 'close_tab':
       return 'fechar a aba';
     case 'create_project':
-      return createProjectPhrase(args, groupNameById);
+      return createProjectPhrase(args, groupNameById, projectNameById);
     case 'link_project_machine':
       return `vincular a pasta \`${asString(args.cwd)}\`${args.create_dir === true ? ' (criando a pasta)' : ''}`;
     case 'set_project_machine_cwd':
@@ -336,8 +346,16 @@ function targetPhrase(loc: Location): string {
   return place ? `${place}, no ${loc.machine}` : `no ${loc.machine}`;
 }
 
-function summarize(action: ChatAction, task: Task | undefined, loc: Location, ticketById: Map<string, Ticket>, integrationById: Map<string, { name: string }>, groupNameById: Map<string, string>): string {
-  const verb = verbPhrase(action, task, ticketById, integrationById, groupNameById);
+function summarize(
+  action: ChatAction,
+  task: Task | undefined,
+  loc: Location,
+  ticketById: Map<string, Ticket>,
+  integrationById: Map<string, { name: string }>,
+  groupNameById: Map<string, string>,
+  projectNameById: Map<string, string> = new Map(),
+): string {
+  const verb = verbPhrase(action, task, ticketById, integrationById, groupNameById, projectNameById);
   const where = targetPhrase(loc);
   return where ? `${verb} ${where}` : verb;
 }
@@ -411,8 +429,14 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
   for (const a of actions) if (a.project_id) projectIds.add(a.project_id);
   for (const t of tabs) projectIds.add(t.project_id);
   for (const t of tasks) projectIds.add(t.project_id);
+  // TER-1169: a create_project card names the project it inherits rules from, read with the others
+  for (const a of actions) {
+    const from = a.tool === 'create_project' ? asString((a.args as Record<string, unknown> | null)?.inherit_rules_from) : '';
+    if (from) projectIds.add(from);
+  }
   const projects = projectIds.size ? await repos.projects.findByIdsForOwner([...projectIds], ownerId) : [];
   const projectById = new Map(projects.map((p) => [p.id, p]));
+  const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
 
   const machineIds = new Set<string>();
   for (const a of actions) if (a.machine_id) machineIds.add(a.machine_id);
@@ -527,7 +551,7 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
       loc = {};
     }
 
-    const summary = summarize(action, task, loc, ticketById, integrationById, groupNameById);
+    const summary = summarize(action, task, loc, ticketById, integrationById, groupNameById, projectNameById);
     const sa = action.subagent_id ? subById.get(action.subagent_id) : undefined;
     const subagent = sa && sa.conversation_id === action.conversation_id ? { id: sa.id, description: sa.description } : null;
     return toCard(action, summary, subagent, autoDecisions[index] ?? null, Boolean(loc.missing) || (Boolean(taskId) && !task));

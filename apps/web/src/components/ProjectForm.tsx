@@ -32,7 +32,7 @@ const keyHint: Record<KeyState['kind'], { text: string; cls: string }> = {
 /** New-project walkthrough: 1) project (name/key/description) 2) machine 3) directory. */
 export function ProjectForm({ open, onClose, machineId }: Props) {
   const { t } = useTranslation();
-  const { createProject, machines, statuses } = useData();
+  const { createProject, machines, statuses, projects } = useData();
   const { can } = useAuth();
   const navigate = useNavigate();
   const [step, setStepRaw] = useState<1 | 2 | 3>(1);
@@ -48,6 +48,9 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
   const [keyEdited, setKeyEdited] = useState(false);
   const [keyState, setKeyState] = useState<KeyState>({ kind: 'idle' });
   const [description, setDescription] = useState('');
+  // TER-1169: start with a copy of another project's current rules
+  const [inheritFrom, setInheritFrom] = useState('');
+  const inheritable = projects.filter((p) => p.status !== 'archived');
 
   // step 2
   const [machine, setMachine] = useState<string>(machineId ?? '');
@@ -110,13 +113,13 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
 
   const skip = () => {
     if (busy) return;
-    void finish({ name: name.trim(), key, description: description || null });
+    void finish({ name: name.trim(), key, description: description || null, ...(inheritFrom ? { inherit_rules_from: inheritFrom } : {}) });
   };
 
   const createWithMachine = (e: FormEvent) => {
     e.preventDefault();
     if (busy || !machine || !cwd.trim()) return;
-    void finish({ name: name.trim(), key, description: description || null, machine_id: machine, cwd: cwd.trim(), create_dir: createDir });
+    void finish({ name: name.trim(), key, description: description || null, machine_id: machine, cwd: cwd.trim(), create_dir: createDir, ...(inheritFrom ? { inherit_rules_from: inheritFrom } : {}) });
   };
 
   return (
@@ -160,6 +163,20 @@ export function ProjectForm({ open, onClose, machineId }: Props) {
             <label className="label" htmlFor="project-description">{t('Descrição (opcional)')}</label>
             <textarea id="project-description" className="input" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
+          {inheritable.length > 0 && (
+            <div>
+              <label className="label" htmlFor="project-inherit">{t('Herdar regras de (opcional)')}</label>
+              <select id="project-inherit" className="input" value={inheritFrom} onChange={(e) => setInheritFrom(e.target.value)}>
+                <option value="">{t('Nenhum projeto')}</option>
+                {inheritable.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-fg-dim">{t('O projeto novo começa com uma cópia das regras vigentes desse projeto. Você pode mudar ou apagar cada uma depois, na Memória do chat.')}</p>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" className="btn-ghost" onClick={onClose}>
               {t('Cancelar')}

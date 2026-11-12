@@ -7,6 +7,7 @@ import { isValidProjectKey, suggestProjectKey } from '../lib/project-key.js';
 import { msg } from '../i18n/index.js';
 import { ControlError, type ControlContext } from './context.js';
 import { checkedDir, toLinkResult, type LinkResult } from './project-links.js';
+import { inheritRules } from '../memory/inherit-rules.js';
 
 export interface NewProject {
   name: string;
@@ -27,10 +28,13 @@ export async function createProjectRecord(
   ownerId: string,
   input: NewProject,
   link?: { machine: Machine; cwd: string },
-): Promise<{ project: Project; link: ProjectMachine | null }> {
+  inheritFrom?: Project,
+): Promise<{ project: Project; link: ProjectMachine | null; inherited_rules: number }> {
   const project = await repos.projects.create({ owner_id: ownerId, key: input.key, name: input.name, description: input.description, status: input.status });
   const linked = link ? await repos.projectMachines.link({ project_id: project.id, machine_id: link.machine.id, cwd: link.cwd }) : null;
-  return { project, link: linked };
+  // "Herdar regras de" (TER-1169): only from a project of the same owner — rules never cross people.
+  const inherited = inheritFrom && inheritFrom.owner_id === ownerId ? await inheritRules(repos, ownerId, inheritFrom, project) : 0;
+  return { project, link: linked, inherited_rules: inherited };
 }
 
 /** The project's page in the web app. */
@@ -70,6 +74,8 @@ export interface CreateProjectInput {
   machine_id?: string;
   cwd?: string;
   create_dir?: boolean;
+  /** TER-1169: the id of one of the person's projects whose current rules the new one starts with. */
+  inherit_rules_from?: string;
 }
 
 export interface CreateProjectResult {
@@ -77,12 +83,15 @@ export interface CreateProjectResult {
   key_suggested: boolean;
   group: { id: string; name: string } | null;
   machine: LinkResult | null;
+  /** TER-1169: where the rules came from and how many, when inherit_rules_from was given. */
+  inherited_rules?: { from: { id: string; name: string }; count: number };
 }
 
 /**
  * `create_project` (TER-1163): what the Projetos screen does, through `createProjectRecord`, plus the two
  * things the screen does in separate steps — putting the project in one of the person's groups and linking
- * the first machine. Everything that can fail on its own (the group, the machine, the folder) is checked
+ * the first machine, and (TER-1169) copying the current rules of another project. Everything that can fail
+ * on its own (the group, the project to inherit from, the machine, the folder) is checked
  * before the project exists, so a refusal never leaves half a project behind. `key` omitted is the name's
  * suggestion (the same `suggestProjectKey` the screen pre-fills), which the confirmation card shows.
  */
@@ -93,6 +102,7 @@ export async function createProject(ctx: ControlContext, input: CreateProjectInp
   const key = input.key ?? suggestProjectKey(input.name);
   if (!isValidProjectKey(key)) throw new ControlError('KEY_INVALID', msg('Chave inválida: 2 a 10 letras maiúsculas ou dígitos, começando com letra'));
   const group = input.group !== undefined ? await resolveGroup(ctx, input.group) : null;
+  const inheritFrom = input.inherit_rules_from !== undefined ? (await ctx.scoped.project(input.inherit_rules_from)).project : undefined;
   let link: { machine: Machine; cwd: string; created: boolean } | undefined;
   if (input.machine_id !== undefined && input.cwd !== undefined) {
     const machine = await ctx.scoped.machine(input.machine_id);
@@ -102,7 +112,7 @@ export async function createProject(ctx: ControlContext, input: CreateProjectInp
 
   let created: Awaited<ReturnType<typeof createProjectRecord>>;
   try {
-    created = await createProjectRecord(ctx.repos, ctx.scope.createAs, { name: input.name, key, description: input.description }, link);
+    created = await createProjectRecord(ctx.repos, ctx.scope.createAs, { name: input.name, key, description: input.description }, link, inheritFrom);
   } catch (e) {
     if (e instanceof ProjectRuleError) {
       if (e.code === 'KEY_TAKEN' && input.key === undefined) {
@@ -125,5 +135,6 @@ export async function createProject(ctx: ControlContext, input: CreateProjectInp
     key_suggested: input.key === undefined,
     group: group ? { id: group.id, name: group.name } : null,
     machine: link ? await toLinkResult(project, link.machine, link.cwd, link.created) : null,
+    ...(inheritFrom ? { inherited_rules: { from: { id: inheritFrom.id, name: inheritFrom.name }, count: created.inherited_rules } } : {}),
   };
 }

@@ -35,6 +35,8 @@ const createBody = z
     cwd: PROJECT_CWD.optional(),
     /** creates the folder on the machine (mkdir -p) when it does not exist */
     create_dir: z.boolean().optional(),
+    /** TER-1169: one of the person's projects whose current rules the new one starts with */
+    inherit_rules_from: z.string().min(1).max(64).optional(),
   })
   .strict()
   .refine((b) => (b.machine_id === undefined) === (b.cwd === undefined), { message: 'machine_id e cwd vêm juntos' });
@@ -98,7 +100,7 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
   });
 
   app.post('/', async (request, reply) => {
-    const { create_dir, machine_id, cwd, ...body } = createBody.parse(request.body);
+    const { create_dir, machine_id, cwd, inherit_rules_from, ...body } = createBody.parse(request.body);
     let machine: Machine | undefined;
     let resolvedCwd: string | undefined;
     if (machine_id && cwd) {
@@ -107,9 +109,20 @@ export async function projectRoutes(app: FastifyInstance, repos: Repositories, d
       });
       resolvedCwd = (await resolveLinkCwd(machine, cwd, create_dir)).path;
     }
+    const inheritFrom = inherit_rules_from
+      ? (
+          await scoped(repos, request)
+            .project(inherit_rules_from)
+            .catch(() => {
+              throw badRequest('Projeto inexistente');
+            })
+        ).project
+      : undefined;
     // the same service the MCP create_project calls (TER-1163): one set of rules wherever a project is born
-    const { project, link } = await rule(() => createProjectRecord(repos, request.scope.createAs, body, machine && resolvedCwd ? { machine, cwd: resolvedCwd } : undefined));
-    return reply.code(201).send({ project: { ...project, machines: link ? [linkView(link)] : [] } });
+    const { project, link, inherited_rules } = await rule(() =>
+      createProjectRecord(repos, request.scope.createAs, body, machine && resolvedCwd ? { machine, cwd: resolvedCwd } : undefined, inheritFrom),
+    );
+    return reply.code(201).send({ project: { ...project, machines: link ? [linkView(link)] : [] }, ...(inheritFrom ? { inherited_rules } : {}) });
   });
 
   app.get('/:id', async (request) => {

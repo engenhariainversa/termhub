@@ -13,6 +13,10 @@ vi.mock('../lib/data', () => ({
       { id: 'm2', name: 'jarvis', type: 'agent', capabilities: [] },
     ],
     statuses: {},
+    projects: [
+      { id: 'p1', name: 'Opa Pingou', status: 'active' },
+      { id: 'p2', name: 'Velho', status: 'archived' },
+    ],
   }),
 }));
 vi.mock('../lib/api', async (orig) => ({ ...(await orig<typeof import('../lib/api')>()), api: { projects: { keyAvailable } } }));
@@ -81,6 +85,20 @@ describe('ProjectForm', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     await screen.findByText('Passo 2 de 3');
     expect(screen.queryByRole('button', { name: 'Cadastrar nova máquina' })).toBeNull();
+  });
+
+  it('step 1: "Herdar regras de" lists the active projects and sends the one picked (TER-1169)', async () => {
+    keyAvailable.mockResolvedValue({ available: true });
+    createProject.mockResolvedValue({ id: 'new' });
+    mount();
+    await fillStep1('Novo');
+    const select = screen.getByLabelText('Herdar regras de (opcional)') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.textContent)).toEqual(['Nenhum projeto', 'Opa Pingou']);
+    fireEvent.change(select, { target: { value: 'p1' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    await screen.findByText('Passo 2 de 3');
+    fireEvent.click(screen.getByRole('button', { name: 'Pular por enquanto' }));
+    await waitFor(() => expect(createProject).toHaveBeenCalledWith({ name: 'Novo', key: 'NOV', description: null, inherit_rules_from: 'p1' }));
   });
 
   it('step 2 → 3: picking a machine and a directory creates the project with machine_id/cwd/create_dir', async () => {

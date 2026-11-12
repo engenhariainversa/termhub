@@ -270,6 +270,8 @@ export interface ProjectInput {
   machine_id?: string;
   cwd?: string;
   create_dir?: boolean;
+  /** create only (TER-1169): one of the person's projects whose current rules the new one starts with */
+  inherit_rules_from?: string;
   /** edit only (a project is born private): publishes it on the owner's public city */
   is_public?: boolean;
   /** edit only (TER-1021): import deliberate ai-memory pages as unverified lessons */
