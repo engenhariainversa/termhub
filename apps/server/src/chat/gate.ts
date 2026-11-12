@@ -73,6 +73,8 @@ const readTools = new Set([
   'get_project_ai_setup',
   // TER-1164: the person's blocks of the open model; nothing is changed.
   'list_blocks',
+  // TER-1186: the person's features in testing and their values; nothing is changed.
+  'list_feature_flags',
 ]);
 
 const writeTools = new Set([
@@ -229,6 +231,14 @@ export function actionClass(tool: string, args: unknown): ActionClass {
   // through (`classOf` in gate-runtime.ts). Never covered by a grant or a default.
   if (tool === 'admin_user_troubleshoot') {
     return (args as { endpoint?: unknown } | undefined)?.endpoint === 'search' ? 'read' : 'write';
+  }
+
+  // TER-1186: the person's own value of a feature in testing. Turning one off is a brake (it only takes away
+  // what the person had: e.g. "liberado por padrão" back to cards) and runs at once; turning one on, or back to
+  // the value for everyone (which may be on), changes what the chat may do: always the person's card, never
+  // a grant or a default (`openKindOf` leaves it in the core).
+  if (tool === 'set_feature_flag') {
+    return (args as { enabled?: unknown } | undefined)?.enabled === false ? 'self_mediated' : 'write';
   }
 
   // Unknown tools default to irreversible: a tool added later must not silently

@@ -111,7 +111,7 @@ export function ChatBlocksView() {
           {t('Sempre pedem confirmação')}
         </h2>
         <p className="text-xs text-fg-dim">
-          {t('Apagar card, fechar aba trabalhando, as teclas Ctrl+C e Esc, responder permissões do CLI (salvo quando o chat repassa a sua própria resposta), comandos encadeados ou com redirecionamento, sudo, rm, kill, git push --force, git reset --hard, git clean, ssh e shells, o que toca segredos, merge e subir o nível da automação, status de ticket, integrações, login e setup das contas de IA, tirar um bloqueio e qualquer ferramenta nova.')}
+          {t('Apagar card, fechar aba trabalhando, as teclas Ctrl+C e Esc, responder permissões do CLI (salvo quando o chat repassa a sua própria resposta), comandos encadeados ou com redirecionamento, sudo, rm, kill, git push --force, git reset --hard, git clean, ssh e shells, o que toca segredos, merge e subir o nível da automação, status de ticket, integrações, login e setup das contas de IA, tirar um bloqueio, ligar um recurso em teste e qualquer ferramenta nova.')}
         </p>
       </section>
       <section aria-labelledby="chat-blocks" className="space-y-2">
