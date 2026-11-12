@@ -62,7 +62,8 @@ export type ChatFrame =
 // channel never actually reports it.
 // `usage_limit`, `model_unavailable` and `auth_failed` are read from the CLI's stream by `parseFrame`
 // (TER-588): the CLI reports them on stdout with an empty stderr, so no runner can name them.
-const REASONS = ['missing_session', 'cli_rejected', 'run_failed', 'cli_missing', 'killed', 'host_gone', 'agent_too_old', 'host_busy', 'reset', 'usage_limit', 'model_unavailable', 'auth_failed'] as const;
+// `timeout` is a headless `run` channel's (TER-1178), like `reset` listed only to cover the protocol's set.
+const REASONS = ['missing_session', 'cli_rejected', 'run_failed', 'cli_missing', 'killed', 'host_gone', 'agent_too_old', 'host_busy', 'reset', 'usage_limit', 'model_unavailable', 'auth_failed', 'timeout'] as const;
 
 /** Written exactly once: the type and the runtime check below are both derived from `REASONS`, so a
  *  label added to the list cannot be accepted by one and dropped by the other — the silent drift this
