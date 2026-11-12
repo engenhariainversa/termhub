@@ -54,3 +54,14 @@ describe('termhub.dev vhost: the phone’s upload routes', () => {
     expect(bodyCap(location!)).toBe(64 * 1024);
   });
 });
+
+// A single `proxy_pass http://<host>:3000` with the host spelled out makes nginx resolve that host once,
+// at config load, and every `$upstream_app` proxy then reuses that IP instead of asking the Docker
+// resolver: once the app container is recreated with a new IP, the whole vhost answers 502.
+describe('termhub.dev vhost: upstreams go through a variable', () => {
+  it('no proxy_pass names a host literally', () => {
+    const proxyPasses = [...template.matchAll(/^\s*proxy_pass\s+(\S+);/gm)].map((m) => m[1]!);
+    expect(proxyPasses.length).toBeGreaterThan(0);
+    expect(proxyPasses.filter((target) => !/^https?:\/\/\$/.test(target))).toEqual([]);
+  });
+});
