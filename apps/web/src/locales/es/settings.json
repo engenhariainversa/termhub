@@ -629,5 +629,8 @@
   "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Permite crear tokens con el alcance runs y ejecutar prompts por la API (/api/v1/runs) en tus propias cuentas de IA y máquinas, y muestra las ejecuciones de la API en Progreso. Desactivado, las rutas no existen y el alcance no aparece.",
   "Criou uma run pela API": "Creó una ejecución por la API",
   "Cancelou uma run da API": "Canceló una ejecución de la API",
-  "Runs da API": "Ejecuciones de la API"
+  "Runs da API": "Ejecuciones de la API",
+  "Runs": "Ejecuciones",
+  "runs": "ejecuciones",
+  "Executar prompts nas suas contas e máquinas": "Ejecutar prompts en tus propias cuentas y máquinas"
 }

@@ -519,5 +519,17 @@
   "Nenhum projeto": "No project",
   "O projeto novo começa com uma cópia das regras vigentes desse projeto. Você pode mudar ou apagar cada uma depois, na Memória do chat.": "The new project starts with a copy of that project's current rules. You can change or delete each one later, in Chat memory.",
   "Executar em ordem": "Run in order",
-  "O automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado. Um card bloqueado ou esperando você segura o épico.": "Automatic work takes one card at a time, in board order, and only moves to the next once the previous one is in Done with its PR merged. A card that is blocked or waiting on you holds the epic."
+  "O automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado. Um card bloqueado ou esperando você segura o épico.": "Automatic work takes one card at a time, in board order, and only moves to the next once the previous one is in Done with its PR merged. A card that is blocked or waiting on you holds the epic.",
+  "Runs da API": "API runs",
+  "Nenhuma run da API neste projeto": "No API runs in this project",
+  "Não foi possível carregar as runs da API.": "Could not load the API runs.",
+  "Quando": "When",
+  "Provedor": "Provider",
+  "Modelo": "Model",
+  "Duração": "Duration",
+  "Custo": "Cost",
+  "na fila": "queued",
+  "rodando": "running",
+  "concluída": "done",
+  "cancelada": "cancelled"
 }

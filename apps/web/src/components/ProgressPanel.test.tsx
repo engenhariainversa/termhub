@@ -3,12 +3,15 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProgressResponse, Tab } from '../lib/types';
+import type { ApiRun, ProgressResponse, Tab } from '../lib/types';
 
 const progressMock = vi.fn();
 const usageMock = vi.fn();
 const live: Record<string, Tab | undefined> = {};
-vi.mock('../lib/api', () => ({ api: { progress: (...a: unknown[]) => progressMock(...a), automation: { usage: (...a: unknown[]) => usageMock(...a) } } }));
+const runsMock = vi.fn();
+const flags = { on: new Set<string>() };
+vi.mock('../lib/api', () => ({ api: { progress: (...a: unknown[]) => progressMock(...a), automation: { usage: (...a: unknown[]) => usageMock(...a) }, runs: { list: (...a: unknown[]) => runsMock(...a) } } }));
+vi.mock('../lib/feature-flags', () => ({ useFeatureFlag: (flag: string) => flags.on.has(flag) }));
 vi.mock('../lib/monitor', () => ({ useMonitor: () => ({ tabState: (id: string) => live[id] }) }));
 
 vi.mock('./PauseAutomationButton', () => ({ PauseBanner: () => null }));
@@ -43,6 +46,9 @@ beforeEach(() => {
   usageMock.mockReset();
   usageMock.mockRejectedValue(new Error('none'));
   for (const k of Object.keys(live)) delete live[k];
+  runsMock.mockReset();
+  runsMock.mockResolvedValue({ runs: [] });
+  flags.on.clear();
 });
 afterEach(() => {
   cleanup();
@@ -214,5 +220,54 @@ describe('ProgressPanel', () => {
     expect(within(feed).getByText('Deploy falhou (Visão gerencial) — automático pausado no projeto')).toBeInTheDocument();
     expect(within(feed).getByText('Publicado npm 1.2.0')).toBeInTheDocument();
     expect(screen.getAllByText('automático').length).toBeGreaterThan(0);
+  });
+
+  // TER-1176: "Runs da API", only behind the runs_api flag
+  describe('Runs da API', () => {
+    const run = (over: Partial<ApiRun> & { id: string }): ApiRun => ({
+      project_id: 'p1', status: 'succeeded', provider: 'claude', model: 'claude-sonnet-5-5', capabilities: [], machine: null, account: null,
+      workspace: null, result: null, usage: null, error: null, timeout_s: 600, created_at: '2026-11-12T10:00:00.000Z',
+      started_at: '2026-11-12T10:00:01.000Z', ended_at: '2026-11-12T10:00:43.000Z', events_url: `/api/v1/runs/${over.id}/events`, ...over,
+    });
+
+    it('is not there, nor asked for, while the flag is off', async () => {
+      mount();
+      await screen.findByText(/Visão gerencial/);
+      expect(screen.queryByRole('region', { name: 'Runs da API' })).toBeNull();
+      expect(runsMock).not.toHaveBeenCalled();
+    });
+
+    it('lists the project runs with status, provider, model, duration and cost', async () => {
+      flags.on.add('runs_api');
+      runsMock.mockResolvedValue({ runs: [
+        run({ id: 'r1', usage: { input_tokens: 10, output_tokens: 20, cost_usd: 0.42 } }),
+        run({ id: 'r2', status: 'failed', provider: 'codex', model: 'gpt-5', error: { code: 'TIMEOUT', message: null }, started_at: '2026-11-12T10:00:00.000Z', ended_at: '2026-11-12T10:03:00.000Z' }),
+        run({ id: 'r3', status: 'running', model: null, ended_at: null }),
+      ] });
+      mount();
+      const section = await screen.findByRole('region', { name: 'Runs da API' });
+      expect(runsMock).toHaveBeenCalledWith({ project: 'p1' });
+      const rows = await within(section).findAllByRole('row');
+      expect(rows).toHaveLength(4);
+      const [, r1, r2, r3] = rows as [HTMLElement, HTMLElement, HTMLElement, HTMLElement];
+      expect(within(r1).getByText('concluída')).toBeInTheDocument();
+      expect(within(r1).getByText('claude')).toBeInTheDocument();
+      expect(within(r1).getByText('claude-sonnet-5-5')).toBeInTheDocument();
+      expect(within(r1).getByText('42 s')).toBeInTheDocument();
+      expect(within(r1).getByText(/0,42/)).toBeInTheDocument();
+      expect(within(r2).getByText('falhou')).toBeInTheDocument();
+      expect(within(r2).getByText('TIMEOUT')).toBeInTheDocument();
+      expect(within(r2).getByText('codex')).toBeInTheDocument();
+      expect(within(r2).getByText('3 min')).toBeInTheDocument();
+      expect(within(r3).getByText('rodando')).toBeInTheDocument();
+      expect(within(r3).getAllByText('—').length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('says so when the project has no API run', async () => {
+      flags.on.add('runs_api');
+      mount();
+      const section = await screen.findByRole('region', { name: 'Runs da API' });
+      expect(await within(section).findByText('Nenhuma run da API neste projeto')).toBeInTheDocument();
+    });
   });
 });

@@ -2,7 +2,7 @@ import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
 import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
 import type { DataExportStatus } from './types';
-import type { ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
+import type { ApiRun, ApiTokenEvent, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
 import type { LegalStatus } from './types';
@@ -621,6 +621,13 @@ export const api = {
     revoke: (id: string) => request<{ api_token: ApiToken }>('DELETE', `/api-tokens/${id}`),
     /** The token's MCP calls (metadata only), newest first; the server keeps `retention_days`. */
     events: (id: string) => request<{ events: ApiTokenEvent[]; retention_days: number }>('GET', `/api-tokens/${id}/events`),
+  },
+  /** "Runs da API" in Progresso (TER-1176, flag `runs_api`): the signed-in person's own runs, newest first. */
+  runs: {
+    list: (params: { project?: string; limit?: number } = {}) => {
+      const qs = new URLSearchParams(Object.entries(params).filter((e) => e[1] !== undefined).map(([k, v]) => [k, String(v)])).toString();
+      return request<{ runs: ApiRun[] }>('GET', `/runs${qs ? `?${qs}` : ''}`);
+    },
   },
   /** Settings → Auditoria (TER-577): the instance's security trail, for admins. */
   securityEvents: {

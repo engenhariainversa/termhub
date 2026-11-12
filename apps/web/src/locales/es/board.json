@@ -519,5 +519,17 @@
   "Nenhum projeto": "Ningún proyecto",
   "O projeto novo começa com uma cópia das regras vigentes desse projeto. Você pode mudar ou apagar cada uma depois, na Memória do chat.": "El proyecto nuevo empieza con una copia de las reglas vigentes de ese proyecto. Puedes cambiar o borrar cada una después, en la Memoria del chat.",
   "Executar em ordem": "Ejecutar en orden",
-  "O automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado. Um card bloqueado ou esperando você segura o épico.": "El trabajo automático toma una tarjeta a la vez, en el orden del tablero, y solo pasa a la siguiente cuando la anterior está en Hecho con su PR fusionado. Una tarjeta bloqueada o que te espera detiene la épica."
+  "O automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado. Um card bloqueado ou esperando você segura o épico.": "El trabajo automático toma una tarjeta a la vez, en el orden del tablero, y solo pasa a la siguiente cuando la anterior está en Hecho con su PR fusionado. Una tarjeta bloqueada o que te espera detiene la épica.",
+  "Runs da API": "Ejecuciones de la API",
+  "Nenhuma run da API neste projeto": "No hay ejecuciones de la API en este proyecto",
+  "Não foi possível carregar as runs da API.": "No se pudieron cargar las ejecuciones de la API.",
+  "Quando": "Cuándo",
+  "Provedor": "Proveedor",
+  "Modelo": "Modelo",
+  "Duração": "Duración",
+  "Custo": "Costo",
+  "na fila": "en cola",
+  "rodando": "ejecutando",
+  "concluída": "hecho",
+  "cancelada": "cancelada"
 }
