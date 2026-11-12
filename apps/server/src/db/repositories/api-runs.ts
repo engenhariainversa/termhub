@@ -17,6 +17,8 @@ export interface ApiRunWorkspace {
   kind: 'project' | 'worktree';
   path: string;
   branch: string | null;
+  /** A worktree the sweeper removed (24 h after the run ended); absent while it is still on the machine. */
+  removed_at?: string;
 }
 
 export interface ApiRunUsage {
@@ -159,13 +161,20 @@ export class ApiRunsRepository {
     return rows.map(mapRun);
   }
 
+  /** Any person's run by id: internal use only (the service and the sweeper), never a route's answer. */
+  async findById(id: string): Promise<ApiRun | undefined> {
+    const row = await this.db.apiRun.findUnique({ where: { id }, include });
+    return row ? mapRun(row) : undefined;
+  }
+
   /** The run created earlier with the same idempotency key, if any. */
   async findByIdempotency(userId: string, key: string): Promise<ApiRun | undefined> {
     const row = await this.db.apiRun.findFirst({ where: { userId, idempotencyKey: key }, include });
     return row ? mapRun(row) : undefined;
   }
 
-  async setStatus(id: string, patch: ApiRunPatch): Promise<ApiRun | undefined> {
+  /** `onlyActive`: changes nothing once the run ended (a cancel that got there first). */
+  async setStatus(id: string, patch: ApiRunPatch, opts: { onlyActive?: boolean } = {}): Promise<ApiRun | undefined> {
     const data: Prisma.ApiRunUncheckedUpdateInput = {};
     if (patch.status !== undefined) data.status = patch.status;
     if (patch.machine_id !== undefined) data.machineId = patch.machine_id;
@@ -179,7 +188,8 @@ export class ApiRunsRepository {
     if (patch.error_message !== undefined) data.errorMessage = patch.error_message;
     if (patch.started_at !== undefined) data.startedAt = patch.started_at;
     if (patch.ended_at !== undefined) data.endedAt = patch.ended_at;
-    const { count } = await this.db.apiRun.updateMany({ where: { id }, data });
+    const where = opts.onlyActive ? { id, status: { in: [...ACTIVE_RUN_STATUSES] } } : { id };
+    const { count } = await this.db.apiRun.updateMany({ where, data });
     if (count === 0) return undefined;
     const row = await this.db.apiRun.findUnique({ where: { id }, include });
     return row ? mapRun(row) : undefined;
@@ -223,6 +233,44 @@ export class ApiRunsRepository {
   async oldestCreatedSince(tokenId: string, since: Date): Promise<Date | null> {
     const row = await this.db.apiRun.findFirst({ where: { tokenId, createdAt: { gte: since } }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } });
     return row?.createdAt ?? null;
+  }
+
+  /**
+   * Ends a run that is still queued or running: false when it already ended (a cancel and the run's own
+   * end racing — the first one wins, the other changes nothing).
+   */
+  async finishActive(id: string, patch: ApiRunPatch & { status: ApiRunStatus }): Promise<boolean> {
+    const data: Prisma.ApiRunUncheckedUpdateInput = { status: patch.status };
+    if (patch.result !== undefined) data.result = patch.result;
+    if (patch.usage !== undefined) data.usage = json(patch.usage);
+    if (patch.error_code !== undefined) data.errorCode = patch.error_code;
+    if (patch.error_message !== undefined) data.errorMessage = patch.error_message;
+    if (patch.ended_at !== undefined) data.endedAt = patch.ended_at;
+    const { count } = await this.db.apiRun.updateMany({ where: { id, status: { in: [...ACTIVE_RUN_STATUSES] } }, data });
+    return count > 0;
+  }
+
+  /** Every run still queued or running, across people (the sweeper ends the ones nobody holds any more). */
+  async listActive(): Promise<ApiRun[]> {
+    const rows = await this.db.apiRun.findMany({ where: { status: { in: [...ACTIVE_RUN_STATUSES] } }, orderBy: { createdAt: 'asc' }, take: 500, include });
+    return rows.map(mapRun);
+  }
+
+  /** Runs that ended before `before` and whose worktree is still on its machine (never automation worktrees: only this table). */
+  async listWorktreesEndedBefore(before: Date, limit = 100): Promise<ApiRun[]> {
+    const ids = await this.db.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "api_runs"
+      WHERE "ended_at" < ${before} AND "machine_id" IS NOT NULL
+        AND "workspace"->>'kind' = 'worktree' AND "workspace"->>'removed_at' IS NULL
+      ORDER BY "ended_at" ASC LIMIT ${limit}`;
+    if (ids.length === 0) return [];
+    const rows = await this.db.apiRun.findMany({ where: { id: { in: ids.map((r) => r.id) } }, orderBy: { endedAt: 'asc' }, include });
+    return rows.map(mapRun);
+  }
+
+  /** Frees an idempotency key, so a request with it after 24 h starts a new run. */
+  async clearIdempotencyKey(id: string): Promise<void> {
+    await this.db.apiRun.updateMany({ where: { id }, data: { idempotencyKey: null } });
   }
 
   /** Drops events older than `before` (7 days); the run rows stay. Returns how many went. */

@@ -227,6 +227,10 @@ Set `PUBLIC_URL=https://app.termhub.yourdomain.com` in `.env` (`secure` cookies,
 
 On jarvis, `app.termhub.dev` sits behind a Cloudflare Access self-hosted application ("termhub") with an e-mail **allowlist** policy; the landing at `termhub.dev` stays public. The allowlist is managed with a script on the server that talks to the Access API using an API token (Account · Access: Apps and Policies · Edit) stored in `~/.cloudflare/access-token`: `bash ~/cf-access-allowlist.sh a@x.com b@y.com` replaces the policy with exactly those e-mails. The tunnel's own `cert.pem` token can read but not edit Access.
 
+## Personal runs API
+
+`/api/v1/runs` runs a prompt headless with your own Claude Code or Codex account, on your own machine (agent 0.37.0 or newer), routed by the project's Setup, and streams normalized events over SSE. It is behind the `runs_api` feature flag and needs a personal token with the `runs` scope. Usage with `curl`, events, limits and errors: [`docs/api/runs.md`](docs/api/runs.md).
+
 ## Users and login
 
 There is no public sign-up. Invite people from the app (sidebar → ⚙ Configurações → Usuários → **Convidar**: e-mail, optional name, role) or create users through the CLI:

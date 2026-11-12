@@ -120,6 +120,35 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ApiRunsRepository (Postgr
     await expect(make({ user: otherId, project: otherProjectId, token: null, key })).resolves.toMatchObject({ user_id: otherId });
   });
 
+  it('finishActive ends a run once; setStatus onlyActive leaves an ended run alone', async () => {
+    const run = await make();
+    expect(await repo.finishActive(run.id, { status: 'cancelled', ended_at: new Date() })).toBe(true);
+    expect(await repo.finishActive(run.id, { status: 'succeeded', result: 'late' })).toBe(false);
+    expect(await repo.setStatus(run.id, { status: 'running' }, { onlyActive: true })).toBeUndefined();
+    expect(await repo.findById(run.id)).toMatchObject({ status: 'cancelled', result: null });
+    expect((await repo.listActive()).map((r) => r.id)).not.toContain(run.id);
+  });
+
+  it('lists the worktrees of runs ended before a date, until they are marked removed', async () => {
+    const run = await make();
+    const workspace = { kind: 'worktree' as const, path: '/w/run', branch: 'termhub/run-x' };
+    await repo.setStatus(run.id, { status: 'succeeded', machine_id: machineId, workspace, ended_at: new Date(Date.now() - 25 * HOUR) });
+    const readOnly = await make();
+    await repo.setStatus(readOnly.id, { status: 'succeeded', machine_id: machineId, workspace: { kind: 'project', path: '/p', branch: null }, ended_at: new Date(Date.now() - 25 * HOUR) });
+    const ids = async () => (await repo.listWorktreesEndedBefore(new Date(Date.now() - 24 * HOUR), 500)).map((r) => r.id);
+    expect(await ids()).toContain(run.id);
+    expect(await ids()).not.toContain(readOnly.id);
+    await repo.setStatus(run.id, { workspace: { ...workspace, removed_at: new Date().toISOString() } });
+    expect(await ids()).not.toContain(run.id);
+  });
+
+  it('clearIdempotencyKey frees the key for a new run', async () => {
+    const key = `k-${newId()}`;
+    const run = await make({ key });
+    await repo.clearIdempotencyKey(run.id);
+    await expect(make({ key })).resolves.toMatchObject({ idempotency_key: key });
+  });
+
   it('drops old events and keeps the run; a deleted token or machine leaves the run with nulls', async () => {
     const run = await make({ token: otherTokenId });
     await repo.setStatus(run.id, { machine_id: machineId });

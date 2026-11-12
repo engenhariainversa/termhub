@@ -16,6 +16,7 @@ import {
   type RpcParams,
   type RpcResult,
   type PtyOpenParams,
+  type RunOpenParams,
   type ServerMessage,
   type TcpOpenParams,
 } from '@termhub/agent-protocol';
@@ -195,6 +196,13 @@ export class AgentConnection extends EventEmitter {
    *  handshake as a terminal, and the prompt goes in as channel data once it is open. */
   openClaude(params: ClaudeOpenParams, handlers: ChannelHandlers): Promise<AgentChannel> {
     return this.openChannel(handlers, (ch) => ({ type: 'open', ch, kind: 'claude', params }));
+  }
+
+  /** A headless API run (personal runs API, TER-1176; `apps/agent/src/run/headless.ts`): the agent builds
+   *  the CLI's argv from the spec, the prompt is the channel's only data frame, stdout comes back a line
+   *  per frame and the end names its reason (`timeout`, `usage_limit`…). */
+  openRun(params: RunOpenParams, handlers: ChannelHandlers): Promise<AgentChannel> {
+    return this.openChannel(handlers, (ch) => ({ type: 'open', ch, kind: 'run', params }));
   }
 
   /** A raw TCP pipe to a loopback WDA port on the machine (`apps/agent/src/tcp.ts`). Same handshake as

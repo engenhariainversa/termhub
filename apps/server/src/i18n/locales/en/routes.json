@@ -104,5 +104,20 @@
   "Escopo indisponível: runs": "Scope unavailable: runs",
   "Run não encontrada": "Run not found",
   "Este token não tem o escopo runs": "This token does not have the runs scope",
-  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "The runs scope is for personal tokens only, never for the chat or a tab"
+  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "The runs scope is for personal tokens only, never for the chat or a tab",
+  "A CLI não está instalada nesta máquina": "The CLI is not installed on this machine",
+  "A CLI recusou as opções da run; atualize-a nesta máquina": "The CLI refused the run's options; update it on this machine",
+  "A CLI terminou com erro": "The CLI ended with an error",
+  "A run foi encerrada na máquina": "The run was stopped on the machine",
+  "O servidor reiniciou": "The server restarted",
+  "Nenhuma máquina disponível respondeu": "No available machine answered",
+  "Não foi possível preparar a worktree da run": "The run's worktree could not be prepared",
+  "Todas as contas disponíveis estão no limite de uso": "Every available account is at its usage limit",
+  "A conta atingiu o limite de uso depois que a run já tinha começado a responder": "The account hit its usage limit after the run had started answering",
+  "A run passou do tempo limite": "The run went past its timeout",
+  "A máquina desconectou durante a run": "The machine disconnected during the run",
+  "A máquina não abriu a run": "The machine did not open the run",
+  "Limite de runs atingido; tente de novo mais tarde": "Run limit reached; try again later",
+  "O projeto não tem contas de Claude Code ou Codex suas no Setup": "The project has none of your Claude Code or Codex accounts in its Setup",
+  "Nenhuma conta disponível para a run": "No account available for the run"
 }

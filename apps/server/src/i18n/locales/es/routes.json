@@ -104,5 +104,20 @@
   "Escopo indisponível: runs": "Alcance no disponible: runs",
   "Run não encontrada": "Ejecución no encontrada",
   "Este token não tem o escopo runs": "Este token no tiene el alcance runs",
-  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "El alcance runs solo vale para tokens personales, nunca para el chat ni para una pestaña"
+  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "El alcance runs solo vale para tokens personales, nunca para el chat ni para una pestaña",
+  "A CLI não está instalada nesta máquina": "La CLI no está instalada en esta máquina",
+  "A CLI recusou as opções da run; atualize-a nesta máquina": "La CLI rechazó las opciones de la run; actualízala en esta máquina",
+  "A CLI terminou com erro": "La CLI terminó con un error",
+  "A run foi encerrada na máquina": "La run se detuvo en la máquina",
+  "O servidor reiniciou": "El servidor se reinició",
+  "Nenhuma máquina disponível respondeu": "Ninguna máquina disponible respondió",
+  "Não foi possível preparar a worktree da run": "No se pudo preparar el worktree de la run",
+  "Todas as contas disponíveis estão no limite de uso": "Todas las cuentas disponibles están en su límite de uso",
+  "A conta atingiu o limite de uso depois que a run já tinha começado a responder": "La cuenta alcanzó su límite de uso después de que la run empezó a responder",
+  "A run passou do tempo limite": "La run superó su tiempo límite",
+  "A máquina desconectou durante a run": "La máquina se desconectó durante la run",
+  "A máquina não abriu a run": "La máquina no abrió la run",
+  "Limite de runs atingido; tente de novo mais tarde": "Límite de runs alcanzado; inténtalo de nuevo más tarde",
+  "O projeto não tem contas de Claude Code ou Codex suas no Setup": "El proyecto no tiene cuentas tuyas de Claude Code o Codex en su Setup",
+  "Nenhuma conta disponível para a run": "No hay ninguna cuenta disponible para la run"
 }

@@ -1,4 +1,6 @@
 import Fastify from 'fastify';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../auth/permissions.js', async (orig) => ({ ...(await orig<typeof import('../auth/permissions.js')>()), canAccess: vi.fn() }));
@@ -6,7 +8,9 @@ vi.mock('../auth/permissions.js', async (orig) => ({ ...(await orig<typeof impor
 import { canAccess } from '../auth/permissions.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ApiToken } from '../db/repositories/api-tokens.js';
-import type { ApiRun } from '../db/repositories/api-runs.js';
+import type { ApiRun, StoredRunEvent } from '../db/repositories/api-runs.js';
+import { NoCandidateError, RunLimitError, type RunService } from '../runs/service.js';
+import { tk } from '../i18n/index.js';
 import { hashApiToken } from '../auth/api-tokens.js';
 import { runsV1Routes } from './runs-v1.js';
 
@@ -27,7 +31,32 @@ const run = (over: Partial<ApiRun> = {}): ApiRun => ({
 const RUNS = [run(), run({ id: 'run2', status: 'running', result: null, ended_at: null }), run({ id: 'foreign', user_id: 'u2', project_id: 'p2' })];
 const PROJECTS = [{ id: 'p1', key: 'TER', name: 'termhub', owner_id: 'u1' }, { id: 'p2', key: 'OTH', name: 'other', owner_id: 'u2' }];
 
-function build(opts: { token?: ApiToken; flag?: boolean; grants?: string[]; legalPending?: boolean } = {}) {
+const ev = (seq: number, type: string, payload: Record<string, unknown> = {}): StoredRunEvent => ({ seq, type, payload, at: '2026-11-11T00:00:0' + seq + '.000Z' });
+const EVENTS = [ev(1, 'started', { provider: 'claude' }), ev(2, 'text', { text: 'oi' }), ev(3, 'usage', { input_tokens: 1, output_tokens: 1 }), ev(4, 'done', { status: 'succeeded', result: 'oi', usage: null })];
+
+/** A stand-in for RunService: the routes' side only (the service has its own tests). */
+function fakeService(opts: { live?: boolean } = {}) {
+  const stops: Array<ReturnType<typeof vi.fn>> = [];
+  return {
+    stops,
+    create: vi.fn<RunService['create']>(async () => ({ run: run({ id: 'new1', status: 'queued', result: null, ended_at: null }), created: true })),
+    cancel: vi.fn<RunService['cancel']>(async (userId, id) => {
+      const r = RUNS.find((x) => x.id === id && x.user_id === userId);
+      return r ? { ...r, status: r.status === 'running' ? 'cancelled' : r.status } : undefined;
+    }),
+    subscribe: vi.fn<RunService['subscribe']>((_id, after, onEvent, onEnd) => {
+      const stop = vi.fn();
+      stops.push(stop);
+      setTimeout(() => {
+        for (const e of opts.live ? EVENTS.slice(0, 2) : EVENTS) if (e.seq > after) onEvent(e);
+        if (!opts.live) onEnd();
+      }, 0);
+      return stop;
+    }),
+  };
+}
+
+function build(opts: { token?: ApiToken; flag?: boolean; grants?: string[]; legalPending?: boolean; service?: ReturnType<typeof fakeService>; keepAliveMs?: number } = {}) {
   const app = Fastify();
   const active = opts.token ?? token();
   const apiTokens = {
@@ -46,6 +75,7 @@ function build(opts: { token?: ApiToken; flag?: boolean; grants?: string[]; lega
     tabs: { findById: vi.fn(async (id: string) => (id === 'tab1' ? { id: 'tab1', project_id: 'p1' } : undefined)) },
     users: { findById: vi.fn(async (id: string) => (id === 'u1' ? { id: 'u1', role_id: 'r', locale: null } : undefined)) },
     featureFlags: { overrideFor: vi.fn(async () => null), instanceValue: vi.fn(async (flag: string) => (flag === 'runs_api' ? (opts.flag ?? true) : null)) },
+    securityEvents: { record: vi.fn(async () => {}) },
     legal: { statusFor: vi.fn(async () => ({ pending: opts.legalPending ? [{ document: 'terms' }] : [], upcoming: [] })) },
     projects: {
       findById: vi.fn(async (id: string) => PROJECTS.find((p) => p.id === id)),
@@ -54,8 +84,9 @@ function build(opts: { token?: ApiToken; flag?: boolean; grants?: string[]; lega
   } as unknown as Repositories;
   const grants = opts.grants ?? ['runs:read', 'runs:create'];
   vi.mocked(canAccess).mockImplementation(async (_r, _u, resource, action) => grants.includes(`${resource}:${action}`));
-  app.register((a) => runsV1Routes(a, repos), { prefix: '/api/v1' });
-  return { app, apiTokens, apiRuns };
+  const service = opts.service ?? fakeService();
+  app.register((a) => runsV1Routes(a, repos, { service, keepAliveMs: opts.keepAliveMs }), { prefix: '/api/v1' });
+  return { app, apiTokens, apiRuns, service, repos };
 }
 
 const get = (app: ReturnType<typeof Fastify>, url: string, headers: Record<string, string> = { authorization: `Bearer ${SECRET}` }) => app.inject({ method: 'GET', url, headers });
@@ -204,5 +235,154 @@ describe('/api/v1 mounted next to /api, as app.ts does', () => {
     expect((await get(app, '/api/v1/nope')).json()).toEqual({ error: { code: 'NOT_FOUND', message: 'Rota não encontrada' } });
     expect((await get(app, '/api/nope')).json()).toEqual({ error: 'Rota não encontrada', code: 'NOT_FOUND' });
     expect(sessionHook.mock.calls.map(([req]) => req.url)).toEqual(['/api/nope']);
+  });
+});
+
+const post = (app: ReturnType<typeof Fastify>, url: string, body?: unknown) =>
+  app.inject({ method: 'POST', url, headers: { authorization: `Bearer ${SECRET}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) }, payload: body === undefined ? undefined : JSON.stringify(body) });
+
+describe('POST /api/v1/runs', () => {
+  it('answers 202 with the run id and events_url, and audits without the prompt', async () => {
+    const { app, service, repos } = build();
+    const r = await post(app, '/api/v1/runs', { project: 'TER', prompt: 'segredo do prompt', capabilities: ['read', 'read'], budget: { timeout_s: 120 }, idempotency_key: 'k1' });
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ run_id: 'new1', status: 'queued', events_url: '/api/v1/runs/new1/events' });
+    expect(service.create).toHaveBeenCalledWith(expect.objectContaining({ user: expect.objectContaining({ id: 'u1' }) }), {
+      project: 'TER', prompt: 'segredo do prompt', capabilities: ['read'], model_class: undefined, model: null, provider: null, machine: null, timeout_s: 120, idempotency_key: 'k1',
+    });
+    const record = vi.mocked(repos.securityEvents.record);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({ action: 'api_run.create', target_id: 'new1' }));
+    expect(JSON.stringify(record.mock.calls)).not.toContain('segredo');
+  });
+
+  it('defaults to read and 600 s', async () => {
+    const { app, service } = build();
+    await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi' });
+    expect(service.create.mock.calls[0]![1]).toMatchObject({ capabilities: ['read'], timeout_s: 600 });
+  });
+
+  it('a replay of the same idempotency key answers the same run and is not audited again', async () => {
+    const service = fakeService();
+    service.create.mockResolvedValue({ run: run(), created: false });
+    const { app, repos } = build({ service });
+    const r = await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi', idempotency_key: 'k1' });
+    expect(r.statusCode).toBe(202);
+    expect(r.json().run_id).toBe('run1');
+    expect(repos.securityEvents.record).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['an unknown field', { project: 'TER', prompt: 'oi', argv: ['--x'] }],
+    ['a timeout above 3600 s', { project: 'TER', prompt: 'oi', budget: { timeout_s: 3601 } }],
+    ['a prompt above 100 000 chars', { project: 'TER', prompt: 'x'.repeat(100_001) }],
+    ['an unknown capability', { project: 'TER', prompt: 'oi', capabilities: ['push'] }],
+  ])('answers 422 VALIDATION for %s', async (_n, body) => {
+    const { app, service } = build();
+    const r = await post(app, '/api/v1/runs', body);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().error.code).toBe('VALIDATION');
+    expect(service.create).not.toHaveBeenCalled();
+  });
+
+  it('answers 429 RATE_LIMITED with Retry-After', async () => {
+    const service = fakeService();
+    service.create.mockRejectedValue(new RunLimitError(42));
+    const { app } = build({ service });
+    const r = await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi' });
+    expect(r.statusCode).toBe(429);
+    expect(r.headers['retry-after']).toBe('42');
+    expect(r.json().error.code).toBe('RATE_LIMITED');
+  });
+
+  it('answers 409 NO_ACCOUNT_AVAILABLE with the reason per account', async () => {
+    const service = fakeService();
+    service.create.mockRejectedValue(new NoCandidateError('NO_ACCOUNT_AVAILABLE', tk('Nenhuma conta disponível para a run'), [{ account: 'pessoal', machine: 'jarvis', reason: 'usage_peak' }]));
+    const { app } = build({ service });
+    const r = await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi' });
+    expect(r.statusCode).toBe(409);
+    expect(r.json()).toEqual({ error: { code: 'NO_ACCOUNT_AVAILABLE', message: 'Nenhuma conta disponível para a run', candidates: [{ account: 'pessoal', machine: 'jarvis', reason: 'usage_peak' }] } });
+  });
+
+  it('answers 409 AGENT_OUTDATED when every machine runs an older agent', async () => {
+    const service = fakeService();
+    service.create.mockRejectedValue(new NoCandidateError('AGENT_OUTDATED', tk('Nenhuma conta disponível para a run'), [{ account: 'pessoal', machine: 'jarvis', reason: 'agent_outdated' }]));
+    const { app } = build({ service });
+    expect((await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi' })).json().error.code).toBe('AGENT_OUTDATED');
+  });
+
+  it('needs the runs:create grant', async () => {
+    const { app, service } = build({ grants: ['runs:read'] });
+    expect((await post(app, '/api/v1/runs', { project: 'TER', prompt: 'oi' })).statusCode).toBe(403);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/v1/runs/:id/events', () => {
+  it('streams the events as SSE (id = seq) and closes after done', async () => {
+    const { app } = build();
+    const r = await get(app, '/api/v1/runs/run1/events');
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toContain('text/event-stream');
+    const ids = [...r.body.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]));
+    expect(ids).toEqual([1, 2, 3, 4]);
+    expect(r.body).toContain('event: done\ndata: {"seq":4,"type":"done","at":"2026-11-11T00:00:04.000Z","status":"succeeded","result":"oi","usage":null}');
+  });
+
+  it('a reconnect with Last-Event-ID gets only what came after it', async () => {
+    const { app, service } = build();
+    const r = await get(app, '/api/v1/runs/run1/events', { authorization: `Bearer ${SECRET}`, 'last-event-id': '2' });
+    expect(service.subscribe.mock.calls[0]![1]).toBe(2);
+    expect([...r.body.matchAll(/^id: (\d+)$/gm)].map((m) => Number(m[1]))).toEqual([3, 4]);
+  });
+
+  it("answers 404 for another person's run, never a stream", async () => {
+    const { app, service } = build();
+    const r = await get(app, '/api/v1/runs/foreign/events');
+    expect(r.statusCode).toBe(404);
+    expect(service.subscribe).not.toHaveBeenCalled();
+  });
+
+  it('a client that disconnects stops its stream and never cancels the run', async () => {
+    const service = fakeService({ live: true });
+    const { app } = build({ service, keepAliveMs: 20 });
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    try {
+      const port = (app.server.address() as AddressInfo).port;
+      const body = await new Promise<string>((resolve, reject) => {
+        const req = http.get({ host: '127.0.0.1', port, path: '/api/v1/runs/run2/events', headers: { authorization: `Bearer ${SECRET}` } }, (res) => {
+          let text = '';
+          res.on('data', (c: Buffer) => {
+            text += c.toString();
+            // Two events and a keep-alive in: the client goes away mid-run.
+            if (text.includes('id: 2') && text.includes(': keep-alive')) {
+              req.destroy();
+              resolve(text);
+            }
+          });
+        });
+        req.on('error', (e) => (e.message.includes('socket hang up') ? undefined : reject(e)));
+      });
+      expect(body).toContain('id: 1');
+      await vi.waitFor(() => expect(service.stops[0]).toHaveBeenCalled());
+      expect(service.cancel).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('POST /api/v1/runs/:id/cancel', () => {
+  it('answers 202 with the new status and audits it', async () => {
+    const { app, service, repos } = build();
+    const r = await post(app, '/api/v1/runs/run2/cancel');
+    expect(r.statusCode).toBe(202);
+    expect(r.json()).toEqual({ run_id: 'run2', status: 'cancelled' });
+    expect(service.cancel).toHaveBeenCalledWith('u1', 'run2');
+    expect(repos.securityEvents.record).toHaveBeenCalledWith(expect.objectContaining({ action: 'api_run.cancel', target_id: 'run2' }));
+  });
+
+  it("answers 404 for another person's run", async () => {
+    const { app } = build();
+    expect((await post(app, '/api/v1/runs/foreign/cancel')).statusCode).toBe(404);
   });
 });

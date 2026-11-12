@@ -6,6 +6,7 @@ import {
   type RpcMethod,
   type RpcParams,
   type RpcResult,
+  type RunOpenParams,
   type TcpOpenParams,
 } from '@termhub/agent-protocol';
 import type { AgentChannel, AgentConnection, AgentPtyChannel, ChannelHandlers, PtyHandlers } from './connection.js';
@@ -115,6 +116,15 @@ export class AgentRegistry extends EventEmitter {
       return Promise.reject(new AgentOfflineError(`agent offline: ${machineId}`));
     }
     return conn.openClaude(params, handlers);
+  }
+
+  /** A headless API run on that machine (personal runs API, `runs/service.ts`). */
+  openRun(machineId: string, params: RunOpenParams, handlers: ChannelHandlers): Promise<AgentChannel> {
+    const conn = this.conns.get(machineId);
+    if (!conn) {
+      return Promise.reject(new AgentOfflineError(`agent offline: ${machineId}`));
+    }
+    return conn.openRun(params, handlers);
   }
 
   /** A tcp pipe to a WDA port on that machine (the simulator's agent tunnel). */
