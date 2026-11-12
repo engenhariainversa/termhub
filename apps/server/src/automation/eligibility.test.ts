@@ -35,6 +35,11 @@ describe('eligibilityOf', () => {
     expect(REASON_TEXT.epic_settling).toBeTruthy();
     expect(EPIC_SETTLE_CAP_MS).toBe(10 * 60_000);
   });
+  it('a card of an epic that runs in order waits for the earlier card, after the agent check (TER-1170)', () => {
+    expect(reason(input({ sequence_waits_on: 'AUV-31' }))).toBe('epic_sequence');
+    expect(reason(input({ sequence_waits_on: 'AUV-31', active_run: true }))).toBe('has_agent');
+    expect(eligibilityOf(input({ sequence_waits_on: null }))).toEqual({ eligible: true });
+  });
   it('a tagged card that passes every check is eligible', () => {
     expect(eligibilityOf(input())).toEqual({ eligible: true });
   });

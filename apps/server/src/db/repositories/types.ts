@@ -278,6 +278,8 @@ export interface Task {
   column_id: string | null;
   /** Tagged "automático" (eligible for automatic work); always false on subtasks. */
   auto: boolean;
+  /** Epics only (TER-1170): the automatic work takes the epic's cards one at a time, in board order. */
+  sequential: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -513,6 +515,7 @@ export const mapTask = (t: PrismaTask, key: string): Task => ({
   epic_id: t.epicId,
   column_id: t.columnId,
   auto: t.auto,
+  sequential: t.sequential,
   created_at: t.createdAt.toISOString(),
   updated_at: t.updatedAt.toISOString(),
 });

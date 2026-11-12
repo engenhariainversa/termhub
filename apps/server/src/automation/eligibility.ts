@@ -18,6 +18,8 @@ export type IneligibleReason =
   // TER-1170: a card of an epic that is still getting new cards waits for the batch, so a batch created
   // bottom-up does not start in creation order
   | 'epic_settling'
+  // TER-1170: the card's epic runs in order and an earlier card of it is not done yet
+  | 'epic_sequence'
   // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
   | 'no_account'
   | 'machine_offline'
@@ -55,6 +57,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   repo_missing: tk('Repositório não configurado no Setup'),
   no_ticket: tk('O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum'),
   just_created: tk('Card recém-criado; o automático começa em até 2 min'),
+  epic_sequence: tk('O épico executa em ordem; este card espera o anterior ficar pronto'),
   epic_settling: tk('O épico ainda está recebendo cards novos; o automático começa 2 min depois do último (até 10 min)'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
@@ -110,6 +113,8 @@ export interface EligibilityInput {
     just_created: boolean;
     /** TER-1170: its epic got a card less than `NEW_CARD_GRACE_MS` ago, and it is younger than `EPIC_SETTLE_CAP_MS` */
     epic_settling?: boolean;
+    /** TER-1170: its epic runs in order and this earlier card is not done yet (its ref); null/absent = its turn */
+    sequence_waits_on?: string | null;
   };
   project: { automation: ProjectAutomation; paused: boolean; repo_ready: boolean; capable_machines: number; require_ticket: boolean };
 }
@@ -131,6 +136,7 @@ export function eligibilityOf({ card, project }: EligibilityInput): Eligibility 
   if (card.column_category !== 'todo' || card.column_waiting) return no('not_in_todo');
   if (!card.description?.trim() && card.subtask_count === 0) return no('no_description');
   if (card.active_run || card.tab_alive) return no('has_agent');
+  if (card.sequence_waits_on) return no('epic_sequence');
   if (project.capable_machines === 0) return no('no_capable_machine');
   if (!project.repo_ready) return no('repo_missing');
   if (project.require_ticket && !card.has_ticket) return no('no_ticket');

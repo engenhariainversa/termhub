@@ -170,6 +170,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('TasksRepository (Postgres
     });
   });
 
+  // TER-1170
+  it('only an epic runs its cards in order', async () => {
+    const epic = await repo.create(projectId, { title: 'E', type: 'epic' });
+    expect(epic.sequential).toBe(false);
+    expect((await repo.setSequential(epic.id, true))!.sequential).toBe(true);
+    const card = await repo.create(projectId, { title: 'c', epic_id: epic.id });
+    await expect(repo.setSequential(card.id, true)).rejects.toMatchObject({ code: 'SEQUENTIAL_ONLY_EPIC' });
+    expect(await repo.setSequential('missing', true)).toBeUndefined();
+  });
+
   describe('subtasks', () => {
     it('appends subtasks in call order and nests them in the list', async () => {
       const parent = await repo.create(projectId, { title: 'parent' });

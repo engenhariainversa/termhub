@@ -40,6 +40,8 @@ export interface TaskOut {
   tab_id: string | null;
   /** tagged "automático" (eligible for automatic work) */
   auto: boolean;
+  /** epics only (TER-1170): the automatic work takes its cards one at a time, in board order */
+  sequential?: boolean;
   /** the external ticket this card came from (Linear/Jira/GitHub), or null */
   ticket: { key: string; url: string; state: string; provider: string } | null;
   created_at: string;
@@ -78,6 +80,7 @@ export function boardUrl(projectId: string): string {
 export const taskOut = (t: Task): TaskOut => ({
   id: t.id, project_id: t.project_id, type: t.type, ref: t.ref, url: cardUrl(t.ref), title: t.title, description: t.description, status: t.status,
   position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id, auto: t.auto,
+  ...(t.type === 'epic' ? { sequential: t.sequential } : {}),
   ticket: (() => { const l = readTicketLink(t.external_ref); return l ? { key: l.key, url: l.url, state: l.state, provider: l.provider } : null; })(),
   created_at: t.created_at, updated_at: t.updated_at,
 });
@@ -148,12 +151,12 @@ async function confirmDoneWithOpenPr(ctx: ControlContext, task: Task, toDone: bo
 
 export async function updateTask(
   ctx: ControlContext,
-  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean; confirm?: boolean },
+  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean; sequential?: boolean; confirm?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
   const fields = [input.title, input.description, input.status, input.type, input.epic_id];
-  if (fields.every((v) => v === undefined) && input.auto === undefined) {
-    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto');
+  if (fields.every((v) => v === undefined) && input.auto === undefined && input.sequential === undefined) {
+    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, auto ou sequential');
   }
   await confirmDoneWithOpenPr(ctx, task, input.status === 'done', input.confirm);
   let updated: Task | undefined = task;
@@ -168,6 +171,11 @@ export async function updateTask(
     await recordTagChange(ctx.repos, task, input.auto, changed, viaOf(ctx));
     if (input.auto) dispatchTriggers.poke('tag_set');
     updated = await ctx.repos.tasks.findById(task.id);
+  }
+  if (updated && input.sequential !== undefined) {
+    updated = await rules(() => ctx.repos.tasks.setSequential(task.id, input.sequential!));
+    // turning it off may free cards that waited for their turn
+    if (!input.sequential) dispatchTriggers.poke('tag_set');
   }
   if (!updated) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');
   return { task: taskOut(updated), board_url: boardUrl(task.project_id) };

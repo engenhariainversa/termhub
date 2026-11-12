@@ -342,6 +342,15 @@ export class TasksRepository {
     });
   }
 
+  /** TER-1170: an epic's "executar em ordem". Undefined when the card does not exist; refused on anything but an epic. */
+  async setSequential(taskId: string, sequential: boolean): Promise<Task | undefined> {
+    const cur = await this.db.task.findUnique({ where: { id: taskId }, select: { type: true } });
+    if (!cur) return undefined;
+    if (cur.type !== 'epic') throw new TaskRuleError('SEQUENTIAL_ONLY_EPIC');
+    await this.db.task.update({ where: { id: taskId }, data: { sequential } });
+    return this.findById(taskId);
+  }
+
   /** Moves a top-level card to a column (or a status) at `position` (clamped), closing its old gap. */
   async move(id: string, target: MoveTarget, position: number): Promise<Task | undefined> {
     return this.db.$transaction(async (tx) => {
