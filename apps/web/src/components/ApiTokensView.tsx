@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useFeatureFlag } from '../lib/feature-flags';
 import type { ApiToken, ApiTokenEvent, ApiTokenScope, CreatedApiToken } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
 import { formatDate, formatDateTime, formatNumber } from '../lib/format';
@@ -11,7 +12,11 @@ const SCOPES: { key: ApiTokenScope; label: string; short: string; hint: string }
   { key: 'tasks', label: tk('Tarefas'), short: tk('tarefas'), hint: tk('criar, editar, mover e excluir tarefas e subtarefas') },
   { key: 'terminals', label: tk('Terminais'), short: tk('terminais'), hint: tk('abrir abas, digitar e iniciar agentes nas suas máquinas') },
   { key: 'memory', label: tk('Memória (gravar anotações)'), short: tk('memória'), hint: tk('anotar decisões no chat, para consultar depois') },
+  // Personal runs API (TER-1176): offered only while `runs_api` is on; the server refuses it otherwise.
+  { key: 'runs', label: tk('Runs'), short: tk('runs'), hint: tk('Executar prompts nas suas contas e máquinas') },
 ];
+/** Scopes offered only behind a feature flag (the list of existing tokens still names them). */
+const FLAGGED_SCOPES: ApiTokenScope[] = ['runs'];
 const EXPIRY: { value: string; label: string }[] = [
   { value: '30', label: tk('30 dias') },
   { value: '90', label: tk('90 dias') },
@@ -162,6 +167,8 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
   const [expiry, setExpiry] = useState('90');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runsApi = useFeatureFlag('runs_api');
+  const offered = SCOPES.filter((s) => runsApi || !FLAGGED_SCOPES.includes(s.key));
 
   const toggle = (s: ApiTokenScope) => setScopes((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
 
@@ -170,7 +177,7 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
     setBusy(true);
     setError(null);
     try {
-      const ordered = SCOPES.map((s) => s.key).filter((k) => scopes.includes(k));
+      const ordered = offered.map((s) => s.key).filter((k) => scopes.includes(k));
       onCreated(await api.apiTokens.create({ name: name.trim(), scopes: ordered, expires_in_days: expiry ? Number(expiry) : null }));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t('Erro ao criar token'));
@@ -190,7 +197,7 @@ function CreateTokenModal({ onClose, onCreated }: { onClose: () => void; onCreat
         </div>
         <fieldset className="space-y-1.5">
           <legend className="label">{t('Escopos')}</legend>
-          {SCOPES.map((s) => (
+          {offered.map((s) => (
             <label key={s.key} className="flex items-start gap-2 text-sm">
               <input type="checkbox" className="mt-1" checked={scopes.includes(s.key)} onChange={() => toggle(s.key)} />
               <span>

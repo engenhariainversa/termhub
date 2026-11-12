@@ -617,5 +617,8 @@
   "Adicionar bloqueio": "Añadir bloqueo",
   "Criou uma run pela API": "Creó una ejecución por la API",
   "Cancelou uma run da API": "Canceló una ejecución de la API",
-  "Runs da API": "Ejecuciones de la API"
+  "Runs da API": "Ejecuciones de la API",
+  "Runs": "Ejecuciones",
+  "runs": "ejecuciones",
+  "Executar prompts nas suas contas e máquinas": "Ejecutar prompts en tus propias cuentas y máquinas"
 }

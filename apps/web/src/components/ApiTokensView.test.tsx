@@ -18,7 +18,7 @@ vi.mock('../lib/api', () => {
   };
 });
 
-const authMock = { can: () => true };
+const authMock: { can: () => boolean; user?: { features: Record<string, boolean> } } = { can: () => true };
 vi.mock('../lib/auth', () => ({ useAuth: () => authMock }));
 
 const tok = (over: Partial<ApiToken> & { id: string }): ApiToken => ({
@@ -42,6 +42,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   authMock.can = () => true;
+  delete authMock.user;
 });
 
 describe('tokenStatus', () => {
@@ -137,6 +138,28 @@ describe('ApiTokensView', () => {
     render(<ApiTokensView />);
     const row = (await screen.findByText('concierge')).closest('tr')!;
     expect(within(row).getByText('ler, memória')).toBeTruthy();
+  });
+
+  // TER-1176: the runs scope is offered only behind the runs_api flag
+  it('does not offer the runs scope while runs_api is off', async () => {
+    render(<ApiTokensView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Novo token' }));
+    expect(screen.getByLabelText(/^Memória \(gravar anotações\)/)).toBeTruthy();
+    expect(screen.queryByLabelText(/^Runs/)).toBeNull();
+    expect(screen.queryByText(/Executar prompts nas suas contas e máquinas/)).toBeNull();
+  });
+
+  it('offers the runs scope with its explanation while runs_api is on and sends it on creation', async () => {
+    authMock.user = { features: { runs_api: true } };
+    createMock.mockResolvedValue({ api_token: tok({ id: 'new', name: 'ci', scopes: ['read', 'runs'] }), token: SECRET, mcp_url: null });
+    render(<ApiTokensView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Novo token' }));
+    expect(screen.getByText(/Executar prompts nas suas contas e máquinas/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'ci' } });
+    fireEvent.click(screen.getByLabelText(/^Runs/));
+    fireEvent.click(screen.getByLabelText(/^Ler/));
+    fireEvent.click(screen.getByRole('button', { name: 'Criar token' }));
+    await waitFor(() => expect(createMock).toHaveBeenCalledWith({ name: 'ci', scopes: ['read', 'runs'], expires_in_days: 90 }));
   });
 
   it('revokes after confirmation', async () => {

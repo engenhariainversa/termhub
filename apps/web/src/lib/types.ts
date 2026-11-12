@@ -2121,6 +2121,29 @@ export interface ApiTokenEvent {
   created_at: string;
 }
 
+export type ApiRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+
+/** A run of the personal runs API (TER-1176) as `GET /api/runs` answers it (server `runs/view.ts`). Never the prompt. */
+export interface ApiRun {
+  id: string;
+  project_id: string;
+  status: ApiRunStatus;
+  provider: string | null;
+  model: string | null;
+  capabilities: string[];
+  machine: { id: string; name: string | null } | null;
+  account: string | null;
+  workspace: { kind: 'project' | 'worktree'; path: string; branch: string | null } | null;
+  result: string | null;
+  usage: { input_tokens: number; output_tokens: number; cost_usd?: number } | null;
+  error: { code: string; message: string | null } | null;
+  timeout_s: number;
+  created_at: string;
+  started_at: string | null;
+  ended_at: string | null;
+  events_url: string;
+}
+
 /** One row of the security trail (TER-577). `action` stays a plain string: one a newer server adds shows as is. */
 export interface SecurityEvent {
   id: string;
