@@ -141,6 +141,17 @@ it('falls back to the verb alone when nothing at all can be resolved (no tab, no
   expect(card.summary).toBe('criar a tarefa "Nova tarefa"');
 });
 
+it('names a feature in testing by its screen name (TER-1186)', async () => {
+  const repos = fakeRepos();
+  const [on, back] = await describeActions(
+    repos,
+    [action({ tool: 'set_feature_flag', args: { flag: 'chat_open_permissions', enabled: true } }), action({ tool: 'set_feature_flag', args: { flag: 'tab_gc', enabled: null } })],
+    OWNER,
+  );
+  expect(on.summary).toBe('ligar o recurso em teste «Chat: liberado por padrão» na sua conta');
+  expect(back.summary).toBe('voltar o recurso em teste «Coletor de abas (teste)» ao valor de todos na sua conta');
+});
+
 // The close_tab card names the tab's origin (TER-184) so the one confirmation the gate now asks for
 // (Task 1: a gated token may close any of the user's tabs after this single "yes") is informed —
 // the user is told plainly whether they are approving the chat closing its own tab or one of theirs.

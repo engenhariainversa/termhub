@@ -40,6 +40,7 @@ import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
 import { listCommandRulesTool, proposeCommandRule } from '../control/command-rules.js';
 import { blockAction, listBlocksTool, unblockAction } from '../control/blocks.js';
+import { listFeatureFlags, setFeatureFlag } from '../control/feature-flags.js';
 import { BLOCK_EFFECTS, BLOCK_KINDS, type BlockEffect, type BlockKind } from '../chat/open-permissions.js';
 import { getClientContext } from '../control/client-context.js';
 import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
@@ -338,6 +339,23 @@ export const TOOLS: ToolDef[] = [
     scope: 'read', resource: 'chat', action: 'create',
     input: { block_id: z.string().min(1).max(64) },
     run: (ctx, a) => unblockAction(ctx, a as { block_id: string }),
+  },
+  {
+    name: 'list_feature_flags',
+    description:
+      'List the person\'s features in testing (Configurações › Recursos em teste) that you may switch for them: key, name and description (pt-BR), enabled (the value in force for them), source (default: the code\'s default; instance: the switch for everyone; override: their own value), instance (the value for everyone) and override (their own value, or null). Only for someone who can open that screen. Agent tabs cannot call it.',
+    scope: 'read', resource: 'feature_flags', action: 'read',
+    input: {},
+    run: (ctx) => listFeatureFlags(ctx),
+  },
+  {
+    name: 'set_feature_flag',
+    description:
+      'Turn a feature in testing on or off for the person\'s own account, when they ask ("liga o liberado por padrão pra mim"), never on your own: the same per-person value the Recursos em teste screen sets. flag: a key from list_feature_flags; enabled: true or false sets their own value, null removes it (back to the value for everyone). Turning one on asks the person on a card; turning one off runs at once. Never changes the value for everyone nor anyone else\'s. Agent tabs cannot call it.',
+    // `terminals`, like set_chat_account: a token minted read-only never changes what its owner's chat may do
+    scope: 'terminals', resource: 'feature_flags', action: 'update',
+    input: { flag: z.string().min(1).max(64), enabled: z.boolean().nullable() },
+    run: (ctx, a) => setFeatureFlag(ctx, a as { flag: string; enabled: boolean | null }),
   },
   {
     name: 'propose_command_rule',
