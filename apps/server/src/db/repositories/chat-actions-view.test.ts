@@ -210,6 +210,20 @@ it('create_project names the project, the key, the group and the folder, on the 
   expect(plain.summary).toBe('criar o projeto "Piki" com a chave PIKI');
 });
 
+it('create_project names the project it inherits rules from, by name only when it is the person\'s (TER-1169)', async () => {
+  const repos = fakeRepos();
+  const [own, foreign] = await describeActions(
+    repos,
+    [
+      action({ id: 'c1', tool: 'create_project', args: { name: 'Piki', key: 'PIKI', inherit_rules_from: 'p1' } }),
+      action({ id: 'c2', tool: 'create_project', args: { name: 'Piki', key: 'PIKI', inherit_rules_from: 'pz' } }),
+    ],
+    OWNER,
+  );
+  expect(own.summary).toBe('criar o projeto "Piki" com a chave PIKI, herdando as regras do projeto "reactivando"');
+  expect(foreign.summary).toBe('criar o projeto "Piki" com a chave PIKI, herdando as regras do projeto "pz"');
+});
+
 it('names link_project_machine by the folder it links, in the project and on the machine', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(

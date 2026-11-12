@@ -363,7 +363,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'create_project',
     description:
-      'Create a project, as the Projetos screen does (same rules: the key is unique, 2 to 10 uppercase letters or digits starting with a letter, and never changes). Use it when the person asks for a new project instead of sending them to the screen. name: the project name. key: omit to use the suggestion from the name (initials, or the first three letters); say it to the person before calling. description: optional. group: optional, the id or name of one of the person\'s own groups (list_project_groups); the project goes at its end. machine_id + cwd (both or neither): link the first machine right away, with the same checks as link_project_machine (create_dir: true creates the folder empty). In the chat the person confirms on a card showing name, key, group and machine/folder. Answers the project (id, key, url), the group and the machine link.',
+      'Create a project, as the Projetos screen does (same rules: the key is unique, 2 to 10 uppercase letters or digits starting with a letter, and never changes). Use it when the person asks for a new project instead of sending them to the screen. name: the project name. key: omit to use the suggestion from the name (initials, or the first three letters); say it to the person before calling. description: optional. group: optional, the id or name of one of the person\'s own groups (list_project_groups); the project goes at its end. machine_id + cwd (both or neither): link the first machine right away, with the same checks as link_project_machine (create_dir: true creates the folder empty). inherit_rules_from: optional, the id of one of the person\'s projects (find): the new project starts with a copy of that project\'s current rules (Regras vigentes scoped to it; the account-wide ones already hold everywhere) — offer it when the new project resembles an existing one. In the chat the person confirms on a card showing name, key, group, machine/folder and the project the rules come from. Answers the project (id, key, url), the group, the machine link and inherited_rules (from, count).',
     scope: 'terminals', resource: 'projects', action: 'create',
     input: {
       name: z.string().trim().min(1).max(120),
@@ -373,6 +373,7 @@ export const TOOLS: ToolDef[] = [
       machine_id: id.optional(),
       cwd: PROJECT_CWD.optional(),
       create_dir: z.boolean().optional(),
+      inherit_rules_from: id.optional(),
     },
     run: (ctx, a) => createProject(ctx, a as unknown as CreateProjectInput),
   },

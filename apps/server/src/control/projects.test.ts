@@ -16,8 +16,14 @@ const groups = [
   { id: 'g1', name: 'Clientes', kind: 'custom', position: 1, project_ids: ['p0', 'hidden'] },
 ];
 
-function ctxWith(over: { create?: ReturnType<typeof vi.fn>; machine?: ReturnType<typeof vi.fn> } = {}) {
+const rule = (id: string, over: Record<string, unknown> = {}) => ({ id, title: `Pergunta ${id}`, text: `Decisão: resposta ${id}\nMotivo: m\nFontes: `, project_id: 'p0', scope: 'project', ...over });
+
+function ctxWith(over: { create?: ReturnType<typeof vi.fn>; machine?: ReturnType<typeof vi.fn>; project?: ReturnType<typeof vi.fn>; rules?: ReturnType<typeof rule>[] } = {}) {
   const repos = {
+    memoryItems: {
+      currentNotes: vi.fn(async () => over.rules ?? []),
+      upsertMany: vi.fn(async (items: unknown[]) => items),
+    },
     projects: {
       create: over.create ?? vi.fn(async (input: { owner_id: string; key: string; name: string }) => ({ id: 'p9', is_public: false, status: 'active', ...input })),
       list: vi.fn(async () => [{ id: 'p0' }, { id: 'p9' }]),
@@ -28,8 +34,11 @@ function ctxWith(over: { create?: ReturnType<typeof vi.fn>; machine?: ReturnType
   return {
     repos,
     scope: { user: { id: 'u1' }, ownerId: 'u1', createAs: 'u1' },
-    scoped: { machine: over.machine ?? vi.fn(async () => machine) },
-  } as never as Parameters<typeof createProject>[0] & { repos: typeof repos; scoped: { machine: ReturnType<typeof vi.fn> } };
+    scoped: {
+      machine: over.machine ?? vi.fn(async () => machine),
+      project: over.project ?? vi.fn(async (id: string) => ({ project: { id, name: 'Opa Pingou', owner_id: 'u1' } })),
+    },
+  } as never as Parameters<typeof createProject>[0] & { repos: typeof repos; scoped: { machine: ReturnType<typeof vi.fn>; project: ReturnType<typeof vi.fn> } };
 }
 
 beforeEach(() => {
@@ -52,6 +61,46 @@ describe('createProjectRecord', () => {
     const r = await createProjectRecord(ctx.repos as never, 'u1', { name: 'Piki', key: 'PIKI' });
     expect(ctx.repos.projectMachines.link).not.toHaveBeenCalled();
     expect(r.link).toBeNull();
+  });
+});
+
+describe('"Herdar regras de" (TER-1169)', () => {
+  it('copies the source project\'s own current rules into the new project, citing each one', async () => {
+    const ctx = ctxWith({ rules: [rule('n2'), rule('n1'), rule('everywhere', { scope: 'user' }), rule('nul', { project_id: null, scope: 'user' })] });
+    const r = await createProject(ctx, { name: 'Piki Digital', key: 'PIKI', inherit_rules_from: 'p0' });
+    expect(ctx.scoped.project).toHaveBeenCalledWith('p0');
+    expect(ctx.repos.memoryItems.currentNotes).toHaveBeenCalledWith('u1', 'p0', expect.any(Number));
+    const items = ctx.repos.memoryItems.upsertMany.mock.calls[0]![0] as { owner_id: string; project_id: string; kind: string; scope: string; title: string; text: string; written_by: string }[];
+    // only the rules scoped to the source; the account-wide ones already hold everywhere. Oldest first.
+    expect(items.map((i) => i.title)).toEqual(['Pergunta n1', 'Pergunta n2']);
+    expect(items[0]).toMatchObject({ owner_id: 'u1', project_id: 'p9', kind: 'note', scope: 'project', written_by: 'person' });
+    expect(items[0]!.text).toBe('Decisão: resposta n1\nMotivo: Herdada do projeto Opa Pingou ao criar este projeto.\nFontes: note:n1');
+    expect(r.inherited_rules).toEqual({ from: { id: 'p0', name: 'Opa Pingou' }, count: 2 });
+  });
+
+  it('a project outside the person\'s scope is refused before anything is created', async () => {
+    const ctx = ctxWith({ project: vi.fn(async () => Promise.reject(new HttpError(404, 'Projeto não encontrado'))) });
+    await expect(createProject(ctx, { name: 'Piki', key: 'PIKI', inherit_rules_from: 'px' })).rejects.toBeInstanceOf(HttpError);
+    expect(ctx.repos.projects.create).not.toHaveBeenCalled();
+    expect(ctx.repos.memoryItems.currentNotes).not.toHaveBeenCalled();
+  });
+
+  it('never copies across owners, and a source with no rules of its own copies nothing', async () => {
+    const ctx = ctxWith({ rules: [rule('n1')] });
+    const r = await createProjectRecord(ctx.repos as never, 'u1', { name: 'Piki', key: 'PIKI' }, undefined, { id: 'p0', name: 'Outro', owner_id: 'u2' } as never);
+    expect(r.inherited_rules).toBe(0);
+    expect(ctx.repos.memoryItems.currentNotes).not.toHaveBeenCalled();
+    const empty = ctxWith({ rules: [rule('u', { scope: 'user' })] });
+    const r2 = await createProject(empty, { name: 'Piki', key: 'PIKI', inherit_rules_from: 'p0' });
+    expect(empty.repos.memoryItems.upsertMany).not.toHaveBeenCalled();
+    expect(r2.inherited_rules).toEqual({ from: { id: 'p0', name: 'Opa Pingou' }, count: 0 });
+  });
+
+  it('without inherit_rules_from nothing is read and the answer has no inherited_rules', async () => {
+    const ctx = ctxWith();
+    const r = await createProject(ctx, { name: 'Piki', key: 'PIKI' });
+    expect(ctx.repos.memoryItems.currentNotes).not.toHaveBeenCalled();
+    expect(r).not.toHaveProperty('inherited_rules');
   });
 });
 

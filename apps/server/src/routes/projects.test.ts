@@ -94,6 +94,10 @@ function buildApp() {
       }),
     },
     tasks: { openCountByProject: vi.fn(async () => ({ p1: 2 })) },
+    memoryItems: {
+      currentNotes: vi.fn(async () => [{ id: 'n1', title: 'Idioma dos PRs', text: 'Decisão: inglês\nMotivo: m\nFontes: ', project_id: 'p1', scope: 'project' }]),
+      upsertMany: vi.fn(async (items: unknown[]) => items),
+    },
     apiTokens: { revokeForTabs: vi.fn(async (ids: string[]) => ids.length) },
   };
   app.register((a) => projectRoutes(a, repos as unknown as Repositories, { simulators: { isReady: () => false } as never }), { prefix: '/projects' });
@@ -148,6 +152,17 @@ describe('POST /projects', () => {
     expect(ensureDirectory).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), '/home/u/novo/', true);
     expect(repos.projectMachines.link).toHaveBeenCalledWith({ project_id: 'new', machine_id: 'm1', cwd: '/home/u/novo' });
     expect(r.json().project.machines).toEqual([expect.objectContaining({ machine_id: 'm1', cwd: '/home/u/novo' })]);
+  });
+
+  it('starts with a copy of another project\'s rules, and refuses a project outside the scope (TER-1169)', async () => {
+    const { app, repos } = buildApp();
+    const r = await app.inject({ method: 'POST', url: '/projects', payload: { name: 'Novo', key: 'NOVO', inherit_rules_from: 'p1' } });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().inherited_rules).toBe(1);
+    expect(repos.memoryItems.upsertMany).toHaveBeenCalledWith([expect.objectContaining({ project_id: 'new', title: 'Idioma dos PRs', scope: 'project' })]);
+    const foreign = await app.inject({ method: 'POST', url: '/projects', payload: { name: 'Outro', key: 'OUTRO', inherit_rules_from: 'px' } });
+    expect(foreign.statusCode).toBe(400);
+    expect(repos.projects.create).toHaveBeenCalledTimes(1);
   });
 
   it.each([
