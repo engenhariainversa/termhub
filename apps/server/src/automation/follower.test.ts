@@ -923,6 +923,22 @@ describe('Claude\'s trust question (never answered by the automation)', () => {
     expect(w.type).not.toHaveBeenCalled();
   });
 
+  it('TER-1148: a tab the monitor saw on a dialog it could not answer (trust_prompt) parks the run after 2 minutes, and stays parked', async () => {
+    const w = world({ tab: { state: 'trust_prompt', state_text: 'O Claude Code pergunta se esta pasta é confiável', state_at: ago(60_000).toISOString() } });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.events).toEqual([]);
+    w.setNow(new Date(NOW.getTime() + 60_000));
+    await followRun(w.deps, w.run.id);
+    await sweepRuns(w.deps);
+    expect(w.type).not.toHaveBeenCalled();
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'needs_person' });
+    expect(w.events).toEqual([expect.objectContaining({ kind: 'escalated', payload: { reason: 'trust_prompt', tab_id: 'tab1' } })]);
+    // still on the dialog: not taken for the person's answer
+    await sweepRuns(w.deps);
+    expect(w.run).toMatchObject({ status: 'waiting', waiting_reason: 'needs_person' });
+  });
+
   it('a first start with no hook at all (trust question of a new worktree) is parked after the wait, never typed into', async () => {
     const w = world({ run: { started_at: ago(60_000) }, tab: { state: null, state_text: null, state_at: null } as Partial<Tab> });
     await sweepRuns(w.deps);

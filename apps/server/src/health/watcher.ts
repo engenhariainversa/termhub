@@ -28,6 +28,9 @@ type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 
 export const HEALTH_SWEEP_MS = 5 * 60_000;
 const FIRST_SWEEP_MS = 3 * 60_000;
+
+/** TER-1168: signs that wake the chat also on a project without automatic work. */
+export const WAKES_WITHOUT_AUTOMATION: readonly string[] = ['approval_stalled'];
 /** A wake that could not start (the chat's host is away) waits this long, doubling up to `WAKE_RETRY_MAX_MS`. */
 const WAKE_RETRY_FIRST_MS = 5 * 60_000;
 const WAKE_RETRY_MAX_MS = 60 * 60_000;
@@ -114,8 +117,9 @@ export function createHealthWatcher(deps: HealthWatcherDeps): HealthWatcher {
       }
     }
 
-    if (!wake) return;
-    const toWake = open.filter((a) => !a.woken_at);
+    // TER-1168: a card of the chat nobody answered wakes the chat that asked it even without automatic work: it is
+    // the chat's own promise that waits, not a tab the person drives.
+    const toWake = open.filter((a) => !a.woken_at && (wake || WAKES_WITHOUT_AUTOMATION.includes(a.signal)));
     const wait = retry.get(project.id);
     if (!toWake.length || (wait && wait.at > at.getTime())) return;
     const won = new Set(await store.claimWake(toWake.map((a) => a.id), at));
@@ -123,17 +127,26 @@ export function createHealthWatcher(deps: HealthWatcherDeps): HealthWatcher {
     if (!mine.length) return;
     // what was pushed in an earlier sweep counts as told too
     for (const a of mine) if (a.noticed_at) noticed.add(a.id);
-    try {
-      const rules = await currentRulesBlock(deps.repos, owner.id, project.id);
-      const started = await deps.chat.wake(owner, conversation.id, healthWakeText(mine, noticed, at, rules));
-      retry.delete(project.id);
-      deps.log.info({ projectId: project.id, conversationId: conversation.id, alerts: mine.map((a) => a.signal) }, 'health: chat woken');
-      started.done.catch((err: unknown) => deps.log.warn({ conversationId: conversation.id, code: failureLabel(err) }, 'health: wake run failed'));
-    } catch (err) {
-      await store.releaseWake(mine.map((a) => a.id)).catch(() => undefined);
-      const pause = Math.min(WAKE_RETRY_MAX_MS, wait ? wait.pause * 2 : WAKE_RETRY_FIRST_MS);
-      retry.set(project.id, { at: now().getTime() + pause, pause });
-      deps.log.warn({ projectId: project.id, code: failureLabel(err) }, 'health: wake failed, will retry');
+    // each card's own conversation hears about it; the rest goes to the project's chat
+    const byConversation = new Map<string, HealthAlert[]>();
+    for (const a of mine) {
+      const id = typeof a.detail.conversation_id === 'string' && a.signal === 'approval_stalled' ? a.detail.conversation_id : conversation.id;
+      byConversation.set(id, [...(byConversation.get(id) ?? []), a]);
+    }
+    const rules = await currentRulesBlock(deps.repos, owner.id, project.id);
+    for (const [conversationId, alerts] of byConversation) {
+      try {
+        const started = await deps.chat.wake(owner, conversationId, healthWakeText(alerts, noticed, at, rules));
+        retry.delete(project.id);
+        deps.log.info({ projectId: project.id, conversationId, alerts: alerts.map((a) => a.signal) }, 'health: chat woken');
+        started.done.catch((err: unknown) => deps.log.warn({ conversationId, code: failureLabel(err) }, 'health: wake run failed'));
+      } catch (err) {
+        // the host away (or the conversation archived meanwhile): tried again after a pause
+        await store.releaseWake(alerts.map((a) => a.id)).catch(() => undefined);
+        const pause = Math.min(WAKE_RETRY_MAX_MS, wait ? wait.pause * 2 : WAKE_RETRY_FIRST_MS);
+        retry.set(project.id, { at: now().getTime() + pause, pause });
+        deps.log.warn({ projectId: project.id, conversationId, code: failureLabel(err) }, 'health: wake failed, will retry');
+      }
     }
   }
 

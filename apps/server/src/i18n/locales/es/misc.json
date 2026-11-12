@@ -137,6 +137,7 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda.",
   "o card saiu do automático": "la tarjeta salió del trabajo automático",
   "Aba {{tab}}: pasta do projeto confiada sozinha": "Pestaña {{tab}}: carpeta del proyecto marcada como confiable automáticamente",
+  "Aba {{tab}}: worktree do card confiada sozinha": "Pestaña {{tab}}: worktree de la tarjeta marcada como confiable automáticamente",
   "a aba foi fechada": "la pestaña se cerró",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub siguió fallando en el push o en el PR después de los reintentos automáticos; revisa la pestaña y reanuda.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub inestable; la corrección del CI se pide de nuevo cuando vuelva",
@@ -238,5 +239,7 @@
   "Épico em ordem": "Épica en orden",
   "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Muestra la opción \"Ejecutar en orden\" en la épica: el trabajo automático toma una tarjeta a la vez, en el orden del tablero, y solo pasa a la siguiente cuando la anterior está en Hecho con su PR fusionado.",
   "API de runs": "API de ejecuciones",
-  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Permite crear tokens con el alcance runs y ejecutar prompts por la API (/api/v1/runs) en tus propias cuentas de IA y máquinas, y muestra las ejecuciones de la API en Progreso. Desactivado, las rutas no existen y el alcance no aparece."
+  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Permite crear tokens con el alcance runs y ejecutar prompts por la API (/api/v1/runs) en tus propias cuentas de IA y máquinas, y muestra las ejecuciones de la API en Progreso. Desactivado, las rutas no existen y el alcance no aparece.",
+  "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Confirmación del chat sin respuesta desde hace {{duration}}: {{label}}",
+  "Confirmação do chat sem resposta": "Confirmación del chat sin respuesta"
 }

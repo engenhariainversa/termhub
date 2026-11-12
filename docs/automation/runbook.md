@@ -217,8 +217,9 @@ project linked to the machine). They show in the feed and in `list_automation_ev
 
 `run_command` asks for every command except two cases, both only in a shell tab (no agent in it):
 
-- **The read-only list**, on for everyone: `git status`, `git log`, `git diff`, `git show`, `git branch`
-  (listing only), `gh pr view/checks/list`, `gh run view/list`, `ls`, `pwd`, `df`, `du`, `ps`, `uptime`,
+- **The read-only list**, on for everyone: `git status`, `git log`, `git diff`, `git show`, `git shortlog`,
+  `git rev-list`, `git blame`, `git ls-files` (also after `--no-pager`), `git branch` (listing only), `git remote [-v]`,
+  `gh pr view/checks/list/diff`, `gh run view/list` (`--log`, `--log-failed` too), `ls`, `pwd`, `df`, `du`, `ps`, `uptime`,
   `which`, `whoami`, `uname`, `cat`/`head`/`tail` of files under the tab's directory, `<program> --version`.
   Turn it off in Permissões do chat › Liberadas por padrão.
 - **Your command rules.** On a command's confirmation card, "Permitir sempre este comando neste projeto"

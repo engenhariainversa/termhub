@@ -137,6 +137,7 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
   "o card saiu do automático": "the card left automatic work",
   "Aba {{tab}}: pasta do projeto confiada sozinha": "Tab {{tab}}: project folder trusted automatically",
+  "Aba {{tab}}: worktree do card confiada sozinha": "Tab {{tab}}: card worktree trusted automatically",
   "a aba foi fechada": "the tab was closed",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
@@ -238,5 +239,7 @@
   "Épico em ordem": "Epic in order",
   "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Shows the \"Run in order\" option on an epic: automatic work takes one card at a time, in board order, and only moves to the next once the previous one is in Done with its PR merged.",
   "API de runs": "Runs API",
-  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Lets you create tokens with the runs scope and run prompts through the API (/api/v1/runs) on your own AI accounts and machines, and shows the API runs in Progress. Off, the routes do not exist and the scope does not show."
+  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Lets you create tokens with the runs scope and run prompts through the API (/api/v1/runs) on your own AI accounts and machines, and shows the API runs in Progress. Off, the routes do not exist and the scope does not show.",
+  "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Chat confirmation unanswered for {{duration}}: {{label}}",
+  "Confirmação do chat sem resposta": "Chat confirmation unanswered"
 }

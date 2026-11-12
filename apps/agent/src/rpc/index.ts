@@ -51,6 +51,7 @@ export const handlers: Handlers = {
   'ai.login.cancel': aiLogin.cancel,
   'secret.read': secret.read,
   'claude.linkSession': claude.linkSession,
+  'claude.trustFolder': claude.trustFolder,
   'docs.scan': docs.scan,
   'docs.read': docs.read,
   'aimemory.pages': aiMemory.pages,

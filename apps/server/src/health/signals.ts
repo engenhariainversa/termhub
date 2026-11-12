@@ -29,7 +29,7 @@ export interface Observation {
 export const PERSON_WAITS: readonly string[] = ['merge_person_card'];
 
 /** Signs that run on every project: a person's own tabs and machines stall too. The rest need automation on. */
-export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited'];
+export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited', 'approval_stalled'];
 
 export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   pr_ready: 'needs_you',
@@ -45,7 +45,15 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   epic_zombie: 'concierge',
   done_unmerged: 'concierge',
   agent_exited: 'concierge',
+  approval_stalled: 'concierge',
 };
+
+/**
+ * TER-1148: a tab on the folder trust dialog waits on nobody but the person (the server already answers it
+ * wherever it may), and its agent has not even started: past this long it opens as `needs_you`, whatever the
+ * `tab_waiting` minutes say.
+ */
+export const TRUST_PROMPT_ALERT_MS = 2 * 60_000;
 
 /** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login, a CLI dialog. */
 export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required', 'cli_dialog'] as const;
@@ -99,6 +107,16 @@ export interface SnapshotTab {
   card_ref?: string | null;
   /** TER-1168: an open watch of a chat follows it: that watch already wakes the chat about the exit */
   watched?: boolean;
+}
+
+/** TER-1168: a confirmation card of the chat (a pending `chat_actions` row) nobody has answered. */
+export interface SnapshotPendingCard {
+  action_id: string;
+  conversation_id: string;
+  tool: string;
+  /** the card's sentence, as the chat shows it */
+  summary: string;
+  created_at: Date;
 }
 
 export interface SnapshotCard {
@@ -190,6 +208,8 @@ export interface HealthSnapshot {
   /** TER-1150; absent from a snapshot built before it */
   epics?: SnapshotEpic[];
   done_unmerged?: SnapshotDoneUnmerged[];
+  /** TER-1168; absent from a snapshot built before it */
+  pending_cards?: SnapshotPendingCard[];
 }
 
 const AUTONOMY_ORDER: AutonomyLevel[] = ['pr', 'merge', 'deploy', 'release'];
@@ -200,8 +220,8 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   if (!config.enabled) return [];
   const out: Observation[] = [];
   const on = (signal: HealthSignal) => config.signals[signal].enabled && (s.automation || LIGHT_SIGNALS.includes(signal));
-  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail, now = false) => {
-    if (on(signal)) out.push({ signal, subject, level: LEVEL_OF[signal], since, detail, ...(now ? { now } : {}) });
+  const add = (signal: HealthSignal, subject: string, since: Date | null, detail: HealthDetail, now = false, level: HealthLevel = LEVEL_OF[signal]) => {
+    if (on(signal)) out.push({ signal, subject, level, since, detail, ...(now ? { now } : {}) });
   };
 
   // 1. a green PR, not a draft, still open while the autonomy lets termhub merge it. One held by policy for
@@ -246,7 +266,11 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   for (const tab of s.tabs) {
     if (!tab.state_at) continue;
     if (tab.state === 'working') add('tab_stuck', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
-    else if (tab.state === 'cli_dialog') {
+    else if (tab.state === 'trust_prompt') {
+      // TER-1148: only the person can answer it, and nothing runs meanwhile — the person is pushed after 2 minutes
+      const due = s.now.getTime() - tab.state_at.getTime() >= TRUST_PROMPT_ALERT_MS;
+      add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due, 'needs_you');
+    } else if (tab.state === 'cli_dialog') {
       const due = s.now.getTime() - tab.state_at.getTime() >= CLI_DIALOG_ALERT_MS;
       add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due);
     } else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
@@ -301,6 +325,13 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // 11. a card in Feito whose PR is still open: done on the board, not in the code (TER-1150)
   for (const d of s.done_unmerged ?? []) {
     add('done_unmerged', `${d.url}#${d.task_id}`, d.since, { label: d.ref, url: d.url, pr: `#${d.number}`, ci: d.ci_state });
+  }
+
+  // 13. TER-1168: a confirmation card of the chat nobody answered. The chat promised something that waits on it
+  // (it asked, and its turn ended there): past the minutes it is woken once per card, in the card's own
+  // conversation, to take a path that needs no card or to tell the person what is stuck.
+  for (const c of s.pending_cards ?? []) {
+    add('approval_stalled', c.action_id, c.created_at, { label: c.summary, tool: c.tool, conversation_id: c.conversation_id });
   }
   return out;
 }

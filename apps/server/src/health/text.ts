@@ -24,6 +24,7 @@ const TEXT: Record<HealthSignal, string> = {
   epic_zombie: tk('Épico {{label}} em andamento sem história ativa nem PR há {{duration}}'),
   done_unmerged: tk('Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}'),
   agent_exited: tk('Agente da aba {{label}} fora do ar há {{duration}}'),
+  approval_stalled: tk('Confirmação do chat sem resposta há {{duration}}: {{label}}'),
 };
 const BASE_PENDING = tk('Branch base {{label}} com a CI sem terminar há {{duration}}');
 const FAILING = tk('falhando: {{names}}');
@@ -47,6 +48,7 @@ export const SIGNAL_NAME: Record<HealthSignal, string> = {
   epic_zombie: tk('Épico parado em andamento'),
   done_unmerged: tk('Card em Feito com PR não mesclado'),
   agent_exited: tk('Agente fora do ar em aba acompanhada'),
+  approval_stalled: tk('Confirmação do chat sem resposta'),
 };
 
 /** "45 min", "3 h", "2 d". */
@@ -103,6 +105,7 @@ const HINT: Record<HealthSignal, string> = {
   epic_zombie: 'list_tasks mostra as histórias do épico; se falta trabalho, ponha a próxima história em A fazer; se o épico já está na main e entregue, mova-o para Feito; se foi abandonado, a pessoa decide',
   done_unmerged: 'o card está em Feito mas o PR não foi mesclado: veja o PR (CI vermelha, conflito, aprovação); se o trabalho não acabou, mova o card de volta para Em andamento, senão a pessoa mescla ou fecha o PR',
   agent_exited: 'o terminal da aba voltou ao shell: o que for mandado a ela não chega a nenhum agente; conte à pessoa, que retoma pelo card de agente encerrado, ou start_agent no card se o trabalho não acabou',
+  approval_stalled: 'o card de confirmação acima (action_id) espera a pessoa e o que você prometeu depende dele; não repita a mesma chamada (ela só traz o card de volta). Tente um caminho que não peça confirmação: a mesma leitura na forma simples da lista padrão (sem clear, pipe ou ;, use lines do run_command), ou peça a um agente numa aba do projeto que leia (send_input). Se nenhum servir, notify com level needs_you uma vez, dizendo o que está travado e o que a pessoa precisa aprovar',
 };
 
 const q = (v: unknown): string => `«${sanitisePromptText(str(v)).slice(0, 200)}»`;
@@ -112,7 +115,7 @@ const s = (v: unknown): string => sanitisePromptText(str(v)).slice(0, 300);
 export function healthWakeText(alerts: HealthAlert[], noticed: ReadonlySet<string>, now: Date, rules: string | null = null): string {
   const lines = alerts.map((a) => {
     const d = a.detail;
-    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') || a.signal === 'agent_exited' ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' || a.signal === 'epic_zombie' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null]
+    const ids = [d.url ? `url ${s(d.url)}` : null, a.signal.startsWith('tab_') || a.signal === 'agent_exited' ? `tab_id ${s(a.subject)}` : null, a.signal === 'card_orphan' || a.signal === 'epic_zombie' ? `task_id ${s(a.subject)}` : null, a.signal === 'run_blocked' ? `run_id ${s(a.subject)}` : null, a.signal === 'machine_offline' || a.signal === 'agent_outdated' ? `machine_id ${s(a.subject)}` : null, a.signal === 'approval_stalled' ? `action_id ${s(a.subject)}` : null]
       .filter(Boolean)
       .join(', ');
     const said = noticed.has(a.id) ? ' A pessoa já recebeu push sobre isto.' : '';

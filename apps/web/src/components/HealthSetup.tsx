@@ -16,6 +16,7 @@ const SIGNALS: { key: HealthSignal; label: string; light?: boolean }[] = [
   { key: 'tab_waiting', label: tk('Aba esperando resposta (pergunta, permissão, confiança, login)'), light: true },
   { key: 'machine_offline', label: tk('Máquina offline com trabalho do projeto'), light: true },
   { key: 'agent_exited', label: tk('Agente fora do ar em aba ligada a card ou acompanhada pelo chat'), light: true },
+  { key: 'approval_stalled', label: tk('Confirmação do chat sem resposta (acorda o chat uma vez para achar outro caminho ou te avisar)'), light: true },
 ];
 
 /**

@@ -16,7 +16,7 @@ import { HttpError } from '../lib/errors.js';
 import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { isReadOnlyCommand, isWrapperCommand, ruleEligible, ruleMatches } from './command-rules.js';
+import { isReadOnlyCommand, isWrapperCommand, ruleEligible, ruleMatches, untrimmedCommand } from './command-rules.js';
 import { effectiveBlocks, openPermissionsOn } from './blocks.js';
 import { BLOCK_KIND_LABEL, blockFor, isQuotedAnswerGrantId, OPEN_BUDGETS, openGrantId, openKindOf, QUOTED_ANSWER_MAX_AGE_MS, quotedAnswerGrantId, type BlockKind } from './open-permissions.js';
 import { verifyOnBehalfOf } from '../control/input-origin.js';
@@ -733,6 +733,22 @@ async function commandRuleCovering(ctx: ControlContext, call: GatedCall): Promis
   }
 }
 
+/**
+ * TER-1168: a `run_command` that would ask only because of the trimming around a command (`clear;`, `| tail
+ * -40`): refused with no card, naming the simple form and `lines`. A card for a read nobody needed to
+ * confirm waits on the person for nothing; the simple form runs under the same rules as any other.
+ */
+function trimmedCommand(call: GatedCall): GateOutcome | null {
+  if (call.tool !== 'run_command' || typeof call.args.command !== 'string') return null;
+  const simple = untrimmedCommand(call.args.command);
+  if (!simple) return null;
+  return {
+    ok: false,
+    code: 'COMMAND_TRIMMED',
+    message: `Nada foi pedido nem executado: clear, ";", "&&" e pipes para tail/head/cat fazem o comando cair na confirmação. Rode só \`${simple}\` e passe lines (quantas linhas do fim da tela devolver) para ler o fim da saída. Num comando git, --no-pager evita o paginador.`,
+  };
+}
+
 /** A call a block of the person's says "nunca" to (TER-1164): refused with no card. */
 const BLOCKED = (label: string): GateOutcome => ({
   ok: false,
@@ -967,6 +983,8 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
     if (!row) {
       const gone = await boardTargetGone(ctx, call);
       if (gone) return gone;
+      const trimmed = trimmedCommand(call);
+      if (trimmed) return trimmed;
     }
     return ask(ctx, call, conversationId, key, cls);
   }
