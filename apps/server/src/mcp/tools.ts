@@ -860,11 +860,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card at the top of a column (default the first todo column; an epic defaults to the backlog), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card in a column (default the first todo column; an epic defaults to the backlog), at the top unless position says otherwise (0 = top; ${TASK_POSITION_MAX} or any number past the last card = the end, so a batch created in its natural order with position ${TASK_POSITION_MAX} keeps that order), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',

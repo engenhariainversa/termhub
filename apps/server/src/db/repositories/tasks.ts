@@ -30,6 +30,8 @@ export interface TaskInput {
   parent_id?: string | null;
   /** Tag "automático" on a top-level card. A card in an automatic epic is born automatic whatever this says (the epic rules, spec D2). */
   auto?: boolean;
+  /** TER-1170: the top-level card's slot in its place (0 = top, the default; clamped to the end) */
+  position?: number;
 }
 
 /** What `update` changes. `epic_id` is ignored on epics and subtasks (they have none). */
@@ -219,14 +221,14 @@ export class TasksRepository {
     });
   }
 
-  /** Validates type, epic and column, then writes a top-level card at slot 0 of its place. */
+  /** Validates type, epic and column, then writes a top-level card at `position` of its place (default 0, the top). */
   private async insertCard(tx: Tx, projectId: string, input: Omit<TaskInput, 'parent_id'>) {
     await lockProject(tx, projectId);
     await ensureDefaultColumns(tx, projectId);
     const type = input.type ?? 'task';
     const epicId = type === 'epic' ? null : input.epic_id ? await requireEpic(tx, projectId, input.epic_id) : await defaultEpicId(tx, projectId);
     const to = await placementFor(tx, projectId, { type, epicId }, { column_id: input.column_id, status: input.status ?? (type === 'epic' ? 'backlog' : 'todo') });
-    const position = await openSlot(tx, projectId, to, 0);
+    const position = await openSlot(tx, projectId, to, input.position ?? 0);
     const epicAuto = epicId ? ((await tx.task.findUnique({ where: { id: epicId }, select: { auto: true } }))?.auto ?? false) : false;
     return tx.task.create({
       data: { id: newId(), projectId, type, title: input.title, description: input.description ?? null, status: to.status, columnId: to.columnId, epicId, position, auto: epicAuto || (input.auto ?? false) },
