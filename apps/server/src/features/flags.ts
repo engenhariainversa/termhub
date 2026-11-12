@@ -21,6 +21,8 @@ export const FEATURE_FLAGS = {
   tab_gc: { default: false },
   /** TER-1171: with `tab_gc` on, the GC warns, keeps and closes for real (and the TER-1138 timer steps aside). */
   tab_gc_live: { default: false },
+  /** TER-1170: the "Executar em ordem" option of an epic on the board (the MCP and the dispatcher take it anyway). */
+  sequential_epics: { default: false },
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;

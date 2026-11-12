@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
+import type { ReactNode } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Task, TaskColumn } from '../lib/types';
 
 vi.mock('./SubtaskList', () => ({ SubtaskList: () => <div>lista de subtarefas</div> }));
+const flags = vi.hoisted(() => ({ on: new Set<string>() }));
+vi.mock('../lib/feature-flags', () => ({
+  useFeatureFlag: (flag: string) => flags.on.has(flag),
+  FeatureGate: ({ flag, children }: { flag: string; children: ReactNode }) => (flags.on.has(flag) ? <>{children}</> : null),
+}));
 vi.mock('./CardPullRequests', () => ({ CardPullRequests: ({ taskId }: { taskId: string }) => <div>prs-{taskId}</div> }));
 
 import { TaskEditor, type TaskEditorProps } from './TaskEditor';
@@ -38,11 +44,27 @@ function mount(t: Task, over: Partial<TaskEditorProps> = {}) {
 }
 
 afterEach(() => {
+  flags.on.clear();
   cleanup();
   vi.clearAllMocks();
 });
 
 describe('TaskEditor', () => {
+  // TER-1170
+  it('an epic offers "Executar em ordem" only with the sequential_epics flag, and saves it', () => {
+    const epic = task({ id: 'Plano', type: 'epic', epic_id: null, column_id: null, status: 'backlog' });
+    mount(epic, { epicUntagged: 0, onSetAuto: vi.fn() });
+    expect(screen.queryByLabelText('Executar em ordem')).not.toBeInTheDocument();
+    cleanup();
+    flags.on.add('sequential_epics');
+    const props = mount(epic, { epicUntagged: 0, onSetAuto: vi.fn() });
+    fireEvent.click(screen.getByLabelText('Executar em ordem'));
+    expect(props.onSave).toHaveBeenCalledWith({ sequential: true });
+    cleanup();
+    mount(task({ id: 'Card' }), { epicUntagged: 0, onSetAuto: vi.fn() });
+    expect(screen.queryByLabelText('Executar em ordem')).not.toBeInTheDocument();
+  });
+
   it('is titled with the ref and saves type and epic changes', () => {
     const props = mount(task({ id: 'Pagar' }));
     expect(screen.getByRole('heading', { name: 'P1-7' })).toBeInTheDocument();

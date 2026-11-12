@@ -9,6 +9,7 @@ import { ConfirmDialog, Modal } from './Modal';
 import { SubtaskList } from './SubtaskList';
 import { formatDate, formatDateTime } from '../lib/format';
 import { useTranslation } from '../i18n';
+import { FeatureGate } from '../lib/feature-flags';
 
 /** Where the column select sends a card. */
 export type PlaceTarget = { column_id: string } | { status: 'backlog' };
@@ -178,6 +179,19 @@ export function TaskEditor({
               {task.type === 'epic' ? t('Marca todos os cards deste épico (os novos também).') : t('O termhub pega este card sozinho quando ele estiver numa coluna "a fazer".')}
             </p>
           </div>
+        )}
+        {task.type === 'epic' && (
+          <FeatureGate flag="sequential_epics">
+            <div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" className="accent-accent" checked={Boolean(task.sequential)} onChange={(e) => onSave({ sequential: e.target.checked })} />
+                {t('Executar em ordem')}
+              </label>
+              <p className="ml-6 text-xs text-fg-dim">
+                {t('O automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado. Um card bloqueado ou esperando você segura o épico.')}
+              </p>
+            </div>
+          </FeatureGate>
         )}
         <ConfirmDialog
           open={confirmAuto}

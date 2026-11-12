@@ -192,8 +192,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
   });
 
   // TER-1170: AUV-30 created B17..B1 bottom-up so B1 ended on top; the per-card grace let B17 out first.
-  async function batchCreatedBottomUp(agesSeconds: number[]) {
-    const epic = await repos.tasks.create(projectId, { title: 'Plano', type: 'epic' });
+  async function batchCreatedBottomUp(agesSeconds: number[], epicId?: string) {
+    const epic = epicId ? { id: epicId } : await repos.tasks.create(projectId, { title: 'Plano', type: 'epic' });
     const made: Array<{ id: string }> = [];
     // the last card of the plan is created first (the oldest); each create lands on top
     for (const [i, age] of agesSeconds.entries()) {
@@ -232,6 +232,65 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
     await tickOnce(deps);
     expect(startedIds(startAgent)).toEqual([older.id]);
+  });
+
+  // TER-1170: an epic that runs in order
+  async function sequentialEpic(n: number) {
+    const epic = await repos.tasks.create(projectId, { title: 'Plano em ordem', type: 'epic' });
+    await repos.tasks.setSequential(epic.id, true);
+    // created bottom-up, as the AUV-30 agent did, and old enough to be past every grace
+    return batchCreatedBottomUp(Array.from({ length: n }, () => 600), epic.id);
+  }
+  const doneColumn = async () => (await db.taskColumn.findFirst({ where: { projectId, category: 'done' } }))!.id;
+  const doingColumn = async () => (await db.taskColumn.findFirst({ where: { projectId, category: 'doing' } }))!.id;
+  const prOf = (n: number, state: 'open' | 'merged') => ({
+    repo: 'acme/app', number: n, url: `https://github.com/acme/app/pull/${n}`, title: 'pr', head_ref: `b${n}`, head_sha: 'sha', base_ref: 'main', state, draft: false,
+    merged_at: state === 'merged' ? new Date() : null, merge_commit_sha: null,
+  });
+
+  it('a sequential epic starts only its first card, whatever max_parallel allows (TER-1170)', async () => {
+    await setSetup({ automation: { max_parallel: 3 } });
+    const [b1, b2, b3] = await sequentialEpic(3);
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([b1!.id]);
+    const queue = await automationQueue(ctx(), projectId);
+    const b1Ref = (await repos.tasks.findById(b1!.id))!.ref;
+    for (const c of [b2!, b3!]) expect(queue.find((i) => i.task_id === c.id)).toMatchObject({ reason: 'epic_sequence', reason_text: expect.stringContaining(b1Ref) });
+  });
+
+  it('the next card of a sequential epic waits for the PR of the one before to be merged (TER-1170)', async () => {
+    const [b1, b2] = await sequentialEpic(2);
+    await repos.tasks.move(b1!.id, { column_id: await doneColumn() }, 0);
+    await repos.taskPullRequests.replaceLinks(projectId, prOf(7, 'open'), [b1!.id]);
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([]);
+    expect(await reasonOf(b2!.id)).toBe('epic_sequence');
+    await repos.taskPullRequests.replaceLinks(projectId, prOf(7, 'merged'), [b1!.id]);
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([b2!.id]);
+  });
+
+  it('a card of a sequential epic stuck outside done (blocked, escalated, with a person) holds the rest of the epic (TER-1170)', async () => {
+    const [b1, b2] = await sequentialEpic(2);
+    await repos.tasks.move(b1!.id, { column_id: await doingColumn() }, 0);
+    const run = (await repos.automationRuns.claim({ project_id: projectId, task_id: b1!.id, role: 'implementer', instance: 'other' }))!;
+    await repos.automationRuns.update(run.id, 'other', { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date() });
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([]);
+    expect(await reasonOf(b2!.id)).toBe('epic_sequence');
+  });
+
+  it('turning sequential off lets the cards of the epic run in parallel again (TER-1170)', async () => {
+    await setSetup({ automation: { max_parallel: 2 } });
+    const [b1, b2] = await sequentialEpic(2);
+    await repos.tasks.setSequential((await repos.tasks.findById(b1!.id))!.epic_id!, false);
+    const { deps, startAgent } = makeDeps();
+    await tickOnce(deps);
+    await tickOnce(deps); // one start per machine per tick (R6)
+    expect(startedIds(startAgent).sort()).toEqual([b1!.id, b2!.id].sort());
   });
 
   it('a project that requires a ticket starts a card without one on no branch of the termhub ref (TER-1110)', async () => {
