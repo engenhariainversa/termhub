@@ -60,7 +60,7 @@ export const CLI_DIALOG_ALERT_MS = 2 * 60_000;
 export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
 
 /** Queue reasons that end on their own in a minute or two: the card is about to start (TER-1110's wait). */
-export const TRANSIENT_REASONS: readonly string[] = ['just_created'];
+export const TRANSIENT_REASONS: readonly string[] = ['just_created', 'epic_settling'];
 
 /** Run waits that are not an escalation: they resume on their own (quota back, GitHub back). */
 export const SELF_RESUMING_WAITS = ['quota', 'github_transient'];
