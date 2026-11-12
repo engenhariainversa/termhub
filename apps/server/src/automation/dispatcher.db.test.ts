@@ -191,6 +191,49 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     expect(startAgent).toHaveBeenCalledTimes(1);
   });
 
+  // TER-1170: AUV-30 created B17..B1 bottom-up so B1 ended on top; the per-card grace let B17 out first.
+  async function batchCreatedBottomUp(agesSeconds: number[]) {
+    const epic = await repos.tasks.create(projectId, { title: 'Plano', type: 'epic' });
+    const made: Array<{ id: string }> = [];
+    // the last card of the plan is created first (the oldest); each create lands on top
+    for (const [i, age] of agesSeconds.entries()) {
+      const c = await card(`B${agesSeconds.length - i}`, { epic_id: epic.id });
+      await db.task.update({ where: { id: c.id }, data: { createdAt: new Date(Date.now() - age * 1000) } });
+      made.push(c);
+    }
+    return made.reverse(); // [B1, B2, …] in board order
+  }
+  const startedIds = (startAgent: { mock: { calls: unknown[][] } }) => startAgent.mock.calls.map((c) => (c[1] as { task_id: string }).task_id);
+
+  it('a batch created bottom-up in an epic waits for the last card, then starts in board order (TER-1170)', async () => {
+    await setSetup({ automation: { max_parallel: 1 } });
+    const [b1, , b3] = await batchCreatedBottomUp([150, 50, 5]);
+    const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
+    await tickOnce(deps);
+    // B3 is past its own grace, but its epic got B1 five seconds ago
+    expect(startAgent).not.toHaveBeenCalled();
+    expect(await reasonOf(b3!.id)).toBe('epic_settling');
+    await tickOnce({ ...deps, now: () => new Date(Date.now() + 61_000) });
+    expect(startedIds(startAgent)).toEqual([b1!.id]);
+  });
+
+  it('a card waits for its epic at most EPIC_SETTLE_CAP_MS after its own creation (TER-1170)', async () => {
+    await setSetup({ automation: { max_parallel: 1 } });
+    const [, , old] = await batchCreatedBottomUp([11 * 60, 30, 5]);
+    const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([old!.id]);
+  });
+
+  it('cards of the default epic keep their own grace: a new one does not hold an older one (TER-1170)', async () => {
+    const older = await card('Older');
+    await db.task.update({ where: { id: older.id }, data: { createdAt: new Date(Date.now() - 100_000) } });
+    await card('Newer');
+    const { deps, startAgent } = makeDeps({ newCardGraceMs: 60_000 });
+    await tickOnce(deps);
+    expect(startedIds(startAgent)).toEqual([older.id]);
+  });
+
   it('a project that requires a ticket starts a card without one on no branch of the termhub ref (TER-1110)', async () => {
     await setSetup({ repo: { require_ticket: true, branch_pattern: 'feature/{ticket_lower}-{slug}' } });
     const bare = await card('Sem ticket');

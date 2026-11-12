@@ -152,6 +152,7 @@
   "nenhuma regra do projeto libera esta permissão": "ninguna regla del proyecto permite este permiso",
   "O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum": "El proyecto exige un ticket externo (Jira, Linear o GitHub) y la tarjeta no tiene ninguno",
   "Card recém-criado; o automático começa em até 2 min": "Tarjeta recién creada; el trabajo automático empieza en hasta 2 min",
+  "O épico ainda está recebendo cards novos; o automático começa 2 min depois do último (até 10 min)": "La épica todavía está recibiendo tarjetas nuevas; el trabajo automático empieza 2 min después de la última (hasta 10 min)",
   "O projeto exige um ticket externo e o card {{ref}} não tem": "El proyecto exige un ticket externo y la tarjeta {{ref}} no tiene",
   "a aba {{name}}": "la pestaña {{name}}",
   "o PR #{{number}} ({{branch}})": "el PR #{{number}} ({{branch}})",
