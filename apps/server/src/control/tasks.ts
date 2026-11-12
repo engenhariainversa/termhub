@@ -115,11 +115,11 @@ export async function listTasks(
 
 export async function createTask(
   ctx: ControlContext,
-  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; subtasks?: SubtaskIn[] },
+  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; subtasks?: SubtaskIn[] },
 ): Promise<{ task: TaskTreeOut; board_url: string }> {
   await ctx.scoped.project(input.project_id);
   const task = await rules(() =>
-    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto }, input.subtasks ?? []),
+    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto, position: input.position }, input.subtasks ?? []),
   );
   if (task.auto) {
     await recordTagChange(ctx.repos, task, true, 1, viaOf(ctx));

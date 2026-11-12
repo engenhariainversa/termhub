@@ -130,6 +130,13 @@ describe('createTask', () => {
     expect(repos.tasks.createWithSubtasks).toHaveBeenCalledWith('p1', { title: 'New', description: undefined, status: 'backlog' }, []);
   });
 
+  it('passes the position on to the repository (TER-1170)', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.createWithSubtasks.mockResolvedValue(tree(task({ id: 'k9', project_id: 'p1' })));
+    await createTask(c, { project_id: 'p1', title: 'New', position: 10_000 });
+    expect(repos.tasks.createWithSubtasks).toHaveBeenCalledWith('p1', expect.objectContaining({ title: 'New', position: 10_000 }), []);
+  });
+
   it('turns a repository rule into a ControlError with its pt-BR message', async () => {
     const { c, repos } = ctx();
     repos.tasks.createWithSubtasks.mockRejectedValue(new TaskRuleError('TOO_MANY_SUBTASKS', 'No máximo 50 subtarefas por vez'));
