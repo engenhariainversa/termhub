@@ -35,7 +35,7 @@ export const BLOCK_KIND_LABEL: Record<BlockKind, string> = {
 
 /** What always asks, whatever the blocks say — told to the model and shown on the screen. */
 export const OPEN_CORE_TEXT =
-  'apagar card, fechar aba trabalhando, as teclas C-c e Escape, responder permissão do CLI (salvo quando você repassa a resposta citando a mensagem da pessoa, on_behalf_of), comandos da lista "nunca" (encadeados, redirecionamento, sudo, rm, kill, push --force, reset --hard, git clean, ssh e shells, segredos), merge e subir o nível da automação, status de ticket, integrações e set_project_repo, login, exclusividade e setup das contas de IA, dados de outro usuário, remover um bloqueio e qualquer ferramenta nova';
+  'apagar card, fechar aba trabalhando, as teclas C-c e Escape, responder permissão do CLI (salvo quando você repassa a resposta citando a mensagem da pessoa, on_behalf_of), comandos da lista "nunca" (encadeados, redirecionamento, sudo, rm, kill, push --force, reset --hard, git clean, ssh e shells, segredos), merge e subir o nível da automação, status de ticket, integrações e set_project_repo, login, exclusividade e setup das contas de IA, dados de outro usuário, remover um bloqueio, ligar um recurso em teste e qualquer ferramenta nova';
 
 const MACHINE_TOOLS: ReadonlySet<string> = new Set(['link_project_machine', 'set_project_machine_cwd', 'wake_machine', 'update_machine_agent', 'install_machine_hooks']);
 const INTERRUPTING_KEYS: ReadonlySet<string> = new Set(['C-c', 'Escape']);

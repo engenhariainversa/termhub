@@ -42,6 +42,19 @@ shows a gated screen.
 2. Add the key to `FeatureFlagKey` (web `lib/types.ts`), to `meResponse.features` (mobile contract,
    defaulted to `false`) and, when the landing needs it, to `FeatureFlag` in `apps/landing/src/features.ts`.
 3. Gate every screen, route, webhook and job of the feature behind it, with tests for both values.
+4. Give it a pt-BR name and description in `FEATURE_FLAG_COPY` (server, the screen's copy): the chat lists it
+   with `list_feature_flags`. A flag the chat must never switch goes into `MCP_HIDDEN_FLAGS`.
+
+## Through the chat (TER-1186)
+
+Whoever can open Recursos em teste (`feature_flags:read` to list, `feature_flags:update` to switch) can
+also ask the chat: `list_feature_flags` shows each flag's value for them and where it comes from
+(`default`, `instance` or `override`), and `set_feature_flag(flag, enabled | null)` sets or removes
+**their own** override, the same row the screen's "Valor próprio por pessoa" writes. Never the instance
+value, never another person's, never a flag in `MCP_HIDDEN_FLAGS` (`subscriptions`). Turning one on, or
+back to the instance value, is a confirmation card (also under `chat_open_permissions`, where it is part
+of the core); turning one off is a brake and runs at once. Agent tabs cannot call either tool. Every
+change is written to the security trail as `feature_flag.override` with `meta.via: "mcp"`.
 
 ## Subscriptions (TER-645)
 

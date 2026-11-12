@@ -96,6 +96,15 @@ it('set_machine_automation: refusing is a brake, accepting asks and no grant or 
   expect(defaultKindOf('set_machine_automation', { machine_id: 'm1', accept: true })).toBeNull();
 });
 
+it('feature flags (TER-1186): listing is a read, off is a brake, on or back to the default asks and nothing covers it', () => {
+  expect(actionClass('list_feature_flags', {})).toBe('read');
+  expect(actionClass('set_feature_flag', { flag: 'tab_gc', enabled: false })).toBe('self_mediated');
+  expect(actionClass('set_feature_flag', { flag: 'tab_gc', enabled: true })).toBe('write');
+  expect(actionClass('set_feature_flag', { flag: 'tab_gc', enabled: null })).toBe('write');
+  expect(standingKindOf('set_feature_flag', { flag: 'tab_gc', enabled: true })).toBeNull();
+  expect(defaultKindOf('set_feature_flag', { flag: 'tab_gc', enabled: true })).toBeNull();
+});
+
 it('keys on the arguments, so a different command is a different question', () => {
   const a = idempotencyKeyFor('c1', 'send_input', { tab_id: 't1', text: 'npm test' });
   expect(idempotencyKeyFor('c1', 'send_input', { text: 'npm test', tab_id: 't1' })).toBe(a); // key order cannot matter
@@ -292,7 +301,7 @@ describe('defaultKindOf (TER-627)', () => {
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
     // report_card is a tab tool (agentic board F-8): only a tab with an active run lists it, never the concierge;
     // unclassified, it would ask like any unknown tool
-    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'create_project', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot', 'set_project_ai_setup', 'unblock_action']);
+    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'create_project', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot', 'set_project_ai_setup', 'unblock_action', 'set_feature_flag']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },

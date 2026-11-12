@@ -139,6 +139,8 @@ describe('open permissions (TER-1164): the chat acts without a card unless the c
     ['set_project_repo', { project_id: 'p1', repo: 'a/b' }],
     ['start_ai_login', { machine_id: 'm1' }],
     ['unblock_action', { block_id: 'b1' }],
+    ['set_feature_flag', { flag: 'chat_open_permissions', enabled: true }],
+    ['set_feature_flag', { flag: 'tab_gc', enabled: null }],
     ['send_key', { tab_id: 'agent', key: 'C-c' }],
     ['send_key', { tab_id: 'agent', key: 'Escape' }],
     ['close_tab', { tab_id: 'busy' }],
@@ -250,6 +252,21 @@ describe('open permissions (TER-1164): the chat acts without a card unless the c
       blocks.push(block('terminal', { project_id: 'p1' }));
       await expectAsks('send_input', { tab_id: 'agent', text: 'ok' });
     });
+  });
+
+  it('set_feature_flag off is a brake: it runs at once, with no card, in either model (TER-1186)', async () => {
+    for (const on of [true, false]) {
+      flagOn = on;
+      run.mockClear();
+      expect(await call('set_feature_flag', { flag: 'chat_open_permissions', enabled: false })).toEqual({ ok: true, value: { ok: 1 } });
+      expect(run).toHaveBeenCalledTimes(1);
+    }
+    expect(actions.insertPending).not.toHaveBeenCalled();
+  });
+
+  it('set_feature_flag on asks with the open model off too (TER-1186)', async () => {
+    flagOn = false;
+    await expectAsks('set_feature_flag', { flag: 'chat_open_permissions', enabled: true });
   });
 
   it('past the hourly budget, asks', async () => {

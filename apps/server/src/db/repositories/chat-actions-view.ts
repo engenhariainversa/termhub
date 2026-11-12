@@ -8,6 +8,7 @@ import type { ChatStandingGrant, ChatStandingGrantWithConversation, StandingGran
 import type { Task, Ticket } from './types.js';
 import { commandRuleOffer } from '../../chat/command-rules.js';
 import { suggestProjectKey } from '../../lib/project-key.js';
+import { FEATURE_FLAG_COPY, isFeatureFlag } from '../../features/flags.js';
 
 /**
  * The trimmed, human-facing shape of a chat action: what the card needs to read like a sentence
@@ -194,6 +195,13 @@ function verbPhrase(
     }
     case 'unblock_action':
       return `tirar o bloqueio \`${asString(args.block_id)}\` (o chat volta a fazer isso sem pedir)`;
+    case 'set_feature_flag': {
+      const key = asString(args.flag);
+      const name = isFeatureFlag(key) ? `«${FEATURE_FLAG_COPY[key].label}»` : `\`${key}\``;
+      if (args.enabled === true) return `ligar o recurso em teste ${name} na sua conta`;
+      if (args.enabled === false) return `desligar o recurso em teste ${name} na sua conta`;
+      return `voltar o recurso em teste ${name} ao valor de todos na sua conta`;
+    }
     case 'send_key':
       return `enviar a tecla \`${asString(args.key)}\``;
     case 'open_tab':
