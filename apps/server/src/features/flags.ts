@@ -31,6 +31,42 @@ export type FeatureFlag = keyof typeof FEATURE_FLAGS;
 export const FEATURE_FLAG_KEYS = Object.keys(FEATURE_FLAGS) as FeatureFlag[];
 export const isFeatureFlag = (v: string): v is FeatureFlag => Object.hasOwn(FEATURE_FLAGS, v);
 
+/**
+ * Flags the chat never lists nor switches through MCP (TER-1186), even for someone the Recursos em teste
+ * screen lets switch them: `subscriptions` gates billing and trial limits, which stay an admin's call on the screen.
+ */
+export const MCP_HIDDEN_FLAGS: ReadonlySet<FeatureFlag> = new Set<FeatureFlag>(['subscriptions']);
+export const MCP_FLAG_KEYS: readonly FeatureFlag[] = FEATURE_FLAG_KEYS.filter((k) => !MCP_HIDDEN_FLAGS.has(k));
+
+/**
+ * The pt-BR name and description of each flag the chat may list (TER-1186), the same copy as the screen's
+ * (`FLAG_COPY` in apps/web/src/components/FeatureFlagsView.tsx): the model reads it and the confirmation
+ * card names the flag with it.
+ */
+export const FEATURE_FLAG_COPY: Record<FeatureFlag, { label: string; description: string }> = {
+  subscriptions: { label: 'Assinaturas', description: 'Planos, checkout, paywall e limites do período de teste.' },
+  chat_open_permissions: {
+    label: 'Chat: liberado por padrão',
+    description: 'O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.',
+  },
+  tab_gc: {
+    label: 'Coletor de abas (teste)',
+    description: 'Procura abas de agente paradas há muito tempo (24 h; com erro, 6 h) ou cuja sessão do terminal não existe mais, e registra no feed do projeto o que fecharia. Não fecha nada: é a semana de teste.',
+  },
+  tab_gc_live: {
+    label: 'Coletor de abas: fechar de verdade',
+    description: 'Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o "Fechar abas paradas" das máquinas.',
+  },
+  sequential_epics: {
+    label: 'Épico em ordem',
+    description: 'Mostra a opção "Executar em ordem" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.',
+  },
+  runs_api: {
+    label: 'API de runs',
+    description: 'Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.',
+  },
+};
+
 /** Every flag resolved for one person: what `/auth/me` and the mobile `/me` send as `features`. */
 export type FeatureFlags = Record<FeatureFlag, boolean>;
 
