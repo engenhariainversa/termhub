@@ -75,7 +75,6 @@
   "PR sem CI; o termhub não mescla sem CI verde": "PR sin CI; termhub no fusiona sin un CI en verde",
   "O PR está verde, mas depende de um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque o card como automático ou tire o vínculo («Depende de», «Closes») do PR.": "El PR está en verde, pero depende de una tarjeta manual que todavía no está en Hecho, así que el trabajo automático no lo fusiona. Fusiónalo a mano, marca la tarjeta como automática o quita el vínculo («Depende de», «Closes») del PR.",
   "O PR #{{pr}} está verde, mas depende de {{cards}}, card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque {{cards}} como automático ou tire o vínculo («Depende de», «Closes») do PR.": "El PR #{{pr}} está en verde, pero depende de {{cards}}, tarjeta manual que todavía no está en Hecho, así que el trabajo automático no lo fusiona. Fusiónalo a mano, marca {{cards}} como automática o quita el vínculo («Depende de», «Closes») del PR.",
-  "O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.": "El PR no tiene ningún CI en ejecución; termhub no fusiona sin un CI en verde. Agrega un workflow en pull_request (o revisa sus filtros) o ajusta el Setup.",
   "Nenhum workflow do repositório rodou em pull_request: o termhub não mescla sem CI verde, então os PRs vão ficar esperando. Adicione um workflow em pull_request ou use o nível PR.": "Ningún workflow del repositorio se ejecutó en pull_request: termhub no fusiona sin un CI en verde, así que los PR se quedarán esperando. Agrega un workflow en pull_request o usa el nivel PR.",
   "Esperando a CI e a entrega da branch base": "Esperando la CI y la entrega de la rama base",
   "Atualizando o PR com a branch base": "Actualizando el PR con la rama base",
@@ -241,5 +240,14 @@
   "API de runs": "API de ejecuciones",
   "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Permite crear tokens con el alcance runs y ejecutar prompts por la API (/api/v1/runs) en tus propias cuentas de IA y máquinas, y muestra las ejecuciones de la API en Progreso. Desactivado, las rutas no existen y el alcance no aparece.",
   "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Confirmación del chat sin respuesta desde hace {{duration}}: {{label}}",
-  "Confirmação do chat sem resposta": "Confirmación del chat sin respuesta"
+  "Confirmação do chat sem resposta": "Confirmación del chat sin respuesta",
+  "O PR não tem nenhum CI rodando, então o termhub não mescla sozinho. Se a branch base não tem regra de proteção, aprove o card de merge no chat ou ligue «PR sem CI: mesclar» no Setup; senão, adicione um workflow em pull_request (ou confira os filtros dele).": "El PR no tiene ningún CI en ejecución, así que termhub no lo fusiona solo. Si la rama base no tiene regla de protección, aprueba la tarjeta de fusión en el chat o activa «PR sem CI: mesclar» en el Setup; si no, agrega un workflow en pull_request (o revisa sus filtros).",
+  "Automático mesclou o PR #{{n}} de {{ref}} sem CI (o repositório não tem CI nem regra de proteção na branch base): {{url}}": "El trabajo automático fusionó el PR #{{n}} de {{ref}} sin CI (el repositorio no tiene CI ni regla de protección en la rama base): {{url}}",
+  "aprove o card de merge no chat": "aprueba la tarjeta de fusión en el chat",
+  "o repositório tem CI em pull_request, mas ele não rodou neste PR": "el repositorio tiene CI en pull_request, pero no se ejecutó en este PR",
+  "não deu para ler o CI do repositório": "no se pudo leer el CI del repositorio",
+  "o PR tem checks de outro app": "el PR tiene checks de otra app",
+  "não deu para ler os checks do PR": "no se pudieron leer los checks del PR",
+  "a branch base tem regra de proteção exigindo checks ou revisão": "la rama base tiene una regla de protección que exige checks o revisión",
+  "não deu para ler as regras de proteção da branch base": "no se pudieron leer las reglas de protección de la rama base"
 }

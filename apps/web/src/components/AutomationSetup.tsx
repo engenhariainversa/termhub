@@ -104,12 +104,26 @@ export function AutomationSetup({ projectId, value, onChange }: Props) {
             ))}
           </select>
           <p className="mt-1 text-xs text-fg-dim">{t('Envio às lojas nunca é automático.')}</p>
-          {prCi === 'absent' && value.autonomy !== 'pr' && (
+          {prCi === 'absent' && value.autonomy !== 'pr' && value.no_ci_merge !== 'merge' && (
             <p className="mt-1 text-xs text-warn">
               {t('Nenhum workflow do repositório rodou em pull_request: o termhub não mescla sem CI verde, então os PRs vão ficar esperando. Adicione um workflow em pull_request ou use o nível PR.')}
             </p>
           )}
         </Field>
+
+        {value.autonomy !== 'pr' && (
+          <Field label={t('PR sem CI')} hint={t('Quando o repositório não roda nenhum workflow em pull_request.')}>
+            <select className="input" value={value.no_ci_merge ?? 'wait'} onChange={(e) => set('no_ci_merge', e.target.value as 'wait' | 'merge')}>
+              <option value="wait">{t('Esperar a pessoa (um card no chat pede a confirmação)')}</option>
+              <option value="merge">{t('Mesclar quando o repositório não tem CI nem regra de proteção')}</option>
+            </select>
+            {value.no_ci_merge === 'merge' && (
+              <p className="mt-1 text-xs text-fg-dim">
+                {t('O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.')}
+              </p>
+            )}
+          </Field>
+        )}
 
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" className="accent-accent mt-0.5" checked={value.stop_on_decisions ?? false} onChange={(e) => set('stop_on_decisions', e.target.checked)} />

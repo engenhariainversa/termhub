@@ -42,6 +42,22 @@ export const MERGE_PERSON_CARD = 'merge_person_card';
 export const MERGE_BASE_RED = 'merge_base_red';
 /** TER-1114: a PR whose head has had no CI run at all for a while: termhub only merges a green CI, so it waits for a person. */
 export const MERGE_NO_CI = 'merge_no_ci';
+/**
+ * TER-1188: why a PR with no CI was not merged by itself, as the merge executor read it (`ok` = nothing holds
+ * it but the project's choice to wait for the person). The queue shows it after `merge_no_ci`'s own text.
+ */
+export const NO_CI_WHY = {
+  ok: tk('aprove o card de merge no chat'),
+  pr_ci_present: tk('o repositório tem CI em pull_request, mas ele não rodou neste PR'),
+  pr_ci_unknown: tk('não deu para ler o CI do repositório'),
+  checks_on_head: tk('o PR tem checks de outro app'),
+  checks_unknown: tk('não deu para ler os checks do PR'),
+  base_rules: tk('a branch base tem regra de proteção exigindo checks ou revisão'),
+  rules_unknown: tk('não deu para ler as regras de proteção da branch base'),
+} as const;
+export type NoCiVerdict = keyof typeof NO_CI_WHY;
+/** The `merged` event's reason when a PR with no CI was merged (TER-1188). */
+export const MERGED_NO_CI = 'no_ci_no_rules';
 /** A PR whose CI is still red after `fix_attempts` fixes (spec D21, shared with the conflict fixes): a person looks at it. */
 export const CI_CAP = 'ci_cap';
 /** R8: the card's estimated cost passed `card_budget_usd`; the run is parked, not resumed. */
@@ -100,7 +116,7 @@ export const ESCALATION_TEXT: Record<string, string> = {
   [RELEASE_FAILED]: tk('Um workflow de publicação falhou depois do merge; confira a execução.'),
   [CI_CAP]: tk('O CI do PR continua falhando depois das tentativas de correção; confira o PR.'),
   [MERGE_PERSON_CARD]: tk('O PR está verde, mas depende de um card manual que ainda não está em Feito, então o automático não mescla. Mescle à mão, marque o card como automático ou tire o vínculo («Depende de», «Closes») do PR.'),
-  [MERGE_NO_CI]: tk('O PR não tem nenhum CI rodando; o termhub não mescla sem CI verde. Adicione um workflow em pull_request (ou confira os filtros dele) ou ajuste o Setup.'),
+  [MERGE_NO_CI]: tk('O PR não tem nenhum CI rodando, então o termhub não mescla sozinho. Se a branch base não tem regra de proteção, aprove o card de merge no chat ou ligue «PR sem CI: mesclar» no Setup; senão, adicione um workflow em pull_request (ou confira os filtros dele).'),
   [CONFLICT_CAP]: tk('O PR continua com conflito depois das tentativas de correção; resolva o conflito e o termhub mescla quando o CI ficar verde.'),
   [MERGE_BASE_RED]: tk('A branch base está vermelha e segura os PRs prontos; nada é mesclado até ela ficar verde. Confira a execução que falhou.'),
 };

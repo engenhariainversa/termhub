@@ -22,7 +22,7 @@ import { epicBranchName, namingRule, targetOf } from './branches.js';
 import type { TriggeredRun, TriggeredStart } from './dispatcher.js';
 import { REASON_TEXT } from './eligibility.js';
 import { cleanupRuns, type CleanupDeps } from './cleanup.js';
-import { baseRedText, CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_BASE_RED, MERGE_NO_CI, MERGE_PERSON_CARD, RUN_DONE_NO_PUSH } from './escalation-text.js';
+import { baseRedText, CI_CAP, CONFLICT_CAP, FIXER_NO_PUSH, MERGE_BASE_RED, MERGE_NO_CI, MERGE_PERSON_CARD, MERGED_NO_CI, RUN_DONE_NO_PUSH, type NoCiVerdict } from './escalation-text.js';
 import { postAutomationLine } from './chat-line.js';
 import { claimEvent, publishEvent, recordEvent, settleEvent } from './events.js';
 import { defaultType, endRunsOfMergedCard, escalateDelivery, postEscalationLine } from './follower.js';
@@ -30,6 +30,7 @@ import { clearMergeWait, noteBaseReading, noteMergeWait, type MergeWait } from '
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
+import { repoPrCi } from './pr-ci.js';
 import { deliveryPending, runBranchOf } from './release.js';
 import { epicDied } from './epic-lifecycle.js';
 import { notePushOnlyWorkflows, pushOnlyKnown, pushOnlyOf } from './unlisted-workflows.js';
@@ -44,7 +45,7 @@ export interface MergeDeps {
   repos: Repositories;
   gh: GithubWriteClient;
   /** `runJobs` (TER-1120) tells a run cancelled before any job got a runner; left out, every cancel counts. */
-  ci: Pick<GithubCiClient, 'listRuns'> & Partial<Pick<GithubCiClient, 'runJobs'>>;
+  ci: Pick<GithubCiClient, 'listRuns'> & Partial<Pick<GithubCiClient, 'runJobs' | 'hasRunsFor'>>;
   lifecycle: { readonly draining: boolean };
   /** This process's instance id: the cap marker run is written under it. */
   instance: string;
@@ -74,6 +75,8 @@ export interface MergeDeps {
   /** TER-1114: when each PR head was first read with no CI run at all (`<project>:<repo>#<n>` → head and ms).
    *  Per process, like `seen`; a restart only delays the notice. */
   noCiSince?: Map<string, { sha: string; at: number }>;
+  /** TER-1188: the last no-CI reading of each PR head (`<project>:<repo>#<n>`), kept `NO_CI_VERDICT_TTL_MS`. Per process. */
+  noCiVerdicts?: Map<string, { sha: string; verdict: NoCiVerdict; at: number }>;
 }
 
 /** What the chat is told when a red base escalates (TER-1120): ids, names and URLs, never a log line. */
@@ -102,6 +105,7 @@ export interface HeldWake {
 
 const defaultSeen = new Map<string, string>();
 const defaultNoCiSince = new Map<string, { sha: string; at: number }>();
+const defaultNoCiVerdicts = new Map<string, { sha: string; verdict: NoCiVerdict; at: number }>();
 /** A red base head this process saw hold a ready PR: since when, and whether its escalation is settled. */
 interface RedBase {
   sha: string;
@@ -116,6 +120,12 @@ export const BASE_RED_ESCALATE_MS = 15 * 60_000;
 
 /** A head with no CI run for this long is told to the person: right after a push GitHub may not have queued its runs yet. */
 export const NO_CI_GRACE_MS = 5 * 60_000;
+
+/** TER-1188: a head with no CI is merged (`no_ci_merge: merge`) only this long after it was first read, so a
+ *  CI that is slow to show up gets its chance. */
+export const NO_CI_MERGE_WINDOW_MS = 2 * 60_000;
+/** How long a no-CI reading (the repository's CI, the head's checks, the base's rules) is reused for a head. */
+export const NO_CI_VERDICT_TTL_MS = 10 * 60_000;
 
 /** One card per PR head and base (spec §10.1): a push or a retarget makes a new question. */
 export const mergeKey = (repo: string, n: number, sha: string, base: string) => `${MERGE_TOOL}:${repo}#${n}@${sha}->${base}`;
@@ -134,6 +144,8 @@ const mergeArgs = z.object({
   url: z.string(),
   base: z.string(),
   needed: z.string(),
+  /** TER-1188: asked for a PR with no CI; approving it merges without a green CI */
+  no_ci: z.boolean().optional(),
 });
 type MergeArgs = z.infer<typeof mergeArgs>;
 
@@ -347,7 +359,10 @@ async function handlePull(c: PullCtx): Promise<void> {
   const seen = deps.seen ?? defaultSeen;
   const seenKey = `${c.project.id}:${repo}#${row.number}`;
   if (row.ci_state === 'failed' || row.ci_state === 'none') seen.delete(seenKey);
-  if (row.ci_state !== 'none') (deps.noCiSince ?? defaultNoCiSince).delete(seenKey);
+  if (row.ci_state !== 'none') {
+    (deps.noCiSince ?? defaultNoCiSince).delete(seenKey);
+    (deps.noCiVerdicts ?? defaultNoCiVerdicts).delete(seenKey);
+  }
 
   // a card already asked for this head: act on an approval a missed hook left behind, else wait for the person
   // (a conflict that appears while the card waits is left to the person, who sees it on GitHub)
@@ -364,7 +379,7 @@ async function handlePull(c: PullCtx): Promise<void> {
 
   // `none` is never green
   if (row.ci_state === 'failed') return void (await onRedCi(c, row));
-  if (row.ci_state === 'none') return void (await onNoCi(c, row, seenKey));
+  if (row.ci_state === 'none') return void (await onNoCi(c, row, seenKey, pull, asked));
   if (!(await checksGreen(c, row, seen, seenKey))) return;
 
   if (asked || !pull) {
@@ -418,7 +433,7 @@ async function readNeeded(c: PullCtx, row: TaskPullRequest, base: string): Promi
  * and the PR waits for CI on the new head; and the base head is green with nothing being delivered.
  * `ok` for a PR into the epic branch (epic branches deploy nothing).
  */
-async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: string; base_ref: string; mergeable_state: string }): Promise<{ wait: 'ok' | MergeWait; detail: string | null }> {
+async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: string; base_ref: string; mergeable_state: string }, noCi = false): Promise<{ wait: 'ok' | MergeWait; detail: string | null }> {
   if (pull.base_ref !== c.baseBranch) return { wait: 'ok', detail: null };
   const { behind_by } = await c.deps.gh.compare(c.token, c.repo, c.baseBranch, pull.head_sha);
   if (behind_by > 0 || pull.mergeable_state === 'behind') {
@@ -426,7 +441,7 @@ async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: 
     if (!updated) (c.deps.log ?? noopLog).warn({ projectId: c.project.id, pr: row.number }, 'automation: update-branch refused (head moved or nothing to do)');
     return { wait: 'merge_updating', detail: null };
   }
-  const base = await baseState(c, c.baseBranch, pull.head_sha);
+  const base = await baseState(c, c.baseBranch, pull.head_sha, noCi);
   if (base.state !== 'red') {
     (c.deps.redSince ?? defaultRedSince).delete(c.project.id);
     return { wait: base.state === 'green' ? 'ok' : 'merge_base_pending', detail: null };
@@ -475,7 +490,7 @@ interface BaseReading {
  * there, the job cancelled after 24 h in the queue) delivered nothing, so it does not hold the queue either.
  * `headSha` is the PR's head, read once per base head to learn which workflows only a push runs (the Setup's warning).
  */
-async function baseState(c: PullCtx, baseBranch: string, headSha: string): Promise<BaseReading> {
+async function baseState(c: PullCtx, baseBranch: string, headSha: string, noCi = false): Promise<BaseReading> {
   const sha = await c.deps.gh.branchSha(c.token, c.repo, baseBranch);
   // TER-1121: every reading is kept for the health watcher, with the workflows behind it
   const noted = (b: BaseReading, behind: WorkflowRun[] = []): BaseReading => {
@@ -487,6 +502,9 @@ async function baseState(c: PullCtx, baseBranch: string, headSha: string): Promi
   await readPushOnly(c, sha, runs, headSha);
   const delivery = [c.setup.repo?.deploy_workflow ?? null, ...c.setup.automation.release_workflows].filter((w): w is string => !!w);
   const isDelivery = (r: WorkflowRun) => delivery.some((w) => matchesWorkflow(r, w));
+  // TER-1188: a repository with no CI has no run on its base head either; with no deploy or release to wait
+  // for, that base is not "pending", it simply has nothing that could be red
+  if (runs.length === 0 && noCi && delivery.length === 0) return noted({ state: 'green', sha, red: null });
   if (runs.length === 0 || runs.some((r) => r.status !== 'completed')) return noted({ state: 'pending', sha, red: null }, runs.filter((r) => r.status !== 'completed'));
   for (const r of runs) {
     if (!FAILED.has(r.conclusion ?? '') || (isDelivery(r) && r.conclusion === 'cancelled')) continue;
@@ -572,20 +590,95 @@ async function onBaseRed(c: PullCtx, row: TaskPullRequest, base: BaseReading): P
 }
 
 /**
- * A PR head with no CI run at all (TER-1114): termhub merges only a green CI, so without this the PR would
- * wait in silence. Past `NO_CI_GRACE_MS` on the same head the queue says why, and the feed (with a push and
- * a chat line) says it once per PR head, as `onHeld` does.
+ * A PR head with no CI run at all (TER-1114, TER-1188). Without a green CI termhub merges it by itself only
+ * when the project chose so (`no_ci_merge: merge`) and `noCiVerdict` finds nothing that asks for a check or
+ * a review: `NO_CI_MERGE_WINDOW_MS` after the head was first read, through the same delivery gate and level
+ * as a green PR, and recorded as `merged` with reason `no_ci_no_rules`. Otherwise, past `NO_CI_GRACE_MS` on
+ * the same head, the queue says why, the feed (with a push and a chat line) says it once per PR head, and
+ * when only the project's choice holds it (`ok`), an approval card asks the person — approving merges it.
  */
-async function onNoCi(c: PullCtx, row: TaskPullRequest, key: string): Promise<void> {
+async function onNoCi(c: PullCtx, row: TaskPullRequest, key: string, pull: PullState | null, asked: ChatAction | undefined): Promise<void> {
   const { repos } = c.deps;
   const since = c.deps.noCiSince ?? defaultNoCiSince;
   const at = now(c.deps).getTime();
   const first = since.get(key);
   if (first?.sha !== row.head_sha) return void since.set(key, { sha: row.head_sha, at });
-  if (at - first.at < NO_CI_GRACE_MS) return;
-  waitOn(c, 'merge_no_ci', row.head_sha);
-  if (await repos.automationEvents.findOnce(c.primary.id, 'escalated', { reason: MERGE_NO_CI, pr: row.number, sha: row.head_sha })) return;
-  await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, MERGE_NO_CI, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha });
+  const waited = at - first.at;
+  if (waited < NO_CI_MERGE_WINDOW_MS) return;
+  // a card already asked for this head (TER-1188): act on an approval a missed hook left behind, else wait
+  if (asked) {
+    if (asked.status === 'approved') await mergeApproved(c.deps, asked.id);
+    else if (asked.status === 'pending') waitOn(c, (asked.args as { needed?: unknown })?.needed === 'store' ? 'merge_store' : 'merge_needs_approval');
+    return;
+  }
+  if (!pull || pull.mergeable === null) return;
+  const merging = c.setup.automation.no_ci_merge === 'merge';
+  if (!merging && waited < NO_CI_GRACE_MS) return;
+  const verdict = await noCiVerdict(c, row, key);
+  if (verdict === 'ok' && merging) return void (await mergeWithoutCi(c, row, pull));
+  if (waited < NO_CI_GRACE_MS) return;
+  waitOn(c, 'merge_no_ci', row.head_sha, verdict);
+  if (!(await repos.automationEvents.findOnce(c.primary.id, 'escalated', { reason: MERGE_NO_CI, pr: row.number, sha: row.head_sha }))) {
+    await escalateDelivery(repos, { project_id: c.project.id, task_id: c.primary.id }, MERGE_NO_CI, c.deps.log ?? noopLog, { pr: row.number, url: row.url, sha: row.head_sha, why: verdict });
+  }
+  // only the project's choice holds it: the person merges it with one click on the usual card (asked once
+  // per head; the next pass finds it in `asked`)
+  if (verdict !== 'ok') return;
+  const { needed, complete } = await readNeeded(c, row, pull.base_ref);
+  await askApproval(c, row, pull.base_ref, complete ? needed : 'files_incomplete', true);
+}
+
+/** What `gh.pull` answers. */
+type PullState = Awaited<ReturnType<GithubWriteClient['pull']>>;
+
+/**
+ * TER-1188: whether a PR with no CI may merge without one. `ok` only when the repository runs no workflow on
+ * pull requests, the head has no check run nor commit status (from Actions or any other app), and the base
+ * branch has no protection nor ruleset that asks for checks, reviews or approvals. A reading that fails is
+ * never `ok` (an unreadable protection may be a rule). Kept per head for `NO_CI_VERDICT_TTL_MS`.
+ */
+async function noCiVerdict(c: PullCtx, row: TaskPullRequest, key: string): Promise<NoCiVerdict> {
+  const cache = c.deps.noCiVerdicts ?? defaultNoCiVerdicts;
+  const at = now(c.deps).getTime();
+  const hit = cache.get(key);
+  if (hit && hit.sha === row.head_sha && at - hit.at < NO_CI_VERDICT_TTL_MS) return hit.verdict;
+  const verdict = await readNoCiVerdict(c, row);  if (cache.size > 10_000) cache.clear();
+  cache.set(key, { sha: row.head_sha, verdict, at });
+  return verdict;
+}
+
+async function readNoCiVerdict(c: PullCtx, row: TaskPullRequest): Promise<NoCiVerdict> {
+  const { gh, ci } = c.deps;
+  if (!ci.hasRunsFor) return 'pr_ci_unknown';
+  const prCi = await repoPrCi(c.token, c.repo, { hasRunsFor: ci.hasRunsFor.bind(ci) }, now(c.deps).getTime());
+  if (prCi !== 'absent') return prCi === 'present' ? 'pr_ci_present' : 'pr_ci_unknown';
+  if (!gh.headChecks) return 'checks_unknown';
+  try {
+    if ((await gh.headChecks(c.token, c.repo, row.head_sha)) > 0) return 'checks_on_head';
+  } catch {
+    return 'checks_unknown';
+  }
+  if (!gh.mergeRules || !row.base_ref) return 'rules_unknown';
+  try {
+    return (await gh.mergeRules(c.token, c.repo, row.base_ref)) === 'none' ? 'ok' : 'base_rules';
+  } catch {
+    return 'rules_unknown';
+  }
+}
+
+/** TER-1188: a PR with no CI and nothing that asks for one, in a project that merges them: the rest of the
+ *  green path (delivery gate, level, the last stop check), merged with reason `no_ci_no_rules`. */
+async function mergeWithoutCi(c: PullCtx, row: TaskPullRequest, pull: PullState): Promise<void> {
+  const { wait, detail } = await deliveryGate(c, row, pull, true);
+  if (wait !== 'ok') return waitOn(c, wait, null, detail);
+  const { needed, complete } = await readNeeded(c, row, pull.base_ref);
+  if (complete && allows(c.setup.automation.autonomy, needed)) {
+    if (await stopped(c)) return;
+    const outcome = await mergePull(c, row, needed, 'policy', MERGED_NO_CI);
+    if (outcome === 'no_write') noWrite(c);
+    return;
+  }
+  await askApproval(c, row, pull.base_ref, complete ? needed : 'files_incomplete', true);
 }
 
 /** A PR GitHub cannot merge cleanly: one fixer run per head (R2), up to `fix_attempts`, then the person. A
@@ -823,9 +916,9 @@ const takesLine = (tab: Tab) =>
   tab.state_text !== AGENT_EXITED_TEXT;
 
 /** Above the level (D7): one irreversible card per PR head in the owner's project chat, and its event. */
-async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, needed: NeededLevel | 'files_incomplete'): Promise<void> {
+async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, needed: NeededLevel | 'files_incomplete', noCi = false): Promise<void> {
   const { repos } = c.deps;
-  const args: MergeArgs = { project_id: c.project.id, repo: c.repo, number: row.number, head_sha: row.head_sha, title: row.title, url: row.url, base, needed };
+  const args: MergeArgs = { project_id: c.project.id, repo: c.repo, number: row.number, head_sha: row.head_sha, title: row.title, url: row.url, base, needed, ...(noCi ? { no_ci: true } : {}) };
   const card = await askForAutomation(repos, c.project.owner_id, c.project.id, { tool: MERGE_TOOL, args, key: mergeKey(c.repo, row.number, row.head_sha, base) });
   waitOn(c, needed === 'store' ? 'merge_store' : 'merge_needs_approval');
   if (!card) return;
@@ -834,7 +927,7 @@ async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, neede
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merge_needs_approval',
-      payload: { pr: row.number, url: row.url, sha: row.head_sha, needed, action_id: card.id, ...(needed === 'store' ? { text: REASON_TEXT.merge_store } : {}) },
+      payload: { pr: row.number, url: row.url, sha: row.head_sha, needed, action_id: card.id, ...(noCi ? { no_ci: true } : {}), ...(needed === 'store' ? { text: REASON_TEXT.merge_store } : {}) },
     });
   }
 }
@@ -844,7 +937,7 @@ async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, neede
  * a chat line, and each card to the project's first `done` column (F-5). `merged` is recorded only when
  * GitHub says so: a head that moved (409) or a PR it refuses (405) is `not_merged`, a read-only token `no_write`.
  */
-async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: 'policy' | 'approval'): Promise<'merged' | 'not_merged' | 'no_write'> {
+async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: 'policy' | 'approval', reason: string | null = null): Promise<'merged' | 'not_merged' | 'no_write'> {
   const { repos } = c.deps;
   const log = c.deps.log ?? noopLog;
   let result: { merged: boolean; sha: string | null };
@@ -875,12 +968,12 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merged',
-      payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
+      payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(reason ? { reason } : {}), ...(kept ? { worktree_kept: true } : {}) },
     });
     if (task.type === 'epic' && moved) await epicDied({ repos, gh: c.deps.gh, log }, c.project, c.setup, task, { number: row.number, url: row.url });
   }
-  log.info({ projectId: c.project.id, pr: row.number, by }, 'automation: PR merged');
-  await postMergeLine(c, row).catch((e: unknown) => log.warn({ pr: row.number, code: codeOf(e) }, 'automation: merge line not posted'));
+  log.info({ projectId: c.project.id, pr: row.number, by, reason }, 'automation: PR merged');
+  await postMergeLine(c, row, reason).catch((e: unknown) => log.warn({ pr: row.number, code: codeOf(e) }, 'automation: merge line not posted'));
   return 'merged';
 }
 
@@ -905,9 +998,18 @@ async function cleanupAfterMerge(c: PullCtx, task: Task): Promise<boolean> {
 }
 
 /** The chat hears of each merge (spec D25), in the owner's most recent project conversation. */
-async function postMergeLine(c: PullCtx, row: TaskPullRequest): Promise<void> {
+async function postMergeLine(c: PullCtx, row: TaskPullRequest, reason: string | null): Promise<void> {
   const refs = c.tasks.map((t) => t.ref).join(', ');
-  await postAutomationLine(c.deps.repos, c.project.id, (locale) => t(locale, 'Automático mesclou o PR #{{n}} de {{ref}}: {{url}}', { n: row.number, ref: refs, url: row.url }), c.deps.log);
+  const vars = { n: row.number, ref: refs, url: row.url };
+  await postAutomationLine(
+    c.deps.repos,
+    c.project.id,
+    (locale) =>
+      reason === MERGED_NO_CI
+        ? t(locale, 'Automático mesclou o PR #{{n}} de {{ref}} sem CI (o repositório não tem CI nem regra de proteção na branch base): {{url}}', vars)
+        : t(locale, 'Automático mesclou o PR #{{n}} de {{ref}}: {{url}}', vars),
+    c.deps.log,
+  );
 }
 
 /** Closes the approval card with its outcome and tells every open screen. */
@@ -961,7 +1063,16 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
 
   // R1 again, on the head the card was asked for: the CI may have been re-run since
   if (row.ci_state === 'failed') return void (await close('CI_FAILED'));
-  if (!(await checksGreen(c, row, null, ''))) return;
+  // TER-1188: a card asked for a PR with no CI merges it while the head still has none; a CI that showed up
+  // since is read as usual
+  const noCi = args.no_ci === true && row.ci_state === 'none';
+  if (!noCi && !(await checksGreen(c, row, null, ''))) return;
+  if (noCi) {
+    const verdict = await noCiVerdict(c, row, `${project.id}:${args.repo}#${args.number}`);
+    // the person approved the missing CI, not a rule of the base branch; a reading that failed waits
+    if (verdict === 'base_rules' || verdict === 'checks_on_head') return void (await close('NO_CI_RULES'));
+    if (verdict === 'rules_unknown' || verdict === 'checks_unknown') return;
+  }
   const pull = await deps.gh.pull(access.token, args.repo, args.number);
   if (pull.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
   if (pull.base_ref !== args.base) return void (await close('BASE_CHANGED'));
@@ -969,7 +1080,7 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   let delivery: 'ok' | MergeWait;
   let detail: string | null;
   try {
-    ({ wait: delivery, detail } = await deliveryGate(c, row, pull));
+    ({ wait: delivery, detail } = await deliveryGate(c, row, pull, noCi));
   } catch (e) {
     if (e instanceof GithubCiError && e.kind === 'forbidden') return noWrite(c);
     throw e;
@@ -986,7 +1097,7 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
 
   const started = Date.now();
   try {
-    const outcome = await mergePull(c, row, args.needed, 'approval');
+    const outcome = await mergePull(c, row, args.needed, 'approval', noCi ? MERGED_NO_CI : null);
     if (outcome === 'no_write') noWrite(c);
     await finish(repos, action, owned.owner_id, outcome === 'merged', outcome === 'merged' ? null : outcome === 'no_write' ? 'GITHUB_FORBIDDEN' : 'NOT_MERGED', started);
   } catch (e) {

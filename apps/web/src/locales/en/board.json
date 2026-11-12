@@ -532,5 +532,10 @@
   "na fila": "queued",
   "rodando": "running",
   "concluída": "done",
-  "cancelada": "cancelled"
+  "cancelada": "cancelled",
+  "PR sem CI": "PR without CI",
+  "Quando o repositório não roda nenhum workflow em pull_request.": "When the repository runs no workflow on pull_request.",
+  "Esperar a pessoa (um card no chat pede a confirmação)": "Wait for a person (a card in the chat asks for confirmation)",
+  "Mesclar quando o repositório não tem CI nem regra de proteção": "Merge when the repository has no CI and no protection rule",
+  "O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.": "termhub merges 2 minutes after the last push, if the PR has no check and the base branch has no protection or ruleset requiring checks or review."
 }

@@ -6,6 +6,7 @@ import type { Task } from '../db/repositories/types.js';
 import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
 import { hasTicketOrBranch } from './branches.js';
 import { EPIC_SETTLE_CAP_MS, eligibilityOf, NEW_CARD_GRACE_MS, REASON_TEXT, type IneligibleReason } from './eligibility.js';
+import { NO_CI_WHY, type NoCiVerdict } from './escalation-text.js';
 import { mergeWaitEntryOf, type MergeWaitEntry } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
@@ -58,6 +59,8 @@ function mergeWaitText({ wait, sha, detail }: MergeWaitEntry, locale: Locale): s
   if (wait === 'merge_conflict_cap' && sha) return t(locale, 'Escalado por conflito em {{sha}}; aguardando um push que resolva', { sha: sha.slice(0, 7) });
   // TER-1120: the workflow that left the base red; TER-1136: the cards the PR depends on
   if ((wait === 'merge_base_red' || wait === 'merge_person_card') && detail) return `${t(locale, REASON_TEXT[wait])}: ${detail}`;
+  // TER-1188: why a PR with no CI waits
+  if (wait === 'merge_no_ci' && detail && detail in NO_CI_WHY) return `${t(locale, REASON_TEXT[wait])}: ${t(locale, NO_CI_WHY[detail as NoCiVerdict])}`;
   return t(locale, REASON_TEXT[wait]);
 }
 

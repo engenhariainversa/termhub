@@ -110,6 +110,9 @@ export type ProjectAi = z.infer<typeof aiSchema>;
 
 export const AUTONOMY_LEVELS = ['pr', 'merge', 'deploy', 'release'] as const;
 export type AutonomyLevel = (typeof AUTONOMY_LEVELS)[number];
+/** TER-1188: what a PR with no CI gets, at merge level or above. */
+export const NO_CI_MERGE_MODES = ['wait', 'merge'] as const;
+export type NoCiMergeMode = (typeof NO_CI_MERGE_MODES)[number];
 const glob = z.string().trim().min(1).max(200);
 // 1200, not more: the implementer template with a custom middle must stay under 4000 characters
 const promptText = z.string().trim().min(1).max(1200).nullable().default(null);
@@ -125,6 +128,10 @@ export const automationSchema = z.object({
   release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).default([]),
   // spike R1 (TER-964): workflows (name or file) that must pass on the PR head before termhub merges; [] = every run
   required_checks: z.array(z.string().trim().min(1).max(200)).max(20).default([]),
+  // TER-1188: a PR whose repository runs no CI on pull requests. wait = a person decides (an approval card);
+  // merge = merged like a green one when the head has no check at all and the base branch has no protection
+  // or ruleset that asks for checks or reviews
+  no_ci_merge: z.enum(NO_CI_MERGE_MODES).default('wait'),
   epic_branch_pattern: z.string().trim().min(1).max(100).refine((p) => p.includes('{ref}'), 'use {ref}').default('epic/{ref}-{slug}'),
   worktrees_dir: z.string().trim().min(1).max(512).default('~/.termhub/worktrees'),
   allowed_tools: z.array(z.string().trim().min(1).max(200)).max(100).nullable().default(null),

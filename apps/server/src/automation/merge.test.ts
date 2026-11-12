@@ -11,6 +11,7 @@ import { epicBranchName } from './branches.js';
 import type { TriggeredStart } from './dispatcher.js';
 import { mergeApproved, mergeKey, MERGE_TOOL, runMergeExecutor, type MergeDeps } from './merge.js';
 import { mergeWaitEntryOf, mergeWaitOf, resetMergeWaits } from './merge-wait.js';
+import { resetPrCiCache } from './pr-ci.js';
 import { resetPushOnlyWorkflows, unlistedWorkflows } from './unlisted-workflows.js';
 import type { RunJob } from '../integrations/github-ci.js';
 import { BASE_RED_ESCALATE_MS } from './merge.js';
@@ -228,7 +229,7 @@ function world(o: { setup?: ProjectSetupData; prs?: TaskPullRequest[]; paused?: 
   const seen = new Map([['p1:acme/app#7', 'h1']]);
   const removeWorkspace = vi.fn(async (_m: unknown, _i: { repoDir: string; root: string; path: string }) => ({ removed: true, dirty: false }));
   const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
-  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, noCiSince: new Map(), removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z'), redSince: new Map(), neverStarted: new Map() };
+  const deps: MergeDeps = { repos, gh: gh as unknown as GithubWriteClient, ci, lifecycle, instance: 'test', startFixer, type, seen, noCiSince: new Map(), noCiVerdicts: new Map(), removeWorkspace: removeWorkspace as unknown as MergeDeps['removeWorkspace'], closeTab, now: () => new Date('2026-10-05T12:00:00Z'), redSince: new Map(), neverStarted: new Map() };
   return { state, repos, gh, ci, startFixer, type, lifecycle, seen, deps, pullFor, removeWorkspace, closeTab };
 }
 
@@ -239,6 +240,7 @@ const approve = (a: ChatAction) => {
 beforeEach(() => {
   resetMergeWaits();
   resetPushOnlyWorkflows();
+  resetPrCiCache();
   setCiError('p1', null);
 });
 
@@ -350,6 +352,120 @@ describe('runMergeExecutor', () => {
       w.deps.now = at('2026-10-05T12:06:00Z');
       await runMergeExecutor(w.deps, 'p1');
       expect(escalations(w)).toHaveLength(0);
+    });
+
+    /** TER-1188: a repository with no CI on pull requests, a head with no check, a base with no rule. */
+    function noCiWorld(o: { mode?: 'wait' | 'merge'; rules?: 'none' | 'rules' | 'error'; prCi?: boolean; checks?: number } = {}) {
+      const w = world({ setup: setupWith({ no_ci_merge: o.mode ?? 'merge' }), prs: [pr({ ci_state: 'none', ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [] } })] });
+      const hasRunsFor = vi.fn(async () => o.prCi ?? false);
+      const mergeRules = vi.fn(async () => {
+        if (o.rules === 'error') throw new GithubCiError('auth', 403);
+        return o.rules === 'rules' ? ('rules' as const) : ('none' as const);
+      });
+      const headChecks = vi.fn(async () => o.checks ?? 0);
+      Object.assign(w.ci, { hasRunsFor });
+      Object.assign(w.gh, { mergeRules, headChecks });
+      return { ...w, hasRunsFor, mergeRules, headChecks };
+    }
+
+    it('no_ci_merge merge, no CI and no rule: merged once the window passed, recorded as no_ci_no_rules', async () => {
+      const w = noCiWorld();
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:01:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      // a CI slow to show up gets its window
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.mergeRules).not.toHaveBeenCalled();
+      w.deps.now = at('2026-10-05T12:02:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.mergeRules).toHaveBeenCalledWith('tok', 'acme/app', EPIC_BRANCH);
+      expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, { sha: 'h1', title: 'Board: drag cards (#7)', method: 'squash' });
+      expect(w.state.events).toEqual([expect.objectContaining({ kind: 'merged', payload: expect.objectContaining({ by: 'policy', reason: 'no_ci_no_rules', level: 'merge' }) })]);
+      expect(w.state.messages[0]).toContain('sem CI');
+      expect(w.state.actions).toHaveLength(0);
+    });
+
+    it('no_ci_merge merge into main: a base head with no run at all is not pending', async () => {
+      const w = noCiWorld();
+      w.state.prs = [pr({ task_id: 'c2', base_ref: 'main', ci_state: 'none' })];
+      w.ci.listRuns.mockResolvedValue([]);
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:02:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).toHaveBeenCalledTimes(1);
+      expect(w.state.events[0]).toMatchObject({ kind: 'merged', payload: expect.objectContaining({ reason: 'no_ci_no_rules' }) });
+    });
+
+    it('no_ci_merge merge, a rule on the base: never merged, the person is told why once', async () => {
+      const w = noCiWorld({ rules: 'rules' });
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:02:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(escalations(w)).toHaveLength(0);
+      w.deps.now = at('2026-10-05T12:05:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.state.actions).toHaveLength(0);
+      expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ reason: 'merge_no_ci', why: 'base_rules' }) })]);
+      expect(mergeWaitEntryOf('c1', new Date('2026-10-05T12:05:00Z'))).toMatchObject({ wait: 'merge_no_ci', detail: 'base_rules' });
+    });
+
+    it('no_ci_merge merge, the protection cannot be read: never merged (it may hold a rule)', async () => {
+      const w = noCiWorld({ rules: 'error' });
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:05:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(escalations(w)[0]).toMatchObject({ payload: expect.objectContaining({ why: 'rules_unknown' }) });
+    });
+
+    it('no_ci_merge merge, a repository with CI on pull requests or a head with checks: the rule of today', async () => {
+      for (const [o, why] of [[{ prCi: true }, 'pr_ci_present'], [{ checks: 1 }, 'checks_on_head']] as const) {
+        resetPrCiCache();
+        const w = noCiWorld(o);
+        await runMergeExecutor(w.deps, 'p1');
+        w.deps.now = at('2026-10-05T12:05:00Z');
+        await runMergeExecutor(w.deps, 'p1');
+        expect(w.gh.merge).not.toHaveBeenCalled();
+        expect(w.state.actions).toHaveLength(0);
+        expect(escalations(w)[0]).toMatchObject({ payload: expect.objectContaining({ why }) });
+      }
+    });
+
+    it('no_ci_merge wait (the default), no rule: told once and a merge card asked; approving it merges without CI', async () => {
+      const w = noCiWorld({ mode: 'wait' });
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:02:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      // waiting for the person reads nothing before the grace
+      expect(w.mergeRules).not.toHaveBeenCalled();
+      w.deps.now = at('2026-10-05T12:05:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      await runMergeExecutor(w.deps, 'p1');
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(escalations(w)).toEqual([expect.objectContaining({ payload: expect.objectContaining({ why: 'ok' }) })]);
+      expect(w.state.actions).toHaveLength(1);
+      expect(w.state.actions[0]!.args).toMatchObject({ number: 7, head_sha: 'h1', needed: 'merge', no_ci: true });
+      expect(mergeWaitOf('c1', new Date('2026-10-05T12:05:00Z'))).toBe('merge_needs_approval');
+      approve(w.state.actions[0]!);
+      await mergeApproved(w.deps, w.state.actions[0]!.id);
+      expect(w.gh.merge).toHaveBeenCalledTimes(1);
+      expect(w.state.events.find((e) => e.kind === 'merged')).toMatchObject({ payload: expect.objectContaining({ by: 'approval', reason: 'no_ci_no_rules' }) });
+      expect(w.state.actions[0]!.status).toBe('executed');
+    });
+
+    it('an approved no-CI card whose base gained a rule is closed without a merge', async () => {
+      const w = noCiWorld({ mode: 'wait' });
+      await runMergeExecutor(w.deps, 'p1');
+      w.deps.now = at('2026-10-05T12:05:00Z');
+      await runMergeExecutor(w.deps, 'p1');
+      w.mergeRules.mockResolvedValue('rules');
+      w.deps.noCiVerdicts = new Map();
+      approve(w.state.actions[0]!);
+      await mergeApproved(w.deps, w.state.actions[0]!.id);
+      expect(w.gh.merge).not.toHaveBeenCalled();
+      expect(w.state.actions[0]).toMatchObject({ status: 'failed', error_code: 'NO_CI_RULES' });
     });
 
     it('in conflict: a fixer for the head, with no CI wait and no CI notice', async () => {

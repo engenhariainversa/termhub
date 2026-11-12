@@ -667,6 +667,8 @@ export interface ProjectAutomation {
   release_workflows: string[];
   /** workflows that must pass on the PR head before termhub merges it; [] = every run (spike R1) */
   required_checks: string[];
+  /** TER-1188: a PR with no CI: wait = the person approves a merge card; merge = merged when the base has no protection rule. Absent from an older server */
+  no_ci_merge?: 'wait' | 'merge';
   epic_branch_pattern: string;
   worktrees_dir: string;
   allowed_tools: string[] | null;

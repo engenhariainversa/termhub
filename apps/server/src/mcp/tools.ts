@@ -29,7 +29,7 @@ import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tab
 import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
-import { AUTONOMY_LEVELS } from '../setup/schema.js';
+import { AUTONOMY_LEVELS, NO_CI_MERGE_MODES } from '../setup/schema.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { DECISION_SCOPES, type DecisionScope } from '../db/repositories/decision-scope.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
@@ -486,7 +486,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_automation_policy',
     description:
-      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. pr_ci says whether the repository runs any workflow on pull requests (present, absent, unknown); the text warns when it is absent at merge level or above, since termhub only merges a green CI. Read it before opening a pull request, to know what happens after it.",
+      "The automation policy of this project: whether automatic work is on, the autonomy level (pr, merge, deploy, release), what it covers and which paths are protected, in pt-BR. pr_ci says whether the repository runs any workflow on pull requests (present, absent, unknown); no_ci_merge says what a PR with no CI gets (wait: a merge card the person approves in the chat; merge: termhub merges it when the head has no check and the base branch has no protection or ruleset asking for checks or reviews), and the text says it too. When the person says \"pode mergear\" about a PR waiting for lack of CI, point them at that card (or propose set_automation_policy with no_ci_merge merge); never answer that it cannot be unblocked. Read it before opening a pull request, to know what happens after it.",
     scope: 'read', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => {
@@ -494,13 +494,13 @@ export const TOOLS: ToolDef[] = [
       const prCi = await projectPrCi(ctx, (a as { project_id: string }).project_id);
       const text = policyText(automation, repo?.deploy_workflow ?? null);
       // TER-1114: at merge level or above, a repository with no CI on PRs never gets a PR merged
-      return { enabled: automation.enabled, autonomy: automation.autonomy, pr_ci: prCi, text: needsPrCiWarning(automation, prCi) ? `${text}\nAviso: ${NO_PR_CI_TEXT}` : text };
+      return { enabled: automation.enabled, autonomy: automation.autonomy, pr_ci: prCi, no_ci_merge: automation.no_ci_merge, text: needsPrCiWarning(automation, prCi) ? `${text}\nAviso: ${NO_PR_CI_TEXT}` : text };
     },
   },
   {
     name: 'set_automation_policy',
     description:
-      "Read or change the project's automatic-work Setup (\"Trabalho automático\"). With only project_id it reads. Fields left out keep their value: enabled (on/off), autonomy (pr, merge, deploy, release; each includes the previous), release_paths and store_paths (globs, the whole list), release_workflows (GitHub Actions workflow names), required_checks (workflows that must pass on the PR head; [] = every run), max_parallel (cards at once; null = no cap). Turning it on, raising the level, changing a path, workflow or check list, or raising max_parallel always asks the person; turning it off, lowering the level or lowering max_parallel is a brake and runs at once. Answers the saved values, the policy text in pt-BR and which fields changed; every change is written to the automation events. Other Setup fields (card types, budgets, prompts) stay on the Setup screen.",
+      "Read or change the project's automatic-work Setup (\"Trabalho automático\"). With only project_id it reads. Fields left out keep their value: enabled (on/off), autonomy (pr, merge, deploy, release; each includes the previous), release_paths and store_paths (globs, the whole list), release_workflows (GitHub Actions workflow names), required_checks (workflows that must pass on the PR head; [] = every run), max_parallel (cards at once; null = no cap), no_ci_merge (a PR whose repository runs no CI on pull requests: wait = the person approves a merge card, merge = termhub merges it when the head has no check and the base branch has no protection or ruleset asking for checks or reviews). Turning it on, raising the level, changing a path, workflow or check list, raising max_parallel or setting no_ci_merge to merge always asks the person; turning it off, lowering the level, lowering max_parallel or no_ci_merge back to wait is a brake and runs at once. Answers the saved values, the policy text in pt-BR and which fields changed; every change is written to the automation events. Other Setup fields (card types, budgets, prompts) stay on the Setup screen.",
     scope: 'terminals', resource: 'projects', action: 'update',
     strict: true,
     input: {
@@ -512,6 +512,7 @@ export const TOOLS: ToolDef[] = [
       release_workflows: z.array(z.string().trim().min(1).max(200)).max(10).optional(),
       required_checks: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
       max_parallel: z.number().int().min(1).max(100).nullable().optional(),
+      no_ci_merge: z.enum(NO_CI_MERGE_MODES).optional(),
     },
     run: (ctx, a) => setAutomationPolicy(ctx, a as Parameters<typeof setAutomationPolicy>[1]),
   },

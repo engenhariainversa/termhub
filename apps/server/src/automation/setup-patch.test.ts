@@ -34,6 +34,13 @@ describe('automationChangeWidens (TER-975)', () => {
     expect(automationChangeWidens(on, { ...on })).toBe(false);
   });
 
+  it('merging PRs with no CI widens; waiting for the person again is a brake (TER-1188)', () => {
+    expect(base.no_ci_merge).toBe('wait');
+    expect(automationChangeWidens(on, { ...on, no_ci_merge: 'merge' })).toBe(true);
+    expect(automationChangeWidens({ ...on, no_ci_merge: 'merge' }, { ...on, no_ci_merge: 'wait' })).toBe(false);
+    expect(changedFields(on, { ...on, no_ci_merge: 'merge' })).toEqual(['no_ci_merge']);
+  });
+
   it('a brake combined with a widening asks', () => {
     expect(automationChangeWidens(on, { ...on, enabled: false, release_paths: [] })).toBe(true);
     expect(automationChangeWidens(on, { ...on, autonomy: 'pr', max_parallel: 10 })).toBe(true);
