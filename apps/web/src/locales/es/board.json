@@ -475,7 +475,6 @@
   "Execução bloqueada sem resposta": "Ejecución bloqueada sin respuesta",
   "Deploy ou release com falha": "Deploy o release con fallo",
   "Agente abaixo do mínimo": "Agente por debajo del mínimo",
-  "Aba \"trabalhando\" sem nenhum evento": "Pestaña \"trabajando\" sin ningún evento",
   "Aba esperando resposta (pergunta, permissão, confiança, login)": "Pestaña esperando respuesta (pregunta, permiso, confianza, inicio de sesión)",
   "Máquina offline com trabalho do projeto": "Máquina sin conexión con trabajo del proyecto",
   "O termhub percebe sozinho quando o trabalho para e avisa: um push quando só você pode destravar e o concierge do projeto acordado para resolver o resto. Abas e máquinas valem em todo projeto; o resto, só com o automático ligado. Horário de silêncio e níveis de push seguem os seus avisos do concierge.": "termhub nota por sí solo cuando el trabajo se detiene y te avisa: un push cuando solo tú puedes destrabarlo y el concierge del proyecto despierto para resolver el resto. Pestañas y máquinas cuentan en todo proyecto; el resto, solo con el automático encendido. El horario de silencio y los niveles de push siguen tus avisos del concierge.",
@@ -537,5 +536,6 @@
   "Quando o repositório não roda nenhum workflow em pull_request.": "Cuando el repositorio no ejecuta ningún workflow en pull_request.",
   "Esperar a pessoa (um card no chat pede a confirmação)": "Esperar a la persona (una tarjeta en el chat pide la confirmación)",
   "Mesclar quando o repositório não tem CI nem regra de proteção": "Fusionar cuando el repositorio no tiene CI ni regla de protección",
-  "O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.": "termhub fusiona 2 minutos después del último push, si el PR no tiene ningún check y la rama base no tiene protección ni ruleset que exija checks o revisión."
+  "O termhub mescla 2 minutos depois do último push, se o PR não tem nenhum check e a branch base não tem proteção nem ruleset exigindo checks ou revisão.": "termhub fusiona 2 minutos después del último push, si el PR no tiene ningún check y la rama base no tiene protección ni ruleset que exija checks o revisión.",
+  "Aba \"trabalhando\" ou esperando segundo plano sem nenhum evento": "Pestaña \"trabajando\" o esperando trabajo en segundo plano sin ningún evento"
 }

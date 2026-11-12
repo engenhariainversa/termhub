@@ -26,6 +26,7 @@ const TEXT: Record<HealthSignal, string> = {
   agent_exited: tk('Agente da aba {{label}} fora do ar há {{duration}}'),
   approval_stalled: tk('Confirmação do chat sem resposta há {{duration}}: {{label}}'),
 };
+const TAB_BACKGROUND_QUIET = tk('Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}');
 const BASE_PENDING = tk('Branch base {{label}} com a CI sem terminar há {{duration}}');
 const FAILING = tk('falhando: {{names}}');
 const PENDING = tk('sem terminar: {{names}}');
@@ -69,7 +70,10 @@ export function alertLine(a: Pick<HealthAlert, 'signal' | 'detail' | 'since_at'>
     label: str(d.label), ref: str(d.ref), pr: str(d.pr), workflow: str(d.workflow), version: str(d.version), min: str(d.min),
     duration: durationText(locale, now.getTime() - Date.parse(a.since_at)),
   };
-  const head = a.signal === 'base_red' && d.state === 'pending' ? t(locale, BASE_PENDING, vars) : t(locale, TEXT[a.signal], vars);
+  const head =
+    a.signal === 'base_red' && d.state === 'pending' ? t(locale, BASE_PENDING, vars)
+    : a.signal === 'tab_stuck' && d.state === 'waiting_background' ? t(locale, TAB_BACKGROUND_QUIET, vars)
+    : t(locale, TEXT[a.signal], vars);
   const extra: string[] = [];
   if (a.signal === 'pr_ready' && typeof d.reason === 'string' && d.reason in REASON_TEXT) {
     // TER-1136: a PR held by a person's card names the cards
@@ -95,7 +99,7 @@ const HINT: Record<HealthSignal, string> = {
   pr_ready: 'o motivo da fila está acima (list_automation_queue também mostra); base vermelha se destrava consertando a base, aprovação a pessoa dá no chat, build de loja só ela faz; um PR que depende de card manual a pessoa mescla no GitHub, ou autoriza marcar o card como automático ou movê-lo para Feito',
   base_red: 'o workflow que falha (ou que nunca termina, por exemplo sem runner) precisa de conserto ou sair dos checks e entregas do Setup; enquanto isso nenhum PR é mesclado',
   queue_stalled: 'list_automation_queue diz o motivo de cada card (conta, máquina, backoff); destrave o que estiver ao seu alcance',
-  tab_stuck: 'read_screen na aba diz se ela está mesmo trabalhando (um build longo) ou travada; travada, send_key ou send_input dentro das regras, senão avise',
+  tab_stuck: 'read_screen na aba diz se ela está mesmo trabalhando (um build longo) ou travada; travada, send_key ou send_input dentro das regras, senão avise. Em waiting_background o trabalho em segundo plano pode ter acabado sem acordar o agente: se acabou, mande a aba seguir',
   tab_waiting: 'list_tab_questions e read_screen mostram o que ela espera; responda se uma regra da pessoa cobrir, senão avise. Em cli_dialog um diálogo do CLI segura a aba (o texto digitado nela se perde): read_screen mostra qual, send_key fecha (Esc costuma ser "agora não"); diga à pessoa o que fechou e reenvie o que se perdeu',
   card_orphan: 'se o trabalho não acabou, start_agent no card; se acabou, mova o card',
   run_blocked: 'list_automation_events mostra o motivo; resume_automation_run depois de destravado, ou a pessoa decide',

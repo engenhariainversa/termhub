@@ -265,7 +265,8 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // 4. a tab working with no event for a long while; a tab waiting on someone
   for (const tab of s.tabs) {
     if (!tab.state_at) continue;
-    if (tab.state === 'working') add('tab_stuck', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
+    // TER-1168: a tab left in waiting_background writes nothing when that work ends: a stop, past the same minutes
+    if (tab.state === 'working' || tab.state === 'waiting_background') add('tab_stuck', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
     else if (tab.state === 'trust_prompt') {
       // TER-1148: only the person can answer it, and nothing runs meanwhile — the person is pushed after 2 minutes
       const due = s.now.getTime() - tab.state_at.getTime() >= TRUST_PROMPT_ALERT_MS;
