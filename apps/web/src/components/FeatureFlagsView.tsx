@@ -2,35 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { FeatureFlagInfo, FeatureFlagKey } from '../lib/types';
-import { tk, useTranslation } from '../i18n';
-
-/** What each flag gates, in pt-BR; a flag a newer server adds shows as its raw key. */
-const FLAG_COPY: Record<FeatureFlagKey, { label: string; description: string }> = {
-  subscriptions: {
-    label: tk('Assinaturas'),
-    description: tk('Planos, checkout, paywall e limites do período de teste. Desligado, nada disso aparece na web, no app nem na landing, as rotas de cobrança não existem e os webhooks do provedor de pagamento são ignorados.'),
-  },
-  chat_open_permissions: {
-    label: tk('Chat: liberado por padrão'),
-    description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.'),
-  },
-  tab_gc: {
-    label: tk('Coletor de abas (teste)'),
-    description: tk('Procura abas de agente paradas há muito tempo (24 h; com erro, 6 h) ou cuja sessão do terminal não existe mais, e registra no feed do projeto o que fecharia. Não fecha nada: é a semana de teste.'),
-  },
-  tab_gc_live: {
-    label: tk('Coletor de abas: fechar de verdade'),
-    description: tk('Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o "Fechar abas paradas" das máquinas.'),
-  },
-  sequential_epics: {
-    label: tk('Épico em ordem'),
-    description: tk('Mostra a opção "Executar em ordem" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.'),
-  },
-  runs_api: {
-    label: tk('API de runs'),
-    description: tk('Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.'),
-  },
-};
+import { useTranslation } from '../i18n';
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (next: boolean) => void }) {
   return (
@@ -105,17 +77,20 @@ export function FeatureFlagsView() {
       <p className="text-sm text-fg-muted">{t('Recursos que ainda não foram liberados. Ligue para todos aqui, sem deploy, ou só para algumas pessoas testarem antes.')}</p>
       {error && <p className="text-sm text-danger">{error}</p>}
       {flags.map((flag) => {
-        const copy = FLAG_COPY[flag.key];
-        const name = copy ? t(copy.label) : flag.key;
+        // Title and description come translated from the server's catalog (FEATURE_FLAGS), so a new flag
+        // never shows up here as its bare key, even on a page loaded before the flag shipped.
+        const name = flag.title || flag.key;
         return (
           <section key={flag.key} className="rounded-lg border border-line bg-bg-2 p-4">
             <div className="flex items-start gap-3">
               <Switch on={flag.enabled} label={t('{{name}} para todos', { name })} disabled={!editable || busy !== null} onChange={(next) => void run(flag.key, () => api.featureFlags.set(flag.key, next))} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">
-                  {name} <span className="font-mono text-[11px] text-fg-dim">{flag.key}</span>
+                <p className="text-sm font-medium">{name}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-x-2 font-mono text-[11px] text-fg-dim">
+                  {name !== flag.key && <span>{flag.key}</span>}
+                  {flag.card && <span>{flag.card}</span>}
                 </p>
-                {copy && <p className="mt-1 text-xs text-fg-muted">{t(copy.description)}</p>}
+                {flag.description && <p className="mt-1 text-xs text-fg-muted">{flag.description}</p>}
                 <p className="mt-1 text-xs text-fg-dim">{flag.enabled ? t('Ligado para todos.') : t('Desligado para todos, exceto quem estiver na lista abaixo.')}</p>
               </div>
             </div>
