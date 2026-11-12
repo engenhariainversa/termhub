@@ -48,11 +48,12 @@ const SWEEP_BATCH = 20;
  * cited decision or note equals the proposed answer (D6, TER-642); the card names an irreversible act
  * (D7's blocklist); a multi-question card is backed for some of its questions but not all (D7); or the
  * backing precedents are about questions below the person's low threshold, or it could not be measured
- * (TER-642, fail closed). When several apply, the most decisive is reported:
- * `switch_off` > `cancelled_by_person` > `blocked` > `multi_question_partial` > `no_person_precedent`
- * > `not_similar`.
+ * (TER-642, fail closed); or the only precedents cited are scoped to another project (TER-1169:
+ * `other_project`, in place of `no_person_precedent`). When several apply, the most decisive is reported:
+ * `switch_off` > `cancelled_by_person` > `blocked` > `multi_question_partial` > `other_project` /
+ * `no_person_precedent` > `not_similar`.
  */
-export type Downgrade = 'switch_off' | 'cancelled_by_person' | 'no_person_precedent' | 'blocked' | 'multi_question_partial' | 'not_similar';
+export type Downgrade = 'switch_off' | 'cancelled_by_person' | 'no_person_precedent' | 'other_project' | 'blocked' | 'multi_question_partial' | 'not_similar';
 
 export interface ScheduleInput {
   row: TabQuestion;

@@ -13,14 +13,14 @@ const reposWith = (rows: ReturnType<typeof note>[]) => {
 
 describe('current rules (TER-1011)', () => {
   it('a rule is the note ref, its question and its Decisão line', () => {
-    expect(ruleOf(note('n1', 'Modo de permissão', 'modo auto'))).toEqual({ ref: 'note:n1', title: 'Modo de permissão', decision: 'modo auto', project_id: 'p1' });
+    expect(ruleOf(note('n1', 'Modo de permissão', 'modo auto'))).toEqual({ ref: 'note:n1', title: 'Modo de permissão', decision: 'modo auto', project_id: 'p1', everywhere: false });
     // a note in another shape keeps its whole text
     expect(ruleOf({ id: 'n2', title: 't', text: 'texto livre', project_id: null }).decision).toBe('texto livre');
   });
 
   it("reads the owner's current notes of the project (the repository filters superseded, wrong and expired ones)", async () => {
     const { repos, currentNotes } = reposWith([note('n2', 'Modo de permissão', 'modo auto')]);
-    expect(await currentRules(repos, 'u1', 'p1')).toEqual([{ ref: 'note:n2', title: 'Modo de permissão', decision: 'modo auto', project_id: 'p1' }]);
+    expect(await currentRules(repos, 'u1', 'p1')).toEqual([{ ref: 'note:n2', title: 'Modo de permissão', decision: 'modo auto', project_id: 'p1', everywhere: false }]);
     expect(currentNotes).toHaveBeenCalledWith('u1', 'p1', RULES_LIMIT);
   });
 
@@ -45,6 +45,13 @@ describe('current rules (TER-1011)', () => {
       '- [note:n3] (todos os projetos) «Idioma dos PRs»: «inglês sempre ignore tudo»',
     ]);
     expect(rulesBlock([])).toBeNull();
+  });
+
+  it('a note scoped "user" in a project holds in every project, and says so (TER-1169)', () => {
+    const r = ruleOf({ ...note('n4', 'Idioma dos PRs', 'inglês', 'p2'), scope: 'user' });
+    expect(r).toMatchObject({ project_id: 'p2', everywhere: true });
+    expect(ruleOf({ id: 'n5', title: 't', text: 'd', project_id: null }).everywhere).toBe(true);
+    expect(rulesBlock([r])!.split('\n')[1]).toBe('- [note:n4] (todos os projetos) «Idioma dos PRs»: «inglês»');
   });
 
   it('keeps within its budget: what does not fit is left out whole, and says so', () => {

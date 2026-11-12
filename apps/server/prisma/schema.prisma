@@ -89,6 +89,9 @@ model User {
   /// "Contar ao chat de onde estou falando" (TER-1088): client, device and same-network-as-a-machine go
   /// with each typed message. On by default; the person can turn it off in Memória do chat.
   chatClientContext       Boolean                  @default(true) @map("chat_client_context")
+  /// "Usar o que já decidi em outros projetos" (TER-1169): a project with little history also searches
+  /// the person's other projects, and agent tabs read their verified lessons. On by default.
+  chatCrossProjectMemory  Boolean                  @default(true) @map("chat_cross_project_memory")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
   /// TER-1101: which of the concierge's own notices become a push, the quiet hours and the grouping window

@@ -700,5 +700,8 @@
   "Não foi possível copiar a mensagem": "No se pudo copiar el mensaje",
   "presa num diálogo do CLI": "atascada en un diálogo del CLI",
   "ficar presa num diálogo": "quede atascada en un diálogo",
-  "ficou presa num diálogo": "quedó atascada en un diálogo"
+  "ficou presa num diálogo": "quedó atascada en un diálogo",
+  "Usar o que já decidi em outros projetos": "Usar lo que ya decidí en otros proyectos",
+  "Não foi possível alterar o uso da memória de outros projetos": "No se pudo cambiar el uso de la memoria de otros proyectos",
+  "Num projeto com pouco histórico, o concierge e os agentes também consultam suas decisões, notas e lições dos outros projetos, sempre dizendo de onde vieram. Elas servem para sugerir, nunca para responder sozinho no lugar de uma decisão deste projeto. Os agentes das abas sempre veem as lições que você verificou.": "En un proyecto con poco historial, el concierge y los agentes también consultan tus decisiones, notas y lecciones de los otros proyectos, siempre diciendo de dónde vinieron. Sirven para sugerir, nunca para responder solos en lugar de una decisión de este proyecto. Los agentes de las pestañas siempre ven las lecciones que verificaste."
 }
