@@ -13,6 +13,7 @@ import { setAccountExclusive } from '../control/account-exclusive.js';
 import { getProjectAiSetup, setProjectAiSetup, unstickProjectChat, type SetProjectAiInput } from '../control/project-ai.js';
 import { startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ANSWER_DEFAULT_CHARS, ANSWER_MAX_CHARS, readLastAnswer, readScreen, SCREEN_MAX_LINES, WAIT_MAX_SECONDS, waitForState } from '../control/screen.js';
+import { listGcCandidates, runGc } from '../control/tab-gc.js';
 import { closeTab, INPUT_MAX_CHARS, openTab, runCommand, RUN_MAX_SECONDS, sendInput, sendKey } from '../control/terminals.js';
 import { linkProjectMachine, PROJECT_CWD, setProjectMachineCwd, unlinkProjectMachine } from '../control/project-links.js';
 import { createProject, type CreateProjectInput } from '../control/projects.js';
@@ -359,6 +360,22 @@ export const TOOLS: ToolDef[] = [
     scope: 'terminals', resource: 'terminals', action: 'write',
     input: { tab_id: id, force: z.boolean().optional() },
     run: (ctx, a) => closeTab(ctx, a as { tab_id: string; force?: boolean }),
+  },
+  {
+    name: 'list_gc_candidates',
+    description:
+      "The agent tab collector (TER-1171, feature tab_gc): what it would do now with each agent tab of the person's (or of project_id / machine_id) and why. action: warn (it would warn now and close after the grace period, closes_at), warned (warned, closes at closes_at unless it gets active or the person keeps it), collect (it would close it now), remove (its tmux session no longer exists: removed at once). reason: idle (finished/idle past X hours, card done or none), error (in error past Y hours), over_cap / no_room (the machine holds too many agent tabs or is short of room), session_gone; with all: true also the kept tabs, with why (busy, needs_you, run_active, card_in_progress, pinned, recent, not_quiet, machine_offline, rate_limited, disabled). live: false = the collector is in its test week (dry run: it closes nothing). Writes nothing.",
+    scope: 'read', resource: 'terminals', action: 'read',
+    input: { project_id: id.optional(), machine_id: id.optional(), all: z.boolean().optional() },
+    run: (ctx, a) => listGcCandidates(ctx, a as { project_id?: string; machine_id?: string; all?: boolean }),
+  },
+  {
+    name: 'run_gc',
+    description:
+      "Run one pass of the agent tab collector now (TER-1171, feature tab_gc) over the person's tabs, or project_id / machine_id. dry_run (default true) answers what the pass would do and writes nothing. dry_run: false warns, keeps and closes for real (same rules and 30-minute warning as the scheduled pass, never a tab working, waiting on the person, running an automatic run, with its card in doing, or pinned); it needs the tab_gc_live feature (else TAB_GC_NOT_LIVE) and, in the chat, the person's confirmation.",
+    scope: 'terminals', resource: 'terminals', action: 'write',
+    input: { project_id: id.optional(), machine_id: id.optional(), dry_run: z.boolean().optional() },
+    run: (ctx, a) => runGc(ctx, a as { project_id?: string; machine_id?: string; dry_run?: boolean }),
   },
   {
     name: 'create_project',

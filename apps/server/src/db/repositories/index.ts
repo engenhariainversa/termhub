@@ -57,6 +57,7 @@ import { AutomationSummariesRepository } from './automation-summaries.js';
 import { HealthAlertsRepository } from './health-alerts.js';
 import { AutomationPausesRepository } from './automation-pauses.js';
 import { AutomationEventsRepository } from './automation-events.js';
+import { TabGcRepository } from './tab-gc.js';
 import { AutomationRunsRepository } from './automation-runs.js';
 import { ViewAsAuditRepository } from './view-as-audit.js';
 import { AiAccountExhaustionsRepository } from './ai-account-exhaustions.js';
@@ -129,6 +130,8 @@ export interface Repositories {
   automationSummaries: AutomationSummariesRepository;
   healthAlerts: HealthAlertsRepository;
   automationEvents: AutomationEventsRepository;
+  /** TER-1171: the agent tab GC's reads, marks and archive */
+  tabGc: TabGcRepository;
   automationRuns: AutomationRunsRepository;
   viewAsAudit: ViewAsAuditRepository;
   tabUsage: TabUsageRepository;
@@ -204,6 +207,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     automationSummaries: new AutomationSummariesRepository(db),
     healthAlerts: new HealthAlertsRepository(db),
     automationEvents: new AutomationEventsRepository(db),
+    tabGc: new TabGcRepository(db),
     automationRuns: new AutomationRunsRepository(db),
     viewAsAudit: new ViewAsAuditRepository(db),
     tabUsage: new TabUsageRepository(db),

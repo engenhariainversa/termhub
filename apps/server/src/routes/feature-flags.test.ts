@@ -46,6 +46,8 @@ describe('feature flag admin routes', () => {
     expect(r.json().flags).toEqual([
       { key: 'subscriptions', default: false, enabled: false, updated_at: null, overrides: [] },
       { key: 'chat_open_permissions', default: false, enabled: false, updated_at: null, overrides: [] },
+      { key: 'tab_gc', default: false, enabled: false, updated_at: null, overrides: [] },
+      { key: 'tab_gc_live', default: false, enabled: false, updated_at: null, overrides: [] },
     ]);
   });
 
@@ -54,7 +56,7 @@ describe('feature flag admin routes', () => {
     const r = await app.inject({ method: 'PUT', url: '/feature-flags/subscriptions', payload: { enabled: true } });
     expect(r.json()).toEqual({ key: 'subscriptions', enabled: true });
     expect((await app.inject({ url: '/feature-flags' })).json().flags[0].enabled).toBe(true);
-    expect((await app.inject({ url: '/public/features' })).json()).toEqual({ features: { subscriptions: true, chat_open_permissions: false } });
+    expect((await app.inject({ url: '/public/features' })).json()).toEqual({ features: { subscriptions: true, chat_open_permissions: false, tab_gc: false, tab_gc_live: false } });
     expect(recorded).toEqual([expect.objectContaining({ action: 'feature_flag.update', target_id: 'subscriptions', meta: { enabled: true } })]);
   });
 
@@ -64,7 +66,7 @@ describe('feature flag admin routes', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().overrides).toEqual([expect.objectContaining({ user_id: 'u2', enabled: true })]);
     // the instance (and so the landing) stays off
-    expect((await app.inject({ url: '/public/features' })).json()).toEqual({ features: { subscriptions: false, chat_open_permissions: false } });
+    expect((await app.inject({ url: '/public/features' })).json()).toEqual({ features: { subscriptions: false, chat_open_permissions: false, tab_gc: false, tab_gc_live: false } });
     expect((await app.inject({ method: 'DELETE', url: '/feature-flags/subscriptions/overrides/u2' })).statusCode).toBe(204);
     expect((await app.inject({ url: '/feature-flags' })).json().flags[0].overrides).toEqual([]);
     expect(recorded.map((e) => e.action)).toEqual(['feature_flag.override', 'feature_flag.override']);

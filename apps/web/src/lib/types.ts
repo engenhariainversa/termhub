@@ -43,7 +43,7 @@ export interface User {
 }
 
 /** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
-export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions';
+export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live';
 
 /** One person's own value for a flag (Configurações → Recursos em teste). */
 export interface FeatureFlagOverride {

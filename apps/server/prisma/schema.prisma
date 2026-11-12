@@ -103,6 +103,8 @@ model User {
   /// "Modelos do concierge" (TER-1145): the Claude model families (fable, opus, sonnet, haiku) the
   /// concierge never runs on. Empty = no restriction, the default; the tabs' agents are not affected.
   chatBlockedModels       String[]                 @default([]) @map("chat_blocked_models")
+  /// TER-1171: this person's level of the tab GC settings (monitor/tab-gc/config.ts); null = inherit the defaults.
+  tabGc                   Json?                    @map("tab_gc")
   memoryItems             MemoryItem[]
   verifiedMemoryItems     MemoryItem[]             @relation("MemoryItemVerifier")
   memoryRules             MemoryRule[]
@@ -264,6 +266,9 @@ model Machine {
   /// TER-1138: agent tabs idle or finished for this many hours are closed by themselves (monitor/idle-tabs.ts).
   /// Opt-in per machine: null = never.
   idleTabCloseHours     Int?               @map("idle_tab_close_hours")
+  /// TER-1171: this machine's level of the tab GC settings ({ enabled?, idle_hours?, error_hours?, grace_minutes?,
+  /// max_agent_tabs? }, monitor/tab-gc/config.ts); null = inherit.
+  tabGc                 Json?              @map("tab_gc")
   /// TER-1018: "Usar ai-memory nesta máquina" (opt-in). Only gates the detection shown in Máquinas for now; nothing ai-memory stores reaches the server.
   aiMemoryEnabled       Boolean            @default(false) @map("ai_memory_enabled")
   /// Its local server, loopback or private network only (null = http://127.0.0.1:49374)
@@ -345,6 +350,7 @@ model Project {
   chatBlocks          ChatBlock[]
   chatWatches         ChatWatch[]
   automationEvents    AutomationEvent[]
+  tabGcArchive        TabGcArchive[]
   automationRuns      AutomationRun[]
   tabUsageDays        TabUsageDay[]
   /// AI accounts only this project may run on (TER-990)
@@ -453,6 +459,14 @@ model Tab {
   aiAccount           AiAccount?     @relation(fields: [aiAccountId], references: [id], onDelete: SetNull)
   /// API token that opened this tab through /mcp (null: opened in the browser). Used by close_tab and the per-token open-tab limit.
   createdByTokenId    String?        @map("created_by_token_id")
+  /// TER-1171 tab GC (monitor/tab-gc): the person pinned the tab, the GC never collects it.
+  gcPinned            Boolean        @default(false) @map("gc_pinned")
+  /// TER-1171: when the GC warned it would close the tab, and the tab's stateAt at that moment (a later
+  /// stateAt = the agent ran again: the warning is dropped). Both null = not warned.
+  gcWarnedAt          DateTime?      @map("gc_warned_at")
+  gcWarnedStateAt     DateTime?      @map("gc_warned_state_at")
+  /// TER-1171: the GC's rest clock starts here ("manter", or a dry-run collection).
+  gcResetAt           DateTime?      @map("gc_reset_at")
   createdAt           DateTime       @default(now()) @map("created_at")
   project             Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   machine             Machine        @relation(fields: [machineId], references: [id], onDelete: Cascade)
@@ -653,6 +667,7 @@ model Task {
   column           TaskColumn?       @relation(fields: [columnId], references: [id], onDelete: SetNull)
   pullRequests     TaskPullRequest[]
   automationEvents AutomationEvent[]
+  tabGcArchive TabGcArchive[]
   automationRuns   AutomationRun[]
   tabUsageDays     TabUsageDay[]
 
@@ -731,6 +746,34 @@ model AutomationEvent {
   // payload->>'reason' = 'merge_base_red'; "automation_events_no_runner_once": unique (project_id, payload->>'run_id')
   // WHERE kind = 'workflow_no_runner' (TER-1120)
   @@map("automation_events")
+}
+
+/// TER-1171: what the tab GC kept of an agent tab it collected: the agent's last answer and the tab's metadata,
+/// so the card and the project still show it once the tab is gone. Goes away with the project.
+model TabGcArchive {
+  id             String    @id
+  projectId      String    @map("project_id")
+  taskId         String?   @map("task_id")
+  /// the collected tab's id (the row is gone: no foreign key)
+  tabId          String    @map("tab_id")
+  tabName        String    @map("tab_name")
+  machineId      String    @map("machine_id")
+  machineName    String    @map("machine_name")
+  tool           String?
+  state          String?
+  /// TabGcReason (monitor/tab-gc/classify.ts)
+  reason         String
+  agentSessionId String?   @map("agent_session_id")
+  cwd            String?
+  lastAnswer     String?   @map("last_answer")
+  lastAnswerAt   DateTime? @map("last_answer_at") @db.Timestamptz
+  collectedAt    DateTime  @default(now()) @map("collected_at") @db.Timestamptz
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task           Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, collectedAt(sort: Desc)])
+  @@index([taskId])
+  @@map("tab_gc_archive")
 }
 
 /// One automatic run on a card (agentic board, spec D11): who claimed it (`claimed_by`, the server
