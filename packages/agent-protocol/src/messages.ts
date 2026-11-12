@@ -28,7 +28,10 @@ const rpcId = z.string().min(1).max(64);
 // could only report it as `run_failed`, and the sentence that says what to do would sit one layer
 // above, unreachable, while the person retried for ever.
 // `reset`: a tcp channel's local socket reset or errored after it had connected.
-export const closedReason = z.enum(['cli_missing', 'run_failed', 'killed', 'missing_session', 'cli_rejected', 'reset']);
+// `timeout` and `usage_limit` come from a headless `run` channel only (TER-1178): the run overstayed the
+// deadline in its open frame, or the CLI said the account is at its limit (the server then tries the
+// next account, which it may only do before any output). Only a server that opens `run` channels gets them.
+export const closedReason = z.enum(['cli_missing', 'run_failed', 'killed', 'missing_session', 'cli_rejected', 'reset', 'timeout', 'usage_limit']);
 
 /**
  * What an agent advertises in `hello.capabilities` beyond the baseline `pty` channel, written once for
@@ -107,6 +110,47 @@ export const NET_WAKE_MIN_AGENT_VERSION = '0.30.0';
  *  Ships in agent 0.34.0. */
 export const CAPABILITY_FILE_SHARE = 'file_share';
 export const FILE_SHARE_MIN_AGENT_VERSION = '0.34.0';
+
+/** The agent runs a `run` channel (personal runs API, TER-1176): a headless Claude Code or Codex run
+ *  from a structured spec (`runOpenParams`), never a raw argv. Ships in agent 0.37.0; the server routes
+ *  API runs only to machines that advertise it, and answers AGENT_OUTDATED otherwise. */
+export const CAPABILITY_RUN_HEADLESS = 'run.headless';
+export const RUN_HEADLESS_MIN_AGENT_VERSION = '0.37.0';
+
+/** The built-in Claude Code tools a run may be given: reading, editing, and the shell. Anything else
+ *  (web, subagents, MCP) is never on a run's list. */
+export const RUN_CLAUDE_TOOLS = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash'] as const;
+/** Codex's sandbox modes a run may use. `danger-full-access` is never one of them. */
+export const RUN_CODEX_SANDBOXES = ['read-only', 'workspace-write'] as const;
+/** The longest a run may last: the API's own ceiling (60 min). */
+export const RUN_MAX_TIMEOUT_MS = 3_600_000;
+
+/**
+ * Opens a headless run (TER-1176). Everything the agent needs to build the CLI's argv itself, and
+ * nothing that could become an argument as is: no argv, no extra flags, and `strict` so a future field
+ * cannot slip one in. The prompt is not here either: it is the channel's first and only data frame, and
+ * goes to the CLI's stdin. stdout comes back a line per frame; the run ends with `closed`.
+ */
+export const runOpenParams = z
+  .object({
+    provider: z.enum(['claude', 'codex']),
+    /** `CLAUDE_CONFIG_DIR` (claude) or `CODEX_HOME` (codex); null runs on the machine's default login. */
+    config_dir: z.string().min(1).max(4096).nullable(),
+    cwd: machinePath,
+    model: z.string().min(1).max(100).regex(/^[A-Za-z0-9._:\[\]/-]+$/).nullable(),
+    /** Claude only: the closed list of tools the run may use. */
+    tools: z.array(z.enum(RUN_CLAUDE_TOOLS)).max(RUN_CLAUDE_TOOLS.length).optional(),
+    /** Codex only: the sandbox the run executes in. */
+    sandbox: z.enum(RUN_CODEX_SANDBOXES).optional(),
+    timeout_ms: z.number().int().min(10_000).max(RUN_MAX_TIMEOUT_MS),
+    /** Claude, edit runs: the guard hook (no push, no writes outside the worktree). */
+    guard: z.object({ branch: z.string().min(1).max(255), worktree: machinePath }).strict().nullable(),
+  })
+  .strict()
+  .superRefine((p, ctx) => {
+    if (p.provider === 'claude' && p.sandbox !== undefined) ctx.addIssue({ code: 'custom', path: ['sandbox'], message: 'sandbox is codex only' });
+    if (p.provider === 'codex' && (p.tools !== undefined || p.guard !== null)) ctx.addIssue({ code: 'custom', path: ['tools'], message: 'tools and guard are claude only' });
+  });
 
 /** One user message on a streamed run. `uuid` comes back on the CLI's replay of the message when
  *  its turn starts. The text is JSON-encoded, so it can never break out of its line. */
@@ -194,6 +238,7 @@ export const probeInfoMessage = z.object({ type: z.literal('probe_info'), hooks_
 const openPty = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('pty'), params: ptyOpenParams });
 const openClaude = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('claude'), params: claudeOpenParams });
 const openTcp = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('tcp'), params: tcpOpenParams });
+const openRun = z.object({ type: z.literal('open'), ch: channel, kind: z.literal('run'), params: runOpenParams });
 
 // zod's discriminatedUnion on 'type' can't hold two 'open' members with different 'kind'
 // literals (see the rpc_result note above), so `open` is two full members tried in a plain
@@ -206,6 +251,7 @@ export const serverMessage = z.union([
   openPty,
   openClaude,
   openTcp,
+  openRun,
   z.object({ type: z.literal('resize'), ch: channel, cols: z.number().int().min(2).max(500), rows: z.number().int().min(2).max(200) }),
   z.object({ type: z.literal('close'), ch: channel }),
 ]);
@@ -216,3 +262,4 @@ export type ServerMessage = z.infer<typeof serverMessage>;
 export type PtyOpenParams = z.infer<typeof ptyOpenParams>;
 export type ClaudeOpenParams = z.infer<typeof claudeOpenParams>;
 export type TcpOpenParams = z.infer<typeof tcpOpenParams>;
+export type RunOpenParams = z.infer<typeof runOpenParams>;

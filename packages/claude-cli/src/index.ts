@@ -138,3 +138,56 @@ export function classifyFailure(stderr: string): ClaudeFailureReason {
   if (/^error: unknown option/m.test(stderr)) return 'cli_rejected';
   return 'run_failed';
 }
+
+/**
+ * A headless run of the personal runs API (TER-1176): `claude -p` with a closed tool list and nothing
+ * else. No MCP server loads (`mcp_config_path` holds `{"mcpServers":{}}` and `--strict-mcp-config`
+ * skips the account's own), no session is written, and `dontAsk` denies whatever is not on the list
+ * instead of asking a person who is not there. `--tools` and `--allowed-tools` carry the same list:
+ * the first is what exists, the second what runs without a prompt. The prompt goes on stdin.
+ */
+export interface HeadlessRunSpec {
+  tools: string[];
+  model: string | null;
+  /** `--settings` with the guard hook (edit runs); null for none. */
+  settingsPath: string | null;
+  mcpConfigPath: string;
+}
+
+export function buildHeadlessArgs(p: HeadlessRunSpec): string[] {
+  const tools = p.tools.join(',');
+  return [
+    '-p', '--output-format', 'stream-json', '--verbose', '--include-partial-messages', '--no-session-persistence',
+    '--mcp-config', p.mcpConfigPath, '--strict-mcp-config',
+    // An empty list must stay an empty list: `--tools ""` is "no tools", where leaving the flag out
+    // would hand the run every built-in the CLI has.
+    '--tools', tools, '--allowed-tools', tools, '--permission-mode', 'dontAsk',
+    ...(p.settingsPath ? ['--settings', p.settingsPath] : []),
+    ...(p.model ? ['--model', p.model] : []),
+  ];
+}
+
+/** The MCP config of a headless run: no server at all, so the person's own never load in it. */
+export const EMPTY_MCP_CONFIG = JSON.stringify({ mcpServers: {} });
+
+/**
+ * `codex exec` for a headless run (TER-1176): JSONL events on stdout, no session kept (`--ephemeral`),
+ * the folder given explicitly, the sandbox from the run's capabilities. `-` reads the prompt from
+ * stdin, so it never becomes an argument. `exec` never asks for approval: it runs what the sandbox
+ * allows and fails what it does not.
+ */
+export function buildCodexExecArgs(p: { cwd: string; sandbox: 'read-only' | 'workspace-write'; model: string | null }): string[] {
+  return ['exec', '--json', '--ephemeral', '--skip-git-repo-check', '-C', p.cwd, '-s', p.sandbox, ...(p.model ? ['-m', p.model] : []), '-'];
+}
+
+/**
+ * Why a headless run failed, from its stderr (which never leaves the machine): the account at its
+ * usage or rate limit, so the server may try the next account, or any other failure. Matches the
+ * phrases Claude Code and Codex print for it ("usage limit", "rate limit", "hit your limit", "429",
+ * "quota"). A false negative costs a retry on another account; a false positive would only move the
+ * run to another account before it said anything, so the match leans broad.
+ */
+export function classifyHeadlessFailure(stderr: string): 'usage_limit' | 'run_failed' {
+  if (/usage limit|rate[ _-]?limit|hit your limit|limit reached|too many requests|\b429\b|quota/i.test(stderr)) return 'usage_limit';
+  return 'run_failed';
+}

@@ -1,7 +1,7 @@
 import type { ServerMessage } from '@termhub/agent-protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { AgentSocket } from './client.js';
-import { createDispatcher, type ClaudeManager, type PtyManager, type TcpManager } from './dispatch.js';
+import { createDispatcher, type ClaudeManager, type PtyManager, type RunManager, type TcpManager } from './dispatch.js';
 import { RpcFailure } from './exec.js';
 import type { Handlers } from './rpc/index.js';
 
@@ -20,6 +20,10 @@ function makeClaude(): ClaudeManager {
 }
 
 function makeTcp(): TcpManager {
+  return { open: vi.fn().mockResolvedValue(undefined), write: vi.fn().mockReturnValue(false), close: vi.fn(), closeAll: vi.fn() };
+}
+
+function makeRun(): RunManager {
   return { open: vi.fn().mockResolvedValue(undefined), write: vi.fn().mockReturnValue(false), close: vi.fn(), closeAll: vi.fn() };
 }
 
@@ -222,5 +226,47 @@ describe('createDispatcher', () => {
     const dispatch = createDispatcher({ handlers: makeHandlers(), pty: makePty(), claude: makeClaude(), tcp, log: vi.fn() });
     dispatch({ type: 'close', ch: 9 }, socket);
     expect(tcp.close).toHaveBeenCalledWith(9);
+  });
+
+  describe('the run channel kind (TER-1178)', () => {
+    const runParams = { provider: 'codex' as const, config_dir: null, cwd: '/w', model: null, sandbox: 'read-only' as const, timeout_ms: 600_000, guard: null };
+
+    it('routes an open with kind: run to the run manager only', async () => {
+      const { socket } = makeSocket();
+      const pty = makePty();
+      const claude = makeClaude();
+      const run = makeRun();
+      const dispatch = createDispatcher({ handlers: makeHandlers(), pty, claude, tcp: makeTcp(), run, log: vi.fn() });
+
+      dispatch({ type: 'open', ch: 9, kind: 'run', params: runParams }, socket);
+      await flush();
+
+      expect(run.open).toHaveBeenCalledWith(9, runParams, socket);
+      expect(claude.open).not.toHaveBeenCalled();
+      expect(pty.open).not.toHaveBeenCalled();
+    });
+
+    it('refuses a run open when no run manager is wired', async () => {
+      const { socket, sendControl } = makeSocket();
+      const pty = makePty();
+      const dispatch = createDispatcher({ handlers: makeHandlers(), pty, claude: makeClaude(), tcp: makeTcp(), log: vi.fn() });
+
+      dispatch({ type: 'open', ch: 9, kind: 'run', params: runParams }, socket);
+      await flush();
+
+      expect(sendControl).toHaveBeenCalledWith(expect.objectContaining({ type: 'open_error', ch: 9 }));
+      expect(pty.open).not.toHaveBeenCalled();
+    });
+
+    it('offers close to the run manager too', async () => {
+      const { socket } = makeSocket();
+      const run = makeRun();
+      const dispatch = createDispatcher({ handlers: makeHandlers(), pty: makePty(), claude: makeClaude(), tcp: makeTcp(), run, log: vi.fn() });
+
+      dispatch({ type: 'close', ch: 4 }, socket);
+      await flush();
+
+      expect(run.close).toHaveBeenCalledWith(4);
+    });
   });
 });
