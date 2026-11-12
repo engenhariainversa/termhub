@@ -216,5 +216,14 @@
   "Épico parado em andamento": "Stalled epic in progress",
   "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR",
   "Agente da aba {{label}} fora do ar há {{duration}}": "Agent of tab {{label}} down for {{duration}}",
-  "Agente fora do ar em aba acompanhada": "Agent down in a followed tab"
+  "Agente fora do ar em aba acompanhada": "Agent down in a followed tab",
+  "parada": "idle",
+  "com erro": "in error",
+  "acima do limite de abas da máquina": "over the machine's tab limit",
+  "Aba {{tab}} mantida: voltou a ter atividade": "Tab {{tab}} kept: it is active again",
+  "Aba {{tab}} mantida": "Tab {{tab}} kept",
+  "Aba {{tab}} em {{machine}} será fechada em {{minutes}} min: {{why}} há {{hours}} h": "Tab {{tab}} on {{machine}} will be closed in {{minutes}} min: {{why}} for {{hours}} h",
+  "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Tab {{tab}} removed: its terminal session on {{machine}} no longer exists",
+  "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Tab {{tab}} closed by the collector on {{machine}}: {{why}} for {{hours}} h",
+  "Teste do coletor de abas, nada foi fechado: {{line}}": "Tab collector test, nothing was closed: {{line}}"
 }

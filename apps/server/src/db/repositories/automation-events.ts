@@ -35,6 +35,12 @@ export type AutomationEventKind =
   | 'worktree_cleanup'
   // TER-1138: an agent tab at rest closed by itself ({ tab_id, tab, machine_id, machine, tool, state, reason: idle | no_room, hours, session_id })
   | 'tab_auto_closed'
+  // TER-1171: the tab GC warned it will close a tab ({ tab_id, tab, machine_id, machine, tool, state, reason, hours,
+  // minutes, dry_run }), dropped the warning ({ tab_id, tab, why: activity | kept | pinned }), or collected it
+  // ({ tab_id, tab, machine_id, machine, tool, state, reason, hours, archive_id, session_id, dry_run })
+  | 'tab_gc_warned'
+  | 'tab_gc_kept'
+  | 'tab_collected'
   // TER-975: changes to what automatic work may do, by the chat, an MCP client, the web or the app
   | 'automation_on'
   | 'automation_off'

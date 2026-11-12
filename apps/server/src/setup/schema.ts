@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { tabGcLevelSchema } from '../monitor/tab-gc/config.js';
 import { MODEL_RE } from '@termhub/mobile-api';
 import { unsafeAllowedTool } from '../control/automation-tools.js';
 import { tk } from '../i18n/index.js';
@@ -308,6 +309,8 @@ export const setupSchema = z.object({
   automation: automationSchema.default({}),
   ai_memory: aiMemorySchema.default({}),
   health: healthSchema.default({}),
+  /** TER-1171: the project's level of the tab GC settings (monitor/tab-gc/config.ts); absent = inherit. */
+  tab_gc: tabGcLevelSchema.optional().catch(undefined),
 });
 
 export type ProjectSetupData = z.infer<typeof setupSchema>;

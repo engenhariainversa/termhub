@@ -199,4 +199,17 @@ describe('sweepIdleTabs (TER-1138)', () => {
     expect(await sweepIdleTabs(repos, l as never, NOW, deps)).toEqual({ closed: 1 });
     expect(l.warn).toHaveBeenCalledWith({ tabId: 'bad', code: 'MACHINE_FAILED' }, 'monitor: idle tab check failed');
   });
+
+  it('TER-1171: leaves the tabs of an owner whose tab GC closes for real to the GC, and keeps working for the rest', async () => {
+    const { repos, deps, closeTab } = setup([tab()]);
+    const gcLive = vi.fn(async () => true);
+    await sweepIdleTabs(repos, log() as never, NOW, { ...deps, gcLive });
+    expect(gcLive).toHaveBeenCalledWith(repos, 'u1');
+    expect(closeTab).not.toHaveBeenCalled();
+    const off = setup([tab(), tab({ id: 't2' })]);
+    const gcOff = vi.fn(async () => false);
+    await sweepIdleTabs(off.repos, log() as never, NOW, { ...off.deps, gcLive: gcOff });
+    expect(closedIds(off.closeTab)).toEqual(['t1', 't2']);
+    expect(gcOff).toHaveBeenCalledTimes(1);
+  });
 });

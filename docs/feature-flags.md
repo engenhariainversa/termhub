@@ -61,6 +61,16 @@ grants model applies as before. Server: `openPermissionsOn` in `apps/server/src/
 `/api/chat/blocks` routes answer 404 while off. Spec:
 `docs/superpowers/specs/2026-11-06-chat-open-permissions-design.md`.
 
+## Agent tab collector (`tab_gc`, `tab_gc_live`, TER-1171)
+
+`tab_gc` turns the agent tab GC on for a person in **dry run**: every 10 min it classifies their agent tabs
+and records in the project feed (`tab_collected` with `dry_run: true`) what it would close, closing
+nothing. `tab_gc_live` (with `tab_gc`) makes it warn 30 min ahead and close for real, and the TER-1138
+"Fechar abas paradas" timer steps aside for that person. The MCP tools `list_gc_candidates` and `run_gc`
+answer `TAB_GC_OFF` while `tab_gc` is off; `run_gc` with `dry_run: false` answers `TAB_GC_NOT_LIVE`
+while `tab_gc_live` is off. Server: `monitor/tab-gc/`. Spec:
+`docs/superpowers/specs/2026-11-11-agent-tab-gc-design.md`.
+
 ## Impact on other users
 
 None while a flag is off, which is the default: no screen, route or limit changes for anyone. The

@@ -45,6 +45,7 @@ import { hooksRoutes } from './routes/hooks.js';
 import { monitorRoutes } from './routes/monitor.js';
 import { startStaleWorkingSweeper } from './monitor/stale-working.js';
 import { startIdleTabsSweeper } from './monitor/idle-tabs.js';
+import { startTabGc } from './monitor/tab-gc/sweep.js';
 import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
@@ -442,6 +443,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopStuckTabQuestions = startStuckTabQuestionSweeper(repos, fastify.log);
   // TER-1138: agent tabs at rest for long are closed on the machines that opted in (Máquinas → Fechar abas paradas)
   const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
+  // TER-1171: the agent tab GC, per owner behind the tab_gc flag (dry run until tab_gc_live)
+  const stopTabGc = startTabGc(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -572,6 +575,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopStaleWorking();
     stopStuckTabQuestions();
     stopIdleTabs();
+    stopTabGc();
     stopDecisionSweeper();
     stopMemorySweeper();
     stopMemoryQueue();

@@ -216,5 +216,14 @@
   "Épico parado em andamento": "Épica detenida en curso",
   "Card em Feito com PR não mesclado": "Tarjeta en Hecho con PR sin fusionar",
   "Agente da aba {{label}} fora do ar há {{duration}}": "Agente de la pestaña {{label}} caído hace {{duration}}",
-  "Agente fora do ar em aba acompanhada": "Agente caído en una pestaña seguida"
+  "Agente fora do ar em aba acompanhada": "Agente caído en una pestaña seguida",
+  "parada": "inactiva",
+  "com erro": "con error",
+  "acima do limite de abas da máquina": "por encima del límite de pestañas de la máquina",
+  "Aba {{tab}} mantida: voltou a ter atividade": "Pestaña {{tab}} mantenida: volvió a tener actividad",
+  "Aba {{tab}} mantida": "Pestaña {{tab}} mantenida",
+  "Aba {{tab}} em {{machine}} será fechada em {{minutes}} min: {{why}} há {{hours}} h": "La pestaña {{tab}} en {{machine}} se cerrará en {{minutes}} min: {{why}} desde hace {{hours}} h",
+  "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Pestaña {{tab}} eliminada: su sesión de terminal en {{machine}} ya no existe",
+  "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Pestaña {{tab}} cerrada por el recolector en {{machine}}: {{why}} desde hace {{hours}} h",
+  "Teste do coletor de abas, nada foi fechado: {{line}}": "Prueba del recolector de pestañas, no se cerró nada: {{line}}"
 }

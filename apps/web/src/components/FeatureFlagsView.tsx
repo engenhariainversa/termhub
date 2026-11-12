@@ -14,6 +14,14 @@ const FLAG_COPY: Record<FeatureFlagKey, { label: string; description: string }> 
     label: tk('Chat: liberado por padrão'),
     description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.'),
   },
+  tab_gc: {
+    label: tk('Coletor de abas (teste)'),
+    description: tk('Procura abas de agente paradas há muito tempo (24 h; com erro, 6 h) ou cuja sessão do terminal não existe mais, e registra no feed do projeto o que fecharia. Não fecha nada: é a semana de teste.'),
+  },
+  tab_gc_live: {
+    label: tk('Coletor de abas: fechar de verdade'),
+    description: tk('Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o "Fechar abas paradas" das máquinas.'),
+  },
 };
 
 function Switch({ on, label, disabled, onChange }: { on: boolean; label: string; disabled?: boolean; onChange: (next: boolean) => void }) {

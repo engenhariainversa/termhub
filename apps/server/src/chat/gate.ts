@@ -43,6 +43,8 @@ const readTools = new Set([
   'list_tasks',
   'list_automation_queue',
   'get_project_health',
+  // TER-1171: what the tab GC would close and why; nothing is written
+  'list_gc_candidates',
   'get_automation_policy',
   // a tab tool (agentic board F-8): reads the calling tab's own run card; the concierge never lists it
   'get_card',
@@ -178,6 +180,12 @@ export function actionClass(tool: string, args: unknown): ActionClass {
 
   if (irreversibleTools.has(tool)) {
     return 'irreversible';
+  }
+
+  // TER-1171: run_gc with dry_run (the default) only answers what a pass would do and writes nothing; a real
+  // pass closes tabs, which is the person's card every time (no grant nor default covers it)
+  if (tool === 'run_gc') {
+    return (args as { dry_run?: unknown } | undefined)?.dry_run === false ? 'irreversible' : 'read';
   }
 
   // send_key must inspect the key argument: only interrupting keys are irreversible
