@@ -100,5 +100,9 @@
   "Este item já substitui o escolhido; desfaça aquela substituição antes": "This item already replaces the one picked; undo that replacement first",
   "O endereço do ai-memory precisa ser local (127.0.0.1, localhost) ou de rede privada": "The ai-memory address must be local (127.0.0.1, localhost) or on a private network",
   "Assinatura não encontrada": "Watch not found",
-  "Projeto inexistente": "Project does not exist"
+  "Projeto inexistente": "Project does not exist",
+  "Escopo indisponível: runs": "Scope unavailable: runs",
+  "Run não encontrada": "Run not found",
+  "Este token não tem o escopo runs": "This token does not have the runs scope",
+  "O escopo runs só vale para tokens pessoais, nunca para o chat nem para uma aba": "The runs scope is for personal tokens only, never for the chat or a tab"
 }

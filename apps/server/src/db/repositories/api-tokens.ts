@@ -1,7 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import type { ApiToken as PrismaApiToken } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
-import { toScopes, type ApiTokenScope } from '../../auth/api-tokens.js';
+import { assertScopesFor, toScopes, type ApiTokenScope } from '../../auth/api-tokens.js';
 
 /** A personal API token as routes see it: never the hash, never the plain token. */
 export interface ApiToken {
@@ -92,6 +92,7 @@ export class ApiTokensRepository {
     input: { name: string; scopes: ApiTokenScope[]; expiresAt: Date | null; gated?: boolean; chatConversationId?: string | null; tabId?: string | null },
     tokenHash: string,
   ): Promise<ApiToken> {
+    assertScopesFor(input, input.scopes);
     const t = await this.db.apiToken.create({
       data: {
         id: newId(),

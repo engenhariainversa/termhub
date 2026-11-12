@@ -434,6 +434,7 @@ export type MachineWhereInput = {
   uploads?: Prisma.UploadListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   aiMemoryPages?: Prisma.AiMemoryPageListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
 }
 
 export type MachineOrderByWithRelationInput = {
@@ -479,6 +480,7 @@ export type MachineOrderByWithRelationInput = {
   uploads?: Prisma.UploadOrderByRelationAggregateInput
   chatConversations?: Prisma.ChatConversationOrderByRelationAggregateInput
   aiMemoryPages?: Prisma.AiMemoryPageOrderByRelationAggregateInput
+  apiRuns?: Prisma.ApiRunOrderByRelationAggregateInput
 }
 
 export type MachineWhereUniqueInput = Prisma.AtLeast<{
@@ -527,6 +529,7 @@ export type MachineWhereUniqueInput = Prisma.AtLeast<{
   uploads?: Prisma.UploadListRelationFilter
   chatConversations?: Prisma.ChatConversationListRelationFilter
   aiMemoryPages?: Prisma.AiMemoryPageListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
 }, "id" | "agentTokenHash" | "agentPairingHash">
 
 export type MachineOrderByWithAggregationInput = {
@@ -649,6 +652,7 @@ export type MachineCreateInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateInput = {
@@ -693,6 +697,7 @@ export type MachineUncheckedCreateInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUpdateInput = {
@@ -737,6 +742,7 @@ export type MachineUpdateInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateInput = {
@@ -781,6 +787,7 @@ export type MachineUncheckedUpdateInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateManyInput = {
@@ -1160,6 +1167,22 @@ export type MachineUpdateOneRequiredWithoutUploadsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.MachineUpdateToOneWithWhereWithoutUploadsInput, Prisma.MachineUpdateWithoutUploadsInput>, Prisma.MachineUncheckedUpdateWithoutUploadsInput>
 }
 
+export type MachineCreateNestedOneWithoutApiRunsInput = {
+  create?: Prisma.XOR<Prisma.MachineCreateWithoutApiRunsInput, Prisma.MachineUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.MachineCreateOrConnectWithoutApiRunsInput
+  connect?: Prisma.MachineWhereUniqueInput
+}
+
+export type MachineUpdateOneWithoutApiRunsNestedInput = {
+  create?: Prisma.XOR<Prisma.MachineCreateWithoutApiRunsInput, Prisma.MachineUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.MachineCreateOrConnectWithoutApiRunsInput
+  upsert?: Prisma.MachineUpsertWithoutApiRunsInput
+  disconnect?: Prisma.MachineWhereInput | boolean
+  delete?: Prisma.MachineWhereInput | boolean
+  connect?: Prisma.MachineWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.MachineUpdateToOneWithWhereWithoutApiRunsInput, Prisma.MachineUpdateWithoutApiRunsInput>, Prisma.MachineUncheckedUpdateWithoutApiRunsInput>
+}
+
 export type MachineCreateNestedOneWithoutChatConversationsInput = {
   create?: Prisma.XOR<Prisma.MachineCreateWithoutChatConversationsInput, Prisma.MachineUncheckedCreateWithoutChatConversationsInput>
   connectOrCreate?: Prisma.MachineCreateOrConnectWithoutChatConversationsInput
@@ -1231,6 +1254,7 @@ export type MachineCreateWithoutOwnerInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutOwnerInput = {
@@ -1274,6 +1298,7 @@ export type MachineUncheckedCreateWithoutOwnerInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutOwnerInput = {
@@ -1381,6 +1406,7 @@ export type MachineCreateWithoutProjectLinksInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutProjectLinksInput = {
@@ -1424,6 +1450,7 @@ export type MachineUncheckedCreateWithoutProjectLinksInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutProjectLinksInput = {
@@ -1483,6 +1510,7 @@ export type MachineUpdateWithoutProjectLinksInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutProjectLinksInput = {
@@ -1526,6 +1554,7 @@ export type MachineUncheckedUpdateWithoutProjectLinksInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutRepositoryCheckoutsInput = {
@@ -1569,6 +1598,7 @@ export type MachineCreateWithoutRepositoryCheckoutsInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
@@ -1612,6 +1642,7 @@ export type MachineUncheckedCreateWithoutRepositoryCheckoutsInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutRepositoryCheckoutsInput = {
@@ -1671,6 +1702,7 @@ export type MachineUpdateWithoutRepositoryCheckoutsInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
@@ -1714,6 +1746,7 @@ export type MachineUncheckedUpdateWithoutRepositoryCheckoutsInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutTabsInput = {
@@ -1757,6 +1790,7 @@ export type MachineCreateWithoutTabsInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutTabsInput = {
@@ -1800,6 +1834,7 @@ export type MachineUncheckedCreateWithoutTabsInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutTabsInput = {
@@ -1859,6 +1894,7 @@ export type MachineUpdateWithoutTabsInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutTabsInput = {
@@ -1902,6 +1938,7 @@ export type MachineUncheckedUpdateWithoutTabsInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutHookInput = {
@@ -1945,6 +1982,7 @@ export type MachineCreateWithoutHookInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutHookInput = {
@@ -1988,6 +2026,7 @@ export type MachineUncheckedCreateWithoutHookInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutHookInput = {
@@ -2047,6 +2086,7 @@ export type MachineUpdateWithoutHookInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutHookInput = {
@@ -2090,6 +2130,7 @@ export type MachineUncheckedUpdateWithoutHookInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutAiMemoryPagesInput = {
@@ -2133,6 +2174,7 @@ export type MachineCreateWithoutAiMemoryPagesInput = {
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutAiMemoryPagesInput = {
@@ -2176,6 +2218,7 @@ export type MachineUncheckedCreateWithoutAiMemoryPagesInput = {
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutAiMemoryPagesInput = {
@@ -2235,6 +2278,7 @@ export type MachineUpdateWithoutAiMemoryPagesInput = {
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutAiMemoryPagesInput = {
@@ -2278,6 +2322,7 @@ export type MachineUncheckedUpdateWithoutAiMemoryPagesInput = {
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutAiAccountsInput = {
@@ -2321,6 +2366,7 @@ export type MachineCreateWithoutAiAccountsInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutAiAccountsInput = {
@@ -2364,6 +2410,7 @@ export type MachineUncheckedCreateWithoutAiAccountsInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutAiAccountsInput = {
@@ -2423,6 +2470,7 @@ export type MachineUpdateWithoutAiAccountsInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutAiAccountsInput = {
@@ -2466,6 +2514,7 @@ export type MachineUncheckedUpdateWithoutAiAccountsInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutUploadsInput = {
@@ -2509,6 +2558,7 @@ export type MachineCreateWithoutUploadsInput = {
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutUploadsInput = {
@@ -2552,6 +2602,7 @@ export type MachineUncheckedCreateWithoutUploadsInput = {
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutUploadsInput = {
@@ -2611,6 +2662,7 @@ export type MachineUpdateWithoutUploadsInput = {
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutUploadsInput = {
@@ -2652,6 +2704,199 @@ export type MachineUncheckedUpdateWithoutUploadsInput = {
   chatFileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutMachineNestedInput
   aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
+  chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
+}
+
+export type MachineCreateWithoutApiRunsInput = {
+  id: string
+  name: string
+  subtitle?: string | null
+  host?: string | null
+  sshUser?: string | null
+  sshPort?: number
+  type: $Enums.MachineType
+  os?: string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Date | string | null
+  agentTokenHash?: string | null
+  agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
+  agentVersion?: string | null
+  agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
+  agentAutoUpdate?: boolean
+  claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
+  automationAllowed?: boolean
+  idleTabCloseHours?: number | null
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  aiMemoryEnabled?: boolean
+  aiMemoryUrl?: string | null
+  permissionHint?: boolean
+  isLocal?: boolean
+  createdAt?: Date | string
+  owner?: Prisma.UserCreateNestedOneWithoutMachinesInput
+  projectLinks?: Prisma.ProjectMachineCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutMachineInput
+  tabs?: Prisma.TabCreateNestedManyWithoutMachineInput
+  chatFileGrants?: Prisma.ChatFileGrantCreateNestedManyWithoutMachineInput
+  aiAccounts?: Prisma.AiAccountCreateNestedManyWithoutMachineInput
+  hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
+  uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
+  chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
+  aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+}
+
+export type MachineUncheckedCreateWithoutApiRunsInput = {
+  id: string
+  name: string
+  subtitle?: string | null
+  host?: string | null
+  sshUser?: string | null
+  sshPort?: number
+  type: $Enums.MachineType
+  os?: string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Date | string | null
+  agentTokenHash?: string | null
+  agentTokenCreatedAt?: Date | string | null
+  agentPairingHash?: string | null
+  agentPairingExpiresAt?: Date | string | null
+  agentPublicKey?: string | null
+  agentPairedAt?: Date | string | null
+  agentVersion?: string | null
+  agentLastSeenAt?: Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Date | string | null
+  agentAutoUpdate?: boolean
+  claudeAutoSwap?: boolean
+  aiUsageQuery?: boolean
+  automationAllowed?: boolean
+  idleTabCloseHours?: number | null
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  aiMemoryEnabled?: boolean
+  aiMemoryUrl?: string | null
+  permissionHint?: boolean
+  isLocal?: boolean
+  ownerId?: string | null
+  createdAt?: Date | string
+  projectLinks?: Prisma.ProjectMachineUncheckedCreateNestedManyWithoutMachineInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutMachineInput
+  tabs?: Prisma.TabUncheckedCreateNestedManyWithoutMachineInput
+  chatFileGrants?: Prisma.ChatFileGrantUncheckedCreateNestedManyWithoutMachineInput
+  aiAccounts?: Prisma.AiAccountUncheckedCreateNestedManyWithoutMachineInput
+  hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
+  uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
+  chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
+  aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+}
+
+export type MachineCreateOrConnectWithoutApiRunsInput = {
+  where: Prisma.MachineWhereUniqueInput
+  create: Prisma.XOR<Prisma.MachineCreateWithoutApiRunsInput, Prisma.MachineUncheckedCreateWithoutApiRunsInput>
+}
+
+export type MachineUpsertWithoutApiRunsInput = {
+  update: Prisma.XOR<Prisma.MachineUpdateWithoutApiRunsInput, Prisma.MachineUncheckedUpdateWithoutApiRunsInput>
+  create: Prisma.XOR<Prisma.MachineCreateWithoutApiRunsInput, Prisma.MachineUncheckedCreateWithoutApiRunsInput>
+  where?: Prisma.MachineWhereInput
+}
+
+export type MachineUpdateToOneWithWhereWithoutApiRunsInput = {
+  where?: Prisma.MachineWhereInput
+  data: Prisma.XOR<Prisma.MachineUpdateWithoutApiRunsInput, Prisma.MachineUncheckedUpdateWithoutApiRunsInput>
+}
+
+export type MachineUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  host?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshUser?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshPort?: Prisma.IntFieldUpdateOperationsInput | number
+  type?: Prisma.EnumMachineTypeFieldUpdateOperationsInput | $Enums.MachineType
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  owner?: Prisma.UserUpdateOneWithoutMachinesNestedInput
+  projectLinks?: Prisma.ProjectMachineUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutMachineNestedInput
+  tabs?: Prisma.TabUpdateManyWithoutMachineNestedInput
+  chatFileGrants?: Prisma.ChatFileGrantUpdateManyWithoutMachineNestedInput
+  aiAccounts?: Prisma.AiAccountUpdateManyWithoutMachineNestedInput
+  hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
+  uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
+  chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
+  aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+}
+
+export type MachineUncheckedUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  subtitle?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  host?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshUser?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  sshPort?: Prisma.IntFieldUpdateOperationsInput | number
+  type?: Prisma.EnumMachineTypeFieldUpdateOperationsInput | $Enums.MachineType
+  os?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  capabilities?: Prisma.JsonNullValueInput | runtime.InputJsonValue
+  checkedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentTokenHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentTokenCreatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPairingHash?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairingExpiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentPublicKey?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentPairedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentVersion?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  agentLastSeenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  network?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  networkUpdatedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  agentAutoUpdate?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  claudeAutoSwap?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiUsageQuery?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  automationAllowed?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  idleTabCloseHours?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
+  tabGc?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  aiMemoryEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  aiMemoryUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  permissionHint?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  isLocal?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  ownerId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  projectLinks?: Prisma.ProjectMachineUncheckedUpdateManyWithoutMachineNestedInput
+  repositoryCheckouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutMachineNestedInput
+  tabs?: Prisma.TabUncheckedUpdateManyWithoutMachineNestedInput
+  chatFileGrants?: Prisma.ChatFileGrantUncheckedUpdateManyWithoutMachineNestedInput
+  aiAccounts?: Prisma.AiAccountUncheckedUpdateManyWithoutMachineNestedInput
+  hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
+  uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
 }
@@ -2697,6 +2942,7 @@ export type MachineCreateWithoutChatConversationsInput = {
   hook?: Prisma.MachineHookCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutChatConversationsInput = {
@@ -2740,6 +2986,7 @@ export type MachineUncheckedCreateWithoutChatConversationsInput = {
   hook?: Prisma.MachineHookUncheckedCreateNestedOneWithoutMachineInput
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutChatConversationsInput = {
@@ -2799,6 +3046,7 @@ export type MachineUpdateWithoutChatConversationsInput = {
   hook?: Prisma.MachineHookUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutChatConversationsInput = {
@@ -2842,6 +3090,7 @@ export type MachineUncheckedUpdateWithoutChatConversationsInput = {
   hook?: Prisma.MachineHookUncheckedUpdateOneWithoutMachineNestedInput
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateWithoutChatFileGrantsInput = {
@@ -2885,6 +3134,7 @@ export type MachineCreateWithoutChatFileGrantsInput = {
   uploads?: Prisma.UploadCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutMachineInput
 }
 
 export type MachineUncheckedCreateWithoutChatFileGrantsInput = {
@@ -2928,6 +3178,7 @@ export type MachineUncheckedCreateWithoutChatFileGrantsInput = {
   uploads?: Prisma.UploadUncheckedCreateNestedManyWithoutMachineInput
   chatConversations?: Prisma.ChatConversationUncheckedCreateNestedManyWithoutMachineInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedCreateNestedManyWithoutMachineInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutMachineInput
 }
 
 export type MachineCreateOrConnectWithoutChatFileGrantsInput = {
@@ -2987,6 +3238,7 @@ export type MachineUpdateWithoutChatFileGrantsInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutChatFileGrantsInput = {
@@ -3030,6 +3282,7 @@ export type MachineUncheckedUpdateWithoutChatFileGrantsInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineCreateManyOwnerInput = {
@@ -3107,6 +3360,7 @@ export type MachineUpdateWithoutOwnerInput = {
   uploads?: Prisma.UploadUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateWithoutOwnerInput = {
@@ -3150,6 +3404,7 @@ export type MachineUncheckedUpdateWithoutOwnerInput = {
   uploads?: Prisma.UploadUncheckedUpdateManyWithoutMachineNestedInput
   chatConversations?: Prisma.ChatConversationUncheckedUpdateManyWithoutMachineNestedInput
   aiMemoryPages?: Prisma.AiMemoryPageUncheckedUpdateManyWithoutMachineNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutMachineNestedInput
 }
 
 export type MachineUncheckedUpdateManyWithoutOwnerInput = {
@@ -3200,6 +3455,7 @@ export type MachineCountOutputType = {
   uploads: number
   chatConversations: number
   aiMemoryPages: number
+  apiRuns: number
 }
 
 export type MachineCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -3211,6 +3467,7 @@ export type MachineCountOutputTypeSelect<ExtArgs extends runtime.Types.Extension
   uploads?: boolean | MachineCountOutputTypeCountUploadsArgs
   chatConversations?: boolean | MachineCountOutputTypeCountChatConversationsArgs
   aiMemoryPages?: boolean | MachineCountOutputTypeCountAiMemoryPagesArgs
+  apiRuns?: boolean | MachineCountOutputTypeCountApiRunsArgs
 }
 
 /**
@@ -3279,6 +3536,13 @@ export type MachineCountOutputTypeCountAiMemoryPagesArgs<ExtArgs extends runtime
   where?: Prisma.AiMemoryPageWhereInput
 }
 
+/**
+ * MachineCountOutputType without action
+ */
+export type MachineCountOutputTypeCountApiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ApiRunWhereInput
+}
+
 
 export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -3323,6 +3587,7 @@ export type MachineSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs 
   uploads?: boolean | Prisma.Machine$uploadsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.Machine$chatConversationsArgs<ExtArgs>
   aiMemoryPages?: boolean | Prisma.Machine$aiMemoryPagesArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.Machine$apiRunsArgs<ExtArgs>
   _count?: boolean | Prisma.MachineCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["machine"]>
 
@@ -3445,6 +3710,7 @@ export type MachineInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs
   uploads?: boolean | Prisma.Machine$uploadsArgs<ExtArgs>
   chatConversations?: boolean | Prisma.Machine$chatConversationsArgs<ExtArgs>
   aiMemoryPages?: boolean | Prisma.Machine$aiMemoryPagesArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.Machine$apiRunsArgs<ExtArgs>
   _count?: boolean | Prisma.MachineCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type MachineIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -3473,6 +3739,10 @@ export type $MachinePayload<ExtArgs extends runtime.Types.Extensions.InternalArg
      * Rule pages termhub wrote to ai-memory on this machine (TER-1019).
      */
     aiMemoryPages: Prisma.$AiMemoryPagePayload<ExtArgs>[]
+    /**
+     * API runs that ran here (TER-1176); deleting the machine nulls the column, the run row stays.
+     */
+    apiRuns: Prisma.$ApiRunPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -3972,6 +4242,7 @@ export interface Prisma__MachineClient<T, Null = never, ExtArgs extends runtime.
   uploads<T extends Prisma.Machine$uploadsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$uploadsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$UploadPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatConversations<T extends Prisma.Machine$chatConversationsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$chatConversationsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ChatConversationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   aiMemoryPages<T extends Prisma.Machine$aiMemoryPagesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$aiMemoryPagesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AiMemoryPagePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  apiRuns<T extends Prisma.Machine$apiRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.Machine$apiRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ApiRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -4661,6 +4932,30 @@ export type Machine$aiMemoryPagesArgs<ExtArgs extends runtime.Types.Extensions.I
   take?: number
   skip?: number
   distinct?: Prisma.AiMemoryPageScalarFieldEnum | Prisma.AiMemoryPageScalarFieldEnum[]
+}
+
+/**
+ * Machine.apiRuns
+ */
+export type Machine$apiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ApiRun
+   */
+  select?: Prisma.ApiRunSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ApiRun
+   */
+  omit?: Prisma.ApiRunOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ApiRunInclude<ExtArgs> | null
+  where?: Prisma.ApiRunWhereInput
+  orderBy?: Prisma.ApiRunOrderByWithRelationInput | Prisma.ApiRunOrderByWithRelationInput[]
+  cursor?: Prisma.ApiRunWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ApiRunScalarFieldEnum | Prisma.ApiRunScalarFieldEnum[]
 }
 
 /**

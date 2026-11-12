@@ -38,6 +38,8 @@ export const SECURITY_EVENT_ACTIONS = [
   'feature_flag.update',
   'feature_flag.override',
   'support.troubleshoot',
+  'api_run.create',
+  'api_run.cancel',
 ] as const;
 
 export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];

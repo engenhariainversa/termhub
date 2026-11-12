@@ -624,5 +624,10 @@
   "Coletor de abas: fechar de verdade": "Tab collector: close for real",
   "Com o coletor ligado, avisa 30 min antes e fecha as abas paradas, guardando a última resposta do agente. Nunca fecha aba trabalhando, esperando você, com run automática, com card em andamento ou fixada. Substitui o \"Fechar abas paradas\" das máquinas.": "With the collector on, it warns 30 min ahead and closes idle tabs, keeping the agent's last answer. It never closes a tab that is working, waiting on you, running an automatic run, whose card is in progress, or pinned. Replaces the machines' \"Close idle tabs\".",
   "Épico em ordem": "Epic in order",
-  "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Shows the \"Run in order\" option on an epic: automatic work takes one card at a time, in board order, and only moves to the next once the previous one is in Done with its PR merged."
+  "Mostra a opção \"Executar em ordem\" no épico: o trabalho automático pega um card por vez, na ordem do board, e só passa ao próximo quando o anterior estiver em Feito com o PR mesclado.": "Shows the \"Run in order\" option on an epic: automatic work takes one card at a time, in board order, and only moves to the next once the previous one is in Done with its PR merged.",
+  "API de runs": "Runs API",
+  "Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.": "Lets you create tokens with the runs scope and run prompts through the API (/api/v1/runs) on your own AI accounts and machines, and shows the API runs in Progress. Off, the routes do not exist and the scope does not show.",
+  "Criou uma run pela API": "Created a run through the API",
+  "Cancelou uma run da API": "Cancelled an API run",
+  "Runs da API": "API runs"
 }

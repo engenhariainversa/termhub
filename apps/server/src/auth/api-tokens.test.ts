@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { API_TOKEN_RE, hashApiToken, newApiToken, toScopes } from './api-tokens.js';
+import { API_TOKEN_RE, assertScopesFor, hashApiToken, newApiToken, toScopes } from './api-tokens.js';
 
 describe('newApiToken', () => {
   it('is thb_pat_ plus 43 base64url chars, and returns the sha256 hex of the token', () => {
@@ -38,5 +38,20 @@ describe('toScopes', () => {
 
   it('accepts the memory scope, last in catalog order', () => {
     expect(toScopes(['memory', 'read'])).toEqual(['read', 'memory']);
+  });
+});
+
+describe('assertScopesFor (TER-1176)', () => {
+  it('lets a personal token carry runs', () => {
+    expect(() => assertScopesFor({ gated: false, tabId: null }, ['read', 'runs'])).not.toThrow();
+    expect(toScopes(['runs', 'read'])).toEqual(['read', 'runs']);
+  });
+
+  it.each([
+    ['gated (concierge)', { gated: true }],
+    ['tab', { tabId: 'tab1' }],
+  ])('refuses runs on a %s token with 422', (_n, kind) => {
+    expect(() => assertScopesFor(kind, ['read', 'runs'])).toThrow(expect.objectContaining({ statusCode: 422, code: 'VALIDATION' }));
+    expect(() => assertScopesFor(kind, ['read', 'memory'])).not.toThrow();
   });
 });
