@@ -137,6 +137,7 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "El agente salió y esta máquina no tiene el bloqueo del trabajo automático; actualiza el agente (0.19.0 o más reciente) y reanuda.",
   "o card saiu do automático": "la tarjeta salió del trabajo automático",
   "Aba {{tab}}: pasta do projeto confiada sozinha": "Pestaña {{tab}}: carpeta del proyecto marcada como confiable automáticamente",
+  "Aba {{tab}}: worktree do card confiada sozinha": "Pestaña {{tab}}: worktree de la tarjeta marcada como confiable automáticamente",
   "a aba foi fechada": "la pestaña se cerró",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub siguió fallando en el push o en el PR después de los reintentos automáticos; revisa la pestaña y reanuda.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub inestable; la corrección del CI se pide de nuevo cuando vuelva",
@@ -226,5 +227,7 @@
   "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Pestaña {{tab}} eliminada: su sesión de terminal en {{machine}} ya no existe",
   "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Pestaña {{tab}} cerrada por el recolector en {{machine}}: {{why}} desde hace {{hours}} h",
   "Teste do coletor de abas, nada foi fechado: {{line}}": "Prueba del recolector de pestañas, no se cerró nada: {{line}}",
-  "O épico executa em ordem; este card espera o anterior ficar pronto": "La épica se ejecuta en orden; esta tarjeta espera a que la anterior esté lista"
+  "O épico executa em ordem; este card espera o anterior ficar pronto": "La épica se ejecuta en orden; esta tarjeta espera a que la anterior esté lista",
+  "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Confirmación del chat sin respuesta desde hace {{duration}}: {{label}}",
+  "Confirmação do chat sem resposta": "Confirmación del chat sin respuesta"
 }

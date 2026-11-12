@@ -137,6 +137,7 @@
   "O agente saiu e esta máquina não tem a trava do automático; atualize o agente (0.19.0 ou mais nova) e retome.": "The agent exited and this machine has no automatic-work hard lock; update the agent (0.19.0 or newer) and resume.",
   "o card saiu do automático": "the card left automatic work",
   "Aba {{tab}}: pasta do projeto confiada sozinha": "Tab {{tab}}: project folder trusted automatically",
+  "Aba {{tab}}: worktree do card confiada sozinha": "Tab {{tab}}: card worktree trusted automatically",
   "a aba foi fechada": "the tab was closed",
   "O GitHub continuou falhando no push ou no PR depois das novas tentativas automáticas; confira a aba e retome.": "GitHub kept failing on the push or the PR after the automatic retries; check the tab and resume.",
   "GitHub instável; a correção do CI é pedida de novo quando ele voltar": "GitHub is unstable; the CI fix is asked again once it is back",
@@ -226,5 +227,7 @@
   "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Tab {{tab}} removed: its terminal session on {{machine}} no longer exists",
   "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Tab {{tab}} closed by the collector on {{machine}}: {{why}} for {{hours}} h",
   "Teste do coletor de abas, nada foi fechado: {{line}}": "Tab collector test, nothing was closed: {{line}}",
-  "O épico executa em ordem; este card espera o anterior ficar pronto": "The epic runs in order; this card waits for the previous one to be done"
+  "O épico executa em ordem; este card espera o anterior ficar pronto": "The epic runs in order; this card waits for the previous one to be done",
+  "Confirmação do chat sem resposta há {{duration}}: {{label}}": "Chat confirmation unanswered for {{duration}}: {{label}}",
+  "Confirmação do chat sem resposta": "Chat confirmation unanswered"
 }
