@@ -4,7 +4,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import { audit } from '../auth/audit.js';
 import { FEATURE_FLAGS, FEATURE_FLAG_KEYS, featuresFor, isFeatureFlag, type FeatureFlag } from '../features/flags.js';
 import { notFound } from '../lib/errors.js';
-import { tk } from '../i18n/index.js';
+import { requestLocale, t, tk } from '../i18n/index.js';
 
 /**
  * Configurações → Recursos em teste (TER-1040): an admin turns a feature flag on or off for the whole
@@ -23,14 +23,18 @@ function flagOf(params: unknown): FeatureFlag {
 }
 
 export async function featureFlagRoutes(app: FastifyInstance, repos: Repositories) {
-  /** Every flag in code, its instance value and who has their own. */
-  app.get('/', async () => {
+  /** Every flag in code, with its title and description in the reader's language, its instance value and who has their own. */
+  app.get('/', async (request) => {
+    const locale = requestLocale(request);
     const rows = new Map((await repos.featureFlags.list()).map((r) => [r.key, r]));
     const flags = await Promise.all(
       FEATURE_FLAG_KEYS.map(async (key) => {
         const row = rows.get(key);
         return {
           key,
+          title: t(locale, FEATURE_FLAGS[key].title),
+          description: t(locale, FEATURE_FLAGS[key].description),
+          card: FEATURE_FLAGS[key].card,
           default: FEATURE_FLAGS[key].default,
           enabled: row ? row.enabled : FEATURE_FLAGS[key].default,
           updated_at: row?.updated_at ?? null,
