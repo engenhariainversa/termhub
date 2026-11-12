@@ -53,6 +53,7 @@ export function ChatMemoryPage() {
   const [autodeciding, setAutodeciding] = useState(false);
   const [codexSwitching, setCodexSwitching] = useState(false);
   const [originSwitching, setOriginSwitching] = useState(false);
+  const [crossSwitching, setCrossSwitching] = useState(false);
   const [forgettingId, setForgettingId] = useState<string | null>(null);
   // "Anotações do concierge" (spec D12/§8): its own list, independent of the search box above (which
   // only ever filters decisions) — fetched once, not re-read on every keystroke of `q`.
@@ -239,6 +240,24 @@ export function ChatMemoryPage() {
       setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar o que o chat sabe de onde você fala'));
     } finally {
       if (mountedRef.current) setOriginSwitching(false);
+    }
+  };
+
+  /** "Usar o que já decidi em outros projetos" (TER-1169): its own busy flag, like the origin switch. */
+  const toggleCrossProject = async () => {
+    if (!memory) return;
+    setCrossSwitching(true);
+    setError(null);
+    try {
+      const next = await api.setChatMemory({ cross_project: !(memory.cross_project ?? true) });
+      togglesRef.current += 1;
+      if (!mountedRef.current) return;
+      setMemory(next);
+    } catch (e) {
+      if (!mountedRef.current) return;
+      setError(e instanceof ApiError ? e.message : i18n.t('Não foi possível alterar o uso da memória de outros projetos'));
+    } finally {
+      if (mountedRef.current) setCrossSwitching(false);
     }
   };
 
@@ -458,6 +477,29 @@ export function ChatMemoryPage() {
           </div>
           <p className="mt-1 text-xs text-fg-dim">
             {t('Cada mensagem leva ao concierge se você está na web ou no app, no celular ou no computador, e se está na mesma rede de alguma máquina sua, para ele não precisar perguntar. O IP fica só em memória no servidor.')}
+          </p>
+        </div>
+      )}
+
+      {/* TER-1169: what a project with little history reads from the others; not tied to embeddings. */}
+      {memory && (
+        <div className="mt-3 rounded-lg border border-line bg-bg-2 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg">{t('Usar o que já decidi em outros projetos')}</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={memory.cross_project ?? true}
+              aria-label={t('Usar o que já decidi em outros projetos')}
+              disabled={crossSwitching}
+              onClick={() => void toggleCrossProject()}
+              className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${(memory.cross_project ?? true) ? 'bg-accent' : 'bg-fg-dim/40'}`}
+            >
+              <span className={`absolute left-0 top-0.5 h-4 w-4 rounded-full transition-transform ${(memory.cross_project ?? true) ? 'translate-x-[18px] bg-white' : 'translate-x-0.5 bg-fg-muted'}`} />
+            </button>
+          </div>
+          <p className="mt-1 text-xs text-fg-dim">
+            {t('Num projeto com pouco histórico, o concierge e os agentes também consultam suas decisões, notas e lições dos outros projetos, sempre dizendo de onde vieram. Elas servem para sugerir, nunca para responder sozinho no lugar de uma decisão deste projeto. Os agentes das abas sempre veem as lições que você verificou.')}
           </p>
         </div>
       )}

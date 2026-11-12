@@ -227,6 +227,16 @@ export class UsersRepository {
     await this.db.user.update({ where: { id: userId }, data: { chatClientContext: enabled } });
   }
 
+  /** "Usar o que já decidi em outros projetos" (TER-1169): on unless the person turned it off. */
+  async chatCrossProjectMemory(userId: string): Promise<boolean> {
+    const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatCrossProjectMemory: true } });
+    return u?.chatCrossProjectMemory ?? true;
+  }
+
+  async setChatCrossProjectMemory(userId: string, enabled: boolean): Promise<void> {
+    await this.db.user.update({ where: { id: userId }, data: { chatCrossProjectMemory: enabled } });
+  }
+
   /** The token count the chat's context meter measures against (TER-1038); null = the model's window. */
   async chatContextLimit(userId: string): Promise<number | null> {
     const u = await this.db.user.findUnique({ where: { id: userId }, select: { chatContextLimit: true } });

@@ -15,6 +15,9 @@ export const AUTHORITY_WEIGHTS = {
   verifiedLesson: 1.3,
   /** A hit from the project the query was made in. */
   sameProject: 1.25,
+  /** A decision or note scoped to another project (TER-1169: read in a project with little history):
+   *  it does not hold here, so it stays behind what does. */
+  otherProjectScoped: 0.6,
   /** Kinds that record what happened rather than what was decided. */
   lowKinds: { action: 0.7, task: 0.7 } as Partial<Record<MemoryRefKind, number>>,
   /** A superseded or expired hit: its score is multiplied by this, then held to at most `inactiveCap`
@@ -33,6 +36,8 @@ export interface AuthorityHit {
   verified?: boolean;
   /** Superseded by another item, or past its `expires_at`. */
   inactive: boolean;
+  /** A decision or note scoped to a project other than the query's (TER-1169). */
+  notHere?: boolean;
 }
 
 /** The factor `AUTHORITY_WEIGHTS` gives one hit; `queryProjectId` is the project the search was held to, if any. */
@@ -43,6 +48,7 @@ export function authorityFactor(hit: Omit<AuthorityHit, 'key' | 'score'>, queryP
   if (hit.kind === 'note' && !hit.inactive) f *= w.currentNote;
   if (hit.kind === 'lesson' && hit.verified) f *= w.verifiedLesson;
   if (queryProjectId && hit.projectId === queryProjectId) f *= w.sameProject;
+  if (hit.notHere) f *= w.otherProjectScoped;
   f *= w.lowKinds[hit.kind] ?? 1;
   if (hit.inactive) f *= w.inactive;
   return f;

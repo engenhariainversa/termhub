@@ -1808,6 +1808,8 @@ export interface ChatMemory {
   codex_replies: boolean;
   /** "Contar ao chat de onde estou falando" (TER-1088): on by default. Absent from an older server. */
   client_context?: boolean;
+  /** "Usar o que já decidi em outros projetos" (TER-1169): on by default. Absent from an older server. */
+  cross_project?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
   /** "Modelos do concierge" (TER-1145): the Claude families the concierge never runs on; empty = none.

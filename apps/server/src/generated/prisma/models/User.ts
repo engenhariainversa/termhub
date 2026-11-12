@@ -63,6 +63,7 @@ export type UserMinAggregateOutputType = {
   chatAutoLow: number | null
   chatCodexReplies: boolean | null
   chatClientContext: boolean | null
+  chatCrossProjectMemory: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
   deletionRequestedAt: Date | null
@@ -96,6 +97,7 @@ export type UserMaxAggregateOutputType = {
   chatAutoLow: number | null
   chatCodexReplies: boolean | null
   chatClientContext: boolean | null
+  chatCrossProjectMemory: boolean | null
   pushTabFinished: boolean | null
   chatContextLimit: number | null
   deletionRequestedAt: Date | null
@@ -130,6 +132,7 @@ export type UserCountAggregateOutputType = {
   chatAutoCalibration: number
   chatCodexReplies: number
   chatClientContext: number
+  chatCrossProjectMemory: number
   pushTabFinished: number
   conciergePush: number
   chatContextLimit: number
@@ -181,6 +184,7 @@ export type UserMinAggregateInputType = {
   chatAutoLow?: true
   chatCodexReplies?: true
   chatClientContext?: true
+  chatCrossProjectMemory?: true
   pushTabFinished?: true
   chatContextLimit?: true
   deletionRequestedAt?: true
@@ -214,6 +218,7 @@ export type UserMaxAggregateInputType = {
   chatAutoLow?: true
   chatCodexReplies?: true
   chatClientContext?: true
+  chatCrossProjectMemory?: true
   pushTabFinished?: true
   chatContextLimit?: true
   deletionRequestedAt?: true
@@ -248,6 +253,7 @@ export type UserCountAggregateInputType = {
   chatAutoCalibration?: true
   chatCodexReplies?: true
   chatClientContext?: true
+  chatCrossProjectMemory?: true
   pushTabFinished?: true
   conciergePush?: true
   chatContextLimit?: true
@@ -371,6 +377,7 @@ export type UserGroupByOutputType = {
   chatAutoCalibration: runtime.JsonValue | null
   chatCodexReplies: boolean
   chatClientContext: boolean
+  chatCrossProjectMemory: boolean
   pushTabFinished: boolean
   conciergePush: runtime.JsonValue | null
   chatContextLimit: number | null
@@ -430,6 +437,7 @@ export type UserWhereInput = {
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   chatClientContext?: Prisma.BoolFilter<"User"> | boolean
+  chatCrossProjectMemory?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -497,6 +505,7 @@ export type UserOrderByWithRelationInput = {
   chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   chatClientContext?: Prisma.SortOrder
+  chatCrossProjectMemory?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrderInput | Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -567,6 +576,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   chatClientContext?: Prisma.BoolFilter<"User"> | boolean
+  chatCrossProjectMemory?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -634,6 +644,7 @@ export type UserOrderByWithAggregationInput = {
   chatAutoCalibration?: Prisma.SortOrderInput | Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   chatClientContext?: Prisma.SortOrder
+  chatCrossProjectMemory?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrderInput | Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -678,6 +689,7 @@ export type UserScalarWhereWithAggregatesInput = {
   chatAutoCalibration?: Prisma.JsonNullableWithAggregatesFilter<"User">
   chatCodexReplies?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   chatClientContext?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
+  chatCrossProjectMemory?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolWithAggregatesFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableWithAggregatesFilter<"User">
   chatContextLimit?: Prisma.IntNullableWithAggregatesFilter<"User"> | number | null
@@ -713,6 +725,7 @@ export type UserCreateInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -780,6 +793,7 @@ export type UserUncheckedCreateInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -845,6 +859,7 @@ export type UserUpdateInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -912,6 +927,7 @@ export type UserUncheckedUpdateInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -978,6 +994,7 @@ export type UserCreateManyInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -1013,6 +1030,7 @@ export type UserUpdateManyMutationInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1049,6 +1067,7 @@ export type UserUncheckedUpdateManyInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -1093,6 +1112,7 @@ export type UserCountOrderByAggregateInput = {
   chatAutoCalibration?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   chatClientContext?: Prisma.SortOrder
+  chatCrossProjectMemory?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   conciergePush?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
@@ -1135,6 +1155,7 @@ export type UserMaxOrderByAggregateInput = {
   chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   chatClientContext?: Prisma.SortOrder
+  chatCrossProjectMemory?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
@@ -1168,6 +1189,7 @@ export type UserMinOrderByAggregateInput = {
   chatAutoLow?: Prisma.SortOrder
   chatCodexReplies?: Prisma.SortOrder
   chatClientContext?: Prisma.SortOrder
+  chatCrossProjectMemory?: Prisma.SortOrder
   pushTabFinished?: Prisma.SortOrder
   chatContextLimit?: Prisma.SortOrder
   deletionRequestedAt?: Prisma.SortOrder
@@ -1751,6 +1773,7 @@ export type UserCreateWithoutRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -1816,6 +1839,7 @@ export type UserUncheckedCreateWithoutRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -1911,6 +1935,7 @@ export type UserScalarWhereInput = {
   chatAutoCalibration?: Prisma.JsonNullableFilter<"User">
   chatCodexReplies?: Prisma.BoolFilter<"User"> | boolean
   chatClientContext?: Prisma.BoolFilter<"User"> | boolean
+  chatCrossProjectMemory?: Prisma.BoolFilter<"User"> | boolean
   pushTabFinished?: Prisma.BoolFilter<"User"> | boolean
   conciergePush?: Prisma.JsonNullableFilter<"User">
   chatContextLimit?: Prisma.IntNullableFilter<"User"> | number | null
@@ -1946,6 +1971,7 @@ export type UserCreateWithoutSessionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2012,6 +2038,7 @@ export type UserUncheckedCreateWithoutSessionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2092,6 +2119,7 @@ export type UserUpdateWithoutSessionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2158,6 +2186,7 @@ export type UserUncheckedUpdateWithoutSessionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2222,6 +2251,7 @@ export type UserCreateWithoutMachinesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2288,6 +2318,7 @@ export type UserUncheckedCreateWithoutMachinesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2368,6 +2399,7 @@ export type UserUpdateWithoutMachinesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2434,6 +2466,7 @@ export type UserUncheckedUpdateWithoutMachinesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2498,6 +2531,7 @@ export type UserCreateWithoutProjectsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2564,6 +2598,7 @@ export type UserUncheckedCreateWithoutProjectsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2644,6 +2679,7 @@ export type UserUpdateWithoutProjectsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2710,6 +2746,7 @@ export type UserUncheckedUpdateWithoutProjectsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2774,6 +2811,7 @@ export type UserCreateWithoutIntegrationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2840,6 +2878,7 @@ export type UserUncheckedCreateWithoutIntegrationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -2920,6 +2959,7 @@ export type UserUpdateWithoutIntegrationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -2986,6 +3026,7 @@ export type UserUncheckedUpdateWithoutIntegrationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3050,6 +3091,7 @@ export type UserCreateWithoutUploadsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3116,6 +3158,7 @@ export type UserUncheckedCreateWithoutUploadsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3196,6 +3239,7 @@ export type UserUpdateWithoutUploadsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3262,6 +3306,7 @@ export type UserUncheckedUpdateWithoutUploadsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3326,6 +3371,7 @@ export type UserCreateWithoutApiTokensInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3392,6 +3438,7 @@ export type UserUncheckedCreateWithoutApiTokensInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3472,6 +3519,7 @@ export type UserUpdateWithoutApiTokensInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3538,6 +3586,7 @@ export type UserUncheckedUpdateWithoutApiTokensInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3602,6 +3651,7 @@ export type UserCreateWithoutChatConversationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3668,6 +3718,7 @@ export type UserUncheckedCreateWithoutChatConversationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3748,6 +3799,7 @@ export type UserUpdateWithoutChatConversationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3814,6 +3866,7 @@ export type UserUncheckedUpdateWithoutChatConversationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -3878,6 +3931,7 @@ export type UserCreateWithoutChatAttachmentsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -3944,6 +3998,7 @@ export type UserUncheckedCreateWithoutChatAttachmentsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4024,6 +4079,7 @@ export type UserUpdateWithoutChatAttachmentsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4090,6 +4146,7 @@ export type UserUncheckedUpdateWithoutChatAttachmentsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4154,6 +4211,7 @@ export type UserCreateWithoutStandingGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4220,6 +4278,7 @@ export type UserUncheckedCreateWithoutStandingGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4300,6 +4359,7 @@ export type UserUpdateWithoutStandingGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4366,6 +4426,7 @@ export type UserUncheckedUpdateWithoutStandingGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4430,6 +4491,7 @@ export type UserCreateWithoutFileGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4496,6 +4558,7 @@ export type UserUncheckedCreateWithoutFileGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4576,6 +4639,7 @@ export type UserUpdateWithoutFileGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4642,6 +4706,7 @@ export type UserUncheckedUpdateWithoutFileGrantsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4706,6 +4771,7 @@ export type UserCreateWithoutChatDefaultRestrictionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4772,6 +4838,7 @@ export type UserUncheckedCreateWithoutChatDefaultRestrictionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -4852,6 +4919,7 @@ export type UserUpdateWithoutChatDefaultRestrictionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4918,6 +4986,7 @@ export type UserUncheckedUpdateWithoutChatDefaultRestrictionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -4982,6 +5051,7 @@ export type UserCreateWithoutChatBlocksInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5048,6 +5118,7 @@ export type UserUncheckedCreateWithoutChatBlocksInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5128,6 +5199,7 @@ export type UserUpdateWithoutChatBlocksInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5194,6 +5266,7 @@ export type UserUncheckedUpdateWithoutChatBlocksInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5258,6 +5331,7 @@ export type UserCreateWithoutChatCommandRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5324,6 +5398,7 @@ export type UserUncheckedCreateWithoutChatCommandRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5404,6 +5479,7 @@ export type UserUpdateWithoutChatCommandRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5470,6 +5546,7 @@ export type UserUncheckedUpdateWithoutChatCommandRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5534,6 +5611,7 @@ export type UserCreateWithoutChatWatchesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5600,6 +5678,7 @@ export type UserUncheckedCreateWithoutChatWatchesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5680,6 +5759,7 @@ export type UserUpdateWithoutChatWatchesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5746,6 +5826,7 @@ export type UserUncheckedUpdateWithoutChatWatchesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -5810,6 +5891,7 @@ export type UserCreateWithoutConciergeNoticesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5876,6 +5958,7 @@ export type UserUncheckedCreateWithoutConciergeNoticesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -5956,6 +6039,7 @@ export type UserUpdateWithoutConciergeNoticesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6022,6 +6106,7 @@ export type UserUncheckedUpdateWithoutConciergeNoticesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6086,6 +6171,7 @@ export type UserCreateWithoutChatAutoSamplesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6152,6 +6238,7 @@ export type UserUncheckedCreateWithoutChatAutoSamplesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6232,6 +6319,7 @@ export type UserUpdateWithoutChatAutoSamplesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6298,6 +6386,7 @@ export type UserUncheckedUpdateWithoutChatAutoSamplesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6362,6 +6451,7 @@ export type UserCreateWithoutChatFocusInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6428,6 +6518,7 @@ export type UserUncheckedCreateWithoutChatFocusInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6508,6 +6599,7 @@ export type UserUpdateWithoutChatFocusInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6574,6 +6666,7 @@ export type UserUncheckedUpdateWithoutChatFocusInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6638,6 +6731,7 @@ export type UserCreateWithoutChatDecisionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6704,6 +6798,7 @@ export type UserUncheckedCreateWithoutChatDecisionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6784,6 +6879,7 @@ export type UserUpdateWithoutChatDecisionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6850,6 +6946,7 @@ export type UserUncheckedUpdateWithoutChatDecisionsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -6914,6 +7011,7 @@ export type UserCreateWithoutMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -6980,6 +7078,7 @@ export type UserUncheckedCreateWithoutMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7049,6 +7148,7 @@ export type UserCreateWithoutVerifiedMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7115,6 +7215,7 @@ export type UserUncheckedCreateWithoutVerifiedMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7195,6 +7296,7 @@ export type UserUpdateWithoutMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7261,6 +7363,7 @@ export type UserUncheckedUpdateWithoutMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7336,6 +7439,7 @@ export type UserUpdateWithoutVerifiedMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7402,6 +7506,7 @@ export type UserUncheckedUpdateWithoutVerifiedMemoryItemsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7466,6 +7571,7 @@ export type UserCreateWithoutMemoryWriteQueueInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7532,6 +7638,7 @@ export type UserUncheckedCreateWithoutMemoryWriteQueueInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7612,6 +7719,7 @@ export type UserUpdateWithoutMemoryWriteQueueInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7678,6 +7786,7 @@ export type UserUncheckedUpdateWithoutMemoryWriteQueueInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7742,6 +7851,7 @@ export type UserCreateWithoutMemoryRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7808,6 +7918,7 @@ export type UserUncheckedCreateWithoutMemoryRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -7888,6 +7999,7 @@ export type UserUpdateWithoutMemoryRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -7954,6 +8066,7 @@ export type UserUncheckedUpdateWithoutMemoryRulesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8018,6 +8131,7 @@ export type UserCreateWithoutProjectGroupsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8084,6 +8198,7 @@ export type UserUncheckedCreateWithoutProjectGroupsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8164,6 +8279,7 @@ export type UserUpdateWithoutProjectGroupsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8230,6 +8346,7 @@ export type UserUncheckedUpdateWithoutProjectGroupsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8294,6 +8411,7 @@ export type UserCreateWithoutDeviceRequestsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8360,6 +8478,7 @@ export type UserUncheckedCreateWithoutDeviceRequestsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8440,6 +8559,7 @@ export type UserUpdateWithoutDeviceRequestsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8506,6 +8626,7 @@ export type UserUncheckedUpdateWithoutDeviceRequestsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8570,6 +8691,7 @@ export type UserCreateWithoutDevicesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8636,6 +8758,7 @@ export type UserUncheckedCreateWithoutDevicesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8716,6 +8839,7 @@ export type UserUpdateWithoutDevicesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8782,6 +8906,7 @@ export type UserUncheckedUpdateWithoutDevicesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -8846,6 +8971,7 @@ export type UserCreateWithoutNotificationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8912,6 +9038,7 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -8992,6 +9119,7 @@ export type UserUpdateWithoutNotificationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9058,6 +9186,7 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9122,6 +9251,7 @@ export type UserCreateWithoutAutomationSummariesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9188,6 +9318,7 @@ export type UserUncheckedCreateWithoutAutomationSummariesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9268,6 +9399,7 @@ export type UserUpdateWithoutAutomationSummariesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9334,6 +9466,7 @@ export type UserUncheckedUpdateWithoutAutomationSummariesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9398,6 +9531,7 @@ export type UserCreateWithoutLegalAcceptancesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9464,6 +9598,7 @@ export type UserUncheckedCreateWithoutLegalAcceptancesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9544,6 +9679,7 @@ export type UserUpdateWithoutLegalAcceptancesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9610,6 +9746,7 @@ export type UserUncheckedUpdateWithoutLegalAcceptancesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9674,6 +9811,7 @@ export type UserCreateWithoutDataExportsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9740,6 +9878,7 @@ export type UserUncheckedCreateWithoutDataExportsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -9820,6 +9959,7 @@ export type UserUpdateWithoutDataExportsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9886,6 +10026,7 @@ export type UserUncheckedUpdateWithoutDataExportsInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -9950,6 +10091,7 @@ export type UserCreateWithoutFeatureFlagOverridesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -10016,6 +10158,7 @@ export type UserUncheckedCreateWithoutFeatureFlagOverridesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -10096,6 +10239,7 @@ export type UserUpdateWithoutFeatureFlagOverridesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -10162,6 +10306,7 @@ export type UserUncheckedUpdateWithoutFeatureFlagOverridesInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -10226,6 +10371,7 @@ export type UserCreateManyRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: number | null
@@ -10261,6 +10407,7 @@ export type UserUpdateWithoutRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -10326,6 +10473,7 @@ export type UserUncheckedUpdateWithoutRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -10391,6 +10539,7 @@ export type UserUncheckedUpdateManyWithoutRoleRefInput = {
   chatAutoCalibration?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatCodexReplies?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatClientContext?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatCrossProjectMemory?: Prisma.BoolFieldUpdateOperationsInput | boolean
   pushTabFinished?: Prisma.BoolFieldUpdateOperationsInput | boolean
   conciergePush?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
   chatContextLimit?: Prisma.NullableIntFieldUpdateOperationsInput | number | null
@@ -10719,6 +10868,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
@@ -10787,6 +10937,7 @@ export type UserSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
@@ -10824,6 +10975,7 @@ export type UserSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensio
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
@@ -10861,6 +11013,7 @@ export type UserSelectScalar = {
   chatAutoCalibration?: boolean
   chatCodexReplies?: boolean
   chatClientContext?: boolean
+  chatCrossProjectMemory?: boolean
   pushTabFinished?: boolean
   conciergePush?: boolean
   chatContextLimit?: boolean
@@ -10873,7 +11026,7 @@ export type UserSelectScalar = {
   locale?: boolean
 }
 
-export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "chatClientContext" | "pushTabFinished" | "conciergePush" | "chatContextLimit" | "chatBlockedModels" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
+export type UserOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "email" | "name" | "avatarUrl" | "nickname" | "cityShortUrlPartner" | "cityShortUrlCustom" | "passwordHash" | "googleId" | "role" | "roleId" | "invitedAt" | "lastLoginAt" | "createdAt" | "reviewEnabledUntil" | "reviewEnabledBy" | "chatSuggestions" | "chatAutodecide" | "chatAutoHigh" | "chatAutoLow" | "chatAutoCalibration" | "chatCodexReplies" | "chatClientContext" | "chatCrossProjectMemory" | "pushTabFinished" | "conciergePush" | "chatContextLimit" | "chatBlockedModels" | "deletionRequestedAt" | "deletionScheduledAt" | "automationPausedAt" | "timeZone" | "aiLoginWarnDays" | "locale", ExtArgs["result"]["user"]>
 export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   roleRef?: boolean | Prisma.User$roleRefArgs<ExtArgs>
   sessions?: boolean | Prisma.User$sessionsArgs<ExtArgs>
@@ -11016,6 +11169,11 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
      * with each typed message. On by default; the person can turn it off in Memória do chat.
      */
     chatClientContext: boolean
+    /**
+     * "Usar o que já decidi em outros projetos" (TER-1169): a project with little history also searches
+     * the person's other projects, and agent tabs read their verified lessons. On by default.
+     */
+    chatCrossProjectMemory: boolean
     /**
      * Push "aba terminou" to the phone (TER-925): opt-in, off by default.
      */
@@ -11537,6 +11695,7 @@ export interface UserFieldRefs {
   readonly chatAutoCalibration: Prisma.FieldRef<"User", 'Json'>
   readonly chatCodexReplies: Prisma.FieldRef<"User", 'Boolean'>
   readonly chatClientContext: Prisma.FieldRef<"User", 'Boolean'>
+  readonly chatCrossProjectMemory: Prisma.FieldRef<"User", 'Boolean'>
   readonly pushTabFinished: Prisma.FieldRef<"User", 'Boolean'>
   readonly conciergePush: Prisma.FieldRef<"User", 'Json'>
   readonly chatContextLimit: Prisma.FieldRef<"User", 'Int'>

@@ -6329,6 +6329,7 @@ export const UserScalarFieldEnum = {
   chatAutoCalibration: 'chatAutoCalibration',
   chatCodexReplies: 'chatCodexReplies',
   chatClientContext: 'chatClientContext',
+  chatCrossProjectMemory: 'chatCrossProjectMemory',
   pushTabFinished: 'pushTabFinished',
   conciergePush: 'conciergePush',
   chatContextLimit: 'chatContextLimit',

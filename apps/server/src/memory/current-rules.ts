@@ -18,7 +18,12 @@ export interface CurrentRule {
   decision: string;
   /** Null for an account-wide rule. */
   project_id: string | null;
+  /** Holds in every project: recorded without one, or scoped `user` in one (TER-1169). Absent = `!project_id`. */
+  everywhere?: boolean;
 }
+
+/** Whether a rule holds in every project (TER-1169). */
+export const holdsEverywhere = (r: CurrentRule): boolean => r.everywhere ?? !r.project_id;
 
 /** At most this many rules are read; the block keeps the newest that fit in `RULES_MAX`. */
 export const RULES_LIMIT = 20;
@@ -33,8 +38,8 @@ function decisionOf(text: string): string {
   return (m?.[1] ?? text).trim();
 }
 
-export function ruleOf(item: Pick<MemoryItem, 'id' | 'title' | 'text' | 'project_id'>): CurrentRule {
-  return { ref: `note:${item.id}`, title: item.title, decision: decisionOf(item.text), project_id: item.project_id };
+export function ruleOf(item: Pick<MemoryItem, 'id' | 'title' | 'text' | 'project_id'> & Partial<Pick<MemoryItem, 'scope'>>): CurrentRule {
+  return { ref: `note:${item.id}`, title: item.title, decision: decisionOf(item.text), project_id: item.project_id, everywhere: !item.project_id || item.scope === 'user' };
 }
 
 /** The owner's current rules for the project, newest first. Never throws: a failed read is no rules. */
@@ -51,7 +56,7 @@ const clip = (s: string, max: number) => (s.length <= max ? s : `${s.slice(0, Ma
 
 /** One rule as a prompt line: the person's words, sanitised and quoted like the wake's question. */
 function ruleLine(r: CurrentRule): string {
-  const scope = r.project_id ? '' : ' (todos os projetos)';
+  const scope = holdsEverywhere(r) ? ' (todos os projetos)' : '';
   return clip(`- [${r.ref}]${scope} «${sanitisePromptText(r.title)}»: «${sanitisePromptText(r.decision)}»`, RULE_MAX);
 }
 

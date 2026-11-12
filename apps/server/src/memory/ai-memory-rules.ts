@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { AI_MEMORY_RULE_PATH_RE } from '@termhub/machine-ops';
 import { sanitisePromptText } from '../chat/tab-question-context.js';
-import type { CurrentRule } from './current-rules.js';
+import { holdsEverywhere, type CurrentRule } from './current-rules.js';
 
 /**
  * Current rules as pinned ai-memory pages (TER-1019, spec 2026-10-07 ai-memory rules): the pages termhub
@@ -51,7 +51,7 @@ export function rulePage(rule: CurrentRule): RulePage | null {
   const path = `_rules/termhub-${ruleSlug(rule.title)}-${id}.md`;
   if (!AI_MEMORY_RULE_PATH_RE.test(path)) return null;
   const title = clip(sanitisePromptText(rule.title), AI_MEMORY_TITLE_MAX) || 'Regra';
-  const scope = rule.project_id ? '' : ' Vale para todos os projetos.';
+  const scope = holdsEverywhere(rule) ? ' Vale para todos os projetos.' : '';
   const decision = clip(sanitisePromptText(rule.decision), AI_MEMORY_DECISION_MAX);
   const body = `${decision}\n\nRegra vigente do termhub (${rule.ref}).${scope} Para mudar, use o termhub, não edite esta página.`;
   return { path, title, body, hash: pageHash(title, body) };

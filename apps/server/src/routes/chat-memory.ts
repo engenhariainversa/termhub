@@ -64,6 +64,8 @@ const memoryBody = z
     codex_replies: z.boolean().optional(),
     // TER-1088: "Contar ao chat de onde estou falando" (on by default).
     client_context: z.boolean().optional(),
+    // TER-1169: "Usar o que já decidi em outros projetos" (on by default).
+    cross_project: z.boolean().optional(),
     context_limit: chatContextLimit.nullable().optional(),
     // TER-642: the automatic-answer thresholds pinned by hand; null hands them back to calibration.
     auto_thresholds: autoThresholdsBody.nullable().optional(),
@@ -74,8 +76,8 @@ const memoryBody = z
       .transform((families) => [...new Set(families)])
       .optional(),
   })
-  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined || b.blocked_models !== undefined, {
-    message: 'Informe enabled, autodecide, codex_replies, client_context, context_limit, auto_thresholds ou blocked_models',
+  .refine((b) => b.enabled !== undefined || b.autodecide !== undefined || b.codex_replies !== undefined || b.client_context !== undefined || b.cross_project !== undefined || b.context_limit !== undefined || b.auto_thresholds !== undefined || b.blocked_models !== undefined, {
+    message: 'Informe enabled, autodecide, codex_replies, client_context, cross_project, context_limit, auto_thresholds ou blocked_models',
   });
 /** `POST /focus` (TER-642): one screen's heartbeat. `client_id` is that screen's own random id. */
 const focusBody = z.object({ client_id: z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/), focused: z.boolean() });
@@ -344,6 +346,8 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     codex_replies: await repos.users.chatCodexReplies(userId),
     // "Contar ao chat de onde estou falando" (TER-1088): on by default, the person can turn it off.
     client_context: await repos.users.chatClientContext(userId),
+    // "Usar o que já decidi em outros projetos" (TER-1169): on by default, the person can turn it off.
+    cross_project: await repos.users.chatCrossProjectMemory(userId),
     // The chat's context meter limit (TER-1038): null = the model's window, the default.
     context_limit: await repos.users.chatContextLimit(userId),
     // "Modelos do concierge" (TER-1145): empty = no restriction, the default.
@@ -369,6 +373,7 @@ export async function chatMemoryRoutes(app: FastifyInstance, repos: Repositories
     if (body.autodecide !== undefined) await repos.users.setChatAutodecide(userId, body.autodecide);
     if (body.codex_replies !== undefined) await repos.users.setChatCodexReplies(userId, body.codex_replies);
     if (body.client_context !== undefined) await repos.users.setChatClientContext(userId, body.client_context);
+    if (body.cross_project !== undefined) await repos.users.setChatCrossProjectMemory(userId, body.cross_project);
     if (body.context_limit !== undefined) await repos.users.setChatContextLimit(userId, body.context_limit);
     if (body.blocked_models !== undefined) await repos.users.setChatBlockedModels(userId, body.blocked_models);
     // Pinning turns calibration off for this person; null turns it back on. A countdown already
