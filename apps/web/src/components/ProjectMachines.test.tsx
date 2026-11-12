@@ -34,14 +34,16 @@ describe('ProjectMachines', () => {
     expect(screen.getByText('mac')).toBeInTheDocument();
     expect(screen.getByDisplayValue('/src/p1')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Vincular máquina' }));
-    const options = Array.from((screen.getByLabelText('Máquina') as HTMLSelectElement).options).map((o) => o.value).filter(Boolean);
-    expect(options).toEqual(['m2', 'm3']);
+    fireEvent.click(screen.getByLabelText('Máquina'));
+    expect(screen.getAllByRole('option')).toHaveLength(2);
+    expect(screen.queryByRole('option', { name: 'mac' })).not.toBeInTheDocument();
   });
 
   it('labels each machine in the "Vincular máquina" select as "nome — subtítulo"', () => {
     render(<ProjectMachines project={project} />);
     fireEvent.click(screen.getByRole('button', { name: 'Vincular máquina' }));
-    const labels = Array.from((screen.getByLabelText('Máquina') as HTMLSelectElement).options).filter((o) => o.value).map((o) => o.textContent);
+    fireEvent.click(screen.getByLabelText('Máquina'));
+    const labels = screen.getAllByRole('option').map((o) => o.textContent);
     expect(labels).toEqual(['jarvis — servidor da sala', 'mini']);
   });
 
@@ -49,7 +51,8 @@ describe('ProjectMachines', () => {
     linkMachine.mockResolvedValue(undefined);
     render(<ProjectMachines project={project} />);
     fireEvent.click(screen.getByRole('button', { name: 'Vincular máquina' }));
-    fireEvent.change(screen.getByLabelText('Máquina'), { target: { value: 'm2' } });
+    fireEvent.click(screen.getByLabelText('Máquina'));
+    fireEvent.click(screen.getByRole('option', { name: 'jarvis — servidor da sala' }));
     fireEvent.change(screen.getByLabelText('Diretório'), { target: { value: '/w' } });
     fireEvent.click(screen.getByRole('button', { name: 'Vincular' }));
     await waitFor(() => expect(linkMachine).toHaveBeenCalledWith('p1', { machine_id: 'm2', cwd: '/w', create_dir: true }));

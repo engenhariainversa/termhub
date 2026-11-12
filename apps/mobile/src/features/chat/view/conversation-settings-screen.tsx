@@ -5,8 +5,11 @@ import { activeGrantsLabel } from '@/features/chat-grants/model/labels';
 import { useTranslation } from '@/i18n';
 import { AppText, Button, Screen, Sheet } from '@/ui';
 import { isGrantActive } from '../model/grant-time';
+import { contextMeter } from '../model/context';
 import { isActive } from '../model/subagents';
 import { useChatStore } from '../viewmodel/useChatStore';
+import { useCompactControl } from '../viewmodel/useCompactControl';
+import { ContextDetails } from './context-meter';
 import { HostLine } from './host-line';
 import { SubagentsSheet } from './subagents-sheet';
 
@@ -23,6 +26,8 @@ export function ConversationSettingsScreen() {
   const slot = useChatStore((s) => (s.activeProject === undefined ? undefined : s.conversations[s.activeProject ?? '']));
   const reset = useChatStore((s) => s.reset);
   const cancelSubagent = useChatStore((s) => s.cancelSubagent);
+  const meter = useMemo(() => contextMeter(slot?.conversation, slot?.contextLimit), [slot?.conversation, slot?.contextLimit]);
+  const compact = useCompactControl(slot);
   const [confirmingReset, setConfirmingReset] = useState(false);
 
   // The subagents panel (spec 2026-09-26 panel §4): the button is always here, so the sheet it opens
@@ -73,7 +78,13 @@ export function ConversationSettingsScreen() {
             <HostLine host={slot.host} canChange={activeProject === null} projectId={activeProject ?? null} />
           </View>
         ) : null}
-        {/* Contexto: the context window indicator of TER-1038 goes here once the phone has one. */}
+        {/* Contexto (TER-1152): the header meter's numbers and "Compactar", once there is a fill to show. */}
+        {meter ? (
+          <View className="gap-2">
+            <AppText variant="label">{t('Contexto')}</AppText>
+            <ContextDetails meter={meter} compact={compact} />
+          </View>
+        ) : null}
         <View className="gap-2">
           <AppText variant="label">{t('Subagentes')}</AppText>
           <Button label={t('Subagentes ({{n}})', { n: activeSubagents.length })} variant="secondary" onPress={() => setSubagentsOpen(true)} />

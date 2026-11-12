@@ -93,6 +93,23 @@ export const cardProgress = z.object({
   usage: progressUsage.nullable().default(null),
 });
 
+/**
+ * TER-1150: where an automatic epic is in its life, from birth (its first card started, the epic branch made)
+ * to death (its PR merged into the base and delivered). `failed`: the epic PR's CI is red or in conflict, or its
+ * deploy or release failed (`failure` says which). Null for an epic that is not automatic (no epic branch).
+ */
+export const epicPhase = z.enum(['not_started', 'in_progress', 'integrating', 'delivering', 'failed', 'done']);
+export const epicLifecycle = z.object({
+  phase: epicPhase,
+  /** the epic branch, when the project's pattern gives one */
+  branch: z.string().nullable(),
+  started_at: z.string().nullable(),
+  done_at: z.string().nullable(),
+  /** the epic's own PR (epic branch → base), the newest one not closed unmerged */
+  pull_request: pullRequestBadge.nullable(),
+  failure: z.enum(['ci', 'conflict', 'deploy', 'release']).nullable(),
+});
+
 export const epicProgress = z.object({
   id: z.string(),
   ref: z.string(),
@@ -109,6 +126,8 @@ export const epicProgress = z.object({
   ci_error: z.string().nullable().default(null),
   /** the epic's own automatic tabs (its integrator) plus its cards'; null when none was metered */
   usage: progressUsage.nullable().default(null),
+  /** TER-1150: the automatic epic's lifecycle; null for a manual epic (or from a server that predates it) */
+  lifecycle: epicLifecycle.nullable().default(null),
 });
 
 /**
@@ -169,4 +188,6 @@ export type PullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type AutomationFeedEvent = z.infer<typeof automationFeedEvent>;
 export type CardProgress = z.infer<typeof cardProgress>;
 export type EpicProgress = z.infer<typeof epicProgress>;
+export type EpicPhase = z.infer<typeof epicPhase>;
+export type EpicLifecycle = z.infer<typeof epicLifecycle>;
 export type ProgressResponse = z.infer<typeof progressResponse>;

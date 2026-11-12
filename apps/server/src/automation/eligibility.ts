@@ -15,6 +15,9 @@ export type IneligibleReason =
   | 'no_ticket'
   // TER-1110: a card created a moment ago waits, so a tab already working on its ticket can be linked first
   | 'just_created'
+  // TER-1170: a card of an epic that is still getting new cards waits for the batch, so a batch created
+  // bottom-up does not start in creation order
+  | 'epic_settling'
   // set by the dispatcher when it found no place for an eligible card (spec §8 step 3, D14)
   | 'no_account'
   | 'machine_offline'
@@ -52,6 +55,7 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   repo_missing: tk('Repositório não configurado no Setup'),
   no_ticket: tk('O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum'),
   just_created: tk('Card recém-criado; o automático começa em até 2 min'),
+  epic_settling: tk('O épico ainda está recebendo cards novos; o automático começa 2 min depois do último (até 10 min)'),
   no_account: tk('Sem conta com folga'),
   machine_offline: tk('Máquina do agente desligada'),
   no_room: tk('Máquina sem folga (memória/disco/carga)'),
@@ -78,6 +82,14 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
  */
 export const NEW_CARD_GRACE_MS = 2 * 60_000;
 
+/**
+ * TER-1170: the grace of a card in an epic (not the project's default one) lasts while any card of that epic
+ * was created less than `NEW_CARD_GRACE_MS` ago, up to this long after the card's own creation. A batch
+ * created bottom-up (each `create_task` lands on top) then starts in board order, not in creation order;
+ * the ceiling keeps an epic that keeps growing from holding its cards forever.
+ */
+export const EPIC_SETTLE_CAP_MS = 10 * 60_000;
+
 export interface EligibilityInput {
   card: {
     type: TaskType;
@@ -96,6 +108,8 @@ export interface EligibilityInput {
     has_ticket: boolean;
     /** created less than `NEW_CARD_GRACE_MS` ago */
     just_created: boolean;
+    /** TER-1170: its epic got a card less than `NEW_CARD_GRACE_MS` ago, and it is younger than `EPIC_SETTLE_CAP_MS` */
+    epic_settling?: boolean;
   };
   project: { automation: ProjectAutomation; paused: boolean; repo_ready: boolean; capable_machines: number; require_ticket: boolean };
 }
@@ -121,5 +135,6 @@ export function eligibilityOf({ card, project }: EligibilityInput): Eligibility 
   if (!project.repo_ready) return no('repo_missing');
   if (project.require_ticket && !card.has_ticket) return no('no_ticket');
   if (card.just_created) return no('just_created');
+  if (card.epic_settling) return no('epic_settling');
   return { eligible: true };
 }

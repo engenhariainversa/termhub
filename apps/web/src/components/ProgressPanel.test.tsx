@@ -50,6 +50,20 @@ afterEach(() => {
 });
 
 describe('ProgressPanel', () => {
+  // TER-1150: an automatic epic says where it is in its life, with its branch and its own PR
+  it('shows an automatic epic integrating, its branch and its PR', async () => {
+    const r = response();
+    r.epics[0]!.lifecycle = {
+      phase: 'integrating', branch: 'epic/TER-182-visao', started_at: '2026-09-20T12:00:00.000Z', done_at: null, failure: null,
+      pull_request: { number: 80, url: 'https://github.com/o/r/pull/80', title: 'TER-182: integrate', state: 'open', draft: false, ci_state: 'running', ci_summary: { total: 0, passed: 0, failed: 0, running: 0, failing: [] }, deploy_state: 'none', deploy_url: null },
+    };
+    progressMock.mockResolvedValue(r);
+    mount();
+    expect(await screen.findByText(/^histórias prontas · integrando · desde /)).toBeInTheDocument();
+    expect(screen.getByText('epic/TER-182-visao')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'PR #80' })).toHaveAttribute('href', 'https://github.com/o/r/pull/80');
+  });
+
   it('shows the epic and card progress, estimate and agent state', async () => {
     mount();
     expect(await screen.findByText('Visão gerencial')).toBeInTheDocument();

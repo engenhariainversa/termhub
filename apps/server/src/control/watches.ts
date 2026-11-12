@@ -96,8 +96,11 @@ async function resolveTarget(ctx: ControlContext, a: WatchArgs): Promise<{ targe
 /** A short reading of the target now, for the answer. */
 async function currentOf(probe: WatchProbe, w: Pick<ChatWatch, 'user_id' | 'kind' | 'target_id' | 'params'>): Promise<Record<string, unknown>> {
   switch (w.kind) {
-    case 'tab':
-      return { state: (await probe.tab(w.target_id!))?.state ?? null };
+    case 'tab': {
+      const t = await probe.tab(w.target_id!);
+      // TER-1168: a watch on a tab whose agent left waits for nothing (the engine wakes the chat at once too)
+      return { state: t?.state ?? null, ...(t?.agent_gone ? { agent_gone: true } : {}) };
+    }
     case 'card': {
       const t = await probe.task(w.target_id!);
       return { status: t?.status ?? null };

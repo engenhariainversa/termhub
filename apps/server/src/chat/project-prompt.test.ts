@@ -1,4 +1,7 @@
+import { STANDING_GRANT_KINDS } from '@termhub/mobile-api';
 import { describe, expect, it } from 'vitest';
+import { streamedSystemPrompt } from './concierge-prompt.js';
+import { DEFAULT_ALLOW_KINDS } from './gate.js';
 import { accountSystemPrompt, commandRulesLine, fit, projectSystemPrompt } from './project-prompt.js';
 
 it('names the project, its machines and paths, and asks for focus and brevity', () => {
@@ -64,6 +67,26 @@ it('stays under the protocol cap with a long name and many long paths, and keeps
   expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
 });
 
+// TER-1164: in a new project the chat said typing in a tab "cannot be turned off" and that the rules only
+// cover commands. The prompt always says where the person lifts a confirmation and what each rule covers.
+it('always says how the person lifts a confirmation, even with no default left on', () => {
+  for (const text of [projectSystemPrompt({ name: 'X', key: 'X' }, []), projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], ['terminal'])]) {
+    expect(text).toContain('Como o usuário libera (você não muda permissões, só diz onde)');
+    expect(text).toContain('Regras de comando cobrem só run_command');
+    expect(text).toContain('Configurações › Permissões do chat');
+    expect(text).toContain('Responder a uma permissão do CLI nunca é liberado');
+  }
+});
+
+it('keeps the how-to-lift line under the protocol cap with every optional line full', () => {
+  const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
+  const rules = Array.from({ length: 40 }, (_, i) => ({ pattern: `cmd-${'x'.repeat(30)}-${i}`, match: 'prefix' as const }));
+  const text = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links, ['open_tab', 'close_tab', 'start_agent', 'board', 'terminal'], [], ['open_tab', 'start_agent', 'link_tab_task', 'board', 'terminal', 'close_tab', 'read_commands'], rules, `Regras atuais:\n${'- regra longa\n'.repeat(80)}`);
+  expect(text.length).toBeLessThanOrEqual(4000);
+  expect(text).toContain('Como o usuário libera');
+  expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+});
+
 it('says nothing about standing grants when none are active', () => {
   const text = projectSystemPrompt({ name: 'X', key: 'X' }, []);
   expect(text).not.toContain('Liberado sem confirmação');
@@ -90,6 +113,60 @@ it('stays under the protocol cap with a long machine list and the standing grant
   expect(text.length).toBeLessThanOrEqual(4000);
   expect(text).toContain('Liberado sem confirmação neste projeto');
   expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+});
+
+// TER-1154: the default allowances, a full rules block, the standing grants, a few command rules and one
+// group added up to 4115 chars; with the orchestrator's rules the open frame passed the protocol's 8000,
+// the agent dropped it and the chat read "machine went offline".
+describe('every optional line at once (TER-1154)', () => {
+  const rulesOf = (n: number) => ['Regras vigentes do projeto (decisões do dono que valem agora):', ...Array.from({ length: n }, (_, i) => `- [note:${i}] «pergunta ${i} ${'x'.repeat(80)}»: «resposta»`)].join('\n');
+  const all = (rules = rulesOf(9)) =>
+    projectSystemPrompt(
+      { name: 'postream', key: 'PST' },
+      [{ machine: 'jarvis', cwd: '/home/x/postream' }],
+      [...STANDING_GRANT_KINDS],
+      [{ name: 'grupo', siblings: Array.from({ length: 40 }, (_, i) => `projeto ${i}`) }],
+      [...DEFAULT_ALLOW_KINDS],
+      Array.from({ length: 30 }, (_, i) => ({ pattern: `gh pr checks ${i}`, match: 'prefix' as const })),
+      rules,
+    );
+
+  it('fits the cap, so the orchestrator prompt and this one fit the open frame', () => {
+    const text = all();
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(streamedSystemPrompt(text).length).toBeLessThanOrEqual(8000);
+    expect(text).toContain('jarvis → /home/x/postream');
+    expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+  });
+
+  it('gives up the groups and command rules first, keeping the rules whole when that is enough', () => {
+    // six rules: the how-to-lift line (TER-1164) is always told and takes the room of three more
+    const text = all(rulesOf(6));
+    expect(text).not.toContain('Its sidebar groups');
+    expect(text).not.toContain('run_command roda sem confirmação');
+    expect(text).toContain('- [note:5]');
+    expect(text).not.toContain('outras em search_memory');
+    expect(text).toContain('Liberado sem confirmação neste projeto');
+    expect(text).toContain('Liberado sem confirmação por padrão');
+  });
+
+  it('then trims the rules at a rule end and points to search_memory', () => {
+    const text = all(rulesOf(20));
+    expect(text).toContain('- [note:0]');
+    expect(text).not.toContain('- [note:19]');
+    expect(text).toMatch(/»: «resposta»\n- … \(outras em search_memory\)\nAnswer about this project/);
+    expect(text).toContain('Liberado sem confirmação por padrão');
+  });
+
+  it('keeps every line when they fit', () => {
+    const text = projectSystemPrompt(p, links, ['board'], [{ name: 'g', siblings: ['a'] }], [...DEFAULT_ALLOW_KINDS], [{ pattern: 'git status', match: 'exact' }], rulesOf(1));
+    for (const s of ['Its sidebar groups', 'run_command roda sem confirmação', '- [note:0]', 'Liberado sem confirmação neste projeto', 'Liberado sem confirmação por padrão']) expect(text).toContain(s);
+    expect(text).not.toContain('outras em search_memory');
+  });
+
+  it('never goes over the cap, even with a rules block far past its own cap', () => {
+    expect(all(rulesOf(60)).length).toBeLessThanOrEqual(4000);
+  });
 });
 
 const p = { name: 'notify', key: 'NOT' };
@@ -315,5 +392,26 @@ describe('commandRulesLine (TER-1081)', () => {
     const line = commandRulesLine(rules);
     expect(line).toContain('…');
     expect(projectSystemPrompt({ name: 'App', key: 'APP' }, [], [], [], [], rules).length).toBeLessThanOrEqual(4000);
+  });
+});
+
+// TER-1164: with the open model on, the chat is told the core and the blocks instead of the grants.
+describe('open permissions line (TER-1164)', () => {
+  it('replaces the grants, defaults, command rules and how-to-lift lines', () => {
+    const text = projectSystemPrompt({ name: 'X', key: 'X' }, [], ['terminal'], [], ['board'], [{ pattern: 'git status', match: 'exact' }], null, ['rodar «git push…» no projeto X (pedir antes; id b1)']);
+    expect(text).toContain('Permissões: liberado por padrão');
+    expect(text).toContain('Sempre pedem confirmação: apagar card');
+    expect(text).toContain('rodar «git push…» no projeto X (pedir antes; id b1)');
+    expect(text).toContain('block_action');
+    for (const s of ['Liberado sem confirmação neste projeto', 'Liberado sem confirmação por padrão', 'run_command roda sem confirmação', 'Como o usuário libera']) expect(text).not.toContain(s);
+  });
+
+  it('says there is no block when there is none, and stays under the cap with many', () => {
+    expect(projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], [], [], null, [])).toContain('Bloqueios do usuário (pedir antes = card; nunca = recusado): nenhum.');
+    const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
+    const many = Array.from({ length: 100 }, (_, i) => `rodar «cmd-${i}…» em todos os projetos (pedir antes; id b${i})`);
+    const text = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links, [], [], [], [], null, many);
+    expect(text.length).toBeLessThanOrEqual(4000);
+    expect(text.endsWith('Keep answers short unless asked for detail.')).toBe(true);
   });
 });

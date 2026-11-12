@@ -10,9 +10,12 @@ const SIGNALS: { key: HealthSignal; label: string; light?: boolean }[] = [
   { key: 'run_blocked', label: tk('Execução bloqueada sem resposta') },
   { key: 'delivery_failed', label: tk('Deploy ou release com falha') },
   { key: 'agent_outdated', label: tk('Agente abaixo do mínimo') },
+  { key: 'epic_zombie', label: tk('Épico em andamento sem história ativa nem PR') },
+  { key: 'done_unmerged', label: tk('Card em Feito com PR não mesclado') },
   { key: 'tab_stuck', label: tk('Aba "trabalhando" sem nenhum evento'), light: true },
   { key: 'tab_waiting', label: tk('Aba esperando resposta (pergunta, permissão, confiança, login)'), light: true },
   { key: 'machine_offline', label: tk('Máquina offline com trabalho do projeto'), light: true },
+  { key: 'agent_exited', label: tk('Agente fora do ar em aba ligada a card ou acompanhada pelo chat'), light: true },
 ];
 
 /**

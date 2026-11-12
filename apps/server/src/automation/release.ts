@@ -13,6 +13,9 @@ import { escalateDelivery } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { globMatches } from './policy.js';
 import { inRunRepo, isRunHead, runRepoOf } from './run-pr.js';
+import { deliveryPending, finished, followsReleases } from './delivery.js';
+
+export { deliveryPending };
 
 /*
  * After a merge (agentic board D22, §10.5): follow the project's deploy workflow and, for a PR that changed
@@ -40,20 +43,6 @@ export interface DeliveryCtx {
   token: string;
   repo: string;
   setup: ProjectSetupData;
-}
-
-const finished = (s: CiState): boolean => s === 'passed' || s === 'failed';
-
-/** Whether the PR's release workflows are followed: automation on, the PR changed a release path (F-31). */
-function followsReleases(setup: ProjectSetupData, w: TaskPullRequest): boolean {
-  return !!setup.automation?.enabled && w.changed_level === 'release' && setup.automation.release_workflows.length > 0;
-}
-
-/** Whether a merged PR still has a delivery run to wait for (its deploy, or one of its release workflows). */
-export function deliveryPending(setup: ProjectSetupData, w: TaskPullRequest): boolean {
-  if (setup.repo?.deploy_workflow && !finished(w.deploy_state)) return true;
-  if (!followsReleases(setup, w)) return false;
-  return setup.automation.release_workflows.some((wf) => !finished(w.release_runs.find((r) => r.workflow === wf)?.state ?? 'none'));
 }
 
 /**

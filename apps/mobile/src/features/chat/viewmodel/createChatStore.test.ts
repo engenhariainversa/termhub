@@ -1816,6 +1816,44 @@ it("a context event moves the header's meter, keeping the last compaction when a
   expect(slot(chat, 'p-termhub').conversation).toMatchObject({ context_tokens: 25_000, context_compacted_at: '2026-10-07T12:00:00.000Z' });
 });
 
+describe('"Compactar" (TER-1152)', () => {
+  it('`/compact` alone compacts the open conversation instead of reaching the concierge', async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const compact = jest.spyOn(api, 'compact');
+    const sendMessage = jest.spyOn(api, 'sendMessage');
+    const before = slot(chat, 'p-termhub').messages.length;
+    await expect(chat.getState().send(' /compact ')).resolves.toBe(true);
+    await flush();
+    expect(compact).toHaveBeenCalledWith(expect.anything(), 'p-termhub');
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(slot(chat, 'p-termhub').messages).toHaveLength(before);
+  });
+
+  it('follows the compact events: under way, then what it did, or why it failed', async () => {
+    const { chat, handlers } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    const base = { user_id: 'u1', conversation_id: 'c-termhub', tokens_before: null, tokens: null, error_code: null };
+    handlers().onEvent({ type: 'compact', ...base, state: 'started' });
+    expect(slot(chat, 'p-termhub').compacting).toBe(true);
+    handlers().onEvent({ type: 'compact', ...base, state: 'done', tokens_before: 411_000, tokens: 52_000 });
+    expect(slot(chat, 'p-termhub')).toMatchObject({ compacting: false, compactNote: 'Conversa compactada: 411k → 52k tokens' });
+    handlers().onEvent({ type: 'compact', ...base, state: 'started' });
+    handlers().onEvent({ type: 'compact', ...base, state: 'failed', error_code: 'HOST_GONE' });
+    expect(slot(chat, 'p-termhub').compacting).toBe(false);
+    expect(chat.getState().error).toBe('A máquina do chat saiu do ar durante a compactação');
+  });
+
+  it("a refusal ends the compaction with the server's own sentence", async () => {
+    const { chat, api } = await setup();
+    await openAndConnect(chat, 'p-termhub');
+    jest.spyOn(api, 'compact').mockRejectedValueOnce(new ApiError(409, 'CHAT_NOTHING_TO_COMPACT', 'Ainda não há contexto para compactar nesta conversa'));
+    await chat.getState().compact();
+    expect(slot(chat, 'p-termhub').compacting).toBe(false);
+    expect(chat.getState().error).toBe('Ainda não há contexto para compactar nesta conversa');
+  });
+});
+
 describe('watches ("Acompanhando", TER-1099)', () => {
   const watch = (patch: Partial<TWatchView> = {}): TWatchView => ({
     id: 'w1',

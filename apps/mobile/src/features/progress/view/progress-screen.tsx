@@ -5,9 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PauseCard } from '@/features/automation/view/pause-card';
 import { relativeTime } from '@/features/shared/relative-time';
 import { useTranslation } from '@/i18n';
-import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicProgress } from '@/services/api/contract';
+import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicLifecycle, TEpicProgress } from '@/services/api/contract';
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
-import { ciLabel, epicCiLine, formatEstimate, stateLabel, usageLine } from '../model/format';
+import { ciLabel, epicCiLine, formatEstimate, lifecycleLine, stateLabel, usageLine } from '../model/format';
 import { feedLine, feedWhy } from '../model/feed';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
@@ -71,6 +71,25 @@ function Feed({ feed }: { feed: TAutomationFeedEvent[] }) {
   );
 }
 
+const PHASE_TONE: Partial<Record<TEpicLifecycle['phase'], string>> = { failed: 'text-red-400', integrating: 'text-amber-400', delivering: 'text-amber-400', done: 'text-emerald-400' };
+
+/** TER-1150: the automatic epic's phase, its branch and its own PR (a link). */
+function EpicLifecycleLine({ lifecycle }: { lifecycle: TEpicLifecycle }) {
+  const { t } = useTranslation();
+  const pr = lifecycle.pull_request;
+  return (
+    <View className="mt-1 flex-row flex-wrap items-center gap-2">
+      <Text className={`text-xs ${PHASE_TONE[lifecycle.phase] ?? 'text-zinc-400'}`}>{lifecycleLine(lifecycle)}</Text>
+      {lifecycle.branch ? <Text className="text-xs text-zinc-500">{lifecycle.branch}</Text> : null}
+      {pr ? (
+        <Pressable onPress={() => void Linking.openURL(pr.url)} accessibilityRole="link">
+          <Text className="text-xs text-indigo-300">{`${t('PR #{{number}}', { number: pr.number })} · ${ciLabel(pr)}`}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 function Epic({ epic }: { epic: TEpicProgress }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -98,6 +117,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
         {epic.ci_error && <Text className="text-xs text-red-400">{epic.ci_error}</Text>}
         {waiting > 0 && <Text className="text-xs text-amber-400">{t('{{count}} agentes esperando você', { count: waiting })}</Text>}
       </Pressable>
+      {epic.lifecycle ? <EpicLifecycleLine lifecycle={epic.lifecycle} /> : null}
       {open &&
         epic.cards.map((c) => (
           <View key={c.id} className="mt-3 gap-1">

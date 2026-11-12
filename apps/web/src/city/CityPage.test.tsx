@@ -80,7 +80,10 @@ beforeEach(() => {
   socket.onClosed = null;
   socket.opened = 0;
   socket.closed = 0;
-  vi.stubGlobal('fetch', fetchMock);
+  // the beta card's legal footer is its own read; the snapshot reads are what these tests count
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+    url === '/api/public/legal' ? Promise.resolve(json({ terms_url: null, privacy_url: null, legal_entity: null })) : fetchMock(url, init),
+  );
   localStorage.clear();
 });
 

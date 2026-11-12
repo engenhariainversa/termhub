@@ -48,6 +48,8 @@ export type ChatEvent =
        * part of the mobile contract — its schema strips it. */
       /** TER-1081: what a run_command card offers to allow for good (`ChatActionCard.command_rule`). */
       command_rule?: { exact: string; prefix: string | null };
+      /** TER-1153: the card's target no longer resolves (`ChatActionCard.target_gone`): no grant buttons. */
+      target_gone?: true;
       origin_update?: true;
       /** When the card was last brought back to the end of the chat (TER-477): screens order by it. */
       surfaced_at?: string | null;

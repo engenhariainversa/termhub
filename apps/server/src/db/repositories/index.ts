@@ -31,6 +31,7 @@ import { ChatWatchesRepository } from './chat-watches.js';
 import { ConciergeNoticesRepository } from './concierge-notices.js';
 import { ChatFileGrantsRepository } from './chat-file-grants.js';
 import { ChatDefaultRestrictionsRepository } from './chat-default-restrictions.js';
+import { ChatBlocksRepository } from './chat-blocks.js';
 import { ChatSubagentsRepository } from './chat-subagents.js';
 import { ChatLiveRunsRepository } from './chat-live-runs.js';
 import { TabQuestionsRepository } from './tab-questions.js';
@@ -101,6 +102,7 @@ export interface Repositories {
   conciergeNotices: ConciergeNoticesRepository;
   chatFileGrants: ChatFileGrantsRepository;
   chatDefaultRestrictions: ChatDefaultRestrictionsRepository;
+  chatBlocks: ChatBlocksRepository;
   chatSubagents: ChatSubagentsRepository;
   chatLiveRuns: ChatLiveRunsRepository;
   tabQuestions: TabQuestionsRepository;
@@ -175,6 +177,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     conciergeNotices: new ConciergeNoticesRepository(db),
     chatFileGrants: new ChatFileGrantsRepository(db),
     chatDefaultRestrictions: new ChatDefaultRestrictionsRepository(db),
+    chatBlocks: new ChatBlocksRepository(db),
     chatSubagents: new ChatSubagentsRepository(db),
     chatLiveRuns: new ChatLiveRunsRepository(db),
     tabQuestions: new TabQuestionsRepository(db),

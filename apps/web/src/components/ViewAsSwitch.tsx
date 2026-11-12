@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import type { User } from '../lib/types';
 import { viewAsLabel } from '../lib/view-as';
+import { Combobox } from './Combobox';
 
 /**
  * Admin-only data-scope switch: the app normally shows an admin their own machines, like any user;
@@ -51,15 +52,18 @@ export function ViewAsSwitch() {
       </button>
       {open && (
         <div className="mt-1 space-y-1">
-          <select className="input w-full py-1 text-xs" value={current} disabled={busy} onChange={(e) => void choose(e.target.value)}>
-            <option value="me">{t('Eu ({{name}})', { name: user?.name ?? '' })}</option>
-            <option value="all">{t('Todas as máquinas (todos os usuários)')}</option>
-            {(users ?? []).filter((u) => u.id !== user?.id).map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} — {u.email}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            className="w-full py-1 text-xs"
+            aria-label={t('Ver como…')}
+            value={current}
+            disabled={busy}
+            onChange={(v) => void choose(v)}
+            options={[
+              { value: 'me', label: t('Eu ({{name}})', { name: user?.name ?? '' }) },
+              { value: 'all', label: t('Todas as máquinas (todos os usuários)') },
+              ...(users ?? []).filter((u) => u.id !== user?.id).map((u) => ({ value: u.id, label: u.name, hint: u.email })),
+            ]}
+          />
           {viewAs && (
             <button className="w-full rounded px-2 py-1 text-xs text-fg-muted hover:bg-bg-3 hover:text-fg" disabled={busy} onClick={() => void choose('me')}>
               {t('Voltar a ver como eu')}

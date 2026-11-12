@@ -274,10 +274,18 @@ describe('defaultKindOf (TER-627)', () => {
     ['resume_automation_run', {}, null],
   ])('%s %j → %s', (tool, args, expected) => expect(defaultKindOf(tool, args)).toBe(expected));
 
+  it('create_project is a write no grant or default covers: in the chat it always asks on a card (TER-1163)', () => {
+    const args = { name: 'Piki', key: 'PIKI', machine_id: 'm1', cwd: '/srv/piki' };
+    expect(actionClass('create_project', args)).toBe('write');
+    expect(standingKindOf('create_project', args)).toBeNull();
+    expect(defaultKindOf('create_project', args)).toBeNull();
+    expect(boardGrantable('create_project')).toBe(false);
+  });
+
   it('every MCP tool is a read, self-mediated, a default kind, or on the list that always asks: a new tool is placed on purpose', () => {
     // report_card is a tab tool (agentic board F-8): only a tab with an active run lists it, never the concierge;
     // unclassified, it would ask like any unknown tool
-    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot', 'set_project_ai_setup']);
+    const alwaysAsks = new Set(['run_command', 'propose_command_rule', 'delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'create_project', 'link_project_machine', 'set_project_machine_cwd', 'unlink_project_machine', 'sync_tickets', 'import_tickets', 'resume_automation', 'resume_automation_run', 'report_card', 'set_machine_automation', 'set_ai_account_exclusive', 'install_machine_hooks', 'update_machine_agent', 'wake_machine', 'start_ai_login', 'submit_ai_login_code', 'share_file', 'admin_user_troubleshoot', 'set_project_ai_setup', 'unblock_action']);
     const sample: Record<string, Record<string, unknown>> = {
       open_tab: { project_id: 'p1' }, start_agent: { project_id: 'p1' }, link_tab_task: { tab_id: 't1', task_id: 'k1' }, close_tab: { tab_id: 't1' },
       send_input: { tab_id: 't1', text: 'x' }, send_key: { tab_id: 't1', key: 'Enter' },

@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentOnCard, EpicProgress, PullRequestBadge, Tab } from './types';
-import { ciLabel, epicCiLine, formatDuration, formatEstimate, needsYouAgents, stateLabel, withLiveTab } from './progress';
+import { ciLabel, epicCiLine, formatDuration, formatEstimate, lifecycleLine, needsYouAgents, stateLabel, withLiveTab } from './progress';
 
 const agent = (over: Partial<AgentOnCard> = {}): AgentOnCard => ({
   tab_id: 't1', tab_name: 'agent', machine_name: 'jarvis', subtask_ref: null, state: 'working', state_at: '2026-09-27T12:00:00.000Z',
   background: false, finished: false, needs_you: false, activity: 'coding', activity_verb: 'Coding', rate_limited: false, ...over,
+});
+
+describe('lifecycleLine (TER-1150)', () => {
+  const life = { branch: 'epic/TER-1-x', started_at: '2026-10-20T12:00:00.000Z', done_at: null, pull_request: null, failure: null } as const;
+  it('names the phase, since when the epic lives, why it failed and when it died', () => {
+    expect(lifecycleLine({ ...life, phase: 'not_started', started_at: null })).toBe('não começou');
+    expect(lifecycleLine({ ...life, phase: 'delivering' })).toMatch(/^na base · entrega em andamento · desde \d/);
+    expect(lifecycleLine({ ...life, phase: 'failed', failure: 'deploy' })).toMatch(/^falhou: deploy · desde /);
+    expect(lifecycleLine({ ...life, phase: 'done', done_at: '2026-10-28T12:00:00.000Z' })).toMatch(/^concluído em \d/);
+  });
 });
 
 describe('formatDuration', () => {

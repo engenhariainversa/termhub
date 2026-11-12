@@ -127,6 +127,13 @@ export interface MemoryFilter {
   includeInactive?: StatusSearch['includeInactive'];
   /** TER-1015: also rows a newer note replaced, but still not the wrong or outdated ones. */
   includeSuperseded?: StatusSearch['includeSuperseded'];
+  /**
+   * TER-1169: what of the owner's other projects a search held to `projectId` also reads. A note
+   * scoped `user` always comes (it holds everywhere); besides it, `notes` brings every other note —
+   * one scoped to its own project included, so the caller must mark it as not holding here — and
+   * `lessons` the lessons, all of them or only the verified ones. Never another owner's rows.
+   */
+  otherProjects?: { notes: boolean; lessons: 'none' | 'verified' | 'all' };
 }
 
 /** Row shape shared by the raw queries below: every `memory_items` column but `embedding` itself
@@ -177,8 +184,11 @@ const SCOPE_SQL = Prisma.raw(`(CASE WHEN m.kind <> 'note' THEN 'user' ELSE COALE
 
 /** The row's scope covers the filter's place (TER-1014). Expiry is part of the status (TER-1013):
  *  `statusFilter` leaves expired rows out unless the filter asks for them. */
-const holdsFilter = (filter: MemoryFilter): Prisma.Sql =>
-  holdsAtSql({ scope: SCOPE_SQL, projectId: Prisma.raw('m.project_id'), conversationId: Prisma.raw('m.conversation_id'), expiresAt: Prisma.raw('m.expires_at') }, filter.place ?? {}, true);
+const holdsFilter = (filter: MemoryFilter): Prisma.Sql => {
+  // Notes of other projects (TER-1169) are read whatever their scope; conversations stay their own.
+  const place = filter.otherProjects?.notes ? { ...filter.place, projectId: undefined } : (filter.place ?? {});
+  return holdsAtSql({ scope: SCOPE_SQL, projectId: Prisma.raw('m.project_id'), conversationId: Prisma.raw('m.conversation_id'), expiresAt: Prisma.raw('m.expires_at') }, place, true);
+};
 
 /** pgvector's text input format: `[x,y,z]`. Never-finite components (NaN, Infinity) are zeroed rather
  *  than sent malformed, since a bad embedding would otherwise fail the whole write. */
@@ -201,6 +211,23 @@ const markHash = (r: { kind: string; content_hash: string; source_hash: string |
 const MARK_HASH_SQL = Prisma.raw(`(CASE WHEN m."kind" = 'lesson' THEN COALESCE(m."source_hash", m."content_hash") ELSE m."content_hash" END)`);
 /** "Not hidden" (`hideSource`): no mark, or a mark for a text that has since changed. */
 const NOT_HIDDEN = Prisma.sql`(m.hidden_hash IS NULL OR m.hidden_hash <> ${MARK_HASH_SQL})`;
+/** `verified` in SQL: marked, and the text has not changed since (`markHash`). */
+const VERIFIED = Prisma.sql`(m.verified_at IS NOT NULL AND m.verified_hash = ${MARK_HASH_SQL})`;
+
+/**
+ * Which projects a search reads (TER-1169): every one without `projectId`; with it, that project's
+ * rows, the notes scoped `user` of any project (they hold everywhere: TER-1014), and what
+ * `otherProjects` adds from the owner's other projects.
+ */
+function projectSql(filter: MemoryFilter): Prisma.Sql {
+  if (!filter.projectId) return Prisma.sql`TRUE`;
+  const parts = [Prisma.sql`m.project_id = ${filter.projectId}`, Prisma.sql`(m.kind = 'note' AND ${SCOPE_SQL} = 'user')`];
+  const other = filter.otherProjects;
+  if (other?.notes) parts.push(Prisma.sql`m.kind = 'note'`);
+  if (other?.lessons === 'all') parts.push(Prisma.sql`m.kind = 'lesson'`);
+  else if (other?.lessons === 'verified') parts.push(Prisma.sql`(m.kind = 'lesson' AND ${VERIFIED})`);
+  return Prisma.sql`(${Prisma.join(parts, ' OR ')})`;
+}
 /** TER-1013: only current rows, unless the search asked for every status. */
 const statusFilter = (f: MemoryFilter) => statusSearchSql('m', f);
 
@@ -389,7 +416,7 @@ export class MemoryItemsRepository {
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId} AND m.embedding IS NOT NULL AND m.embed_model = ${embedModel}
         AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
-        AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
+        AND ${projectSql(filter)}
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND ${holdsFilter(filter)}
       ORDER BY m.embedding <=> ${v}::vector
@@ -407,7 +434,7 @@ export class MemoryItemsRepository {
       FROM "memory_items" m CROSS JOIN q LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${filter.ownerId}
         AND ${NOT_HIDDEN} AND ${statusFilter(filter)}
-        AND (${filter.projectId ?? null}::text IS NULL OR m.project_id = ${filter.projectId ?? null})
+        AND ${projectSql(filter)}
         AND (${filter.kinds ?? null}::text[] IS NULL OR m.kind = ANY(${filter.kinds ?? null}::text[]))
         AND ${holdsFilter(filter)}
         AND numnode(q.tsq) > 0
@@ -541,7 +568,7 @@ export class MemoryItemsRepository {
 
   /**
    * The owner's current rules for a project (TER-1011): the concierge's notes (`record_decision`) of this
-   * project and the account-wide ones, newest first, at most `limit` — never one the person marked wrong,
+   * project and the account-wide ones — no project, or scoped `user` in any project (TER-1169) — newest first, at most `limit` — never one the person marked wrong,
    * superseded or outdated, nor one past its validity or recorded for one conversation only.
    *
    * Those marks (`wrong_at`, `superseded_at`, `expires_at`, `scope`) come from sibling cards of the same
@@ -554,11 +581,20 @@ export class MemoryItemsRepository {
       SELECT ${ITEM_COLUMNS}, p.name AS project_name
       FROM "memory_items" m LEFT JOIN "projects" p ON p.id = m.project_id
       WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.chunk_index = 0
-        AND (m.project_id = ${projectId} OR m.project_id IS NULL)
+        AND (m.project_id = ${projectId} OR ${SCOPE_SQL} = 'user')
         AND ${CURRENT_NOTE}
       ORDER BY m.created_at DESC, m.id DESC
       LIMIT ${limit}`;
     return rows.map(mapRaw);
+  }
+
+  /** How many current notes the owner has in this project (TER-1169: part of whether it has history). */
+  async countProjectNotes(ownerId: string, projectId: string): Promise<number> {
+    const rows = await this.db.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM "memory_items" m
+      WHERE m.owner_id = ${ownerId} AND m.kind = 'note' AND m.chunk_index = 0 AND m.project_id = ${projectId}
+        AND ${CURRENT_NOTE}`;
+    return Number(rows[0]?.n ?? 0);
   }
 
   /** "Esquecer": only the owner's own note, never a card/message/action/doc chunk. */

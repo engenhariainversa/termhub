@@ -5,6 +5,7 @@ import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup, type BatchDecision } from './ChatActionGroup';
 import { ChatActionTrail } from './ChatActionTrail';
 import { ChatComposer } from './ChatComposer';
+import { ChatContextBadge } from './ChatContextBadge';
 import { ChatContextMeter } from './ChatContextMeter';
 import { ChatHost } from './ChatHost';
 import { ChatPendingBar } from './ChatPendingBar';
@@ -34,6 +35,7 @@ import { isActive, upsertSubagent } from '../../lib/subagents';
 import { PROMPT_CHANGED_TEXT, upsertTabQuestion } from './tab-question-text';
 import { SUGGESTION_CHANGED_TEXT, upsertTabSuggestion } from './tab-suggestion-text';
 import { useAuth } from '../../lib/auth';
+import { useOptionalData } from '../../lib/data';
 import type { AiAccount, ChatAction, ChatAttachment, ChatDecisionWord, ChatEvent, ChatGrant, ChatHostMachine, ChatHostState, ChatCommandRule, ChatMessage, ChatProjectGrant, ChatStandingGrant, ChatWatch, SubagentView, TabQuestion, TabLimit, TabQuestionAnswer, TabSuggestion } from '../../lib/types';
 
 /** How often the panel's elapsed labels ("há N min") refresh while it is open. */
@@ -99,6 +101,9 @@ const TabSuggestionRow = memo(function TabSuggestionRow({
   return <TabSuggestionCard suggestion={suggestion} busy={busy} error={error} onSend={send} onDismiss={dismiss} />;
 });
 
+/** Chat tools whose run changes the projects list (a new project, a machine linked or unlinked). */
+const PROJECT_LIST_TOOLS = new Set(['create_project', 'link_project_machine', 'unlink_project_machine']);
+
 /**
  * The concierge chat: streamed live over /ws/chat and persisted over REST. `projectId === null` is the
  * account-wide chat (`/chat`, where the host is chosen); a project id is that project's own chat,
@@ -124,6 +129,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
    * assume one row per proposal or per tool.
    */
   const [actions, setActions] = useState<ChatAction[]>([]);
+  // TER-1163: an approved create_project (or a link change) shows in the sidebar at once, not at the next focus.
+  const data = useOptionalData();
+  const actionsRef = useRef(actions);
+  const refreshData = useRef(data?.refresh);
+  useEffect(() => {
+    actionsRef.current = actions;
+    refreshData.current = data?.refresh;
+  });
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   /** A `queued: true` decision is not an error: the pt-BR note the server sent, shown under that card
@@ -403,8 +416,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // new `surfaced_at`) — merged in, never re-added.
         setActions((prev) =>
           prev.some((a) => a.id === e.action_id)
-            ? prev.map((a) => (a.id === e.action_id ? { ...a, ...(e.subagent ? { subagent: e.subagent } : {}), ...(e.surfaced_at ? { surfaced_at: e.surfaced_at } : {}) } : a))
-            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null, ...(e.command_rule ? { command_rule: e.command_rule } : {}) }],
+            ? prev.map((a) => (a.id === e.action_id ? { ...a, ...(e.subagent ? { subagent: e.subagent } : {}), ...(e.surfaced_at ? { surfaced_at: e.surfaced_at } : {}), ...(e.target_gone ? { target_gone: true as const } : {}) } : a))
+            : [...prev, { id: e.action_id, tool: e.tool, args: e.args, class: e.class, status: 'pending', machine_id: e.machine_id, project_id: e.project_id, tab_id: e.tab_id, summary: e.summary, subagent: e.subagent, created_at: e.created_at, surfaced_at: e.surfaced_at ?? null, ...(e.command_rule ? { command_rule: e.command_rule } : {}), ...(e.target_gone ? { target_gone: true as const } : {}) }],
         );
       } else if (e.type === 'decision') {
         // Someone answered — possibly in another open tab. Keyed on the action id alone.
@@ -413,6 +426,8 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
         // The gate ran it, or it failed or went stale (TER-477): the card reads so without a reload. An
         // id not on screen (outside the loaded window) is left to the next read.
         setActions((prev) => (prev.some((a) => a.id === e.action_id) ? prev.map((a) => (a.id === e.action_id ? { ...a, status: e.status, error_code: e.error_code } : a)) : prev));
+        const tool = actionsRef.current.find((a) => a.id === e.action_id)?.tool;
+        if (e.status === 'executed' && tool && PROJECT_LIST_TOOLS.has(tool)) void refreshData.current?.();
       } else if (e.type === 'grant') setGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && !(g.tab_id === e.grant.tab_id && g.tool === e.grant.tool)), e.grant]);
       else if (e.type === 'grant_revoked') setGrants((prev) => prev.filter((g) => g.id !== e.grant_id));
       else if (e.type === 'project_grant') setProjectGrants((prev) => [...prev.filter((g) => g.id !== e.grant.id && g.project_id !== e.grant.project_id), e.grant]);
@@ -1129,9 +1144,14 @@ export function ChatPanel({ projectId }: { projectId: string | null }) {
     // `waiting_permission` in backticks, a long path — widened this column past the viewport and
     // took the composer's send button off screen with it.
     <div ref={rootRef} className="mx-auto flex min-h-0 w-full min-w-0 max-w-3xl flex-1 flex-col px-4" onKeyDown={onPanelKeyDown}>
-      {/* The header shows one cog (TER-1039); the context, the host, the subagents, the trusted tabs and
+      {/* The header shows the context badge (TER-1151) and one cog (TER-1039); the context's details, the host, the subagents, the trusted tabs and
        *  starting over live in the dialog it opens. The dot keeps what mattered at a glance in sight. */}
-      <ChatSettingsButton open={settingsOpen} attention={activeSubagents.length > 0 || contextLevel(context?.tokens == null ? null : contextShare(context.tokens, contextMax(context.window ?? null, contextLimit))) !== 'ok'} onOpen={() => setSettingsOpen(true)} />
+      <ChatSettingsButton
+        open={settingsOpen}
+        attention={activeSubagents.length > 0 || contextLevel(context?.tokens == null ? null : contextShare(context.tokens, contextMax(context.window ?? null, contextLimit))) !== 'ok'}
+        onOpen={() => setSettingsOpen(true)}
+        before={<ChatContextBadge tokens={context?.tokens ?? null} window={context?.window ?? null} limit={contextLimit} compactedAt={context?.compacted_at ?? null} compacting={compacting} canCompact={canCompact} onCompact={() => void compact()} />}
+      />
       <ChatSettingsDialog
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

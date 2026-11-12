@@ -1,0 +1,3 @@
+-- A modal dialog of the agent CLI holds the tab's input (TER-1166): "Teach auto mode", "Hooks need review"…
+-- Adding an enum value is backward compatible: the release still serving during the switch never writes it.
+ALTER TYPE "TabState" ADD VALUE 'cli_dialog';

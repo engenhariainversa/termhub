@@ -145,7 +145,7 @@ O legítimo interesse precisa de um relatório (LIA) documentado?
 
 | # | Decisão | Onde aparece | Sugestão |
 |---|---|---|---|
-| D-1 | Razão social, CNPJ e endereço do controlador. O GitHub e a conta do Expo estão em nome da "Engenharia Inversa", que nos cards aparece como **parceiro** e não como o próprio termhub. Quem assina? | Termos 1.1; Política 2.1 | definir antes da revisão |
+| D-1 | Razão social, CNPJ e endereço do controlador. O GitHub e a conta do Expo estão em nome da "Engenharia Inversa", que nos cards aparece como **parceiro** e não como o próprio termhub. Quem assina? | Termos 1.1 e 8.4; Política 2.1 e 15 | **decidido no TER-1155**: **8020 Digital Ltda**, CNPJ 32.285.763/0001-12, controladora em todos os projetos da org `engenhariainversa`; a mesma linha vai no rodapé do site, do login do app web, da cidade pública e do app móvel. Falta o endereço |
 | D-2 | E-mails de contato e do encarregado | Termos 17; Política 2.2 | `contato@termhub.dev` e `privacidade@termhub.dev` (criar) |
 | D-3 | País e estado onde o servidor fica, e se haverá mudança de hospedagem antes do lançamento | Política 6 e 7 | declarar "Brasil, [estado]" |
 | D-4 | Provedor de SMTP de produção | Política 6 | — |
@@ -177,7 +177,7 @@ A Política foi escrita como **deve ficar**. Ela só pode ser publicada quando e
 | P-10 | ~~**Exportação dos dados** (portabilidade)~~ | **entregue no TER-741**: Perfil → "Exportar meus dados" gera um zip (JSON + anexos do chat) em segundo plano, avisa por e-mail e fica para baixar por 7 dias, só pela própria conta; um pedido por dia; sem senhas, tokens nem segredos | `apps/server/src/account/data-export.ts`; `apps/server/src/db/repositories/data-exports.ts` | LGPD, art. 18, V |
 | P-11 | ~~Prazos de retenção automáticos para chat, `tab_last_answers`, `tab_events`, memória e lista de espera~~ | **entregue no TER-743**: histórico das abas 90 dias, lista de espera 12 meses (da inscrição ou do último convite), expurgo de hora em hora; chat, últimas respostas e memória ficam enquanto a conta existir, e o usuário apaga uma conversa inteira em "Apagar conversa" | `apps/server/src/retention/purge.ts`; `apps/server/src/chat/service.ts` (`deleteConversation`) | — |
 | P-12 | **Aceite dos Termos e da Política**: versão e data por usuário, no cadastro e no checkout, e novo aceite quando houver mudança relevante | não existe | — | lançamento (TER-717) |
-| P-13 | **Links para os Termos e a Política** no rodapé do site, no login do app web, em Ajustes e na tela inicial do app móvel | não existem; as páginas `/termos` e `/privacidade` também não | `apps/landing/vite.config.ts:13-17`; `apps/landing/src/Site.tsx:10`; `apps/landing/src/i18n.ts:190` | lojas |
+| P-13 | ~~**Links para os Termos e a Política** no rodapé do site, no login do app web, em Ajustes e na tela inicial do app móvel~~ | **entregue**: rodapé do site, login e Perfil do app web, tela inicial e Ajustes do app móvel; o TER-1155 acrescentou a razão social e o CNPJ nesses lugares e no cartão do beta da cidade pública | `apps/landing/src/Site.tsx`; `apps/web/src/city/LegalFooter.tsx`; `apps/mobile/src/features/legal/view/legal-links.tsx` | — |
 | P-14 | ~~Google Fonts carregado antes do consentimento~~ | **resolvido no TER-583**: Inter e JetBrains Mono servidas pelo próprio site (`@fontsource`) | `apps/landing/src/index.css` | — |
 | P-15 | ~~Analytics do app móvel com consentimento~~ | **resolvido no TER-583**: `analytics_storage` e a coleta seguem o consentimento de "Métricas de uso e anúncios"; falta só o padrão nativo (`apps/mobile/firebase.json`) no próximo build de loja, para a primeira abertura de uma instalação nova | `apps/mobile/src/services/analytics.ts` | — |
 | P-16 | `docs/security-and-network.md:28` diz que o app web não tem scripts de terceiros, mas ele carrega o Google Analytics depois do consentimento | doc desatualizado | `apps/web/src/lib/analytics.ts` | coerência |
@@ -267,3 +267,27 @@ Valem depois de D-5, P-1 e P-3. Se D-5 for consentimento, "Product Interaction" 
 | Device or other IDs (inclui o Advertising ID, com consentimento) | sim | sim (Advertising ID) | Advertising ID opcional | App functionality, Analytics, Advertising |
 
 Mais no Play Console: declaração **Advertising ID** = sim; URL de exclusão de conta = D-8; URL da Política = D-8.
+
+## Anexo C: inventário de rastreadores e terceiros (TER-1155, código em 30/10/2026)
+
+Feito antes de nomear a 8020 Digital Ltda como controladora, para conferir se a Política cobre o que o produto realmente faz. Busca no código por GA/GTM, Meta Pixel, PostHog, Mixpanel, Clarity, Hotjar, Amplitude, Segment, Datadog, Sentry, Bugsnag, Firebase, Stripe, Mercado Pago, Pagar.me, Asaas e provedores de e-mail.
+
+| Terceiro / tecnologia | Onde | O que recebe | Na Política | Evidência |
+|---|---|---|---|---|
+| Google Analytics 4 via Firebase JS (`gtag`, `googletagmanager.com`) | site e app web, só depois do "Aceitar" | navegação, eventos, IP; cookies `_ga`, `_ga_*` | seções 6 e 9 | `apps/landing/src/analytics.ts`; `apps/landing/src/consent.ts`; `apps/web/src/lib/analytics.ts`; CSP em `apps/server/src/lib/security-headers.ts` |
+| Google Analytics for Firebase (nativo) | app móvel, coleta desligada até o consentimento | telas abertas, identificador de instalação, IP; com consentimento, sinais de anúncio | seções 6 e 9.2 | `apps/mobile/src/services/analytics.ts`; `apps/mobile/firebase.json`; `apps/mobile/src/features/permissions/view/ad-consent-card.tsx` |
+| Apple ATT (`expo-tracking-transparency`) | app iOS | pedido de permissão do IDFA | seção 9.2 | `apps/mobile/package.json`; `apps/mobile/src/features/permissions/view/ad-consent-card.tsx` |
+| Google OAuth | login web | e-mail, nome, foto | seção 6 | `apps/server/src/auth/google.ts` |
+| Cloudflare (túnel, Access, API) | todo o tráfego; Access recebe o e-mail de quem é convidado | IP, cabeçalhos, e-mail na allowlist | seções 6 e 9.1 | `apps/server/src/cloudflare/access.ts`; `apps/server/src/auth/cloudflare.ts` |
+| Expo Push → APNs / FCM | app móvel | token do aparelho, texto da notificação | seção 6 | `apps/server/src/mobile/push.ts`; `apps/mobile/package.json` (`expo-notifications`) |
+| SMTP (nodemailer; provedor definido por variável de ambiente) | servidor | e-mail e conteúdo das mensagens | seção 6, provedor em aberto (D-4) | `apps/server/src/email/mailer.ts` |
+| Type to Access (`api.typetoaccess.it`, `77a.it`) | servidor, ao publicar a cidade | endereço da cidade e apelido | seção 6 | `apps/server/src/public/typetoaccess.ts` |
+| Anthropic, OpenAI, Google (consulta de uso das contas de IA) | máquina do usuário ou servidor | credencial da conta de IA, só para a consulta | seções 3.6 e 6 | `apps/server/src/ai/index.ts`; `packages/machine-ops/src/ai-usage*.ts` |
+| GitHub, Linear, Jira | servidor, quando o usuário liga a integração | token pessoal e consultas pedidas | seção 6 | `apps/server/src/routes/integrations.ts` |
+| xprem (OTA, `ota.engenhariainversa.com.br`) | app móvel | plataforma, versão, identificador de instalação | seção 3.7, operador em aberto | `apps/mobile/app.config.js` |
+| Whisper e embeddings | infraestrutura própria, sem terceiro | áudio (não gravado) e texto da memória | seção 6 (infraestrutura) | `docker/whisper/server.py`; `docker/embed/server.py` |
+| Cookies próprios | servidor | sessão, `termhub_csrf`, `termhub_view_as`, cookie do OAuth (10 min) | seção 9 | `apps/server/src/auth/routes.ts` |
+| Pagamento | — | nada implementado; cobrança atrás da flag `subscriptions`, desligada | seções 3.10 e 6 (intermediador futuro) | `apps/server/src/features/flags.ts` |
+| Meta Pixel, PostHog, Mixpanel, Clarity, Hotjar, Amplitude, Segment, Sentry, Bugsnag, Datadog | — | não usados | — | busca sem resultados em `apps/` e `packages/` |
+
+Nada novo apareceu em relação à Política: os terceiros acima já estão nas seções 6 e 9. Continuam em aberto o endereço da controladora (D-1), o provedor de SMTP (D-4), o país da hospedagem (D-3) e o operador do servidor de OTA.

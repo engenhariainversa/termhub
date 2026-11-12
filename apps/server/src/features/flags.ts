@@ -15,6 +15,8 @@ import { tk } from '../i18n/index.js';
 export const FEATURE_FLAGS = {
   /** Subscriptions (epic TER-645): plans, checkout, paywall, trial limits and the provider's webhooks. */
   subscriptions: { default: false },
+  /** TER-1164: the chat acts without a card by default and the person lists what it must not do. */
+  chat_open_permissions: { default: false },
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
@@ -56,7 +58,10 @@ export async function featuresFor(ctx: FlagContext): Promise<FeatureFlags> {
 
 /** The person a request acts for: the signed-in user (web), else the device's owner (mobile API). */
 function requestUserId(request: FastifyRequest): string | null {
-  return request.user?.id ?? request.scope?.user.id ?? null;
+  // Typed here rather than through auth/middleware's augmentation, which a type-only build of a file that
+  // reaches this one (tsconfig.parity.json) does not load.
+  const user = (request as { user?: { id: string } | null }).user;
+  return user?.id ?? request.scope?.user.id ?? null;
 }
 
 /**

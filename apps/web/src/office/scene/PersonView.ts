@@ -22,6 +22,7 @@ const SHIRT: Record<string, number> = {
   blocked: 0x7d8799,
   auth_required: 0xf85149,
   trust_prompt: 0xd29922,
+  cli_dialog: 0xd29922,
   none: 0x475569,
 };
 const SEAT = { u: 0.5, v: 0.78 };

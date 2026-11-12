@@ -127,7 +127,9 @@ export interface ChatActionCardProps {
  */
 export const ChatActionCard = memo(function ChatActionCard({ action, deciding, note, grant, projectGrant, standingGrant, commandRule, revoking, onRevoke, onRevokeRule, onDecide, onRepropose, onReply }: ChatActionCardProps) {
   const { t } = useTranslation();
-  const standingKind = standingKindOf(action);
+  // TER-1153: a card whose target is gone can still be answered, but nothing can be trusted from it.
+  const offersGrants = !action.target_gone;
+  const standingKind = offersGrants ? standingKindOf(action) : null;
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
   // TER-984: a call that ran under a grant asked nobody, so it reads as one line — what it did and how
@@ -174,22 +176,22 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
           <button type="button" className="btn-primary" disabled={deciding} onClick={() => onDecide(action.id, 'approve')}>
             {t('Autorizar')}
           </button>
-          {isTabGrantable(action) && (
+          {offersGrants && isTabGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_tab')}>
               {t('Permitir sempre nesta aba')}
             </button>
           )}
-          {isBoardGrantable(action) && (
+          {offersGrants && isBoardGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project')}>
               {t('Permitir sempre neste projeto')}
             </button>
           )}
-          {isTerminalGrantable(action) && (
+          {offersGrants && isTerminalGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_tab_terminal')}>
               {t('Liberar teclas e shell nesta aba')}
             </button>
           )}
-          {(isTerminalGrantable(action) || isBoardGrantable(action)) && (
+          {offersGrants && (isTerminalGrantable(action) || isBoardGrantable(action)) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_project_all')}>
               {t('Liberar tudo neste projeto')}
             </button>
@@ -200,17 +202,17 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
             </button>
           )}
           {/* TER-1081: the server sends `command_rule` only for a command a rule could cover. */}
-          {action.tool === 'run_command' && action.command_rule && (
+          {offersGrants && action.tool === 'run_command' && action.command_rule && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_command')}>
               {t('Permitir sempre este comando neste projeto')}
             </button>
           )}
-          {action.tool === 'run_command' && action.command_rule?.prefix && (
+          {offersGrants && action.tool === 'run_command' && action.command_rule?.prefix && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_command_prefix')}>
               {t('Permitir sempre comandos que começam com «{{prefix}}»', { prefix: action.command_rule.prefix })}
             </button>
           )}
-          {isFolderGrantable(action) && (
+          {offersGrants && isFolderGrantable(action) && (
             <button type="button" className="btn-ghost" disabled={deciding} onClick={() => onDecide(action.id, 'approve_folder_always')}>
               {t('Permitir sempre nesta pasta')}
             </button>

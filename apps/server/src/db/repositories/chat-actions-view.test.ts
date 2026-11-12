@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { ChatAction } from './chat-actions.js';
 import type { ChatGrant, ChatGrantWithConversation } from './chat-grants.js';
 import type { ChatProjectGrant, ChatProjectGrantWithConversation } from './chat-project-grants.js';
@@ -86,6 +86,7 @@ function fakeRepos(tabOverride?: Partial<typeof tab>) {
         return ticketRows.filter((k) => ids.includes(k.id));
       }),
     },
+    projectGroups: { read: vi.fn(async (userId: string) => (userId === OWNER ? [{ id: 'grp1', name: 'Clientes', kind: 'custom', position: 1, project_ids: [] }] : [])) },
     integrations: { list: vi.fn(async (ownerId: string) => (ownerId === OWNER ? [{ id: 'g1', provider: 'github', name: 'GitHub ana', owner_id: OWNER }] : [{ id: 'g9', provider: 'github', name: 'Integração Alheia', owner_id: OTHER_OWNER }])) },
     apiTokens: { listByUser: vi.fn(async (userId: string) => (userId === OWNER ? [{ id: 'tokChat', gated: true }, { id: 'tokMine', gated: false }] : [])) },
     // No owner scoping of its own (chat_subagents belongs to a conversation, not a user) — the
@@ -190,6 +191,25 @@ it('never looks up tokens for actions other than close_tab, even when their tab 
 // machine here is the key fact being approved, so `describeActions` names both — a project-scoped
 // tool naming a machine is otherwise never correct (a project can link to 0–N machines), which is why
 // this is limited to exactly these three tools (MACHINE_LINK_TOOLS) rather than a general rule.
+it('create_project names the project, the key, the group and the folder, on the machine (TER-1163)', async () => {
+  const repos = fakeRepos();
+  const [full, suggested, byName, plain] = await describeActions(
+    repos,
+    [
+      action({ id: 'c1', tool: 'create_project', args: { name: 'Piki', key: 'PIKI', group: 'grp1', machine_id: 'm1', cwd: '/srv/piki', create_dir: true }, machine_id: 'm1' }),
+      action({ id: 'c2', tool: 'create_project', args: { name: 'Piki Digital App' } }),
+      action({ id: 'c3', tool: 'create_project', args: { name: 'Piki', key: 'PIKI', group: 'Outro grupo' } }),
+      action({ id: 'c4', tool: 'create_project', args: { name: 'Piki', key: 'PIKI' } }),
+    ],
+    OWNER,
+  );
+  expect(full.summary).toBe('criar o projeto "Piki" com a chave PIKI, no grupo "Clientes", ligado à pasta `/srv/piki` (criando a pasta) no macbook m3');
+  // the key the tool will use when none is given, so the person approves the real one
+  expect(suggested.summary).toBe('criar o projeto "Piki Digital App" com a chave PDA (sugerida pelo nome)');
+  expect(byName.summary).toBe('criar o projeto "Piki" com a chave PIKI, no grupo "Outro grupo"');
+  expect(plain.summary).toBe('criar o projeto "Piki" com a chave PIKI');
+});
+
 it('names link_project_machine by the folder it links, in the project and on the machine', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(
@@ -826,4 +846,30 @@ it('names the machine on a set_machine_automation card (TER-975)', async () => {
   const repos = fakeRepos();
   const [card] = await describeActions(repos, [action({ tool: 'set_machine_automation', args: { machine_id: 'm1', accept: true }, machine_id: 'm1' })], OWNER);
   expect(card.summary).toBe('fazer a máquina aceitar trabalho automático no macbook m3');
+});
+
+// TER-1153: a pending card whose target no longer resolves offers no grant — the screens read `target_gone`.
+describe('target_gone', () => {
+  it.each([
+    ['a gone project', action({ tool: 'create_task', args: { project_id: 'nope', title: 'x' }, project_id: 'nope' })],
+    ['a foreign project', action({ tool: 'create_task', args: { project_id: foreignProject.id, title: 'x' }, project_id: foreignProject.id })],
+    ['a gone card', action({ tool: 'move_task', args: { task_id: 'gone', status: 'done' } })],
+    ['a closed tab', action({ tool: 'send_input', args: { tab_id: 'gone', text: 'oi' }, tab_id: 'gone' })],
+  ])('is set on a pending card for %s', async (_label, row) => {
+    const [card] = await describeActions(fakeRepos(), [row], OWNER);
+    expect(card.target_gone).toBe(true);
+  });
+
+  it('is absent when the target resolves, and on a decided card', async () => {
+    const [ok, decided] = await describeActions(
+      fakeRepos(),
+      [
+        action({ tool: 'create_task', args: { project_id: 'p1', title: 'x' }, project_id: 'p1' }),
+        action({ id: 'a2', tool: 'create_task', args: { project_id: 'nope', title: 'x' }, project_id: 'nope', status: 'denied' }),
+      ],
+      OWNER,
+    );
+    expect(ok).not.toHaveProperty('target_gone');
+    expect(decided).not.toHaveProperty('target_gone');
+  });
 });

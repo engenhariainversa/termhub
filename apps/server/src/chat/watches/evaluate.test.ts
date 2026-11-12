@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import type { ChatWatch } from '../../db/repositories/chat-watches.js';
 import type { TaskPullRequest } from '../../db/repositories/task-pull-requests.js';
 import { WATCH_LIMITS } from './kinds.js';
+import type { Undelivered } from '../../terminal/deliveries.js';
 import { evaluateWatch, expiredEvaluation, initialBaseline, OFFLINE_GRACE_MS, type ProbeMachine, type ProbeTab, type ProbeTask, type WatchProbe } from './evaluate.js';
 
-type Ev = { id: string; kind: ProbeTab['state'] & string; created_at: string };
+type Ev = { id: string; kind: ProbeTab['state'] & string; created_at: string; meta?: Record<string, unknown> };
 
-function probe(over: Partial<{ tab: ProbeTab | null; events: Ev[]; task: ProbeTask | null; prs: TaskPullRequest[]; machine: ProbeMachine | null; latest: string | null }> = {}): WatchProbe {
+function probe(over: Partial<{ tab: ProbeTab | null; events: Ev[]; task: ProbeTask | null; prs: TaskPullRequest[]; machine: ProbeMachine | null; latest: string | null; undelivered: Undelivered | null }> = {}): WatchProbe {
   return {
+    undelivered: () => over.undelivered ?? null,
     tab: async () => (over.tab === undefined ? { id: 't1', name: 'api', project_id: 'p1', machine_id: 'm1', state: 'working' } : over.tab),
     tabEventsAfter: async (_id, after, kinds) => (over.events ?? []).filter((e) => Date.parse(e.created_at) > after.getTime() && kinds.includes(e.kind)),
     task: async () => (over.task === undefined ? { id: 'k1', ref: 'TER-12', title: 'Login', project_id: 'p1', column_id: 'c-todo', status: 'todo' } : over.task),
@@ -92,6 +94,45 @@ describe('tab watches', () => {
   it('starts from now', async () => {
     const now = new Date('2026-10-21T12:00:00.000Z');
     expect(await initialBaseline(probe(), { user_id: 'u1', kind: 'tab', target_id: 't1', params: { events: ['finished'] } }, now)).toEqual({ cursor: now.toISOString() });
+  });
+});
+
+// TER-1168: "te aviso quando o pda-app estiver no ar" on a tab whose Claude had exited: the watch waited 24 h for nothing
+describe('tab watches on an agent that is gone (TER-1168)', () => {
+  const at = '2026-10-21T12:00:00.000Z';
+  const w = watch({ baseline: { cursor: at } });
+  const goneTab: ProbeTab = { id: 't1', name: 'api', project_id: 'p1', machine_id: 'm1', state: 'idle', state_at: '2026-10-21T11:00:00.000Z', agent_gone: true };
+
+  it('an agent that left before the watch began: told at once, whatever the events asked, and the watch ends', async () => {
+    const ev = await evaluateWatch(probe({ tab: goneTab }), w);
+    expect(ev?.events).toEqual([expect.objectContaining({ event: 'gone', payload: expect.objectContaining({ tab_id: 't1', reason: 'agent_exited', at: '2026-10-21T11:00:00.000Z' }) })]);
+    expect(ev?.close).toBe('gone');
+  });
+
+  it('an agent that leaves after it: the exit event is told as gone, even when only finished was asked', async () => {
+    for (const event of ['SessionEnd', 'AgentExited', 'sessionEnd']) {
+      const exit: Ev = { id: 'x1', kind: 'idle', created_at: '2026-10-21T12:03:00.000Z', meta: { event } };
+      const ev = await evaluateWatch(probe({ tab: { ...goneTab, state_at: exit.created_at }, events: [exit] }), w);
+      expect(ev?.events[0]).toMatchObject({ event: 'gone', payload: { reason: 'agent_exited', at: exit.created_at } });
+    }
+  });
+
+  it('an idle that is no exit (a CLI dialog closed with no answer, Cursor\'s sessionStart) is not one', async () => {
+    const idle: Ev = { id: 'i1', kind: 'idle', created_at: '2026-10-21T12:03:00.000Z', meta: { event: 'ScreenCheck' } };
+    const tab: ProbeTab = { id: 't1', name: 'api', project_id: 'p1', machine_id: 'm1', state: 'idle', state_at: idle.created_at, agent_gone: false };
+    expect(await evaluateWatch(probe({ tab, events: [idle] }), w)).toBeNull();
+  });
+
+  it('a text that started no turn, sent around the watch: told with its reason; one that a turn followed is not', async () => {
+    const tab: ProbeTab = { id: 't1', name: 'api', project_id: 'p1', machine_id: 'm1', state: 'finished' };
+    const u = { at: new Date('2026-10-21T11:59:30.000Z'), reason: 'no_reaction' as const };
+    const ev = await evaluateWatch(probe({ tab, undelivered: u }), w);
+    expect(ev?.events[0]).toMatchObject({ event: 'gone', payload: { reason: 'not_delivered', why: 'no_reaction', at: '2026-10-21T11:59:30.000Z' } });
+    expect(ev?.close).toBe('gone');
+    const started: Ev = { id: 's1', kind: 'working', created_at: '2026-10-21T12:00:10.000Z' };
+    expect(await evaluateWatch(probe({ tab, undelivered: u, events: [started] }), w)).toBeNull();
+    // a failed send long before the watch is about something else
+    expect(await evaluateWatch(probe({ tab, undelivered: { ...u, at: new Date('2026-10-21T11:40:00.000Z') } }), w)).toBeNull();
   });
 });
 

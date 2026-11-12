@@ -62,6 +62,7 @@ export function needsYouText(tab: Tab): string {
   if (tab.state_text) return tab.state_text;
   if (tab.state === 'auth_required') return i18n.t('o login expirou: rode /login na aba');
   if (tab.state === 'trust_prompt') return i18n.t('pergunta se a pasta é confiável');
+  if (tab.state === 'cli_dialog') return i18n.t('está presa num diálogo do CLI');
   return tab.state === 'waiting_permission' ? i18n.t('está pedindo permissão') : i18n.t('terminou e está esperando você');
 }
 

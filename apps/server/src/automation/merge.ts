@@ -30,7 +30,8 @@ import { clearMergeWait, noteBaseReading, noteMergeWait, type MergeWait } from '
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
 import { fixerPrompt, serverMessage } from './prompts.js';
-import { runBranchOf } from './release.js';
+import { deliveryPending, runBranchOf } from './release.js';
+import { epicDied } from './epic-lifecycle.js';
 import { notePushOnlyWorkflows, pushOnlyKnown, pushOnlyOf } from './unlisted-workflows.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
@@ -858,8 +859,11 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
   clearMergeWait(c.tasks.map((t) => t.id));
   for (const task of c.tasks) {
     let moved = false;
+    // TER-1150: an epic whose merge has a deploy or release to follow stays in Fazendo ("entregando") until
+    // the delivery is through; `settleEpic` then finishes it
+    const delivering = task.type === 'epic' && deliveryPending(c.setup, { ...row, changed_level: needed, deploy_state: 'none', release_runs: [] });
     try {
-      moved = (await repos.tasks.move(task.id, { status: 'done' }, 0)) !== undefined;
+      if (!delivering) moved = (await repos.tasks.move(task.id, { status: 'done' }, 0)) !== undefined;
     } catch (e) {
       log.warn({ taskId: task.id, code: codeOf(e) }, 'automation: merged card not moved to done');
     }
@@ -873,6 +877,7 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
       kind: 'merged',
       payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(kept ? { worktree_kept: true } : {}) },
     });
+    if (task.type === 'epic' && moved) await epicDied({ repos, gh: c.deps.gh, log }, c.project, c.setup, task, { number: row.number, url: row.url });
   }
   log.info({ projectId: c.project.id, pr: row.number, by }, 'automation: PR merged');
   await postMergeLine(c, row).catch((e: unknown) => log.warn({ pr: row.number, code: codeOf(e) }, 'automation: merge line not posted'));

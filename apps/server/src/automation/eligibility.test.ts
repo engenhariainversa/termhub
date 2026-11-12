@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { automationSchema } from '../setup/schema.js';
-import { eligibilityOf, NEW_CARD_GRACE_MS, REASON_TEXT, type EligibilityInput } from './eligibility.js';
+import { EPIC_SETTLE_CAP_MS, eligibilityOf, NEW_CARD_GRACE_MS, REASON_TEXT, type EligibilityInput } from './eligibility.js';
 
 const input = (card: Partial<EligibilityInput['card']> = {}, project: Partial<EligibilityInput['project']> = {}, automation: Record<string, unknown> = {}): EligibilityInput => ({
   card: { type: 'task', parent_id: null, auto: true, column_category: 'todo', description: 'Do it', subtask_count: 0, tab_alive: false, active_run: false, has_ticket: false, just_created: false, ...card },
@@ -26,6 +26,14 @@ describe('eligibilityOf', () => {
     expect(reason(input({ just_created: true }))).toBe('just_created');
     expect(reason(input({ just_created: true }, { repo_ready: false }))).toBe('repo_missing');
     expect(NEW_CARD_GRACE_MS).toBe(2 * 60_000);
+  });
+  // TER-1170
+  it('a card of an epic still getting new cards waits for the batch, after its own grace', () => {
+    expect(reason(input({ epic_settling: true }))).toBe('epic_settling');
+    expect(reason(input({ just_created: true, epic_settling: true }))).toBe('just_created');
+    expect(reason(input({ epic_settling: true }, { repo_ready: false }))).toBe('repo_missing');
+    expect(REASON_TEXT.epic_settling).toBeTruthy();
+    expect(EPIC_SETTLE_CAP_MS).toBe(10 * 60_000);
   });
   it('a tagged card that passes every check is eligible', () => {
     expect(eligibilityOf(input())).toEqual({ eligible: true });

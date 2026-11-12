@@ -229,6 +229,15 @@ describe('pending cards at hand (spec 2026-09-30 TER-477)', () => {
     expect(applyEvent(back, confirmation({ surfaced_at: later, resurfaced: true }))).toBe(back);
   });
 
+  it('carries target_gone (TER-1153), on a fresh card and on one brought back after its target went away', () => {
+    expect(applyEvent(empty, confirmation({ target_gone: true })).actions[0]?.target_gone).toBe(true);
+    const once = applyEvent(empty, confirmation());
+    expect(once.actions[0]).not.toHaveProperty('target_gone');
+    const back = applyEvent(once, confirmation({ surfaced_at: later, resurfaced: true, target_gone: true }));
+    expect(back.actions).toEqual([{ ...action('a1'), surfaced_at: later, target_gone: true }]);
+    expect(applyEvent(back, confirmation({ surfaced_at: later, resurfaced: true, target_gone: true }))).toBe(back);
+  });
+
   it('merges both a later subagent and a surfaced_at from one confirmation', () => {
     const once = applyEvent(empty, confirmation());
     const sub = { id: 'sub1', description: 'Buscar CI' };

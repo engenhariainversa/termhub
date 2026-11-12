@@ -43,6 +43,11 @@ import { activeCommandRules, assertCommandRuleAction, grantCommandRule, listComm
 import { decideMany } from '../chat/decisions.js';
 import { assertActionTabAlive } from '../chat/tab-gone-actions.js';
 import { DEFAULT_ALLOW_KINDS, DEFAULT_KIND_LABEL } from '../chat/gate.js';
+import { blockViews, effectiveBlocks } from '../chat/blocks.js';
+import { BLOCK_EFFECTS, BLOCK_KINDS, OPEN_CORE_TEXT } from '../chat/open-permissions.js';
+import { parseCommand } from '../chat/command-rules.js';
+import { BLOCKS_MAX } from '../db/repositories/chat-blocks.js';
+import { requireFeature } from '../features/flags.js';
 import { indexActions as indexActionsWrite } from '../memory/index-items.js';
 import { conflict, HttpError, notFound } from '../lib/errors.js';
 import { auditBlocked, exclusiveError, usableIn } from '../ai/exclusive.js';
@@ -82,6 +87,13 @@ const batchBody = z.object({
 });
 const grantIdParam = z.object({ id: z.string().min(1).max(64) });
 const defaultKindParam = z.object({ kind: z.enum(DEFAULT_ALLOW_KINDS) });
+/** TER-1164: a block the person adds on "O que o chat não pode fazer". */
+const blockBody = z.object({
+  kind: z.enum(BLOCK_KINDS),
+  project_id: z.string().min(1).max(64).nullable().optional(),
+  command: z.string().trim().min(1).max(200).optional(),
+  effect: z.enum(BLOCK_EFFECTS).optional(),
+});
 const defaultAllowedBody = z.object({ allowed: z.boolean() }).strict();
 
 /** The defaults as "Permissões do chat" shows them: server-worded labels, in `DEFAULT_ALLOW_KINDS` order. */
@@ -423,6 +435,43 @@ export async function chatRoutes(app: FastifyInstance, repos: Repositories, deps
     const { allowed } = defaultAllowedBody.parse(request.body);
     await repos.chatDefaultRestrictions.setAllowed(request.scope.user.id, kind, allowed);
     return { defaults: await chatDefaultsOf(repos, request.scope.user.id) };
+  });
+
+  /** "O que o chat não pode fazer" (TER-1164, flag chat_open_permissions): the blocks in force and the core. */
+  const openOnly = { preHandler: requireFeature('chat_open_permissions', repos) };
+  app.get('/blocks', openOnly, async (request) => {
+    const userId = request.scope.user.id;
+    return { blocks: await blockViews(repos, userId, await effectiveBlocks(repos, userId)), always_asks: OPEN_CORE_TEXT };
+  });
+
+  /** Adds a block. `create`, like granting. A project outside the person's scope answers 404. */
+  app.post('/blocks', { ...openOnly, config: { action: 'create' } }, async (request, reply) => {
+    const userId = request.scope.user.id;
+    const body = blockBody.parse(request.body);
+    let words: string[] = [];
+    if (body.command !== undefined) {
+      const parsed = parseCommand(body.command);
+      if (body.kind !== 'run_command' || !parsed.ok || parsed.words.length === 0) throw new HttpError(400, 'Comando inválido para o bloqueio: use o começo de um comando simples, como «git push».', 'BLOCK_INVALID');
+      words = parsed.words;
+    }
+    let projectId: string | null = null;
+    if (body.project_id) {
+      const [project] = await repos.projects.findByIdsForOwner([body.project_id], request.scope.user.id);
+      if (!project) throw notFound('Projeto não encontrado');
+      projectId = project.id;
+    }
+    if ((await repos.chatBlocks.countActive(userId)) >= BLOCKS_MAX) throw conflict('Limite de bloqueios atingido: tire algum antes de criar outro.');
+    const { block, created } = await repos.chatBlocks.create({ user_id: userId, project_id: projectId, kind: body.kind, words, effect: body.effect ?? 'ask' });
+    const [view] = await blockViews(repos, userId, [{ ...block, source: 'block' }]);
+    return reply.code(created ? 201 : 200).send({ block: view });
+  });
+
+  /** Lifts a block: the person themself, on the screen, so no card. 404 unknown, another user's or already lifted. */
+  app.delete('/blocks/:id', { ...openOnly, config: { action: 'create' } }, async (request) => {
+    const { id } = grantIdParam.parse(request.params);
+    const lifted = await repos.chatBlocks.revoke(id, request.scope.user.id);
+    if (!lifted) throw notFound('Bloqueio não encontrado');
+    return { block: { id: lifted.id, revoked_at: lifted.revoked_at } };
   });
 
   /** "Comandos liberados" (TER-1081): the command rules of run_command in force, and the revoked or expired ones. */

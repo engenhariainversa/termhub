@@ -39,4 +39,15 @@ describe('LegalLinks', () => {
     expect(screen.queryByRole('link', { name: 'Termos de uso' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Política de privacidade' })).toBeInTheDocument();
   });
+
+  it('prints the operator under the links, and alone when the instance has no documents', () => {
+    authState.config = { terms_url: 'https://example.com/termos/', privacy_url: null, legal_entity: '8020 Digital Ltda · CNPJ 32.285.763/0001-12' };
+    render(<LegalLinks />);
+    expect(screen.getByText('8020 Digital Ltda · CNPJ 32.285.763/0001-12')).toBeInTheDocument();
+    cleanup();
+    authState.config = { terms_url: null, privacy_url: null, legal_entity: 'Acme Ltda' };
+    render(<LegalLinks />);
+    expect(screen.queryByRole('navigation')).toBeNull();
+    expect(screen.getByText('Acme Ltda')).toBeInTheDocument();
+  });
 });

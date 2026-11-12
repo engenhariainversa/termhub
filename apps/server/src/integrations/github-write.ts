@@ -19,6 +19,8 @@ export interface PullFiles {
 export interface GithubWriteClient {
   branchSha(token: string, repo: string, branch: string): Promise<string | null>;
   createBranch(token: string, repo: string, branch: string, fromSha: string): Promise<'created' | 'exists'>;
+  /** Deletes a branch (TER-1150: a finished epic's). A branch already gone (GitHub's auto-delete on merge) is `gone`. */
+  deleteBranch(token: string, repo: string, branch: string): Promise<'deleted' | 'gone'>;
   openPull(token: string, repo: string, i: { head: string; base: string; title: string; body: string; draft: boolean }): Promise<PullInfo>;
   findOpenPull(token: string, repo: string, head: string, base: string): Promise<PullInfo | null>;
   /** `head_repo`: the repository the head branch lives in (`owner/name`), null when the fork is gone. */
@@ -89,6 +91,12 @@ export function createGithubWriteClient(fetchImpl: typeof fetch = fetch): Github
       const res = await call(token, 'POST', `/repos/${repo}/git/refs`, { ref: `refs/heads/${branch}`, sha: fromSha });
       if (res.ok) return 'created';
       if (res.status === 422 && /already exists/i.test(await res.clone().text().catch(() => ''))) return 'exists';
+      throw writeFailure(res);
+    },
+    async deleteBranch(token, repo, branch) {
+      const res = await call(token, 'DELETE', `/repos/${repo}/git/refs/heads/${enc(branch)}`);
+      if (res.ok) return 'deleted';
+      if (res.status === 404 || (res.status === 422 && /does not exist/i.test(await res.clone().text().catch(() => '')))) return 'gone';
       throw writeFailure(res);
     },
     async openPull(token, repo, i) {

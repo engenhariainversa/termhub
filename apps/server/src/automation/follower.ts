@@ -145,7 +145,8 @@ async function defaultForeground(repos: Repositories, tab: Tab): Promise<PaneFor
 }
 
 export const defaultType = async (ctx: ControlContext, tabId: string, text: string): Promise<void> => {
-  await sendInput(ctx, { tab_id: tabId, text }, null);
+  // TER-1168: a run's message never goes into the shell of an agent that exited (its restart is onExited's)
+  await sendInput(ctx, { tab_id: tabId, text }, null, { requireAgent: true });
 };
 
 function errorCode(e: unknown): string {

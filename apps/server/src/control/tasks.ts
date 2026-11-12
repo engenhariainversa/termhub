@@ -134,15 +134,28 @@ export async function addSubtasks(ctx: ControlContext, input: { task_id: string;
   return { task_id: task.id, subtasks: created.map(taskOut), board_url: boardUrl(task.project_id) };
 }
 
+/**
+ * TER-1150: a card (or epic) going to Feito while a PR of its own is still open needs `confirm: true`; the
+ * refusal names each PR, its CI and its link, so whoever asked sees what is not merged yet.
+ */
+async function confirmDoneWithOpenPr(ctx: ControlContext, task: Task, toDone: boolean, confirm: boolean | undefined): Promise<void> {
+  if (!toDone || confirm || task.status === 'done') return;
+  const open = (await ctx.repos.taskPullRequests.listByTasks([task.id])).filter((p) => !p.mention_only && p.state === 'open');
+  if (open.length === 0) return;
+  const prs = open.map((p) => `#${p.number} (CI ${p.ci_state}${p.draft ? ', draft' : ''}) ${p.url}`).join('; ');
+  throw new ControlError('CONFIRM_REQUIRED', msg('O card {{ref}} tem PR aberto, não mesclado: {{prs}}; repita com confirm: true para mover para Feito mesmo assim', { ref: task.ref, prs }));
+}
+
 export async function updateTask(
   ctx: ControlContext,
-  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean },
+  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean; confirm?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
   const fields = [input.title, input.description, input.status, input.type, input.epic_id];
   if (fields.every((v) => v === undefined) && input.auto === undefined) {
     throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id ou auto');
   }
+  await confirmDoneWithOpenPr(ctx, task, input.status === 'done', input.confirm);
   let updated: Task | undefined = task;
   if (fields.some((v) => v !== undefined)) {
     updated = await rules(() =>
@@ -163,10 +176,12 @@ export async function updateTask(
 /** Top-level cards only: the repository refuses a subtask (they have no column of their own). */
 export async function moveTask(
   ctx: ControlContext,
-  input: { task_id: string; column_id?: string; status?: TaskStatus; position?: number },
+  input: { task_id: string; column_id?: string; status?: TaskStatus; position?: number; confirm?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
   if ((input.column_id === undefined) === (input.status === undefined)) throw new ControlError('BAD_REQUEST', 'Informe column_id ou status (um dos dois)');
+  const toDone = input.status === 'done' || (input.column_id !== undefined && (await ctx.scoped.column(input.column_id)).column.category === 'done');
+  await confirmDoneWithOpenPr(ctx, task, toDone, input.confirm);
   const target = input.column_id !== undefined ? { column_id: input.column_id } : { status: input.status as TaskStatus };
   const moved = await rules(() => ctx.repos.tasks.move(task.id, target, input.position ?? 0));
   if (!moved) throw new ControlError('NOT_FOUND', 'Tarefa não encontrada');

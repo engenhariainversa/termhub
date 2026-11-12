@@ -16,6 +16,13 @@ type Log = Pick<FastifyBaseLogger, 'info' | 'warn'>;
 /** The tab's `state_text` once its agent is found gone (TER-643): what the monitor and `list_tabs` show. */
 export const AGENT_EXITED_TEXT = 'Agente encerrado sem terminar o turno';
 
+/**
+ * TER-1168: the `state_text` of a tab whose agent was found gone while it rested (its turn had ended, no hook
+ * said it left). Not AGENT_EXITED_TEXT: nothing was cut mid-turn, so no resume card opens and an automatic
+ * run's follower does not restart it; the tab only stops reading as an agent waiting at its prompt.
+ */
+export const AGENT_LEFT_TEXT = 'Agente encerrado';
+
 /** What a resumed Claude session is told first. */
 export const EXITED_RESUME_PROMPT = 'O processo anterior desta sessão foi encerrado no meio do trabalho. Continue a tarefa de onde parou.';
 

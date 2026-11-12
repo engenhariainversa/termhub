@@ -3,6 +3,7 @@
 // `setStringAsync.mock.calls`, or makes a copy fail with `setStringAsync.mockRejectedValueOnce(...)`.
 let text = '';
 module.exports = {
+  StringFormat: { PLAIN_TEXT: 'plainText', HTML: 'html' },
   setStringAsync: jest.fn(async (value) => {
     text = value;
     return true;

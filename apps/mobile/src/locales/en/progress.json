@@ -90,5 +90,19 @@
   "Motivo: {{why}}": "Why: {{why}}",
   "Precedente: {{ref}}": "Precedent: {{ref}}",
   "Regra: {{ref}}": "Rule: {{ref}}",
-  "Similaridade: {{score}}%": "Similarity: {{score}}%"
+  "Similaridade: {{score}}%": "Similarity: {{score}}%",
+  "{{ref}}: épico começou na branch {{branch}}": "{{ref}}: epic started on branch {{branch}}",
+  "{{ref}}: épico começou": "{{ref}}: epic started",
+  "{{ref}}: épico concluído, na base e entregue": "{{ref}}: epic finished, in the base branch and delivered",
+  "não começou": "not started",
+  "histórias prontas · integrando": "stories done · integrating",
+  "na base · entrega em andamento": "in the base branch · delivery running",
+  "falhou": "failed",
+  "falhou: CI": "failed: CI",
+  "falhou: conflito": "failed: conflict",
+  "falhou: deploy": "failed: deploy",
+  "falhou: publicação": "failed: release",
+  "{{phase}} em {{date}}": "{{phase}} on {{date}}",
+  "{{phase}} · desde {{date}}": "{{phase}} · since {{date}}",
+  "em andamento": "in progress"
 }

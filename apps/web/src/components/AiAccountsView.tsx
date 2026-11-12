@@ -10,6 +10,7 @@ import { AutoSwapSettings } from './AutoSwapSettings';
 import { AiUsageQuerySettings } from './AiUsageQueryCard';
 import { ConfirmDialog, Modal } from './Modal';
 import { i18n, tk, Trans, useTranslation } from '../i18n';
+import { Combobox } from './Combobox';
 
 const PROVIDERS: AiProvider[] = ['claude', 'chatgpt', 'gemini', 'antigravity'];
 
@@ -284,13 +285,7 @@ function AccountForm({
           <label className="label" htmlFor="ai-account-machine">
             {t('Máquina onde o CLI está logado')}
           </label>
-          <select id="ai-account-machine" className="input" value={machineId} onChange={(e) => setMachineId(e.target.value)} required>
-            {machines.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
+          <Combobox id="ai-account-machine" value={machineId} onChange={setMachineId} options={machines.map((m) => ({ value: m.id, label: m.name }))} />
         </div>
         <fieldset>
           <legend className="label">{t('Login')}</legend>
@@ -322,15 +317,16 @@ function AccountForm({
           <label className="label" htmlFor="ai-account-exclusive">
             {t('Exclusiva de um projeto')}
           </label>
-          <select id="ai-account-exclusive" className="input" value={exclusive} onChange={(e) => setExclusive(e.target.value)}>
-            <option value="">{t('Não: qualquer projeto pode usar')}</option>
-            {account?.exclusive_project && !projects.some((p) => p.id === account.exclusive_project!.id) && <option value={account.exclusive_project.id}>{account.exclusive_project.name}</option>}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            id="ai-account-exclusive"
+            value={exclusive}
+            onChange={setExclusive}
+            options={[
+              { value: '', label: t('Não: qualquer projeto pode usar') },
+              ...(account?.exclusive_project && !projects.some((p) => p.id === account.exclusive_project!.id) ? [{ value: account.exclusive_project.id, label: account.exclusive_project.name }] : []),
+              ...projects.map((p) => ({ value: p.id, label: p.name })),
+            ]}
+          />
           <p className="mt-1 text-xs text-fg-dim">{t('Para a conta de um cliente ou empresa: ela só roda nesse projeto, e nenhum outro projeto, troca automática ou chat pode usá-la.')}</p>
         </div>
         {error && <p className="text-sm text-danger">{error}</p>}

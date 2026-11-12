@@ -53,7 +53,8 @@ export const TabState = {
   finished: 'finished',
   blocked: 'blocked',
   auth_required: 'auth_required',
-  trust_prompt: 'trust_prompt'
+  trust_prompt: 'trust_prompt',
+  cli_dialog: 'cli_dialog'
 } as const
 
 export type TabState = (typeof TabState)[keyof typeof TabState]

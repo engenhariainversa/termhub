@@ -45,6 +45,7 @@ export function mockProgress(now: number): TProgressResponse {
         ci: { open: 1, failed: 1, running: 0, deployed: 0 },
         ci_error: null,
         usage: { tokens: 1_200_000, cost_usd: 2.4 },
+        lifecycle: { phase: 'in_progress', branch: 'epic/TER-182-visao-gerencial', started_at: minutesAgo(90), done_at: null, pull_request: null, failure: null },
       },
     ],
   };

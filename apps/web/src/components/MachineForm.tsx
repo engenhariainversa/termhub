@@ -18,6 +18,7 @@ import type { Machine, User } from '../lib/types';
 import { TYPE_LABEL } from '../lib/machine-status';
 import { api, ApiError } from '../lib/api';
 import { Trans, tk, useTranslation } from '../i18n';
+import { Combobox } from './Combobox';
 
 /** The sections of the edit form, one tab each. */
 export const MACHINE_FORM_TABS = ['general', 'agent', 'network', 'monitor', 'simulator'] as const;
@@ -293,14 +294,12 @@ export function MachineForm({ open, onClose, machine, initialTab = 'general' }: 
       {machine && isAdmin && owners && (
         <div>
           <label className="label">{t('Dono')}</label>
-          <select className="input" value={ownerId} onChange={(e) => setOwnerId(e.target.value)}>
-            <option value="">{t('— sem dono (só visível em "todas as máquinas") —')}</option>
-            {owners.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name} — {u.email}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            aria-label={t('Dono')}
+            value={ownerId}
+            onChange={setOwnerId}
+            options={[{ value: '', label: t('— sem dono (só visível em "todas as máquinas") —') }, ...owners.map((u) => ({ value: u.id, label: u.name, hint: u.email }))]}
+          />
           <p className="mt-1 text-[11px] text-fg-dim">{t('Projetos, tabs, tarefas, notas e contas de IA desta máquina passam a ser vistos pelo novo dono.')}</p>
         </div>
       )}

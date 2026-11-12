@@ -25,6 +25,7 @@ import { belongsTo } from '../model/filter';
 import { approveAlwaysLabel, CHAT_MSG } from '../model/messages';
 import { upsertTabLimit } from '../model/tab-limit-text';
 import { withoutWatch } from '../model/watch-text';
+import { compactDoneText, compactFailedText, isCompactCommand } from '../model/context';
 import { closeLive, emptyFold, pruneLive, seedLive, type LiveFold } from '../model/live';
 import type { PickedFile } from './attachments';
 import { createThrottledStorage } from './throttled-storage';
@@ -79,6 +80,11 @@ export interface ConversationSlot {
   /** The person's own context limit (TER-1038, Memória do chat): what the header's meter measures
    *  against instead of the model's window. Absent from a slot persisted before it. */
   contextLimit?: number | null;
+  /** "Compactar" is under way (TER-1152): from the tap (or `GET chat`, for a screen opened meanwhile)
+   *  until the `compact` event says done or failed. */
+  compacting?: boolean;
+  /** What the last compaction did ("Conversa compactada: 411k → 52k tokens"), until the next message goes. */
+  compactNote?: string | null;
   host: ChatHostState | null;
   /** A `GET chat` answered since this store started (a persisted slot is shown, but not loaded). */
   loaded: boolean;
@@ -187,6 +193,9 @@ export interface ChatState {
    * session-ending error is the only thing worth reacting to here. */
   forgetDecision(decisionId: string): Promise<void>;
   reset(): Promise<void>;
+  /** "Compactar" (TER-1152, the web's TER-315): runs `/compact` on the open conversation's session. A
+   *  refusal (an answer being written, nothing to compact yet, the host) shows its own sentence in the banner. */
+  compact(): Promise<void>;
   loadHostOptions(): Promise<void>;
   setHost(machineId: string, aiAccountId?: string): Promise<void>;
   /** Re-reads one conversation's slot (`GET chat`) in place, updating `conversations[key]` only —
@@ -367,6 +376,7 @@ export function createChatStore(deps: ChatDeps) {
               subagents: res.subagents,
               watches: res.watches,
               contextLimit: res.context_limit ?? null,
+              compacting: res.compacting === true,
               host: res.host,
               loaded: true,
               error: null,
@@ -518,6 +528,12 @@ export function createChatStore(deps: ChatDeps) {
                 ? { conversation: { ...slot.conversation, context_tokens: e.tokens, context_window: e.window, ...(e.compacted_at !== undefined ? { context_compacted_at: e.compacted_at } : {}) } }
                 : {},
             );
+          // "Compactar" (TER-1152): the meter says "compactando…" until done or failed; the new fill
+          // comes as its own `context` event.
+          if (e.type === 'compact') {
+            patchSlot(key, () => ({ compacting: e.state === 'started', ...(e.state === 'done' ? { compactNote: compactDoneText(e.tokens_before, e.tokens) } : {}) }));
+            if (e.state === 'failed') set({ error: compactFailedText(e.error_code) });
+          }
           // The whole list of the scope's watches (TER-1099): it replaces the slot's.
           if (e.type === 'watches') {
             watchListArrived(key);
@@ -707,8 +723,14 @@ export function createChatStore(deps: ChatDeps) {
             const body = text.trim();
             const projectId = get().activeProject;
             if ((!body && attachments.length === 0) || projectId === undefined || get().sending) return false;
+            // `/compact` alone is the command, as on the web and in Claude Code: it compacts, nothing is sent.
+            if (attachments.length === 0 && !replyTo && isCompactCommand(body)) {
+              void get().compact();
+              return true;
+            }
             const key = keyOf(projectId);
             const gen = generation;
+            patchSlot(key, () => ({ compactNote: null }));
             // The person's row, at once (spec §4.2 "Optimistic user bubble"): renamed to the server's
             // id on the 202, or kept with the reason when the send fails.
             const localId = `local:${randomId(8)}`;
@@ -1121,6 +1143,23 @@ export function createChatStore(deps: ChatDeps) {
               patchSlot(key, () => ({ messages: [], actions: [], grants: [], projectGrants: [], tabQuestions: [], tabSuggestions: [], tabLimits: [], subagents: [], cancelFailed: [] }));
               await reread(key);
             } catch (e) {
+              fail(gen, e);
+            }
+          },
+
+          async compact() {
+            const projectId = get().activeProject;
+            if (projectId === undefined) return;
+            const key = keyOf(projectId);
+            if (get().conversations[key]?.compacting) return;
+            const gen = generation;
+            set({ error: null });
+            patchSlot(key, () => ({ compacting: true, compactNote: null }));
+            try {
+              await api.compact(session().auth(), projectId);
+            } catch (e) {
+              if (gen !== generation) return;
+              patchSlot(key, () => ({ compacting: false }));
               fail(gen, e);
             }
           },

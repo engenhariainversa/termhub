@@ -143,6 +143,8 @@ export interface MobileApi {
   setHost(auth: Auth, body: TSetHostBody): Promise<void>;
   sendMessage(auth: Auth, body: TMobileMessageBody): Promise<TSendAccepted>;
   reset(auth: Auth, projectId: string | null): Promise<void>;
+  /** "Compactar" (TER-1152): `202` once it started; its end comes over the socket (`compact`, `context`). */
+  compact(auth: Auth, projectId: string | null): Promise<void>;
   decide(auth: Auth, actionId: string, body: TMobileDecisionBody): Promise<void>;
   /** A grouped confirmation: every approval carries its own proof, all checked before anything is
    * decided (a wrong PIN is a 401 and leaves the whole batch pending). */

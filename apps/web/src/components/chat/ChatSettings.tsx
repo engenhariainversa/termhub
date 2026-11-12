@@ -10,8 +10,9 @@ import { useChatHeaderSlot } from './chat-header-slot';
  * The conversation's one control in the header (TER-1039): a cog that opens its settings. Portalled
  * into the header around the panel (`ChatHeaderSlot`), or drawn in place when there is none. The dot
  * is what the old top row said at a glance: a subagent is running, or the context is filling up.
+ * `before` sits left of the cog, in the same place (the context badge, TER-1151).
  */
-export function ChatSettingsButton({ open, attention, onOpen }: { open: boolean; attention: boolean; onOpen: () => void }) {
+export function ChatSettingsButton({ open, attention, onOpen, before = null }: { open: boolean; attention: boolean; onOpen: () => void; before?: ReactNode }) {
   const { t } = useTranslation();
   const slot = useChatHeaderSlot();
   const button = (
@@ -28,8 +29,14 @@ export function ChatSettingsButton({ open, attention, onOpen }: { open: boolean;
       {attention && <span data-testid="chat-settings-attention" className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-warn" />}
     </button>
   );
-  if (slot) return createPortal(button, slot);
-  return <div className="flex justify-end pt-2">{button}</div>;
+  const controls = (
+    <>
+      {before}
+      {button}
+    </>
+  );
+  if (slot) return createPortal(controls, slot);
+  return <div className="flex items-center justify-end pt-2">{controls}</div>;
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

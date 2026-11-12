@@ -89,6 +89,9 @@ model User {
   /// "Contar ao chat de onde estou falando" (TER-1088): client, device and same-network-as-a-machine go
   /// with each typed message. On by default; the person can turn it off in Memória do chat.
   chatClientContext       Boolean                  @default(true) @map("chat_client_context")
+  /// "Usar o que já decidi em outros projetos" (TER-1169): a project with little history also searches
+  /// the person's other projects, and agent tabs read their verified lessons. On by default.
+  chatCrossProjectMemory  Boolean                  @default(true) @map("chat_cross_project_memory")
   /// Push "aba terminou" to the phone (TER-925): opt-in, off by default.
   pushTabFinished         Boolean                  @default(false) @map("push_tab_finished")
   /// TER-1101: which of the concierge's own notices become a push, the quiet hours and the grouping window
@@ -106,6 +109,7 @@ model User {
   memoryWriteQueue        MemoryWriteQueue[]
   standingGrants          ChatStandingGrant[]
   chatCommandRules        ChatCommandRule[]
+  chatBlocks              ChatBlock[]
   chatWatches             ChatWatch[]
   conciergeNotices        ConciergeNotice[]
   fileGrants             ChatFileGrant[]
@@ -338,6 +342,7 @@ model Project {
   pullRequests        TaskPullRequest[]
   standingGrants      ChatStandingGrant[]
   chatCommandRules    ChatCommandRule[]
+  chatBlocks          ChatBlock[]
   chatWatches         ChatWatch[]
   automationEvents    AutomationEvent[]
   automationRuns      AutomationRun[]
@@ -479,6 +484,9 @@ enum TabState {
   auth_required
   /// Claude Code asks whether the folder is trusted, before any hook fires (TER-1046).
   trust_prompt
+  /// A modal dialog of the agent CLI holds its input ("Teach auto mode", "Hooks need review"): text typed
+  /// into the tab is lost until it closes (TER-1166). Read off the screen; the text names the dialog.
+  cli_dialog
 }
 
 /// What a working agent is doing, from the tool it is about to call (monitor/activity.ts).
@@ -1361,6 +1369,29 @@ model ChatDefaultRestriction {
   @@map("chat_default_restrictions")
 }
 
+/// TER-1164 (flag `chat_open_permissions`): something the chat must not do on its own — the person's
+/// "não pode". With the flag on the chat acts without a card unless a block (or the fixed core) says so.
+/// `kind` is one of `BLOCK_KINDS` (chat/open-permissions.ts); `words` narrows a run_command block to the
+/// commands that start with them (empty = every command). `effect`: ask (a card) | never (refused).
+model ChatBlock {
+  id             String            @id
+  userId         String            @map("user_id")
+  user           User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// null = every project of the user
+  projectId      String?           @map("project_id")
+  project        Project?          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind           String
+  words          String[]          @default([])
+  effect         String            @default("ask")
+  conversationId String?           @map("conversation_id")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  revokedAt      DateTime?         @map("revoked_at")
+  revokedBy      String?           @map("revoked_by")
+
+  @@index([userId, revokedAt])
+  @@map("chat_blocks")
+}
+
 /// A command the chat's run_command may type without a card (TER-1081, chat/command-rules.ts): the
 /// command's words, matched exactly or as a prefix, in one project (or every project of the user when
 /// null), on every machine or only the listed ones, until revoked or until it expires.
@@ -2017,7 +2048,7 @@ model ProjectHealthAlert {
   id          String    @id
   projectId   String    @map("project_id")
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  /// pr_ready | base_red | queue_stalled | tab_stuck | tab_waiting | card_orphan | run_blocked | machine_offline | delivery_failed | agent_outdated
+  /// pr_ready | base_red | queue_stalled | tab_stuck | tab_waiting | card_orphan | run_blocked | machine_offline | delivery_failed | agent_outdated | epic_zombie | done_unmerged
   signal      String
   /// what it is about (a PR url, a tab, card, run or machine id, the base branch)
   subject     String

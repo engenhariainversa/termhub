@@ -93,8 +93,11 @@ type Props = {
 export const ActionCard = memo(function ActionCard({ action, busy, onDecide, grant, projectGrant, standingGrant, revoking, onRevoke, onRepropose }: Props) {
   const { t } = useTranslation();
   // explicit fields: the contract infers `args` (z.unknown) as optional
-  const terminal = isTerminalGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id });
-  const standingKind = standingKindOf({ tool: action.tool, args: action.args, tab_id: action.tab_id, project_id: action.project_id });
+  // TER-1153: a card whose target is gone can still be answered, but nothing can be trusted from it.
+  const offersGrants = !action.target_gone;
+  const terminal = offersGrants && isTerminalGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id });
+  const board = offersGrants && isBoardGrantable({ tool: action.tool });
+  const standingKind = offersGrants ? standingKindOf({ tool: action.tool, args: action.args, tab_id: action.tab_id, project_id: action.project_id }) : null;
   const stale = staleLabel(action);
   const autoDecision = actionAutoDecision(action);
   // TER-984: a call that ran under a grant asked nobody, so it reads as one line — what it did and how
@@ -142,22 +145,22 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
             </View>
           </View>
           {/* explicit fields: the contract infers `args` (z.unknown) as optional */}
-          {isTabGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id }) ? (
+          {offersGrants && isTabGrantable({ tool: action.tool, args: action.args, tab_id: action.tab_id }) ? (
             <Button label={t('Permitir sempre nesta aba')} variant="secondary" onPress={() => onDecide(action.id, 'approve_tab')} disabled={busy} />
           ) : null}
-          {isBoardGrantable({ tool: action.tool }) ? (
+          {board ? (
             <Button label={t('Permitir sempre neste projeto')} variant="secondary" onPress={() => onDecide(action.id, 'approve_project')} disabled={busy} />
           ) : null}
           {terminal ? (
             <Button label={t('Liberar teclas e shell nesta aba')} variant="secondary" onPress={() => onDecide(action.id, 'approve_tab_terminal')} disabled={busy} />
           ) : null}
-          {terminal || isBoardGrantable({ tool: action.tool }) ? (
+          {terminal || board ? (
             <Button label={t('Liberar tudo neste projeto')} variant="secondary" onPress={() => onDecide(action.id, 'approve_project_all')} disabled={busy} />
           ) : null}
           {standingKind ? (
             <Button label={approveAlwaysLabel(standingKind)} variant="secondary" onPress={() => onDecide(action.id, 'approve_project_always')} disabled={busy} />
           ) : null}
-          {isFolderGrantable({ tool: action.tool, args: action.args }) ? (
+          {offersGrants && isFolderGrantable({ tool: action.tool, args: action.args }) ? (
             <Button label={t('Permitir sempre nesta pasta')} variant="secondary" onPress={() => onDecide(action.id, 'approve_folder_always')} disabled={busy} />
           ) : null}
         </View>

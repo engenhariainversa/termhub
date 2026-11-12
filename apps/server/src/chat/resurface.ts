@@ -39,6 +39,7 @@ export async function resurfaceCards(
       subagent: card.subagent,
       created_at: card.created_at,
       ...(card.command_rule ? { command_rule: card.command_rule } : {}),
+      ...(card.target_gone ? { target_gone: true as const } : {}),
       surfaced_at: card.surfaced_at,
       resurfaced: true,
     });

@@ -29,7 +29,7 @@ export interface Observation {
 export const PERSON_WAITS: readonly string[] = ['merge_person_card'];
 
 /** Signs that run on every project: a person's own tabs and machines stall too. The rest need automation on. */
-export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline'];
+export const LIGHT_SIGNALS: readonly HealthSignal[] = ['tab_stuck', 'tab_waiting', 'machine_offline', 'agent_exited'];
 
 export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   pr_ready: 'needs_you',
@@ -42,6 +42,9 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
   machine_offline: 'needs_you',
   delivery_failed: 'needs_you',
   agent_outdated: 'needs_you',
+  epic_zombie: 'concierge',
+  done_unmerged: 'concierge',
+  agent_exited: 'concierge',
 };
 
 /**
@@ -51,14 +54,20 @@ export const LEVEL_OF: Record<HealthSignal, HealthLevel> = {
  */
 export const TRUST_PROMPT_ALERT_MS = 2 * 60_000;
 
-/** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login. */
-export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required'] as const;
+/** Tab states that wait on someone: a question, a permission, the folder trust dialog, a login, a CLI dialog. */
+export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_prompt', 'auth_required', 'cli_dialog'] as const;
+
+/**
+ * TER-1166: a tab held by a modal dialog of its CLI swallows every message typed into it, and nothing else
+ * says so: past this long it opens at once, whatever the `tab_waiting` minutes say.
+ */
+export const CLI_DIALOG_ALERT_MS = 2 * 60_000;
 
 /** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
 export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
 
 /** Queue reasons that end on their own in a minute or two: the card is about to start (TER-1110's wait). */
-export const TRANSIENT_REASONS: readonly string[] = ['just_created'];
+export const TRANSIENT_REASONS: readonly string[] = ['just_created', 'epic_settling'];
 
 /** Run waits that are not an escalation: they resume on their own (quota back, GitHub back). */
 export const SELF_RESUMING_WAITS = ['quota', 'github_transient'];
@@ -91,6 +100,12 @@ export interface SnapshotTab {
   machine_id: string;
   /** an automatic run drives it */
   run: boolean;
+  /** TER-1168: its agent is gone (`agentGone`, monitor/agent-gone.ts); absent = not known to be */
+  agent_gone?: boolean;
+  /** TER-1168: a card in Fazendo points at it */
+  card_ref?: string | null;
+  /** TER-1168: an open watch of a chat follows it: that watch already wakes the chat about the exit */
+  watched?: boolean;
 }
 
 export interface SnapshotCard {
@@ -127,6 +142,30 @@ export interface SnapshotMachine {
   active_run: boolean;
 }
 
+/** TER-1150: an automatic epic in Fazendo, and what still keeps it alive. */
+export interface SnapshotEpic {
+  task_id: string;
+  ref: string;
+  title: string;
+  /** the epic's or its cards' last change, or the last end of one of their runs, whichever is latest */
+  since: Date;
+  /** a card of the epic in Fazendo or with an active run */
+  active_card: boolean;
+  /** an open PR of the epic or of its cards, or the epic's merged PR still delivering */
+  open_pr: boolean;
+}
+
+/** TER-1150: a card in Feito whose PR is still open (red, in conflict or just never merged). */
+export interface SnapshotDoneUnmerged {
+  task_id: string;
+  ref: string;
+  url: string;
+  number: number;
+  ci_state: string;
+  /** when the card last changed: about when it was moved to Feito */
+  since: Date;
+}
+
 export interface SnapshotQueued {
   task_id: string;
   ref: string;
@@ -155,6 +194,9 @@ export interface HealthSnapshot {
   runs: SnapshotRun[];
   machines: SnapshotMachine[];
   min_agent_version: string;
+  /** TER-1150; absent from a snapshot built before it */
+  epics?: SnapshotEpic[];
+  done_unmerged?: SnapshotDoneUnmerged[];
 }
 
 const AUTONOMY_ORDER: AutonomyLevel[] = ['pr', 'merge', 'deploy', 'release'];
@@ -215,7 +257,16 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
       // TER-1148: only the person can answer it, and nothing runs meanwhile — the person is pushed after 2 minutes
       const due = s.now.getTime() - tab.state_at.getTime() >= TRUST_PROMPT_ALERT_MS;
       add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due, 'needs_you');
+    } else if (tab.state === 'cli_dialog') {
+      const due = s.now.getTime() - tab.state_at.getTime() >= CLI_DIALOG_ALERT_MS;
+      add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 }, due);
     } else if ((WAITING_STATES as readonly string[]).includes(tab.state ?? '')) add('tab_waiting', tab.id, tab.state_at, { label: tab.name, state: tab.state, run: tab.run ? 1 : 0 });
+    // 12. TER-1168: the agent of a tab someone counts on left — a card in Fazendo points at it, or a watch follows
+    // it. A watch already wakes the chat about it (chat/watches/evaluate.ts): shown, quiet (`told_elsewhere`).
+    // A run's own tab is its follower's to bring back (AgentExited mid-turn), so it is left out.
+    if (tab.agent_gone && !tab.run && (tab.card_ref || tab.watched)) {
+      add('agent_exited', tab.id, tab.state_at, { label: tab.name, ref: tab.card_ref ?? null, ...(tab.watched ? { told_elsewhere: 1 } : {}) });
+    }
   }
 
   // 5. a card in Doing nobody works on: no tab, no run, no PR to wait for, not parked on a blocked run (6 says that)
@@ -250,6 +301,17 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
     for (const run of pr.release_runs) {
       if (run.state === 'failed') add('delivery_failed', `${pr.url}#${run.workflow}`, null, { label: `#${pr.number}`, url: run.url ?? pr.url, workflow: run.workflow, ref: pr.task_ref });
     }
+  }
+
+  // 10. an automatic epic in Fazendo with nothing alive under it: no card in progress, no PR, no delivery (TER-1150)
+  for (const e of s.epics ?? []) {
+    if (e.active_card || e.open_pr) continue;
+    add('epic_zombie', e.task_id, e.since, { label: e.ref, title: e.title });
+  }
+
+  // 11. a card in Feito whose PR is still open: done on the board, not in the code (TER-1150)
+  for (const d of s.done_unmerged ?? []) {
+    add('done_unmerged', `${d.url}#${d.task_id}`, d.since, { label: d.ref, url: d.url, pr: `#${d.number}`, ci: d.ci_state });
   }
   return out;
 }

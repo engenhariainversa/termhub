@@ -168,6 +168,8 @@ export const chatResponse = z.object({
   /** The person's own context limit for the meter (TER-1038); null = the model's window, and so does an
    * older server, which never sends the field. */
   context_limit: z.number().nullable().optional(),
+  /** "Compactar" is under way (TER-1152): a screen opened meanwhile shows it. An older server never sends it. */
+  compacting: z.boolean().optional(),
   host: chatHostStateSchema,
 });
 
@@ -364,6 +366,7 @@ export type TEpicProgress = z.infer<typeof epicProgress>;
 export type TCardProgress = z.infer<typeof cardProgress>;
 export type TAgentOnCard = z.infer<typeof agentOnCard>;
 export type { AutomationFeedEvent as TAutomationFeedEvent } from '@termhub/mobile-api';
+export type { EpicLifecycle as TEpicLifecycle } from '@termhub/mobile-api';
 export type TProgressEstimate = z.infer<typeof progressEstimate>;
 export type TPullRequestBadge = z.infer<typeof pullRequestBadge>;
 export type TCancelSubagentResponse = z.infer<typeof cancelSubagentResponse>;

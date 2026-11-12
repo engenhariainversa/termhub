@@ -1,6 +1,6 @@
 import { i18n, tk } from '../i18n';
-import { formatNumber } from './format';
-import { NEEDS_YOU, type AgentOnCard, type EpicProgress, type ProgressEstimate, type PullRequestBadge, type Tab, type TabState } from './types';
+import { formatDate, formatNumber } from './format';
+import { NEEDS_YOU, type AgentOnCard, type EpicLifecycle, type EpicProgress, type ProgressEstimate, type PullRequestBadge, type Tab, type TabState } from './types';
 
 const HOUR = 3600;
 
@@ -22,6 +22,29 @@ export function formatEstimate(e: ProgressEstimate): string {
   return i18n.t('~{{time}} de trabalho', { time: `${sameUnit ? low.replace(/ (min|h)$/, '') : low}–${high}` });
 }
 
+const PHASE_KEY: Record<EpicLifecycle['phase'], string> = {
+  not_started: tk('não começou'),
+  in_progress: tk('em andamento'),
+  integrating: tk('histórias prontas · integrando'),
+  delivering: tk('na base · entrega em andamento'),
+  failed: tk('falhou'),
+  done: tk('concluído'),
+};
+const FAILURE_KEY: Record<NonNullable<EpicLifecycle['failure']>, string> = {
+  ci: tk('falhou: CI'),
+  conflict: tk('falhou: conflito'),
+  deploy: tk('falhou: deploy'),
+  release: tk('falhou: publicação'),
+};
+
+/** TER-1150: where an automatic epic is, as one line: its phase (why it failed), since when it lives or when it died. */
+export function lifecycleLine(l: EpicLifecycle): string {
+  const phase = l.phase === 'failed' && l.failure ? i18n.t(FAILURE_KEY[l.failure]) : i18n.t(PHASE_KEY[l.phase]);
+  if (l.phase === 'done' && l.done_at) return i18n.t('{{phase}} em {{date}}', { phase, date: formatDate(l.done_at) });
+  if (l.started_at && l.phase !== 'not_started') return i18n.t('{{phase}} · desde {{date}}', { phase, date: formatDate(l.started_at) });
+  return phase;
+}
+
 const BASIS_KEY = { agent_time: tk('tempo de agente'), wall_clock: tk('tempo corrido') } as const;
 
 /** How the estimate was measured, in the language on screen. */
@@ -38,6 +61,7 @@ const STATE_LABEL: Record<TabState, string> = {
   blocked: tk('bloqueado'),
   auth_required: tk('login expirado'),
   trust_prompt: tk('confiar na pasta?'),
+  cli_dialog: tk('preso num diálogo'),
 };
 
 type StateFlags = Partial<Pick<AgentOnCard, 'background' | 'finished' | 'blocked' | 'auth_required' | 'trust_prompt'>>;
@@ -69,7 +93,7 @@ export function withLiveTab(agent: AgentOnCard, live: Tab | undefined): AgentOnC
   return {
     ...agent,
     // the shape the server sends (TER-644, TER-972, TER-1046): each newer state as an older one, flagged
-    state: s === 'waiting_background' ? 'working' : s === 'finished' || s === 'blocked' ? 'idle' : s === 'auth_required' ? 'error' : s === 'trust_prompt' ? 'waiting_input' : s,
+    state: s === 'waiting_background' ? 'working' : s === 'finished' || s === 'blocked' ? 'idle' : s === 'auth_required' ? 'error' : s === 'trust_prompt' || s === 'cli_dialog' ? 'waiting_input' : s,
     state_at: live.state_at,
     background: s === 'waiting_background',
     finished: s === 'finished',

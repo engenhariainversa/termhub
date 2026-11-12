@@ -16,7 +16,10 @@ import { HttpError } from '../lib/errors.js';
 import { automationCallIsBrake } from '../automation/setup-tools.js';
 import { chatBus } from './bus.js';
 import { boardProjectOf } from './board-project.js';
-import { isReadOnlyCommand, ruleEligible, ruleMatches } from './command-rules.js';
+import { isReadOnlyCommand, isWrapperCommand, ruleEligible, ruleMatches } from './command-rules.js';
+import { effectiveBlocks, openPermissionsOn } from './blocks.js';
+import { BLOCK_KIND_LABEL, blockFor, isQuotedAnswerGrantId, OPEN_BUDGETS, openGrantId, openKindOf, QUOTED_ANSWER_MAX_AGE_MS, quotedAnswerGrantId, type BlockKind } from './open-permissions.js';
+import { verifyOnBehalfOf } from '../control/input-origin.js';
 import { type ActionClass, actionClass, BOARD_GRANT_BUDGET, BOARD_GRANT_TOOLS, boardGrantable, COMMAND_RULE_BUDGET, DEFAULT_ALLOW_BUDGETS, defaultGrantId, defaultKindOf, FILE_GRANT_BUDGET, fileGrantable, gateDecision, insideFolder, grantable, GRANTABLE_TOOL, idempotencyKeyFor, STANDING_BUDGET_WINDOW_MS, STANDING_GRANT_BUDGETS, standingKindOf, TAB_TERMINAL_GRANT, TERMINAL_GRANT_BUDGET, TERMINAL_GRANT_TOOLS, terminalGrantable } from './gate.js';
 import { SCREEN_STATE_LINES, claudeScreenState } from '../monitor/screen-state.js';
 import { STALE_WORKING_MS } from '../monitor/stale-working.js';
@@ -182,6 +185,23 @@ const TAB_PROMPT_CHANGED = (tabId: string) => ({
   message: `A aba ${tabId} está esperando outra permissão, pedida depois da pergunta que o usuário confirmou: responder agora aceitaria algo que ele nunca viu. Nada foi executado e a confirmação não vale mais. Leia a tela com read_screen e proponha a ação de novo.`,
 });
 
+/**
+ * TER-1153: the refusal for a board write (`boardGrantable`) whose project does not resolve for this
+ * user — a deleted project, a card or column that is gone, or an id that was never theirs (one answer
+ * for all, so the refusal is no existence oracle). Undefined when the target resolves.
+ */
+async function boardTargetGone(ctx: ControlContext, call: GatedCall): Promise<{ ok: false; code: string; message: string } | undefined> {
+  if (!boardGrantable(call.tool)) return undefined;
+  if (await boardProjectOf(ctx.repos, ctx.scope.user.id, call.tool, call.args)) return undefined;
+  const id = targetId(call.args.project_id) ?? targetId(call.args.column_id) ?? targetId(call.args.task_id) ?? '?';
+  const what = call.tool === 'create_task' || call.tool === 'create_column' ? `O projeto ${id}` : call.tool === 'update_column' ? `A coluna ${id}` : `A tarefa ${id}`;
+  return {
+    ok: false,
+    code: 'TARGET_NOT_FOUND',
+    message: `${what} não existe mais ou não é deste usuário, então nada foi pedido a ele nem executado. Ache o projeto certo com find (ou list_projects / list_tasks) e proponha a ação de novo com o id atual; não use ids guardados de conversas antigas sem conferir.`,
+  };
+}
+
 /** What the action targets, for the chat's card and for re-validating an approval. Ids only: a value
  * of another shape is not an id and is dropped rather than stored. */
 const targetId = (v: unknown) => (typeof v === 'string' && v.length >= 1 && v.length <= 64 ? v : null);
@@ -281,7 +301,8 @@ async function staleApproval(ctx: ControlContext, call: GatedCall, row: ChatActi
   if (tab.state === 'waiting_permission') {
     if (typesFreeText(call)) return TAB_WAITING_PERMISSION(row.tab_id);
     // A grant's call was never shown to the user, so it cannot be the answer they chose.
-    if (row.grant_id) return GRANTED_KEY_ON_PERMISSION(row.tab_id);
+    // …except a permission answer relayed with the person's own words (TER-1164): it is their answer.
+    if (row.grant_id && !isQuotedAnswerGrantId(row.grant_id)) return GRANTED_KEY_ON_PERMISSION(row.tab_id);
     // The exempted tools answer a permission on purpose — but only the one the user actually saw.
     if (promptChangedSince(tab, row)) return TAB_PROMPT_CHANGED(row.tab_id);
   }
@@ -404,6 +425,7 @@ async function publishCard(repos: Repositories, userId: string, row: ChatAction)
     subagent: card.subagent,
     created_at: row.created_at,
     ...(card.command_rule ? { command_rule: card.command_rule } : {}),
+    ...(card.target_gone ? { target_gone: true as const } : {}),
   });
 }
 
@@ -711,6 +733,140 @@ async function commandRuleCovering(ctx: ControlContext, call: GatedCall): Promis
   }
 }
 
+/** A call a block of the person's says "nunca" to (TER-1164): refused with no card. */
+const BLOCKED = (label: string): GateOutcome => ({
+  ok: false,
+  code: 'BLOCKED_BY_PERSON',
+  message: `O usuário bloqueou esta ação (${label}) e marcou "nunca": nada foi pedido a ele nem executado. Não tente por outro caminho; diga a ele o que ficou sem fazer. Só ele tira o bloqueio, em Permissões do chat ou pedindo a você (unblock_action, que vira um card).`,
+});
+
+/** Tab states with an agent at work in the tab: typed text is a prompt, not a shell command. */
+const AGENT_TAB_STATES: ReadonlySet<string | null> = new Set(['working', 'waiting_background', 'waiting_input', 'finished', 'blocked']);
+
+/**
+ * Whether this `send_input` answers a permission with the person's own words (TER-1164): it passes
+ * `answering_permission` and `on_behalf_of`, the refs check out (`verifyOnBehalfOf`), and one of the
+ * quoted messages is at most `QUOTED_ANSWER_MAX_AGE_MS` old and was written after the tab started asking
+ * (its `state_at`), so the person answered this dialog, not an earlier one.
+ */
+async function quotedAnswer(ctx: ControlContext, call: GatedCall, tab: Tab): Promise<boolean> {
+  if (call.tool !== 'send_input' || call.args.answering_permission !== true) return false;
+  const refs = call.args.on_behalf_of;
+  if (!Array.isArray(refs) || refs.length === 0 || !refs.every((r) => typeof r === 'string')) return false;
+  let ids: string[] | undefined;
+  try {
+    ids = await verifyOnBehalfOf(ctx, refs as string[]);
+  } catch {
+    return false;
+  }
+  if (!ids?.length) return false;
+  const asked = tab.state === 'waiting_permission' ? Date.parse(tab.state_at ?? '') : Number.NEGATIVE_INFINITY;
+  const messages = await ctx.repos.chat.findUserMessagesForUser(ids, ctx.scope.user.id);
+  const now = Date.now();
+  return messages.some((m) => {
+    const at = Date.parse(m.created_at);
+    return Number.isFinite(at) && now - at <= QUOTED_ANSWER_MAX_AGE_MS && (!Number.isFinite(asked) || at > asked);
+  });
+}
+
+type OpenOutcome = { grantId: string } | { refused: GateOutcome } | null;
+
+/**
+ * The open model (TER-1164, flag `chat_open_permissions`): what lets a call through without a card, or
+ * null when it asks. The call's kind (`openKindOf`; core → null), its target resolved owner-scoped (an
+ * unresolved one asks), the guards that keep the core out of reach — a command must be one simple command
+ * off the "never" list and not a wrapper, typed text on a shell is such a command, control characters
+ * ask, a permission is answered only with the person's quoted words, a working tab is not closed — then
+ * the person's blocks (`effectiveBlocks`: "nunca" refuses, "pedir antes" asks), a budget per kind, and
+ * last the screen. Replaces every grant and default while the flag is on: a block must win over a grant
+ * given before it.
+ */
+async function openGrantCovering(ctx: ControlContext, call: GatedCall): Promise<OpenOutcome> {
+  const kind = openKindOf(call.tool, call.args);
+  if (!kind) return null;
+  const userId = ctx.scope.user.id;
+  let projectId: string | null = null;
+  let tab: Tab | undefined;
+  if (kind === 'board') {
+    projectId = await boardProjectOf(ctx.repos, userId, call.tool, call.args);
+    if (!projectId) return null;
+  } else if (kind === 'terminal' || kind === 'close_tab' || kind === 'link_tab_task' || kind === 'run_command') {
+    const tabId = targetId(call.args.tab_id);
+    if (!tabId) return null;
+    [tab] = await ctx.repos.tabs.findByIdsForOwner([tabId], userId);
+    if (!tab) return null;
+    projectId = tab.project_id;
+  } else if (call.args.project_id !== undefined) {
+    const id = targetId(call.args.project_id);
+    if (!id) return null;
+    const [project] = await ctx.repos.projects.findByIdsForOwner([id], userId);
+    if (!project) return null;
+    projectId = project.id;
+  }
+
+  // The command a call runs, when it runs one: its words, already off the "never" list.
+  let words: string[] | null = null;
+  let quoted = false;
+  let screen: 'shell' | 'agent' | 'none' = 'none';
+  const commandOf = (text: string): string[] | null => {
+    const parsed = ruleEligible(text);
+    return parsed.ok && !isWrapperCommand(parsed.words) ? parsed.words : null;
+  };
+  if (kind === 'run_command') {
+    if (typeof call.args.command !== 'string' || tab!.kind !== 'terminal' || !SHELL_TAB_STATES.has(tab!.state)) return null;
+    words = commandOf(call.args.command);
+    if (!words) return null;
+    screen = 'shell';
+  } else if (kind === 'close_tab') {
+    if (!(STOPPED_TAB_STATES.has(tab!.state ?? '') || (tab!.state === 'working' && (await idleDespiteWorking(ctx, tab!))))) return null;
+  } else if (kind === 'terminal') {
+    const text = typeof call.args.text === 'string' ? call.args.text : null;
+    if (text !== null && CONTROL_CHARS.test(text)) return null;
+    if (call.args.answering_permission === true || tab!.state === 'waiting_permission') {
+      // A permission dialog: only the person's own quoted answer, never free text into it.
+      if (!(await quotedAnswer(ctx, call, tab!))) return null;
+      quoted = true;
+    } else if (AGENT_TAB_STATES.has(tab!.state)) {
+      // `!` in Claude Code runs the rest in bash: the same rules as run_command.
+      if (text !== null && text.trimStart().startsWith('!')) {
+        words = commandOf(text.trimStart().slice(1));
+        if (!words) return null;
+      }
+      screen = 'agent';
+    } else {
+      // No agent in the tab: what is typed is a shell command, and a key could replay one.
+      if (call.tool !== 'send_input' || text === null) return null;
+      if (text.trim() !== '') {
+        words = commandOf(text);
+        if (!words) return null;
+      }
+      screen = 'shell';
+    }
+  }
+
+  const blocks = await effectiveBlocks(ctx.repos, userId);
+  const block = blockFor(blocks, kind, projectId, words) ?? (kind === 'terminal' && words ? blockFor(blocks, 'run_command', projectId, words) : undefined);
+  if (block) return block.effect === 'never' ? { refused: BLOCKED(describeKind(block.kind, block.words)) } : null;
+
+  const grantId = quoted ? quotedAnswerGrantId(userId) : openGrantId(userId, kind);
+  const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
+  if (used >= OPEN_BUDGETS[quoted ? 'terminal' : kind]) return null;
+
+  // Last, the screen: a dialog the hooks have not reported yet, or the wrong kind of prompt for the text.
+  if (screen !== 'none') {
+    try {
+      const { text } = await readScreen(ctx, { tab_id: tab!.id, lines: 40 }, { plain: true });
+      if (permissionDialogVisible(text)) return null;
+      if (screen === 'shell' && claudeScreenState(text) !== null) return null;
+    } catch {
+      return null;
+    }
+  }
+  return { grantId };
+}
+
+const describeKind = (kind: BlockKind, words: readonly string[]): string => (kind === 'run_command' && words.length > 0 ? `rodar «${words.join(' ')}…»` : BLOCK_KIND_LABEL[kind]);
+
 /**
  * `actionClass`, plus what only the current state can tell (TER-975): a `set_automation_policy` change is a
  * brake or a widening only against the Setup it changes. A brake goes through like `pause_automation`; a
@@ -765,39 +921,52 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   // `allow` and `refuse` only come back with a row (without one the decision is `ask`), so the guard
   // on `row` narrows the type rather than adding a branch of its own.
   if (!row || decision === 'ask') {
+    // TER-1164: with the open model on, it alone decides; the grants and defaults below are the old model.
+    const open = !row && (await openPermissionsOn(ctx.repos, ctx.scope.user.id));
+    if (open) {
+      const outcome = await openGrantCovering(ctx, call);
+      if (outcome && 'refused' in outcome) return outcome.refused;
+      if (outcome) return executeGranted(ctx, call, conversationId, key, cls, outcome.grantId);
+    }
     // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
-    if (!row && grantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
+    if (!row && !open && grantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
       const grant = await ctx.repos.chatGrants.findActive(conversationId, call.args.tab_id, GRANTABLE_TOOL);
       if (grant && (await grantCoversTab(ctx, call.args.tab_id))) return executeGranted(ctx, call, conversationId, key, cls, grant.id);
     }
     // Wider, and tried after the narrow grant so agent chatter stays off the terminal budget.
-    if (!row && terminalGrantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
+    if (!row && !open && terminalGrantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
       const grantId = await terminalGrantCovering(ctx, conversationId, call.args.tab_id);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
-    if (!row && boardGrantable(call.tool)) {
+    if (!row && !open && boardGrantable(call.tool)) {
       const grantId = await projectGrantCovering(ctx, conversationId, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // Last, the standing grants (TER-386): after every conversation-bound one, so their budgets are spent first.
-    if (!row) {
+    if (!row && !open) {
       const grantId = await standingGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // run_command under a command rule of the person's, or the read-only default list (TER-1081).
-    if (!row) {
+    if (!row && !open) {
       const grantId = await commandRuleCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // A folder the person trusted for share_file (TER-1086). Never a default.
-    if (!row) {
+    if (!row && !open) {
       const grantId = await fileGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
     }
     // Then the defaults every user gets unless they restricted them (TER-627).
-    if (!row) {
+    if (!row && !open) {
       const grantId = await defaultGrantCovering(ctx, call);
       if (grantId) return executeGranted(ctx, call, conversationId, key, cls, grantId);
+    }
+    // TER-1153: a board write whose project does not resolve would only ask a question nobody can
+    // usefully answer (the call 404s once approved). Refused here, with no card.
+    if (!row) {
+      const gone = await boardTargetGone(ctx, call);
+      if (gone) return gone;
     }
     return ask(ctx, call, conversationId, key, cls);
   }

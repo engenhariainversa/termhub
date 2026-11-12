@@ -4,7 +4,9 @@ import { progressResponse, progressScope } from '@termhub/mobile-api';
 import type { Repositories } from '../db/repositories/index.js';
 import { canAccess } from '../auth/permissions.js';
 import { scoped } from '../auth/scope.js';
-import { aggregateEpic, feedOf, selectEpics, withUsage } from '../progress/aggregate.js';
+import { aggregateEpic, feedOf, lifecycleOf, selectEpics, withUsage } from '../progress/aggregate.js';
+import { mergeWaitOf } from '../automation/merge-wait.js';
+import type { ProjectSetupData } from '../setup/schema.js';
 import { requestLocale } from '../i18n/index.js';
 import { ciErrorOf } from '../ci/status.js';
 
@@ -29,8 +31,16 @@ export async function progressRoutes(app: FastifyInstance, repos: Repositories, 
     const feed = automatic ? feedOf(await repos.progress.feed({ ...where, limit: FEED_LIMIT }), requestLocale(request), includeAgents) : [];
     // what the automatic tabs cost (spec D23); only where automatic work ever ran, so nobody else pays for it
     const totals = automatic ? await repos.tabUsage.totalsByTask(rows.flatMap((e) => [e.id, ...e.cards.map((c) => c.id)])) : new Map();
-    const aggregated = rows.map((e) => withUsage({ ...aggregateEpic(e, includeAgents), ci_error: ciErrorOf(e.project.id) }, totals));
+    // TER-1150: the automatic epics' lifecycle reads their project's epic branch pattern and delivery workflows
+    const setups = new Map<string, ProjectSetupData>();
+    for (const e of rows) if (e.auto && !setups.has(e.project.id)) setups.set(e.project.id, (await repos.projectSetup.get(e.project.id)).data);
+    const now = deps.now?.() ?? new Date();
+    const aggregated = rows.map((e) => {
+      const setup = setups.get(e.project.id);
+      const lifecycle = setup ? lifecycleOf(e, setup, mergeWaitOf(e.id, now)) : null;
+      return withUsage({ ...aggregateEpic(e, includeAgents), ci_error: ciErrorOf(e.project.id), lifecycle }, totals);
+    });
     const epics = selectEpics(aggregated, q.scope);
-    return progressResponse.parse({ epics, feed, generated_at: (deps.now?.() ?? new Date()).toISOString() });
+    return progressResponse.parse({ epics, feed, generated_at: now.toISOString() });
   });
 }

@@ -253,6 +253,11 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }
 
+/** The data lists when there is a provider above, else null: for a component (the chat) that only nudges them. */
+export function useOptionalData(): DataState | null {
+  return useContext(DataContext);
+}
+
 export function useData(): DataState {
   const ctx = useContext(DataContext);
   if (!ctx) throw new Error('useData fora do DataProvider');

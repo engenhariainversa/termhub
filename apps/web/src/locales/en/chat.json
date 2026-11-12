@@ -689,5 +689,19 @@
   "Nenhuma outra conta do projeto tem limite livre agora.": "No other account of the project has usage left right now.",
   "Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.": "Add another Claude account to the project's Setup (AI accounts and model) so the chat can switch on its own.",
   "Ainda no mesmo limite de uso (volta {{reset}}).": "Still at the same usage limit (back {{reset}}).",
-  "Ainda no mesmo limite de uso.": "Still at the same usage limit."
+  "Ainda no mesmo limite de uso.": "Still at the same usage limit.",
+  "{{tokens}} de {{max}} tokens (o seu limite)": "{{tokens}} of {{max}} tokens (your limit)",
+  "{{tokens}} de {{max}} tokens": "{{tokens}} of {{max}} tokens",
+  "compactado às {{time}}": "compacted at {{time}}",
+  "compactado em {{when}}": "compacted on {{when}}",
+  "Mensagem pronta": "Ready to send",
+  "Copiar mensagem": "Copy message",
+  "Mensagem copiada": "Message copied",
+  "Não foi possível copiar a mensagem": "Could not copy the message",
+  "presa num diálogo do CLI": "stuck on a CLI dialog",
+  "ficar presa num diálogo": "get stuck on a dialog",
+  "ficou presa num diálogo": "got stuck on a dialog",
+  "Usar o que já decidi em outros projetos": "Use what I decided in other projects",
+  "Não foi possível alterar o uso da memória de outros projetos": "Could not change the use of memory from other projects",
+  "Num projeto com pouco histórico, o concierge e os agentes também consultam suas decisões, notas e lições dos outros projetos, sempre dizendo de onde vieram. Elas servem para sugerir, nunca para responder sozinho no lugar de uma decisão deste projeto. Os agentes das abas sempre veem as lições que você verificou.": "In a project with little history, the concierge and the agents also look up your decisions, notes and lessons from your other projects, always saying where they came from. They are used to suggest, never to answer on their own in place of a decision of this project. Agents in tabs always see the lessons you verified."
 }

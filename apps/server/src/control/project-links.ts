@@ -28,7 +28,7 @@ export async function resolveLinkCwd(machine: Machine, cwd: string, createDir: b
 }
 
 /** `resolveLinkCwd`, but a missing directory answers with a message that says what to do next. */
-async function checkedDir(machine: Machine, cwd: string, createDir: boolean | undefined): Promise<{ path: string; created: boolean }> {
+export async function checkedDir(machine: Machine, cwd: string, createDir: boolean | undefined): Promise<{ path: string; created: boolean }> {
   try {
     return await resolveLinkCwd(machine, cwd, createDir);
   } catch (e) {
@@ -66,7 +66,7 @@ export interface LinkResult {
   note?: string;
 }
 
-async function toLinkResult(project: Project, machine: Machine, path: string, created: boolean): Promise<LinkResult> {
+export async function toLinkResult(project: Project, machine: Machine, path: string, created: boolean): Promise<LinkResult> {
   const git_repo = await gitRepo(machine, path);
   return {
     project_id: project.id,

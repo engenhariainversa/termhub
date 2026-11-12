@@ -336,6 +336,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     setHost: (a: Auth, body: TSetHostBody) => empty('POST', '/api/m/v1/chat/host', { token: a.accessToken, body }),
     sendMessage: (a: Auth, body: TMobileMessageBody) => call('POST', '/api/m/v1/chat/messages', sendAccepted, { token: a.accessToken, body }),
     reset: (a: Auth, projectId: string | null) => empty('POST', '/api/m/v1/chat/reset', { token: a.accessToken, body: { project_id: projectId } }),
+    compact: (a: Auth, projectId: string | null) => empty('POST', '/api/m/v1/chat/compact', { token: a.accessToken, body: { project_id: projectId } }),
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
     decideMany: (a: Auth, body: TMobileBatchDecisionBody) => empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body }),

@@ -96,6 +96,10 @@ interface Setup {
   textItems?: MemoryHit[];
   embedder?: Embedder | null;
   user?: string;
+  /** TER-1169: the person's own decisions and notes in the searched project; absent = the counts are not wired. */
+  history?: { decisions: number; notes: number };
+  /** TER-1169: "Usar o que já decidi em outros projetos" (default on). */
+  crossProject?: boolean;
 }
 
 function ctxFor(setup: Setup = {}) {
@@ -104,16 +108,21 @@ function ctxFor(setup: Setup = {}) {
   const decisionTextSearch = vi.fn(async () => setup.textDecisions ?? []);
   const nearest = vi.fn(async (_filter: MemoryFilter) => setup.vecItems ?? []);
   const itemTextSearch = vi.fn(async (_filter: MemoryFilter) => setup.textItems ?? []);
+  const countPersonForProject = vi.fn(async () => setup.history?.decisions ?? 0);
+  const countProjectNotes = vi.fn(async () => setup.history?.notes ?? 0);
+  const chatCrossProjectMemory = vi.fn(async () => setup.crossProject ?? true);
   const repos = {
     projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)) },
-    chatDecisions: { nearestAny, textSearch: decisionTextSearch },
-    memoryItems: { nearest, textSearch: itemTextSearch },
+    chatDecisions: { nearestAny, textSearch: decisionTextSearch, ...(setup.history ? { countPersonForProject } : {}) },
+    memoryItems: { nearest, textSearch: itemTextSearch, ...(setup.history ? { countProjectNotes } : {}) },
+    ...(setup.history ? { users: { chatCrossProjectMemory } } : {}),
   } as unknown as Repositories;
+
   const user = setup.user ?? 'u1';
   const scope = { user: { id: user } as never, viewAs: { kind: 'self' as const }, ownerId: user, createAs: user };
   const ctx: ControlContext = { repos, scope, scoped: new Scoped(repos, scope), can: async () => true };
   const embedder: Embedder | null | undefined = 'embedder' in setup ? setup.embedder : { embed: vi.fn(async (texts: string[]) => ({ model: 'm', vectors: texts.map(() => [1, 0, 0]) })) };
-  return { ctx, repos, calls: { nearestAny, decisionTextSearch, nearest, itemTextSearch }, embedder };
+  return { ctx, repos, calls: { nearestAny, decisionTextSearch, nearest, itemTextSearch, countPersonForProject, countProjectNotes, chatCrossProjectMemory }, embedder };
 }
 
 describe('parseRef', () => {
@@ -357,6 +366,79 @@ describe('searchMemory and replaced items (TER-1015)', () => {
     expect(byRef.get('decision:d1')).toMatchObject({ superseded_at: '2026-10-03T12:02:00.000Z' });
     expect(byRef.get('note:n2')).toMatchObject({ supersedes: 'decision:d1' });
     expect(byRef.get('note:n2')).not.toHaveProperty('superseded_at');
+  });
+});
+
+describe('searchMemory across the person\'s projects (TER-1169)', () => {
+  const place = (projectId: string | undefined) => ({ projectId, conversationId: null, includeExpired: false, includeInactive: false, includeSuperseded: false });
+
+  it('a project with little history reads every note, decision and lesson of the other projects', async () => {
+    const { ctx, embedder, calls } = ctxFor({ history: { decisions: 3, notes: 6 } });
+    await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
+    expect(calls.countPersonForProject).toHaveBeenCalledWith('u1', 'p1');
+    expect(calls.countProjectNotes).toHaveBeenCalledWith('u1', 'p1');
+    expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', otherProjects: { notes: true, lessons: 'all' } }), 'x', expect.anything());
+    // decisions are read wherever they were recorded, not only where they hold
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, place(undefined));
+  });
+
+  it('a project with history keeps its own notes and decisions, and reads only verified lessons elsewhere', async () => {
+    const { ctx, embedder, calls } = ctxFor({ history: { decisions: 4, notes: 6 } });
+    await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
+    expect(calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ otherProjects: { notes: false, lessons: 'verified' } }), 'x', expect.anything());
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, place('p1'));
+  });
+
+  it('with the switch off, nothing of the other projects is added and nothing is counted', async () => {
+    const { ctx, embedder, calls } = ctxFor({ history: { decisions: 0, notes: 0 }, crossProject: false });
+    await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder });
+    expect(calls.itemTextSearch.mock.calls[0]![0]).not.toHaveProperty('otherProjects');
+    expect(calls.countProjectNotes).not.toHaveBeenCalled();
+    expect(calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), undefined, place('p1'));
+  });
+
+  it('without project_id nothing is counted', async () => {
+    const { ctx, embedder, calls } = ctxFor({ history: { decisions: 0, notes: 0 } });
+    await searchMemory(ctx, { query: 'x' }, { embedder });
+    expect(calls.chatCrossProjectMemory).not.toHaveBeenCalled();
+    expect(calls.itemTextSearch.mock.calls[0]![0]).not.toHaveProperty('otherProjects');
+  });
+
+  it('marks what came from another project, and what does not hold here ranks behind what does', async () => {
+    const { ctx, embedder } = ctxFor({
+      history: { decisions: 0, notes: 1 },
+      textItems: [
+        item({ id: 'n1', project_id: 'p2', project_name: 'outro', scope: 'project', rank: 1 }),
+        item({ id: 'n2', project_id: 'p2', project_name: 'outro', scope: 'user', rank: 2 }),
+        item({ id: 'l1', kind: 'lesson', project_id: 'p2', project_name: 'outro', verified: true, rank: 3 }),
+        item({ id: 'n3', project_id: 'p1', project_name: 'proj', scope: 'project', rank: 4 }),
+      ],
+    });
+    const r = await searchMemory(ctx, { query: 'x', project_id: 'p1' }, { embedder: null });
+    const byRef = new Map(r.results.map((x) => [x.ref, x]));
+    expect(byRef.get('note:n1')).toMatchObject({ other_project: true, holds_here: false });
+    expect(byRef.get('note:n2')).toMatchObject({ other_project: true });
+    expect(byRef.get('note:n2')).not.toHaveProperty('holds_here');
+    expect(byRef.get('lesson:l1')).toMatchObject({ other_project: true });
+    expect(byRef.get('note:n3')).not.toHaveProperty('other_project');
+    const order = r.results.map((x) => x.ref);
+    expect(order.indexOf('note:n1')).toBeGreaterThan(order.indexOf('note:n2'));
+    expect(order.indexOf('note:n1')).toBeGreaterThan(order.indexOf('note:n3'));
+  });
+
+  it('a tab with little history reads other projects\' notes and only verified lessons; its decisions stay its project\'s', async () => {
+    const out = ctxFor({ history: { decisions: 0, notes: 0 } });
+    out.ctx.token = { id: 't', scopes: ['read', 'memory'], tab: { id: 'tab1', project_id: 'p1' } };
+    await searchMemory(out.ctx, { query: 'x' }, { embedder: out.embedder });
+    expect(out.calls.itemTextSearch).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1', otherProjects: { notes: true, lessons: 'verified' } }), 'x', expect.anything());
+    expect(out.calls.decisionTextSearch).toHaveBeenCalledWith('u1', 'x', expect.anything(), 'p1', place('p1'));
+  });
+
+  it('a failed count searches the project alone, as before', async () => {
+    const out = ctxFor({ history: { decisions: 0, notes: 0 } });
+    out.calls.countProjectNotes.mockRejectedValueOnce(new Error('db down'));
+    await searchMemory(out.ctx, { query: 'x', project_id: 'p1' }, { embedder: out.embedder });
+    expect(out.calls.itemTextSearch.mock.calls[0]![0]).not.toHaveProperty('otherProjects');
   });
 });
 
@@ -927,6 +1009,8 @@ interface AnswerSetup {
   pinned?: { high: number; low: number };
   /** Whether one of the person's screens has termhub in focus (default: none). */
   focused?: boolean;
+  /** TER-1169: "Usar o que já decidi em outros projetos" (default on). */
+  crossProject?: boolean;
 }
 
 /** An embedder that always answers; tests of the similarity floor pass their own. */
@@ -948,7 +1032,7 @@ function ctxForAnswer(setup: AnswerSetup = {}) {
   const findManyForOwner = vi.fn(async (ids: string[], ownerId: string) => items.filter((it) => ids.includes(it.id) && it.owner_id === ownerId));
   const repos = {
     tabQuestions: { findByIdForUser, setAutoAnswer, setSuggestion },
-    users: { chatAutodecide, chatAutoThresholds: vi.fn(async () => ({ high: setup.pinned?.high ?? null, low: setup.pinned?.low ?? null, calibration: null })) },
+    users: { chatAutodecide, chatCrossProjectMemory: vi.fn(async () => setup.crossProject ?? true), chatAutoThresholds: vi.fn(async () => ({ high: setup.pinned?.high ?? null, low: setup.pinned?.low ?? null, calibration: null })) },
     chatDecisions: { findManyForUser, similarityTo },
     memoryItems: { findManyForOwner },
     chatAuto: { focusedUsers: vi.fn(async (ids: string[]) => new Set(setup.focused ? ids : [])) },
@@ -1000,7 +1084,8 @@ describe('answerTabQuestionTool', () => {
     it('SOURCE_NOT_VALID for a cited decision or note that expired, or holds in another project or conversation (TER-1014)', async () => {
       const expired = pastDecision({ id: 'd1', expires_at: '2026-09-26T11:00:00.000Z' });
       await refusal({ decisions: [expired] }, yes, 'SOURCE_NOT_VALID');
-      await refusal({ decisions: [pastDecision({ id: 'd1', scope: 'project', project_id: 'p2' })] }, yes, 'SOURCE_NOT_VALID');
+      await refusal({ decisions: [pastDecision({ id: 'd1', scope: 'project', project_id: 'p2' })], crossProject: false }, yes, 'SOURCE_NOT_VALID');
+      await refusal({ decisions: [pastDecision({ id: 'd1', scope: 'project', project_id: 'p2', expires_at: '2026-09-26T11:00:00.000Z' })] }, yes, 'SOURCE_NOT_VALID');
       await refusal({ decisions: [pastDecision({ id: 'd1', scope: 'conversation', conversation_id: 'c2' })] }, yes, 'SOURCE_NOT_VALID');
       const note = memoryItem({ id: 'n1', kind: 'note', scope: 'conversation', conversation_id: 'c2' });
       await refusal({ items: [note] }, { ...yes, sources: ['decision:d1', 'note:n1'] }, 'SOURCE_NOT_VALID');
@@ -1148,6 +1233,29 @@ describe('answerTabQuestionTool', () => {
     const r = await callTool(ctx, yes);
     expect(r).toEqual({ mode: 'suggest', downgraded_because: 'switch_off' });
     expectSuggestion(calls, d1Source);
+  });
+
+  it('a decision scoped to another project only suggests (other_project, TER-1169), and is named as such', async () => {
+    const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', scope: 'project', project_id: 'p2' })] });
+    const r = await callTool(ctx, yes);
+    expect(r).toEqual({ mode: 'suggest', downgraded_because: 'other_project', other_project_sources: ['decision:d1'] });
+    expect(calls.setAutoAnswer).not.toHaveBeenCalled();
+    expect(calls.setSuggestion).toHaveBeenCalledTimes(1);
+  });
+
+  it('a note scoped to another project only suggests too (TER-1169)', async () => {
+    const n = memoryItem({ id: 'n1', kind: 'note', scope: 'project', project_id: 'p2', title: 'Usar git worktree para isolar o trabalho?', text: 'Decisão: Sim\nMotivo: m' });
+    const { ctx, calls } = ctxForAnswer({ decisions: [], items: [n] });
+    const r = await callTool(ctx, { ...yes, sources: ['note:n1'] });
+    expect(r).toEqual({ mode: 'suggest', downgraded_because: 'other_project', other_project_sources: ['note:n1'] });
+    expect(calls.setAutoAnswer).not.toHaveBeenCalled();
+  });
+
+  it('a decision of another project scoped "user" still backs auto (as before TER-1169)', async () => {
+    const { ctx, calls } = ctxForAnswer({ decisions: [pastDecision({ id: 'd1', scope: 'user', project_id: 'p2' })] });
+    const r = await callTool(ctx, yes);
+    expect(r).toMatchObject({ mode: 'auto', other_project_sources: ['decision:d1'] });
+    expect(calls.setAutoAnswer).toHaveBeenCalledTimes(1);
   });
 
   it('downgrades with only a doc/note/task source (no_person_precedent); source.question is the item title', async () => {

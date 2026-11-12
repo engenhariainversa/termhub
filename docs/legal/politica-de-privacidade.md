@@ -21,7 +21,7 @@
 
 ## 2. Quem é o controlador e como falar conosco
 
-2.1. O controlador dos dados pessoais tratados no serviço hospedado do termhub é **[RAZÃO SOCIAL]**, CNPJ [CNPJ], com sede em [ENDEREÇO] ("**termhub**", "**nós**").
+2.1. O controlador dos dados pessoais tratados no serviço hospedado do termhub é **8020 Digital Ltda**, CNPJ 32.285.763/0001-12, com sede em [ENDEREÇO] ("**termhub**", "**nós**").
 
 2.2. **Encarregado pelo tratamento de dados pessoais (DPO):** [NOME ou "Encarregado do termhub"], e-mail **[privacidade@termhub.dev]**.
 
@@ -319,7 +319,7 @@ Avisaremos as mudanças relevantes com pelo menos **30 dias** de antecedência, 
 ## 15. Contato
 
 - Encarregado: [NOME], [privacidade@termhub.dev]
-- [RAZÃO SOCIAL], [ENDEREÇO]
+- 8020 Digital Ltda, [ENDEREÇO]
 
 ---
 

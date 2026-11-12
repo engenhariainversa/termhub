@@ -999,6 +999,16 @@ export function registerChatRoutes(router: MockRouter, state: MockState, opts: {
     return { status: 200, body: { ok: true } };
   });
 
+  // "Compactar" (TER-1152): the mock has no CLI session to rewrite, so it starts and ends at once.
+  router.route('POST', '/api/m/v1/chat/compact', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    const conversation = conversationFor(state, resetBody.parse(ctx.body).project_id ?? null);
+    const base = { user_id: USER_ID, conversation_id: conversation.id, tokens_before: null, tokens: null, error_code: null };
+    broadcast(state, { type: 'compact', ...base, state: 'started' });
+    broadcast(state, { type: 'compact', ...base, state: 'done' });
+    return { status: 202, body: { conversation_id: conversation.id } };
+  });
+
   router.route('POST', '/api/m/v1/chat/reset', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
     const body = resetBody.parse(ctx.body);

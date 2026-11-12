@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { config } from '../config.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { buildCardSvg, renderCard, resolveFocus } from '../public/card.js';
 import { normalizeNickname } from '../public/nickname.js';
@@ -82,6 +83,16 @@ function cardCacheKey(nickname: string, focus: { building?: { id: string } }): s
  * city would tell a stranger which nicknames are taken.
  */
 export async function publicCityRoutes(app: FastifyInstance, repos: Repositories) {
+  /**
+   * This instance's legal footer (the same values as /auth/config), for the city's beta sign-up: the
+   * form posts to this instance, so its terms, policy and operator are the ones to show. Here because
+   * termhub.dev forwards only /api/public/ to the app, not /api/auth/.
+   */
+  app.get('/legal', { config: { public: true } }, async (_request, reply) => {
+    reply.header('cache-control', 'public, max-age=300');
+    return { terms_url: config.legal.termsUrl, privacy_url: config.legal.privacyUrl, legal_entity: config.legal.entity };
+  });
+
   app.get('/city/:nickname', { config: { public: true } }, async (request, reply) => {
     const parsed = normalizeNickname(params.parse(request.params).nickname);
     if (!parsed.ok) return sendError(request, reply, 404, 'Cidade não encontrada', 'NOT_FOUND');

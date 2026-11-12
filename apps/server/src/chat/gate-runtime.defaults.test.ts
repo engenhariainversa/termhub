@@ -244,9 +244,15 @@ describe('what the defaults never cover (TER-627): still a card', () => {
     ['open_tab', { project_id: 'p-foreign', machine_id: 'm1' }],
     ['close_tab', { tab_id: 'nope' }],
     ['link_tab_task', { tab_id: 'nope', task_id: 'k1' }],
-    ['create_task', { project_id: 'p-foreign', title: 'x' }],
   ])('%s on something that is not the user’s asks', async (tool, args) => {
     await expectAsks(tool, args);
+  });
+
+  it('create_task on a project that is not the user’s is refused with no card (TER-1153)', async () => {
+    expect(await call('create_task', { project_id: 'p-foreign', title: 'x' })).toMatchObject({ ok: false, code: 'TARGET_NOT_FOUND' });
+    expect(actions.rows).toHaveLength(0);
+    expect(run).not.toHaveBeenCalled();
+    expect(actions.insertApproved).not.toHaveBeenCalled();
   });
 
   it('the 11th start_agent in an hour asks, counted across conversations', async () => {

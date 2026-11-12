@@ -273,8 +273,12 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
     expect(ids).not.toContain(unembedded.id);
     expect(ids).not.toContain(otherOwnerRow.id);
 
+    const accountDoc = (await repo.upsertMany([item({ project_id: null, kind: 'task', source_id: newId(), title: 'Q', text: 'q' })]))[0]!;
+    await repo.setEmbedding(accountDoc.id, mix(1, 5, 0.3), 'm');
     const byProject = await repo.nearest({ ownerId: userId, projectId }, vec(1), 10, 'm');
-    expect(byProject.map((n) => n.id)).not.toContain(inOtherProject.id);
+    // an account-wide note holds in every project (TER-1169); any other row outside the project stays out
+    expect(byProject.map((n) => n.id)).toContain(inOtherProject.id);
+    expect(byProject.map((n) => n.id)).not.toContain(accountDoc.id);
 
     const byKind = await repo.nearest({ ownerId: userId, kinds: ['doc'] }, vec(1), 10, 'm');
     expect(byKind.map((n) => n.id)).toEqual([docKind.id]);
@@ -601,5 +605,35 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('MemoryItemsRepository (Po
       .catch((e: unknown) => {
         if (e !== ROLLBACK) throw e;
       });
+  });
+  it('a search held to a project (TER-1169): user-scoped notes of any project; otherProjects adds the other notes and lessons', async () => {
+    const side = newId();
+    await db.project.create({ data: { id: side, key: `T${side.slice(-5).toUpperCase().replace(/[^A-Z0-9]/g, 'X')}`, name: 'side', ownerId: userId } });
+    try {
+      const word = `cross${side.slice(-6)}`;
+      const [own] = await repo.upsertMany([item({ title: `${word} own`, text: word })]);
+      const [everywhere] = await repo.upsertMany([item({ project_id: side, scope: 'user', title: `${word} everywhere`, text: word })]);
+      const [scoped] = await repo.upsertMany([item({ project_id: side, scope: 'project', title: `${word} scoped`, text: word })]);
+      const [lesson] = await repo.upsertMany([item({ project_id: side, kind: 'lesson', title: `${word} lesson`, text: word })]);
+      const [verified] = await repo.upsertMany([item({ project_id: side, kind: 'lesson', title: `${word} verified`, text: word })]);
+      const [stranger] = await repo.upsertMany([item({ owner_id: otherUserId, project_id: otherProjectId, scope: 'user', title: `${word} stranger`, text: word })]);
+      expect(await repo.setVerified(verified!.id, userId, userId)).toBe(true);
+      const place = { projectId, conversationId: null };
+      const ids = async (f: Partial<MemoryFilter>) => new Set((await repo.textSearch({ ownerId: userId, projectId, place, ...f }, word, 20)).map((h) => h.id));
+
+      expect(await ids({})).toEqual(new Set([own!.id, everywhere!.id]));
+      expect(await ids({ otherProjects: { notes: false, lessons: 'verified' } })).toEqual(new Set([own!.id, everywhere!.id, verified!.id]));
+      expect(await ids({ otherProjects: { notes: true, lessons: 'all' } })).toEqual(new Set([own!.id, everywhere!.id, scoped!.id, lesson!.id, verified!.id]));
+      expect(await ids({ otherProjects: { notes: true, lessons: 'all' } })).not.toContain(stranger!.id);
+
+      // the rules of a project take the user-scoped notes of the others, never their project-scoped ones
+      const rules = (await repo.currentNotes(userId, projectId, 50)).map((n) => n.id);
+      expect(rules).toContain(everywhere!.id);
+      expect(rules).not.toContain(scoped!.id);
+      expect(await repo.countProjectNotes(userId, side)).toBe(2);
+    } finally {
+      await db.memoryItem.deleteMany({ where: { projectId: side } });
+      await db.project.delete({ where: { id: side } });
+    }
   });
 });

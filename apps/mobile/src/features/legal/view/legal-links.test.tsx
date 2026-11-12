@@ -13,4 +13,9 @@ describe('LegalLinks', () => {
     await fireEvent.press(screen.getByRole('link', { name: 'Política de privacidade' }));
     expect(open).toHaveBeenLastCalledWith('https://termhub.dev/privacidade/');
   });
+
+  it('names the publisher and its CNPJ under the links', async () => {
+    await render(<LegalLinks />);
+    expect(screen.getByText('8020 Digital Ltda · CNPJ 32.285.763/0001-12')).toBeTruthy();
+  });
 });

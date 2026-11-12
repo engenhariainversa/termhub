@@ -153,6 +153,7 @@
   "nenhuma regra do projeto libera esta permissão": "no project rule allows this permission",
   "O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum": "The project requires an external ticket (Jira, Linear or GitHub) and the card has none",
   "Card recém-criado; o automático começa em até 2 min": "Card just created; automatic work starts within 2 min",
+  "O épico ainda está recebendo cards novos; o automático começa 2 min depois do último (até 10 min)": "The epic is still getting new cards; automatic work starts 2 min after the last one (at most 10 min)",
   "O projeto exige um ticket externo e o card {{ref}} não tem": "The project requires an external ticket and card {{ref}} has none",
   "a aba {{name}}": "the tab {{name}}",
   "o PR #{{number}} ({{branch}})": "PR #{{number}} ({{branch}})",
@@ -210,5 +211,11 @@
   "Aba {{tab}} fechada sozinha: {{machine}} sem folga, parada há {{hours}} h": "Tab {{tab}} closed by itself: {{machine}} has no room, idle for {{hours}} h",
   "Aba {{tab}} fechada sozinha em {{machine}}: parada há {{hours}} h": "Tab {{tab}} closed by itself on {{machine}}: idle for {{hours}} h",
   "A sessão pode ser retomada na mesma pasta (--continue)": "The session can be resumed in the same folder (--continue)",
-  "A máquina do concierge precisa estar ligada ao projeto": "The concierge machine must be linked to the project"
+  "A máquina do concierge precisa estar ligada ao projeto": "The concierge machine must be linked to the project",
+  "Épico {{label}} em andamento sem história ativa nem PR há {{duration}}": "Epic {{label}} in progress with no active story nor PR for {{duration}}",
+  "Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}": "Card {{label}} in Done with PR {{pr}} still open for {{duration}}",
+  "Épico parado em andamento": "Stalled epic in progress",
+  "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR",
+  "Agente da aba {{label}} fora do ar há {{duration}}": "Agent of tab {{label}} down for {{duration}}",
+  "Agente fora do ar em aba acompanhada": "Agent down in a followed tab"
 }

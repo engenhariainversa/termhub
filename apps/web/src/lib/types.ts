@@ -43,7 +43,7 @@ export interface User {
 }
 
 /** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
-export type FeatureFlagKey = 'subscriptions';
+export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions';
 
 /** One person's own value for a flag (Configurações → Recursos em teste). */
 export interface FeatureFlagOverride {
@@ -440,6 +440,20 @@ export interface EpicProgress {
   ci_error: string | null;
   /** the epic's own automatic tabs plus its cards'; null/absent = nothing metered */
   usage?: ProgressUsage | null;
+  /** TER-1150: the automatic epic's lifecycle; null/absent for a manual epic or a server that predates it */
+  lifecycle?: EpicLifecycle | null;
+}
+
+/** TER-1150: where an automatic epic is in its life, from its first card to its delivery (same shape as `@termhub/mobile-api`). */
+export type EpicPhase = 'not_started' | 'in_progress' | 'integrating' | 'delivering' | 'failed' | 'done';
+export interface EpicLifecycle {
+  phase: EpicPhase;
+  branch: string | null;
+  started_at: string | null;
+  done_at: string | null;
+  /** the epic's own PR (epic branch → base) */
+  pull_request: PullRequestBadge | null;
+  failure: 'ci' | 'conflict' | 'deploy' | 'release' | null;
 }
 /** One line of the automatic work's feed (same shape as `@termhub/mobile-api`): the sentence is written from `kind` and these facts. */
 export interface AutomationFeedEvent {
@@ -697,7 +711,7 @@ export interface ProjectSetupData {
 }
 
 /** TER-1121: the signs of stalled work the project's health watcher looks for. */
-export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated';
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated' | 'epic_zombie' | 'done_unmerged' | 'agent_exited';
 
 export interface ProjectHealthSetup {
   enabled: boolean;
@@ -800,6 +814,7 @@ export interface Tab {
  * `blocked`: the tab's automatic run reported itself blocked; automation or the chat acts (TER-1046).
  * `auth_required`: Claude Code's login expired, the person has to run /login (TER-1046).
  * `trust_prompt`: Claude Code asks whether the folder is trusted, before it starts (TER-1046).
+ * `cli_dialog`: a dialog of the CLI holds its input ("Teach auto mode", "Hooks need review"); the state text names it (TER-1166).
  */
 export type TabState =
   | 'working'
@@ -811,7 +826,8 @@ export type TabState =
   | 'finished'
   | 'blocked'
   | 'auth_required'
-  | 'trust_prompt';
+  | 'trust_prompt'
+  | 'cli_dialog';
 
 export type TabActivity = 'coding' | 'reading' | 'researching' | 'planning' | 'terminal' | 'working';
 
@@ -827,10 +843,11 @@ export const TAB_STATE_LABEL: Record<TabState, string> = {
   blocked: tk('bloqueado'),
   auth_required: tk('login expirado'),
   trust_prompt: tk('confiar na pasta?'),
+  cli_dialog: tk('preso num diálogo'),
 };
 
-/** States in which the tool is waiting for the person: the yellow ones and the expired login (TER-1046). */
-export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt'];
+/** States in which the tool is waiting for the person: the yellow ones, the expired login (TER-1046), a CLI dialog (TER-1166). */
+export const NEEDS_YOU: readonly TabState[] = ['waiting_input', 'waiting_permission', 'auth_required', 'trust_prompt', 'cli_dialog'];
 
 /** States a quick reply answers: typing text into a login or trust dialog would do nothing good. */
 export const ANSWERABLE: readonly TabState[] = ['waiting_input', 'waiting_permission'];
@@ -1069,6 +1086,8 @@ export interface AuthConfig {
   /** this instance's terms of use and privacy policy (TERMS_URL / PRIVACY_URL); null = no link */
   terms_url?: string | null;
   privacy_url?: string | null;
+  /** who runs this instance, e.g. "8020 Digital Ltda · CNPJ …" (LEGAL_ENTITY); null = no line */
+  legal_entity?: string | null;
 }
 
 export type AiProvider = 'claude' | 'chatgpt' | 'gemini' | 'antigravity';
@@ -1408,6 +1427,9 @@ export interface ChatAction {
   /** TER-1081: what a pending run_command card offers to allow for good — the command and its prefix as
    * text; absent when no rule could cover it (or from an older server). */
   command_rule?: { exact: string; prefix: string | null };
+  /** TER-1153: a pending card whose project, tab or card no longer exists for this user: only
+   * Autorizar/Recusar, no "sempre"/"liberar" buttons. Absent otherwise (and from an older server). */
+  target_gone?: true;
 }
 
 /**
@@ -1552,6 +1574,21 @@ export interface ChatDefault {
   kind: 'open_tab' | 'start_agent' | 'link_tab_task' | 'board' | 'terminal' | 'close_tab' | 'read_commands';
   label: string;
   allowed: boolean;
+}
+
+/** TER-1164 (flag chat_open_permissions): something the chat must not do on its own. */
+export type ChatBlockKind = 'open_tab' | 'close_tab' | 'start_agent' | 'board' | 'link_tab_task' | 'terminal' | 'run_command' | 'share_file' | 'machines' | 'tickets' | 'automation';
+export interface ChatBlock {
+  /** `restriction:<default kind>` for a default the person unchecked before the open model. */
+  id: string;
+  kind: ChatBlockKind;
+  project_id: string | null;
+  project_name: string | null;
+  /** run_command only: the commands that start with these words; empty = every command. */
+  words: string[];
+  effect: 'ask' | 'never';
+  source: 'block' | 'restriction';
+  created_at: string | null;
 }
 
 export interface ChatGrantListItem {
@@ -1771,6 +1808,8 @@ export interface ChatMemory {
   codex_replies: boolean;
   /** "Contar ao chat de onde estou falando" (TER-1088): on by default. Absent from an older server. */
   client_context?: boolean;
+  /** "Usar o que já decidi em outros projetos" (TER-1169): on by default. Absent from an older server. */
+  cross_project?: boolean;
   /** The context meter's limit in tokens (TER-1038); null = the model's window. Absent from an older server. */
   context_limit?: number | null;
   /** "Modelos do concierge" (TER-1145): the Claude families the concierge never runs on; empty = none.

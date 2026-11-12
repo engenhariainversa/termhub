@@ -1,8 +1,8 @@
 // Same wording as the web's lib/progress.ts (spec 2026-09-26 progress-panel §4.6): keep both in sync.
 // In the language the app shows (i18n spec 2026-10-04): "min" and "h" read the same in both.
 import { t, tk } from '@/i18n';
-import { formatNumber } from '@/i18n/format';
-import type { TAgentOnCard, TEpicProgress, TProgressEstimate, TPullRequestBadge } from '@/services/api/contract';
+import { formatDate, formatNumber } from '@/i18n/format';
+import type { TAgentOnCard, TEpicLifecycle, TEpicProgress, TProgressEstimate, TPullRequestBadge } from '@/services/api/contract';
 import type { ProgressUsage } from '@/services/api/contract';
 
 const HOUR = 3600;
@@ -23,6 +23,29 @@ export function formatEstimate(e: TProgressEstimate): string {
   if (low === high) return t('~{{range}} de trabalho', { range: low });
   const sameUnit = e.low_s < HOUR === e.high_s < HOUR;
   return t('~{{range}} de trabalho', { range: `${sameUnit ? low.replace(/ (min|h)$/, '') : low}–${high}` });
+}
+
+const PHASE_KEY: Record<TEpicLifecycle['phase'], string> = {
+  not_started: tk('não começou'),
+  in_progress: tk('em andamento'),
+  integrating: tk('histórias prontas · integrando'),
+  delivering: tk('na base · entrega em andamento'),
+  failed: tk('falhou'),
+  done: tk('concluído'),
+};
+const FAILURE_KEY: Record<NonNullable<TEpicLifecycle['failure']>, string> = {
+  ci: tk('falhou: CI'),
+  conflict: tk('falhou: conflito'),
+  deploy: tk('falhou: deploy'),
+  release: tk('falhou: publicação'),
+};
+
+/** TER-1150: where an automatic epic is, as one line (same wording as the web's `lifecycleLine`). */
+export function lifecycleLine(l: TEpicLifecycle): string {
+  const phase = l.phase === 'failed' && l.failure ? t(FAILURE_KEY[l.failure]) : t(PHASE_KEY[l.phase]);
+  if (l.phase === 'done' && l.done_at) return t('{{phase}} em {{date}}', { phase, date: formatDate(l.done_at) });
+  if (l.started_at && l.phase !== 'not_started') return t('{{phase}} · desde {{date}}', { phase, date: formatDate(l.started_at) });
+  return phase;
 }
 
 /** "US$ 1,23" / "US$ 1.23"; below a cent, 4 digits; "—" when nothing was priced (an unknown model, a Codex tab). Same as the web. */

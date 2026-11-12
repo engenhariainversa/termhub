@@ -10,7 +10,7 @@
 
 ## 1. Quem somos e o que estes Termos regulam
 
-1.1. O termhub é um serviço oferecido por **[RAZÃO SOCIAL]**, inscrita no CNPJ sob o nº [CNPJ], com sede em [ENDEREÇO] ("**termhub**", "**nós**").
+1.1. O termhub é um serviço oferecido por **8020 Digital Ltda**, inscrita no CNPJ sob o nº 32.285.763/0001-12, com sede em [ENDEREÇO] ("**termhub**", "**nós**").
 
 1.2. Estes Termos de Uso ("**Termos**") regulam o uso do serviço hospedado pelo termhub, que inclui:
 - o aplicativo web em `app.termhub.dev`;
@@ -129,7 +129,7 @@ Pedimos que você leia esta seção com atenção: ela explica o que o Serviço 
 
 8.3. **Não usamos o Seu Conteúdo para treinar modelos de IA** e não o vendemos.
 
-8.4. O termhub, a marca, o site, os aplicativos e o Serviço hospedado pertencem a [RAZÃO SOCIAL]. O código-fonte aberto segue a licença MIT.
+8.4. O termhub, a marca, o site, os aplicativos e o Serviço hospedado pertencem a 8020 Digital Ltda. O código-fonte aberto segue a licença MIT.
 
 8.5. Se você nos mandar sugestões ou feedback, podemos usá-los para melhorar o Serviço, sem obrigação de pagamento. Isso não transfere a propriedade do Seu Conteúdo.
 

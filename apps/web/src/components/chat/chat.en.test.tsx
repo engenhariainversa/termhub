@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { i18n } from '../../i18n';
@@ -8,6 +8,7 @@ import { formatTokens } from '../../lib/chat-context';
 import type { ChatAction } from '../../lib/types';
 import { ChatActionCard } from './ChatActionCard';
 import { ChatActionGroup } from './ChatActionGroup';
+import { ChatContextBadge } from './ChatContextBadge';
 import { ChatContextMeter } from './ChatContextMeter';
 import { ChatHost } from './ChatHost';
 
@@ -48,6 +49,13 @@ describe('chat in English', () => {
     expect(formatTokens(1_000_000)).toBe('1M');
     render(<ChatContextMeter tokens={25_258} window={1_000_000} compacting={false} canCompact onCompact={vi.fn()} />);
     expect(screen.getByRole('meter', { name: 'Conversation context' })).toHaveTextContent('25K / 1M · 3%');
+    expect(screen.getByRole('button', { name: 'Compact' })).toBeInTheDocument();
+  });
+
+  it('the header context badge reads its numbers in English (TER-1151)', () => {
+    render(<ChatContextBadge tokens={170_000} window={1_000_000} limit={200_000} compacting={false} canCompact onCompact={vi.fn()} />);
+    fireEvent.click(screen.getByRole('meter', { name: 'Conversation context' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('170K of 200K tokens (your limit)');
     expect(screen.getByRole('button', { name: 'Compact' })).toBeInTheDocument();
   });
 

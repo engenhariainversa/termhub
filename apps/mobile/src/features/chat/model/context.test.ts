@@ -1,4 +1,4 @@
-import { contextDetails, contextLabel, contextMeter, parseContextLimit, shortTokens } from './context';
+import { compactDoneText, compactFailedText, contextDetails, contextLabel, contextMeter, isCompactCommand, parseContextLimit, shortTokens } from './context';
 import type { ChatConversation } from './types';
 
 const conversation = (over: Partial<ChatConversation>): ChatConversation => ({ id: 'c1', title: null, project_id: null, archived_at: null, last_message_at: null, ...over });
@@ -27,6 +27,16 @@ describe('contextMeter (TER-1038)', () => {
     expect(lines[3]).toMatch(/Compactar/);
     expect(contextDetails(contextMeter(conversation({ context_tokens: 10_000, context_window: 200_000 }), null)!)).toEqual([expect.stringMatching(/10.000 de 200.000 tokens \(5%\)$/), 'Esta conversa ainda não foi compactada.']);
   });
+});
+
+it('reads `/compact` alone as the command, and says how a compaction ended', () => {
+  expect(isCompactCommand('  /compact ')).toBe(true);
+  expect(isCompactCommand('/compact agora')).toBe(false);
+  expect(isCompactCommand('o que é /compact?')).toBe(false);
+  expect(compactDoneText(411_000, 52_000)).toBe('Conversa compactada: 411k → 52k tokens');
+  expect(compactDoneText(null, null)).toBe('Conversa compactada');
+  expect(compactFailedText('HOST_GONE')).toBe('A máquina do chat saiu do ar durante a compactação');
+  expect(compactFailedText(null)).toBe('Não foi possível compactar a conversa');
 });
 
 it('shortens tokens the way the status line does', () => {

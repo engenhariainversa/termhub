@@ -25,6 +25,7 @@ import { startPermission } from './permission.js';
 import { implementerPrompt, serverMessage } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
+import { epicBorn, followExternalMerges, settleEpic } from './epic-lifecycle.js';
 import { eligibilityQueue } from './queue.js';
 import { existingWorkText, findExistingWork, type ExistingWork } from './existing-work.js';
 
@@ -311,6 +312,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       if (epicBranch) {
         const gh = await githubToken(project, setup);
         await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, repo?.base_branch ?? 'main', epicBranch);
+        // TER-1150: the epic is born with its first card: it goes to Fazendo, and the feed says when and by whom
+        if (epic) await epicBorn({ repos, log }, epic, task, epicBranch);
       }
       const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.link.cwd, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
       if (!(await write(run, { worktree_path: ws.path }))) return;
@@ -556,10 +559,18 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const project = await repos.projects.findById(projectId);
     if (!project?.owner_id || (await isPaused(repos, project.owner_id, projectId))) return;
     const board = await repos.tasks.listByProject(projectId);
+    // TER-1150: a card PR a person merged on GitHub moves its card as the merge executor would
+    try {
+      await followExternalMerges({ repos, log }, project, setup, board);
+    } catch (e) {
+      log.warn({ projectId, code: errorCode(e) }, 'automation: external merges not followed');
+    }
     for (const epic of board) {
       if (halted()) return;
       if (epic.type !== 'epic' || !epic.auto || epic.status === 'done') continue;
       try {
+        // TER-1150: an epic whose PR is merged and delivered dies (Feito, branch deleted, cleanup, epic_done)
+        if (await settleEpic({ repos, gh: deps.gh, log }, project, setup, epic, board)) continue;
         await integrateEpic({ repos, gh: deps.gh, lifecycle: deps.lifecycle, log, startTriggered }, epic, setup, board);
       } catch (e) {
         log.warn({ projectId, taskId: epic.id, code: errorCode(e) }, 'automation: epic integration failed');

@@ -85,10 +85,27 @@ describe('project grant in the gate', () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it('foreign task asks', async () => {
+  // TER-1153: a board write whose target does not resolve (gone, or never this user's) is refused at
+  // once — no card the person could only fail to approve, and no grant tried on it.
+  it.each([
+    ['create_task', { project_id: 'p-gone', title: 'x' }, 'O projeto p-gone'],
+    ['create_column', { project_id: 'p-gone', name: 'x', category: 'todo' }, 'O projeto p-gone'],
+    ['move_task', { task_id: 'k-foreign', status: 'done' }, 'A tarefa k-foreign'],
+    ['add_subtasks', { task_id: 'k-gone', subtasks: [{ title: 's' }] }, 'A tarefa k-gone'],
+  ])('%s on a target that does not resolve is refused with no card', async (tool, args, what) => {
     seedGrant('p1');
-    expect(await call('move_task', { task_id: 'k-foreign', status: 'done' })).toMatchObject({ code: 'CONFIRMATION_PENDING' });
+    const outcome = await call(tool, args);
+    expect(outcome).toMatchObject({ ok: false, code: 'TARGET_NOT_FOUND' });
+    expect((outcome as { message: string }).message).toContain(`${what} não existe mais`);
+    expect((outcome as { message: string }).message).toContain('find');
+    expect(actions.insertPending).not.toHaveBeenCalled();
+    expect(actions.rows).toHaveLength(0);
+    expect(chatBus.publish).not.toHaveBeenCalled();
     expect(run).not.toHaveBeenCalled();
+  });
+
+  it('an ungated call on a gone project is not the gate\'s business: the tool answers it', async () => {
+    expect(await applyGate(ctx, { token: { gated: false }, tool: 'create_task', args: { project_id: 'p-gone', title: 'x' }, run })).toEqual({ ok: true, value: { ok: 1 } });
   });
 
   it('expired or revoked grant asks', async () => {

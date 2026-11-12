@@ -90,5 +90,19 @@
   "Motivo: {{why}}": "Motivo: {{why}}",
   "Precedente: {{ref}}": "Precedente: {{ref}}",
   "Regra: {{ref}}": "Regla: {{ref}}",
-  "Similaridade: {{score}}%": "Similitud: {{score}}%"
+  "Similaridade: {{score}}%": "Similitud: {{score}}%",
+  "{{ref}}: épico começou na branch {{branch}}": "{{ref}}: la épica empezó en la rama {{branch}}",
+  "{{ref}}: épico começou": "{{ref}}: la épica empezó",
+  "{{ref}}: épico concluído, na base e entregue": "{{ref}}: épica terminada, en la rama base y entregada",
+  "não começou": "no empezó",
+  "histórias prontas · integrando": "historias listas · integrando",
+  "na base · entrega em andamento": "en la rama base · entrega en curso",
+  "falhou": "falló",
+  "falhou: CI": "falló: CI",
+  "falhou: conflito": "falló: conflicto",
+  "falhou: deploy": "falló: deploy",
+  "falhou: publicação": "falló: publicación",
+  "{{phase}} em {{date}}": "{{phase}} el {{date}}",
+  "{{phase}} · desde {{date}}": "{{phase}} · desde {{date}}",
+  "em andamento": "en curso"
 }

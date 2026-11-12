@@ -497,6 +497,11 @@ export class ChatDecisionsRepository {
     return this.db.chatDecision.count({ where: { userId } });
   }
 
+  /** The person's own answers (trust `person`) in this project (TER-1169: part of whether it has history). */
+  countPersonForProject(userId: string, projectId: string): Promise<number> {
+    return this.db.chatDecision.count({ where: { userId, projectId, trust: 'person' } });
+  }
+
   /**
    * A `choice` question the chat answered but the sweeper has not yet turned into decisions (spec §5):
    * never a `permission` row, never one still `open` (only `answered` questions are remembered), and
