@@ -58,6 +58,11 @@ export interface FeatureFlagOverride {
 /** GET /api/feature-flags: a flag, its instance value and who has their own. */
 export interface FeatureFlagInfo {
   key: FeatureFlagKey;
+  /** Readable name and what turning it on changes, already in the reader's language (TER-1187); absent on an older server. */
+  title?: string;
+  description?: string;
+  /** The card the flag came from (`TER-1171`). */
+  card?: string;
   default: boolean;
   enabled: boolean;
   updated_at: string | null;
