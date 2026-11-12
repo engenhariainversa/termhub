@@ -28,7 +28,7 @@ import { TRUST_CLI_LABEL, trustDialogOf } from './trust-dialogs.js';
  * TER-1148: the folder also counts as the project's when the tab's `cwd` names it (the link's folder spelled
  * out) and when it is the worktree of the tab's automatic run; before Claude Code starts or resumes there
  * (start_agent, an account swap, a resume after the agent exited) the folder is marked trusted in every
- * Claude account of the machine (`pretrustFolder`, agent 0.37.0), since the trust is kept per account; and a
+ * Claude account of the machine (`pretrustFolder`, agent 0.38.0), since the trust is kept per account; and a
  * dialog whose cursor starts on "No" gets the selection moved up to the trust option first, Enter only once
  * the screen shows it there.
  */
@@ -92,7 +92,7 @@ export async function trustedFolderOf(repos: TrustRepos, tab: Pick<Tab, 'id' | '
 }
 
 /** The first agent release that answers `claude.trustFolder` (TER-1148). */
-export const TRUST_FOLDER_MIN_AGENT_VERSION = '0.37.0';
+export const TRUST_FOLDER_MIN_AGENT_VERSION = '0.38.0';
 
 /**
  * Right before Claude Code starts or resumes in a tab (TER-1148): its folder, when the server may trust it
