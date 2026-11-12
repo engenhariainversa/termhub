@@ -237,6 +237,7 @@ export type ApiTokenWhereInput = {
   tabId?: Prisma.StringNullableFilter<"ApiToken"> | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   events?: Prisma.ApiTokenEventListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
   chatConversation?: Prisma.XOR<Prisma.ChatConversationNullableScalarRelationFilter, Prisma.ChatConversationWhereInput> | null
 }
 
@@ -255,6 +256,7 @@ export type ApiTokenOrderByWithRelationInput = {
   tabId?: Prisma.SortOrderInput | Prisma.SortOrder
   user?: Prisma.UserOrderByWithRelationInput
   events?: Prisma.ApiTokenEventOrderByRelationAggregateInput
+  apiRuns?: Prisma.ApiRunOrderByRelationAggregateInput
   chatConversation?: Prisma.ChatConversationOrderByWithRelationInput
 }
 
@@ -276,6 +278,7 @@ export type ApiTokenWhereUniqueInput = Prisma.AtLeast<{
   tabId?: Prisma.StringNullableFilter<"ApiToken"> | string | null
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   events?: Prisma.ApiTokenEventListRelationFilter
+  apiRuns?: Prisma.ApiRunListRelationFilter
   chatConversation?: Prisma.XOR<Prisma.ChatConversationNullableScalarRelationFilter, Prisma.ChatConversationWhereInput> | null
 }, "id" | "tokenHash">
 
@@ -328,6 +331,7 @@ export type ApiTokenCreateInput = {
   tabId?: string | null
   user: Prisma.UserCreateNestedOneWithoutApiTokensInput
   events?: Prisma.ApiTokenEventCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutTokenInput
   chatConversation?: Prisma.ChatConversationCreateNestedOneWithoutApiTokensInput
 }
 
@@ -345,6 +349,7 @@ export type ApiTokenUncheckedCreateInput = {
   chatConversationId?: string | null
   tabId?: string | null
   events?: Prisma.ApiTokenEventUncheckedCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutTokenInput
 }
 
 export type ApiTokenUpdateInput = {
@@ -360,6 +365,7 @@ export type ApiTokenUpdateInput = {
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutApiTokensNestedInput
   events?: Prisma.ApiTokenEventUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutTokenNestedInput
   chatConversation?: Prisma.ChatConversationUpdateOneWithoutApiTokensNestedInput
 }
 
@@ -377,6 +383,7 @@ export type ApiTokenUncheckedUpdateInput = {
   chatConversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   events?: Prisma.ApiTokenEventUncheckedUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutTokenNestedInput
 }
 
 export type ApiTokenCreateManyInput = {
@@ -480,6 +487,11 @@ export type ApiTokenScalarRelationFilter = {
   isNot?: Prisma.ApiTokenWhereInput
 }
 
+export type ApiTokenNullableScalarRelationFilter = {
+  is?: Prisma.ApiTokenWhereInput | null
+  isNot?: Prisma.ApiTokenWhereInput | null
+}
+
 export type ApiTokenCreateNestedManyWithoutUserInput = {
   create?: Prisma.XOR<Prisma.ApiTokenCreateWithoutUserInput, Prisma.ApiTokenUncheckedCreateWithoutUserInput> | Prisma.ApiTokenCreateWithoutUserInput[] | Prisma.ApiTokenUncheckedCreateWithoutUserInput[]
   connectOrCreate?: Prisma.ApiTokenCreateOrConnectWithoutUserInput | Prisma.ApiTokenCreateOrConnectWithoutUserInput[]
@@ -545,6 +557,22 @@ export type ApiTokenUpdateOneRequiredWithoutEventsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ApiTokenUpdateToOneWithWhereWithoutEventsInput, Prisma.ApiTokenUpdateWithoutEventsInput>, Prisma.ApiTokenUncheckedUpdateWithoutEventsInput>
 }
 
+export type ApiTokenCreateNestedOneWithoutApiRunsInput = {
+  create?: Prisma.XOR<Prisma.ApiTokenCreateWithoutApiRunsInput, Prisma.ApiTokenUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.ApiTokenCreateOrConnectWithoutApiRunsInput
+  connect?: Prisma.ApiTokenWhereUniqueInput
+}
+
+export type ApiTokenUpdateOneWithoutApiRunsNestedInput = {
+  create?: Prisma.XOR<Prisma.ApiTokenCreateWithoutApiRunsInput, Prisma.ApiTokenUncheckedCreateWithoutApiRunsInput>
+  connectOrCreate?: Prisma.ApiTokenCreateOrConnectWithoutApiRunsInput
+  upsert?: Prisma.ApiTokenUpsertWithoutApiRunsInput
+  disconnect?: Prisma.ApiTokenWhereInput | boolean
+  delete?: Prisma.ApiTokenWhereInput | boolean
+  connect?: Prisma.ApiTokenWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ApiTokenUpdateToOneWithWhereWithoutApiRunsInput, Prisma.ApiTokenUpdateWithoutApiRunsInput>, Prisma.ApiTokenUncheckedUpdateWithoutApiRunsInput>
+}
+
 export type ApiTokenCreateNestedManyWithoutChatConversationInput = {
   create?: Prisma.XOR<Prisma.ApiTokenCreateWithoutChatConversationInput, Prisma.ApiTokenUncheckedCreateWithoutChatConversationInput> | Prisma.ApiTokenCreateWithoutChatConversationInput[] | Prisma.ApiTokenUncheckedCreateWithoutChatConversationInput[]
   connectOrCreate?: Prisma.ApiTokenCreateOrConnectWithoutChatConversationInput | Prisma.ApiTokenCreateOrConnectWithoutChatConversationInput[]
@@ -599,6 +627,7 @@ export type ApiTokenCreateWithoutUserInput = {
   gated?: boolean
   tabId?: string | null
   events?: Prisma.ApiTokenEventCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutTokenInput
   chatConversation?: Prisma.ChatConversationCreateNestedOneWithoutApiTokensInput
 }
 
@@ -615,6 +644,7 @@ export type ApiTokenUncheckedCreateWithoutUserInput = {
   chatConversationId?: string | null
   tabId?: string | null
   events?: Prisma.ApiTokenEventUncheckedCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutTokenInput
 }
 
 export type ApiTokenCreateOrConnectWithoutUserInput = {
@@ -673,6 +703,7 @@ export type ApiTokenCreateWithoutEventsInput = {
   gated?: boolean
   tabId?: string | null
   user: Prisma.UserCreateNestedOneWithoutApiTokensInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutTokenInput
   chatConversation?: Prisma.ChatConversationCreateNestedOneWithoutApiTokensInput
 }
 
@@ -689,6 +720,7 @@ export type ApiTokenUncheckedCreateWithoutEventsInput = {
   gated?: boolean
   chatConversationId?: string | null
   tabId?: string | null
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutTokenInput
 }
 
 export type ApiTokenCreateOrConnectWithoutEventsInput = {
@@ -719,6 +751,7 @@ export type ApiTokenUpdateWithoutEventsInput = {
   gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutApiTokensNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutTokenNestedInput
   chatConversation?: Prisma.ChatConversationUpdateOneWithoutApiTokensNestedInput
 }
 
@@ -735,6 +768,87 @@ export type ApiTokenUncheckedUpdateWithoutEventsInput = {
   gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   chatConversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutTokenNestedInput
+}
+
+export type ApiTokenCreateWithoutApiRunsInput = {
+  id: string
+  name: string
+  tokenHash: string
+  scopes?: Prisma.ApiTokenCreatescopesInput | string[]
+  expiresAt?: Date | string | null
+  lastUsedAt?: Date | string | null
+  revokedAt?: Date | string | null
+  createdAt?: Date | string
+  gated?: boolean
+  tabId?: string | null
+  user: Prisma.UserCreateNestedOneWithoutApiTokensInput
+  events?: Prisma.ApiTokenEventCreateNestedManyWithoutTokenInput
+  chatConversation?: Prisma.ChatConversationCreateNestedOneWithoutApiTokensInput
+}
+
+export type ApiTokenUncheckedCreateWithoutApiRunsInput = {
+  id: string
+  userId: string
+  name: string
+  tokenHash: string
+  scopes?: Prisma.ApiTokenCreatescopesInput | string[]
+  expiresAt?: Date | string | null
+  lastUsedAt?: Date | string | null
+  revokedAt?: Date | string | null
+  createdAt?: Date | string
+  gated?: boolean
+  chatConversationId?: string | null
+  tabId?: string | null
+  events?: Prisma.ApiTokenEventUncheckedCreateNestedManyWithoutTokenInput
+}
+
+export type ApiTokenCreateOrConnectWithoutApiRunsInput = {
+  where: Prisma.ApiTokenWhereUniqueInput
+  create: Prisma.XOR<Prisma.ApiTokenCreateWithoutApiRunsInput, Prisma.ApiTokenUncheckedCreateWithoutApiRunsInput>
+}
+
+export type ApiTokenUpsertWithoutApiRunsInput = {
+  update: Prisma.XOR<Prisma.ApiTokenUpdateWithoutApiRunsInput, Prisma.ApiTokenUncheckedUpdateWithoutApiRunsInput>
+  create: Prisma.XOR<Prisma.ApiTokenCreateWithoutApiRunsInput, Prisma.ApiTokenUncheckedCreateWithoutApiRunsInput>
+  where?: Prisma.ApiTokenWhereInput
+}
+
+export type ApiTokenUpdateToOneWithWhereWithoutApiRunsInput = {
+  where?: Prisma.ApiTokenWhereInput
+  data: Prisma.XOR<Prisma.ApiTokenUpdateWithoutApiRunsInput, Prisma.ApiTokenUncheckedUpdateWithoutApiRunsInput>
+}
+
+export type ApiTokenUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
+  scopes?: Prisma.ApiTokenUpdatescopesInput | string[]
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  user?: Prisma.UserUpdateOneRequiredWithoutApiTokensNestedInput
+  events?: Prisma.ApiTokenEventUpdateManyWithoutTokenNestedInput
+  chatConversation?: Prisma.ChatConversationUpdateOneWithoutApiTokensNestedInput
+}
+
+export type ApiTokenUncheckedUpdateWithoutApiRunsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  name?: Prisma.StringFieldUpdateOperationsInput | string
+  tokenHash?: Prisma.StringFieldUpdateOperationsInput | string
+  scopes?: Prisma.ApiTokenUpdatescopesInput | string[]
+  expiresAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  lastUsedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  revokedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  chatConversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  events?: Prisma.ApiTokenEventUncheckedUpdateManyWithoutTokenNestedInput
 }
 
 export type ApiTokenCreateWithoutChatConversationInput = {
@@ -750,6 +864,7 @@ export type ApiTokenCreateWithoutChatConversationInput = {
   tabId?: string | null
   user: Prisma.UserCreateNestedOneWithoutApiTokensInput
   events?: Prisma.ApiTokenEventCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunCreateNestedManyWithoutTokenInput
 }
 
 export type ApiTokenUncheckedCreateWithoutChatConversationInput = {
@@ -765,6 +880,7 @@ export type ApiTokenUncheckedCreateWithoutChatConversationInput = {
   gated?: boolean
   tabId?: string | null
   events?: Prisma.ApiTokenEventUncheckedCreateNestedManyWithoutTokenInput
+  apiRuns?: Prisma.ApiRunUncheckedCreateNestedManyWithoutTokenInput
 }
 
 export type ApiTokenCreateOrConnectWithoutChatConversationInput = {
@@ -819,6 +935,7 @@ export type ApiTokenUpdateWithoutUserInput = {
   gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   events?: Prisma.ApiTokenEventUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutTokenNestedInput
   chatConversation?: Prisma.ChatConversationUpdateOneWithoutApiTokensNestedInput
 }
 
@@ -835,6 +952,7 @@ export type ApiTokenUncheckedUpdateWithoutUserInput = {
   chatConversationId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   events?: Prisma.ApiTokenEventUncheckedUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutTokenNestedInput
 }
 
 export type ApiTokenUncheckedUpdateManyWithoutUserInput = {
@@ -878,6 +996,7 @@ export type ApiTokenUpdateWithoutChatConversationInput = {
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   user?: Prisma.UserUpdateOneRequiredWithoutApiTokensNestedInput
   events?: Prisma.ApiTokenEventUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUpdateManyWithoutTokenNestedInput
 }
 
 export type ApiTokenUncheckedUpdateWithoutChatConversationInput = {
@@ -893,6 +1012,7 @@ export type ApiTokenUncheckedUpdateWithoutChatConversationInput = {
   gated?: Prisma.BoolFieldUpdateOperationsInput | boolean
   tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   events?: Prisma.ApiTokenEventUncheckedUpdateManyWithoutTokenNestedInput
+  apiRuns?: Prisma.ApiRunUncheckedUpdateManyWithoutTokenNestedInput
 }
 
 export type ApiTokenUncheckedUpdateManyWithoutChatConversationInput = {
@@ -916,10 +1036,12 @@ export type ApiTokenUncheckedUpdateManyWithoutChatConversationInput = {
 
 export type ApiTokenCountOutputType = {
   events: number
+  apiRuns: number
 }
 
 export type ApiTokenCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   events?: boolean | ApiTokenCountOutputTypeCountEventsArgs
+  apiRuns?: boolean | ApiTokenCountOutputTypeCountApiRunsArgs
 }
 
 /**
@@ -939,6 +1061,13 @@ export type ApiTokenCountOutputTypeCountEventsArgs<ExtArgs extends runtime.Types
   where?: Prisma.ApiTokenEventWhereInput
 }
 
+/**
+ * ApiTokenCountOutputType without action
+ */
+export type ApiTokenCountOutputTypeCountApiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ApiRunWhereInput
+}
+
 
 export type ApiTokenSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -955,6 +1084,7 @@ export type ApiTokenSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   tabId?: boolean
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   events?: boolean | Prisma.ApiToken$eventsArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.ApiToken$apiRunsArgs<ExtArgs>
   chatConversation?: boolean | Prisma.ApiToken$chatConversationArgs<ExtArgs>
   _count?: boolean | Prisma.ApiTokenCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["apiToken"]>
@@ -1012,6 +1142,7 @@ export type ApiTokenOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs =
 export type ApiTokenInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   events?: boolean | Prisma.ApiToken$eventsArgs<ExtArgs>
+  apiRuns?: boolean | Prisma.ApiToken$apiRunsArgs<ExtArgs>
   chatConversation?: boolean | Prisma.ApiToken$chatConversationArgs<ExtArgs>
   _count?: boolean | Prisma.ApiTokenCountOutputTypeDefaultArgs<ExtArgs>
 }
@@ -1029,6 +1160,10 @@ export type $ApiTokenPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
   objects: {
     user: Prisma.$UserPayload<ExtArgs>
     events: Prisma.$ApiTokenEventPayload<ExtArgs>[]
+    /**
+     * Runs created with this token (TER-1176); deleting the token nulls the column, the run row stays.
+     */
+    apiRuns: Prisma.$ApiRunPayload<ExtArgs>[]
     chatConversation: Prisma.$ChatConversationPayload<ExtArgs> | null
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
@@ -1454,6 +1589,7 @@ export interface Prisma__ApiTokenClient<T, Null = never, ExtArgs extends runtime
   readonly [Symbol.toStringTag]: "PrismaPromise"
   user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   events<T extends Prisma.ApiToken$eventsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ApiToken$eventsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ApiTokenEventPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  apiRuns<T extends Prisma.ApiToken$apiRunsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ApiToken$apiRunsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ApiRunPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   chatConversation<T extends Prisma.ApiToken$chatConversationArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ApiToken$chatConversationArgs<ExtArgs>>): Prisma.Prisma__ChatConversationClient<runtime.Types.Result.GetResult<Prisma.$ChatConversationPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
@@ -1918,6 +2054,30 @@ export type ApiToken$eventsArgs<ExtArgs extends runtime.Types.Extensions.Interna
   take?: number
   skip?: number
   distinct?: Prisma.ApiTokenEventScalarFieldEnum | Prisma.ApiTokenEventScalarFieldEnum[]
+}
+
+/**
+ * ApiToken.apiRuns
+ */
+export type ApiToken$apiRunsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the ApiRun
+   */
+  select?: Prisma.ApiRunSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the ApiRun
+   */
+  omit?: Prisma.ApiRunOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ApiRunInclude<ExtArgs> | null
+  where?: Prisma.ApiRunWhereInput
+  orderBy?: Prisma.ApiRunOrderByWithRelationInput | Prisma.ApiRunOrderByWithRelationInput[]
+  cursor?: Prisma.ApiRunWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.ApiRunScalarFieldEnum | Prisma.ApiRunScalarFieldEnum[]
 }
 
 /**

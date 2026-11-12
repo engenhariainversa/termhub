@@ -432,6 +432,8 @@ export const ModelName = {
   Upload: 'Upload',
   ApiToken: 'ApiToken',
   ApiTokenEvent: 'ApiTokenEvent',
+  ApiRun: 'ApiRun',
+  ApiRunEvent: 'ApiRunEvent',
   ChatConversation: 'ChatConversation',
   ChatMessage: 'ChatMessage',
   ChatAttachment: 'ChatAttachment',
@@ -491,7 +493,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "apiRun" | "apiRunEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -3082,6 +3084,154 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.ApiTokenEventCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.ApiTokenEventCountAggregateOutputType> | number
+        }
+      }
+    }
+    ApiRun: {
+      payload: Prisma.$ApiRunPayload<ExtArgs>
+      fields: Prisma.ApiRunFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ApiRunFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ApiRunFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        findFirst: {
+          args: Prisma.ApiRunFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ApiRunFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        findMany: {
+          args: Prisma.ApiRunFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>[]
+        }
+        create: {
+          args: Prisma.ApiRunCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        createMany: {
+          args: Prisma.ApiRunCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ApiRunCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>[]
+        }
+        delete: {
+          args: Prisma.ApiRunDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        update: {
+          args: Prisma.ApiRunUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        deleteMany: {
+          args: Prisma.ApiRunDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ApiRunUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ApiRunUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>[]
+        }
+        upsert: {
+          args: Prisma.ApiRunUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunPayload>
+        }
+        aggregate: {
+          args: Prisma.ApiRunAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateApiRun>
+        }
+        groupBy: {
+          args: Prisma.ApiRunGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ApiRunGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ApiRunCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ApiRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    ApiRunEvent: {
+      payload: Prisma.$ApiRunEventPayload<ExtArgs>
+      fields: Prisma.ApiRunEventFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.ApiRunEventFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.ApiRunEventFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        findFirst: {
+          args: Prisma.ApiRunEventFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.ApiRunEventFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        findMany: {
+          args: Prisma.ApiRunEventFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>[]
+        }
+        create: {
+          args: Prisma.ApiRunEventCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        createMany: {
+          args: Prisma.ApiRunEventCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.ApiRunEventCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>[]
+        }
+        delete: {
+          args: Prisma.ApiRunEventDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        update: {
+          args: Prisma.ApiRunEventUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        deleteMany: {
+          args: Prisma.ApiRunEventDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.ApiRunEventUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.ApiRunEventUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>[]
+        }
+        upsert: {
+          args: Prisma.ApiRunEventUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$ApiRunEventPayload>
+        }
+        aggregate: {
+          args: Prisma.ApiRunEventAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateApiRunEvent>
+        }
+        groupBy: {
+          args: Prisma.ApiRunEventGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ApiRunEventGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.ApiRunEventCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.ApiRunEventCountAggregateOutputType> | number
         }
       }
     }
@@ -6980,6 +7130,43 @@ export const ApiTokenEventScalarFieldEnum = {
 export type ApiTokenEventScalarFieldEnum = (typeof ApiTokenEventScalarFieldEnum)[keyof typeof ApiTokenEventScalarFieldEnum]
 
 
+export const ApiRunScalarFieldEnum = {
+  id: 'id',
+  userId: 'userId',
+  tokenId: 'tokenId',
+  projectId: 'projectId',
+  machineId: 'machineId',
+  accountId: 'accountId',
+  provider: 'provider',
+  model: 'model',
+  capabilities: 'capabilities',
+  status: 'status',
+  workspace: 'workspace',
+  result: 'result',
+  usage: 'usage',
+  errorCode: 'errorCode',
+  errorMessage: 'errorMessage',
+  idempotencyKey: 'idempotencyKey',
+  timeoutMs: 'timeoutMs',
+  createdAt: 'createdAt',
+  startedAt: 'startedAt',
+  endedAt: 'endedAt'
+} as const
+
+export type ApiRunScalarFieldEnum = (typeof ApiRunScalarFieldEnum)[keyof typeof ApiRunScalarFieldEnum]
+
+
+export const ApiRunEventScalarFieldEnum = {
+  runId: 'runId',
+  seq: 'seq',
+  type: 'type',
+  payload: 'payload',
+  at: 'at'
+} as const
+
+export type ApiRunEventScalarFieldEnum = (typeof ApiRunEventScalarFieldEnum)[keyof typeof ApiRunEventScalarFieldEnum]
+
+
 export const ChatConversationScalarFieldEnum = {
   id: 'id',
   userId: 'userId',
@@ -8206,6 +8393,8 @@ export type GlobalOmitConfig = {
   upload?: Prisma.UploadOmit
   apiToken?: Prisma.ApiTokenOmit
   apiTokenEvent?: Prisma.ApiTokenEventOmit
+  apiRun?: Prisma.ApiRunOmit
+  apiRunEvent?: Prisma.ApiRunEventOmit
   chatConversation?: Prisma.ChatConversationOmit
   chatMessage?: Prisma.ChatMessageOmit
   chatAttachment?: Prisma.ChatAttachmentOmit

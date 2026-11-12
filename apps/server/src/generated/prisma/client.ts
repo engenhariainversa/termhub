@@ -245,6 +245,18 @@ export type ApiToken = Prisma.ApiTokenModel
  */
 export type ApiTokenEvent = Prisma.ApiTokenEventModel
 /**
+ * Model ApiRun
+ * One prompt run through the personal runs API (TER-1176, `/api/v1/runs`, behind the `runs_api` flag),
+ * on the owner's own machine and AI account. The row keeps status, usage and the final text; its events
+ * are pruned after 7 days. Never the prompt.
+ */
+export type ApiRun = Prisma.ApiRunModel
+/**
+ * Model ApiRunEvent
+ * One normalized event of an API run (`runs/events.ts`), in `seq` order. Owner's data: never logged.
+ */
+export type ApiRunEvent = Prisma.ApiRunEventModel
+/**
  * Model ChatConversation
  * One chat with the concierge: the account-wide one (projectId null) or one project's (spec
  * 2026-09-23 §3). tabId stays nullable so a per-tab chat can arrive without a migration (spec §7).

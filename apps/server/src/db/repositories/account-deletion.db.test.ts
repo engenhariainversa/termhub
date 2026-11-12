@@ -60,6 +60,10 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     const tokenId = newId();
     await db.apiToken.create({ data: { id: tokenId, userId, name: 'mcp', tokenHash: `h-${tokenId}` } });
     await db.apiTokenEvent.create({ data: { id: newId(), tokenId, tool: 'list_tabs', ok: true, durationMs: 1 } });
+    // An API run (TER-1176) with one event: both go with the account.
+    const apiRunId = newId();
+    await db.apiRun.create({ data: { id: apiRunId, userId, tokenId, projectId, machineId, capabilities: ['read'], timeoutMs: 600_000 } });
+    await db.apiRunEvent.create({ data: { runId: apiRunId, seq: 1, type: 'text', payload: { text: 'oi' } } });
     const conversationId = newId();
     await db.chatConversation.create({ data: { id: conversationId, userId } });
     const messageId = newId();
@@ -183,6 +187,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
       expect(await db.ticket.count({ where: { id: a.ticketId } })).toBe(0);
       expect(await db.integration.count({ where: { id: a.integrationId } })).toBe(0);
       expect(await db.apiTokenEvent.count({ where: { tokenId: a.tokenId } })).toBe(0);
+      expect(await db.apiRun.count({ where: { userId: a.userId } })).toBe(0);
       // Rows keyed by e-mail.
       expect(await db.loginCode.count({ where: { email: a.email } })).toBe(0);
       expect(await db.loginAttempt.count({ where: { key: `email:${a.email}` } })).toBe(0);

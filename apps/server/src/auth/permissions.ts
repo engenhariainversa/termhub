@@ -23,6 +23,8 @@ export const RESOURCES = [
   { key: 'legal', label: 'Documentos legais' },
   { key: 'security_events', label: 'Auditoria de segurança' },
   { key: 'feature_flags', label: 'Recursos em teste' },
+  // The personal runs API (TER-1176, behind `runs_api`): the person's own API runs in Progresso.
+  { key: 'runs', label: 'Runs da API' },
 ] as const;
 export type Resource = (typeof RESOURCES)[number]['key'];
 // 'write' is used only by the `terminals` resource: acting inside a terminal or simulator — typing over
