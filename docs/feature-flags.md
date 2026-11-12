@@ -75,3 +75,12 @@ while `tab_gc_live` is off. Server: `monitor/tab-gc/`. Spec:
 
 None while a flag is off, which is the default: no screen, route or limit changes for anyone. The
 switch is per instance (admin), with per-person overrides for testing.
+
+## Epic in order (`sequential_epics`, TER-1170)
+
+The flag only gates the **"Executar em ordem"** checkbox of an epic in the card editor (web). The rule
+itself is not gated: an epic marked `sequential` (through the MCP `update_task` or the web's `PATCH /tasks/:id`)
+runs its cards one at a time for everyone. A card of the epic in progress (a doing column, waiting ones
+included, or done with its PR still open) holds every to-do card of the epic; with none, only the first to-do
+card in board order is eligible, and the others show `epic_sequence` with the ref they wait on
+(`sequenceHeads` in `apps/server/src/automation/queue.ts`). No epic is sequential unless someone marks it.

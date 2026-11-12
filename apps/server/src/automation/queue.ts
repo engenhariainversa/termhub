@@ -102,6 +102,7 @@ export async function eligibilityQueue(
   const tagged = cards.filter((c) => c.auto);
   if (tagged.length === 0) return [];
   const newestInEpic = newestCardPerEpic(cards);
+  const waitsOn = await sequenceHeads(repos, cards, column);
 
   let capable = 0;
   for (const l of links) {
@@ -134,6 +135,7 @@ export async function eligibilityQueue(
         active_run: running.has(c.id),
         has_ticket: hasTicketOrBranch(c),
         just_created: now - new Date(c.created_at).getTime() < graceMs,
+        sequence_waits_on: waitsOn.get(c.id) ?? null,
         epic_settling: c.epic_id !== null && now - new Date(c.created_at).getTime() < settleCapMs && now - (newestInEpic.get(c.epic_id) ?? 0) < graceMs,
       },
       project,
@@ -146,7 +148,7 @@ export async function eligibilityQueue(
       title: c.title,
       eligible: verdict.eligible,
       reason,
-      reason_text: reason ? t(locale, REASON_TEXT[reason]) : null,
+      reason_text: reason === 'epic_sequence' ? `${t(locale, REASON_TEXT[reason])}: ${waitsOn.get(c.id)}` : reason ? t(locale, REASON_TEXT[reason]) : null,
       col: col?.position ?? Number.MAX_SAFE_INTEGER,
       pos: c.position,
     });
@@ -169,4 +171,40 @@ function newestCardPerEpic(cards: readonly Task[]): Map<string, number> {
     if (at > (newest.get(c.epic_id) ?? 0)) newest.set(c.epic_id, at);
   }
   return newest;
+}
+
+/**
+ * TER-1170: in an epic that runs in order (`sequential`), one card at a time. A card of the epic still in
+ * progress — in a doing column (waiting ones too: blocked, escalated, with a person) or in done with an open PR
+ * of its own (a PR only citing it does not count) — holds every card of the epic in to-do; with none, the first
+ * to-do card in board order (column position, then card position) is the epic's turn and the later ones wait
+ * on it. Backlog cards are left out. At the "pr" autonomy the next card waits for the person's merge, so it
+ * starts from a base that has the previous work. Returns, for each card that waits, the ref it waits on.
+ */
+async function sequenceHeads(repos: ControlContext['repos'], cards: readonly Task[], column: ReadonlyMap<string, { position: number }>): Promise<Map<string, string>> {
+  const sequential = new Set(cards.filter((c) => c.type === 'epic' && c.sequential).map((c) => c.id));
+  const waits = new Map<string, string>();
+  if (sequential.size === 0) return waits;
+  const inOrder = cards
+    .filter((c) => c.type !== 'epic' && c.parent_id === null && c.epic_id !== null && sequential.has(c.epic_id) && c.status !== 'backlog')
+    .map((c) => ({ c, col: c.column_id ? (column.get(c.column_id)?.position ?? Number.MAX_SAFE_INTEGER) : Number.MAX_SAFE_INTEGER }))
+    .sort((a, b) => a.col - b.col || a.c.position - b.c.position)
+    .map(({ c }) => c);
+  const done = inOrder.filter((c) => c.status === 'done');
+  const openPr = new Set(
+    done.length === 0 ? [] : (await repos.taskPullRequests.listByTasks(done.map((c) => c.id))).filter((p) => p.state === 'open' && !p.mention_only).map((p) => p.task_id),
+  );
+  const holder = new Map<string, Task>();
+  for (const c of inOrder) {
+    if (holder.has(c.epic_id!)) continue;
+    if (c.status === 'doing' || (c.status === 'done' && openPr.has(c.id))) holder.set(c.epic_id!, c);
+  }
+  for (const c of inOrder) {
+    if (c.status !== 'todo') continue;
+    const epic = c.epic_id!;
+    const turn = holder.get(epic);
+    if (turn) waits.set(c.id, turn.ref);
+    else holder.set(epic, c); // the first to-do card is the turn; the next ones wait on it
+  }
+  return waits;
 }

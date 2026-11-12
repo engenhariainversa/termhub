@@ -225,5 +225,6 @@
   "Aba {{tab}} em {{machine}} será fechada em {{minutes}} min: {{why}} há {{hours}} h": "Tab {{tab}} on {{machine}} will be closed in {{minutes}} min: {{why}} for {{hours}} h",
   "Aba {{tab}} removida: a sessão do terminal em {{machine}} não existe mais": "Tab {{tab}} removed: its terminal session on {{machine}} no longer exists",
   "Aba {{tab}} fechada pelo coletor em {{machine}}: {{why}} há {{hours}} h": "Tab {{tab}} closed by the collector on {{machine}}: {{why}} for {{hours}} h",
-  "Teste do coletor de abas, nada foi fechado: {{line}}": "Tab collector test, nothing was closed: {{line}}"
+  "Teste do coletor de abas, nada foi fechado: {{line}}": "Tab collector test, nothing was closed: {{line}}",
+  "O épico executa em ordem; este card espera o anterior ficar pronto": "The epic runs in order; this card waits for the previous one to be done"
 }

@@ -20,7 +20,8 @@ export type TaskRuleCode =
   | 'COLUMN_LAST_ACTIVE'
   | 'COLUMN_WAITING_AGENT'
   | 'TOO_MANY_COLUMNS'
-  | 'AUTO_NOT_FOR_SUBTASK';
+  | 'AUTO_NOT_FOR_SUBTASK'
+  | 'SEQUENTIAL_ONLY_EPIC';
 
 /** Enforced both here and in the route's zod schema (which uses this constant too). */
 export const MAX_SUBTASKS_PER_CALL = 50;
@@ -46,6 +47,7 @@ const MESSAGES: Record<TaskRuleCode, string> = {
   COLUMN_WAITING_AGENT: tk('A coluna do agente não pode ser uma coluna de espera'),
   TOO_MANY_COLUMNS: tk('Limite de 12 colunas'),
   AUTO_NOT_FOR_SUBTASK: tk('Subtarefas não levam a tag automático; marque o card'),
+  SEQUENTIAL_ONLY_EPIC: tk('Só um épico executa os cards em ordem'),
 };
 
 /** A board rule was broken. `message` is pt-BR and safe to show to the user; replies translate `localized`. */
