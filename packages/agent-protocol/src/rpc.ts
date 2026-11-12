@@ -260,7 +260,7 @@ export const RPC = {
    * right before it starts or resumes Claude Code in a project's own folder or a run's worktree, so the
    * trust question never stops the tab. `config_dirs`: accounts the server knows of outside the home's
    * `~/.claude*` (an AI account's config dir). `changed`: how many config files it rewrote; `notfound` when
-   * `dir` is not a folder here (since agent 0.37.0).
+   * `dir` is not a folder here (since agent 0.38.0).
    */
   'claude.trustFolder': def(
     z.object({ dir: machinePath, config_dirs: z.array(machinePath).max(16).optional() }),
