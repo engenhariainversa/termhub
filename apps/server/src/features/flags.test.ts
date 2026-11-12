@@ -1,8 +1,9 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 import type { Repositories } from '../db/repositories/index.js';
+import { CATALOGS } from '../i18n/catalog.js';
 import { applyErrorHandler } from '../lib/errors.js';
-import { FEATURE_FLAGS, featuresFor, isEnabled, requireFeature, webhookGate } from './flags.js';
+import { FEATURE_FLAGS, FEATURE_FLAG_KEYS, featuresFor, isEnabled, requireFeature, webhookGate } from './flags.js';
 
 /** An in-memory `featureFlags` repository: instance values and per-user overrides. */
 function fakeFlags(instance: Record<string, boolean> = {}, overrides: Record<string, Record<string, boolean>> = {}) {
@@ -14,6 +15,20 @@ function fakeFlags(instance: Record<string, boolean> = {}, overrides: Record<str
     },
   } as unknown as Pick<Repositories, 'featureFlags'>;
 }
+
+describe('FEATURE_FLAGS catalog (TER-1187)', () => {
+  it.each(FEATURE_FLAG_KEYS)('%s has a title, a description and its card, in pt-BR, English and Spanish', (key) => {
+    const flag: { title: string; description: string; card: string } = FEATURE_FLAGS[key];
+    expect(flag.title.trim()).not.toBe('');
+    expect(flag.title).not.toBe(key);
+    expect(flag.description.trim().length).toBeGreaterThan(flag.title.length);
+    expect(flag.card).toMatch(/^TER-\d+$/);
+    for (const locale of ['en', 'es'] as const) {
+      expect(CATALOGS[locale][flag.title], `${locale}: ${flag.title}`).toBeTruthy();
+      expect(CATALOGS[locale][flag.description], `${locale}: ${flag.description}`).toBeTruthy();
+    }
+  });
+});
 
 describe('isEnabled', () => {
   it('is off by default: subscriptions ships dark', async () => {
