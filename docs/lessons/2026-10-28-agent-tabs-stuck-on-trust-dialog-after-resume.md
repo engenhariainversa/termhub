@@ -26,7 +26,7 @@ of the ways an agent comes up in a tab:
 
 ## Fix
 
-- Agent 0.37.0: RPC `claude.trustFolder` marks a folder trusted in every Claude account of the machine
+- Agent 0.38.0 (0.37.0 went out from main without it, TER-1178): RPC `claude.trustFolder` marks a folder trusted in every Claude account of the machine
   (plus the account dirs the server names), as worktrees already were (TER-1025).
 - `monitor/folder-trust.ts`: `pretrustFolder` calls it right before Claude starts or resumes in a tab
   (start_agent, "Iniciar sessão", account swap, resume after exit) when the folder is the project link's or
@@ -41,6 +41,6 @@ of the ways an agent comes up in a tab:
 ## How to check
 
 `npm test -w @termhub/server -- folder-trust stale-working account-swap follower signals` and
-`npm test -w @termhub/agent -- claude-trust`. On a machine with agent 0.37.0, start an agent in a project
+`npm test -w @termhub/agent -- claude-trust`. On a machine with agent 0.38.0, start an agent in a project
 folder no account has opened: the server log shows `monitor: folder trusted before the agent start` and the
 dialog never appears; with an older agent, the feed shows "pasta do projeto confiada sozinha".
