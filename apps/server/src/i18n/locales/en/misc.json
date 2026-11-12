@@ -213,5 +213,7 @@
   "Épico {{label}} em andamento sem história ativa nem PR há {{duration}}": "Epic {{label}} in progress with no active story nor PR for {{duration}}",
   "Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}": "Card {{label}} in Done with PR {{pr}} still open for {{duration}}",
   "Épico parado em andamento": "Stalled epic in progress",
-  "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR"
+  "Card em Feito com PR não mesclado": "Card in Done with an unmerged PR",
+  "Agente da aba {{label}} fora do ar há {{duration}}": "Agent of tab {{label}} down for {{duration}}",
+  "Agente fora do ar em aba acompanhada": "Agent down in a followed tab"
 }

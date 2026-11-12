@@ -3,6 +3,8 @@
  * machines, and npm for agent releases (read at most every `NPM_EVERY_MS`, and only while a watch asks).
  */
 import type { Repositories } from '../../db/repositories/index.js';
+import { agentGone, eventNameOf } from '../../monitor/agent-gone.js';
+import { undeliveredOf } from '../../terminal/deliveries.js';
 import { fetchLatestAgentVersion, latestAgentVersion } from '../../agent/latest-version.js';
 import { MERGE_NO_CI, MERGE_PERSON_CARD } from '../../automation/escalation-text.js';
 import type { TaskPullRequest } from '../../db/repositories/task-pull-requests.js';
@@ -53,9 +55,13 @@ export function createWatchProbe(deps: ProbeDeps): WatchProbe {
   return {
     async tab(id) {
       const t = await deps.repos.tabs.findById(id);
-      return t ? { id: t.id, name: t.name, project_id: t.project_id, machine_id: t.machine_id, state: t.state } : null;
+      if (!t) return null;
+      // TER-1168: only an idle tab can have its agent gone; its newest event says whether it left
+      const last = t.state === 'idle' ? (await deps.repos.tabs.listEvents(t.id, 1))[0] : undefined;
+      return { id: t.id, name: t.name, project_id: t.project_id, machine_id: t.machine_id, state: t.state, state_at: t.state_at, agent_gone: agentGone(t.state, eventNameOf(last?.meta)) };
     },
     tabEventsAfter: (tabId, after, kinds) => deps.repos.tabs.eventsAfter(tabId, after, kinds),
+    undelivered: (tabId) => undeliveredOf(tabId),
     async task(id) {
       const t = await deps.repos.tasks.findById(id);
       return t ? { id: t.id, ref: t.ref, title: t.title, project_id: t.project_id, column_id: t.column_id, status: t.status as CardStatus } : null;

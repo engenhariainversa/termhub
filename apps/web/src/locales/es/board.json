@@ -513,5 +513,6 @@
   "{{phase}} · desde {{date}}": "{{phase}} · desde {{date}}",
   "Branch do épico": "Rama de la épica",
   "está presa num diálogo do CLI": "está atascada en un diálogo del CLI",
-  "preso num diálogo": "atascado en un diálogo"
+  "preso num diálogo": "atascado en un diálogo",
+  "Agente fora do ar em aba ligada a card ou acompanhada pelo chat": "Agente caído en una pestaña vinculada a una tarjeta o seguida por el chat"
 }

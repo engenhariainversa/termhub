@@ -5,7 +5,7 @@ import type { Machine, Tab } from '../db/repositories/types.js';
 
 const publish = vi.fn();
 vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish(...a) } }));
-vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', notifyAgentExited: vi.fn() }));
+vi.mock('../chat/agent-exited.js', () => ({ AGENT_EXITED_TEXT: 'Agente encerrado sem terminar o turno', AGENT_LEFT_TEXT: 'Agente encerrado', notifyAgentExited: vi.fn() }));
 
 const { BACKGROUND_TIMEOUT_MINUTES, DIALOG_FRESH_MS, DIALOG_RECHECK_MS, DIALOG_WINDOW_MS, RESTING_STATES, STALE_WORKING_MS, UNREPORTED_AFTER_MS, sweepDialogs, sweepStaleWorking, sweepUnreported } = await import('./stale-working.js');
 
@@ -39,6 +39,35 @@ function setup(tabs: Tab[], screen: string, opts: { answer?: { text: string; sta
   };
   return { repos, recordEvent, capture, deps };
 }
+
+// TER-1168: Claude killed while the tab rested (no SessionEnd): the tab said "finished" and took messages into its shell
+describe('sweepDialogs — the agent left a tab at rest (TER-1168)', () => {
+  const now = new Date(Date.parse(AT) + 60_000);
+
+  it('a resting tab whose pane is back at its shell (or dead) becomes idle, Agente encerrado, with no resume card', async () => {
+    for (const pane of ['shell', 'dead'] as const) {
+      publish.mockClear();
+      const { repos, recordEvent, capture, deps } = setup([tab({ state: 'waiting_input' })], PROMPT);
+      deps.foreground.mockResolvedValue(pane as never);
+      await sweepDialogs(repos, log() as never, now, deps);
+      expect(recordEvent).toHaveBeenCalledWith('t1', { kind: 'idle', tool: 'claude', text: 'Agente encerrado', meta: { event: 'AgentExited', pane, resting: true }, ifStateAt: AT, ifStateIn: RESTING_STATES });
+      expect(publish).toHaveBeenCalled();
+      expect(deps.exited).not.toHaveBeenCalled();
+      expect(capture).not.toHaveBeenCalled();
+    }
+  });
+
+  it('the agent still in front (or a pane it cannot read) reads the screen for a dialog, as before; idle tabs are not asked', async () => {
+    const busy = setup([tab()], PROMPT);
+    busy.deps.foreground.mockResolvedValue('busy' as never);
+    await sweepDialogs(busy.repos, log() as never, now, busy.deps);
+    expect(busy.recordEvent).not.toHaveBeenCalled();
+    expect(busy.capture).toHaveBeenCalled();
+    const idle = setup([tab({ state: 'idle' })], PROMPT);
+    await sweepDialogs(idle.repos, log() as never, now, idle.deps);
+    expect(idle.deps.foreground).not.toHaveBeenCalled();
+  });
+});
 
 describe('sweepDialogs — a CLI dialog holds a tab at rest (TER-1166)', () => {
   const now = new Date(Date.parse(AT) + 60_000);

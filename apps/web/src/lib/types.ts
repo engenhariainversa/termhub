@@ -711,7 +711,7 @@ export interface ProjectSetupData {
 }
 
 /** TER-1121: the signs of stalled work the project's health watcher looks for. */
-export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated' | 'epic_zombie' | 'done_unmerged';
+export type HealthSignal = 'pr_ready' | 'base_red' | 'queue_stalled' | 'tab_stuck' | 'tab_waiting' | 'card_orphan' | 'run_blocked' | 'machine_offline' | 'delivery_failed' | 'agent_outdated' | 'epic_zombie' | 'done_unmerged' | 'agent_exited';
 
 export interface ProjectHealthSetup {
   enabled: boolean;

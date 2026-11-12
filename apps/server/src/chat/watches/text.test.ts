@@ -16,3 +16,17 @@ describe('watch wake text', () => {
     expect(text).not.toContain('continua ativa');
   });
 });
+
+// TER-1168: a watch that waited for an agent that is gone tells why, so the concierge tells the person
+describe('watch wake text for an agent that is gone (TER-1168)', () => {
+  const watch = { id: 'w2', kind: 'tab' as const, label: 'pda', note: 'avisar quando o pda-app subir', recurring: false, status: 'gone' as const };
+  it('names the exit and what to do', () => {
+    const text = watchWakeText([{ watch, fire: { event: 'gone', payload: { tab_id: 't1', tab_name: 'pda', reason: 'agent_exited', at: '2026-11-11T10:00:00.000Z' } } }]);
+    expect(text).toContain('o agente da aba «pda» (tab_id t1) saiu');
+    expect(text).toContain('Conte à pessoa agora');
+  });
+  it('names a text that started no turn, with its reason', () => {
+    const text = watchWakeText([{ watch, fire: { event: 'gone', payload: { tab_id: 't1', tab_name: 'pda', reason: 'not_delivered', why: 'agent_exited', at: '2026-11-11T10:00:00.000Z' } } }]);
+    expect(text).toContain('não começou nenhum turno (o agente saiu e o texto caiu no shell)');
+  });
+});

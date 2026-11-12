@@ -213,5 +213,7 @@
   "Épico {{label}} em andamento sem história ativa nem PR há {{duration}}": "Épica {{label}} en curso sin historia activa ni PR desde hace {{duration}}",
   "Card {{label}} em Feito com o PR {{pr}} ainda aberto há {{duration}}": "Tarjeta {{label}} en Hecho con el PR {{pr}} aún abierto desde hace {{duration}}",
   "Épico parado em andamento": "Épica detenida en curso",
-  "Card em Feito com PR não mesclado": "Tarjeta en Hecho con PR sin fusionar"
+  "Card em Feito com PR não mesclado": "Tarjeta en Hecho con PR sin fusionar",
+  "Agente da aba {{label}} fora do ar há {{duration}}": "Agente de la pestaña {{label}} caído hace {{duration}}",
+  "Agente fora do ar em aba acompanhada": "Agente caído en una pestaña seguida"
 }

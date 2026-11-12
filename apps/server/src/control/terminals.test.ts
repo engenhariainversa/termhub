@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HttpError } from '../lib/errors.js';
 
-const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentVersion, sendKeyToSession, sendTextToSession, typeCommandLine, waitForState } = vi.hoisted(() => ({
+const { captureScreen, ensureSession, awaitAgent, killTmuxSession, paneForeground, requireAgentVersion, sendKeyToSession, sendTextToSession, typeCommandLine, waitForState } = vi.hoisted(() => ({
   captureScreen: vi.fn(),
+  paneForeground: vi.fn(),
   ensureSession: vi.fn(),
   awaitAgent: vi.fn(async () => true),
   killTmuxSession: vi.fn(),
@@ -16,7 +17,7 @@ const { captureScreen, ensureSession, awaitAgent, killTmuxSession, requireAgentV
 vi.mock('../agent/screen.js', () => ({ captureScreen }));
 vi.mock('../agent/registry.js', () => ({ agents: { awaitAgent } }));
 vi.mock('../agent/errors.js', () => ({ requireAgentVersion }));
-vi.mock('../terminal/session-ops.js', () => ({ ensureSession, sendKeyToSession, sendTextToSession, typeCommandLine, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
+vi.mock('../terminal/session-ops.js', () => ({ ensureSession, paneForeground, sendKeyToSession, sendTextToSession, typeCommandLine, TERMINAL_RPC_MIN_AGENT_VERSION: '0.2.0', INPUT_MAX_CHARS: 4000 }));
 vi.mock('../terminal/machine-exec.js', () => ({ killTmuxSession }));
 const { removeTabMcp } = vi.hoisted(() => ({ removeTabMcp: vi.fn(async () => undefined) }));
 vi.mock('../terminal/tab-mcp.js', () => ({ removeTabMcp }));
@@ -33,6 +34,7 @@ const HOOKS_REVIEW = dialogFixture('codex-hooks-review-0.159.3');
 
 const { closeTab, MAX_TABS_PER_TOKEN, openTab, runCommand, sendInput, sendKey, typeCommandInTab } = await import('./terminals.js');
 const { resetInputOrigins, takeInputOrigin } = await import('../terminal/input-origin.js');
+const { resetUndelivered, undeliveredOf } = await import('../terminal/deliveries.js');
 
 const machine = { id: 'm1', name: 'jarvis', type: 'agent', os: 'linux', capabilities: ['tmux'], owner_id: 'u1' };
 const machine2 = { id: 'm2', name: 'mac mini', type: 'agent', os: 'macos', capabilities: ['tmux'], owner_id: 'u1' };
@@ -88,6 +90,8 @@ beforeEach(() => {
   waitForState.mockReset();
   awaitAgent.mockReset().mockResolvedValue(true);
   ensureSession.mockResolvedValue({ created: true });
+  paneForeground.mockReset().mockResolvedValue('busy');
+  resetUndelivered();
 });
 
 describe('openTab', () => {
@@ -225,6 +229,82 @@ describe('sendInput', () => {
   it('refuses a tab that is not a terminal', async () => {
     const ctx = ctxWith({ tab: tab({ kind: 'simulator', tmux_session: null }) });
     await expect(sendInput(ctx, { tab_id: 't1', text: 'oi' })).rejects.toMatchObject({ code: 'NOT_A_TERMINAL' });
+  });
+});
+
+// TER-1168: the concierge typed a request into a tab whose Claude had exited; it ran in the shell and the answer said "sent"
+describe('sendInput into an agent that exited (TER-1168)', () => {
+  const agentTab = (over: Record<string, unknown> = {}) => tab({ state: 'idle', state_tool: 'claude', state_at: '2026-11-11T10:00:00.000Z', ...over });
+  const fast = { deliveryWaitMs: 20, deliveryPollMs: 5 };
+
+  it('refuses with AGENT_NOT_RUNNING and types nothing when the pane is back at its shell (or dead)', async () => {
+    for (const pane of ['shell', 'dead']) {
+      paneForeground.mockResolvedValueOnce(pane);
+      await expect(sendInput(ctxWith({ tab: agentTab() }), { tab_id: 't1', text: 'publica o pda-app' }, undefined, { requireAgent: true })).rejects.toMatchObject({ code: 'AGENT_NOT_RUNNING', message: expect.stringContaining('to_shell: true') });
+    }
+    // a tab started by start_agent whose hooks never reported is an agent tab too
+    paneForeground.mockResolvedValueOnce('shell');
+    await expect(sendInput(ctxWith({ tab: tab({ ai_account_id: 'acc1' }) }), { tab_id: 't1', text: 'oi' }, undefined, { requireAgent: true })).rejects.toMatchObject({ code: 'AGENT_NOT_RUNNING' });
+    expect(sendTextToSession).not.toHaveBeenCalled();
+  });
+
+  it('types into a shell tab that never ran an agent, into the shell on purpose, and when the pane cannot be read', async () => {
+    paneForeground.mockResolvedValue('shell');
+    // open_tab's shell: never checked
+    await expect(sendInput(ctxWith(), { tab_id: 't1', text: 'ls' }, undefined, { requireAgent: true })).resolves.toMatchObject({ sent: true });
+    // to_shell: the caller does not ask for the check
+    await expect(sendInput(ctxWith({ tab: agentTab() }), { tab_id: 't1', text: 'claude --continue' }, undefined, {})).resolves.toMatchObject({ sent: true });
+    // an agent older than 0.14.0 or a failed call: the check never blocks typing on its own failure
+    paneForeground.mockRejectedValueOnce(Object.assign(new Error('old'), { code: 'AGENT_OUTDATED' }));
+    await expect(sendInput(ctxWith({ tab: agentTab() }), { tab_id: 't1', text: 'oi' }, undefined, { requireAgent: true })).resolves.toMatchObject({ sent: true });
+    expect(sendTextToSession).toHaveBeenCalledTimes(3);
+  });
+
+  it('says delivered: true once the tab starts a turn after the text', async () => {
+    const eventsAfter = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([{ id: 'e1', kind: 'working', created_at: new Date().toISOString(), meta: {} }]);
+    const ctx = ctxWith({ tab: agentTab({ state: 'finished' }), tabs: { eventsAfter } });
+    const r = await sendInput(ctx, { tab_id: 't1', text: 'continua' }, undefined, { requireAgent: true, confirm: true, deliveryWaitMs: 1000, deliveryPollMs: 5 });
+    expect(r).toEqual({ tab_id: 't1', sent: true, delivered: true });
+    expect(eventsAfter).toHaveBeenCalledWith('t1', expect.any(Date), ['working', 'waiting_permission', 'error'], 1);
+    expect(undeliveredOf('t1')).toBeNull();
+  });
+
+  it('says delivered: false with the reason when no turn started, and keeps it for the tab\'s watches', async () => {
+    const eventsAfter = vi.fn(async () => []);
+    // the agent left between the check and the Enter
+    paneForeground.mockResolvedValueOnce('busy').mockResolvedValueOnce('shell');
+    const exited = await sendInput(ctxWith({ tab: agentTab({ state: 'finished' }), tabs: { eventsAfter } }), { tab_id: 't1', text: 'oi' }, undefined, { requireAgent: true, confirm: true, ...fast });
+    expect(exited).toMatchObject({ sent: true, delivered: false, reason: 'agent_exited', note: expect.stringContaining('Do not promise') });
+    expect(undeliveredOf('t1')).toMatchObject({ reason: 'agent_exited' });
+    // nothing moved and no dialog: no reaction
+    captureScreen.mockResolvedValue('● Pronto.\n\n────────────\n❯ oi\n────────────');
+    const none = await sendInput(ctxWith({ tab: agentTab({ state: 'waiting_input' }), tabs: { eventsAfter } }), { tab_id: 't1', text: 'oi' }, undefined, { requireAgent: true, confirm: true, ...fast });
+    expect(none).toMatchObject({ delivered: false, reason: 'no_reaction', note: expect.stringContaining('read_screen') });
+  });
+
+  it('does not wait when there is nothing to confirm: no Enter, a working agent (queued), no hooks, a shell tab', async () => {
+    const eventsAfter = vi.fn(async () => []);
+    const cases: [Record<string, unknown>, Record<string, unknown>][] = [
+      [agentTab({ state: 'finished' }), { enter: false }],
+      [agentTab({ state: 'working' }), {}],
+      [tab({ ai_account_id: 'acc1' }), {}],
+      [tab(), {}],
+    ];
+    for (const [t, extra] of cases) {
+      const r = await sendInput(ctxWith({ tab: t, tabs: { eventsAfter } }), { tab_id: 't1', text: 'oi', ...extra }, undefined, { requireAgent: true, confirm: true, ...fast });
+      expect(r).toEqual({ tab_id: 't1', sent: true });
+    }
+    expect(eventsAfter).not.toHaveBeenCalled();
+  });
+});
+
+describe('sendKey into an agent that exited (TER-1168)', () => {
+  it('refuses with AGENT_NOT_RUNNING when asked to, and presses the key otherwise', async () => {
+    paneForeground.mockResolvedValue('shell');
+    const ctx = ctxWith({ tab: tab({ state: 'idle', state_tool: 'codex' }) });
+    await expect(sendKey(ctx, { tab_id: 't1', key: 'Enter' }, { requireAgent: true })).rejects.toMatchObject({ code: 'AGENT_NOT_RUNNING' });
+    expect(sendKeyToSession).not.toHaveBeenCalled();
+    await expect(sendKey(ctx, { tab_id: 't1', key: 'C-c' })).resolves.toMatchObject({ sent: true });
   });
 });
 

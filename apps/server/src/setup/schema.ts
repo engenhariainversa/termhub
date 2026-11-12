@@ -158,7 +158,7 @@ export const aiMemorySchema = z.object({
 export type ProjectAiMemory = z.infer<typeof aiMemorySchema>;
 
 /** TER-1121: the health watcher's signs of stalled work, and the minutes each waits before it counts. */
-export const HEALTH_SIGNALS = ['pr_ready', 'base_red', 'queue_stalled', 'tab_stuck', 'tab_waiting', 'card_orphan', 'run_blocked', 'machine_offline', 'delivery_failed', 'agent_outdated', 'epic_zombie', 'done_unmerged'] as const;
+export const HEALTH_SIGNALS = ['pr_ready', 'base_red', 'queue_stalled', 'tab_stuck', 'tab_waiting', 'card_orphan', 'run_blocked', 'machine_offline', 'delivery_failed', 'agent_outdated', 'epic_zombie', 'done_unmerged', 'agent_exited'] as const;
 export type HealthSignal = (typeof HEALTH_SIGNALS)[number];
 export const HEALTH_DEFAULT_MINUTES: Record<HealthSignal, number> = {
   pr_ready: 120,
@@ -173,6 +173,7 @@ export const HEALTH_DEFAULT_MINUTES: Record<HealthSignal, number> = {
   agent_outdated: 60,
   epic_zombie: 240,
   done_unmerged: 30,
+  agent_exited: 5,
 };
 const healthSignalSchema = (minutes: number) =>
   z.object({ enabled: z.boolean().default(true), minutes: z.number().int().min(5).max(7 * 24 * 60).default(minutes) }).default({});
@@ -198,6 +199,7 @@ export const healthSchema = z.object({
       agent_outdated: healthSignalSchema(HEALTH_DEFAULT_MINUTES.agent_outdated),
       epic_zombie: healthSignalSchema(HEALTH_DEFAULT_MINUTES.epic_zombie),
       done_unmerged: healthSignalSchema(HEALTH_DEFAULT_MINUTES.done_unmerged),
+      agent_exited: healthSignalSchema(HEALTH_DEFAULT_MINUTES.agent_exited),
     })
     .default({}),
 });
