@@ -50,6 +50,8 @@ export interface WatchProbe {
   tabEventsAfter(tabId: string, after: Date, kinds: readonly TabState[]): Promise<{ id: string; kind: TabState; created_at: string; meta?: Record<string, unknown> }[]>;
   /** TER-1168: the last text typed into the tab that started no turn (terminal/deliveries.ts); absent = none known */
   undelivered?(tabId: string): Undelivered | null;
+  /** TER-1168: whether any of this person's watches on the tab already fired `key`; absent = never */
+  toldAboutTab?(userId: string, tabId: string, key: string): Promise<boolean>;
   task(id: string): Promise<ProbeTask | null>;
   pullRequests(watch: Pick<ChatWatch, 'user_id' | 'target_id' | 'params'>): Promise<ProbePr[]>;
   machine(id: string): Promise<ProbeMachine | null>;
@@ -208,15 +210,21 @@ async function tabDown(probe: WatchProbe, w: Watch, tab: ProbeTab, cursor: Date)
  */
 export const BACKGROUND_QUIET_MS = 20 * 60_000;
 
-function quietBackground(w: Watch, tab: ProbeTab, now: Date): Evaluation | null {
+async function quietBackground(probe: WatchProbe, w: Watch, tab: ProbeTab, now: Date): Promise<Evaluation | null> {
   if (tab.state !== 'waiting_background' || !tab.state_at) return null;
   const since = Date.parse(tab.state_at);
-  if (now.getTime() - since < BACKGROUND_QUIET_MS) return null;
-  // told once per stretch: a new event in the tab starts another one
+  // Counted from the later of the stop and this watch's creation: a watch created in the middle of a long,
+  // legitimate stretch (a slow prune) waits its own 20 min instead of firing on its first sweep.
+  if (now.getTime() - Math.max(since, Date.parse(w.created_at)) < BACKGROUND_QUIET_MS) return null;
   if (w.baseline.quiet === tab.state_at) return null;
+  // told once per stretch, by whichever of this person's watches on the tab got there first; a new event in
+  // the tab starts another stretch. Already told: only the mark moves, so the next sweeps skip the read.
+  const key = `tab:quiet:${tab.state_at}`;
+  const baseline = { ...w.baseline, quiet: tab.state_at };
+  if (await probe.toldAboutTab?.(w.user_id, tab.id, key)) return { events: [], baseline, close: null };
   return {
-    events: [{ key: `tab:quiet:${tab.state_at}`, event: 'waiting_background', payload: { tab_id: tab.id, tab_name: tab.name, project_id: tab.project_id, machine_id: tab.machine_id, state: 'waiting_background', at: tab.state_at, state_now: tab.state, quiet_minutes: Math.floor((now.getTime() - since) / 60_000) } }],
-    baseline: { ...w.baseline, quiet: tab.state_at },
+    events: [{ key, event: 'waiting_background', payload: { tab_id: tab.id, tab_name: tab.name, project_id: tab.project_id, machine_id: tab.machine_id, state: 'waiting_background', at: tab.state_at, state_now: tab.state, quiet_minutes: Math.floor((now.getTime() - since) / 60_000) } }],
+    baseline,
     close: done(w),
   };
 }
@@ -231,7 +239,7 @@ async function evaluateTab(probe: WatchProbe, w: Watch, now = new Date()): Promi
   const down = await tabDown(probe, w, tab, cursor);
   if (down) return down;
   const events = await probe.tabEventsAfter(tabId, cursor, kinds);
-  if (events.length === 0) return quietBackground(w, tab, now);
+  if (events.length === 0) return quietBackground(probe, w, tab, now);
   // Once: the first stop after the watch began is the one asked about. Recurring: the newest, since a
   // cooldown may have let several pass.
   const ev = w.recurring ? events[events.length - 1] : events[0];

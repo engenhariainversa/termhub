@@ -7,8 +7,9 @@ import { evaluateWatch, expiredEvaluation, initialBaseline, OFFLINE_GRACE_MS, ty
 
 type Ev = { id: string; kind: ProbeTab['state'] & string; created_at: string; meta?: Record<string, unknown> };
 
-function probe(over: Partial<{ tab: ProbeTab | null; events: Ev[]; task: ProbeTask | null; prs: TaskPullRequest[]; machine: ProbeMachine | null; latest: string | null; undelivered: Undelivered | null }> = {}): WatchProbe {
+function probe(over: Partial<{ tab: ProbeTab | null; events: Ev[]; task: ProbeTask | null; prs: TaskPullRequest[]; machine: ProbeMachine | null; latest: string | null; undelivered: Undelivered | null; told: string[] }> = {}): WatchProbe {
   return {
+    toldAboutTab: async (_user, _tab, key) => (over.told ?? []).includes(key),
     undelivered: () => over.undelivered ?? null,
     tab: async () => (over.tab === undefined ? { id: 't1', name: 'api', project_id: 'p1', machine_id: 'm1', state: 'working' } : over.tab),
     tabEventsAfter: async (_id, after, kinds) => (over.events ?? []).filter((e) => Date.parse(e.created_at) > after.getTime() && kinds.includes(e.kind)),
@@ -278,6 +279,21 @@ describe('a tab left in waiting_background (TER-1168)', () => {
     // a recurring watch keeps the mark: the same stretch is not told again
     const r = watch({ ...w, recurring: true, baseline: { ...w.baseline, quiet: stopped } });
     expect(await evaluateWatch(probe({ tab }), r, later(60))).toBeNull();
+  });
+
+  // ap0ft01sp9gm, 13/11: a new watch on a tab 20 min into a legitimate docker builder prune fired on its first
+  // sweep, repeating what the previous watch had already said
+  it('a watch created mid-stretch waits its own 20 min, and a stretch already told is not told again', async () => {
+    const fresh = watch({ ...w, created_at: later(20).toISOString(), baseline: { cursor: later(20).toISOString() } });
+    expect(await evaluateWatch(probe({ tab }), fresh, later(21))).toBeNull();
+    expect(await evaluateWatch(probe({ tab }), fresh, later(39))).toBeNull();
+    expect((await evaluateWatch(probe({ tab }), fresh, later(40)))?.events[0]).toMatchObject({ key: `tab:quiet:${stopped}`, payload: { quiet_minutes: 40 } });
+    // the previous watch already fired this stretch: only the mark moves, silently
+    const told = await evaluateWatch(probe({ tab, told: [`tab:quiet:${stopped}`] }), fresh, later(40));
+    expect(told).toEqual({ events: [], baseline: { cursor: later(20).toISOString(), quiet: stopped }, close: null });
+    // a new stop is a new stretch
+    const next = { ...tab, state_at: later(45).toISOString() };
+    expect((await evaluateWatch(probe({ tab: next, told: [`tab:quiet:${stopped}`] }), { ...fresh, baseline: told!.baseline }, later(65)))?.events[0].key).toBe(`tab:quiet:${next.state_at}`);
   });
 
   it('a tab still working, or one that reported since, is not', async () => {

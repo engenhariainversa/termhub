@@ -14,7 +14,7 @@ import type { CardStatus } from './kinds.js';
 export const NPM_EVERY_MS = 2 * 60_000;
 
 export interface ProbeDeps {
-  repos: Pick<Repositories, 'tabs' | 'tasks' | 'taskPullRequests' | 'machines'> & Partial<Pick<Repositories, 'automationEvents'>>;
+  repos: Pick<Repositories, 'tabs' | 'tasks' | 'taskPullRequests' | 'machines'> & Partial<Pick<Repositories, 'automationEvents' | 'chatWatches'>>;
   agents: { isOnline(machineId: string): boolean };
   fetchLatest?: () => Promise<string | null>;
   now?: () => number;
@@ -62,6 +62,7 @@ export function createWatchProbe(deps: ProbeDeps): WatchProbe {
     },
     tabEventsAfter: (tabId, after, kinds) => deps.repos.tabs.eventsAfter(tabId, after, kinds),
     undelivered: (tabId) => undeliveredOf(tabId),
+    toldAboutTab: (userId, tabId, key) => deps.repos.chatWatches?.toldAboutTab(userId, tabId, key) ?? Promise.resolve(false),
     async task(id) {
       const t = await deps.repos.tasks.findById(id);
       return t ? { id: t.id, ref: t.ref, title: t.title, project_id: t.project_id, column_id: t.column_id, status: t.status as CardStatus } : null;
