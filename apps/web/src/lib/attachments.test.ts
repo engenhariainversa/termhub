@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, canRetryAttachment, checkFile, formatBytes, kindFromNameAndMime, patchMessageAttachment, thumbSize } from './attachments';
+import { ACCEPT_ATTRIBUTE, ATTACHMENT_LIMITS, MAX_ATTACHMENTS_PER_MESSAGE, attachmentStatusText, canRetryAttachment, checkFile, formatBytes, kindFromNameAndMime, patchMessageAttachment, thumbSize } from './attachments';
 import type { ChatAttachment, ChatMessage } from './types';
 
 const att = (over: Partial<ChatAttachment> = {}): ChatAttachment => ({
@@ -17,12 +17,23 @@ describe('kindFromNameAndMime', () => {
     expect(kindFromNameAndMime('clip.webm', 'video/webm')).toBe('video');
     expect(kindFromNameAndMime('notas.md', 'text/markdown')).toBe('text');
     expect(kindFromNameAndMime('script.py', '')).toBe('text');
+    // TER-1167: a property list, whatever MIME the browser reports for it.
+    expect(kindFromNameAndMime('Info.plist', 'application/x-plist')).toBe('text');
+    expect(kindFromNameAndMime('com.apple.dock.plist', '')).toBe('text');
+    expect(kindFromNameAndMime('Info.PLIST', 'application/octet-stream')).toBe('text');
+    expect(kindFromNameAndMime('Info.plist', 'text/xml')).toBe('text');
   });
 
   it('knows nothing about svg, html or binaries', () => {
     expect(kindFromNameAndMime('logo.svg', 'image/svg+xml')).toBeNull();
     expect(kindFromNameAndMime('page.html', 'text/html')).toBeNull();
     expect(kindFromNameAndMime('setup.exe', 'application/octet-stream')).toBeNull();
+  });
+});
+
+describe('ACCEPT_ATTRIBUTE', () => {
+  it('offers .plist files in the picker (TER-1167)', () => {
+    expect(ACCEPT_ATTRIBUTE.split(',')).toContain('.plist');
   });
 });
 

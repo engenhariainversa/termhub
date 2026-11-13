@@ -1,7 +1,8 @@
 import type { AttachmentKind } from '@termhub/mobile-api';
 import { transcribeUrl, whisperHeaders } from '../../lib/whisper.js';
 import { ExtractError } from './errors.js';
-import { type Extracted, ZIP_EXPANDED_MAX_BYTES, capText } from './parsers.js';
+import { PLIST_MIME, PlistError, binaryPlistToXml, isBinaryPlist } from './plist.js';
+import { type Extracted, TEXT_CAP, ZIP_EXPANDED_MAX_BYTES, capText } from './parsers.js';
 import { EXTRACT_WORKER_HEAP_MB, defaultWorkerUrl, runInWorker } from './worker-runner.js';
 
 export { ExtractError, type ExtractErrorCode, type TranscriptionReason } from './errors.js';
@@ -109,6 +110,18 @@ function decodeText(file: Buffer): Extracted {
   }
 }
 
+/** A property list (TER-1167): an XML one is its own text; a binary one becomes the same XML first, never run. */
+function decodePlist(file: Buffer): Extracted {
+  if (!isBinaryPlist(file)) return decodeText(file);
+  try {
+    const c = binaryPlistToXml(file, TEXT_CAP);
+    return { text: c.text, meta: { truncated: c.truncated, plist: 'binary' } };
+  } catch (err) {
+    if (err instanceof PlistError) throw new ExtractError('ATTACHMENT_INVALID', 'invalid binary plist');
+    throw err;
+  }
+}
+
 export async function extract(kind: AttachmentKind, file: Buffer, mime: string, deps: ExtractDeps): Promise<Extracted> {
   const timeoutMs = deps.timeoutMs ?? EXTRACT_TIMEOUT_MS;
   const zipBudget = deps.zipExpandedMaxBytes ?? ZIP_EXPANDED_MAX_BYTES;
@@ -118,7 +131,7 @@ export async function extract(kind: AttachmentKind, file: Buffer, mime: string, 
       return { text: null, meta: dims ? { width: dims.width, height: dims.height } : {} };
     }
     case 'text':
-      return decodeText(file);
+      return mime === PLIST_MIME ? decodePlist(file) : decodeText(file);
     case 'pdf':
     case 'docx':
     case 'xlsx':

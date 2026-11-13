@@ -14,6 +14,7 @@ describe('describeAttachment', () => {
     [row({ kind: 'image', mime: 'image/jpeg', meta: { width: 1568, height: 1176 } }), 'imagem 1568×1176'],
     [row({ kind: 'image', mime: 'image/png', meta: {} }), 'imagem'],
     [row({ kind: 'docx', meta: { truncated: true } }), 'documento Word (truncado em 200 mil caracteres)'],
+    [row({ kind: 'text', mime: 'application/x-plist', meta: { truncated: false, plist: 'binary' } }), 'texto, plist binário convertido para XML'],
     [row({ kind: 'xlsx', meta: { sheets: [{ name: 'A', rows: 3, cols: 2 }, { name: 'B', rows: 1, cols: 1 }] } }), 'planilha Excel, 2 abas'],
     [row({ kind: 'audio', meta: { duration_s: 61.4 } }), 'áudio, 61 s'],
     [row({ kind: 'video', meta: { duration_s: 5 } }), 'vídeo, 5 s'],

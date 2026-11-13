@@ -24,6 +24,9 @@ export const MAX_ATTACHMENTS_PER_MESSAGE = 5;
 
 export const TEXT_EXTENSIONS: readonly string[] = ['.txt', '.md', '.csv', '.json', '.log', '.yaml', '.yml', '.ts', '.js', '.py'];
 
+/** A property list (TER-1167), XML or binary: a text attachment, which the server checks by its bytes. */
+const PLIST_EXTENSION = '.plist';
+
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
 const AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.ogg', '.oga', '.opus', '.aac'];
@@ -32,7 +35,7 @@ const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingm
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 /** What the file picker offers by default; anything else can still be dropped and is refused by `checkFile`. */
-export const ACCEPT_ATTRIBUTE = ['image/*', 'video/*', 'audio/*', '.pdf', '.docx', '.xlsx', ...TEXT_EXTENSIONS].join(',');
+export const ACCEPT_ATTRIBUTE = ['image/*', 'video/*', 'audio/*', '.pdf', '.docx', '.xlsx', ...TEXT_EXTENSIONS, PLIST_EXTENSION].join(',');
 
 function extensionOf(name: string): string {
   const m = /\.[a-z0-9]+$/i.exec(name);
@@ -49,7 +52,7 @@ export function kindFromNameAndMime(name: string, mime: string): AttachmentKind 
   if (m === XLSX_MIME || ext === '.xlsx') return 'xlsx';
   if (m.startsWith('audio/') || AUDIO_EXTENSIONS.includes(ext)) return 'audio';
   if (m.startsWith('video/') || VIDEO_EXTENSIONS.includes(ext)) return 'video';
-  if (TEXT_EXTENSIONS.includes(ext)) return 'text';
+  if (TEXT_EXTENSIONS.includes(ext) || ext === PLIST_EXTENSION) return 'text';
   return null;
 }
 
