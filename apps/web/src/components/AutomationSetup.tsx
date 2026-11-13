@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { tk, useTranslation } from '../i18n';
 import { api } from '../lib/api';
 import { AUTONOMY_LABEL, autonomyConfirmText, needsAutonomyConfirm } from '../lib/automation';
 import type { AutomationAutonomy, ProjectAutomation } from '../lib/types';
+import { Combobox } from './Combobox';
 import { ConfirmDialog } from './Modal';
 
 const TYPE_OPTIONS: { type: ProjectAutomation['types'][number]; label: string }[] = [
@@ -33,6 +34,7 @@ interface Props {
 export function AutomationSetup({ projectId, value, onChange }: Props) {
   const { t } = useTranslation();
   const [pending, setPending] = useState<ProjectAutomation | null>(null);
+  const autonomyId = useId();
   const [defaults, setDefaults] = useState<{ implementer: string; integrator: string; fixer: string } | null>(null);
   useEffect(() => {
     let live = true;
@@ -95,14 +97,16 @@ export function AutomationSetup({ projectId, value, onChange }: Props) {
           </div>
         </Field>
 
-        <Field label={t('Até onde os agentes vão sozinhos')}>
-          <select className="input" value={value.autonomy} onChange={(e) => propose({ ...value, autonomy: e.target.value as AutomationAutonomy })}>
-            {LEVELS.map((l) => (
-              <option key={l} value={l}>
-                {t(AUTONOMY_LABEL[l])}
-              </option>
-            ))}
-          </select>
+        <Field label={t('Até onde os agentes vão sozinhos')} htmlFor={autonomyId}>
+          {/* TER-1165: a native select's list can open on another monitor (macOS, several screens). */}
+          <Combobox
+            id={autonomyId}
+            testId="automation-autonomy"
+            searchable={false}
+            value={value.autonomy}
+            options={LEVELS.map((l) => ({ value: l, label: t(AUTONOMY_LABEL[l]) }))}
+            onChange={(next) => propose({ ...value, autonomy: next as AutomationAutonomy })}
+          />
           <p className="mt-1 text-xs text-fg-dim">{t('Envio às lojas nunca é automático.')}</p>
           {prCi === 'absent' && value.autonomy !== 'pr' && value.no_ci_merge !== 'merge' && (
             <p className="mt-1 text-xs text-warn">
@@ -226,10 +230,10 @@ export function AutomationSetup({ projectId, value, onChange }: Props) {
   );
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Field({ label, hint, htmlFor, children }: { label: string; hint?: string; htmlFor?: string; children: ReactNode }) {
   return (
     <div>
-      <label className="label">
+      <label className="label" htmlFor={htmlFor}>
         {label}
         {hint && <span className="ml-1 normal-case tracking-normal text-fg-dim">— {hint}</span>}
       </label>
