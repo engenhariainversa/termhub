@@ -239,6 +239,14 @@ export class ChatWatchesRepository {
     if (ids.length) await this.db.chatWatchFire.updateMany({ where: { id: { in: ids }, deliveredAt: null }, data: { claimedAt: null, attempts: { increment: 1 } } });
   }
 
+  /**
+   * TER-1168: whether this person was already told, by any of their watches on the tab, about the event `key`
+   * (`tab:quiet:<state_at>`, one quiet stretch in waiting_background): a new watch must not tell it again.
+   */
+  async toldAboutTab(userId: string, tabId: string, key: string): Promise<boolean> {
+    return (await this.db.chatWatchFire.count({ where: { userId, eventKey: key, watch: { kind: 'tab', targetId: tabId } } })) > 0;
+  }
+
   /** Fires that could not be delivered for this long are given up on; answers how many. */
   async dropUndeliveredBefore(cutoff: Date, now = new Date()): Promise<number> {
     const { count } = await this.db.chatWatchFire.updateMany({ where: { deliveredAt: null, droppedAt: null, createdAt: { lt: cutoff } }, data: { droppedAt: now } });

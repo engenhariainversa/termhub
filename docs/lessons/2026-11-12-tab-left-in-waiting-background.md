@@ -22,6 +22,10 @@ drhorton, 12/11: the APPS-456 tab's last event was a `Stop` into `waiting_backgr
 
 - A tab watch tells a tab in `waiting_background` with no event for 20 min (`BACKGROUND_QUIET_MS`) as a stop, once per
   stretch, whatever events it asked; the wake says the background work may have ended without waking the agent.
+- Follow-up (13/11, ap0ft01sp9gm): a watch created 20 min into a legitimate `docker builder prune` fired on its first
+  sweep and repeated what the previous watch had said. The 20 min now count from the later of the stop and the
+  watch's creation, and a stretch already told by any of the person's watches on that tab (a `chat_watch_fires` row
+  with key `tab:quiet:<state_at>`, `toldAboutTab`) is not told again.
 - `tab_stuck` also covers `waiting_background`, with its own minutes (default 30) and sentence.
 
 ## How to check

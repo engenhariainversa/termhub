@@ -53,6 +53,16 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('ChatWatchesRepository (Po
     expect(await db.chatWatchFire.count({ where: { watchId: w.id } })).toBe(1);
   });
 
+  it('tells whether any tab watch of the person on a tab already fired a key (TER-1168)', async () => {
+    const a = await repo.create(input({ target_id: 'tab-q' }), t0);
+    const key = 'tab:quiet:2026-10-21T11:00:00.000Z';
+    expect(await repo.toldAboutTab(userId, 'tab-q', key)).toBe(false);
+    await repo.fire(a, { events: [{ key, event: 'waiting_background', payload: { tab_id: 'tab-q' } }], baseline: {}, close: 'done' }, t0);
+    expect(await repo.toldAboutTab(userId, 'tab-q', key)).toBe(true);
+    expect(await repo.toldAboutTab(userId, 'tab-other', key)).toBe(false);
+    expect(await repo.toldAboutTab(otherUserId, 'tab-q', key)).toBe(false);
+  });
+
   it('a recurring watch honours its cooldown, and the same event key is never stored twice', async () => {
     const w = await repo.create(input({ recurring: true }), t0);
     expect(await repo.fire(w, { ...fired('tab:e1'), close: null, cooldownMs: 600_000 }, t0)).toBe(1);
