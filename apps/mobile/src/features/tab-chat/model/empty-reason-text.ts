@@ -27,6 +27,11 @@ const TEXT: Record<string, { title: string; hint: string; install: string | null
     hint: tk('O arquivo da conversa do Claude Code não foi encontrado em {{machine}}. A próxima sessão do Claude nesta aba volta a aparecer aqui.'),
     install: null,
   },
+  codex_hooks_review: {
+    title: tk('O Codex parou para revisar hooks'),
+    hint: tk('Um hook novo ou alterado em {{machine}} segura a primeira mensagem até ser respondido. Confiar vale para todos os hooks pendentes, inclusive os de plugins, e eles rodam fora do sandbox. Para ver quais são, abra Ver tela.'),
+    install: null,
+  },
   codex_untrusted: {
     title: tk('O Codex ainda não confia nos hooks do termhub'),
     hint: tk('O histórico desta aba vem do Codex, e são os hooks que dizem ao termhub qual sessão ler, mas o Codex só os roda depois que você confia neles. Abra o Codex nesta aba (Ver tela) e escolha "Trust all" em "Hooks need review", ou use /hooks em {{machine}}: a conversa aparece aqui a partir da próxima mensagem.'),

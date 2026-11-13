@@ -18,6 +18,7 @@ export const TAB_CHAT_MSG = {
   get updateApp() { return t('Atualize o app para continuar.'); },
   get installFailed() { return t('Não foi possível instalar os hooks. Tente de novo.'); },
   get hooksInstalled() { return t('Hooks instalados. Reinicie o Claude nesta aba (claude --continue retoma a conversa) para o histórico aparecer aqui.'); },
+  get trustHooks() { return t('Confiar nos hooks e continuar'); },
   get codexHooksInstalled() { return t('Hooks instalados. Reinicie o Codex nesta aba (codex resume retoma a conversa) para o histórico aparecer aqui.'); },
   get unknownHooksInstalled() { return t('Hooks instalados. Reinicie o agente nesta aba (claude --continue ou codex resume retomam a conversa) para o histórico aparecer aqui.'); },
   get agentOptionsFailed() { return t('Não foi possível carregar as contas de IA.'); },

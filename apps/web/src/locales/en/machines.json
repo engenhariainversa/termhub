@@ -289,7 +289,6 @@
   "Usa <0>asdf</0>? Rode": "Using <0>asdf</0>? Run",
   "Usar esta pasta": "Use this folder",
   "Usar git worktree por run (isola a branch de cada ticket)": "Use a git worktree per run (isolates each ticket's branch)",
-  "Confiar sozinho na pasta do projeto quando o agente perguntar (Claude Code, Codex, Cursor ou Gemini)": "Trust the project folder automatically when the agent asks (Claude Code, Codex, Cursor or Gemini)",
   "Usuário SSH": "SSH user",
   "Vale para novas sessões tmux; tabs já abertas continuam onde estão.": "Applies to new tmux sessions; tabs already open stay where they are.",
   "Verificação": "Verification",
@@ -485,5 +484,6 @@
   "Horas parada antes de fechar": "Idle hours before closing",
   "horas parada": "idle hours",
   "Use de {{min}} a {{max}} horas": "Use {{min}} to {{max}} hours",
-  "Abas de agente (Claude Code, Codex, Cursor, Gemini) que terminaram ou estão ociosas há esse tempo são fechadas sozinhas e aparecem no feed; uma aba esperando você com um relatório fecha depois do triplo. Nunca fecha aba trabalhando, com pergunta ou permissão, com uma execução automática ativa, com um build ou servidor rodando, nem terminais sem agente. A pasta e a sessão ficam: retome com --continue. Com a máquina sem folga, as mais antigas fecham antes do prazo (a partir de 2 h).": "Agent tabs (Claude Code, Codex, Cursor, Gemini) that finished or sat idle for this long are closed by themselves and show in the feed; a tab waiting on you with a report closes after three times as long. It never closes a tab that is working, has a question or a permission prompt, an active automatic run, a build or server running, nor terminals without an agent. The folder and the session stay: resume with --continue. When the machine has no room, the oldest close earlier (from 2 h)."
+  "Abas de agente (Claude Code, Codex, Cursor, Gemini) que terminaram ou estão ociosas há esse tempo são fechadas sozinhas e aparecem no feed; uma aba esperando você com um relatório fecha depois do triplo. Nunca fecha aba trabalhando, com pergunta ou permissão, com uma execução automática ativa, com um build ou servidor rodando, nem terminais sem agente. A pasta e a sessão ficam: retome com --continue. Com a máquina sem folga, as mais antigas fecham antes do prazo (a partir de 2 h).": "Agent tabs (Claude Code, Codex, Cursor, Gemini) that finished or sat idle for this long are closed by themselves and show in the feed; a tab waiting on you with a report closes after three times as long. It never closes a tab that is working, has a question or a permission prompt, an active automatic run, a build or server running, nor terminals without an agent. The folder and the session stay: resume with --continue. When the machine has no room, the oldest close earlier (from 2 h).",
+  "Confiar sozinho na pasta do projeto quando o agente perguntar (Claude Code, Codex, Cursor ou Gemini), e nos hooks novos ou alterados que o Codex pedir para revisar, inclusive os de plugins": "Trust the project folder automatically when the agent asks (Claude Code, Codex, Cursor or Gemini), and in new or changed hooks Codex asks to review, plugin hooks included"
 }

@@ -1,0 +1,29 @@
+projects/api on  main
+❯ codex --no-alt-screen 'first message'
+
+  Hooks need review
+  1 hook is new or changed.
+  Hooks can run outside the sandbox after you trust them.
+
+
+› 1. Review hooks
+  2. Trust all and continue
+  3. Continue without trusting (hooks won't run)
+
+  enter confirm · esc skip
+
+╭─────────────────────────────────────────────────╮
+│ ✨ Update available! 0.164.0 -> 0.166.0         │
+╰─────────────────────────────────────────────────╯
+
+  >_ OpenAI Codex (v0.164.0)
+     /home/dev/projects/api
+
+
+› first message
+
+
+
+› Ask Codex to do anything
+
+  GPT-6-Astra high · /home/dev/projects/api  ⚠ 1 warning · f2 to view

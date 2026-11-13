@@ -8,7 +8,7 @@ vi.mock('./bus.js', () => ({ monitorBus: { publish: (...a: unknown[]) => publish
 const recordFeed = vi.fn(async () => {});
 vi.mock('../automation/events.js', () => ({ recordEvent: (...a: unknown[]) => recordFeed(...(a as [])) }));
 
-const { LAUNCH_CHECKS_MS, checkLaunch, followLaunch, pretrustFolder, resetAnsweredForTests, settleTrustDialog, trustedFolderOf } = await import('./folder-trust.js');
+const { LAUNCH_CHECKS_MS, answerHooksReview, checkLaunch, followLaunch, hooksReviewSelection, pretrustFolder, resetAnsweredForTests, settleHooksReview, settleTrustDialog, trustedFolderOf } = await import('./folder-trust.js');
 
 const AT = '2026-10-24T18:00:00.000Z';
 const TRUST = readFileSync(new URL('./fixtures/claude-screens/trust-2.1.289.txt', import.meta.url), 'utf8');
@@ -18,6 +18,11 @@ const OTHERS = [
   { cli: 'cursor', screen: readFileSync(new URL('./fixtures/trust-screens/cursor.txt', import.meta.url), 'utf8'), label: 'Cursor' },
   { cli: 'gemini', screen: readFileSync(new URL('./fixtures/trust-screens/gemini.txt', import.meta.url), 'utf8'), label: 'Gemini CLI' },
 ] as const;
+const HOOKS = readFileSync(new URL('./fixtures/cli-dialogs/codex-hooks-review-0.164.0.txt', import.meta.url), 'utf8');
+const HOOKS_OLD = readFileSync(new URL('./fixtures/cli-dialogs/codex-hooks-review-0.159.3.txt', import.meta.url), 'utf8');
+const HOOKS_ANSWERED = readFileSync(new URL('./fixtures/cli-dialogs/codex-hooks-review-answered-0.164.0.txt', import.meta.url), 'utf8');
+/** The review with the selection moved to option `n`. */
+const hooksAt = (n: 1 | 2 | 3, screen = HOOKS) => screen.replace('› 1. Review hooks', '  1. Review hooks').replace(new RegExp(`^  ${n}\\.`, 'm'), `› ${n}.`);
 const PROMPT = '● Pronto.\n\n✻ Brewed for 3s\n\n────────────\n❯ \n────────────';
 
 const tab = (over: Partial<Tab> = {}): Tab & { tmux_session: string } =>
@@ -37,7 +42,7 @@ function setup(opts: { tab?: Tab | undefined; trustProjectFolder?: boolean; scre
     automationRuns: { latestByTab: vi.fn(async () => (opts.worktree ? { project_id: 'p1', worktree_path: opts.worktree } : null)) },
   } as unknown as Repositories;
   let clock = 0;
-  const deps = { capture: vi.fn(async () => opts.screen ?? TRUST), sendEnter: vi.fn(async () => {}), sendUp: vi.fn(async () => {}), pause: vi.fn(async () => {}), now: () => clock };
+  const deps = { capture: vi.fn(async () => opts.screen ?? TRUST), sendEnter: vi.fn(async () => {}), sendUp: vi.fn(async () => {}), sendDown: vi.fn(async () => {}), pause: vi.fn(async () => {}), now: () => clock };
   return { repos, recordEvent, deps, tick: (ms: number) => (clock += ms) };
 }
 
@@ -180,10 +185,14 @@ describe('followLaunch — the screen read right after an agent start (TER-1117)
     expect(await checkLaunch(busy.repos, log() as never, 't1', machine, busy.deps)).toBe(false);
   });
 
-  it('TER-1122: a Codex start is followed the same way', async () => {
+  it('TER-1122: a Codex start is followed the same way, and read on for the hooks review that may follow (TER-1162)', async () => {
     const { repos, deps } = setup({ screen: OTHERS[0].screen });
-    expect(await checkLaunch(repos, log() as never, 't1', machine, deps)).toBe(true);
+    expect(await checkLaunch(repos, log() as never, 't1', machine, deps)).toBe(false);
     expect(deps.sendEnter).toHaveBeenCalledTimes(1);
+    deps.capture.mockResolvedValueOnce(HOOKS).mockResolvedValueOnce(hooksAt(2));
+    expect(await checkLaunch(repos, log() as never, 't1', machine, deps)).toBe(true);
+    expect(deps.sendDown).toHaveBeenCalledTimes(1);
+    expect(deps.sendEnter).toHaveBeenCalledTimes(2);
   });
 
   it('a tab that reported working from the start still turns trust_prompt, never stays "working"', async () => {
@@ -222,5 +231,64 @@ describe('pretrustFolder — the folder trusted before Claude Code opens it (TER
     const l = log();
     expect(await pretrustFolder(setup().repos, l as never, tab(), agentMachine('0.38.0'), [], vi.fn(async () => Promise.reject(new Error('boom'))))).toBe(false);
     expect(l.warn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Codex hooks review (TER-1162)', () => {
+  it('reads where the selection is, on 0.159.3 and 0.164.0, and never the screen left in the history', () => {
+    expect(hooksReviewSelection(HOOKS)).toBe('above');
+    expect(hooksReviewSelection(HOOKS_OLD)).toBe('above');
+    expect(hooksReviewSelection(hooksAt(2))).toBe('trust');
+    expect(hooksReviewSelection(hooksAt(3))).toBe('below');
+    expect(hooksReviewSelection(HOOKS_ANSWERED)).toBeNull();
+    expect(hooksReviewSelection(TRUST)).toBeNull();
+    expect(hooksReviewSelection(PROMPT)).toBeNull();
+  });
+
+  it('in the project folder: Down onto "Trust all and continue", Enter once the screen shows it, and a feed line', async () => {
+    const { repos, recordEvent, deps } = setup({ screen: hooksAt(2) });
+    const l = log();
+    expect(await settleHooksReview(repos, l as never, tab(), machine, HOOKS, deps)).toBe('accepted');
+    expect(deps.sendDown).toHaveBeenCalledTimes(1);
+    expect(deps.sendEnter).toHaveBeenCalledTimes(1);
+    expect(deps.sendDown.mock.invocationCallOrder[0]).toBeLessThan(deps.sendEnter.mock.invocationCallOrder[0]!);
+    expect(recordFeed).toHaveBeenCalledWith(repos, { project_id: 'p1', kind: 'trust_auto_accepted', payload: { tab_id: 't1', tab_name: 'api', folder: 'project', cli: 'codex', hooks: true } });
+    expect(recordEvent).not.toHaveBeenCalled();
+    expect(JSON.stringify(l.info.mock.calls)).not.toContain('Trust all');
+  });
+
+  it('a selection that never lands on the trust option is never confirmed', async () => {
+    const { repos, deps } = setup({ screen: HOOKS });
+    expect(await settleHooksReview(repos, log() as never, tab(), machine, HOOKS, deps)).toBe('unchanged');
+    expect(deps.sendDown).toHaveBeenCalledTimes(3);
+    expect(deps.sendEnter).not.toHaveBeenCalled();
+    expect(recordFeed).not.toHaveBeenCalled();
+  });
+
+  it('a selection below it ("Continue without trusting") is moved up', async () => {
+    const { deps } = setup({ screen: hooksAt(2) });
+    expect(await answerHooksReview(machine, 'th-t1', hooksAt(3), deps)).toBe(true);
+    expect(deps.sendUp).toHaveBeenCalledTimes(1);
+    expect(deps.sendDown).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the project turned the option off', { trustProjectFolder: false }, tab()],
+    ['the tab runs in a folder outside the project', {}, tab({ cwd: '/elsewhere' })],
+  ])('when %s nothing is pressed: the tab is left to the person', async (_name, opts, target) => {
+    const { repos, deps } = setup(opts);
+    expect(await settleHooksReview(repos, log() as never, target, machine, HOOKS, deps)).toBe('off');
+    expect(deps.sendDown).not.toHaveBeenCalled();
+    expect(deps.sendEnter).not.toHaveBeenCalled();
+  });
+
+  it('is not answered twice within the hold, while the folder dialog before it keeps its own', async () => {
+    const { repos, deps, tick } = setup({ screen: hooksAt(2) });
+    expect(await settleTrustDialog(repos, log() as never, tab(), machine, OTHERS[0].screen, deps)).toBe('accepted');
+    expect(await settleHooksReview(repos, log() as never, tab(), machine, hooksAt(2), deps)).toBe('accepted');
+    expect(await settleHooksReview(repos, log() as never, tab(), machine, hooksAt(2), deps)).toBe('unchanged');
+    tick(60_000);
+    expect(await settleHooksReview(repos, log() as never, tab(), machine, hooksAt(2), deps)).toBe('accepted');
+    expect(deps.sendEnter).toHaveBeenCalledTimes(3);
   });
 });

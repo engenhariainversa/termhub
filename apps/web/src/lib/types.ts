@@ -2320,7 +2320,7 @@ export interface StartTabAgentResult {
   model?: string | null;
 }
 
-export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact';
+export type TabChatAction = 'interrupt' | 'cycle_mode' | 'clear' | 'compact' | 'trust_hooks';
 
 /** Server to browser on `/ws/tabs/:id/chat`. `reset`: drop the items and fetch the first page again. */
 export type TabChatFrame =

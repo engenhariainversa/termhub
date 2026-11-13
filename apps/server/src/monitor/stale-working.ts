@@ -12,7 +12,7 @@ import type { Machine, Tab, TabState } from '../db/repositories/types.js';
 import { paneForeground } from '../terminal/session-ops.js';
 import { publishTabChange } from './ingest.js';
 import { SCREEN_STATE_LINES, claudeScreenState, trustDialogVisible, type ScreenState } from './screen-state.js';
-import { defaultTrustDeps, settleTrustDialog, type FolderTrustDeps } from './folder-trust.js';
+import { defaultTrustDeps, HOOKS_REVIEW_DIALOG, settleHooksReview, settleTrustDialog, type FolderTrustDeps } from './folder-trust.js';
 import { cliDialogOf, cliDialogText, type CliDialog } from './cli-dialogs.js';
 import { AUTH_REQUIRED_TEXT, TRUST_PROMPT_TEXT, cap } from './state.js';
 import { classifyTurnEnd } from './turn-end.js';
@@ -133,7 +133,10 @@ async function checkTab(repos: Repositories, log: Log, tab: Tab & { tmux_session
       // TER-1122: Codex, Cursor and Gemini have no screen rule here but their folder trust dialog
       const other = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
       if (trustDialogVisible(other)) await settleTrustDialog(repos, log, tab, machine, other, deps.trust ?? defaultTrustDeps, ['working', 'waiting_background']);
-      else await recordDialog(repos, log, tab, machine, cliDialogOf(other), ['working', 'waiting_background']);
+      else {
+        const dialog = cliDialogOf(other);
+        if (!(await hooksReviewAnswered(repos, log, tab, machine, dialog, other, deps))) await recordDialog(repos, log, tab, machine, dialog, ['working', 'waiting_background']);
+      }
       return;
     }
     // A tab that waits on its background work (TER-644): its hooks went quiet on purpose, and a screen without
@@ -219,6 +222,7 @@ export async function sweepUnreported(repos: Repositories, log: Log, now = new D
       if (screen !== 'trust' && screen !== 'auth') {
         // TER-1166: a named dialog of the CLI holds a tab that never reported ("Hooks need review")
         const dialog = cliDialogOf(raw);
+        if (await hooksReviewAnswered(repos, log, { ...tab, tmux_session: tab.tmux_session }, machine, dialog, raw, deps)) continue;
         if (dialog?.title) await recordDialog(repos, log, tab, machine, dialog, [null]);
         continue;
       }
@@ -237,6 +241,22 @@ export async function sweepUnreported(repos: Repositories, log: Log, now = new D
   // the map holds both sweeps' entries: drop this sweep's that left the list
   const listed = new Set(tabs.map((t) => `unreported:${t.id}`));
   for (const key of deps.checked.keys()) if (key.startsWith('unreported:') && !listed.has(key)) deps.checked.delete(key);
+}
+
+/**
+ * Codex's hooks review (TER-1162) answered "Trust all and continue" by the server, in a folder it may trust
+ * (folder-trust.ts). False for any other dialog, the option off, another folder or a failure: the caller records
+ * the dialog.
+ */
+async function hooksReviewAnswered(repos: Repositories, log: Log, tab: Tab & { tmux_session: string }, machine: Machine, dialog: CliDialog | null, raw: string, deps: StaleWorkingDeps): Promise<boolean> {
+  if (dialog?.id !== HOOKS_REVIEW_DIALOG) return false;
+  try {
+    return (await settleHooksReview(repos, log, tab, machine, raw, deps.trust ?? defaultTrustDeps)) === 'accepted';
+  } catch (err) {
+    // the tab is still told to be held by the dialog
+    log.warn({ tabId: tab.id, code: failureLabel(err) }, 'monitor: Codex hooks review not answered');
+    return false;
+  }
 }
 
 /**
@@ -297,6 +317,9 @@ export async function sweepDialogs(repos: Repositories, log: Log, now = new Date
       if (tab.state !== 'cli_dialog' && tab.state !== 'idle' && (await agentLeftAtRest(repos, log, tab as Tab & { tmux_session: string; state_at: string }, machine, deps))) continue;
       const raw = await deps.capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20);
       const dialog = cliDialogOf(raw);
+      // TER-1162: a hooks review the server may answer is answered, whether or not the tab already says cli_dialog;
+      // once it is gone the next sweep takes the tab back to its turn end
+      if (await hooksReviewAnswered(repos, log, tab as Tab & { tmux_session: string }, machine, dialog, raw, deps)) continue;
       if (tab.state !== 'cli_dialog') {
         if (dialog?.title) await recordDialog(repos, log, tab, machine, dialog, RESTING_STATES);
         continue;

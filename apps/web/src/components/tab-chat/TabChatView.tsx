@@ -195,6 +195,11 @@ export function TabChatView({ tabId, projectId, machineId, active, onShowTermina
       {reason && (
         <div className="flex items-center gap-2 border-b border-warn/30 bg-warn/10 px-3 py-1 text-xs text-warn">
           <span>{reason}</span>
+          {chat.emptyReason === 'codex_hooks_review' && (
+            <button type="button" className="shrink-0 underline" data-testid="tab-chat-trust-hooks" onClick={() => void chat.act('trust_hooks')}>
+              {t('Confiar nos hooks e continuar')}
+            </button>
+          )}
           <button type="button" className="underline" onClick={() => setScreenOpen(true)}>
             {t('Ver tela')}
           </button>

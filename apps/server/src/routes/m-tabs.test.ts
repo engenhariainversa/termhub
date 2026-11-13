@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import Fastify from 'fastify';
 import { sessionStartOptions, tabChatPage, tabsResponse } from '@termhub/mobile-api';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -79,7 +80,7 @@ const question = (o: Record<string, unknown>) => ({
   ...o,
 });
 
-function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean; codexTrusted?: boolean | null; pane?: 'shell' | 'busy' | 'dead' | Error } = {}) {
+function build(opts: { screen?: string; answers?: boolean; grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknown[]) => Promise<Page>; questions?: unknown[]; surface?: 'app' | 'web'; hooksInstalled?: boolean; codexTrusted?: boolean | null; pane?: 'shell' | 'busy' | 'dead' | Error } = {}) {
   const grants = new Set(opts.grants ?? ['terminals:read', 'terminals:write']);
   const tabs = opts.tabs ?? [tabRow(), tabRow({ id: 't2', project_id: 'p2' })];
   const repos = {
@@ -106,6 +107,8 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
     if (opts.pane instanceof Error) throw opts.pane;
     return opts.pane ?? 'busy';
   });
+  const capture = vi.fn(async () => opts.screen ?? '');
+  const answerHooks = vi.fn(async () => opts.answers ?? true);
   const logged: unknown[] = [];
   const app = Fastify({ logger: { level: 'debug', stream: { write: (line: string) => logged.push(line) } } });
   applyErrorHandler(app);
@@ -122,11 +125,11 @@ function build(opts: { grants?: string[]; tabs?: Tab[]; readPage?: (...a: unknow
         const cfg = (route.config ?? {}) as { action?: string };
         route.config = { ...cfg, resource: 'terminals', action: cfg.action ?? actionForMethod(String(route.method)) } as never;
       });
-      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface, codexHooksTrusted, foreground: foreground as never });
+      await mobileTabRoutes(a, repos as never, { hub: hub as never, readPage: readPage as never, modeSettleMs: 0, surface: opts.surface, codexHooksTrusted, foreground: foreground as never, capture: capture as never, answerHooks: answerHooks as never });
     },
     { prefix: '/tabs' },
   );
-  return { app, repos, readPage, hub, logged, codexHooksTrusted, foreground };
+  return { app, repos, readPage, hub, logged, codexHooksTrusted, foreground, capture, answerHooks };
 }
 
 afterEach(() => {
@@ -294,6 +297,53 @@ describe('GET /tabs/:id/chat', () => {
     const item = { kind: 'assistant', id: 'a1', at: '2026-10-01T10:00:00.000Z', text: 'oi' };
     const full = build({ readPage: async () => ({ items: [item as never], before: null, live: `${SID}.40`, mode: null, degraded: false, missing: false }) });
     expect((await full.app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBeNull();
+  });
+
+  // TER-1162: `hooks.status` says all trusted and the tab has no state, while Codex holds the first message on the screen.
+  describe('Codex hooks review', () => {
+    const REVIEW = readFileSync(new URL('../monitor/fixtures/cli-dialogs/codex-hooks-review-0.164.0.txt', import.meta.url), 'utf8');
+    const ANSWERED = readFileSync(new URL('../monitor/fixtures/cli-dialogs/codex-hooks-review-answered-0.164.0.txt', import.meta.url), 'utf8');
+    const stuck = tabRow({ agent_session_id: null, agent_transcript_path: null, state: null, state_tool: null });
+
+    it('a tab with no state stopped on the screen says codex_hooks_review, although every termhub hook is trusted', async () => {
+      const { app } = build({ tabs: [stuck], codexTrusted: true, screen: REVIEW });
+      const page = tabChatPage.parse((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json());
+      expect(page.empty_reason).toBe('codex_hooks_review');
+    });
+
+    it('the screen left in the history, or an unreadable pane, keeps the other reasons', async () => {
+      const { app, capture } = build({ tabs: [stuck], screen: ANSWERED });
+      expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+      capture.mockRejectedValueOnce(new Error('offline'));
+      expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('not_reported');
+    });
+
+    it('a shell in front is not read at all', async () => {
+      const { app, capture } = build({ tabs: [stuck], pane: 'shell', screen: REVIEW });
+      expect((await app.inject({ method: 'GET', url: '/tabs/t1/chat' })).json().empty_reason).toBe('no_agent');
+      expect(capture).not.toHaveBeenCalled();
+    });
+
+    it('trust_hooks answers the screen it read', async () => {
+      const { app, answerHooks, hub } = build({ tabs: [stuck], screen: REVIEW });
+      const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/actions', payload: { action: 'trust_hooks' } });
+      expect(res.statusCode).toBe(200);
+      expect(answerHooks).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), stuck.tmux_session, REVIEW);
+      expect(hub.poke).toHaveBeenCalledWith('t1');
+    });
+
+    it('trust_hooks with no review left on screen is a 409', async () => {
+      const { app } = build({ tabs: [stuck], screen: ANSWERED, answers: false });
+      const res = await app.inject({ method: 'POST', url: '/tabs/t1/chat/actions', payload: { action: 'trust_hooks' } });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().code).toBe('NO_HOOKS_REVIEW');
+    });
+
+    it('trust_hooks needs terminals:write', async () => {
+      const { app, answerHooks } = build({ tabs: [stuck], screen: REVIEW, grants: ['terminals:read'] });
+      expect((await app.inject({ method: 'POST', url: '/tabs/t1/chat/actions', payload: { action: 'trust_hooks' } })).statusCode).toBe(403);
+      expect(answerHooks).not.toHaveBeenCalled();
+    });
   });
 
   // TER-1095: a Codex tab whose machine never trusted the hooks says so, instead of "not reported".

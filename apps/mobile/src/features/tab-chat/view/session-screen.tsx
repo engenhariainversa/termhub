@@ -254,13 +254,21 @@ export function SessionView({ tabId }: { tabId: string }) {
             <Banner tone="danger" text={error} />
           </View>
         ) : null}
+        {/* Above the thread: a new session's first message is on screen, "sent", while Codex holds it here (TER-1162). */}
+        {emptyReason === 'codex_hooks_review' && !BLOCKED.has(availability) ? (
+          <View testID="session-hooks-review" className="gap-2 border-b border-app-border px-4 py-3">
+            <AppText variant="label">{empty.title}</AppText>
+            <AppText variant="muted">{empty.hint}</AppText>
+            <Button testID="session-trust-hooks" label={TAB_CHAT_MSG.trustHooks} onPress={() => void act('trust_hooks')} />
+          </View>
+        ) : null}
         {status === 'loading' ? (
           <View className="flex-1 items-center justify-center">
             <ActivityIndicator />
           </View>
         ) : entries.length === 0 ? (
           <View className="flex-1">
-            {status === 'ready' ? (
+            {status === 'ready' && emptyReason !== 'codex_hooks_review' ? (
               // Never blank without a reason (TER-1091): why there is no history, and what brings it.
               <View testID="session-empty" className="flex-1">
                 <EmptyState

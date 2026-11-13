@@ -19,6 +19,7 @@ import {
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireTranscriptCapable } from '../agent/errors.js';
+import { captureScreen } from '../agent/screen.js';
 import { agents } from '../agent/registry.js';
 import { scoped } from '../auth/scope.js';
 import { startAgent, startTabAgent, tabAgentOptions } from '../control/agents.js';
@@ -29,10 +30,11 @@ import type { Repositories } from '../db/repositories/index.js';
 import { describeTabQuestions, splitTabRows } from '../db/repositories/tab-questions-view.js';
 import { HttpError, badRequest } from '../lib/errors.js';
 import { applyState } from '../monitor/ingest.js';
+import { answerHooksReview, hooksReviewSelection } from '../monitor/folder-trust.js';
 import { readHooksStatus } from '../monitor/install.js';
 import { AT_PROMPT } from '../monitor/state.js';
 import { claudeAccountDirs } from '../monitor/machine-hooks.js';
-import { claudeFooterMode } from '../monitor/screen-state.js';
+import { claudeFooterMode, SCREEN_STATE_LINES } from '../monitor/screen-state.js';
 import type { TabChatHub } from '../tab-chat/hub.js';
 import { availabilityOf, emptyReasonOf, hasNoHistory, hasReportedSession, readPage as defaultReadPage, transcriptToolOf, type AgentView, type HooksOnMachine, type Page, type TabChatAvailability } from '../tab-chat/reader.js';
 import { tabSummaryOf } from '../tab-chat/view.js';
@@ -67,6 +69,10 @@ export interface MobileTabDeps {
   codexHooksTrusted?: (machine: Machine) => Promise<boolean | null>;
   /** What the tab's pane runs in front (TER-1094); injected by tests, the agent's `tmux.foreground` otherwise. */
   foreground?: (machine: Machine, session: string) => Promise<PaneForeground>;
+  /** The pane's text (TER-1162); injected by tests, the agent's capture otherwise. */
+  capture?: (machine: Machine, session: string, lines: number) => Promise<string>;
+  /** Injected by tests; "Trust all and continue" on Codex's hooks review otherwise. */
+  answerHooks?: (machine: Machine, session: string, screen: string) => Promise<boolean>;
 }
 
 /** Whether Codex trusts every termhub hook on the machine; null when that cannot be read (offline, an old agent, no Codex). */
@@ -123,6 +129,8 @@ const emptyPage = (): Page => ({ items: [], before: null, live: null, mode: null
 export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories, deps: MobileTabDeps) {
   const readPage = deps.readPage ?? defaultReadPage;
   const foreground = deps.foreground ?? paneForeground;
+  const capture = deps.capture ?? captureScreen;
+  const answerHooks = deps.answerHooks ?? ((machine: Machine, session: string, screen: string) => answerHooksReview(machine, session, screen));
   const ctxOf = (request: FastifyRequest) => controlContextFor(repos, request.scope.user);
   const availability = (tab: Parameters<typeof availabilityOf>[0], machine: Parameters<typeof availabilityOf>[1]) => availabilityOf(tab, machine, deps.agent);
 
@@ -204,8 +212,13 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
     }
     // A page with no history at all is worth a look at the pane (TER-1094): a plain shell there means no
     // agent, not a missing history. Any failure (an agent older than 0.14.0, offline) keeps the other reasons.
-    const atShell = tab.tmux_session && (avail === 'no_session' || avail === 'ready') && hasNoHistory(avail, page, !before) ? (await foreground(machine, tab.tmux_session).catch(() => null)) === 'shell' : false;
-    const empty_reason = emptyReasonOf(tab, avail, page, !before, hooks, atShell);
+    const noHistory = !!tab.tmux_session && (avail === 'no_session' || avail === 'ready') && hasNoHistory(avail, page, !before);
+    const atShell = noHistory ? (await foreground(machine, tab.tmux_session!).catch(() => null)) === 'shell' : false;
+    // TER-1162: an agent in front and no history may be Codex holding the first message on its hooks review (the
+    // project's option off, or a folder the server does not trust). The screen says so at once, before the sweep
+    // marks the tab cli_dialog, and `hooks.status` says nothing of a plugin's hook. Compared and dropped.
+    const reviewing = noHistory && !atShell ? hooksReviewSelection(await capture(machine, tab.tmux_session!, SCREEN_STATE_LINES + 20).catch(() => '')) !== null : false;
+    const empty_reason = reviewing ? 'codex_hooks_review' : emptyReasonOf(tab, avail, page, !before, hooks, atShell);
     request.log.debug({ tabId: tab.id, availability: avail, items: page.items.length, degraded: page.degraded, emptyReason: empty_reason }, 'tab chat: page');
     return {
       tab: tabSummaryOf(tab, project, machine, avail),
@@ -274,6 +287,13 @@ export async function mobileTabRoutes(app: FastifyInstance, repos: Repositories,
       case 'compact':
         await control(() => sendInput(ctx, { tab_id: tab.id, text: '/compact' }, null));
         break;
+      case 'trust_hooks': {
+        // The person's own answer to Codex's hooks review (TER-1162), whatever the project's setting says.
+        const screen = tab.tmux_session ? await capture(machine, tab.tmux_session, SCREEN_STATE_LINES + 20) : '';
+        if (!tab.tmux_session || !(await answerHooks(machine, tab.tmux_session, screen))) throw new HttpError(409, tk('O Codex não está mais pedindo a revisão dos hooks nesta aba'), 'NO_HOOKS_REVIEW');
+        await audit(repos, request, 'terminal.input', { target: { type: 'tab', id: tab.id, label: tab.name }, meta: { machine_id: machine.id, hooks_trusted: true, surface: deps.surface ?? 'app' } });
+        break;
+      }
       case 'cycle_mode': {
         // An older agent's schema refuses the key: say "update" instead of a bare 400 from the machine.
         requireTranscriptCapable(machine);
