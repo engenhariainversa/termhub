@@ -10,7 +10,8 @@
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./models": { "types": "./dist/models.d.ts", "default": "./dist/models.js" },
     "./pasted-text": { "types": "./dist/pasted-text.d.ts", "default": "./dist/pasted-text.js" },
-    "./draft-text": { "types": "./dist/draft-text.d.ts", "default": "./dist/draft-text.js" }
+    "./draft-text": { "types": "./dist/draft-text.d.ts", "default": "./dist/draft-text.js" },
+    "./decision-batch": { "types": "./dist/decision-batch.d.ts", "default": "./dist/decision-batch.js" }
   },
   "scripts": { "build": "tsc -p tsconfig.json", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run" },
   "dependencies": { "zod": "^3.24.1" },

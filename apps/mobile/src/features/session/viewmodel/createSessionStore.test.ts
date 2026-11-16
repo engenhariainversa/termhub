@@ -3,7 +3,7 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import * as SecureStore from 'expo-secure-store';
-import { decisionProofMessage } from '@termhub/mobile-api';
+import { CHAT_DECISION_BATCH_MAX, decisionProofMessage } from '@termhub/mobile-api';
 import { createChatStore } from '@/features/chat/viewmodel/createChatStore';
 import { pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
 import { socketWake } from '@/services/api/wake';
@@ -389,6 +389,21 @@ it('requestPinProofs asks the PIN once, then signs one decision challenge per ac
   }
   expect(seen[0]!.a1!.challenge).not.toBe(seen[0]!.a2!.challenge);
   expect(store.getState()).toMatchObject({ pinPrompt: null, busy: false, error: null });
+});
+
+it('requestPinProofs splits more ids than one challenges call takes into runs, one PIN entry (TER-1192)', async () => {
+  const ctx = setup();
+  await enrol(ctx);
+  const { store } = ctx;
+  const decisionChallenges = jest.spyOn(ctx.api, 'decisionChallenges');
+  const ids = Array.from({ length: CHAT_DECISION_BATCH_MAX + 5 }, (_, i) => `a${i}`);
+  const perform = jest.fn(async (_proofs: Record<string, Proof>) => {});
+  const pending = store.getState().requestPinProofs(ids, perform);
+  await store.getState().resolvePinPrompt(PIN);
+  await pending;
+  expect(decisionChallenges).toHaveBeenCalledTimes(2);
+  expect(decisionChallenges.mock.calls.map((c) => (c[1] as { action_ids: string[] }).action_ids.length)).toEqual([CHAT_DECISION_BATCH_MAX, 5]);
+  expect(Object.keys(perform.mock.calls[0]![0])).toHaveLength(ids.length);
 });
 
 it('requestPinProofs: a batch of 13 approvals goes through even where session/challenge answers 429 from the sixth call on (TER-530)', async () => {

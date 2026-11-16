@@ -85,11 +85,11 @@ it('offers "Aprovar as reversíveis" only with two or more pending writes, and s
   expect(screen.queryByRole('button', { name: /Aprovar as reversíveis/ })).toBeNull();
 });
 
-it('sends at most 20 writes in one batch, and is disabled while one is in flight', () => {
-  const many = Array.from({ length: 25 }, (_, i) => action(`a${i}`));
+it('approves every pending write at once, 50 of them too (TER-1192), and is disabled while one is in flight', () => {
+  const many = Array.from({ length: 50 }, (_, i) => action(`a${i}`));
   const { onApprove } = renderBar(many);
-  fireEvent.click(screen.getByRole('button', { name: 'Aprovar as reversíveis (20)' }));
-  expect(onApprove.mock.calls[0][0]).toHaveLength(20);
+  fireEvent.click(screen.getByRole('button', { name: 'Aprovar as reversíveis (50)' }));
+  expect(onApprove.mock.calls[0][0]).toHaveLength(50);
   cleanup();
   renderBar([action('a1'), action('a2')], [], [], { batchDeciding: true });
   expect(screen.getByRole('button', { name: 'Aprovar as reversíveis (2)' })).toBeDisabled();

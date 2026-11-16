@@ -39,6 +39,7 @@ export const SECURITY_ACTION_LABELS: Record<string, string> = {
   'support.troubleshoot': tk('Consultou dados de suporte de um usuário'),
   'api_run.create': tk('Criou uma run pela API'),
   'api_run.cancel': tk('Cancelou uma run da API'),
+  'chat_action.deny': tk('Recusou pedidos pendentes do chat pelo MCP'),
 };
 
 const GROUP_LABELS: Record<string, string> = {
@@ -53,6 +54,7 @@ const GROUP_LABELS: Record<string, string> = {
   feature_flag: tk('Recursos em teste'),
   support: tk('Suporte'),
   api_run: tk('Runs da API'),
+  chat_action: tk('Pedidos do chat'),
 };
 
 /** A local calendar day (`2026-10-07`) as the instant it starts; `plusDays` 1 gives the exclusive end of the day. */

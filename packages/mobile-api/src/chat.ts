@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { MAX_ATTACHMENTS_PER_MESSAGE } from './attachments.js';
 import { CHAT_MESSAGE_MAX_CHARS } from './pasted-text.js';
 import { replyCardRef, tabQuestionSchema, type ReplyCardKind, type StandingGrantKind, type TAutoDecision } from './events.js';
+import { CHAT_DECISION_BATCH_MAX } from './decision-batch.js';
 
 /** `POST chat/messages`: text, or attachments, or both (spec 2026-09-26 §5.5). An empty text with ids
  * is a message made of files alone; neither is refused before anything is stored. */
@@ -97,7 +98,7 @@ export const mobileBatchDecisionBody = z.object({
       ]),
     )
     .min(1)
-    .max(20)
+    .max(CHAT_DECISION_BATCH_MAX)
     .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas')
     .refine((d) => d.every((x) => x.decision !== 'approve' || (x.challenge === undefined) === (x.pin_proof === undefined)), 'challenge e pin_proof vão juntos'),
 });
@@ -110,7 +111,7 @@ export const decisionChallengesBody = z.object({
   action_ids: z
     .array(z.string().min(1).max(64))
     .min(1)
-    .max(20)
+    .max(CHAT_DECISION_BATCH_MAX)
     .refine((ids) => new Set(ids).size === ids.length, 'Ações repetidas'),
 });
 export const decisionChallengesResponse = z.object({

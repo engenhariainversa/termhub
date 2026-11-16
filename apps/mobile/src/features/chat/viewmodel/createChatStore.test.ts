@@ -709,6 +709,36 @@ it('decideMany of denials only sends one batch with no PIN prompt', async () => 
   expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
 });
 
+it.each(['approve', 'deny'] as const)('decideMany of 50 write cards (%s) goes through with no PIN prompt (TER-1192)', async (decision) => {
+  // "Aprovar selecionadas (30)" and "Recusar todas" answered "Dados inválidos": the batch was capped at 20.
+  const { chat, store, api, controls } = await setup();
+  const ids = Array.from({ length: 50 }, (_, i) => `a-many-${i}`);
+  for (const [i, id] of ids.entries()) {
+    controls.seedAction({
+      id,
+      conversation_id: 'c-termhub',
+      tool: 'create_task',
+      args: { project_id: 'p-termhub', title: `Card ${i}` },
+      class: 'write',
+      status: 'pending',
+      machine_id: null,
+      project_id: 'p-termhub',
+      tab_id: null,
+      grant_id: null,
+      summary: `criar o card "Card ${i}" no projeto termhub`,
+      created_at: new Date(Date.now() - (60 - i) * 1000).toISOString(),
+    });
+  }
+  await openAndConnect(chat, 'p-termhub');
+  const challenge = jest.spyOn(api, 'challenge');
+  await chat.getState().decideMany(ids.map((id) => ({ id, decision })));
+  expect(challenge).not.toHaveBeenCalled();
+  expect(store.getState().pinPrompt).toBeNull();
+  expect(chat.getState()).toMatchObject({ decidingId: null, error: null });
+  const statuses = slot(chat, 'p-termhub').actions.filter((a) => ids.includes(a.id)).map((a) => a.status);
+  expect(statuses).toEqual(ids.map(() => (decision === 'deny' ? 'denied' : 'approved')));
+});
+
 it('decideMany of write approvals sends one batch with no PIN prompt and no proof (TER-92)', async () => {
   const { chat, store, api } = await setup();
   await openAndConnect(chat, 'p-termhub');

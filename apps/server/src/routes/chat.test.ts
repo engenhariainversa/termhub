@@ -1,3 +1,4 @@
+import { CHAT_DECISION_BATCH_MAX } from '@termhub/mobile-api';
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
@@ -646,10 +647,25 @@ it('POST /chat/actions/decisions decides the batch and resumes the conversation 
 
 it('POST /chat/actions/decisions validates the body', async () => {
   const { app, decide } = build();
-  for (const payload of [{}, { decisions: [] }, { decisions: [{ id: 'a1', decision: 'approve_tab' }] }, { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a1', decision: 'deny' }] }, { decisions: Array.from({ length: 21 }, (_, i) => ({ id: `a${i}`, decision: 'deny' })) }]) {
+  for (const payload of [{}, { decisions: [] }, { decisions: [{ id: 'a1', decision: 'approve_tab' }] }, { decisions: [{ id: 'a1', decision: 'approve' }, { id: 'a1', decision: 'deny' }] }, { decisions: Array.from({ length: CHAT_DECISION_BATCH_MAX + 1 }, (_, i) => ({ id: `a${i}`, decision: 'deny' })) }]) {
     expect((await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload })).statusCode).toBe(400);
   }
   expect(decide).not.toHaveBeenCalled();
+});
+
+it('POST /chat/actions/decisions takes 50 decisions in one call: approve and deny all (TER-1192)', async () => {
+  // A subagent asked for 30 cards at once; the cap of 20 answered "Dados inválidos" to both buttons.
+  const ids = Array.from({ length: 50 }, (_, i) => `a${i}`);
+  for (const decision of ['approve', 'deny'] as const) {
+    const findByIdForUser = vi.fn(async (id: string) => ({ ...pendingAction, id, status: 'pending' }));
+    const decide = vi.fn(async (id: string, _u: string, status: string) => ({ ...pendingAction, id, status }));
+    const { app, startAfterDecision } = build({ findByIdForUser, decide });
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/decisions', payload: { decisions: ids.map((id) => ({ id, decision })) } });
+    expect(res.statusCode).toBe(200);
+    expect(decide).toHaveBeenCalledTimes(50);
+    expect(res.json().actions).toHaveLength(50);
+    expect(startAfterDecision).toHaveBeenCalledTimes(1);
+  }
 });
 
 it('POST /chat/actions/decisions answers queued when a run holds the conversation', async () => {

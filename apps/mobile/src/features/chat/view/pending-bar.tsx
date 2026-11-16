@@ -5,9 +5,6 @@ import { AppText, Button, Icon } from '@/ui';
 import { permissionTitle, tabLabel } from '../model/tab-question-text';
 import type { ChatEntry } from '../model/timeline';
 
-/** What `POST chat/actions/decisions` takes in one call (the server refuses more). */
-const BATCH_MAX = 20;
-
 type PendingItem = {
   id: string;
   line: string;
@@ -52,7 +49,7 @@ export const PendingBar = memo(function PendingBar({ entries, deciding, onJump, 
   // The lines are composed in the current language: rebuilt when it changes.
   const items = useMemo(() => pendingItems(entries), [entries, i18n.language]);
   if (items.length === 0) return null;
-  const writes = items.filter((i) => i.write).slice(0, BATCH_MAX);
+  const writes = items.filter((i) => i.write);
   const count = t('{{count}} pendentes', { count: items.length });
   return (
     <View testID="pending-bar" className="gap-1 border-t border-app-border px-4 py-2">

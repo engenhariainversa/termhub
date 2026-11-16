@@ -186,5 +186,8 @@
   "O coletor de abas está desligado para você (recurso em teste tab_gc)": "The tab collector is off for you (tab_gc feature in test)",
   "O coletor de abas está em teste: só roda com dry_run (recurso tab_gc_live desligado)": "The tab collector is in test: it only runs with dry_run (tab_gc_live feature off)",
   "Só a pessoa ou o chat dela trocam os recursos em teste, nunca um agente numa aba.": "Only the person or their chat switch features in testing, never an agent in a tab.",
-  "Este recurso em teste não pode ser trocado pelo chat. Veja os que podem com list_feature_flags.": "This feature in testing cannot be switched by the chat. See the ones that can with list_feature_flags."
+  "Este recurso em teste não pode ser trocado pelo chat. Veja os que podem com list_feature_flags.": "This feature in testing cannot be switched by the chat. See the ones that can with list_feature_flags.",
+  "Só a pessoa e o chat dela podem listar ou recusar os pedidos pendentes do chat; uma aba de agente não pode.": "Only the person and their chat can list or refuse the chat's pending requests; an agent tab cannot.",
+  "Passe action_ids ou orphans_of_conversation, um dos dois.": "Pass action_ids or orphans_of_conversation, one of the two.",
+  "Conversa não encontrada.": "Conversation not found."
 }

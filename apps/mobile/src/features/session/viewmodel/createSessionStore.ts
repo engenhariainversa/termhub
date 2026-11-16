@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { pushGranted, sessionEnded, sessionStarted } from '@/features/shared/signals';
-import { ACCOUNT_PENDING_DELETION, type PinDecision } from '@/services/api/contract';
+import { ACCOUNT_PENDING_DELETION, decisionBatches, type PinDecision } from '@/services/api/contract';
 import { ApiError } from '@/services/api/errors';
 import { socketWake } from '@/services/api/wake';
 import { b64url, fromB64url } from '@/services/crypto/encoding';
@@ -171,8 +171,13 @@ export function createSessionStore(deps: SessionDeps) {
         const decisionChallenges = async (actionIds: string[]): Promise<Map<string, string>> => {
           if (actionIds.length > 1) {
             try {
-              const { challenges } = await api.decisionChallenges(get().auth(), { action_ids: actionIds });
-              return new Map(challenges.map((c) => [c.action_id, c.challenge]));
+              // TER-1192: more ids than one call takes go in runs, one after the other.
+              const out = new Map<string, string>();
+              for (const action_ids of decisionBatches(actionIds)) {
+                const { challenges } = await api.decisionChallenges(get().auth(), { action_ids });
+                for (const c of challenges) out.set(c.action_id, c.challenge);
+              }
+              return out;
             } catch (e) {
               if (!(e instanceof ApiError && e.status === 404)) throw e;
             }

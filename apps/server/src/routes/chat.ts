@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { answerTabLimit, describeTabLimits } from '../chat/tab-limits.js';
 import { tabLimitAnswerBody } from '@termhub/mobile-api';
 import { z } from 'zod';
-import { CHAT_MESSAGE_MAX_CHARS, chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE, replyCardKind } from '@termhub/mobile-api';
+import { CHAT_DECISION_BATCH_MAX, CHAT_MESSAGE_MAX_CHARS, chatGrantListQuery, MAX_ATTACHMENTS_PER_MESSAGE, replyCardKind } from '@termhub/mobile-api';
 import { assertMessageFits } from '../chat/message-size.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { ChatAction } from '../db/repositories/chat-actions.js';
@@ -82,7 +82,7 @@ const batchBody = z.object({
   decisions: z
     .array(z.object({ id: z.string().min(1).max(64), decision: z.enum(['approve', 'deny']) }))
     .min(1)
-    .max(20)
+    .max(CHAT_DECISION_BATCH_MAX)
     .refine((d) => new Set(d.map((x) => x.id)).size === d.length, 'Ações repetidas'),
 });
 const grantIdParam = z.object({ id: z.string().min(1).max(64) });

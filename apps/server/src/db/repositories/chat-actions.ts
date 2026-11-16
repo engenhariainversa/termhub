@@ -130,6 +130,35 @@ export class ChatActionsRepository {
     return n > 0;
   }
 
+  /**
+   * The person's pending cards across their live chats (TER-1192, `list_pending_actions` and
+   * `deny_pending_action`), oldest first, each with its chat's project. Owner-scoped through the
+   * conversation, like `decide`; an archived chat's rows were expired by `reset` and are left out anyway.
+   */
+  async listPendingForUser(
+    userId: string,
+    opts: { conversationId?: string; projectId?: string; limit: number },
+  ): Promise<{ rows: Array<ChatAction & { conversation_project_id: string | null; conversation_project_name: string | null }>; total: number }> {
+    const where = {
+      status: 'pending' satisfies ChatActionStatus,
+      conversation: { userId, archivedAt: null, ...(opts.projectId ? { projectId: opts.projectId } : {}) },
+      ...(opts.conversationId ? { conversationId: opts.conversationId } : {}),
+    };
+    const [rows, total] = await Promise.all([
+      this.db.chatAction.findMany({
+        where,
+        include: { conversation: { select: { projectId: true, project: { select: { name: true } } } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        take: opts.limit,
+      }),
+      this.db.chatAction.count({ where }),
+    ]);
+    return {
+      rows: rows.map((r) => ({ ...mapAction(r), conversation_project_id: r.conversation.projectId, conversation_project_name: r.conversation.project?.name ?? null })),
+      total,
+    };
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatAction | undefined> {
     const row = await this.db.chatAction.findFirst({ where: { id, conversation: { userId } } });
     return row ? mapAction(row) : undefined;

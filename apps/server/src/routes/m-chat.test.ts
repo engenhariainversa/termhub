@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
-import { chatGrantListResponse, decisionProofMessage, tabQuestionAutoAnswerCancelResponse } from '@termhub/mobile-api';
+import { CHAT_DECISION_BATCH_MAX, chatGrantListResponse, decisionProofMessage, tabQuestionAutoAnswerCancelResponse } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import { applyErrorHandler, HttpError } from '../lib/errors.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
@@ -1211,9 +1211,9 @@ describe('POST /chat/actions/challenges (TER-530)', () => {
     for (const id of ids) expect(session.challenge).toHaveBeenCalledWith(device.id, 'decision', id);
   });
 
-  it('refuses an empty list, repeated ids and more than the batch cap (20) before issuing anything', async () => {
+  it('refuses an empty list, repeated ids and more than the batch cap before issuing anything', async () => {
     const { app, session } = build();
-    for (const action_ids of [[], ['a1', 'a1'], Array.from({ length: 21 }, (_, i) => `a${i}`)]) {
+    for (const action_ids of [[], ['a1', 'a1'], Array.from({ length: CHAT_DECISION_BATCH_MAX + 1 }, (_, i) => `a${i}`)]) {
       expect((await post(app, { action_ids })).statusCode).toBe(400);
     }
     expect(session.challenge).not.toHaveBeenCalled();
@@ -1247,6 +1247,28 @@ describe('POST /chat/actions/decisions (batch)', () => {
     ]);
     // The decision hook (agentic board F-19) sees every decided row of the batch.
     expect(service.afterDecisions).toHaveBeenCalledWith([expect.objectContaining({ id: 'a1', status: 'approved' }), expect.objectContaining({ id: 'a2', status: 'denied' })]);
+  });
+
+  it('takes 50 write approvals with the session alone, and 50 denials, in one call each (TER-1192)', async () => {
+    // "Aprovar selecionadas (30)" and "Recusar todas" on 30 create_task cards answered "Dados inválidos" at 20.
+    const ids = Array.from({ length: 50 }, (_, i) => `a${i}`);
+    for (const decision of ['approve', 'deny'] as const) {
+      const decide = decideById();
+      const { app, session, startAfterDecision } = build({ decide, findByIdForUser: rowsOf(Object.fromEntries(ids.map((id) => [id, { status: 'pending', class: 'write' }]))) });
+      const res = await post(app, ids.map((id) => ({ id, decision })));
+      expect(res.statusCode).toBe(200);
+      expect(res.json().actions).toHaveLength(50);
+      expect(decide).toHaveBeenCalledTimes(50);
+      expect(session.checkPin).not.toHaveBeenCalled();
+      expect(startAfterDecision).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it('issues 50 challenges in one call', async () => {
+    const { app, session } = build();
+    const res = await app.inject({ method: 'POST', url: '/chat/actions/challenges', payload: { action_ids: Array.from({ length: 50 }, (_, i) => `a${i}`) } });
+    expect(res.statusCode).toBe(200);
+    expect(session.challenge).toHaveBeenCalledTimes(50);
   });
 
   it('a wrong PIN on the second approval is 401 and decides nothing', async () => {
