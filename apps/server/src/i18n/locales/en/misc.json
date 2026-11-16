@@ -255,5 +255,11 @@
   "{{n}} repositórios encontrados na pasta do projeto em {{machine}}: {{names}}": "{{n}} repositories found in the project folder on {{machine}}: {{names}}",
   "Novo repositório na pasta do projeto: {{repo}} (nível {{level}}).": "New repository in the project folder: {{repo}} (level {{level}}).",
   "Novo repositório na pasta do projeto: {{repo}} (fora do GitHub, fica de fora do automático).": "New repository in the project folder: {{repo}} (not on GitHub, left out of automatic work).",
-  "{{n}} repositórios encontrados na pasta do projeto: {{names}}. Cada um começa no nível pr; ajuste em Setup.": "{{n}} repositories found in the project folder: {{names}}. Each one starts at level pr; change it in Setup."
+  "{{n}} repositórios encontrados na pasta do projeto: {{names}}. Cada um começa no nível pr; ajuste em Setup.": "{{n}} repositories found in the project folder: {{names}}. Each one starts at level pr; change it in Setup.",
+  "Sem repositório: o chat vai escolher": "No repository: the chat will pick it",
+  "Vários repositórios: em breve": "Several repositories: coming soon",
+  "Repositório desligado ou removido no Setup": "Repository turned off or removed in Setup",
+  "A integração do GitHub não vê o repositório": "The GitHub integration cannot see the repository",
+  "Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo": "No machine of the project looks for repositories; update the agent to 0.29 or newer",
+  "O repositório não está em nenhuma máquina do projeto": "The repository is not on any machine of the project"
 }

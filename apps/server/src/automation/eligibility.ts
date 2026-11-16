@@ -1,6 +1,7 @@
 import { tk } from '../i18n/index.js';
 import type { TaskStatus, TaskType } from '../db/repositories/types.js';
 import type { ProjectAutomation } from '../setup/schema.js';
+import type { RepoReason } from './repo-readiness.js';
 
 export type IneligibleReason =
   | 'automation_off'
@@ -11,6 +12,8 @@ export type IneligibleReason =
   | 'has_agent'
   | 'no_capable_machine'
   | 'repo_missing'
+  // TER-1068, multi-repo projects only (spec 2026-10-07 §9): a repository of the card is not ready
+  | Exclude<RepoReason, 'repo_missing'>
   // TER-1110: the project requires an external ticket and the card has none (nor an explicit branch)
   | 'no_ticket'
   // TER-1110: a card created a moment ago waits, so a tab already working on its ticket can be linked first
@@ -55,6 +58,12 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   has_agent: tk('Já tem um agente'),
   no_capable_machine: tk('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente'),
   repo_missing: tk('Repositório não configurado no Setup'),
+  repo_unknown: tk('Sem repositório: o chat vai escolher'),
+  repo_multi_soon: tk('Vários repositórios: em breve'),
+  repo_disabled: tk('Repositório desligado ou removido no Setup'),
+  repo_no_access: tk('A integração do GitHub não vê o repositório'),
+  agent_no_repo_scan: tk('Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo'),
+  repo_not_on_machine: tk('O repositório não está em nenhuma máquina do projeto'),
   no_ticket: tk('O projeto exige um ticket externo (Jira, Linear ou GitHub) e o card não tem nenhum'),
   just_created: tk('Card recém-criado; o automático começa em até 2 min'),
   epic_sequence: tk('O épico executa em ordem; este card espera o anterior ficar pronto'),
@@ -115,7 +124,11 @@ export interface EligibilityInput {
     epic_settling?: boolean;
     /** TER-1170: its epic runs in order and this earlier card is not done yet (its ref); null/absent = its turn */
     sequence_waits_on?: string | null;
+    /** TER-1068: in a multi-repo project, why the card's repositories are not ready (`cardRepoBlock`); null/absent = ready */
+    repo_block?: RepoReason | null;
   };
+  /** `repo_ready`: the project's repository block is set (single-repo); a multi-repo project passes true and
+   *  says per card through `card.repo_block`, so "ready" reads "every repository of the card is ready". */
   project: { automation: ProjectAutomation; paused: boolean; repo_ready: boolean; capable_machines: number; require_ticket: boolean };
 }
 
@@ -138,6 +151,7 @@ export function eligibilityOf({ card, project }: EligibilityInput): Eligibility 
   if (card.active_run || card.tab_alive) return no('has_agent');
   if (card.sequence_waits_on) return no('epic_sequence');
   if (project.capable_machines === 0) return no('no_capable_machine');
+  if (card.repo_block) return no(card.repo_block);
   if (!project.repo_ready) return no('repo_missing');
   if (project.require_ticket && !card.has_ticket) return no('no_ticket');
   if (card.just_created) return no('just_created');

@@ -58,6 +58,21 @@ it('tells the concierge external tickets are not cards and how to bring them in'
   expect(text).toContain('import_tickets');
 });
 
+// TER-1068 (multi-repo §6): one line only for a project with several repositories; the rules live in the tools
+it('points a project with several repositories at list_project_repos, and says nothing for one', () => {
+  const one = projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], [], [], null, null, 1);
+  expect(one).not.toContain('list_project_repos');
+  expect(one).toBe(projectSystemPrompt({ name: 'X', key: 'X' }, []));
+  const three = projectSystemPrompt({ name: 'X', key: 'X' }, [], [], [], [], [], null, null, 3);
+  expect(three).toContain('\nProjeto com 3 repositórios: veja list_project_repos.');
+  expect(three.endsWith('Keep answers short unless asked for detail.')).toBe(true);
+  const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
+  const long = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links, [...STANDING_GRANT_KINDS], [], [...DEFAULT_ALLOW_KINDS], [], null, null, 10);
+  expect(long.length).toBeLessThanOrEqual(4000);
+  expect(long).toContain('Projeto com 10 repositórios');
+  expect(streamedSystemPrompt(long).length).toBeLessThanOrEqual(8000);
+});
+
 it('stays under the protocol cap with a long name and many long paths, and keeps the whole tail', () => {
   const links = Array.from({ length: 200 }, (_, i) => ({ machine: `m${i}`, cwd: `/very/long/path/${'d'.repeat(40)}/${i}` }));
   const text = projectSystemPrompt({ name: 'N'.repeat(200), key: 'X' }, links);

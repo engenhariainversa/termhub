@@ -4,7 +4,7 @@ import type { AutoAnswer, TabQuestion } from '../db/repositories/tab-questions.j
 import type { User } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import type { ChatService } from './service.js';
-import { createWaker, heldPrWakeText, POST_RUN_WAKE_COOLDOWN_MS, postRunBlockWakeText, stoppedTabWakeText, wakeText, type PostRunBlockWake } from './wake.js';
+import { createWaker, heldPrWakeText, POST_RUN_WAKE_COOLDOWN_MS, postRunBlockWakeText, repoUnknownWakeText, stoppedTabWakeText, wakeText, type PostRunBlockWake } from './wake.js';
 
 const cleanPayload = { questions: [{ question: 'Qual cor?', header: 'Cor', multi_select: false, options: [{ label: 'Azul', description: '', recommended: true }, { label: 'Verde', description: '', recommended: false }] }] };
 const row = (over: Partial<TabQuestion> = {}): TabQuestion => ({
@@ -260,5 +260,29 @@ describe('heldPrWakeText (TER-1136)', () => {
     expect(text).toContain('depende de PST-3 («Visual final», task_id wze)');
     expect(text).toContain('mesclar no GitHub');
     expect(text).toContain('Não mescle nem mude card algum sem a pessoa pedir');
+  });
+});
+
+describe('the repo-unknown wake (TER-1068, multi-repo R9 b)', () => {
+  const repos = () => ({ ...fakeRepos(), chat: { getOrCreateForProject: vi.fn(async () => ({ id: 'cp' })) } });
+  const cards = [{ id: 'c1', ref: 'TER-9', title: 'Tela «nova»' }];
+
+  it('names the cards as quoted data and points at list_project_repos and update_task', () => {
+    const text = repoUnknownWakeText({ cards });
+    expect(text).toMatch(/^Automático: o card TER-9 \(«Tela nova», task_id c1\) está marcado para o trabalho automático, mas o projeto tem vários repositórios/);
+    expect(text).toContain('list_project_repos');
+    expect(text).toContain('update_task (repos)');
+    expect(text).toContain('se houver dúvida real, pergunte');
+    expect(text).not.toContain('\n');
+    expect(repoUnknownWakeText({ cards: [...cards, { id: 'c2', ref: 'TER-10', title: 'b' }] })).toMatch(/^Automático: os cards TER-9 .*, TER-10 .* estão marcados/);
+  });
+
+  it("wakes the project's chat on the automation's hourly budget", async () => {
+    const chat = fakeChat();
+    const waker = createWaker({ repos: repos() as unknown as Repositories, chat, maxPerHour: 0, automationMaxPerHour: 1, now: () => 0, log: log() });
+    expect(await waker.wakeForRepoUnknown({ ownerId: 'u1', projectId: 'p1', cards })).toBe(true);
+    expect(chat.wake).toHaveBeenCalledWith(user, 'cp', expect.stringContaining('TER-9'));
+    expect(await waker.wakeForRepoUnknown({ ownerId: 'u1', projectId: 'p1', cards })).toBe(false);
+    expect(chat.wake).toHaveBeenCalledTimes(1);
   });
 });

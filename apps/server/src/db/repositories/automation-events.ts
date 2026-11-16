@@ -58,6 +58,9 @@ export type AutomationEventKind =
   // trust question of a termhub worktree answered by the server ({ tab_id })
   | 'github_wait'
   | 'trust_auto_accepted'
+  // TER-1068: the chat was woken about an automatic card with no repository in a multi-repo project ({ ref });
+  // one per card (`automation_events_repo_unknown_once`)
+  | 'repo_unknown'
   // TER-1120: a workflow on the base head cancelled before any job got a runner: delivered nothing, does not
   // hold the merge queue ({ run_id, workflow, url, sha }), once per run
   | 'workflow_no_runner'
@@ -163,7 +166,8 @@ export class AutomationEventsRepository {
   /**
    * Inserts the event unless a unique index already holds one like it: null then. `ci_fix_requested`
    * (one per card, PR and head SHA: `automation_events_ci_fix_once`, the red-CI loop's claim, F-27) and the
-   * budget notices (one per project, kind and day: `automation_events_budget_once`) have such an index.
+   * budget notices (one per project, kind and day: `automation_events_budget_once`) have such an index, and so
+   * does `repo_unknown` (one per card: `automation_events_repo_unknown_once`, TER-1068).
    */
   async insertOnce(e: AutomationEventInput): Promise<AutomationEvent | null> {
     try {

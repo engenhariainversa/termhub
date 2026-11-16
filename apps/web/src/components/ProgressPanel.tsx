@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
 import { AutomationBadge } from './AutomationBadge';
+import { RepoChips } from './RepoChips';
 import { UsageCost } from './UsageCost';
 import { formatCost, hasTokens, loadUsage } from '../lib/automation-usage';
 import { PauseBanner } from './PauseAutomationButton';
@@ -126,6 +127,7 @@ function CardRow({ card, projectId }: { card: CardProgress; projectId: string })
           {card.units.done}/{card.units.total} · {card.percent}%
         </span>
       </div>
+      <RepoChips keys={card.repo_keys} />
       <Bar percent={card.percent} label={`${card.ref} ${card.percent}%`} />
       <div className="flex flex-wrap gap-3">
         <EstimateLine estimate={card.estimate} />

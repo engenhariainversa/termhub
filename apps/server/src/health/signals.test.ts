@@ -47,6 +47,14 @@ describe('observe (TER-1121)', () => {
     expect(o).toMatchObject({ signal: 'queue_stalled', detail: { label: '1', cards: 'TER-4' } });
   });
 
+  it('a card with no repository (the chat was woken) or with several (not run yet) is no stalled queue (TER-1068)', () => {
+    const unknown = { task_id: 't8', ref: 'TER-8', reason: 'repo_unknown', reason_text: 'Sem repositório: o chat vai escolher', since: ago(300) };
+    const multi = { task_id: 't9', ref: 'TER-9', reason: 'repo_multi_soon', reason_text: 'Vários repositórios: em breve', since: ago(300) };
+    expect(signals(snap({ queued: [unknown, multi], last_run_at: ago(180) }))).toEqual([]);
+    const card = { task_id: 't10', ref: 'TER-10', reason: 'repo_not_on_machine', reason_text: null, since: ago(300) };
+    expect(signals(snap({ queued: [unknown, card], last_run_at: ago(180) }))).toEqual(['queue_stalled:queue']);
+  });
+
   it('a new card in its first minutes is no stalled queue; the sign lasts since the oldest card waits (TER-1146)', () => {
     const fresh = { task_id: 't5', ref: 'TER-5', reason: 'just_created', reason_text: 'Card recém-criado; o automático começa em até 2 min', since: ago(1) };
     expect(signals(snap({ queued: [fresh], last_run_at: ago(180) }))).toEqual([]);
