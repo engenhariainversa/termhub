@@ -477,6 +477,7 @@ export const TaskScalarFieldEnum = {
   activeSeconds: 'activeSeconds',
   auto: 'auto',
   sequential: 'sequential',
+  repoKeys: 'repoKeys',
   externalKey: 'externalKey',
   tabId: 'tabId',
   parentId: 'parentId',

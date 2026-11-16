@@ -3,7 +3,7 @@ import { getProvider, type IntegrationProvider } from '../integrations/index.js'
 import { providerIdOf, readTicketLink, ticketLinkJson } from '../integrations/ticket-link.js';
 import { HttpError } from '../lib/errors.js';
 import { sourceIdentity } from '../setup/schema.js';
-import { lastSync, syncProjectTickets, type SyncResult } from '../setup/tickets-sync.js';
+import { lastSync, syncProjectTickets, ticketRepoKeys, type SyncResult } from '../setup/tickets-sync.js';
 import type { ControlContext } from './context.js';
 import { cardUrl, taskOut, type TaskOut } from './tasks.js';
 import { msg } from '../i18n/index.js';
@@ -158,6 +158,9 @@ export async function importTickets(ctx: ControlContext, input: { project_id: st
   const seen = new Set<string>();
   const picked = resolved.filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
   const existing = await cardsOf(ctx, picked);
+  const repos = picked.some((t) => !(t.task_id && existing.has(t.task_id)))
+    ? await ctx.repos.projectRepositories.effective(project.id, (await ctx.repos.projectSetup.get(project.id)).data)
+    : [];
   const cards: { ticket_key: string; card: TaskOut; task: Task; created: boolean }[] = [];
   for (const t of picked) {
     const old = t.task_id ? existing.get(t.task_id) : undefined;
@@ -169,7 +172,8 @@ export async function importTickets(ctx: ControlContext, input: { project_id: st
       { provider: t.provider, provider_id: providerIdOf(t), key: t.key, url: t.url, state: t.state, status: t.status, updated_at: String(t.meta.updated_at ?? ''), meta: t.meta },
       { integration_id: t.integration_id, scope: t.scope ?? String(t.meta.scope ?? '') },
     );
-    const task = await ctx.repos.tasks.createFromTicket(project.id, { key: t.sync_key, title: t.title, description: t.description, ref: link, ticketId: t.id });
+    const repo_keys = ticketRepoKeys({ provider: t.provider, scope: t.scope ?? String(t.meta.scope ?? '') }, repos);
+    const task = await ctx.repos.tasks.createFromTicket(project.id, { key: t.sync_key, title: t.title, description: t.description, ref: link, ticketId: t.id, repo_keys });
     cards.push({ ticket_key: t.key, card: taskOut(task), task, created: true });
   }
   return { cards };

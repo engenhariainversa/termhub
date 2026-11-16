@@ -1,5 +1,6 @@
 import type { TaskType } from './types.js';
-import { LocalizedText, tk } from '../../i18n/index.js';
+import { LocalizedText, msg, tk } from '../../i18n/index.js';
+import type { RepoKeysProblem } from '../../setup/repo-keys.js';
 
 /** Rules the board repositories enforce. Routes answer 409 for EPIC_HAS_CHILDREN, COLUMN_LAST_OF_CATEGORY and COLUMN_LAST_ACTIVE, 400 for the rest. */
 export type TaskRuleCode =
@@ -21,7 +22,12 @@ export type TaskRuleCode =
   | 'COLUMN_WAITING_AGENT'
   | 'TOO_MANY_COLUMNS'
   | 'AUTO_NOT_FOR_SUBTASK'
-  | 'SEQUENTIAL_ONLY_EPIC';
+  | 'SEQUENTIAL_ONLY_EPIC'
+  | 'REPOS_NOT_FOR_TYPE'
+  | 'TOO_MANY_REPOS'
+  | 'REPO_UNKNOWN'
+  | 'REPO_DISABLED'
+  | 'REPO_NO_KEY';
 
 /** Enforced both here and in the route's zod schema (which uses this constant too). */
 export const MAX_SUBTASKS_PER_CALL = 50;
@@ -48,6 +54,12 @@ const MESSAGES: Record<TaskRuleCode, string> = {
   TOO_MANY_COLUMNS: tk('Limite de 12 colunas'),
   AUTO_NOT_FOR_SUBTASK: tk('Subtarefas não levam a tag automático; marque o card'),
   SEQUENTIAL_ONLY_EPIC: tk('Só um épico executa os cards em ordem'),
+  REPOS_NOT_FOR_TYPE: tk('Épicos e subtarefas não levam repositórios; marque os cards'),
+  TOO_MANY_REPOS: tk('No máximo 10 repositórios por card'),
+  // the three below always come with the repository's name (`repoKeysError`)
+  REPO_UNKNOWN: tk('Repositório não encontrado neste projeto'),
+  REPO_DISABLED: tk('Repositório desligado no Setup do projeto'),
+  REPO_NO_KEY: tk('Repositório ainda sem key'),
 };
 
 /** A board rule was broken. `message` is pt-BR and safe to show to the user; replies translate `localized`. */
@@ -62,6 +74,20 @@ export class TaskRuleError extends Error {
     super(localized.toString());
     Object.defineProperty(this, 'localized', { value: localized, enumerable: false });
     this.name = 'TaskRuleError';
+  }
+}
+
+/** A ref to `repo_keys` the project cannot take (spec 2026-10-07 multi-repo R8), named in the message. */
+export function repoKeysError(problem: RepoKeysProblem): TaskRuleError {
+  switch (problem.code) {
+    case 'TOO_MANY':
+      return new TaskRuleError('TOO_MANY_REPOS');
+    case 'UNKNOWN':
+      return new TaskRuleError('REPO_UNKNOWN', msg('Repositório {{repo}} não encontrado neste projeto; veja os repositórios no Setup do projeto', { repo: problem.repo }));
+    case 'DISABLED':
+      return new TaskRuleError('REPO_DISABLED', msg('O repositório {{repo}} está desligado no Setup do projeto', { repo: problem.repo }));
+    case 'NO_KEY':
+      return new TaskRuleError('REPO_NO_KEY', msg('O repositório {{repo}} ainda não tem key: espere a descoberta de repositórios do projeto encontrá-lo numa máquina', { repo: problem.repo }));
   }
 }
 

@@ -5,7 +5,11 @@ const syncProjectTickets = vi.fn();
 let last: unknown = null;
 // The wrapper (not `syncProjectTickets` itself) is what the hoisted factory reads eagerly; a direct
 // shorthand reference here would hit the TDZ (imports run before this file's own top-level `const`).
-vi.mock('../setup/tickets-sync.js', () => ({ syncProjectTickets: (...args: unknown[]) => syncProjectTickets(...args), lastSync: () => last }));
+vi.mock('../setup/tickets-sync.js', async (importOriginal) => ({
+  ticketRepoKeys: (await importOriginal<typeof import('../setup/tickets-sync.js')>()).ticketRepoKeys,
+  syncProjectTickets: (...args: unknown[]) => syncProjectTickets(...args),
+  lastSync: () => last,
+}));
 const updateStatus = vi.fn();
 vi.mock('../integrations/index.js', () => ({ getProvider: () => ({ updateStatus }) }));
 
@@ -14,6 +18,8 @@ import type { Project, Task, Ticket } from '../db/repositories/types.js';
 import { Scoped } from '../auth/scope.js';
 import type { ControlContext } from './context.js';
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets } from './tickets.js';
+import { effectiveRepos, type EffectiveRepo } from '../setup/repos.js';
+import { normalizeSetup, SETUP_VERSION } from '../setup/schema.js';
 
 const project = (id: string, owner: string): Project => ({ id, owner_id: owner, key: id.toUpperCase(), next_task_number: 1, name: id, status: 'active', description: null, last_terminal_at: null, created_at: '' });
 const ticket = (over: Partial<Ticket> & { id: string; key: string }): Ticket => ({
@@ -28,11 +34,13 @@ const task = (over: Partial<Task> & { id: string }): Task => ({
 
 let tickets: Ticket[];
 let tasks: Task[];
+let projectRepos: EffectiveRepo[];
 function ctxFor(user = 'u1'): ControlContext {
   const projects = [project('p1', 'u1'), project('p2', 'u1'), project('px', 'u2')];
   const repos = {
     projects: { findById: vi.fn(async (id: string) => projects.find((p) => p.id === id)), list: vi.fn(async () => projects.filter((p) => p.owner_id === user)) },
     projectSetup: { get: vi.fn(async () => ({ data: { ticket_sources: [{ provider: 'github', integration_id: 'g', scope: 'acme/api', filter: null, sync_minutes: 0 }] } })) },
+    projectRepositories: { effective: vi.fn(async () => projectRepos) },
     tickets: {
       listByProject: vi.fn(async (pid: string) => tickets.filter((t) => t.project_id === pid)),
       findByIds: vi.fn(async (pid: string, ids: string[]) => tickets.filter((t) => t.project_id === pid && ids.includes(t.id))),
@@ -61,6 +69,7 @@ function ctxFor(user = 'u1'): ControlContext {
 beforeEach(() => {
   vi.clearAllMocks();
   last = null;
+  projectRepos = [];
   tickets = [
     ticket({ id: 'a', key: 'acme/api#12' }),
     ticket({ id: 'b', key: 'acme/web#12', scope: 'acme/web' }),
@@ -163,6 +172,22 @@ describe('importTickets', () => {
     });
     await importTickets(ctx, { project_id: 'p1', keys: ['acme/api#12', 'acme/web#12', 'acme/api#13'] });
     expect(peak).toBe(1);
+  });
+
+  it('a GitHub ticket of one of the repositories of a multi-repo project is born with its key (spec 2026-10-07 multi-repo §6)', async () => {
+    const row = (full_name: string, key: string) => ({ id: `r-${key}`, project_id: 'p1', full_name, key, description: null, status: 'ok' as const, discovered_at: '', updated_at: '', checkouts: [] });
+    projectRepos = effectiveRepos(normalizeSetup({}, SETUP_VERSION), [row('acme/api', 'api'), row('acme/web', 'web')]);
+    const ctx = ctxFor();
+    await importTickets(ctx, { project_id: 'p1', keys: ['acme/web#12', 'EI-5'] });
+    expect(ctx.repos.tasks.createFromTicket).toHaveBeenCalledWith('p1', expect.objectContaining({ ticketId: 'b', repo_keys: ['web'] }));
+    expect(ctx.repos.tasks.createFromTicket).toHaveBeenCalledWith('p1', expect.objectContaining({ ticketId: 'e', repo_keys: [] }));
+  });
+
+  it('in a project with one repository the imported card keeps an empty list', async () => {
+    projectRepos = effectiveRepos(normalizeSetup({ repo: { full_name: 'acme/api' } }, SETUP_VERSION), []);
+    const ctx = ctxFor();
+    await importTickets(ctx, { project_id: 'p1', keys: ['acme/api#12'] });
+    expect(ctx.repos.tasks.createFromTicket).toHaveBeenCalledWith('p1', expect.objectContaining({ ticketId: 'a', repo_keys: [] }));
   });
 
   it('importing the same ticket twice in one call creates one card and returns it once', async () => {

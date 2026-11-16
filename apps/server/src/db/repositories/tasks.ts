@@ -2,7 +2,9 @@ import type { PrismaClient } from '../prisma.js';
 import type { Task as PrismaTask } from '../../generated/prisma/client.js';
 import { newId } from '../../lib/ids.js';
 import { closeGap, defaultEpicId, endOf, ensureDefaultColumns, firstColumnId, lockProject, openSlot, placementFor, placementOf, requireEpic, type Tx } from './task-board.js';
-import { checkSubtaskParent, checkTypeChange, MAX_SUBTASKS_PER_CALL, PARENT_TYPES, TaskRuleError, WORK_TYPES } from './task-rules.js';
+import { checkSubtaskParent, checkTypeChange, MAX_SUBTASKS_PER_CALL, PARENT_TYPES, repoKeysError, TaskRuleError, WORK_TYPES } from './task-rules.js';
+import { loadEffectiveRepos } from './project-repositories.js';
+import { resolveRepoKeys } from '../../setup/repo-keys.js';
 import { nestTasks } from './task-tree.js';
 import { mapTask, type OfficeProgress, type Task, type TaskStatus, type TaskType, type TaskWithSubtasks } from './types.js';
 
@@ -32,6 +34,8 @@ export interface TaskInput {
   auto?: boolean;
   /** TER-1170: the top-level card's slot in its place (0 = top, the default; clamped to the end) */
   position?: number;
+  /** Repositories the card touches, as keys or `owner/repo` (spec 2026-10-07 multi-repo R8); see `resolveRepoKeys`. */
+  repo_keys?: string[];
 }
 
 /** What `update` changes. `epic_id` is ignored on epics and subtasks (they have none). */
@@ -41,6 +45,8 @@ export interface TaskPatch {
   status?: TaskStatus;
   type?: TaskType;
   epic_id?: string | null;
+  /** replaces the card's repositories (keys or `owner/repo`); [] clears them */
+  repo_keys?: string[];
 }
 
 export interface SubtaskInput {
@@ -51,6 +57,19 @@ export interface SubtaskInput {
 
 /** Where `move` sends a card: a column of its project, or a status (backlog, or the first column of a category). */
 export type MoveTarget = { column_id: string } | { status: TaskStatus };
+
+/**
+ * The `repo_keys` a card of `type` stores for `refs` (spec 2026-10-07 multi-repo R8), checked against the
+ * project's effective repositories. Run under the project lock. Epics and subtasks carry none: an empty list
+ * is fine, anything else is refused.
+ */
+async function repoKeysFor(tx: Tx, projectId: string, type: TaskType, refs: string[]): Promise<string[]> {
+  if (refs.length === 0) return [];
+  if (type === 'epic' || type === 'subtask') throw new TaskRuleError('REPOS_NOT_FOR_TYPE');
+  const r = resolveRepoKeys(refs, await loadEffectiveRepos(tx, projectId));
+  if ('problem' in r) throw repoKeysError(r.problem);
+  return r.keys;
+}
 
 export class TasksRepository {
   constructor(private db: PrismaClient) {}
@@ -230,8 +249,9 @@ export class TasksRepository {
     const to = await placementFor(tx, projectId, { type, epicId }, { column_id: input.column_id, status: input.status ?? (type === 'epic' ? 'backlog' : 'todo') });
     const position = await openSlot(tx, projectId, to, input.position ?? 0);
     const epicAuto = epicId ? ((await tx.task.findUnique({ where: { id: epicId }, select: { auto: true } }))?.auto ?? false) : false;
+    const repoKeys = input.repo_keys === undefined ? [] : await repoKeysFor(tx, projectId, type, input.repo_keys);
     return tx.task.create({
-      data: { id: newId(), projectId, type, title: input.title, description: input.description ?? null, status: to.status, columnId: to.columnId, epicId, position, auto: epicAuto || (input.auto ?? false) },
+      data: { id: newId(), projectId, type, title: input.title, description: input.description ?? null, status: to.status, columnId: to.columnId, epicId, position, auto: epicAuto || (input.auto ?? false), repoKeys },
       include: KEY,
     });
   }
@@ -291,9 +311,11 @@ export class TasksRepository {
       await lockProject(tx, found.projectId);
       const cur = await tx.task.findUnique({ where: { id } });
       if (!cur) return undefined;
+      const repoKeys = patch.repo_keys === undefined ? undefined : await repoKeysFor(tx, cur.projectId, cur.parentId ? 'subtask' : cur.type, patch.repo_keys);
       const text = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
+        ...(repoKeys !== undefined ? { repoKeys } : {}),
       };
       if (cur.parentId) {
         if (patch.type && patch.type !== cur.type) throw new TaskRuleError('TYPE_LOCKED');
@@ -424,7 +446,11 @@ export class TasksRepository {
    * tagged — an imported ticket must not become automatic work by import alone (ruling R-15).
    */
   /** With `ticketId`, that staging ticket is linked to the new card in the same transaction (no card without its link). */
-  async createFromTicket(projectId: string, ticket: { key: string; title: string; description: string | null; ref: Record<string, unknown>; ticketId?: string }): Promise<Task> {
+  /** `repo_keys`: already resolved by the caller (`ticketRepoKeys`), stored as given. */
+  async createFromTicket(
+    projectId: string,
+    ticket: { key: string; title: string; description: string | null; ref: Record<string, unknown>; ticketId?: string; repo_keys?: string[] },
+  ): Promise<Task> {
     return this.db.$transaction(async (tx) => {
       await lockProject(tx, projectId);
       await ensureDefaultColumns(tx, projectId);
@@ -442,6 +468,7 @@ export class TasksRepository {
           position,
           externalKey: ticket.key,
           externalRef: ticket.ref as object,
+          repoKeys: ticket.repo_keys ?? [],
         },
         include: KEY,
       });

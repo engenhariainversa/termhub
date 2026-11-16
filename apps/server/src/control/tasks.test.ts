@@ -4,6 +4,7 @@ vi.mock('../config.js', () => ({ config: { publicUrl: 'https://app.test' } }));
 
 import type { Repositories } from '../db/repositories/index.js';
 import { TaskRuleError } from '../db/repositories/tasks.js';
+import { repoKeysError } from '../db/repositories/task-rules.js';
 import type { Project, Task, TaskWithSubtasks } from '../db/repositories/types.js';
 import { Scoped } from '../auth/scope.js';
 import type { ControlContext } from './context.js';
@@ -15,7 +16,7 @@ const project = (over: Partial<Project> & { id: string; owner_id: string }): Pro
 });
 const task = (over: Partial<Task> & { id: string; project_id: string }): Task => ({
   title: over.id, description: null, status: 'todo', position: 0, external_ref: null, external_key: null, tab_id: null, parent_id: null,
-  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null, auto: false,
+  type: over.parent_id ? 'subtask' : 'task', number: 1, ref: `P1-${over.id}`, epic_id: over.parent_id ? null : 'e1', column_id: null, auto: false, repo_keys: [],
   created_at: '2026-09-20T10:00:00.000Z', updated_at: '2026-09-20T10:00:00.000Z', ...over,
 });
 const tree = (t: Task, subtasks: Task[] = []): TaskWithSubtasks => ({ ...t, subtasks, subtask_counts: { done: subtasks.filter((s) => s.status === 'done').length, total: subtasks.length } });
@@ -130,6 +131,20 @@ describe('createTask', () => {
     expect(repos.tasks.createWithSubtasks).toHaveBeenCalledWith('p1', { title: 'New', description: undefined, status: 'backlog' }, []);
   });
 
+  it('passes repos on to the repository and returns the stored keys (spec 2026-10-07 multi-repo R8)', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.createWithSubtasks.mockResolvedValue(tree(task({ id: 'k9', project_id: 'p1', repo_keys: ['api', 'web'] })));
+    const r = await createTask(c, { project_id: 'p1', title: 'New', repos: ['acme/web', 'api'] });
+    expect(repos.tasks.createWithSubtasks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo_keys: ['acme/web', 'api'] }), []);
+    expect(r.task.repo_keys).toEqual(['api', 'web']);
+  });
+
+  it('a refused repository comes back as a ControlError naming it', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.createWithSubtasks.mockRejectedValue(repoKeysError({ code: 'UNKNOWN', repo: 'mobile' }));
+    await expect(createTask(c, { project_id: 'p1', title: 'New', repos: ['mobile'] })).rejects.toMatchObject({ code: 'REPO_UNKNOWN', message: expect.stringContaining('mobile') });
+  });
+
   it('passes the position on to the repository (TER-1170)', async () => {
     const { c, repos } = ctx();
     repos.tasks.createWithSubtasks.mockResolvedValue(tree(task({ id: 'k9', project_id: 'p1' })));
@@ -192,9 +207,19 @@ describe('updateTask', () => {
     expect(repos.tasks.update).toHaveBeenCalled();
   });
 
+  it('repos alone is a change; the card answers its keys, and only work cards carry them', async () => {
+    const { c, repos } = ctx();
+    repos.tasks.update.mockResolvedValue({ ...k2, repo_keys: ['web'] });
+    const r = await updateTask(c, { task_id: 'k2', repos: ['web'] });
+    expect(repos.tasks.update).toHaveBeenCalledWith('k2', expect.objectContaining({ repo_keys: ['web'] }));
+    expect(r.task.repo_keys).toEqual(['web']);
+    repos.tasks.update.mockResolvedValue({ ...s1, title: 'x' });
+    expect((await updateTask(c, { task_id: 's1', title: 'x' })).task).not.toHaveProperty('repo_keys');
+  });
+
   it('requires at least one field', async () => {
     const { c, repos } = ctx();
-    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, auto ou sequential'));
+    await expect(updateTask(c, { task_id: 'k1' })).rejects.toEqual(new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, repos, auto ou sequential'));
     expect(repos.tasks.update).not.toHaveBeenCalled();
   });
 
