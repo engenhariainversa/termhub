@@ -9,6 +9,7 @@ import { scoped } from '../auth/scope.js';
 import { canAccess } from '../auth/permissions.js';
 import { feedOf } from '../progress/aggregate.js';
 import { requestLocale } from '../i18n/index.js';
+import { REPO_KEYS_MAX, REPO_REF_MAX } from '../setup/repo-keys.js';
 
 /** A card's page lists this many automatic events at most (the events are kept 30 days). */
 const ACTIVITY_LIMIT = 100;
@@ -19,11 +20,14 @@ const rowId = z.string().min(1).max(64);
 const statusSchema = z.enum(['backlog', 'todo', 'doing', 'done']);
 const typeSchema = z.enum(['epic', 'story', 'task', 'subtask', 'bug', 'spike']);
 const position = z.number().int().min(0).max(10_000);
+/** Keys (or owner/repo) of the project's repositories the card touches (multi-repo R8); the repository checks them. */
+const repoKeys = z.array(z.string().trim().min(1).max(REPO_REF_MAX)).max(REPO_KEYS_MAX);
 
 const taskFields = {
   title: z.string().trim().min(1).max(300),
   description: z.string().trim().max(5000).optional().nullable(),
   status: statusSchema.optional(),
+  repo_keys: repoKeys.optional(),
 };
 const createBody = z.object({
   ...taskFields,

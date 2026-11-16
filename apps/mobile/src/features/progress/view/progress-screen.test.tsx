@@ -50,6 +50,24 @@ describe('Progresso', () => {
     expect(screen.getByLabelText('automático')).toBeTruthy();
   });
 
+  // TER-1069
+  it('shows the repositories a card touches as chips, and none for a single-repo card', async () => {
+    const progress = mockProgress(Date.now());
+    progress.epics[0]!.cards[0]!.repo_keys = ['api', 'web'];
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByLabelText('Repositórios: api, web')).toBeTruthy();
+    expect(screen.getByText('api')).toBeTruthy();
+  });
+
+  it('shows no repository chips for a card without repositories', async () => {
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(mockProgress(Date.now()));
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.queryByLabelText(/^Repositórios/)).toBeNull();
+  });
+
   it('shows the estimated cost per epic and card, "—" when nothing was priced', async () => {
     const progress = mockProgress(Date.now());
     progress.epics[0]!.usage = { tokens: 2_500_000, cost_usd: 3.25 };

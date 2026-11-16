@@ -42,6 +42,8 @@ export interface ProgressCardRow {
   subtasks: ProgressSubtaskRow[];
   pull_requests: PullRequestBadge[];
   auto: boolean;
+  /** multi-repo R8 (TER-1069): the repositories the card touches; [] = the project's single repository */
+  repo_keys?: string[];
 }
 /** One of the epic's own PRs, with what its lifecycle reads (TER-1150). */
 export interface ProgressEpicPr extends PullRequestBadge {
@@ -119,6 +121,7 @@ export function aggregateCard(card: ProgressCardRow, includeAgents: boolean): Ca
     agents: includeAgents ? agentsOf(card) : null,
     pull_requests: card.pull_requests,
     auto: card.auto,
+    repo_keys: card.repo_keys ?? [],
     usage: null,
   };
 }

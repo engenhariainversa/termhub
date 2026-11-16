@@ -32,6 +32,7 @@ export function mockProgress(now: number): TProgressResponse {
             estimate: { kind: 'range', low_s: 1200, high_s: 2700, basis: 'agent_time', samples: 3 },
             agents: [{ tab_id: 't-api', tab_name: 'api', machine_name: 'jarvis', subtask_ref: null, state: 'waiting_input', state_at: minutesAgo(12), background: false, finished: false, blocked: false, auth_required: false, trust_prompt: false, needs_you: true, activity: null, activity_verb: null, rate_limited: false, automatic: false }],
             auto: false,
+            repo_keys: [],
             usage: { tokens: 1_200_000, cost_usd: 2.4 },
             pull_requests: [
               {

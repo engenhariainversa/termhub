@@ -18,6 +18,11 @@ describe('aggregateCard', () => {
     expect(c.units).toEqual({ done: 1, total: 3 });
     expect(c.percent).toBe(33);
   });
+  // TER-1069: the app shows them as chips
+  it('carries the repositories the card touches, [] when the row has none', () => {
+    expect(aggregateCard(card({ id: '2', repo_keys: ['api', 'web'] }), true).repo_keys).toEqual(['api', 'web']);
+    expect(aggregateCard(card({ id: '2' }), true).repo_keys).toEqual([]);
+  });
   it('counts a card without subtasks as one unit', () => {
     expect(aggregateCard(card({ id: '2' }), true).units).toEqual({ done: 0, total: 1 });
     expect(aggregateCard(card({ id: '2', status: 'done' }), true).percent).toBe(100);

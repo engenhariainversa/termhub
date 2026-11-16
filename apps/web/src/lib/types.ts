@@ -317,6 +317,8 @@ export interface Task {
   auto?: boolean;
   /** epics only (TER-1170): "Executar em ordem"; absent from an older server */
   sequential?: boolean;
+  /** TER-1069 (multi-repo R8): keys of the repositories the card touches; [] or absent = the project's single repository */
+  repo_keys?: string[];
   /** Only on top-level cards from the list endpoint. */
   subtasks?: Task[];
   subtask_counts?: { done: number; total: number };
@@ -363,6 +365,8 @@ export interface TaskPatchInput {
   auto?: boolean;
   /** epics only (TER-1170): the automatic work takes the cards one at a time, in board order */
   sequential?: boolean;
+  /** TER-1069: keys of the project's repositories the card touches (multi-repo projects only) */
+  repo_keys?: string[];
 }
 
 /** Where a move sends a card: a column, or a status (backlog, or the first column of a category). */

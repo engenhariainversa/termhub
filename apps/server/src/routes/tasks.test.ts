@@ -211,6 +211,22 @@ describe('task routes: subtasks', () => {
     expect(r.json()).toEqual({ error: 'Uma subtarefa não pode ter subtarefas', code: 'BAD_REQUEST' });
   });
 
+  // TER-1069: the board's card form edits the card's repositories
+  it('passes repo_keys through on create and PATCH, and a repository rule as a 400', async () => {
+    const { app, tasksRepo } = buildApp(store);
+    const c = await app.inject({ method: 'POST', url: '/projects/p1/tasks', payload: { title: 'x', repo_keys: [' api '] } });
+    expect(c.statusCode).toBe(201);
+    expect(tasksRepo.create).toHaveBeenCalledWith('p1', { title: 'x', repo_keys: ['api'] });
+    const p = await app.inject({ method: 'PATCH', url: '/tasks/t1', payload: { repo_keys: ['api', 'web'] } });
+    expect(p.statusCode).toBe(200);
+    expect(tasksRepo.update).toHaveBeenCalledWith('t1', { repo_keys: ['api', 'web'] });
+    tasksRepo.update.mockRejectedValueOnce(new TaskRuleError('REPO_UNKNOWN', 'Repositório não encontrado neste projeto: x'));
+    const bad = await app.inject({ method: 'PATCH', url: '/tasks/t1', payload: { repo_keys: ['x'] } });
+    expect(bad.statusCode).toBe(400);
+    const tooMany = await app.inject({ method: 'PATCH', url: '/tasks/t1', payload: { repo_keys: Array.from({ length: 11 }, (_, i) => `r${i}`) } });
+    expect(tooMany.statusCode).toBe(400);
+  });
+
   it('passes parent_id through on the project create route', async () => {
     const { app, tasksRepo } = buildApp(store);
     const r = await app.inject({ method: 'POST', url: '/projects/p1/tasks', payload: { title: 'child', parent_id: 't1' } });

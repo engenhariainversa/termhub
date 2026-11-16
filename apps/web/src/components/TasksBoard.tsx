@@ -27,6 +27,8 @@ import { loadIneligibleReasons, untaggedUnderEpic } from '../lib/automation';
 import { AutomationBadge } from './AutomationBadge';
 import { MachinePicker } from './MachinePicker';
 import { TaskEditor, type PlaceTarget } from './TaskEditor';
+import { RepoChips } from './RepoChips';
+import { useCardRepos } from '../lib/project-repos';
 import { TypeBadge } from './TypeBadge';
 import { useTranslation } from '../i18n';
 
@@ -67,6 +69,7 @@ export function TasksBoard({ projectId }: Props) {
   const [drag, setDrag] = useState<DragState | null>(null);
   const [pickingMachineFor, setPickingMachineFor] = useState<string | null>(null);
   const [reasons, setReasons] = useState<Map<string, string>>(new Map());
+  const cardRepos = useCardRepos(projectId);
 
   const load = useCallback(async () => {
     try {
@@ -365,6 +368,7 @@ export function TasksBoard({ projectId }: Props) {
           task={editing}
           columns={columns}
           epics={epics}
+          repos={cardRepos}
           terminalHref={editing.tab_id ? `/projects/${projectId}?tab=${editing.tab_id}` : null}
           linkableTabs={linkableTabs}
           onLinkTab={(tabId) => void linkTab(editing.id, tabId)}
@@ -566,6 +570,7 @@ function TaskCard({ task, epicTitle, dragging, onDragStart, onDragEnd, onOpen, n
           </button>
         )}
       </div>
+      <RepoChips keys={task.repo_keys} className="mt-1" />
       {task.external_ref && (
         <a
           href={task.external_ref.url}
