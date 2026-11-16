@@ -35,5 +35,11 @@
   "Automático pausado desde {{time}}.": "Trabajo automático en pausa desde {{time}}.",
   "Hora do resumo diário": "Hora del resumen diario",
   "Sem resumo": "Sin resumen",
-  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "El resumen del día llega a esta hora, en la zona horaria de este dispositivo."
+  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "El resumen del día llega a esta hora, en la zona horaria de este dispositivo.",
+  "Repositórios": "Repositorios",
+  "ausente": "ausente",
+  "desligado": "apagado",
+  "fora do GitHub": "fuera de GitHub",
+  "sem acesso": "sin acceso",
+  "O nível de cada repositório e as máquinas onde ele está se editam no Setup da web.": "El nivel de cada repositorio y las máquinas donde está se editan en el Setup de la web."
 }

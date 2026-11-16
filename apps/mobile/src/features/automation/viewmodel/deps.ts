@@ -2,5 +2,6 @@
 import { useSessionStore } from '@/features/session/viewmodel/useSessionStore';
 import { api } from '@/services/api';
 import type { AutomationDeps } from './use-automation';
+import type { ProjectReposDeps } from './use-project-repos';
 
-export const automationDeps: AutomationDeps = { api, session: () => useSessionStore.getState() };
+export const automationDeps: AutomationDeps & ProjectReposDeps = { api, session: () => useSessionStore.getState() };

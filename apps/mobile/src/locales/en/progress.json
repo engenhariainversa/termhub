@@ -105,5 +105,6 @@
   "falhou: publicação": "failed: release",
   "{{phase}} em {{date}}": "{{phase}} on {{date}}",
   "{{phase}} · desde {{date}}": "{{phase}} · since {{date}}",
-  "em andamento": "in progress"
+  "em andamento": "in progress",
+  "PRs em {{repo}}": "PRs in {{repo}}"
 }

@@ -19,6 +19,7 @@ import {
   aiLoginStatusResponse,
   aiLoginSubmitResponse,
   automationSetupResponse,
+  projectReposResponse,
   cardAutoResponse,
   pauseResponse,
   pauseState,
@@ -369,6 +370,7 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
         token: a.accessToken,
         body: { automation, ...proof, ...(timeZone ? { time_zone: timeZone } : {}) },
       }).then((r) => r.automation),
+    getProjectRepos: (a: Auth, projectId: string) => call('GET', `/api/m/v1/projects/${encodeURIComponent(projectId)}/repos`, projectReposResponse, { token: a.accessToken }),
     getPauseState: (a: Auth) => call('GET', '/api/m/v1/automation/state', pauseState, { token: a.accessToken }),
     pauseAutomation: (a: Auth, scope: string, interrupt = false) =>
       call('POST', '/api/m/v1/automation/pause', pauseResponse, { token: a.accessToken, body: { scope, interrupt } }).then((r) => r.paused_at),

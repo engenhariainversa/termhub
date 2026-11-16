@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { Fragment, useCallback, useState } from 'react';
 import { FlatList, Linking, Pressable, RefreshControl, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PauseCard } from '@/features/automation/view/pause-card';
@@ -9,6 +9,7 @@ import type { TAgentOnCard, TAutomationFeedEvent, TCardProgress, TEpicLifecycle,
 import { AppText, Button, MAX_READABLE_WIDTH, readableColumn, Sheet } from '@/ui';
 import { ciLabel, epicCiLine, formatEstimate, lifecycleLine, stateLabel, usageLine } from '../model/format';
 import { feedLine, feedWhy } from '../model/feed';
+import { prGroups } from '../model/pr-groups';
 import { useProgressStore } from '../viewmodel/useProgressStore';
 
 function Bar({ percent }: { percent: number }) {
@@ -145,12 +146,22 @@ function Epic({ epic }: { epic: TEpicProgress }) {
             <Text className="text-xs text-zinc-400">{`${c.units.done}/${c.units.total} · ${formatEstimate(c.estimate)}`}</Text>
             {usageLine(c.usage) && <Text className="text-xs text-zinc-400">{usageLine(c.usage)}</Text>}
             {c.agents?.map((a) => <Agent key={a.tab_id} agent={a} />)}
-            {c.pull_requests.map((p) => (
-              <Pressable key={p.number} onPress={() => void Linking.openURL(p.state === 'merged' && p.deploy_url ? p.deploy_url : p.url)}>
-                {/* i18n-ignore */}
-                <Text className="text-xs text-indigo-300">{`PR #${p.number} · ${ciLabel(p)}`}</Text>
-              </Pressable>
-            ))}
+            {prGroups(c).map((g) => {
+              const links = g.pull_requests.map((p) => (
+                <Pressable key={p.url} onPress={() => void Linking.openURL(p.state === 'merged' && p.deploy_url ? p.deploy_url : p.url)}>
+                  {/* i18n-ignore */}
+                  <Text className="text-xs text-indigo-300">{`PR #${p.number} · ${ciLabel(p)}`}</Text>
+                </Pressable>
+              ));
+              // TER-1061: a single-repo card's PRs stay plain lines of the card, as before
+              if (g.repo === null) return <Fragment key="">{links}</Fragment>;
+              return (
+                <View key={g.repo} testID={`card-prs-${g.repo}`} accessibilityLabel={t('PRs em {{repo}}', { repo: g.repo })} className="gap-0.5">
+                  <Text className="font-mono text-[10px] text-zinc-500">{g.repo}</Text>
+                  {links}
+                </View>
+              );
+            })}
           </View>
         ))}
       <Sheet open={menuFor !== null} onClose={() => setMenuFor(null)} title={t('Trabalho automático')}>
