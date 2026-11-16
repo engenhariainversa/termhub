@@ -4,6 +4,7 @@ import { TAB_FILE_MAX_BYTES } from '@termhub/mobile-api';
 import { describe, expect, it } from 'vitest';
 import { UPLOAD_BODY_LIMIT } from '../chat/attachments/upload.js';
 import { TRANSCRIPTION_MAX_BYTES } from '../terminal/transcription.js';
+import { RUN_LIMITS } from '../runs/limits.js';
 
 // The phone talks to the landing host (MOBILE_PUBLIC_URL), whose nginx caps every body under /api/m/ at
 // 64k. An upload route without its own location is refused there before the app sees it (TER-1105):
@@ -52,6 +53,27 @@ describe('termhub.dev vhost: the phone’s upload routes', () => {
     const location = locationFor('/api/m/v1/tabs/abc123/chat/messages');
     expect(location?.pattern).toBe('/api/m/');
     expect(bodyCap(location!)).toBe(64 * 1024);
+  });
+});
+
+// The personal runs API is reachable on the landing host without Cloudflare Access (TER-1190): only its
+// own prefix, with a body cap a full prompt fits in and an unbuffered stream that outlives the longest run.
+describe('termhub.dev vhost: the personal runs API', () => {
+  it('/api/v1/ has its own location, and nothing wider reaches the app', () => {
+    expect(locationFor('/api/v1/runs')?.pattern).toBe('/api/v1/');
+    expect(locationFor('/api/v1/runs/abc/events')?.pattern).toBe('/api/v1/');
+    expect(locationFor('/api/projects')?.pattern).toBe('/');
+    expect(locations.some((l) => l.pattern === '/api/' || l.pattern === '/api')).toBe(false);
+  });
+
+  it('takes a full prompt, streams unbuffered and outlives the longest run', () => {
+    const location = locationFor('/api/v1/runs')!;
+    // A UTF-16 unit is at most 3 bytes of UTF-8.
+    expect(bodyCap(location)).toBeGreaterThanOrEqual(RUN_LIMITS.maxPromptChars * 3);
+    expect(location.body).toContain('proxy_buffering off;');
+    const timeout = /proxy_read_timeout\s+(\d+)s;/.exec(location.body);
+    expect(Number(timeout?.[1])).toBeGreaterThan(RUN_LIMITS.maxTimeoutS);
+    expect(location.body).toMatch(/limit_req zone=termhub_runs /);
   });
 });
 

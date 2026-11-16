@@ -64,7 +64,7 @@ A proxy or firewall that closes idle connections after **60 s or more** does not
 | Host | Port | Used by | Why |
 |---|---|---|---|
 | `app.termhub.dev` | 443 (HTTPS + WSS) | browsers; agent | Web app, REST API, browser WebSockets. The agent WebSocket `wss://app.termhub.dev/agent/ws` also lives here: the `connect` command the app shows uses the app's own address. |
-| `termhub.dev` | 443 (HTTPS + WSS) | machines; phones | Hook events (`/api/hooks/events`), MCP endpoint for the chat and agent tabs (`/mcp`), mobile API and WebSocket (`/api/m/v1`, `/ws/m/chat`), and the website. |
+| `termhub.dev` | 443 (HTTPS + WSS) | machines; phones | Hook events (`/api/hooks/events`), MCP endpoint for the chat and agent tabs (`/mcp`), mobile API and WebSocket (`/api/m/v1`, `/ws/m/chat`), the personal runs API (`/api/v1`, a personal token with the `runs` scope), and the website. |
 | `registry.npmjs.org` | 443 | machines (install/update) | `npm i -g @termhub/agent`, and later updates from the app's update button, the chat's `update_machine_agent` or the auto-update (on by default since TER-1056). |
 | Cloudflare Access for termhub Cloud, `*.cloudflareaccess.com` | 443 | browsers | `app.termhub.dev` is protected by Cloudflare Access, which asks the user to sign in before the app loads. |
 | `accounts.google.com` | 443 | browsers | Google sign-in, used by the Cloud's access check and by "Entrar com Google". |
@@ -264,7 +264,7 @@ Paths are relative to the repository root.
 | `connect` command uses the app's origin | `apps/web/src/components/AgentEnrollment.tsx` |
 | Probe used by `doctor`/`status`; hooks/MCP addresses in `probe_info`, checked with a POST expecting 401 | `apps/agent/src/run.ts` (`checkServerConnection`), `apps/agent/src/doctor.ts`, `apps/agent/src/rpc/net.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/routes/machines.ts` (`/network-check`) |
 | Hook script posts with curl to `HOOKS_URL` | `packages/machine-ops/src/hooks.ts`, `apps/server/src/config.ts` |
-| Hosts routed on `termhub.dev` (hooks, MCP, mobile) | `deploy/nginx/termhub.dev.conf.tmpl` |
+| Hosts routed on `termhub.dev` (hooks, MCP, mobile, runs API) | `deploy/nginx/termhub.dev.conf.tmpl` |
 | Server WebSocket endpoints, Origin check, pings, drain with 1012 | `apps/server/src/ws/router.ts`, `apps/server/src/agent/ws.ts`, `apps/server/src/terminal/ws.ts`, `apps/server/src/ws/drain.ts` |
 | Web uses same-origin API and WebSockets only; no third-party scripts in `index.html` | `apps/web/src/lib/api.ts`, `apps/web/src/lib/terminal-connection.ts`, `apps/web/index.html` |
 | Google Analytics (Firebase SDK) loads only after cookie consent, and not at all without `VITE_FIREBASE_*` | `apps/web/src/lib/analytics.ts`, `apps/web/src/lib/consent.ts` |

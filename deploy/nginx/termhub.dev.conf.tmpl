@@ -20,6 +20,9 @@ limit_req_zone $http_cf_connecting_ip zone=termhub_mobile:1m rate=10r/s;
 limit_req_zone $http_cf_connecting_ip zone=termhub_mobile_enrol:1m rate=2r/s;
 limit_conn_zone $http_cf_connecting_ip zone=termhub_mobile_conn:1m;
 
+# Personal runs API (TER-1176, TER-1190): per-client budget; the app also limits runs per token and per person
+limit_req_zone $http_cf_connecting_ip zone=termhub_runs:1m rate=5r/s;
+
 # Landing page
 server {
     listen 80;
@@ -196,6 +199,24 @@ server {
         proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto https;
         proxy_read_timeout 3600s;
+    }
+    # Personal runs API (TER-1190): scripts call /api/v1 with a personal token that carries the `runs`
+    # scope (public routes; no Access on this host). Only this prefix: never /api/ nor the web app.
+    # The events stream (SSE) is unbuffered and lives as long as a run (at most 3600 s, plus margin);
+    # the body cap matches the app's own (1 MB), which a 100 000-character prompt fits in.
+    location /api/v1/ {
+        limit_except GET POST { deny all; }
+        limit_req zone=termhub_runs burst=20 nodelay;
+        limit_req_status 429;
+        proxy_pass http://$upstream_app:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $http_cf_connecting_ip;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_buffering off;
+        proxy_read_timeout 3700s;
+        client_max_body_size 1m;
     }
     # The public city: the page, its snapshot and its live channel (public routes; no Access on this host)
     location /city/ {
