@@ -36,6 +36,7 @@ import { DECISION_SCOPES, type DecisionScope } from '../db/repositories/decision
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
 import { answerTabQuestionTool, listTabQuestions, recordDecision, searchMemory, MEMORY_REF, type MemoryRefKind } from '../control/memory.js';
 import { createIntegration, getProjectSetup, listIntegrations, setProjectRepo } from '../control/integrations.js';
+import { listProjectRepos, scanProjectRepos } from '../control/repos.js';
 import { recordLesson } from '../control/lessons.js';
 import { recapPendingCards } from '../control/pending.js';
 import { getChatContext } from '../control/chat-context.js';
@@ -1018,6 +1019,22 @@ export const TOOLS: ToolDef[] = [
     scope: 'read', resource: 'projects', action: 'read',
     input: { project_id: id },
     run: (ctx, a) => getProjectSetup(ctx, a as { project_id: string }),
+  },
+  {
+    name: 'list_project_repos',
+    description:
+      "List the git repositories in a project's folder, as termhub found them on each linked machine: key (the short name cards and worktree paths use), owner/repo, description (from package.json or the README), status (ok; unsupported = not on GitHub, never automatic; no_access = the project's GitHub integration cannot read it), enabled, autonomy level (a repository found in the folder starts at pr, only opens PRs, until the person raises it in Setup) and, per machine, the folder and whether it went missing; plus, per linked machine, when its folder was last scanned. termhub scans by itself (agent connect, every 10 min, Setup open): call this when the person asks which repositories a project has or where one sits, or before choosing the repositories of a card. A project with one repository lists it as key `main`.",
+    scope: 'read', resource: 'projects', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => listProjectRepos(ctx, a as { project_id: string }),
+  },
+  {
+    name: 'scan_project_repos',
+    description:
+      "Scan a project's folder now on every linked machine for git repositories (the Setup's \"Procurar agora\"), then answer the same list as list_project_repos plus, per machine, what the scan did (found, created, missing) or why it was skipped (offline, agent without repo_scan: update it to 0.29.0 or newer; refused: the folder is / or the home folder). It only reads folder names, the git remote, the default branch and one description line, and only adds rows: nothing automatic changes, and a new repository starts at level pr. Call it only when the person says they just added or moved a repository and list_project_repos does not show it yet; termhub already scans by itself.",
+    scope: 'read', resource: 'projects', action: 'read',
+    input: { project_id: id },
+    run: (ctx, a) => scanProjectRepos(ctx, a as { project_id: string }),
   },
   {
     name: 'set_project_repo',

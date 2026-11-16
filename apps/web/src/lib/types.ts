@@ -756,6 +756,57 @@ export interface HealthWaitingCard {
   since: string;
 }
 
+/** TER-1071: where one repository of the project sits on one linked machine. */
+export interface ProjectRepoMachine {
+  machine_id: string;
+  machine: string;
+  /** relative to the project's folder on that machine */
+  dir: string;
+  missing: boolean;
+  seen_at: string;
+}
+
+/** TER-1071: one repository of the project, as discovery found it (or as named by hand in the Setup). */
+export interface ProjectRepo {
+  key: string | null;
+  full_name: string;
+  description: string | null;
+  status: 'ok' | 'unsupported' | 'no_access';
+  enabled: boolean;
+  discovered: boolean;
+  autonomy: AutomationAutonomy;
+  machines: ProjectRepoMachine[];
+}
+
+/** TER-1071: one machine linked to the project, as discovery sees it. */
+export interface ProjectRepoScanMachine {
+  machine_id: string;
+  machine: string;
+  cwd: string;
+  scanned_at: string | null;
+  can_scan: 'ok' | 'not_agent' | 'offline' | 'no_repo_scan';
+}
+
+export interface ProjectReposView {
+  project_id: string;
+  repos: ProjectRepo[];
+  machines: ProjectRepoScanMachine[];
+}
+
+/** TER-1071: what one on-demand scan did on one machine. */
+export interface ProjectRepoScan {
+  machine_id: string;
+  scanned: boolean;
+  skipped?: 'not_agent' | 'offline' | 'no_repo_scan' | 'throttled' | 'refused' | 'not_found' | 'failed';
+  error?: string;
+  found: number;
+  created: string[];
+  missing: string[];
+  duplicates: string[];
+  truncated: boolean;
+  scanned_at: string | null;
+}
+
 export interface ProjectSetup {
   project_id: string;
   version: number;

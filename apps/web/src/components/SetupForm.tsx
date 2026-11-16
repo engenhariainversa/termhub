@@ -5,6 +5,7 @@ import { machineLabel } from '../lib/machine-labels';
 import { AutomationSetup } from './AutomationSetup';
 import { HealthSetup } from './HealthSetup';
 import { ProjectAiCard } from './ProjectAiCard';
+import { RepoDiscovery } from './RepoDiscovery';
 import { tk, useTranslation } from '../i18n';
 import {
   APPROVAL_LABEL,
@@ -217,6 +218,8 @@ export function SetupForm({ project }: Props) {
           </>
         )}
       </Card>
+
+      <RepoDiscovery projectId={project.id} />
 
       <Card title={t('Tickets')} hint={t('Fontes das tarefas: tickets abertos de cada fonte aparecem em Tickets; os que você escolher entram no backlog do épico padrão.')}>
         {sources.map((s, i) => {

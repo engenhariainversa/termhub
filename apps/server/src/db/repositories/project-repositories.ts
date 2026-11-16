@@ -108,6 +108,17 @@ export class ProjectRepositoriesRepository {
     });
   }
 
+  /** The result of discovery's access check (spec §5 step 4): `no_access` when the integration's token cannot read it. */
+  async setStatus(id: string, status: RepoStatus): Promise<void> {
+    await this.db.projectRepository.updateMany({ where: { id, status: { not: status } }, data: { status } });
+  }
+
+  /** Projects with more than one discovered repository: discovery's 10-minute loop scans them (R3). */
+  async projectsWithSeveral(): Promise<string[]> {
+    const rows = await this.db.projectRepository.groupBy({ by: ['projectId'], _count: { _all: true } });
+    return rows.filter((r) => r._count._all > 1).map((r) => r.projectId);
+  }
+
   /** The project's repositories as the rest of the server reads them: see `effectiveRepos`. */
   async effective(projectId: string, setup: ProjectSetupData): Promise<EffectiveRepo[]> {
     return effectiveRepos(setup, await this.listByProject(projectId));

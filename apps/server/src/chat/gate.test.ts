@@ -254,6 +254,9 @@ it('classifies list_tab_questions as read (TER-627): it only lists the tabs\' qu
 
 it('the project AI Setup (TER-1147): reading and previewing are reads, confirm asks a card, unstick runs at once', () => {
   expect(actionClass('get_project_ai_setup', { project_id: 'p1' })).toBe('read');
+  // TER-1071: the repositories in the project's folder; the scan only reads folders and adds rows
+  expect(actionClass('list_project_repos', { project_id: 'p1' })).toBe('read');
+  expect(actionClass('scan_project_repos', { project_id: 'p1' })).toBe('read');
   expect(actionClass('set_project_ai_setup', { project_id: 'p1', remove: ['a1'] })).toBe('read');
   expect(actionClass('set_project_ai_setup', { project_id: 'p1', remove: ['a1'], confirm: true })).toBe('write');
   expect(defaultKindOf('set_project_ai_setup', { project_id: 'p1', confirm: true })).toBeNull();

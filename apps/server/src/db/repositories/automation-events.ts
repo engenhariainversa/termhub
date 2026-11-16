@@ -68,7 +68,12 @@ export type AutomationEventKind =
   // TER-1150: an automatic epic born — its first card started, the epic went to Fazendo ({ branch, by, card_id })
   // — and finished — its PR merged and delivered, the epic in Feito ({ branch, branch_deleted, pr?, url? })
   | 'epic_started'
-  | 'epic_done';
+  | 'epic_done'
+  // TER-1071 (spec 2026-10-07 multi-repo R3): a repository new in the project's folder ({ full_name, key, machine_id,
+  // machine, autonomy }), or one summary for a project's first scan ({ first_scan: true, count, names, machine_id,
+  // machine }); and a checkout whose folder is gone from a machine ({ full_name, key, machine_id, machine })
+  | 'repo_discovered'
+  | 'repo_missing';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;
