@@ -200,6 +200,37 @@ describe('placeRun with the card repository (multi-repo R5, Task 11)', () => {
     expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1', 'a2']), undefined, app)).toMatchObject({ machine: { id: 'm2' }, repoDir: '/code/m2/app' });
   });
 
+  it('multi-repo Task 12: a workspace run needs every repository on the machine, the multi-repo guard and room for each worktree', async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const both = [repoRow('r-app', 'acme/app', 'app', [co('m1', 'app'), co('m2', 'src/app')]), repoRow('r-api', 'acme/api', 'api', [co('m2', 'svc/api')])];
+    const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const ws = pickRunRepo(withRepo(['a1', 'a2']), both, ['app', 'api']);
+    const room = vi.fn(async () => true);
+    // m1 lacks api: left out, though first in the account order
+    const p = await placeRun({ repos, now: () => new Date(), usage: async () => 0, room }, project, withRepo(['a1', 'a2']), undefined, ws);
+    expect(p).toMatchObject({
+      machine: { id: 'm2' },
+      repoDir: '/code/m2/src/app',
+      repoDirs: [
+        { key: 'app', repoDir: '/code/m2/src/app' },
+        { key: 'api', repoDir: '/code/m2/svc/api' },
+      ],
+    });
+    expect(room).toHaveBeenCalledWith(expect.objectContaining({ id: 'm2' }), expect.anything(), expect.anything(), 2);
+    // an agent whose guard predates the multi-repo push rule is never chosen for it (`no_guard`)
+    const old = fakeRepos({ machines: [machine('m1'), { ...machine('m2'), agent_version: '0.28.0' }], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const refused = await placeRun({ repos: old, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1', 'a2']), undefined, ws);
+    expect(refused).toMatchObject({ waiting: 'no_machine' });
+    expect((refused as { detail: { machines: Array<{ id: string; why: string }> } }).detail.machines).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: 'm1', why: 'no_checkout' }), expect.objectContaining({ id: 'm2', why: 'no_guard' })]),
+    );
+    // a one-repository run carries no repoDirs and counts one worktree
+    const app = pickRunRepo(withRepo(['a1', 'a2']), both, ['app']);
+    const one = await placeRun({ repos, now: () => new Date(), usage: async () => 0, room }, project, withRepo(['a1', 'a2']), undefined, app);
+    expect(one).not.toHaveProperty('repoDirs');
+    expect(room).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'm1' }), expect.anything(), expect.anything(), 1);
+  });
+
   it("a single-repo project keeps the link's folder as is", async () => {
     reg.online.set('m1', ['worktree']);
     const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });

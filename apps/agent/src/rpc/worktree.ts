@@ -1,4 +1,4 @@
-import { lstat, mkdir, readdir, realpath } from 'node:fs/promises';
+import { lstat, mkdir, readdir, realpath, rmdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { GIT_BRANCH_RE, RPC, type RpcParams, type RpcResult } from '@termhub/agent-protocol';
@@ -251,11 +251,31 @@ export async function remove(params: RpcParams<'git.worktree.remove'>, home = os
   const repoDir = await repoOf(params.repo_dir, home, d.step('git rev-parse', QUICK_STEP_MS));
   if (!(await exists(target))) {
     await gitOk('git worktree prune', ['-C', repoDir, 'worktree', 'prune'], d.step('git worktree prune', QUICK_STEP_MS));
+    if (params.remove_empty_parent) await removeEmptyParent(params.root, target, home);
     return { removed: false, dirty: false };
   }
   if (!(await findWorktree(repoDir, target, d.step('git worktree list', QUICK_STEP_MS)))) throw new RpcFailure('invalid', 'not a worktree of this repository', params.path);
   const status = await gitOk('git status', ['-C', target, 'status', '--porcelain'], d.step('git status', QUICK_STEP_MS));
   if (status !== '') return { removed: false, dirty: true };
   await gitOk('git worktree remove', ['-C', repoDir, 'worktree', 'remove', target], d.step('git worktree remove', REMOVE_BUDGET_MS));
+  if (params.remove_empty_parent) await removeEmptyParent(params.root, target, home);
   return { removed: true, dirty: false };
+}
+
+/**
+ * A workspace run's folder (`<root>/<project>/<ref>`), once its last worktree is gone: removed when it is empty
+ * and strictly under `root`, so never `root` itself nor the project's folder of worktrees. `rmdir` refuses a
+ * folder with anything left in it (a worktree kept dirty), which is the point. Best effort.
+ */
+async function removeEmptyParent(rootParam: string, target: string, home: string): Promise<void> {
+  try {
+    const realRoot = await realpath(absolute(rootParam, home));
+    const parent = path.dirname(target);
+    const rel = path.relative(realRoot, parent);
+    // two levels at least: <project>/<ref>
+    if (!inside(realRoot, parent) || rel.split(path.sep).length < 2) return;
+    await rmdir(parent);
+  } catch {
+    // not empty, or gone already: nothing to do
+  }
 }

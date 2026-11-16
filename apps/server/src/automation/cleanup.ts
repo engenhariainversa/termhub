@@ -6,7 +6,7 @@ import type { Project, ProjectMachine, ProjectRepository } from '../db/repositor
 import type { ProjectSetupData } from '../setup/schema.js';
 import { removeWorkspace as removeWorkspaceFn } from './branches.js';
 import { recordEvent } from './events.js';
-import { checkoutDirOn, pickRunRepo, repoDirOf } from './run-repo.js';
+import { checkoutDirOn, pickRunRepo, repoDirOf, runKeysOf } from './run-repo.js';
 
 /*
  * After a merge (agentic board spec §7, TER-871): the card's worktree is removed and the finished run's tab
@@ -93,6 +93,27 @@ async function repoDirOfRuns(repos: Repositories, setup: ProjectSetupData, runs:
 }
 
 /**
+ * A workspace run's worktrees (multi-repo R11, outline Task 12): every row of the runs under their shared
+ * `worktree_path` (the workspace root), each with the checkout it belongs to on the machine. Empty for a run in
+ * one repository, whose row is the worktree itself.
+ */
+async function workspaceWorktrees(repos: Repositories, runs: AutomationRun[], machineId: string, link: ProjectMachine): Promise<Array<{ path: string; repoDir: string }>> {
+  if (!repos.projectRepositories || !repos.automationRunRepos) return [];
+  const root = runs[0]!.worktree_path;
+  const rows = (await Promise.all(runs.map((r) => repos.automationRunRepos.listByRun(r.id)))).flat();
+  if (runKeysOf(rows, root).length < 2) return [];
+  const discovered: ProjectRepository[] = await repos.projectRepositories.listByProject(runs[0]!.project_id);
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    if (out.has(row.worktree_path) || runKeysOf([row], root).length === 0) continue;
+    const checkout = discovered.find((r) => r.id === row.repository_id)?.checkouts.find((c) => c.machine_id === machineId);
+    // a checkout no longer known: the link's folder (the agent refuses a path that is not its worktree, as nothing to remove)
+    out.set(row.worktree_path, checkout ? repoDirOf(link.cwd, checkout.dir) : link.cwd);
+  }
+  return [...out].map(([path, repoDir]) => ({ path, repoDir }));
+}
+
+/**
  * Works through the due runs of one project. Never throws for a run it cannot finish: that run stays due.
  * Pause and automation-off are the caller's to decide (a merged card's cleanup is not "work", so a pause
  * does not stop it; turning automation off does: nothing calls this then).
@@ -175,8 +196,21 @@ export async function cleanupRuns(deps: CleanupDeps, project: Pick<Project, 'id'
         for (const r of group) await settle(r, 'done', null); // the machine or its link is gone: nothing to remove
         continue;
       }
-      const repoDir = await repoDirOfRuns(repos, setup, group, machine.id, link);
-      const r = await remove(machine, { repoDir, root: setup.automation.worktrees_dir, path: run.worktree_path! });
+      const root = setup.automation.worktrees_dir;
+      const members = await workspaceWorktrees(repos, group, machine.id, link);
+      let r: { removed: boolean; dirty: boolean };
+      if (members.length > 0) {
+        // a workspace run: each worktree from its own checkout; the agent removes the folder that held them once
+        // the last one leaves it empty (a dirty worktree keeps it)
+        r = { removed: false, dirty: false };
+        for (const m of members) {
+          const one = await remove(machine, { repoDir: m.repoDir, root, path: m.path, removeEmptyParent: true });
+          r = { removed: r.removed || one.removed, dirty: r.dirty || one.dirty };
+        }
+      } else {
+        const repoDir = await repoDirOfRuns(repos, setup, group, machine.id, link);
+        r = await remove(machine, { repoDir, root, path: run.worktree_path! });
+      }
       if (r.dirty) {
         result.kept++;
         for (const x of group) await settle(x, 'kept', 'kept');

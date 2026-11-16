@@ -198,6 +198,12 @@ export interface AgentPermission {
    * room for them.
    */
   worktree?: string | null;
+  /**
+   * A workspace run's repository keys (spec 2026-10-07 multi-repo R13, outline Task 12): `worktree` is then the
+   * workspace root, and each `<worktree>/<key>` gets the `-C` forms and the branch pushes by exact path. Empty or
+   * absent for a run in one repository.
+   */
+  repoKeys?: readonly string[];
 }
 
 /**
@@ -249,7 +255,7 @@ export async function installRunGuard(machine: Machine, tabId: string, permissio
  */
 function permissionFlags(permission: AgentPermission, mcpTabId: string | null, guardTabId: string | null = null): string {
   if (!PERMISSION_MODES.has(permission.mode)) throw new ControlError('INVALID_PERMISSION_MODE', 'Modo de permissão inválido');
-  const forms = permission.worktree ? { worktree: permission.worktree } : null;
+  const forms = permission.worktree ? { worktree: permission.worktree, keys: permission.repoKeys ?? [] } : null;
   const tools = automationAllowList(checkAllowedTools(permission.allowedTools), permission.branch, forms);
   const allow = mcpTabId ? claudeMcpFlags(mcpTabId, tools) : tools.length ? `--allowedTools ${tools.map((t) => shellQuote(t)).join(' ')}` : '';
   const deny = `--disallowedTools ${automationDenyList(forms !== null).map((t) => shellQuote(t)).join(' ')}`;

@@ -65,7 +65,7 @@ export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_pro
 export const CLI_DIALOG_ALERT_MS = 2 * 60_000;
 
 /** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
-export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed', 'repo_multi_soon'];
+export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
 
 /** Queue reasons the chat was already woken about (TER-1068: a card with no repository): no stalled queue either. */
 export const TOLD_REASONS: readonly string[] = ['repo_unknown'];

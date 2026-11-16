@@ -53,6 +53,14 @@ describe('roomReading (TER-1138)', () => {
     expect(roomReading(snap({ load: [14.5, 1, 1] }), '/home/u/w', at)).toMatchObject({ ok: false, limit: 'load', load1: 14.5, ncpu: 12 });
   });
 
+  it('multi-repo Task 12: a workspace run asks for the disk of one worktree per repository', () => {
+    const disk = (avail: number) => snap({ disks: [{ mount: '/', source: '/dev/a', size_kb: 500 * GB, used_kb: 0, avail_kb: avail }] });
+    expect(roomReading(disk(30 * GB), '/home/u/w', at).ok).toBe(true);
+    expect(roomReading(disk(30 * GB), '/home/u/w', at, 2)).toMatchObject({ ok: false, limit: 'disk' });
+    expect(roomReading(disk(40 * GB), '/home/u/w', at, 2).ok).toBe(true);
+    expect(roomReading(disk(40 * GB), '/home/u/w', at, 3).ok).toBe(false);
+  });
+
   it('memory comes first, then disk, then load; a missing value fails its own limit', () => {
     expect(roomReading(snap({ mem_used_kb: 58 * GB, load: [20, 1, 1] }), '/mnt/hd/w', at).limit).toBe('memory');
     expect(roomReading(snap({ load: [20, 1, 1] }), '/mnt/hd/w', at).limit).toBe('disk');

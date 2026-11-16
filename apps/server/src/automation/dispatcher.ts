@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { hostname } from 'node:os';
+import path from 'node:path';
 import { tabIdOfError, type startAgent as startAgentFn } from '../control/agents.js';
 import { closeTab as closeTabFn } from '../control/terminals.js';
 import { controlContextFor, ControlError, type ControlContext } from '../control/context.js';
@@ -22,7 +23,7 @@ import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps, type TickStarts } from './placement.js';
 import { policyText, runPromptRepos } from './policy.js';
 import { startPermission } from './permission.js';
-import { implementerPrompt, serverMessage } from './prompts.js';
+import { implementerPrompt, serverMessage, type PromptRepo } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { epicBorn, followExternalMerges, settleEpic } from './epic-lifecycle.js';
@@ -31,7 +32,7 @@ import { askForRepos, type RepoUnknownWake } from './repo-unknown.js';
 import { NEW_CARD_GRACE_MS } from './eligibility.js';
 import { existingWorkText, findExistingWork, type ExistingWork } from './existing-work.js';
 import { githubAccess } from './merge.js';
-import { baseOf, resolveRunRepo, type RunRepo } from './run-repo.js';
+import { baseOf, membersOf, resolveRunRepo, runKeysOf, type RunRepo } from './run-repo.js';
 
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
@@ -310,29 +311,62 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const { automation, repo, runner } = setup;
     let branch: string | null = null;
     let tabId: string;
+    // a workspace run (multi-repo R11, outline Task 12): two or more repositories, each in `<ref>/<key>`
+    const members = membersOf(target);
+    const workspace = members.length > 1 && place.repoDirs ? members : null;
     try {
-      const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
+      // a workspace run reads the epic for every role: each repository's base is the epic branch when it is automatic
+      const epic = (!work || workspace) && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
+      const epicOf = { epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null };
       // the card's repository gives the base and the branch pattern (multi-repo Task 11); one repository per epic for now
-      const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup, target.branch);
+      const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf(epicOf, setup, target.branch);
       branch = work ? work.branch : implementerBranchOf(task, target.branch);
       const { permission, dropped } = startPermission(automation, branch);
       if (dropped > 0) log.warn({ runId: run.id, taskId: task.id, code: 'ALLOWED_TOOL_DROPPED', count: dropped }, 'automation: allow rules too broad for an automatic tab dropped');
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {
-        const gh = await githubToken(project, setup, target);
-        await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, baseOf(target, setup), epicBranch);
+        // R16: in a workspace run, the epic branch is made in each repository the card touches, from its own base
+        for (const r of workspace ?? [target]) {
+          const gh = await githubToken(project, setup, r);
+          await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, baseOf(r, setup), epicBranch);
+        }
         // TER-1150: the epic is born with its first card: it goes to Fazendo, and the feed says when and by whom
         if (epic) await epicBorn({ repos, log }, epic, task, epicBranch);
       }
-      // R5: the worktree is cut in the checkout of the card's repository on this machine; its path stays <root>/<pid>/<ref>
-      const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.repoDir, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
-      if (!(await write(run, { worktree_path: ws.path }))) return;
-      if (target.repositoryId) {
+      const recordRepo = (repositoryId: string | null, repoBase: string, worktree: string) =>
+        repositoryId
+          ? repos.automationRunRepos
+              .add({ run_id: run.id, repository_id: repositoryId, branch: branch!, base: repoBase, worktree_path: worktree })
+              .catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run repository not recorded'))
+          : Promise.resolve();
+      let cwd: string;
+      let promptRepos: PromptRepo[] | null = null;
+      if (workspace) {
+        // R11: one worktree per repository at <root>/<pid>/<ref>/<key>, all on the one branch name; the run's
+        // worktree is the workspace root (the tab's cwd, and the guard's WORKTREE, R13)
+        const dirs = new Map(place.repoDirs!.map((d) => [d.key, d.repoDir]));
+        promptRepos = [];
+        let root: string | null = null;
+        for (const m of workspace) {
+          // each repository's own base, or the epic branch when the card's epic is automatic (a fixer's PR base too)
+          const repoBase = targetOf(epicOf, setup, m.branch).base;
+          const ws = await deps.ensureWorkspace(place.machine, { repoDir: dirs.get(m.entry.key)!, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base: repoBase, key: m.entry.key });
+          if (root === null) {
+            root = path.posix.dirname(ws.path);
+            if (!(await write(run, { worktree_path: root }))) return;
+          }
+          await recordRepo(m.repositoryId, repoBase, ws.path);
+          promptRepos.push({ key: m.entry.key, full_name: m.entry.full_name, base: repoBase });
+        }
+        cwd = root!;
+      } else {
+        // R5: the worktree is cut in the checkout of the card's repository on this machine; its path stays <root>/<pid>/<ref>
+        const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.repoDir, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
+        if (!(await write(run, { worktree_path: ws.path }))) return;
         // R11: the run's repository; without the row the cleanup falls back to the project's run repository
-        await repos.automationRunRepos
-          .add({ run_id: run.id, repository_id: target.repositoryId, branch, base, worktree_path: ws.path })
-          .catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run repository not recorded'));
+        await recordRepo(target.repositoryId, base, ws.path);
+        cwd = ws.path;
       }
       const prompt =
         work?.prompt ??
@@ -343,7 +377,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           base,
           // only a multi-repo project names the repository: a single-repo prompt stays byte for byte the same
           repo: target.multi && target.entry ? target.entry.full_name : null,
-          policy: policyText(automation, (target.multi ? target.entry?.deploy_workflow : repo?.deploy_workflow) ?? null, await runPromptRepos(repos, project.id, setup, target.entry)),
+          repos: promptRepos,
+          workspace: workspace ? cwd : null,
+          policy: policyText(
+            automation,
+            workspace ? null : ((target.multi ? target.entry?.deploy_workflow : repo?.deploy_workflow) ?? null),
+            await runPromptRepos(repos, project.id, setup, workspace ? workspace.map((m) => m.entry) : target.entry),
+          ),
           custom: automation.prompts.implementer,
           description: task.description,
           rules: await currentRulesBlock(repos, project.owner_id, project.id),
@@ -363,8 +403,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         { project_id: project.id, machine_id: place.machine.id, account_id: place.account.id, task_id: task.id, prompt },
         // setup command only from the project's runner, cwd only from the run's worktree (Task 14 rule)
         {
-          cwd: ws.path,
-          permission: { ...permission, worktree: ws.path },
+          cwd,
+          // a workspace run's keys give its repository folders their `-C` forms and pushes (R13)
+          permission: { ...permission, worktree: cwd, ...(workspace ? { repoKeys: workspace.map((m) => m.entry.key) } : {}) },
           setupCommand: runner.setup_command,
           promptIsFinal: true,
           // the run knows its tab before the agent starts: its tab MCP then lists report_card and get_card
@@ -390,9 +431,14 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     } catch {
       // the start itself fails on it and says why
     }
-    // GitHub is asked about the card's repository (multi-repo Task 11)
-    const github = await githubToken(project, setup, target).catch(() => null);
-    return findExistingWork({ repos, github: github && { gh: deps.gh, ...github }, log }, task, own, baseOf(target, setup));
+    // GitHub is asked about the card's repository (multi-repo Task 11), or each of a workspace run's (Task 12)
+    const members = membersOf(target);
+    for (const r of members.length > 1 ? members : [target]) {
+      const github = await githubToken(project, setup, r).catch(() => null);
+      const found = await findExistingWork({ repos, github: github && { gh: deps.gh, ...github }, log }, task, own, baseOf(r, setup));
+      if (found) return found;
+    }
+    return null;
   }
 
   /** The card leaves the queue (untagged) with the work it found in the feed: no second agent on the ticket. */
@@ -529,9 +575,13 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (max !== null && (await repos.automationRuns.countOccupyingSlots(project.id, SLOT_FREE_REASONS)) >= max) return 'waiting';
     const run = await repos.automationRuns.claim({ project_id: project.id, task_id: task.id, role: i.role, instance, trigger_sha: i.triggerSha });
     if (!run) return 'taken';
-    // TER-1051: the worktree is per card, so a fixer goes into the card's open tab, or waits for it
+    // TER-1051: the worktree is per card, so a fixer goes into the card's open tab, or waits for it. Not when the
+    // card now names a repository the tab's run lacks (multi-repo §7): its guard and worktrees do not cover it, so
+    // the fixer starts a new tab, whose workspace gets the missing worktree.
     const open = i.role === 'fixer' ? await openCardTab(repos, task.id) : null;
-    if (open) {
+    if (open && !(await tabCoversCard(open, task))) {
+      log.info({ runId: run.id, taskId: task.id, tabId: open.tab.id }, 'automation: fixer starts a new tab, the card names a repository its open tab lacks');
+    } else if (open) {
       if (open.free) return takeOverTab(controlContextFor(repos, owner), project, run, task, open, i);
       await release(run);
       return 'tab_busy';
@@ -559,6 +609,17 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     inflight.add(p);
     log.info({ runId: run.id, taskId: task.id, role: i.role }, 'automation: triggered run claimed');
     return 'started';
+  }
+
+  /**
+   * Whether the run of the card's open tab works in every repository the card names now (multi-repo §7): a
+   * card with one repository (or none) is always covered; a workspace card needs each key in the run's rows.
+   */
+  async function tabCoversCard(open: CardTab, task: Task): Promise<boolean> {
+    const keys = [...new Set(task.repo_keys ?? [])];
+    if (keys.length < 2) return true;
+    const had = runKeysOf(await repos.automationRunRepos.listByRun(open.run.id), open.run.worktree_path);
+    return keys.every((k) => had.includes(k));
   }
 
   /**

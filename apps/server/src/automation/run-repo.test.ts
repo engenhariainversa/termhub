@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRepository, ProjectRepositoryCheckout } from '../db/repositories/types.js';
 import { setupSchema } from '../setup/schema.js';
-import { baseOf, checkoutDirOn, pickRunRepo, repoDirOf } from './run-repo.js';
+import { baseOf, checkoutDirOn, memberDirsOn, membersOf, pickRunRepo, repoDirOf, runKeysOf } from './run-repo.js';
 
 const checkout = (machine_id: string, dir: string, missing = false): ProjectRepositoryCheckout => ({
   machine_id,
@@ -36,9 +36,9 @@ describe('pickRunRepo (multi-repo Task 11)', () => {
     expect(pickRunRepo(setup(), two, ['app']).branch).toMatchObject({ base_branch: 'develop' });
   });
 
-  it('no key is the project run repository; several keys and an unknown or disabled key are refused', () => {
+  it('no key is the project run repository; an unknown or disabled key is refused', () => {
     expect(pickRunRepo(setup(), two, []).entry?.full_name).toBe('acme/app');
-    expect(() => pickRunRepo(setup(), two, ['app', 'api'])).toThrow(expect.objectContaining({ code: 'REPO_MULTI' }));
+    expect(() => pickRunRepo(setup(), two, ['app', 'web'])).toThrow(expect.objectContaining({ code: 'REPO_UNAVAILABLE' }));
     expect(() => pickRunRepo(setup(), two, ['web'])).toThrow(expect.objectContaining({ code: 'REPO_UNAVAILABLE' }));
     const off = setupSchema.parse({ ...setup(), repos: [{ full_name: 'acme/api', enabled: false }] });
     expect(() => pickRunRepo(off, two, ['api'])).toThrow(expect.objectContaining({ code: 'REPO_UNAVAILABLE' }));
@@ -71,6 +71,44 @@ describe('pickRunRepo (multi-repo Task 11)', () => {
     expect(none).toMatchObject({ entry: null, repositoryId: null, branch: null });
     expect(checkoutDirOn(none, 'm1')).toBe('.');
     expect(baseOf(none, setup(null))).toBe('main');
+  });
+});
+
+describe('workspace runs (multi-repo Task 12)', () => {
+  const two = [row('r-app', 'acme/app', 'app', [checkout('m1', 'app'), checkout('m2', 'code/app')]), row('r-api', 'acme/api', 'api', [checkout('m1', 'api'), checkout('m2', 'api', true)])];
+
+  it('several keys are one run with a member per repository, in the order given; the first gives the naming', () => {
+    const r = pickRunRepo(setup(), two, ['app', 'api']);
+    expect(r).toMatchObject({ repositoryId: 'r-app', entry: { key: 'app' }, branch: { branch_pattern: 'feat/{ticket}', base_branch: 'develop' } });
+    expect(membersOf(r).map((m) => [m.entry.key, m.repositoryId, m.branch?.base_branch])).toEqual([
+      ['app', 'r-app', 'develop'],
+      ['api', 'r-api', 'main'],
+    ]);
+    // a key given twice is one repository: no workspace
+    expect(membersOf(pickRunRepo(setup(), two, ['api', 'api']))).toEqual([]);
+    expect(membersOf(pickRunRepo(setup(), two, ['api']))).toEqual([]);
+  });
+
+  it('a machine holds the run only with every repository present there', () => {
+    const r = pickRunRepo(setup(), two, ['app', 'api']);
+    expect(memberDirsOn(r, 'm1')).toEqual([
+      { key: 'app', dir: 'app' },
+      { key: 'api', dir: 'api' },
+    ]);
+    expect(checkoutDirOn(r, 'm1')).toBe('app');
+    // api is marked missing on m2
+    expect(memberDirsOn(r, 'm2')).toBeNull();
+    expect(checkoutDirOn(r, 'm2')).toBeNull();
+    expect(checkoutDirOn(r, 'm3')).toBeNull();
+  });
+
+  it("reads a run's keys back from its rows: only worktrees right under its workspace", () => {
+    const rows = [{ worktree_path: '/w/p1/TER-1/api' }, { worktree_path: '/w/p1/TER-1/app/' }, { worktree_path: '/w/p1/TER-1/api' }];
+    expect(runKeysOf(rows, '/w/p1/TER-1')).toEqual(['api', 'app']);
+    expect(runKeysOf(rows, '/w/p1/TER-1/')).toEqual(['api', 'app']);
+    // a single-repo run: its row is the worktree itself
+    expect(runKeysOf([{ worktree_path: '/w/p1/TER-1' }], '/w/p1/TER-1')).toEqual([]);
+    expect(runKeysOf(rows, null)).toEqual([]);
   });
 });
 

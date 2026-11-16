@@ -122,15 +122,27 @@ export function policyRepos(entries: RepoEntry[], first: Array<string | null | u
 }
 
 /** What a run's prompt lists: the run's repositories only, so the 660-character clip never drops them (multi-repo §9). */
-export function runPolicyRepos(entries: RepoEntry[], run: RepoEntry | null): PolicyRepo[] | undefined {
-  return isMultiRepo(entries) && run ? [run] : undefined;
+export function runPolicyRepos(entries: RepoEntry[], run: RepoEntry | RepoEntry[] | null): PolicyRepo[] | undefined {
+  const own = run === null ? [] : Array.isArray(run) ? run : [run];
+  return isMultiRepo(entries) && own.length > 0 ? own : undefined;
 }
 
 /**
- * `runPolicyRepos` for the implementer's prompt: the card's repository (`run`, multi-repo Task 11), else the
- * one the project's runs work on.
+ * `runPolicyRepos` for the implementer's prompt: the card's repository (`run`, multi-repo Task 11), or each of
+ * a workspace run's (Task 12), else the one the project's runs work on.
  */
-export async function runPromptRepos(repos: Repositories, projectId: string, setup: ProjectSetupData, run?: Pick<RepoEntry, 'full_name'> | null): Promise<PolicyRepo[] | undefined> {
+export async function runPromptRepos(
+  repos: Repositories,
+  projectId: string,
+  setup: ProjectSetupData,
+  run?: Pick<RepoEntry, 'full_name'> | ReadonlyArray<Pick<RepoEntry, 'full_name'>> | null,
+): Promise<PolicyRepo[] | undefined> {
   const entries = await loadRepoEntries(repos, projectId, setup);
-  return runPolicyRepos(entries, (run ? entries.find((e) => sameRepo(e.full_name, run.full_name)) : null) ?? runEntry(entries, setup));
+  const find = (r: Pick<RepoEntry, 'full_name'>) => entries.find((e) => sameRepo(e.full_name, r.full_name));
+  if (Array.isArray(run)) {
+    const own = run.map(find).filter((e): e is NonNullable<typeof e> => !!e);
+    if (own.length > 0) return runPolicyRepos(entries, own);
+  }
+  const one = run && !Array.isArray(run) ? find(run as Pick<RepoEntry, 'full_name'>) : null;
+  return runPolicyRepos(entries, one ?? runEntry(entries, setup));
 }

@@ -74,7 +74,7 @@ export function startAutomation(o: {
       ensureEpicBranch,
       gh: createGithubWriteClient(),
       usage: accountPeak(repos),
-      room: (machine, link, setup) => machineRoom.check(machine, setup.automation.worktrees_dir, link.cwd),
+      room: (machine, link, setup, repoCount) => machineRoom.check(machine, setup.automation.worktrees_dir, link.cwd, repoCount),
       startedOn: (id) => machineRoom.invalidate(id),
       log,
       ...o.dispatcher,

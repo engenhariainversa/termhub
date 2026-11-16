@@ -3,6 +3,7 @@ import { safeAllowedTools } from '../control/automation-tools.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
 import type { ProjectSetupData } from '../setup/schema.js';
+import { runKeysOf } from './run-repo.js';
 
 /**
  * The permission profile an automatic run starts with (spec D19, TER-993): the `auto` mode plus the project's allow
@@ -33,11 +34,14 @@ export function startPermission(automation: Pick<ProjectSetupData['automation'],
  */
 export async function runPermission(
   repos: Repositories,
-  run: Pick<AutomationRun, 'project_id' | 'allowed_tools' | 'branch'> & Partial<Pick<AutomationRun, 'worktree_path'>>,
+  run: Pick<AutomationRun, 'project_id' | 'allowed_tools' | 'branch'> & Partial<Pick<AutomationRun, 'id' | 'worktree_path'>>,
 ): Promise<AgentPermission> {
   const worktree = run.worktree_path ?? null;
-  if (run.allowed_tools) return { mode: AUTOMATION_PERMISSION_MODE, allowedTools: run.allowed_tools, branch: run.branch, worktree };
-  return { ...automationPermission((await repos.projectSetup.get(run.project_id)).data.automation, run.branch), worktree };
+  // a workspace run (multi-repo Task 12) keeps its repositories' rules: their keys come back from its rows
+  const keys = worktree && run.id && repos.automationRunRepos ? runKeysOf(await repos.automationRunRepos.listByRun(run.id), worktree) : [];
+  const repoKeys = keys.length > 1 ? { repoKeys: keys } : {};
+  if (run.allowed_tools) return { mode: AUTOMATION_PERMISSION_MODE, allowedTools: run.allowed_tools, branch: run.branch, worktree, ...repoKeys };
+  return { ...automationPermission((await repos.projectSetup.get(run.project_id)).data.automation, run.branch), worktree, ...repoKeys };
 }
 
 /**

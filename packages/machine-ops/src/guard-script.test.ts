@@ -231,6 +231,12 @@ describe.each(AWKS)('guard v3 — the whole command is read (TER-1111), with %s'
       'xargs git push origin main',
     ]) expect(bash(c).deny, c).toBe(true);
   });
+  // multi-repo Task 12: what a workspace run's prompt tells it (SHELL_LINE_MULTI, pushLineMulti in the server)
+  it('a workspace run: cd <key> alone, then a plain push, or git -C <workspace>/<key> push; never a relative cd with the push', () => {
+    for (const c of ['cd frontend', 'cd frontend/', `git push -u origin ${BRANCH}`, `git -C ${WORKTREE}/frontend push -u origin ${BRANCH}`, 'git -C frontend status', `cd ${WORKTREE}/frontend && git push -u origin ${BRANCH}`])
+      expect(bash(c).deny, c).toBe(false);
+    for (const c of [`cd frontend && git push -u origin ${BRANCH}`, `git -C frontend push -u origin ${BRANCH}`, `cd frontend; git push -u origin ${BRANCH}`]) expect(bash(c).deny, c).toBe(true);
+  });
   it('denies git aliases, which can hide a push', () => {
     for (const c of ['git -c alias.p=push p origin main', 'git config alias.p push', 'git -calias.x=push x']) expect(bash(c).deny, c).toBe(true);
   });

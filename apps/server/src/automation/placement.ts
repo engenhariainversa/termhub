@@ -1,7 +1,7 @@
 import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
-import { GUARD_MIN_AGENT_VERSION, guardSupported } from '../terminal/tab-mcp.js';
+import { GUARD_MIN_AGENT_VERSION, guardSupported, multiRepoGuardSupported } from '../terminal/tab-mcp.js';
 import { usableIn } from '../ai/exclusive.js';
 import { expiresSoon } from '../ai/login-expiry.js';
 import { accountsOn } from '../ai/project-accounts.js';
@@ -12,7 +12,7 @@ import type { AiAccount, Machine, Project, ProjectMachine } from '../db/reposito
 import type { ProjectSetupData } from '../setup/schema.js';
 import type { IneligibleReason } from './eligibility.js';
 import type { RoomReading } from './machine-room.js';
-import { checkoutDirOn, repoDirOf, type RunRepo } from './run-repo.js';
+import { checkoutDirOn, memberDirsOn, membersOf, repoDirOf, type RunRepo } from './run-repo.js';
 
 /** Why an eligible card found no place this tick (spec §8 step 3). Not an error and not an event. */
 export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline' | 'no_room' | 'automation_not_allowed' | 'repo_not_on_machine';
@@ -28,9 +28,10 @@ export interface PlacementDeps {
   /**
    * R6: whether the machine has room for one more run (memory, disk under `worktrees_dir`, load; a failed
    * reading = no room). Without it no room check is made (tests); the app wires the real one, which says what it
-   * read (TER-1138); a bare boolean is a check without a reading.
+   * read (TER-1138); a bare boolean is a check without a reading. `repoCount`: the worktrees the run cuts (a
+   * workspace run, multi-repo Task 12, has one per repository), so the disk it needs.
    */
-  room?: (machine: Machine, link: ProjectMachine, setup: ProjectSetupData) => Promise<RoomReading | boolean>;
+  room?: (machine: Machine, link: ProjectMachine, setup: ProjectSetupData, repoCount: number) => Promise<RoomReading | boolean>;
 }
 
 /** R6: what this tick already started. At most one start per machine and per account per tick. */
@@ -57,8 +58,11 @@ export interface PlaceDetail {
 }
 
 export type Placement =
-  /** `repoDir`: the run's repository on that machine (the link's folder, or its checkout under it: multi-repo R5) */
-  | { machine: Machine; account: AiAccount; link: ProjectMachine; repoDir: string }
+  /**
+   * `repoDir`: the run's repository on that machine (the link's folder, or its checkout under it: multi-repo R5).
+   * `repoDirs`: a workspace run's every repository there, by key, in the card's order (Task 12).
+   */
+  | { machine: Machine; account: AiAccount; link: ProjectMachine; repoDir: string; repoDirs?: Array<{ key: string; repoDir: string }> }
   // `later`: every place is taken by a start of this tick; nothing to show, the next tick asks again
   | { waiting: WaitingReason | 'later'; detail?: PlaceDetail };
 
@@ -69,11 +73,11 @@ const capableNow = (m: Machine) => worktreeNow(m) && guardSupported(m);
 /** An agent recent enough for automatic work that is not connected: the card waits for it, not for an update. */
 const capableButOffline = (m: Machine) => !agents.isOnline(m.id) && m.agent_version !== null && versionAtLeast(m.agent_version, GUARD_MIN_AGENT_VERSION);
 
-function machineVerdict(m: Machine): MachineVerdict | null {
+function machineVerdict(m: Machine, workspace: boolean): MachineVerdict | null {
   if (m.type !== 'agent') return 'not_agent';
   if (!agents.isOnline(m.id)) return 'offline';
   if (!worktreeNow(m)) return 'no_worktree';
-  if (!guardSupported(m)) return 'no_guard';
+  if (!guardSupported(m) || (workspace && !multiRepoGuardSupported(m))) return 'no_guard';
   if (!m.capabilities.includes('claude')) return 'no_claude';
   if (!m.automation_allowed) return 'not_allowed';
   return null;
@@ -92,7 +96,9 @@ function machineVerdict(m: Machine): MachineVerdict | null {
  *
  * `repo` (multi-repo R5, outline Task 11): the run's repository. A machine whose folder has no present checkout
  * of it is left out (`no_checkout`), and when that leaves no machine the card waits with `repo_not_on_machine`.
- * Without it, the run works in the link's folder.
+ * Without it, the run works in the link's folder. A workspace run (`repo.members`, Task 12) needs every one of
+ * its repositories on the machine and the multi-repo guard (`MULTI_REPO_GUARD_MIN_AGENT_VERSION`), and its room
+ * check counts one worktree per repository.
  */
 export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData, tick?: TickStarts, repo?: RunRepo | null): Promise<Placement> {
   const { repos } = deps;
@@ -107,6 +113,8 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
   }
   const detail: PlaceDetail = { listed: ai.accounts.length, machines: [], accounts: [] };
   const dirOf = new Map<string, string>();
+  const workspace = membersOf(repo).length > 1;
+  const repoCount = workspace ? membersOf(repo).length : 1;
   const ready: typeof linked = [];
   let away = 0;
   for (const place of linked) {
@@ -117,12 +125,14 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
       continue;
     }
     dirOf.set(place.machine.id, dir);
-    const why = machineVerdict(place.machine);
+    const why = machineVerdict(place.machine, workspace);
     if (why) detail.machines.push({ id: place.machine.id, name: place.machine.name, why });
     else ready.push(place);
   }
   // ssh and local machines are never chosen (D10)
-  const capable = linked.filter(({ machine }) => dirOf.has(machine.id) && machine.type === 'agent' && capableNow(machine) && machine.capabilities.includes('claude'));
+  const capable = linked.filter(
+    ({ machine }) => dirOf.has(machine.id) && machine.type === 'agent' && capableNow(machine) && (!workspace || multiRepoGuardSupported(machine)) && machine.capabilities.includes('claude'),
+  );
   if (capable.length === 0 && away > 0 && dirOf.size === 0) return { waiting: 'repo_not_on_machine', detail };
   if (capable.length === 0) return { waiting: linked.some(({ machine }) => dirOf.has(machine.id) && machine.type === 'agent' && capableButOffline(machine)) ? 'machine_offline' : 'no_machine', detail };
   if (ready.length === 0) return { waiting: 'automation_not_allowed', detail };
@@ -160,7 +170,7 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
     }
     const place = ready.find(({ machine }) => machine.id === account.machine_id)!;
     if (deps.room) {
-      if (!roomOf.has(place.machine.id)) roomOf.set(place.machine.id, deps.room(place.machine, place.link, setup));
+      if (!roomOf.has(place.machine.id)) roomOf.set(place.machine.id, deps.room(place.machine, place.link, setup, repoCount));
       const room = await roomOf.get(place.machine.id)!;
       if (room === false || (room !== true && !room.ok)) {
         crowded = true;
@@ -173,7 +183,10 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
         continue;
       }
     }
-    return { machine: place.machine, account, link: place.link, repoDir: repoDirOf(place.link.cwd, dirOf.get(place.machine.id)!) };
+    const repoDir = repoDirOf(place.link.cwd, dirOf.get(place.machine.id)!);
+    if (!workspace) return { machine: place.machine, account, link: place.link, repoDir };
+    const repoDirs = memberDirsOn(repo!, place.machine.id)!.map(({ key, dir }) => ({ key, repoDir: repoDirOf(place.link.cwd, dir) }));
+    return { machine: place.machine, account, link: place.link, repoDir, repoDirs };
   }
   return crowded ? { waiting: 'no_room', detail } : taken ? { waiting: 'later' } : { waiting: 'no_account', detail };
 }

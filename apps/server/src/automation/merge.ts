@@ -29,7 +29,7 @@ import { defaultType, endRunsOfMergedCard, escalateDelivery, postEscalationLine 
 import { clearMergeWait, noteBaseReading, noteMergeWait, type MergeWait } from './merge-wait.js';
 import { isPaused } from './pause.js';
 import { allows, requiredLevel, type NeededLevel } from './policy.js';
-import { fixerPrompt, serverMessage } from './prompts.js';
+import { fixerPrompt, serverMessage, type PromptRepo } from './prompts.js';
 import { repoPrCi } from './pr-ci.js';
 import { deliveryPending, runBranchOf } from './release.js';
 import { epicDied } from './epic-lifecycle.js';
@@ -720,7 +720,18 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   const task = c.primary;
   const used = await fixesUsed(repos, task.id);
   if (used >= c.setup.automation.fix_attempts) return void (await conflictEscalation(c, row, { attempts: used }));
-  const prompt = fixerPrompt({ ref: task.ref, branch: row.head_ref, base, reason: 'conflict', detail: `PR ${row.url}`, naming: namingRule(task, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id) });
+  const prompt = fixerPrompt({
+    ref: task.ref,
+    branch: row.head_ref,
+    base,
+    reason: 'conflict',
+    detail: `PR ${row.url}`,
+    naming: namingRule(task, c.setup.repo),
+    custom: c.setup.automation.prompts.fixer,
+    stopOnDecisions: c.setup.automation.stop_on_decisions,
+    rules: await currentRulesBlock(repos, c.project.owner_id, c.project.id),
+    ...(await fixerRepos(c)),
+  });
   const started = await deps.startFixer({ projectId: c.project.id, taskId: task.id, role: 'fixer', triggerSha: row.head_sha, branch: row.head_ref, base, prompt });
   if (started === 'started') log.info({ projectId: c.project.id, taskId: task.id, pr: row.number }, 'automation: fixer started for a conflict');
   // TER-1051: the card's open tab is busy or in use; the next sync asks again
@@ -729,6 +740,21 @@ async function onConflict(c: PullCtx, row: TaskPullRequest, base: string): Promi
   // taken: a run of the card is still on (it may be the fixer itself), or this head's fixer already ended
   if ((await repos.automationRuns.activeByProject(c.project.id)).some((r) => r.task_id === task.id)) return;
   await conflictEscalation(c, row, { attempts: used, cause: FIXER_NO_PUSH });
+}
+
+/**
+ * A workspace card's repositories for its fixer's prompt (multi-repo Task 12): each with the base its PR goes
+ * to, and the key of this PR's repository. Nothing for a card in one repository (its prompt stays as it was).
+ */
+async function fixerRepos(c: PullCtx): Promise<{ repos: PromptRepo[]; repoKey: string | null }> {
+  const keys = [...new Set(c.primary.repo_keys ?? [])];
+  if (keys.length < 2) return { repos: [], repoKey: null };
+  const entries = activeEntries(await loadRepoEntries(c.deps.repos, c.project.id, c.setup));
+  const repos = keys.flatMap((key) => {
+    const e = entries.find((x) => x.key === key);
+    return e ? [{ key, full_name: e.full_name, base: c.epicBranch ?? e.base_branch }] : [];
+  });
+  return { repos, repoKey: c.entry.key ?? null };
 }
 
 /** The conflict marker's trigger: apart from the fixer's own (the head SHA), so both can exist for one head. */
@@ -876,7 +902,18 @@ async function onRedCi(c: PullCtx, row: TaskPullRequest): Promise<void> {
 async function startCiFixer(c: PullCtx, row: TaskPullRequest, trigger: string): Promise<TriggeredStart> {
   const base = row.base_ref ?? c.baseBranch;
   const rules = await currentRulesBlock(c.deps.repos, c.project.owner_id, c.project.id);
-  const prompt = fixerPrompt({ ref: c.primary.ref, branch: row.head_ref, base, reason: 'ci', detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`, naming: namingRule(c.primary, c.setup.repo), custom: c.setup.automation.prompts.fixer, stopOnDecisions: c.setup.automation.stop_on_decisions, rules });
+  const prompt = fixerPrompt({
+    ref: c.primary.ref,
+    branch: row.head_ref,
+    base,
+    reason: 'ci',
+    detail: `PR ${row.url}\nJobs com falha: ${failingJobs(row)}`,
+    naming: namingRule(c.primary, c.setup.repo),
+    custom: c.setup.automation.prompts.fixer,
+    stopOnDecisions: c.setup.automation.stop_on_decisions,
+    rules,
+    ...(await fixerRepos(c)),
+  });
   return c.deps.startFixer({ projectId: c.project.id, taskId: c.primary.id, role: 'fixer', triggerSha: trigger, branch: row.head_ref, base, prompt });
 }
 

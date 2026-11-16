@@ -59,7 +59,6 @@ export const REASON_TEXT: Record<IneligibleReason, string> = {
   no_capable_machine: tk('Nenhuma máquina com agente 0.36 ligada ao projeto; atualize o agente'),
   repo_missing: tk('Repositório não configurado no Setup'),
   repo_unknown: tk('Sem repositório: o chat vai escolher'),
-  repo_multi_soon: tk('Vários repositórios: em breve'),
   repo_disabled: tk('Repositório desligado ou removido no Setup'),
   repo_no_access: tk('A integração do GitHub não vê o repositório'),
   agent_no_repo_scan: tk('Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo'),

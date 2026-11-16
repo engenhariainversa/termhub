@@ -433,15 +433,15 @@ function deniedByList(tool: string, command: string | null): boolean {
  * The same at every autonomy level, on purpose: merging, deploying and publishing are the server's own
  * steps (D5), never a permission answered in a tab — so the level is not an input.
  */
-export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null): boolean {
-  return permissionRule(req, allowed, branch, worktree) !== null;
+export function permissionAllowed(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null, keys: readonly string[] = []): boolean {
+  return permissionRule(req, allowed, branch, worktree, keys) !== null;
 }
 
 /**
  * `permissionAllowed`'s rule (TER-1011): the allow rule the request matched — the tool's own name for
  * termhub's card tools — or null when it is not allowed. The feed names it as why the permission went out.
  */
-export function permissionRule(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null): string | null {
+export function permissionRule(req: PermissionRequest, allowed: string[], branch: string | null = null, worktree: string | null = null, keys: readonly string[] = []): string | null {
   if (autoAnswerBlocked([req.tool, req.command ?? ''])) return null;
   const isBash = req.tool === 'Bash';
   let command: string | null = null;
@@ -453,7 +453,8 @@ export function permissionRule(req: PermissionRequest, allowed: string[], branch
   if (deniedByList(req.tool, command)) return null;
   if (AUTOMATION_MCP_DENIED_TOOLS.includes(req.tool)) return null;
   if (AUTOMATION_MCP_TOOLS.includes(req.tool)) return req.tool;
-  const match = automationAllowList(allowed, branch, { worktree }).find((raw) => {
+  // a workspace run's repository folders (`keys`, multi-repo Task 12) have their `-C` forms on the tab's line too
+  const match = automationAllowList(allowed, branch, { worktree, keys }).find((raw) => {
     const rule = parseRule(raw);
     if (!rule || rule.tool !== req.tool) return false;
     if (rule.spec === null) return true;
@@ -509,8 +510,8 @@ export async function answerPermissionAutomatically(deps: AnswerDeps, q: TabQues
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission with no plain tool name');
     return handOver(PERMISSION_NEEDED);
   }
-  const { allowedTools, worktree } = await runPermission(repos, run);
-  const rule = permissionRule({ tool, command }, allowedTools, run.branch, worktree ?? null);
+  const { allowedTools, worktree, repoKeys } = await runPermission(repos, run);
+  const rule = permissionRule({ tool, command }, allowedTools, run.branch, worktree ?? null, repoKeys ?? []);
   if (rule === null) {
     log.info({ runId: run.id, tabQuestionId: q.id }, 'automation: permission outside the rules');
     return handOver(PERMISSION_NEEDED);

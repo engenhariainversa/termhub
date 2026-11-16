@@ -45,8 +45,47 @@ const lastLine = (stopOnDecisions: boolean | undefined, where: 'pr' | 'report') 
  */
 export const SHELL_LINE =
   'Leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já liberados. O diretório atual já é a worktree: rode tudo nele, sem git -C nem cd. Um comando por vez, programas pelo nome (ls, não /bin/ls): sem vários cd, sem grupos entre parênteses ( … ), sem heredoc longo; caminhos a partir da raiz (grep -rn x apps/web/src), Grep para buscar e Edit/Write para mudar arquivos (não sed -i).';
+/**
+ * A workspace run's shell line (spec 2026-10-07 multi-repo R13, outline Task 12): the cwd is the workspace
+ * root and each repository sits in `<key>/`. git takes `-C <key>` (the allow list has those forms, by exact
+ * path); any other command runs after a `cd <key>` sent alone, since the guard refuses a push in a command that
+ * also has a `cd` to a relative folder, and Claude Code asks for several `cd` in one command.
+ */
+export const SHELL_LINE_MULTI =
+  'Leitura (grep, rg, find, git log/diff/show), testes, build e gh pr view/checks/create já liberados. O diretório atual é a raiz do workspace, com cada repositório na pasta <key>/: git com git -C <key> …; o resto, cd <key> sozinho numa chamada e o comando na seguinte. Um comando por vez, programas pelo nome (ls, não /bin/ls), sem grupos ( … ) nem heredoc longo; Grep para buscar e Edit/Write para mudar arquivos (não sed -i).';
 /** The push the tab may send without asking (TER-968, R5: only its own branch is pre-allowed). */
 const pushLine = (branch: string) => `Para enviar, use git push -u origin ${branch}; outro push pede aprovação.`;
+/**
+ * A workspace run's push (R13): the exact `git -C <root>/<key>` form the guard and the allow list take, or a
+ * plain push after a `cd <key>` sent alone (the guard refuses a push in a command that also has a relative
+ * `cd`). Without the root (a prompt built before the run has a place), only the second.
+ */
+const pushLineMulti = (branch: string, workspace: string | null | undefined) => {
+  const root = workspace?.replace(/\/+$/, '');
+  const how = root ? `use git -C ${root}/<key> push -u origin ${branch}` : `rode cd <key> sozinho numa chamada e, na seguinte, git push -u origin ${branch}`;
+  return `Para enviar cada repositório, ${how}; outro push pede aprovação.`;
+};
+
+/** A repository of a workspace run, as the prompt names it. */
+export interface PromptRepo {
+  key: string;
+  full_name: string;
+  base: string;
+}
+/** At most this much of the prompt names the repositories (they still take the description's room first). */
+export const REPOS_MAX = 500;
+/** Only a run in two or more repositories is a workspace run: one repository keeps today's prompt. */
+const workspaceOf = (repos: readonly PromptRepo[] | null | undefined): readonly PromptRepo[] | null => (repos && repos.length > 1 ? repos : null);
+const REPOS_HEAD = 'Repositórios do card (cada um na pasta <key>/, mesma branch em todos; abra um PR por repositório com mudança, nenhum nos outros)';
+/**
+ * One line per repository, under `REPOS_MAX`: the folder, owner/repo and the base its PR goes to. When the rest
+ * of the prompt leaves no room for it (everything at its maximum), the keys alone (`compact`): `get_card` and
+ * `list_project_repos` say the rest.
+ */
+function reposBlock(repos: readonly PromptRepo[], failing?: string | null): Elastic {
+  const lines = repos.map((r) => `- ${r.key}: ${clip(r.full_name, 120)} (base ${clip(r.base, 80)})${failing && r.key === failing ? ' ← o PR com problema' : ''}`);
+  return { elastic: clip([`${REPOS_HEAD}:`, ...lines].join('\n'), REPOS_MAX), compact: `${REPOS_HEAD}: ${repos.map((r) => r.key).join(', ')}.` };
+}
 /** The branch line, with the project's naming rule after it (`namingRule`, TER-1110) when there is one. */
 const namingOf = (naming: string | null | undefined) => (naming?.trim() ? clip(naming.trim(), NAMING_MAX) : null);
 const branchLine = (head: string, branch: string, naming: string | null | undefined) => [`${head} ${pushLine(branch)}`, namingOf(naming)].filter(Boolean).join(' ');
@@ -89,13 +128,22 @@ function fitRules(rules: string, room: number): string | null {
 
 /** A part kept only when it fits the budget (before the description excerpt): its rule is also elsewhere. */
 type Optional = { optional: string };
+/** A required part with a shorter form, used when the other required parts leave no room for the long one. */
+type Elastic = { elastic: string; compact: string };
 
 /**
  * Joins the parts and fills what is left of the budget with the (optional) description excerpt. The rules
  * part (`rules`, its index in `parts`) only takes what the required parts leave; an `Optional` part is then
  * dropped when the required ones and the rules leave no room for it (a custom text at its maximum).
  */
-function assemble(parts: (string | Optional | null)[], description: string | null, rules: number | null = null): string {
+function assemble(input: (string | Optional | Elastic | null)[], description: string | null, rules: number | null = null): string {
+  // an elastic part takes its long form when the other required parts (the rules aside) leave room for it
+  const others = input.filter((p, i): p is string => typeof p === 'string' && i !== rules).join('\n\n');
+  let parts: (string | Optional | null)[] = input.map((p) => {
+    if (p === null || typeof p === 'string' || !('elastic' in p)) return p;
+    const room = BUDGET - others.length - 2;
+    return p.elastic.length <= room ? p.elastic : clip(p.compact, Math.max(1, room));
+  });
   if (rules !== null && typeof parts[rules] === 'string') {
     const fixed = parts.filter((p, i): p is string => typeof p === 'string' && i !== rules).join('\n\n');
     parts = parts.map((p, i) => (i === rules ? fitRules(p as string, BUDGET - fixed.length - 2) : p));
@@ -115,6 +163,15 @@ const policyLine = (policy: string, max = POLICY_MAX) => `Política do projeto (
 const namingRoom = (naming: string | null | undefined) => (namingOf(naming)?.length ?? -1) + 1;
 /** What naming the repository in the branch line takes from the policy excerpt (multi-repo Task 11). */
 const repoRoom = (repo: string | null | undefined) => (repo ? ` no repositório ${repo}, na`.length : 0);
+/**
+ * What a workspace run's prompt takes over a single-repo one from the policy excerpt (Task 12): the repository
+ * block, the longer push, report and shell lines. At most `POLICY_MAX - 220`, so the level line always stays;
+ * past that the repository block gives way (its compact form).
+ */
+const multiRoom = (block: Elastic, workspace: string | null | undefined, branch: string) =>
+  Math.min(POLICY_MAX - 220, block.elastic.length + 2 + (pushLineMulti(branch, workspace).length - pushLine(branch).length) + MULTI_WORDING + (SHELL_LINE_MULTI.length - SHELL_LINE.length));
+/** The longer wording of a workspace run's branch and report lines. */
+const MULTI_WORDING = 90;
 const ref = (c: { ref: string; url: string; title: string }) => `${c.ref} ${clip(c.title, TITLE_MAX)}\n${c.url}`;
 
 export function implementerPrompt(i: {
@@ -125,6 +182,10 @@ export function implementerPrompt(i: {
   naming?: string | null;
   /** `owner/repo` of the card's repository, in a multi-repo project only (outline Task 11); null = not named. */
   repo?: string | null;
+  /** A workspace run's repositories (outline Task 12): two or more; `repo` is then not used. */
+  repos?: readonly PromptRepo[] | null;
+  /** A workspace run's root on the machine (the tab's cwd), for the push form. */
+  workspace?: string | null;
   policy: string;
   custom: string | null;
   description?: string | null;
@@ -133,6 +194,28 @@ export function implementerPrompt(i: {
   /** the project's "Parar em decisões de produto" (`stop_on_decisions`): off by default */
   stopOnDecisions?: boolean;
 }): string {
+  const ws = workspaceOf(i.repos);
+  if (ws) {
+    const block = reposBlock(ws);
+    return assemble(
+      [
+        `Você trabalha no card ${ref(i.card)}`,
+        [`Trabalhe na branch ${i.branch} em todos os repositórios do card. ${pushLineMulti(i.branch, i.workspace)}`, namingOf(i.naming)].filter(Boolean).join(' '),
+        block,
+        i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
+        // the policy lists the card's repositories too: its excerpt gives up what the block and the longer push take
+        policyLine(i.policy, POLICY_MAX - namingRoom(i.naming) - multiRoom(block, i.workspace, i.branch)),
+        i.rules ?? null,
+        TRUST_LINE,
+        SHELL_LINE_MULTI,
+        { optional: GITHUB_LINE },
+        `Quando terminar, abra os PRs (cada um contra a base do seu repositório) e chame report_card com status done e as URLs; se travar, chame report_card com status blocked e o motivo.`,
+        lastLine(i.stopOnDecisions, 'pr'),
+      ],
+      i.description ?? null,
+      5,
+    );
+  }
   return assemble(
     [
       `Você trabalha no card ${ref(i.card)}`,
@@ -162,7 +245,31 @@ export function integratorPrompt(i: {
   custom: string | null;
   rules?: string | null;
   stopOnDecisions?: boolean;
+  /** The epic's repositories when it has its branch in two or more (outline Task 15 wires it; Task 12 shapes it). */
+  repos?: readonly PromptRepo[] | null;
+  workspace?: string | null;
 }): string {
+  const ws = workspaceOf(i.repos);
+  if (ws) {
+    const block = reposBlock(ws);
+    return assemble(
+      [
+        `Você integra o épico ${ref(i.epic)}`,
+        `A branch do épico é ${i.branch} em todos os repositórios abaixo; o PR do épico é ${i.prUrl}. ${pushLineMulti(i.branch, i.workspace)}`,
+        block,
+        i.custom?.trim() || DEFAULT_INTEGRATOR_TEXT('<base do repositório>'),
+        policyLine(i.policy, POLICY_MAX - multiRoom(block, i.workspace, i.branch)),
+        i.rules ?? null,
+        TRUST_LINE,
+        SHELL_LINE_MULTI,
+        { optional: GITHUB_LINE },
+        `Quando terminar, chame report_card com status done e as URLs dos PRs; se travar, chame report_card com status blocked e o motivo.`,
+        lastLine(i.stopOnDecisions, 'report'),
+      ],
+      null,
+      5,
+    );
+  }
   return assemble(
     [
       `Você integra o épico ${ref(i.epic)}`,
@@ -191,8 +298,34 @@ export function fixerPrompt(i: {
   custom: string | null;
   rules?: string | null;
   stopOnDecisions?: boolean;
+  /** A workspace card's repositories (Task 12) and the key of the one whose PR the fixer works on. */
+  repos?: readonly PromptRepo[] | null;
+  repoKey?: string | null;
+  workspace?: string | null;
 }): string {
   const what = i.reason === 'conflict' ? `O PR do card ${i.ref} tem conflito com ${i.base}.` : `O CI do PR do card ${i.ref} falhou.`;
+  const ws = workspaceOf(i.repos);
+  if (ws) {
+    const where = i.repoKey ? ` O PR é do repositório da pasta ${i.repoKey}/.` : '';
+    const block = reposBlock(ws, i.repoKey);
+    return assemble(
+      [
+        [`${what}${where} Trabalhe na branch ${i.branch}. ${pushLineMulti(i.branch, i.workspace)}`, namingOf(i.naming)].filter(Boolean).join(' '),
+        block,
+        // 900 less what the repository block and the longer lines take (the detail names the PR anyway)
+        `Detalhe:\n${clip(i.detail, 900 - namingRoom(i.naming) - multiRoom(block, i.workspace, i.branch) - where.length)}`,
+        i.custom?.trim() || (i.reason === 'conflict' ? DEFAULT_FIXER_CONFLICT_TEXT(i.base) : DEFAULT_FIXER_CI_TEXT),
+        i.rules ?? null,
+        TRUST_LINE,
+        SHELL_LINE_MULTI,
+        { optional: GITHUB_LINE },
+        `Quando o PR estiver corrigido, chame report_card com status done; se travar, chame report_card com status blocked e o motivo.`,
+        lastLine(i.stopOnDecisions, 'report'),
+      ],
+      null,
+      4,
+    );
+  }
   return assemble(
     [
       branchLine(`${what} Trabalhe na branch ${i.branch}.`, i.branch, i.naming),
