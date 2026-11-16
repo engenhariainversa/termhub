@@ -262,5 +262,11 @@
   "Repositório desligado ou removido no Setup": "Repository turned off or removed in Setup",
   "A integração do GitHub não vê o repositório": "The GitHub integration cannot see the repository",
   "Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo": "No machine of the project looks for repositories; update the agent to 0.29 or newer",
-  "O repositório não está em nenhuma máquina do projeto": "The repository is not on any machine of the project"
+  "O repositório não está em nenhuma máquina do projeto": "The repository is not on any machine of the project",
+  "Falta PR em {{repos}}: a branch {{branch}} tem commits à frente da base. Abra um PR em cada repositório com mudanças e chame report_card de novo": "Missing PR in {{repos}}: branch {{branch}} has commits ahead of the base. Open a PR in each repository with changes and call report_card again",
+  "Não deu para conferir no GitHub os repositórios {{repos}}; chame report_card de novo em alguns minutos": "Could not check the repositories {{repos}} on GitHub; call report_card again in a few minutes",
+  "Esta execução trabalha num repositório só e não recebe outro; chame report_card com status blocked dizendo qual repositório falta, para o card rodar com os dois": "This run works in a single repository and cannot take another; call report_card with status blocked saying which repository is missing, so the card runs with both",
+  "O repositório {{key}} não existe neste projeto": "Repository {{key}} does not exist in this project",
+  "O repositório {{key}} não está na máquina desta execução": "Repository {{key}} is not on this run's machine",
+  "A integração do GitHub não acessa o repositório {{key}}": "The GitHub integration cannot access repository {{key}}"
 }

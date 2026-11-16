@@ -16,9 +16,10 @@ import { DEFAULT_LOCALE, t, type Locale } from '../i18n/index.js';
  *  level and what it covers, so the agent knows what happens after it opens a PR. `report_card` and `get_card`
  *  are listed and callable only by a tab with an active automatic run (their `allowedIf`), and act on that
  *  run's card only: the scopes stay `read`/`memory`. `share_file` (TER-1086) publishes a file of the tab's own
- *  folder in the project's chat. `report_card` also answers a tab whose latest run ended
+ *  folder in the project's chat. `add_repo` (multi-repo R12) adds a repository to that run's workspace.
+ *  `report_card` also answers a tab whose latest run ended
  *  `blocked` and may still be adopted (spike TER-1031 §5.4), for `done` with the PR the agent opened by hand. */
-export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'share_file'] as const;
+export const TAB_TOKEN_TOOLS = ['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'add_repo', 'share_file'] as const;
 
 /** Scopes of a tab token (D2). The allowlist narrows them further. */
 export const TAB_TOKEN_SCOPES: ApiTokenScope[] = ['read', 'memory'];
@@ -96,7 +97,7 @@ export function tabInputShape(shape: ZodRawShape): ZodRawShape {
 
 /** The tab tools that need an active automatic run in the tab (preflight F-8); `report_card` also takes a
  *  tab whose run ended blocked within the adoption window, and every other tab gets this refusal. */
-const RUN_ONLY_TOOLS: readonly string[] = ['report_card', 'get_card'];
+const RUN_ONLY_TOOLS: readonly string[] = ['report_card', 'get_card', 'add_repo'];
 
 /** pt-BR answer for a tools/call outside the allowlist (D2): naming a scope, as the ordinary refusal
  *  does, would mislead — no scope or grant unlocks it for a tab token. A run-only tool called from a tab

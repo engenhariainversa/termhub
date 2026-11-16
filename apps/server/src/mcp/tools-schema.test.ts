@@ -96,7 +96,7 @@ describe('tools/list input schemas (TER-626)', () => {
     const text = r.body.includes('data:') ? r.body.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5)).join('') : r.body;
     const listed = JSON.parse(text).result.tools as { name: string; inputSchema: Record<string, unknown> }[];
     // the run-only tab tools are listed to a tab token whose tab has an active run, never to this one
-    const runOnly = ['report_card', 'get_card'];
+    const runOnly = ['report_card', 'get_card', 'add_repo'];
     expect(listed.map((t) => t.name).sort()).toEqual(TOOLS.map((t) => t.name).filter((n) => !runOnly.includes(n)).sort());
     const tabApp = build({ token: token({ scopes: ['read', 'memory'], tab_id: 'tab1', gated: false }), grants, tabs: [{ id: 'tab1', project_id: 'p1' }] }).app;
     const tabRes = await rpc(tabApp, { jsonrpc: '2.0', id: 2, method: 'tools/list' });

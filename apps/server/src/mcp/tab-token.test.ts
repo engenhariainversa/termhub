@@ -10,7 +10,7 @@ const tab = { id: 'tab1', project_id: 'p1' };
 
 describe('constants', () => {
   it('pins the allowlist, scopes, excluded kinds and TTL of the spec (D2, D3, D6)', () => {
-    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'share_file']);
+    expect(TAB_TOKEN_TOOLS).toEqual(['search_memory', 'record_lesson', 'get_automation_policy', 'report_card', 'get_card', 'add_repo', 'share_file']);
     expect(TAB_TOKEN_SCOPES).toEqual(['read', 'memory']);
     expect(TAB_EXCLUDED_KINDS).toEqual(['message', 'action']);
     expect(TAB_TOKEN_TTL_MS).toBe(30 * 24 * 60 * 60 * 1000);
@@ -150,7 +150,7 @@ describe('allowedTools for a tab token', () => {
     const withRun = (run: { project_id: string } | null): ControlContext =>
       ({ ...ctxWith(tab), repos: { automationRuns: { activeByTab: async (id: string) => (id === 'tab1' ? run : null) } } }) as unknown as ControlContext;
     const listed = async (ctx: ControlContext) => (await allowedTools(ctx, ['read', 'memory'])).map((t) => t.name);
-    expect(await listed(withRun({ project_id: 'p1' }))).toEqual(expect.arrayContaining(['report_card', 'get_card']));
+    expect(await listed(withRun({ project_id: 'p1' }))).toEqual(expect.arrayContaining(['report_card', 'get_card', 'add_repo']));
     expect(await listed(withRun(null))).not.toContain('report_card');
     expect(await listed(withRun({ project_id: 'other' }))).not.toContain('get_card');
     // the condition fails closed: no repository answer, no tool

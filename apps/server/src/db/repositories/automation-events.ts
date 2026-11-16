@@ -76,7 +76,10 @@ export type AutomationEventKind =
   // machine, autonomy }), or one summary for a project's first scan ({ first_scan: true, count, names, machine_id,
   // machine }); and a checkout whose folder is gone from a machine ({ full_name, key, machine_id, machine })
   | 'repo_discovered'
-  | 'repo_missing';
+  | 'repo_missing'
+  // TER-1064 (multi-repo R12): the agent of a workspace run added a repository to it through `add_repo`
+  // ({ key, repo, tab_id, path })
+  | 'run_repo_added';
 
 /** Flat on purpose: ids, URLs, counts and reasons — never terminal content, transcripts or prompts. */
 export type AutomationEventPayload = Record<string, string | number | boolean | null>;

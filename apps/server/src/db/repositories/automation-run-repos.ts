@@ -40,6 +40,11 @@ export class AutomationRunReposRepository {
     return (await this.db.automationRunRepo.findMany({ where: { runId }, orderBy: { createdAt: 'asc' } })).map(map);
   }
 
+  /** The final state of one repository of a run that ended done (spec 2026-10-07 multi-repo R14): `pr_open` or `no_changes`. */
+  async setState(runId: string, repositoryId: string, state: RunRepoState): Promise<void> {
+    await this.db.automationRunRepo.updateMany({ where: { runId, repositoryId }, data: { state } });
+  }
+
   /** A fixer that takes over the card's tab works in the same worktrees (spec §7): it gets the old run's rows. */
   async copy(fromRunId: string, toRunId: string): Promise<number> {
     const rows = await this.db.automationRunRepo.findMany({ where: { runId: fromRunId } });

@@ -300,6 +300,24 @@ export class TasksRepository {
   }
 
   /**
+   * Appends one repository key to a card's `repo_keys` (spec 2026-10-07 multi-repo R12, `add_repo`), checked
+   * like any other edit of the list, under the project lock so two calls never drop each other's key. A key
+   * already there leaves the card as it is.
+   */
+  async addRepoKey(id: string, key: string): Promise<Task | undefined> {
+    return this.db.$transaction(async (tx) => {
+      const found = await tx.task.findUnique({ where: { id }, select: { projectId: true } });
+      if (!found) return undefined;
+      await lockProject(tx, found.projectId);
+      const cur = await tx.task.findUnique({ where: { id }, include: KEY });
+      if (!cur) return undefined;
+      if (cur.repoKeys.includes(key)) return toTask(cur);
+      const repoKeys = await repoKeysFor(tx, cur.projectId, cur.parentId ? 'subtask' : cur.type, [...cur.repoKeys, key]);
+      return toTask(await tx.task.update({ where: { id }, data: { repoKeys }, include: KEY }));
+    });
+  }
+
+  /**
    * Title, description, type, epic and status. A subtask's status changes in place (the checklist);
    * a top-level card's status change is a move to the top of the first column of that category (or of
    * its epic's backlog). A backlog item that changes epic goes to the top of the new epic's backlog.
