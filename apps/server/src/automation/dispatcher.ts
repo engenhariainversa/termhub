@@ -20,7 +20,7 @@ import { defaultType, escalateRun } from './follower.js';
 import { openCardTab, type CardTab } from './card-tab.js';
 import { interruptRuns, isPaused, type PressEscape } from './pause.js';
 import { clearWaiting, noteWaiting, placeRun, type Placement, type PlacementDeps, type TickStarts } from './placement.js';
-import { policyText } from './policy.js';
+import { policyText, runPromptRepos } from './policy.js';
 import { startPermission } from './permission.js';
 import { implementerPrompt, serverMessage } from './prompts.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
@@ -324,7 +324,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           branch,
           naming: namingRule(task, repo),
           base,
-          policy: policyText(automation, repo?.deploy_workflow ?? null),
+          policy: policyText(automation, repo?.deploy_workflow ?? null, await runPromptRepos(repos, project.id, setup)),
           custom: automation.prompts.implementer,
           description: task.description,
           rules: await currentRulesBlock(repos, project.owner_id, project.id),

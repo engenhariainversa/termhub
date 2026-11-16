@@ -14,6 +14,7 @@ import { pauseAutomation } from './pause.js';
 import { globMatches } from './policy.js';
 import { inRunRepo, isRunHead, runRepoOf } from './run-pr.js';
 import { deliveryPending, finished, followsReleases } from './delivery.js';
+import { entryFor, legacyEntry, loadRepoEntries, type RepoEntry } from './repo-entry.js';
 
 export { deliveryPending };
 
@@ -43,6 +44,16 @@ export interface DeliveryCtx {
   token: string;
   repo: string;
   setup: ProjectSetupData;
+  /** the merged PR's repository in the project's list (multi-repo R7); left out, read from the setup */
+  entry?: Pick<RepoEntry, 'deploy_workflow' | 'release_workflows' | 'release_paths'>;
+}
+
+/** What the merged PR's repository delivers: its entry, else the setup's own repository. */
+function entryOf(c: DeliveryCtx): NonNullable<DeliveryCtx['entry']> {
+  return (
+    c.entry ??
+    legacyEntry(c.setup, c.repo) ?? { deploy_workflow: c.setup.repo?.deploy_workflow ?? null, release_workflows: c.setup.automation?.release_workflows ?? [], release_paths: c.setup.automation?.release_paths ?? [] }
+  );
 }
 
 /**
@@ -90,7 +101,7 @@ async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number
     }
   };
   const changed = await deps.github.prFiles(c.token, c.repo, number).catch(() => [] as string[]);
-  const globs = c.setup.automation.release_paths;
+  const globs = entryOf(c).release_paths;
   const released = (name: string) => changed.filter((f) => (f === name || f.endsWith(`/${name}`)) && globs.some((g) => globMatches(g, f)));
   for (const path of [...released('package.json'), ...released('app.json'), 'package.json']) {
     const v = await read(path);
@@ -107,8 +118,19 @@ async function versionAt(deps: DeliveryDeps, c: DeliveryCtx, sha: string, number
  */
 export async function runBranchOf(repos: Repositories, setup: ProjectSetupData, taskId: string, pr: { repo: string; head_ref: string }): Promise<boolean> {
   const repo = runRepoOf(setup);
-  if (!inRunRepo(repo, pr.repo)) return false;
-  return isRunHead(repo, await repos.automationRuns.branchesOfTask(taskId), pr);
+  if (inRunRepo(repo, pr.repo)) return isRunHead(repo, await repos.automationRuns.branchesOfTask(taskId), pr);
+  // a repository the card names in `repo_keys` (multi-repo R8, R14): its runs work there too
+  if (!(await inCardRepos(repos, setup, taskId, pr.repo))) return false;
+  return isRunHead(pr.repo, await repos.automationRuns.branchesOfTask(taskId), pr);
+}
+
+/** Whether `repo` is one of the repositories the card names (`repo_keys`). A card that names none works on the run's repository only. */
+async function inCardRepos(repos: Repositories, setup: ProjectSetupData, taskId: string, repo: string): Promise<boolean> {
+  const task = await repos.tasks.findById(taskId);
+  const keys = task?.repo_keys ?? [];
+  if (!task || keys.length === 0) return false;
+  const entry = entryFor(await loadRepoEntries(repos, task.project_id, setup), repo);
+  return !!entry?.key && keys.includes(entry.key);
 }
 
 /** Of a merged PR's rows (one per card it cites), the one of the automatic card that worked on its head; else the first. */
@@ -129,7 +151,8 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
   if (!w.merge_commit_sha) return;
   const log = deps.log ?? noopLog;
   const runsOf = runSource(deps, c, w, !!c.setup.automation?.enabled);
-  const deployWorkflow = c.setup.repo?.deploy_workflow ?? null;
+  const entry = entryOf(c);
+  const deployWorkflow = entry.deploy_workflow;
   const patch: { deploy_state?: CiState; deploy_url?: string | null; release_runs?: ReleaseRun[] } = {};
 
   const deploy = deployWorkflow ? deployOf(await runsOf(deployWorkflow), deployWorkflow) : null;
@@ -139,9 +162,9 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
   }
 
   const releases: Array<ReleaseRun & { previous: CiState }> = [];
-  if (followsReleases(c.setup, w)) {
+  if (followsReleases(c.setup, w, entry)) {
     let version: Promise<string | null> | undefined;
-    for (const workflow of c.setup.automation.release_workflows) {
+    for (const workflow of entry.release_workflows) {
       const { state, url } = deployOf(await runsOf(workflow), workflow);
       const previous = w.release_runs.find((r) => r.workflow === workflow);
       releases.push({ workflow, state, url, version: state === 'passed' ? await (version ??= versionAt(deps, c, w.merge_commit_sha, w.number)) : (previous?.version ?? null), previous: previous?.state ?? 'none' });
@@ -151,7 +174,7 @@ export async function followMerged(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPu
   // only what the automation delivers: the PR of an automatic card's run, in a project with automation on
   const reporting = !!c.setup.automation?.enabled && !!(await repos.tasks.findById(w.task_id))?.auto && (await runBranchOf(repos, c.setup, w.task_id, w));
   const about = { project_id: c.projectId, task_id: w.task_id };
-  const ids = { pr: w.number, sha: w.merge_commit_sha };
+  const ids = { repo: c.repo, pr: w.number, sha: w.merge_commit_sha };
   const deployDone = reporting && !!deploy && finished(deploy.state) && deploy.state !== w.deploy_state;
   // TER-1025: a deploy that failed on GitHub's side is run again, or waits for its next try; the failed state
   // is not stored meanwhile, so every sync looks at it again and nothing is paused
@@ -237,7 +260,7 @@ async function retryDeploy(deps: DeliveryDeps, c: DeliveryCtx, w: TaskPullReques
   const failedAt = Date.parse(run.updated_at ?? run.created_at);
   if ((deps.now?.() ?? new Date()).getTime() - failedAt < delay) return { outcome: 'wait', attempts: done };
   const attempt = done + 1;
-  const claim = await claimEvent(repos, { project_id: c.projectId, task_id: w.task_id, kind: 'deploy_retried', payload: { pr: w.number, sha, attempt, run_id: run.id, cause, url: run.html_url, workflow: c.setup.repo?.deploy_workflow ?? null } });
+  const claim = await claimEvent(repos, { project_id: c.projectId, task_id: w.task_id, kind: 'deploy_retried', payload: { repo: c.repo, pr: w.number, sha, attempt, run_id: run.id, cause, url: run.html_url, workflow: entryOf(c).deploy_workflow } });
   if (!claim) return { outcome: 'wait', attempts: done };
   try {
     await deps.github.rerunRun(c.token, c.repo, run.id);

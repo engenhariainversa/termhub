@@ -10,7 +10,8 @@ import type { DispatcherDeps, TriggeredRun, TriggeredStart } from './dispatcher.
 import { recordEvent } from './events.js';
 import { githubAccess } from './merge.js';
 import { isPaused } from './pause.js';
-import { policyText } from './policy.js';
+import { policyText, runPolicyRepos } from './policy.js';
+import { loadRepoEntries, runEntry } from './repo-entry.js';
 import { integratorPrompt } from './prompts.js';
 
 /** Spike R2: an epic gets at most this many integrator runs until a person acts. */
@@ -89,7 +90,10 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
   } catch {
     return; // a pattern that gives no valid name: no card of this epic could have started either
   }
-  const baseBranch = setup.repo?.base_branch ?? 'main';
+  // the epic's repository: the one the runs work on (one repository per epic for now, multi-repo R16)
+  const entries = await loadRepoEntries(repos, project.id, setup);
+  const entry = runEntry(entries, setup);
+  const baseBranch = entry?.base_branch ?? setup.repo?.base_branch ?? 'main';
   if (epicBranch === baseBranch) return;
   const cards = (board ?? (await repos.tasks.listByProject(project.id))).filter((t) => t.epic_id === epic.id && t.parent_id === null && t.type !== 'epic');
   const prs = await repos.taskPullRequests.listByTasks(cards.map((c) => c.id));
@@ -98,7 +102,7 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
   const epicPrs = await repos.taskPullRequests.listByTasks([epic.id]);
   if (epicPrs.some((p) => p.head_ref === epicBranch && p.base_ref === baseBranch && p.state !== 'open')) return;
 
-  const access = await githubAccess(repos, project, setup);
+  const access = await githubAccess(repos, project, setup, entry);
   if (!access) return;
   const { token, repo } = access;
   let pull: PullInfo | null = await deps.gh.findOpenPull(token, repo, epicBranch, baseBranch);
@@ -114,7 +118,7 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
     }
   }
   if (opened) {
-    await recordEvent(repos, { project_id: project.id, task_id: epic.id, kind: 'pr_opened', payload: { pr_url: pull.url, number: pull.number, branch: epicBranch } }).catch((e: unknown) =>
+    await recordEvent(repos, { project_id: project.id, task_id: epic.id, kind: 'pr_opened', payload: { repo, pr_url: pull.url, number: pull.number, branch: epicBranch } }).catch((e: unknown) =>
       log.warn({ taskId: epic.id, code: codeOf(e) }, 'automation: pr_opened not recorded'),
     );
     log.info({ projectId: project.id, taskId: epic.id, pr: pull.number }, 'automation: epic PR opened');
@@ -127,7 +131,7 @@ export async function integrateEpic(deps: IntegratorDeps, epic: Task, setup: Pro
     branch: epicBranch,
     base: baseBranch,
     prUrl: pull.url,
-    policy: policyText(setup.automation, setup.repo?.deploy_workflow ?? null),
+    policy: policyText(setup.automation, entry?.deploy_workflow ?? setup.repo?.deploy_workflow ?? null, runPolicyRepos(entries, entry)),
     custom: setup.automation.prompts.integrator,
     rules: await currentRulesBlock(repos, project.owner_id, project.id),
     stopOnDecisions: setup.automation.stop_on_decisions,

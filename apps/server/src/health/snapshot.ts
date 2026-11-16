@@ -14,6 +14,7 @@ import type { Project, Tab, Task, User } from '../db/repositories/types.js';
 import { agentGone, eventNameOf } from '../monitor/agent-gone.js';
 import { localeOf } from '../i18n/index.js';
 import type { ProjectSetupData } from '../setup/schema.js';
+import { entryFor, loadRepoEntries, runEntry } from '../automation/repo-entry.js';
 import { deliveryOf } from '../automation/epic-phase.js';
 import { WATCH_MERGED_FOR_MS } from '../db/repositories/task-pull-requests.js';
 import { describeActions } from '../db/repositories/chat-actions-view.js';
@@ -160,11 +161,14 @@ export async function buildSnapshot(repos: Repositories, project: Project, owner
   const gone = await goneAgents(repos, tabs, tasks);
   const pending = await pendingCards(repos, project, setup, now);
   const base = automationOn ? baseReadingOf(project.id, now) : null;
+  // multi-repo §8: the base of the repository whose reading is the worst, else the one the runs work on
+  const entries = await loadRepoEntries(repos, project.id, setup);
+  const baseEntry = (base?.repo ? entryFor(entries, base.repo) : null) ?? runEntry(entries, setup);
   return {
     now,
     automation: automationOn,
     autonomy: setup.automation.autonomy,
-    base_branch: setup.repo?.base_branch ?? 'main',
+    base_branch: baseEntry?.base_branch ?? setup.repo?.base_branch ?? 'main',
     prs: [...prs.values()],
     base: base ? { state: base.state, sha: base.sha, failing: base.failing } : null,
     queued,

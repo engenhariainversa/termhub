@@ -55,10 +55,19 @@ export class ProjectSetupRepository {
   }
 
   /** Projects whose setup names a repository and the integration to read it with (CI panel). */
+  /**
+   * Projects with any repository the CI sync can read (spec 2026-10-07 multi-repo R17): one named in
+   * `setup.repo` or an override, or found by discovery, and a GitHub integration named somewhere in the setup.
+   */
   async listWithRepo(): Promise<{ project_id: string; data: ProjectSetupData }[]> {
-    const rows = await this.db.projectSetup.findMany();
+    const [rows, discovered] = await Promise.all([this.db.projectSetup.findMany(), this.db.projectRepository.findMany({ select: { projectId: true }, distinct: ['projectId'] })]);
+    const withRows = new Set(discovered.map((d) => d.projectId));
     return rows
       .map((r) => ({ project_id: r.projectId, data: normalizeSetup(r.data, r.version) }))
-      .filter((r) => !!r.data.repo?.integration_id && !!r.data.repo.full_name);
+      .filter(({ project_id, data }) => {
+        const named = !!data.repo?.full_name || data.repos.length > 0 || withRows.has(project_id);
+        const integration = !!data.repo?.integration_id || !!data.repo_defaults.integration_id || data.repos.some((o) => !!o.integration_id);
+        return named && integration;
+      });
   }
 }

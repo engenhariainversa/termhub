@@ -53,22 +53,33 @@ export interface BaseReading {
   sha: string | null;
   /** the workflows failing (red) or not done yet (pending) on it, by name */
   failing: string[];
+  /** owner/repo: a project with several repositories has one base per repository (multi-repo §8) */
+  repo?: string;
   at: number;
 }
 
 /** Kept this long: past it the executor stopped reading the base (no PR waits on it) and nothing is told. */
 export const BASE_READING_TTL_MS = 15 * 60_000;
 
-const bases = new Map<string, BaseReading>();
+/** project → repository (lower case, '' when not named) → its base's last reading */
+const bases = new Map<string, Map<string, BaseReading>>();
 
 export function noteBaseReading(projectId: string, reading: Omit<BaseReading, 'at'>, now: Date = new Date()): void {
-  bases.set(projectId, { ...reading, at: now.getTime() });
+  const own = bases.get(projectId) ?? new Map<string, BaseReading>();
+  own.set((reading.repo ?? '').toLowerCase(), { ...reading, at: now.getTime() });
+  bases.set(projectId, own);
 }
 
+const WORST: Record<BaseReading['state'], number> = { red: 2, pending: 1, green: 0 };
+
+/** The project's base as last read: with several repositories, the worst one still fresh (red, then pending), with its repository. */
 export function baseReadingOf(projectId: string, now: Date = new Date()): BaseReading | null {
-  const b = bases.get(projectId);
-  if (!b || now.getTime() - b.at > BASE_READING_TTL_MS) return null;
-  return b;
+  let worst: BaseReading | null = null;
+  for (const b of bases.get(projectId)?.values() ?? []) {
+    if (now.getTime() - b.at > BASE_READING_TTL_MS) continue;
+    if (!worst || WORST[b.state] > WORST[worst.state] || (WORST[b.state] === WORST[worst.state] && b.at > worst.at)) worst = b;
+  }
+  return worst;
 }
 
 /** Tests only. */

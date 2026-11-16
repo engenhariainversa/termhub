@@ -1,4 +1,7 @@
-import { AUTONOMY_LEVELS, type AutonomyLevel, type ProjectAutomation } from '../setup/schema.js';
+import { AUTONOMY_LEVELS, sameRepo, type AutonomyLevel, type ProjectAutomation } from '../setup/schema.js';
+import type { Repositories } from '../db/repositories/index.js';
+import type { ProjectSetupData } from '../setup/schema.js';
+import { activeEntries, isMultiRepo, loadRepoEntries, runEntry, type RepoEntry } from './repo-entry.js';
 
 export { AUTONOMY_LEVELS, type AutonomyLevel };
 
@@ -66,13 +69,35 @@ const LEVEL_TEXT: Record<AutonomyLevel, string> = {
   release: 'O termhub mescla o PR quando o CI fica verde, inclusive na branch principal, e também publica versões (release).',
 };
 
-/** pt-BR policy text for the tab's agent (`get_automation_policy`). */
-export function policyText(a: ProjectAutomation, deployWorkflow: string | null): string {
+/** What the policy text says of one repository of a project with several (multi-repo §9). */
+export type PolicyRepo = Pick<RepoEntry, 'key' | 'full_name' | 'autonomy' | 'deploy_workflow' | 'release_paths' | 'store_paths'>;
+
+/** One line per repository: key, owner/repo, its level, its deploy and its globs. */
+function repoLine(r: PolicyRepo): string {
+  const parts = [`${r.autonomy}`];
+  if (r.deploy_workflow) parts.push(`deploy "${r.deploy_workflow}"`);
+  if (r.release_paths.length > 0) parts.push(`release em ${r.release_paths.join(', ')}`);
+  if (r.store_paths.length > 0) parts.push(`loja (nunca mesclado) em ${r.store_paths.join(', ')}`);
+  return `- ${r.key ? `${r.key} (${r.full_name})` : r.full_name}: ${parts.join('; ')}`;
+}
+
+/**
+ * pt-BR policy text for the tab's agent (`get_automation_policy`). `repos`, for a project with several
+ * repositories (multi-repo §9): each one's level (never above the project's), deploy and globs, right after
+ * the level line, in the order given (the run's first), so the prompt's clip keeps them. A single-repo
+ * project leaves it out and reads the text as before.
+ */
+export function policyText(a: ProjectAutomation, deployWorkflow: string | null, repos?: PolicyRepo[]): string {
   const lines = [`Autonomia do projeto: ${a.autonomy}. ${LEVEL_TEXT[a.autonomy]}`];
-  if (deployWorkflow) lines.push(`Um merge na branch principal dispara o workflow de deploy "${deployWorkflow}".`);
-  if (a.release_paths.length > 0) lines.push(`Mudanças nestes caminhos pedem o nível release: ${a.release_paths.join(', ')}.`);
-  if (a.store_paths.length > 0) lines.push(`Mudanças nestes caminhos nunca são mescladas pelo termhub (build de loja): ${a.store_paths.join(', ')}.`);
-  else lines.push('Builds de loja nunca são mesclados pelo termhub, em nenhum nível.');
+  if (repos && repos.length > 0) {
+    lines.push('Repositórios (o nível de cada um nunca passa o do projeto):', ...repos.map(repoLine));
+    lines.push('Builds de loja nunca são mesclados pelo termhub, em nenhum nível.');
+  } else {
+    if (deployWorkflow) lines.push(`Um merge na branch principal dispara o workflow de deploy "${deployWorkflow}".`);
+    if (a.release_paths.length > 0) lines.push(`Mudanças nestes caminhos pedem o nível release: ${a.release_paths.join(', ')}.`);
+    if (a.store_paths.length > 0) lines.push(`Mudanças nestes caminhos nunca são mescladas pelo termhub (build de loja): ${a.store_paths.join(', ')}.`);
+    else lines.push('Builds de loja nunca são mesclados pelo termhub, em nenhum nível.');
+  }
   // TER-1188: what a PR with no CI gets
   if (a.autonomy !== 'pr') {
     lines.push(
@@ -83,4 +108,26 @@ export function policyText(a: ProjectAutomation, deployWorkflow: string | null):
   }
   lines.push('O merge é feito pelo termhub quando o CI fica verde e a política permite; abra o PR e avise com report_card.');
   return lines.join('\n');
+}
+
+/**
+ * The repositories `policyText` lists for `get_automation_policy`: every active one, the run's (`first`)
+ * first. Undefined for a single-repo project.
+ */
+export function policyRepos(entries: RepoEntry[], first: Array<string | null | undefined> = []): PolicyRepo[] | undefined {
+  if (!isMultiRepo(entries)) return undefined;
+  const active = activeEntries(entries);
+  const lead = active.filter((e) => first.some((f) => sameRepo(f, e.full_name)));
+  return [...lead, ...active.filter((e) => !lead.includes(e))];
+}
+
+/** What a run's prompt lists: the run's repositories only, so the 660-character clip never drops them (multi-repo §9). */
+export function runPolicyRepos(entries: RepoEntry[], run: RepoEntry | null): PolicyRepo[] | undefined {
+  return isMultiRepo(entries) && run ? [run] : undefined;
+}
+
+/** `runPolicyRepos` for the repository the project's runs work on (the implementer's prompt). */
+export async function runPromptRepos(repos: Repositories, projectId: string, setup: ProjectSetupData): Promise<PolicyRepo[] | undefined> {
+  const entries = await loadRepoEntries(repos, projectId, setup);
+  return runPolicyRepos(entries, runEntry(entries, setup));
 }

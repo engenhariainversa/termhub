@@ -103,7 +103,7 @@ describe('integrateEpic', () => {
     expect(args.body).not.toMatch(/\b(close[sd]?|fix(e[sd])?|resolve[sd]?)\b/i);
     expect(args.body).not.toContain('TER-9'); // another epic's card
 
-    expect(w.state.events).toEqual([expect.objectContaining({ kind: 'pr_opened', task_id: 'e1', payload: { pr_url: 'https://github.com/acme/app/pull/42', number: 42, branch: EPIC_BRANCH } })]);
+    expect(w.state.events).toEqual([expect.objectContaining({ kind: 'pr_opened', task_id: 'e1', payload: { repo: 'acme/app', pr_url: 'https://github.com/acme/app/pull/42', number: 42, branch: EPIC_BRANCH } })]);
     expect(w.startTriggered).toHaveBeenCalledTimes(1);
     expect(w.startTriggered).toHaveBeenCalledWith({
       projectId: 'p1',
