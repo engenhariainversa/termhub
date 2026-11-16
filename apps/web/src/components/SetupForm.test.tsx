@@ -19,6 +19,9 @@ vi.mock('../lib/api', () => {
         get: (...a: unknown[]) => getMock(...a),
         save: (...a: unknown[]) => saveMock(...a),
         syncTickets: (...a: unknown[]) => syncTicketsMock(...a),
+        // the "Repositórios na pasta" card (TER-1071): nothing found yet
+        repos: () => Promise.resolve({ project_id: 'p1', repos: [], machines: [] }),
+        scanRepos: () => Promise.reject(new Error('unused')),
         // the project's AI accounts card (TER-589): nothing configured, nothing available
         ai: { get: () => Promise.resolve({ ai: { accounts: [], models: { claude: null, chatgpt: null } }, available: [] }), save: () => Promise.reject(new Error('unused')) },
       },
