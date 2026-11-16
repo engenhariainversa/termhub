@@ -962,7 +962,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       expect(items.get(none.id)).toMatchObject({ reason: 'repo_unknown', reason_text: 'Sem repositório: o chat vai escolher', repo_keys: [] });
       expect(items.get(both.id)).toMatchObject({ reason: 'repo_multi_soon', repo_keys: ['api', 'app'] });
       expect(items.get(api.id)).toMatchObject({ reason: 'repo_missing', reason_text: 'Repositório não configurado no Setup: api' });
-      expect(items.get(app.id)).toMatchObject({ eligible: true, reason: null, repo_keys: ['app'] });
+      // every repository check passed: only the new-card grace (the queue's default, after them) is left
+      expect(items.get(app.id)).toMatchObject({ reason: 'just_created', repo_keys: ['app'] });
       // an agent that does not scan for repositories cannot say where they sit
       reg.caps.set(machineId, ['worktree']);
       expect(await reasonOf(app.id)).toBe('agent_no_repo_scan');
@@ -1007,7 +1008,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
     reg.caps.set(machineId, ['worktree', 'repo_scan']);
     await repos.projectRepositories.upsertDiscovered(projectId, machineId, [{ full_name: 'acme/app', dir: '.', default_branch: 'main', has_commits: true }]);
     const c = await card();
-    expect(await reasonOf(c.id)).toBeNull();
+    expect(await reasonOf(c.id)).toBe('just_created'); // past every repo check; the dispatcher below waits no grace
     const wake = vi.fn(async () => true);
     const { deps, startAgent } = makeDeps({ wakeRepoUnknown: wake });
     await tickOnce(deps);
