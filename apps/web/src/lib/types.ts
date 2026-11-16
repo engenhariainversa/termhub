@@ -2095,6 +2095,9 @@ export interface WebSession {
   current: boolean;
 }
 
+/** Where a token came from (TER-1191): made by the person, or minted by termhub itself (the chat, an agent tab, an automatic run). */
+export type ApiTokenOrigin = 'person' | 'concierge' | 'tab' | 'automation';
+
 export interface ApiToken {
   id: string;
   user_id: string;
@@ -2104,6 +2107,39 @@ export interface ApiToken {
   last_used_at: string | null;
   revoked_at: string | null;
   created_at: string;
+  origin: ApiTokenOrigin;
+  /** The project and machine it acts for; the name is null once the row is gone (or is not the person's). */
+  project_id: string | null;
+  project_name: string | null;
+  machine_id: string | null;
+  machine_name: string | null;
+}
+
+/** Settings → Tokens de API's filters (TER-1191). `origin` is one origin, `system` or absent (all). Dates are ISO. */
+export interface ApiTokenFilter {
+  origin?: ApiTokenOrigin | 'system';
+  status?: 'active' | 'expired' | 'revoked';
+  project_id?: string;
+  machine_id?: string;
+  scope?: ApiTokenScope;
+  created_from?: string;
+  created_to?: string;
+  used_from?: string;
+  used_to?: string;
+  q?: string;
+}
+
+export interface ApiTokensPage {
+  tokens: ApiToken[];
+  next: string | null;
+  /** The person's live system tokens, and how many of them "Revogar inativos" would take. */
+  system: { active: number; idle: number };
+  retention: { system_days: number; person_revoked_days: number; idle_days: number };
+}
+
+export interface ApiTokenFacets {
+  projects: { id: string; name: string | null }[];
+  machines: { id: string; name: string | null }[];
 }
 
 /** One MCP call made with a token (TER-577): metadata only. Names are null once the row is gone. */

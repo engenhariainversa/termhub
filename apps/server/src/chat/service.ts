@@ -806,7 +806,7 @@ export class ChatService {
       // revokes the conversation's previous token, which is safe here: the lock says no run holds it.
       let token: string;
       try {
-        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals'], { accountWide: conversation.project_id === null });
+        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals'], { accountWide: conversation.project_id === null, projectId: conversation.project_id, machineId: conversation.machine_id });
       } catch {
         return { ...out, errorCode: 'TOKEN_FAILED' };
       }
@@ -1828,7 +1828,7 @@ export class ChatService {
         // `gated: true` — every write this token can attempt still stops at the chat's gate, except
         // record_decision and answer_tab_question (spec 2026-09-26 concierge memory D13), whose own
         // effect already is the mediation the gate exists to add.
-        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals', 'memory'], { accountWide: conversation.project_id === null });
+        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals', 'memory'], { accountWide: conversation.project_id === null, projectId: conversation.project_id, machineId: conversation.machine_id });
       } catch {
         errorCode = 'TOKEN_FAILED';
       }
@@ -2003,7 +2003,7 @@ export class ChatService {
         // `gated: true` — every write this token can attempt still stops at the chat's gate, except
         // record_decision and answer_tab_question (spec 2026-09-26 concierge memory D13), whose own
         // effect already is the mediation the gate exists to add.
-        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals', 'memory'], { accountWide: conversation.project_id === null });
+        token = await mintConciergeToken(this.deps.repos, user.id, conversation.id, ['read', 'tasks', 'terminals', 'memory'], { accountWide: conversation.project_id === null, projectId: conversation.project_id, machineId: conversation.machine_id });
       } catch {
         if (this.suspending) await live.rejectOpen(serverRestarting());
         else await live.failOpen('TOKEN_FAILED');

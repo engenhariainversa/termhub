@@ -1,20 +1,31 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiTokensView, eventPlace, mcpAddCommand, tokenStatus } from './ApiTokensView';
+import { ApiTokensView, DEFAULT_DRAFT, eventPlace, filterOfDraft, mcpAddCommand, tokenPlace, tokenStatus } from './ApiTokensView';
 import { ApiError } from '../lib/api';
-import type { ApiToken, ApiTokenEvent } from '../lib/types';
+import type { ApiToken, ApiTokenEvent, ApiTokensPage } from '../lib/types';
 
 const listMock = vi.fn();
 const createMock = vi.fn();
 const revokeMock = vi.fn();
 const eventsMock = vi.fn();
+const facetsMock = vi.fn();
+const revokeIdleMock = vi.fn();
 
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
     ApiError,
-    api: { apiTokens: { list: (...a: unknown[]) => listMock(...a), create: (...a: unknown[]) => createMock(...a), revoke: (...a: unknown[]) => revokeMock(...a), events: (...a: unknown[]) => eventsMock(...a) } },
+    api: {
+      apiTokens: {
+        list: (...a: unknown[]) => listMock(...a),
+        create: (...a: unknown[]) => createMock(...a),
+        revoke: (...a: unknown[]) => revokeMock(...a),
+        events: (...a: unknown[]) => eventsMock(...a),
+        facets: (...a: unknown[]) => facetsMock(...a),
+        revokeIdle: (...a: unknown[]) => revokeIdleMock(...a),
+      },
+    },
   };
 });
 
@@ -29,13 +40,28 @@ const tok = (over: Partial<ApiToken> & { id: string }): ApiToken => ({
   last_used_at: null,
   revoked_at: null,
   created_at: '2026-09-19T00:00:00.000Z',
+  origin: 'person',
+  project_id: null,
+  project_name: null,
+  machine_id: null,
+  machine_name: null,
+  ...over,
+});
+
+/** One page as the server answers it (TER-1191). */
+const page = (tokens: ApiToken[], over: Partial<ApiTokensPage> = {}): ApiTokensPage => ({
+  tokens,
+  next: null,
+  system: { active: 0, idle: 0 },
+  retention: { system_days: 30, person_revoked_days: 90, idle_days: 7 },
   ...over,
 });
 
 const SECRET = 'thb_pat_' + 'A'.repeat(43);
 
 beforeEach(() => {
-  listMock.mockResolvedValue({ tokens: [] });
+  listMock.mockResolvedValue(page([]));
+  facetsMock.mockResolvedValue({ projects: [], machines: [] });
 });
 
 afterEach(() => {
@@ -63,13 +89,13 @@ describe('mcpAddCommand', () => {
 
 describe('ApiTokensView', () => {
   it('lists tokens with their status', async () => {
-    listMock.mockResolvedValue({
-      tokens: [
+    listMock.mockResolvedValue(
+      page([
         tok({ id: 'laptop', scopes: ['read', 'terminals'] }),
         tok({ id: 'old', expires_at: '2000-01-01T00:00:00.000Z' }),
         tok({ id: 'gone', revoked_at: '2026-09-19T01:00:00.000Z' }),
-      ],
-    });
+      ]),
+    );
     render(<ApiTokensView />);
     const laptop = (await screen.findByText('laptop')).closest('tr')!;
     expect(within(laptop).getByText('ler, terminais')).toBeTruthy();
@@ -134,7 +160,7 @@ describe('ApiTokensView', () => {
   });
 
   it('shows the memory scope short label in the token list', async () => {
-    listMock.mockResolvedValue({ tokens: [tok({ id: 'concierge', scopes: ['read', 'memory'] })] });
+    listMock.mockResolvedValue(page([tok({ id: 'concierge', scopes: ['read', 'memory'] })]));
     render(<ApiTokensView />);
     const row = (await screen.findByText('concierge')).closest('tr')!;
     expect(within(row).getByText('ler, memória')).toBeTruthy();
@@ -163,7 +189,7 @@ describe('ApiTokensView', () => {
   });
 
   it('revokes after confirmation', async () => {
-    listMock.mockResolvedValue({ tokens: [tok({ id: 'laptop' })] });
+    listMock.mockResolvedValue(page([tok({ id: 'laptop' })]));
     revokeMock.mockResolvedValue({ api_token: tok({ id: 'laptop', revoked_at: '2026-09-19T02:00:00.000Z' }) });
     render(<ApiTokensView />);
     fireEvent.click(await screen.findByRole('button', { name: 'Revogar laptop' }));
@@ -173,7 +199,7 @@ describe('ApiTokensView', () => {
   });
 
   it('clears a stale error once a later action succeeds', async () => {
-    listMock.mockResolvedValue({ tokens: [tok({ id: 'laptop' })] });
+    listMock.mockResolvedValue(page([tok({ id: 'laptop' })]));
     revokeMock.mockRejectedValueOnce(new ApiError('Erro ao revogar token'));
     revokeMock.mockResolvedValueOnce({ api_token: tok({ id: 'laptop', revoked_at: '2026-09-19T02:00:00.000Z' }) });
     render(<ApiTokensView />);
@@ -211,7 +237,7 @@ describe('ApiTokensView', () => {
 
   it('hides the create/revoke actions when the user lacks permission', async () => {
     authMock.can = () => false;
-    listMock.mockResolvedValue({ tokens: [tok({ id: 'laptop' })] });
+    listMock.mockResolvedValue(page([tok({ id: 'laptop' })]));
     render(<ApiTokensView />);
     expect(await screen.findByText('laptop')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Novo token' })).toBeNull();
@@ -219,9 +245,103 @@ describe('ApiTokensView', () => {
   });
 });
 
+describe('token filters and pages (TER-1191)', () => {
+  it('maps the draft to the server query: empty means any, a day\'s end is the next day\'s start', () => {
+    expect(filterOfDraft(DEFAULT_DRAFT)).toEqual({ origin: 'person', status: 'active' });
+    const f = filterOfDraft({ ...DEFAULT_DRAFT, origin: '', status: '', scope: 'read', project_id: 'p1', created_from: '2026-11-01', created_to: '2026-11-01', q: '  aba ' });
+    expect(f).toMatchObject({ origin: undefined, status: undefined, scope: 'read', project_id: 'p1', q: 'aba' });
+    expect(new Date(f.created_to!).getTime() - new Date(f.created_from!).getTime()).toBe(24 * 60 * 60 * 1000);
+  });
+
+  it('names where a token acts, by name or by id, and nothing for a person\'s own', () => {
+    expect(tokenPlace(tok({ id: 'a', project_id: 'p1', project_name: 'termhub', machine_id: 'm1', machine_name: null }))).toBe('termhub · m1');
+    expect(tokenPlace(tok({ id: 'b' }))).toBe('');
+  });
+
+  it('opens on "criados por mim · ativos", without the origin column', async () => {
+    listMock.mockResolvedValue(page([tok({ id: 'laptop' })]));
+    render(<ApiTokensView />);
+    expect(await screen.findByText('laptop')).toBeTruthy();
+    expect(listMock.mock.calls[0]).toEqual([expect.objectContaining({ origin: 'person', status: 'active' }), null]);
+    expect((screen.getByLabelText('Origem') as HTMLSelectElement).value).toBe('person');
+    expect((screen.getByLabelText('Estado') as HTMLSelectElement).value).toBe('active');
+    expect(screen.queryByRole('columnheader', { name: 'Origem' })).toBeNull();
+  });
+
+  it('applies the filters on Filtrar, shows the origin and place, and Limpar goes back to the default', async () => {
+    facetsMock.mockResolvedValue({ projects: [{ id: 'p1', name: 'termhub' }], machines: [{ id: 'm1', name: 'jarvis' }] });
+    render(<ApiTokensView />);
+    await screen.findByText('Nenhum token seu ativo.');
+    await screen.findByRole('option', { name: 'termhub' });
+    listMock.mockResolvedValue(page([tok({ id: 'aba «shell» (automático)', origin: 'tab', project_id: 'p1', project_name: 'termhub', machine_id: 'm1', machine_name: 'jarvis', revoked_at: '2026-11-01T00:00:00.000Z' })]));
+    fireEvent.change(screen.getByLabelText('Origem'), { target: { value: 'system' } });
+    fireEvent.change(screen.getByLabelText('Estado'), { target: { value: 'revoked' } });
+    fireEvent.change(screen.getByLabelText('Projeto'), { target: { value: 'p1' } });
+    fireEvent.change(screen.getByLabelText('Escopo'), { target: { value: 'memory' } });
+    fireEvent.change(screen.getByLabelText('Buscar pelo nome'), { target: { value: 'shell' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Filtrar' }));
+    const row = (await screen.findByText('aba «shell» (automático)')).closest('tr')!;
+    expect(listMock.mock.calls[1]![0]).toMatchObject({ origin: 'system', status: 'revoked', project_id: 'p1', scope: 'memory', q: 'shell' });
+    expect(within(row).getByText('Aba de agente')).toBeTruthy();
+    expect(within(row).getByText('termhub · jarvis')).toBeTruthy();
+    // the system group belongs to the default view only
+    expect(screen.queryByRole('button', { name: /Gerados pelo sistema/ })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Limpar' }));
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(3));
+    expect(listMock.mock.calls[2]![0]).toEqual(filterOfDraft(DEFAULT_DRAFT));
+  });
+
+  it('loads the next page with the server\'s cursor and appends it', async () => {
+    listMock.mockResolvedValueOnce(page([tok({ id: 'a' })], { next: 'c1' }));
+    listMock.mockResolvedValueOnce(page([tok({ id: 'b' })]));
+    render(<ApiTokensView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Carregar mais' }));
+    expect(await screen.findByText('b')).toBeTruthy();
+    expect(screen.getByText('a')).toBeTruthy();
+    expect(listMock.mock.calls[1]![1]).toBe('c1');
+    expect(screen.queryByRole('button', { name: 'Carregar mais' })).toBeNull();
+  });
+
+  it('keeps the system tokens in a collapsed group, loaded only when opened', async () => {
+    listMock.mockResolvedValueOnce(page([tok({ id: 'laptop' })], { system: { active: 12, idle: 0 } }));
+    listMock.mockResolvedValueOnce(page([tok({ id: 'concierge (automático)', origin: 'concierge' })]));
+    render(<ApiTokensView />);
+    const toggle = await screen.findByRole('button', { name: /Gerados pelo sistema · 12 ativos/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(listMock).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Revogar inativos/ })).toBeNull();
+    fireEvent.click(toggle);
+    expect(await screen.findByText('concierge (automático)')).toBeTruthy();
+    expect(listMock.mock.calls[1]).toEqual([{ origin: 'system', status: 'active' }, null]);
+    expect(screen.getByText(/somem depois de 30 dias/)).toBeTruthy();
+  });
+
+  it('"Revogar inativos" asks first, revokes on the server and reloads', async () => {
+    listMock.mockResolvedValue(page([], { system: { active: 5, idle: 3 } }));
+    revokeIdleMock.mockResolvedValue({ revoked: 3 });
+    render(<ApiTokensView />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Revogar inativos (3)' }));
+    expect(screen.getByText(/Revoga os 3 tokens do sistema sem uso há 7 dias/)).toBeTruthy();
+    expect(revokeIdleMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Revogar' }));
+    await waitFor(() => expect(revokeIdleMock).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('3 tokens do sistema revogados.')).toBeTruthy();
+    await waitFor(() => expect(listMock).toHaveBeenCalledTimes(2));
+  });
+
+  it('hides "Revogar inativos" without the delete permission', async () => {
+    authMock.can = () => false;
+    listMock.mockResolvedValue(page([], { system: { active: 5, idle: 3 } }));
+    render(<ApiTokensView />);
+    expect(await screen.findByRole('button', { name: /Gerados pelo sistema/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Revogar inativos/ })).toBeNull();
+  });
+});
+
 describe('CopyField (via CreatedTokenModal)', () => {
   beforeEach(() => {
-    listMock.mockResolvedValue({ tokens: [] });
+    listMock.mockResolvedValue(page([]));
   });
 
   const openCreatedTokenModal = async () => {
@@ -299,7 +419,7 @@ describe('token activity (TER-577)', () => {
   });
 
   it('opens the MCP calls of a token, with failures and their code', async () => {
-    listMock.mockResolvedValue({ tokens: [tok({ id: 't1', name: 'laptop' })] });
+    listMock.mockResolvedValue(page([tok({ id: 't1', name: 'laptop' })]));
     eventsMock.mockResolvedValue({ events: [ev({ id: 'e1' }), ev({ id: 'e2', tool: 'send_input', ok: false, error_code: 'TOOL_NOT_ALLOWED' })], retention_days: 30 });
     render(<ApiTokensView />);
     fireEvent.click(await screen.findByRole('button', { name: 'Atividade de laptop' }));

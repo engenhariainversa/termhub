@@ -126,6 +126,7 @@ A terminal tab is a real shell. Whoever can type into that tab — you in the br
 
 1. **The signed-in user**, in their own tabs. Data is scoped by owner: another user's machines, projects and tabs answer 404.
 2. **A personal API token** (MCP) the user created. Its scopes (`read`, `tasks`, `terminals`, `memory`) are intersected with the user's role, its expiry is optional, and it is limited to 120 calls per minute. It can be revoked at any time and stops working on the next call.
+   - termhub also mints tokens of its own, shown apart on Settings › API tokens (TER-1191): the chat gets a new gated token for every run (24 h, the conversation's previous one revoked at once), and every agent tab gets one limited to its memory tools (30 days at most, revoked with the tab). "Revoke idle" revokes the live ones unused for 7 days. Revoked or expired system tokens are deleted after 30 days, and a person's own revoked tokens after 90; a token a tab still names as its opener stays while the tab exists.
 3. **The chat.** Every action that changes something becomes a **confirmation card** and nothing runs until a person approves it.
    - Approvals are single-use and expire after 24 h.
    - The following always need a card, and no permission grant can cover them:

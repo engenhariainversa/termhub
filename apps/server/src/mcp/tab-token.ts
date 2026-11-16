@@ -39,11 +39,26 @@ export function tabTokenName(tabName: string): string {
  * never taken from a caller: this is the one function that makes tab tokens, so a tab token can never be
  * gated nor carry wider scopes (§6). The plain token goes back to the caller only — it is never logged.
  */
-export async function mintTabToken(repos: Repositories, userId: string, tab: { id: string; name: string }): Promise<{ token: string; id: string }> {
+export async function mintTabToken(
+  repos: Repositories,
+  userId: string,
+  tab: { id: string; name: string; project_id: string; machine_id: string },
+  opts: { automatic?: boolean } = {},
+): Promise<{ token: string; id: string }> {
   const { token, hash } = newApiToken();
   const row = await repos.apiTokens.create(
     userId,
-    { name: tabTokenName(tab.name), scopes: [...TAB_TOKEN_SCOPES], expiresAt: new Date(Date.now() + TAB_TOKEN_TTL_MS), gated: false, tabId: tab.id },
+    {
+      name: tabTokenName(tab.name),
+      scopes: [...TAB_TOKEN_SCOPES],
+      expiresAt: new Date(Date.now() + TAB_TOKEN_TTL_MS),
+      gated: false,
+      tabId: tab.id,
+      // the screen's filters (TER-1191); `automation` for a tab an automatic run opened
+      origin: opts.automatic ? 'automation' : 'tab',
+      projectId: tab.project_id,
+      machineId: tab.machine_id,
+    },
     hash,
   );
   return { token, id: row.id };

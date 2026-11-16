@@ -331,7 +331,7 @@ interface Location {
   closesTab?: boolean;
   /** close_tab only: who opened the tab being closed, in parentheses right after its name — set by
    * `describeActions` from the tab's `created_by_token_id`, never resolved here (see there for why:
-   * it takes an owner-scoped `apiTokens.listByUser` lookup that `describeActions` has a repos handle
+   * it takes an owner-scoped `apiTokens.gatedIdsAmong` lookup that `describeActions` has a repos handle
    * for and this — `targetPhrase`, building `Location` — does not). */
   tabOrigin?: string;
 }
@@ -473,12 +473,12 @@ export async function describeActions(repos: Repositories, actions: ChatAction[]
   // actually resolved *and* named a token — never for a browser-opened tab (`created_by_token_id`
   // null needs no lookup to say "aberta por você") and never at all when no close_tab card qualifies,
   // so every other caller (send_input, run_command, the task tools, ...) never touches `apiTokens`.
-  // Tokens are revoked, never deleted, so an old concierge token still resolves here.
+  // The retention purge keeps a token while a tab names it as its opener (TER-1191), so it still resolves here.
   const needsTokenLookup = actions.some((a) => a.tool === 'close_tab' && a.tab_id && tabById.get(a.tab_id)?.created_by_token_id != null);
   let chatTokenIds: Set<string> | undefined;
   if (needsTokenLookup) {
-    const tokens = await repos.apiTokens.listByUser(ownerId);
-    chatTokenIds = new Set(tokens.filter((t) => t.gated).map((t) => t.id));
+    const openers = actions.map((a) => (a.tool === 'close_tab' && a.tab_id ? tabById.get(a.tab_id)?.created_by_token_id : null)).filter((x): x is string => !!x);
+    chatTokenIds = await repos.apiTokens.gatedIdsAmong(ownerId, [...new Set(openers)]);
   }
 
   // Which subagent proposed an action (spec 2026-09-26 §4), resolved the same batched way as every

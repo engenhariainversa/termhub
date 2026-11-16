@@ -15,16 +15,18 @@ export async function mintConciergeToken(
   userId: string,
   conversationId: string,
   scopes: ApiTokenScope[],
-  opts: { accountWide?: boolean } = {},
+  opts: { accountWide?: boolean; projectId?: string | null; machineId?: string | null } = {},
 ): Promise<string> {
-  const previous = (await repos.apiTokens.listByUser(userId)).filter(
-    (t) => t.name === CONCIERGE_TOKEN_NAME && t.revoked_at === null && (t.chat_conversation_id === conversationId || (opts.accountWide === true && t.chat_conversation_id === null)),
-  );
-  for (const t of previous) await repos.apiTokens.revoke(t.id, userId);
+  // One targeted update, not a read of every token the person ever had (thousands, one per run).
+  await repos.apiTokens.revokeLiveConcierge(userId, conversationId, { accountWide: opts.accountWide });
 
   const { token, hash } = newApiToken();
   // `gated: true` is hardcoded here, never taken from a caller — this is the one function that
   // mints the concierge's own token, so wide scopes and the gate flag can only ever arrive together.
-  await repos.apiTokens.create(userId, { name: CONCIERGE_TOKEN_NAME, scopes, expiresAt: new Date(Date.now() + TTL_MS), gated: true, chatConversationId: conversationId }, hash);
+  await repos.apiTokens.create(
+    userId,
+    { name: CONCIERGE_TOKEN_NAME, scopes, expiresAt: new Date(Date.now() + TTL_MS), gated: true, chatConversationId: conversationId, origin: 'concierge', projectId: opts.projectId ?? null, machineId: opts.machineId ?? null },
+    hash,
+  );
   return token;
 }
