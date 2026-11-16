@@ -6,11 +6,14 @@ import { AutomationSetup } from './AutomationSetup';
 import { HealthSetup } from './HealthSetup';
 import { ProjectAiCard } from './ProjectAiCard';
 import { RepoDiscovery } from './RepoDiscovery';
+import { RepoTable } from './RepoTable';
+import { showRepoTable } from '../lib/repo-overrides';
 import { tk, useTranslation } from '../i18n';
 import {
   APPROVAL_LABEL,
   PROVIDER_LABEL,
   type ConnectionInfo,
+  type EffectiveRepo,
   type Integration,
   type IntegrationProvider,
   type Project,
@@ -22,6 +25,10 @@ import { Combobox, type ComboboxOption } from './Combobox';
 interface Props {
   project: Project;
 }
+
+/** A repository block with nothing chosen yet: the server fills the repository from the table on save (TER-1072). */
+const EMPTY_REPO: NonNullable<ProjectSetupData['repo']> = { integration_id: null, full_name: null, base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: null };
+const DEFAULT_REPO_DEFAULTS = { integration_id: null, scan_depth: 1 };
 
 const SCOPE_LABEL: Record<IntegrationProvider, { label: string; placeholder: string; optionsKey: string; filterLabel: string; filterHint: string }> = {
   linear: { label: tk('Time (key)'), placeholder: 'EI', optionsKey: 'teams', filterLabel: tk('Estados'), filterHint: tk('nomes separados por vírgula (ex.: Todo, In Progress). Vazio = todos os abertos') },
@@ -39,6 +46,8 @@ export function SetupForm({ project }: Props) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [conn, setConn] = useState<Record<string, ConnectionInfo | 'loading'>>({});
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
+  // TER-1072: the project's repositories as the server reads them (absent from an older server)
+  const [effective, setEffective] = useState<EffectiveRepo[] | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +55,7 @@ export function SetupForm({ project }: Props) {
       if (cancelled) return;
       setData(s.setup.data);
       setSaved(JSON.stringify(s.setup.data));
+      setEffective(s.effective_repos);
       setIntegrations(i.integrations);
     });
     return () => {
@@ -69,6 +79,7 @@ export function SetupForm({ project }: Props) {
     try {
       const r = await api.setup.save(project.id, data);
       setData(r.setup.data);
+      if (r.effective_repos) setEffective(r.effective_repos);
       // the daily summary runs on the person's own clock (spec D26): the zone travels with the hour
       if (r.setup.data.automation?.summary_hour != null) {
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -134,6 +145,16 @@ export function SetupForm({ project }: Props) {
   };
 
   const byProvider = (p: IntegrationProvider) => integrations.filter((i) => i.provider === p);
+  // a scan may have found or lost repositories: reload the list, never the form being edited
+  const reloadRepos = () => {
+    void api.setup
+      .get(project.id)
+      .then((s) => setEffective(s.effective_repos))
+      .catch(() => {});
+  };
+  // more than one repository, on a server that knows the overrides: the table replaces the single-repo fields
+  const multiRepo = showRepoTable(effective) && data.repos !== undefined;
+  const repoBlock = data.repo ?? EMPTY_REPO;
   const caps = runnerMachine?.capabilities ?? [];
 
   const sources = data.ticket_sources;
@@ -145,81 +166,110 @@ export function SetupForm({ project }: Props) {
 
   return (
     <div className="space-y-5">
-      <Card title={t('Repositório')} hint={t('Onde o agente cria branch e abre PR.')}>
-        {byProvider('github').length === 0 ? (
-          <Empty>{t('Cadastre uma integração GitHub em Integrações.')}</Empty>
-        ) : (
-          <>
-            <Row label={t('Integração')}>
-              <select
-                className="input"
-                value={data.repo?.integration_id ?? ''}
-                onChange={(e) =>
-                  patch('repo', e.target.value ? { ...(data.repo ?? { full_name: null, base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: null }), integration_id: e.target.value } : null)
-                }
-              >
-                <option value="">{t('— sem repositório —')}</option>
-                {byProvider('github').map((i) => (
-                  <option key={i.id} value={i.id}>
-                    {i.name}
-                  </option>
-                ))}
-              </select>
-            </Row>
-            {data.repo && (
-              <>
-                <Row label={t('Repositório (owner/repo)')}>
-                  <div className="flex gap-2">
-                    <Combobox
-                      mono
-                      allowFreeText
-                      aria-label={t('Repositório (owner/repo)')}
-                      value={data.repo.full_name ?? ''}
-                      onChange={(v) => patch('repo', { ...data.repo!, full_name: v || null })}
-                      options={optionsOf(data.repo.integration_id!, 'repos')}
-                      loading={conn[data.repo.integration_id!] === 'loading'}
-                      onOpen={() => loadOnce(data.repo!.integration_id!)}
-                      // i18n-ignore: an example of the id
-                      placeholder="engenhariainversa/app"
-                    />
-                    <button type="button" className="btn-ghost shrink-0 text-xs" onClick={() => void loadOptions(data.repo!.integration_id!)}>
-                      {conn[data.repo.integration_id!] === 'loading' ? '…' : t('listar')}
-                    </button>
+      {multiRepo ? (
+        <Card title={t('Repositórios')} hint={t('Onde o agente cria branch e abre PR. Cada repositório tem a sua política; clique em um para editá-la.')}>
+          {byProvider('github').length === 0 && <Empty>{t('Cadastre uma integração GitHub em Integrações.')}</Empty>}
+          <RepoDiscovery projectId={project.id} embedded onScanned={reloadRepos} />
+          <RepoTable
+            effective={effective}
+            overrides={data.repos ?? []}
+            defaults={data.repo_defaults ?? DEFAULT_REPO_DEFAULTS}
+            ceiling={data.automation?.autonomy ?? 'release'}
+            integrations={byProvider('github')}
+            machines={project.machines.map((l) => {
+              const m = machines.find((x) => x.id === l.machine_id);
+              return { id: l.machine_id, name: m ? machineLabel(m) : l.machine_id };
+            })}
+            onOverrides={(next) => patch('repos', next)}
+            onDefaults={(next) => patch('repo_defaults', next)}
+          />
+          <Row label={t('Padrão da branch do projeto')} hint={t('vale para os repositórios sem padrão próprio')}>
+            <input className="input font-mono" value={repoBlock.branch_pattern} onChange={(e) => patch('repo', { ...repoBlock, branch_pattern: e.target.value })} />
+          </Row>
+          <Check checked={repoBlock.require_ticket ?? false} onChange={(v) => patch('repo', { ...repoBlock, require_ticket: v })}>
+            {t('Exigir ticket externo: card sem ticket não entra no automático, e a ref do termhub nunca vai para o GitHub')}
+          </Check>
+          <Check checked={repoBlock.draft_pr} onChange={(v) => patch('repo', { ...repoBlock, draft_pr: v })}>
+            {t('Abrir PR como rascunho até a aprovação')}
+          </Check>
+        </Card>
+      ) : (
+        <Card title={t('Repositório')} hint={t('Onde o agente cria branch e abre PR.')}>
+          {byProvider('github').length === 0 ? (
+            <Empty>{t('Cadastre uma integração GitHub em Integrações.')}</Empty>
+          ) : (
+            <>
+              <Row label={t('Integração')}>
+                <select
+                  className="input"
+                  value={data.repo?.integration_id ?? ''}
+                  onChange={(e) =>
+                    patch('repo', e.target.value ? { ...(data.repo ?? { full_name: null, base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: null }), integration_id: e.target.value } : null)
+                  }
+                >
+                  <option value="">{t('— sem repositório —')}</option>
+                  {byProvider('github').map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              {data.repo && (
+                <>
+                  <Row label={t('Repositório (owner/repo)')}>
+                    <div className="flex gap-2">
+                      <Combobox
+                        mono
+                        allowFreeText
+                        aria-label={t('Repositório (owner/repo)')}
+                        value={data.repo.full_name ?? ''}
+                        onChange={(v) => patch('repo', { ...data.repo!, full_name: v || null })}
+                        options={optionsOf(data.repo.integration_id!, 'repos')}
+                        loading={conn[data.repo.integration_id!] === 'loading'}
+                        onOpen={() => loadOnce(data.repo!.integration_id!)}
+                        // i18n-ignore: an example of the id
+                        placeholder="engenhariainversa/app"
+                      />
+                      <button type="button" className="btn-ghost shrink-0 text-xs" onClick={() => void loadOptions(data.repo!.integration_id!)}>
+                        {conn[data.repo.integration_id!] === 'loading' ? '…' : t('listar')}
+                      </button>
+                    </div>
+                    {connError(data.repo.integration_id!) && <p className="mt-1 text-xs text-danger">{connError(data.repo.integration_id!)}</p>}
+                  </Row>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Row label={t('Branch base')}>
+                      <input className="input font-mono" value={data.repo.base_branch} onChange={(e) => patch('repo', { ...data.repo!, base_branch: e.target.value })} />
+                    </Row>
+                    <Row label={t('Padrão da branch')}>
+                      <input className="input font-mono" value={data.repo.branch_pattern} onChange={(e) => patch('repo', { ...data.repo!, branch_pattern: e.target.value })} />
+                    </Row>
                   </div>
-                  {connError(data.repo.integration_id!) && <p className="mt-1 text-xs text-danger">{connError(data.repo.integration_id!)}</p>}
-                </Row>
-                <div className="grid grid-cols-2 gap-3">
-                  <Row label={t('Branch base')}>
-                    <input className="input font-mono" value={data.repo.base_branch} onChange={(e) => patch('repo', { ...data.repo!, base_branch: e.target.value })} />
+                  <Row label={t('Workflow de deploy')}>
+                    <input
+                      className="input font-mono"
+                      /* i18n-ignore */ placeholder="deploy.yml"
+                      value={data.repo.deploy_workflow ?? ''}
+                      onChange={(e) => patch('repo', { ...data.repo!, deploy_workflow: e.target.value.trim() ? e.target.value : null })}
+                    />
                   </Row>
-                  <Row label={t('Padrão da branch')}>
-                    <input className="input font-mono" value={data.repo.branch_pattern} onChange={(e) => patch('repo', { ...data.repo!, branch_pattern: e.target.value })} />
-                  </Row>
-                </div>
-                <Row label={t('Workflow de deploy')}>
-                  <input
-                    className="input font-mono"
-                    /* i18n-ignore */ placeholder="deploy.yml"
-                    value={data.repo.deploy_workflow ?? ''}
-                    onChange={(e) => patch('repo', { ...data.repo!, deploy_workflow: e.target.value.trim() ? e.target.value : null })}
-                  />
-                </Row>
-                <p className="text-xs text-fg-dim">
-                  {t('No padrão da branch, {ticket} é a chave do ticket externo (Jira, Linear, GitHub) do card, ou a ref do card quando ele não tem ticket; {ticket_lower} é a mesma chave em minúsculas, {ref} é sempre a ref do card e {slug} vem do título. Uma linha "branch: nome" na descrição do card vale mais que o padrão.')}
-                </p>
-                <Check checked={data.repo.require_ticket ?? false} onChange={(v) => patch('repo', { ...data.repo!, require_ticket: v })}>
-                  {t('Exigir ticket externo: card sem ticket não entra no automático, e a ref do termhub nunca vai para o GitHub')}
-                </Check>
-                <Check checked={data.repo.draft_pr} onChange={(v) => patch('repo', { ...data.repo!, draft_pr: v })}>
-                  {t('Abrir PR como rascunho até a aprovação')}
-                </Check>
-              </>
-            )}
-          </>
-        )}
-      </Card>
+                  <p className="text-xs text-fg-dim">
+                    {t('No padrão da branch, {ticket} é a chave do ticket externo (Jira, Linear, GitHub) do card, ou a ref do card quando ele não tem ticket; {ticket_lower} é a mesma chave em minúsculas, {ref} é sempre a ref do card e {slug} vem do título. Uma linha "branch: nome" na descrição do card vale mais que o padrão.')}
+                  </p>
+                  <Check checked={data.repo.require_ticket ?? false} onChange={(v) => patch('repo', { ...data.repo!, require_ticket: v })}>
+                    {t('Exigir ticket externo: card sem ticket não entra no automático, e a ref do termhub nunca vai para o GitHub')}
+                  </Check>
+                  <Check checked={data.repo.draft_pr} onChange={(v) => patch('repo', { ...data.repo!, draft_pr: v })}>
+                    {t('Abrir PR como rascunho até a aprovação')}
+                  </Check>
+                </>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
-      <RepoDiscovery projectId={project.id} />
+      {!multiRepo && <RepoDiscovery projectId={project.id} onScanned={reloadRepos} />}
 
       <Card title={t('Tickets')} hint={t('Fontes das tarefas: tickets abertos de cada fonte aparecem em Tickets; os que você escolher entram no backlog do épico padrão.')}>
         {sources.map((s, i) => {

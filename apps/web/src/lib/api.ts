@@ -1,7 +1,7 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
 import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
-import type { DataExportStatus, ProjectRepoScan, ProjectReposView } from './types';
+import type { DataExportStatus, EffectiveRepo, ProjectRepoScan, ProjectReposView } from './types';
 import type { ApiRun, ApiTokenEvent, ApiTokenFacets, ApiTokenFilter, ApiTokensPage, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
@@ -558,8 +558,9 @@ export const api = {
     resume: (scope: string) => request<void>('POST', '/automation/resume', { scope }),
   },
   setup: {
-    get: (projectId: string) => request<{ setup: ProjectSetup }>('GET', `/projects/${projectId}/setup`),
-    save: (projectId: string, data: ProjectSetupData) => request<{ setup: ProjectSetup }>('PUT', `/projects/${projectId}/setup`, data),
+    /** effective_repos (TER-1076): absent from an older server */
+    get: (projectId: string) => request<{ setup: ProjectSetup; effective_repos?: EffectiveRepo[] }>('GET', `/projects/${projectId}/setup`),
+    save: (projectId: string, data: ProjectSetupData) => request<{ setup: ProjectSetup; effective_repos?: EffectiveRepo[] }>('PUT', `/projects/${projectId}/setup`, data),
     /** The project's AI accounts and models (TER-589): its own endpoint, saved apart from the form. */
     ai: {
       get: (projectId: string) => request<ProjectAiView>('GET', `/projects/${projectId}/setup/ai`),

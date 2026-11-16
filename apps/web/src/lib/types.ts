@@ -721,6 +721,74 @@ export interface ProjectSetupData {
   ai_memory?: { publish_rules: boolean; use_in_runs?: boolean };
   /** TER-1121: the project health watcher; absent from an older server */
   health?: ProjectHealthSetup;
+  /** TER-1072 (spec 2026-10-07 multi-repo §4): what a discovered repository starts with; absent from an older server */
+  repo_defaults?: RepoDefaults;
+  /** TER-1072: the person's per-repository overrides, keyed by owner/repo; absent from an older server */
+  repos?: RepoOverride[];
+}
+
+export interface RepoDefaults {
+  /** the GitHub integration discovered repos use */
+  integration_id: string | null;
+  /** how deep discovery looks under the project folder, 1..3 */
+  scan_depth: number;
+}
+
+/** One repository's override (server `repoOverrideSchema`). null = the fallback. */
+export interface RepoOverride {
+  full_name: string;
+  enabled: boolean;
+  /** null = repo_defaults.integration_id */
+  integration_id: string | null;
+  /** null = what discovery read */
+  description: string | null;
+  /** null = the checkout's default branch */
+  base_branch: string | null;
+  /** null = the project's */
+  branch_pattern: string | null;
+  deploy_workflow: string | null;
+  /** never above automation.autonomy */
+  autonomy: AutomationAutonomy;
+  required_checks: string[];
+  release_workflows: string[];
+  release_paths: string[];
+  store_paths: string[];
+  /** a card's PRs merge lowest first */
+  merge_order: number;
+}
+
+/** Where one repository sits on one machine (server `ProjectRepositoryCheckout`). */
+export interface EffectiveRepoCheckout {
+  machine_id: string;
+  dir: string;
+  default_branch: string | null;
+  has_commits: boolean;
+  seen_at: string;
+  missing_at: string | null;
+}
+
+/** One repository of the project as the server reads it: discovery, override and defaults merged (server `EffectiveRepo`). */
+export interface EffectiveRepo {
+  full_name: string;
+  /** null: named by hand, not discovered yet */
+  key: string | null;
+  discovered: boolean;
+  has_override: boolean;
+  status: 'ok' | 'unsupported' | 'no_access';
+  enabled: boolean;
+  integration_id: string | null;
+  description: string | null;
+  base_branch: string;
+  branch_pattern: string;
+  draft_pr: boolean;
+  deploy_workflow: string | null;
+  autonomy: AutomationAutonomy;
+  required_checks: string[];
+  release_workflows: string[];
+  release_paths: string[];
+  store_paths: string[];
+  merge_order: number;
+  checkouts: EffectiveRepoCheckout[];
 }
 
 /** TER-1121: the signs of stalled work the project's health watcher looks for. */
