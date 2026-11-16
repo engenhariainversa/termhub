@@ -61,6 +61,28 @@ describe('Progresso', () => {
     expect(screen.getByText('api')).toBeTruthy();
   });
 
+  // TER-1061
+  it('groups a card\'s PRs by repository, each named', async () => {
+    const progress = mockProgress(Date.now());
+    const card = progress.epics[0]!.cards[0]!;
+    card.repo_keys = ['app', 'api'];
+    card.pull_requests = [...card.pull_requests, { ...card.pull_requests[0]!, number: 7, url: 'https://github.com/acme/api/pull/7' }];
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(progress);
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(within(screen.getByTestId('card-prs-acme/app')).getByText(/^PR #12/)).toBeTruthy();
+    expect(within(screen.getByTestId('card-prs-acme/api')).getByText(/^PR #7/)).toBeTruthy();
+    expect(screen.getByLabelText('PRs em acme/api')).toBeTruthy();
+  });
+
+  it('keeps a single-repo card\'s PRs unnamed', async () => {
+    jest.spyOn(stores.api, 'progress').mockResolvedValue(mockProgress(Date.now()));
+    await render(<ProgressScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Visão gerencial', {}, LOAD)));
+    expect(screen.getByText(/^PR #12 ·/)).toBeTruthy();
+    expect(screen.queryByTestId(/^card-prs-/)).toBeNull();
+  });
+
   it('shows no repository chips for a card without repositories', async () => {
     jest.spyOn(stores.api, 'progress').mockResolvedValue(mockProgress(Date.now()));
     await render(<ProgressScreen />);

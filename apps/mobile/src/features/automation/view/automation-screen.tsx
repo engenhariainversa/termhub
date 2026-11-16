@@ -4,8 +4,11 @@ import { ActivityIndicator, Pressable, Switch, Text, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { AppText, Banner, Button, Screen, Sheet } from '@/ui';
 import { AUTOMATION_MSG, AUTONOMY_LABEL, AUTONOMY_LEVELS, hourLabel, SUMMARY_HOURS, summaryHourOf, toggleType, TYPE_OPTIONS, withSummaryHour } from '../model/automation';
+import { repoRows, showRepos } from '../model/repos';
 import { automationDeps } from '../viewmodel/deps';
 import { useAutomation } from '../viewmodel/use-automation';
+import { useProjectRepos } from '../viewmodel/use-project-repos';
+import type { TProjectReposResponse } from '@/services/api/contract';
 
 /** One choice of a level or a type: selected or not. */
 function Choice({ label, selected, role, onPress }: { label: string; selected: boolean; role: 'radio' | 'checkbox'; onPress(): void }) {
@@ -39,6 +42,32 @@ function HourChoice({ hour, selected, onPress }: { hour: number; selected: boole
   );
 }
 
+/** TER-1061 (spec 2026-10-07 multi-repo): the project's repositories, read-only — each one's level and its
+ * folder on every linked machine. Only for more than one repository; editing stays on the web Setup. */
+function RepoList({ view }: { view: TProjectReposResponse }) {
+  const { t } = useTranslation();
+  return (
+    <View testID="automation-repos" className="gap-2">
+      <AppText variant="label">{t('Repositórios')}</AppText>
+      {repoRows(view).map((r) => (
+        <View key={r.full_name} accessibilityLabel={`${r.label} · ${r.level}${r.note ? ` · ${r.note}` : ''}`} className="gap-1 rounded-xl border border-app-border px-3 py-2">
+          <View className="flex-row flex-wrap items-baseline gap-2">
+            <Text className="font-mono text-sm text-app-text">{r.label}</Text>
+            <Text className="text-xs text-app-muted">{r.level}</Text>
+            {r.note ? <Text className="text-xs text-amber-400">{r.note}</Text> : null}
+          </View>
+          {r.presence.map((p) => (
+            <Text key={p.machine} className="text-xs text-app-muted">
+              {`${p.machine}: ${p.dir ?? t('ausente')}`}
+            </Text>
+          ))}
+        </View>
+      ))}
+      <AppText variant="muted">{t('O nível de cada repositório e as máquinas onde ele está se editam no Setup da web.')}</AppText>
+    </View>
+  );
+}
+
 /** "Trabalho automático" of the project Setup (spec 2026-10-04), reached from a project chat's host sheet:
  * the switch, the card types, how far the agents go alone and the daily summary's hour (TER-974). The rest
  * of the block (paths, limits, prompts) is edited on the web and kept as it is. */
@@ -47,9 +76,13 @@ export function AutomationView({ projectId }: { projectId: string }) {
   const router = useRouter();
   const { saved, draft, loadError, saving, saveError, notice, confirming, canSave, load, edit, save, confirm, cancelConfirm } = useAutomation(projectId, automationDeps);
 
+  const repos = useProjectRepos(projectId, automationDeps);
+  const loadRepos = repos.load;
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadRepos();
+  }, [load, loadRepos]);
 
   return (
     <Screen scroll>
@@ -87,6 +120,7 @@ export function AutomationView({ projectId }: { projectId: string }) {
               </View>
               <AppText variant="muted">{t(AUTOMATION_MSG.storesNever)}</AppText>
             </View>
+            {showRepos(repos.repos) ? <RepoList view={repos.repos} /> : null}
             <View className="gap-2">
               <AppText variant="label">{t(AUTOMATION_MSG.summary)}</AppText>
               <View accessibilityRole="radiogroup" className="flex-row flex-wrap gap-2">

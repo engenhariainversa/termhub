@@ -49,6 +49,7 @@ import type {
   TProgressResponse,
   TAutomationSetup,
   TPauseState,
+  TProjectReposResponse,
   TProjectAi,
   TProjectAiResponse,
   TSendAccepted,
@@ -203,6 +204,9 @@ export interface MobileApi {
    * server answers 401 `PIN_REQUIRED`. Lowering the level or turning off never asks. `timeZone` (TER-974): the
    * phone's zone, sent with a summary hour so the daily summary runs on the person's clock. */
   saveAutomationSetup(auth: Auth, projectId: string, automation: TAutomationSetup, proof?: { challenge: string; pin_proof: string }, timeZone?: string): Promise<TAutomationSetup>;
+  /** TER-1061: the project's repositories (level, presence per linked machine), read-only. 404 outside the
+   * scope, and from a server that predates it (the app then shows no repositories). */
+  getProjectRepos(auth: Auth, projectId: string): Promise<TProjectReposResponse>;
   /** Tags or untags a card for automatic work; answers the tag as it now stands. No PIN. 404 outside the scope. */
   setCardAuto(auth: Auth, taskId: string, auto: boolean): Promise<boolean>;
   /** The pause switch ("Pausar tudo"): the person's pause and the projects paused on their own. */

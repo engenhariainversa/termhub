@@ -1,6 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { automationSetupActionId, decisionProofMessage } from '@termhub/mobile-api';
+import { automationSetupActionId, decisionProofMessage, projectReposResponse } from '@termhub/mobile-api';
 import type { Device } from '../db/repositories/devices.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { SessionService } from '../mobile/session.js';
@@ -25,6 +25,15 @@ async function build(stored: unknown = {}) {
     projectSetup: { get: vi.fn(async () => ({ project_id: 'p1', version: 2, data, updated_at: null })), save },
     automationEvents: { insert: vi.fn(async (e: object) => ({ id: 'ev', created_at: '', ...e })) },
     users: { setTimeZone },
+    projectMachines: { listByProject: vi.fn(async () => [{ project_id: 'p1', machine_id: 'm1', cwd: '/w' }, { project_id: 'p1', machine_id: 'm2', cwd: '/x' }]) },
+    machines: { findById: vi.fn(async (id: string) => ({ id, name: id === 'm1' ? 'hulk' : 'jarvis', type: 'agent' })) },
+    projectRepositories: {
+      listByProject: vi.fn(async () => []),
+      effective: vi.fn(async () => [
+        { key: 'api', full_name: 'acme/api', description: null, status: 'ok', enabled: true, discovered: true, autonomy: 'merge', checkouts: [{ machine_id: 'm1', dir: 'api', missing_at: null, seen_at: '2026-11-16T00:00:00.000Z' }] },
+        { key: 'web', full_name: 'acme/web', description: null, status: 'ok', enabled: false, discovered: true, autonomy: 'pr', checkouts: [] },
+      ]),
+    },
   } as unknown as Repositories;
   const session = {
     consumeDecisionChallenge: vi.fn(async (_d: Device, challenge: string, actionId: string) => challenge === 'c1' && actionId === ACTION),
@@ -143,6 +152,30 @@ describe('mobile automation setup routes', () => {
       expect(r.statusCode).toBe(200);
       expect(r.json()).toEqual({ id: 't1', auto: true });
       expect(t.setAuto).toHaveBeenCalledWith('t1', true);
+    });
+  });
+
+  describe('GET /projects/:id/repos (TER-1061)', () => {
+    beforeEach(async () => {
+      t = await build();
+    });
+    it('answers the repositories with their level and presence per linked machine, in the app contract', async () => {
+      const r = await t.app.inject({ method: 'GET', url: '/projects/p1/repos' });
+      expect(r.statusCode).toBe(200);
+      const body = projectReposResponse.parse(r.json());
+      expect(body.repos.map((x) => [x.key, x.autonomy, x.enabled])).toEqual([
+        ['api', 'merge', true],
+        ['web', 'pr', false],
+      ]);
+      expect(body.repos[0]!.machines).toEqual([{ machine_id: 'm1', machine: 'hulk', dir: 'api', missing: false }]);
+      expect(body.machines).toEqual([
+        { machine_id: 'm1', machine: 'hulk' },
+        { machine_id: 'm2', machine: 'jarvis' },
+      ]);
+    });
+    it('a project outside the scope is 404', async () => {
+      const r = await t.app.inject({ method: 'GET', url: '/projects/other/repos' });
+      expect(r.statusCode).toBe(404);
     });
   });
 });

@@ -5,6 +5,7 @@ import { automationNeedsConfirm, automationSetupActionId, automationSetupBody, c
 import { automationPauseState, pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { scoped } from '../auth/scope.js';
 import { controlContextForRequest } from '../control/context.js';
+import { listProjectRepos } from '../control/repos.js';
 import type { Repositories } from '../db/repositories/index.js';
 import { msg } from '../i18n/index.js';
 import { HttpError, notFound } from '../lib/errors.js';
@@ -47,6 +48,13 @@ export async function mobileAutomationSetupRoutes(app: FastifyInstance, repos: R
     await recordSetupChange(repos, id, current.data.automation, saved.data.automation, 'app');
     if (saved.data.automation.enabled) dispatchTriggers.poke('setup_saved');
     return { automation: saved.data.automation };
+  });
+
+  // TER-1061 (spec 2026-10-07 multi-repo): the project's repositories, read-only — the same view the web
+  // Setup and `list_project_repos` read. It only reads what discovery stored; it never scans.
+  app.get('/:id/repos', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return listProjectRepos(controlContextForRequest(repos, request), { project_id: id });
   });
 }
 

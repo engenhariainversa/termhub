@@ -6,7 +6,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { b64url, utf8 } from '../../crypto/encoding';
 import type { P256Jwk } from '../../key/types';
 import { verifyProof } from '../dpop';
-import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion, TWatchView } from '../contract';
+import type { StandingGrantKind, TTabChatItem, TTabSummary, TChatAction, TChatAttachment, TChatConversation, TChatDecision, TChatGrant, TChatMessage, TConciergeNote, TDeviceInfo, TLegalVersion, TLessonItem, TMemoryRule, TNotificationRow, TAutomationSetup, TProjectAi, TProjectReposResponse, TSubagentView, TTabLimit, TTabQuestion, TTabSuggestion, TWatchView } from '../contract';
 import type { ConciergePushSettings } from '../contract';
 
 /** Every non-2xx answer the mock throws (design spec ruling): mapped to the wire shape by
@@ -262,6 +262,8 @@ export interface MockState {
   projectAi: Map<string, TProjectAi>;
   /** project id -> the saved automation block (absent = the server's default, off at `pr`) */
   automation: Map<string, TAutomationSetup>;
+  /** project id -> its repositories (TER-1061); absent = none discovered */
+  projectRepos: Map<string, TProjectReposResponse>;
   /** The pause switch: the person's "Pausar tudo" and the projects paused on their own (ISO times). */
   /** The mock person has a project with automatic work on (the pause switch shows). */
   hasAutomation: boolean;
@@ -348,6 +350,7 @@ export function createMockState(): MockState {
     watches: [],
     projectAi: new Map(),
     automation: new Map(),
+    projectRepos: new Map(),
     hasAutomation: true,
     pause: { paused_at: null, projects: [] },
     cardAuto: new Map(),

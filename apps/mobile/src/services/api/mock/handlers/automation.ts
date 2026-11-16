@@ -48,6 +48,13 @@ export function registerAutomationRoutes(router: MockRouter, state: MockState): 
     return { status: 200, body: { automation: body.automation } };
   });
 
+  router.route('GET', '/api/m/v1/projects/:id/repos', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
+    const id = ctx.params.id!;
+    if (!state.projects.has(id)) throw new WireError(404, 'NOT_FOUND', 'Projeto não encontrado');
+    return { status: 200, body: state.projectRepos.get(id) ?? { project_id: id, repos: [], machines: [] } };
+  });
+
   router.route('PUT', '/api/m/v1/tasks/:id/auto', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'PUT', htu: ctx.htu, now: ctx.now() });
     const id = ctx.params.id!;

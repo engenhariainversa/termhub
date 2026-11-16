@@ -35,5 +35,11 @@
   "Automático pausado desde {{time}}.": "Automatic work paused since {{time}}.",
   "Hora do resumo diário": "Daily summary hour",
   "Sem resumo": "No summary",
-  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "The day's summary arrives at this hour, in this device's time zone."
+  "O resumo do dia chega nesta hora, no fuso deste aparelho.": "The day's summary arrives at this hour, in this device's time zone.",
+  "Repositórios": "Repositories",
+  "ausente": "missing",
+  "desligado": "off",
+  "fora do GitHub": "outside GitHub",
+  "sem acesso": "no access",
+  "O nível de cada repositório e as máquinas onde ele está se editam no Setup da web.": "Each repository's level and the machines it is on are edited in the web Setup."
 }
