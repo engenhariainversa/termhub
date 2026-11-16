@@ -91,7 +91,8 @@ async function removeRunWorktree(deps: RunSweeperDeps, remove: NonNullable<RunSw
     return false;
   }
   try {
-    const r = await remove(machine, { repoDir: link.cwd, root: setup.data.automation.worktrees_dir, path: ws.path });
+    // the checkout the worktree was cut from (multi-repo R5); older rows: the link's folder
+    const r = await remove(machine, { repoDir: ws.repo_dir ?? link.cwd, root: setup.data.automation.worktrees_dir, path: ws.path });
     if (r.dirty) {
       log.info({ runId: run.id, machineId: machine.id }, 'api runs: worktree kept (uncommitted changes)');
       return false;

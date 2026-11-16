@@ -113,6 +113,8 @@ function assemble(parts: (string | Optional | null)[], description: string | nul
 const policyLine = (policy: string, max = POLICY_MAX) => `Política do projeto (consulte também get_automation_policy):\n${clip(policy, max)}`;
 /** What the naming rule takes from another part, so the prompt stays under the cap (TER-1110). */
 const namingRoom = (naming: string | null | undefined) => (namingOf(naming)?.length ?? -1) + 1;
+/** What naming the repository in the branch line takes from the policy excerpt (multi-repo Task 11). */
+const repoRoom = (repo: string | null | undefined) => (repo ? ` no repositório ${repo}, na`.length : 0);
 const ref = (c: { ref: string; url: string; title: string }) => `${c.ref} ${clip(c.title, TITLE_MAX)}\n${c.url}`;
 
 export function implementerPrompt(i: {
@@ -121,6 +123,8 @@ export function implementerPrompt(i: {
   base: string;
   /** The project's naming rule for this card (`namingRule`, TER-1110): the ticket to cite, the ref never to use. */
   naming?: string | null;
+  /** `owner/repo` of the card's repository, in a multi-repo project only (outline Task 11); null = not named. */
+  repo?: string | null;
   policy: string;
   custom: string | null;
   description?: string | null;
@@ -132,10 +136,11 @@ export function implementerPrompt(i: {
   return assemble(
     [
       `Você trabalha no card ${ref(i.card)}`,
-      branchLine(`Trabalhe na branch ${i.branch} (base ${i.base}).`, i.branch, i.naming),
+      branchLine(i.repo ? `Trabalhe no repositório ${i.repo}, na branch ${i.branch} (base ${i.base}).` : `Trabalhe na branch ${i.branch} (base ${i.base}).`, i.branch, i.naming),
       i.custom?.trim() || DEFAULT_IMPLEMENTER_TEXT,
       // the whole policy is in get_automation_policy: its excerpt gives up the room the naming rule takes
-      policyLine(i.policy, POLICY_MAX - namingRoom(i.naming)),
+      // …and the repository's name too (the policy already lists the card's repository in a multi-repo project)
+      policyLine(i.policy, POLICY_MAX - namingRoom(i.naming) - repoRoom(i.repo)),
       i.rules ?? null,
       TRUST_LINE,
       SHELL_LINE,

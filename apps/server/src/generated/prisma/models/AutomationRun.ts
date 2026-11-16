@@ -392,6 +392,7 @@ export type AutomationRunWhereInput = {
   createdAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   task?: Prisma.XOR<Prisma.TaskNullableScalarRelationFilter, Prisma.TaskWhereInput> | null
+  repos?: Prisma.AutomationRunRepoListRelationFilter
 }
 
 export type AutomationRunOrderByWithRelationInput = {
@@ -422,6 +423,7 @@ export type AutomationRunOrderByWithRelationInput = {
   createdAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   task?: Prisma.TaskOrderByWithRelationInput
+  repos?: Prisma.AutomationRunRepoOrderByRelationAggregateInput
 }
 
 export type AutomationRunWhereUniqueInput = Prisma.AtLeast<{
@@ -455,6 +457,7 @@ export type AutomationRunWhereUniqueInput = Prisma.AtLeast<{
   createdAt?: Prisma.DateTimeFilter<"AutomationRun"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   task?: Prisma.XOR<Prisma.TaskNullableScalarRelationFilter, Prisma.TaskWhereInput> | null
+  repos?: Prisma.AutomationRunRepoListRelationFilter
 }, "id">
 
 export type AutomationRunOrderByWithAggregationInput = {
@@ -547,6 +550,7 @@ export type AutomationRunCreateInput = {
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutAutomationRunsInput
   task?: Prisma.TaskCreateNestedOneWithoutAutomationRunsInput
+  repos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunUncheckedCreateInput = {
@@ -575,6 +579,7 @@ export type AutomationRunUncheckedCreateInput = {
   startedAt?: Date | string | null
   endedAt?: Date | string | null
   createdAt?: Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunUpdateInput = {
@@ -603,6 +608,7 @@ export type AutomationRunUpdateInput = {
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutAutomationRunsNestedInput
   task?: Prisma.TaskUpdateOneWithoutAutomationRunsNestedInput
+  repos?: Prisma.AutomationRunRepoUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunUncheckedUpdateInput = {
@@ -631,6 +637,7 @@ export type AutomationRunUncheckedUpdateInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunCreateManyInput = {
@@ -821,6 +828,11 @@ export type AutomationRunSumOrderByAggregateInput = {
   cleanupAttempts?: Prisma.SortOrder
 }
 
+export type AutomationRunScalarRelationFilter = {
+  is?: Prisma.AutomationRunWhereInput
+  isNot?: Prisma.AutomationRunWhereInput
+}
+
 export type AutomationRunCreateNestedManyWithoutProjectInput = {
   create?: Prisma.XOR<Prisma.AutomationRunCreateWithoutProjectInput, Prisma.AutomationRunUncheckedCreateWithoutProjectInput> | Prisma.AutomationRunCreateWithoutProjectInput[] | Prisma.AutomationRunUncheckedCreateWithoutProjectInput[]
   connectOrCreate?: Prisma.AutomationRunCreateOrConnectWithoutProjectInput | Prisma.AutomationRunCreateOrConnectWithoutProjectInput[]
@@ -905,6 +917,20 @@ export type AutomationRunUncheckedUpdateManyWithoutTaskNestedInput = {
   deleteMany?: Prisma.AutomationRunScalarWhereInput | Prisma.AutomationRunScalarWhereInput[]
 }
 
+export type AutomationRunCreateNestedOneWithoutReposInput = {
+  create?: Prisma.XOR<Prisma.AutomationRunCreateWithoutReposInput, Prisma.AutomationRunUncheckedCreateWithoutReposInput>
+  connectOrCreate?: Prisma.AutomationRunCreateOrConnectWithoutReposInput
+  connect?: Prisma.AutomationRunWhereUniqueInput
+}
+
+export type AutomationRunUpdateOneRequiredWithoutReposNestedInput = {
+  create?: Prisma.XOR<Prisma.AutomationRunCreateWithoutReposInput, Prisma.AutomationRunUncheckedCreateWithoutReposInput>
+  connectOrCreate?: Prisma.AutomationRunCreateOrConnectWithoutReposInput
+  upsert?: Prisma.AutomationRunUpsertWithoutReposInput
+  connect?: Prisma.AutomationRunWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.AutomationRunUpdateToOneWithWhereWithoutReposInput, Prisma.AutomationRunUpdateWithoutReposInput>, Prisma.AutomationRunUncheckedUpdateWithoutReposInput>
+}
+
 export type AutomationRunCreateWithoutProjectInput = {
   id: string
   role: string
@@ -930,6 +956,7 @@ export type AutomationRunCreateWithoutProjectInput = {
   endedAt?: Date | string | null
   createdAt?: Date | string
   task?: Prisma.TaskCreateNestedOneWithoutAutomationRunsInput
+  repos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunUncheckedCreateWithoutProjectInput = {
@@ -957,6 +984,7 @@ export type AutomationRunUncheckedCreateWithoutProjectInput = {
   startedAt?: Date | string | null
   endedAt?: Date | string | null
   createdAt?: Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunCreateOrConnectWithoutProjectInput = {
@@ -1041,6 +1069,7 @@ export type AutomationRunCreateWithoutTaskInput = {
   endedAt?: Date | string | null
   createdAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutAutomationRunsInput
+  repos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunUncheckedCreateWithoutTaskInput = {
@@ -1068,6 +1097,7 @@ export type AutomationRunUncheckedCreateWithoutTaskInput = {
   startedAt?: Date | string | null
   endedAt?: Date | string | null
   createdAt?: Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRunInput
 }
 
 export type AutomationRunCreateOrConnectWithoutTaskInput = {
@@ -1094,6 +1124,134 @@ export type AutomationRunUpdateWithWhereUniqueWithoutTaskInput = {
 export type AutomationRunUpdateManyWithWhereWithoutTaskInput = {
   where: Prisma.AutomationRunScalarWhereInput
   data: Prisma.XOR<Prisma.AutomationRunUpdateManyMutationInput, Prisma.AutomationRunUncheckedUpdateManyWithoutTaskInput>
+}
+
+export type AutomationRunCreateWithoutReposInput = {
+  id: string
+  role: string
+  status: string
+  waitingReason?: string | null
+  tabId?: string | null
+  machineId?: string | null
+  accountId?: string | null
+  branch?: string | null
+  worktreePath?: string | null
+  resumeCount?: number
+  fixCount?: number
+  restartCount?: number
+  allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
+  wokenAt?: Date | string | null
+  triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
+  claimedBy: string
+  heartbeatAt?: Date | string
+  startedAt?: Date | string | null
+  endedAt?: Date | string | null
+  createdAt?: Date | string
+  project: Prisma.ProjectCreateNestedOneWithoutAutomationRunsInput
+  task?: Prisma.TaskCreateNestedOneWithoutAutomationRunsInput
+}
+
+export type AutomationRunUncheckedCreateWithoutReposInput = {
+  id: string
+  projectId: string
+  taskId?: string | null
+  role: string
+  status: string
+  waitingReason?: string | null
+  tabId?: string | null
+  machineId?: string | null
+  accountId?: string | null
+  branch?: string | null
+  worktreePath?: string | null
+  resumeCount?: number
+  fixCount?: number
+  restartCount?: number
+  allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Date | string | null
+  wokenAt?: Date | string | null
+  triggerSha?: string | null
+  cleanupState?: string | null
+  cleanupAttempts?: number
+  claimedBy: string
+  heartbeatAt?: Date | string
+  startedAt?: Date | string | null
+  endedAt?: Date | string | null
+  createdAt?: Date | string
+}
+
+export type AutomationRunCreateOrConnectWithoutReposInput = {
+  where: Prisma.AutomationRunWhereUniqueInput
+  create: Prisma.XOR<Prisma.AutomationRunCreateWithoutReposInput, Prisma.AutomationRunUncheckedCreateWithoutReposInput>
+}
+
+export type AutomationRunUpsertWithoutReposInput = {
+  update: Prisma.XOR<Prisma.AutomationRunUpdateWithoutReposInput, Prisma.AutomationRunUncheckedUpdateWithoutReposInput>
+  create: Prisma.XOR<Prisma.AutomationRunCreateWithoutReposInput, Prisma.AutomationRunUncheckedCreateWithoutReposInput>
+  where?: Prisma.AutomationRunWhereInput
+}
+
+export type AutomationRunUpdateToOneWithWhereWithoutReposInput = {
+  where?: Prisma.AutomationRunWhereInput
+  data: Prisma.XOR<Prisma.AutomationRunUpdateWithoutReposInput, Prisma.AutomationRunUncheckedUpdateWithoutReposInput>
+}
+
+export type AutomationRunUpdateWithoutReposInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  waitingReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  branch?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  worktreePath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  resumeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  fixCount?: Prisma.IntFieldUpdateOperationsInput | number
+  restartCount?: Prisma.IntFieldUpdateOperationsInput | number
+  allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
+  claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
+  heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  project?: Prisma.ProjectUpdateOneRequiredWithoutAutomationRunsNestedInput
+  task?: Prisma.TaskUpdateOneWithoutAutomationRunsNestedInput
+}
+
+export type AutomationRunUncheckedUpdateWithoutReposInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.StringFieldUpdateOperationsInput | string
+  taskId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  role?: Prisma.StringFieldUpdateOperationsInput | string
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  waitingReason?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  tabId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  machineId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  accountId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  branch?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  worktreePath?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  resumeCount?: Prisma.IntFieldUpdateOperationsInput | number
+  fixCount?: Prisma.IntFieldUpdateOperationsInput | number
+  restartCount?: Prisma.IntFieldUpdateOperationsInput | number
+  allowedTools?: Prisma.NullableJsonNullValueInput | runtime.InputJsonValue
+  lastTypedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  wokenAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  triggerSha?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupState?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  cleanupAttempts?: Prisma.IntFieldUpdateOperationsInput | number
+  claimedBy?: Prisma.StringFieldUpdateOperationsInput | string
+  heartbeatAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
 }
 
 export type AutomationRunCreateManyProjectInput = {
@@ -1148,6 +1306,7 @@ export type AutomationRunUpdateWithoutProjectInput = {
   endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   task?: Prisma.TaskUpdateOneWithoutAutomationRunsNestedInput
+  repos?: Prisma.AutomationRunRepoUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunUncheckedUpdateWithoutProjectInput = {
@@ -1175,6 +1334,7 @@ export type AutomationRunUncheckedUpdateWithoutProjectInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunUncheckedUpdateManyWithoutProjectInput = {
@@ -1256,6 +1416,7 @@ export type AutomationRunUpdateWithoutTaskInput = {
   endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutAutomationRunsNestedInput
+  repos?: Prisma.AutomationRunRepoUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunUncheckedUpdateWithoutTaskInput = {
@@ -1283,6 +1444,7 @@ export type AutomationRunUncheckedUpdateWithoutTaskInput = {
   startedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   endedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  repos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRunNestedInput
 }
 
 export type AutomationRunUncheckedUpdateManyWithoutTaskInput = {
@@ -1313,6 +1475,35 @@ export type AutomationRunUncheckedUpdateManyWithoutTaskInput = {
 }
 
 
+/**
+ * Count Type AutomationRunCountOutputType
+ */
+
+export type AutomationRunCountOutputType = {
+  repos: number
+}
+
+export type AutomationRunCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  repos?: boolean | AutomationRunCountOutputTypeCountReposArgs
+}
+
+/**
+ * AutomationRunCountOutputType without action
+ */
+export type AutomationRunCountOutputTypeDefaultArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AutomationRunCountOutputType
+   */
+  select?: Prisma.AutomationRunCountOutputTypeSelect<ExtArgs> | null
+}
+
+/**
+ * AutomationRunCountOutputType without action
+ */
+export type AutomationRunCountOutputTypeCountReposArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.AutomationRunRepoWhereInput
+}
+
 
 export type AutomationRunSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -1342,6 +1533,8 @@ export type AutomationRunSelect<ExtArgs extends runtime.Types.Extensions.Interna
   createdAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.AutomationRun$taskArgs<ExtArgs>
+  repos?: boolean | Prisma.AutomationRun$reposArgs<ExtArgs>
+  _count?: boolean | Prisma.AutomationRunCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["automationRun"]>
 
 export type AutomationRunSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
@@ -1436,6 +1629,8 @@ export type AutomationRunOmit<ExtArgs extends runtime.Types.Extensions.InternalA
 export type AutomationRunInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   task?: boolean | Prisma.AutomationRun$taskArgs<ExtArgs>
+  repos?: boolean | Prisma.AutomationRun$reposArgs<ExtArgs>
+  _count?: boolean | Prisma.AutomationRunCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type AutomationRunIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
@@ -1451,6 +1646,7 @@ export type $AutomationRunPayload<ExtArgs extends runtime.Types.Extensions.Inter
   objects: {
     project: Prisma.$ProjectPayload<ExtArgs>
     task: Prisma.$TaskPayload<ExtArgs> | null
+    repos: Prisma.$AutomationRunRepoPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1898,6 +2094,7 @@ export interface Prisma__AutomationRunClient<T, Null = never, ExtArgs extends ru
   readonly [Symbol.toStringTag]: "PrismaPromise"
   project<T extends Prisma.ProjectDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ProjectDefaultArgs<ExtArgs>>): Prisma.Prisma__ProjectClient<runtime.Types.Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   task<T extends Prisma.AutomationRun$taskArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AutomationRun$taskArgs<ExtArgs>>): Prisma.Prisma__TaskClient<runtime.Types.Result.GetResult<Prisma.$TaskPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+  repos<T extends Prisma.AutomationRun$reposArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.AutomationRun$reposArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunRepoPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2369,6 +2566,30 @@ export type AutomationRun$taskArgs<ExtArgs extends runtime.Types.Extensions.Inte
    */
   include?: Prisma.TaskInclude<ExtArgs> | null
   where?: Prisma.TaskWhereInput
+}
+
+/**
+ * AutomationRun.repos
+ */
+export type AutomationRun$reposArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AutomationRunRepo
+   */
+  select?: Prisma.AutomationRunRepoSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AutomationRunRepo
+   */
+  omit?: Prisma.AutomationRunRepoOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AutomationRunRepoInclude<ExtArgs> | null
+  where?: Prisma.AutomationRunRepoWhereInput
+  orderBy?: Prisma.AutomationRunRepoOrderByWithRelationInput | Prisma.AutomationRunRepoOrderByWithRelationInput[]
+  cursor?: Prisma.AutomationRunRepoWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.AutomationRunRepoScalarFieldEnum | Prisma.AutomationRunRepoScalarFieldEnum[]
 }
 
 /**

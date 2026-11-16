@@ -30,6 +30,8 @@ import { eligibilityQueue } from './queue.js';
 import { askForRepos, type RepoUnknownWake } from './repo-unknown.js';
 import { NEW_CARD_GRACE_MS } from './eligibility.js';
 import { existingWorkText, findExistingWork, type ExistingWork } from './existing-work.js';
+import { githubAccess } from './merge.js';
+import { baseOf, resolveRunRepo, type RunRepo } from './run-repo.js';
 
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
 export const TICK_MS = 15_000;
@@ -185,14 +187,15 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     return { task, setup: setup.data };
   }
 
-  /** The project's GitHub token, under the same rule as the CI sync: a GitHub integration of the project's owner. */
-  async function githubToken(project: Project, setup: ProjectSetupData): Promise<{ token: string; repo: string }> {
-    const repo = setup.repo;
-    const integration = repo?.integration_id ? await repos.integrations.findById(repo.integration_id) : undefined;
-    const allowed = !!repo?.full_name && !!integration && integration.provider === 'github' && project.owner_id !== null && integration.owner_id === project.owner_id;
-    const token = allowed ? await repos.integrations.getSecret(integration.id) : undefined;
-    if (!token || !repo?.full_name) throw new ControlError('GITHUB_NO_ACCESS', msg('Integração do GitHub sem acesso'));
-    return { token, repo: repo.full_name };
+  /**
+   * The GitHub token of the run's repository (multi-repo R6), under the same rule as the CI sync: a GitHub
+   * integration of the project's owner. With no repository entry, `setup.repo`'s.
+   */
+  async function githubToken(project: Project, setup: ProjectSetupData, target: RunRepo): Promise<{ token: string; repo: string }> {
+    const legacy = setup.repo?.full_name ? { full_name: setup.repo.full_name, integration_id: setup.repo.integration_id } : null;
+    const access = await githubAccess(repos, project, setup, target.entry ?? legacy);
+    if (!access) throw new ControlError('GITHUB_NO_ACCESS', msg('Integração do GitHub sem acesso'));
+    return access;
   }
 
   /**
@@ -301,6 +304,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     run: AutomationRun,
     task: Task,
     place: Extract<Placement, { machine: unknown }>,
+    target: RunRepo,
     work?: { branch: string; base: string; prompt: string },
   ): Promise<void> {
     const { automation, repo, runner } = setup;
@@ -308,20 +312,28 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     let tabId: string;
     try {
       const epic = !work && task.epic_id ? await repos.tasks.findById(task.epic_id) : undefined;
-      const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup);
-      branch = work ? work.branch : implementerBranchOf(task, repo);
+      // the card's repository gives the base and the branch pattern (multi-repo Task 11); one repository per epic for now
+      const { base, epicBranch } = work ? { base: work.base, epicBranch: null } : targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, setup, target.branch);
+      branch = work ? work.branch : implementerBranchOf(task, target.branch);
       const { permission, dropped } = startPermission(automation, branch);
       if (dropped > 0) log.warn({ runId: run.id, taskId: task.id, code: 'ALLOWED_TOOL_DROPPED', count: dropped }, 'automation: allow rules too broad for an automatic tab dropped');
       // the profile is stored on the run: restarts and swaps keep it even if the setup changes (F-12)
       if (!(await write(run, { status: 'starting', machine_id: place.machine.id, account_id: place.account.id, branch, allowed_tools: permission.allowedTools }))) return;
       if (epicBranch) {
-        const gh = await githubToken(project, setup);
-        await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, repo?.base_branch ?? 'main', epicBranch);
+        const gh = await githubToken(project, setup, target);
+        await deps.ensureEpicBranch({ gh: deps.gh, ...gh }, baseOf(target, setup), epicBranch);
         // TER-1150: the epic is born with its first card: it goes to Fazendo, and the feed says when and by whom
         if (epic) await epicBorn({ repos, log }, epic, task, epicBranch);
       }
-      const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.link.cwd, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
+      // R5: the worktree is cut in the checkout of the card's repository on this machine; its path stays <root>/<pid>/<ref>
+      const ws = await deps.ensureWorkspace(place.machine, { repoDir: place.repoDir, root: automation.worktrees_dir, projectId: project.id, ref: task.ref, branch, base });
       if (!(await write(run, { worktree_path: ws.path }))) return;
+      if (target.repositoryId) {
+        // R11: the run's repository; without the row the cleanup falls back to the project's run repository
+        await repos.automationRunRepos
+          .add({ run_id: run.id, repository_id: target.repositoryId, branch, base, worktree_path: ws.path })
+          .catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run repository not recorded'));
+      }
       const prompt =
         work?.prompt ??
         implementerPrompt({
@@ -329,7 +341,9 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
           branch,
           naming: namingRule(task, repo),
           base,
-          policy: policyText(automation, repo?.deploy_workflow ?? null, await runPromptRepos(repos, project.id, setup)),
+          // only a multi-repo project names the repository: a single-repo prompt stays byte for byte the same
+          repo: target.multi && target.entry ? target.entry.full_name : null,
+          policy: policyText(automation, (target.multi ? target.entry?.deploy_workflow : repo?.deploy_workflow) ?? null, await runPromptRepos(repos, project.id, setup, target.entry)),
           custom: automation.prompts.implementer,
           description: task.description,
           rules: await currentRulesBlock(repos, project.owner_id, project.id),
@@ -369,15 +383,16 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
    * Work on the card's ticket that this card's runs did not start (TER-1110): a tab, an open PR or a branch on
    * GitHub that names its ref or its ticket's key. GitHub is asked only here, once per card about to start.
    */
-  async function existingWork(project: Project, setup: ProjectSetupData, task: Task): Promise<ExistingWork | null> {
+  async function existingWork(project: Project, setup: ProjectSetupData, task: Task, target: RunRepo): Promise<ExistingWork | null> {
     let own: string | null = null;
     try {
-      own = implementerBranchOf(task, setup.repo);
+      own = implementerBranchOf(task, target.branch);
     } catch {
       // the start itself fails on it and says why
     }
-    const github = await githubToken(project, setup).catch(() => null);
-    return findExistingWork({ repos, github: github && { gh: deps.gh, ...github }, log }, task, own, setup.repo?.base_branch ?? 'main');
+    // GitHub is asked about the card's repository (multi-repo Task 11)
+    const github = await githubToken(project, setup, target).catch(() => null);
+    return findExistingWork({ repos, github: github && { gh: deps.gh, ...github }, log }, task, own, baseOf(target, setup));
   }
 
   /** The card leaves the queue (untagged) with the work it found in the feed: no second agent on the ticket. */
@@ -449,13 +464,28 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
         await release(run);
         continue;
       }
-      const place = await placeRun(deps, project, wanted.setup, tickStarts);
+      // the card's repository (multi-repo R5): the queue already checked it, so a refusal here is a race
+      let target: RunRepo;
+      try {
+        target = await resolveRunRepo(repos, projectId, wanted.setup, wanted.task.repo_keys ?? []);
+      } catch (e) {
+        log.warn({ taskId: item.task_id, code: errorCode(e) }, 'automation: card repository not resolved');
+        await release(run);
+        continue;
+      }
+      const place = await placeRun(deps, project, wanted.setup, tickStarts, target);
       if ('waiting' in place) {
         const why = place.waiting;
         if (why === 'later') {
           // every place took a start already in this pass: the card stays as it was and the next tick asks again
           await release(run);
           return;
+        }
+        if (why === 'repo_not_on_machine') {
+          // about this card's repository only: the cards after it may work on another one
+          await release(run);
+          noteWaiting(item.task_id, why, deps.now(), place.detail ?? null);
+          continue;
         }
         // No place now: the claim goes away and the card (and those after it, which would get the same
         // answer) shows why it waits. Not an error, and no event per tick.
@@ -465,7 +495,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       }
       // TER-1110: someone already works on this ticket (a tab opened by hand, a PR, a branch): no second agent.
       // Only once the card has a place, so a card waiting for one does not ask GitHub on every tick.
-      const found = await existingWork(project, wanted.setup, wanted.task).catch((e: unknown) => {
+      const found = await existingWork(project, wanted.setup, wanted.task, target).catch((e: unknown) => {
         log.warn({ taskId: item.task_id, code: errorCode(e) }, 'automation: existing work not checked');
         return null;
       });
@@ -477,7 +507,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       clearWaiting(item.task_id);
       placed(place);
       starting.add(item.task_id);
-      const p = launch(ctx, project, wanted.setup, run, wanted.task, place).finally(() => {
+      const p = launch(ctx, project, wanted.setup, run, wanted.task, place, target).finally(() => {
         starting.delete(item.task_id);
         inflight.delete(p);
       });
@@ -506,7 +536,15 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
       await release(run);
       return 'tab_busy';
     }
-    const place = await placeRun(deps, project, setup.data, tickStarts);
+    let target: RunRepo;
+    try {
+      target = await resolveRunRepo(repos, project.id, setup.data, task.repo_keys ?? []);
+    } catch (e) {
+      log.warn({ runId: run.id, taskId: task.id, code: errorCode(e) }, 'automation: card repository not resolved for a triggered run');
+      await release(run);
+      return 'waiting';
+    }
+    const place = await placeRun(deps, project, setup.data, tickStarts, target);
     if ('waiting' in place) {
       // no row is kept: the next CI sync asks again (the trigger is still free)
       await release(run);
@@ -514,7 +552,7 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     }
     placed(place);
     starting.add(task.id);
-    const p = launch(controlContextFor(repos, owner), project, setup.data, run, task, place, { branch: i.branch, base: i.base, prompt: i.prompt }).finally(() => {
+    const p = launch(controlContextFor(repos, owner), project, setup.data, run, task, place, target, { branch: i.branch, base: i.base, prompt: i.prompt }).finally(() => {
       starting.delete(task.id);
       inflight.delete(p);
     });
@@ -535,6 +573,8 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     const patch: AutomationRunPatch = { status: 'starting', tab_id: tab.id, machine_id: tab.machine_id, account_id: account, branch: i.branch, worktree_path: prev.worktree_path };
     if (prev.allowed_tools) patch.allowed_tools = prev.allowed_tools;
     if (!(await write(run, patch))) return 'taken';
+    // spec §7: the fixer works in the same worktree, so it gets the previous run's repositories
+    await repos.automationRunRepos.copy(prev.id, run.id).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run repositories not copied'));
     // D24: the last check before anything is typed
     if (halted() || (await isPaused(repos, project.owner_id, project.id))) {
       await release(run);

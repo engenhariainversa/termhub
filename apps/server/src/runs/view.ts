@@ -28,6 +28,13 @@ export interface RunView {
   events_url: string;
 }
 
+/** The workspace without the checkout folder the sweeper reads (`repo_dir`): the API answers what it did before. */
+function publicWorkspace(ws: ApiRun['workspace']): ApiRun['workspace'] {
+  if (!ws || ws.repo_dir === undefined) return ws;
+  const { repo_dir: _, ...rest } = ws;
+  return rest;
+}
+
 export function toRunView(run: ApiRun): RunView {
   return {
     id: run.id,
@@ -38,7 +45,7 @@ export function toRunView(run: ApiRun): RunView {
     capabilities: run.capabilities,
     machine: run.machine_id ? { id: run.machine_id, name: run.machine_name } : null,
     account: run.account_label,
-    workspace: run.workspace,
+    workspace: publicWorkspace(run.workspace),
     result: run.result,
     usage: run.usage,
     error: run.error_code ? { code: run.error_code, message: run.error_message } : null,

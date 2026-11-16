@@ -8,6 +8,7 @@ import type { AiAccount, Machine, User } from '../db/repositories/types.js';
 import { getAccountUsage } from '../ai/index.js';
 import { resetAt } from '../automation/quota.js';
 import { ensureWorkspace } from '../automation/branches.js';
+import { baseOf, checkoutDirOn, repoDirOf, resolveRunRepo } from '../automation/run-repo.js';
 import { localeOf, msg, t, tk, type Locale } from '../i18n/index.js';
 import type { LocalizedText } from '../i18n/index.js';
 import { claudeAdapter } from './adapters/claude.js';
@@ -353,13 +354,22 @@ export class RunService {
     return this.finalize(st, 'failed', failure, null);
   }
 
-  /** read → the project's folder; edit/run_commands → a disposable worktree `<worktrees_dir>/<projectId>/run-<id>`. */
+  /**
+   * read → the project's folder; edit/run_commands → a disposable worktree `<worktrees_dir>/<projectId>/run-<id>`,
+   * cut from the checkout of the project's run repository on that machine, from its base branch (multi-repo
+   * R5, TER-1066): a link that points at a parent folder holding several repositories still works. A
+   * single-repo project reads the link's folder and `setup.repo`'s base, as before.
+   */
   private async workspace(st: Active, c: Candidate, setup: Awaited<ReturnType<Repositories['projectSetup']['get']>>['data']): Promise<ApiRunWorkspace> {
     if (!st.run.capabilities.some((cap) => WORKTREE_CAPS.includes(cap as Capability))) return { kind: 'project', path: c.cwd, branch: null };
     const ensure = this.deps.ensureWorktree ?? ensureWorkspace;
     const branch = `termhub/run-${st.run.id}`;
-    const r = await ensure(c.machine, { repoDir: c.cwd, root: setup.automation.worktrees_dir, projectId: st.run.project_id, ref: `run-${st.run.id}`, branch, base: setup.repo?.base_branch ?? 'main' });
-    return { kind: 'worktree', path: r.path, branch };
+    const target = await resolveRunRepo(this.deps.repos, st.run.project_id, setup, []);
+    const dir = checkoutDirOn(target, c.machine.id);
+    if (dir === null) throw new Error('repository not on this machine');
+    const repoDir = repoDirOf(c.cwd, dir);
+    const r = await ensure(c.machine, { repoDir, root: setup.automation.worktrees_dir, projectId: st.run.project_id, ref: `run-${st.run.id}`, branch, base: baseOf(target, setup) });
+    return { kind: 'worktree', path: r.path, branch, ...(repoDir === c.cwd ? {} : { repo_dir: repoDir }) };
   }
 
   /** One try on one account: resolves when the run ended on it, or when it should move to the next one. */

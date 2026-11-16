@@ -2,10 +2,11 @@ import { controlContextFor, type ControlContext } from '../control/context.js';
 import { closeTab as closeTabFn } from '../control/terminals.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AutomationRun } from '../db/repositories/automation-runs.js';
-import type { Project } from '../db/repositories/types.js';
+import type { Project, ProjectMachine, ProjectRepository } from '../db/repositories/types.js';
 import type { ProjectSetupData } from '../setup/schema.js';
 import { removeWorkspace as removeWorkspaceFn } from './branches.js';
 import { recordEvent } from './events.js';
+import { checkoutDirOn, pickRunRepo, repoDirOf } from './run-repo.js';
 
 /*
  * After a merge (agentic board spec §7, TER-871): the card's worktree is removed and the finished run's tab
@@ -68,6 +69,27 @@ export async function markCancelledWorktreesDue(repos: Repositories, projectId: 
     due.push(...(await repos.automationRuns.markCleanupDue([taskId])));
   }
   return due;
+}
+
+/**
+ * The checkout a run's worktree belongs to on its machine (multi-repo R5, outline Task 11): the repository
+ * of the run's `automation_run_repos` row (a fixer that took over the tab has a copy), else the project's
+ * run repository on that machine, else the link's folder (a run started before either existed).
+ */
+async function repoDirOfRuns(repos: Repositories, setup: ProjectSetupData, runs: AutomationRun[], machineId: string, link: ProjectMachine): Promise<string> {
+  // fakes without these tables read the link's folder
+  if (!repos.projectRepositories || !repos.automationRunRepos) return link.cwd;
+  const discovered: ProjectRepository[] = await repos.projectRepositories.listByProject(runs[0]!.project_id);
+  for (const run of runs) {
+    const row = (await repos.automationRunRepos.listByRun(run.id))[0];
+    const checkout = row ? discovered.find((r) => r.id === row.repository_id)?.checkouts.find((c) => c.machine_id === machineId) : undefined;
+    if (checkout) return repoDirOf(link.cwd, checkout.dir);
+  }
+  try {
+    return repoDirOf(link.cwd, checkoutDirOn(pickRunRepo(setup, discovered, []), machineId) ?? '.');
+  } catch {
+    return link.cwd;
+  }
 }
 
 /**
@@ -153,7 +175,8 @@ export async function cleanupRuns(deps: CleanupDeps, project: Pick<Project, 'id'
         for (const r of group) await settle(r, 'done', null); // the machine or its link is gone: nothing to remove
         continue;
       }
-      const r = await remove(machine, { repoDir: link.cwd, root: setup.automation.worktrees_dir, path: run.worktree_path! });
+      const repoDir = await repoDirOfRuns(repos, setup, group, machine.id, link);
+      const r = await remove(machine, { repoDir, root: setup.automation.worktrees_dir, path: run.worktree_path! });
       if (r.dirty) {
         result.kept++;
         for (const x of group) await settle(x, 'kept', 'kept');

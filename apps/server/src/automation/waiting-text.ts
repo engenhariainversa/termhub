@@ -10,6 +10,7 @@ const MACHINE_TEXT: Record<MachineVerdict, string> = {
   no_claude: tk('sem o Claude instalado'),
   not_allowed: tk('não aceita trabalho automático'),
   no_room: tk('sem folga (memória/disco/carga)'),
+  no_checkout: tk('repositório fora da pasta do projeto nesta máquina'),
 };
 
 const ACCOUNT_TEXT: Record<AccountVerdict, string> = {

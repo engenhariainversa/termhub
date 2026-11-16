@@ -402,6 +402,7 @@ model ProjectRepository {
   updatedAt    DateTime                    @default(now()) @updatedAt @map("updated_at")
   project      Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   checkouts    ProjectRepositoryCheckout[]
+  runRepos     AutomationRunRepo[]
 
   @@unique([projectId, fullName])
   @@unique([projectId, key])
@@ -830,10 +831,31 @@ model AutomationRun {
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
   project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task            Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  repos           AutomationRunRepo[]
 
   @@index([projectId, status], map: "automation_runs_project_status_idx")
   @@index([tabId])
   @@map("automation_runs")
+}
+
+/// The repositories a run works on (spec 2026-10-07 multi-repo R11, §4): one row per repository, with its
+/// branch, base and worktree. A run of a single-repo project read from `setup.repo` alone (nothing discovered
+/// yet) has no row.
+model AutomationRunRepo {
+  runId        String            @map("run_id")
+  repositoryId String            @map("repository_id")
+  branch       String
+  base         String
+  worktreePath String            @map("worktree_path")
+  /// ready | pr_open | no_changes | removed
+  state        String            @default("ready")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  run          AutomationRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  repository   ProjectRepository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@id([runId, repositoryId])
+  @@index([repositoryId])
+  @@map("automation_run_repos")
 }
 
 /// Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was

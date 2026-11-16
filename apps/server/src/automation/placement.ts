@@ -12,9 +12,10 @@ import type { AiAccount, Machine, Project, ProjectMachine } from '../db/reposito
 import type { ProjectSetupData } from '../setup/schema.js';
 import type { IneligibleReason } from './eligibility.js';
 import type { RoomReading } from './machine-room.js';
+import { checkoutDirOn, repoDirOf, type RunRepo } from './run-repo.js';
 
 /** Why an eligible card found no place this tick (spec §8 step 3). Not an error and not an event. */
-export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline' | 'no_room' | 'automation_not_allowed';
+export type WaitingReason = 'no_machine' | 'no_account' | 'machine_offline' | 'no_room' | 'automation_not_allowed' | 'repo_not_on_machine';
 
 /** Spike §2: automatic starts keep more headroom than a person's `start_agent` (`SWAP_MAX_UTILIZATION`). */
 export const AUTOMATIC_MAX_UTILIZATION = 80;
@@ -39,7 +40,7 @@ export interface TickStarts {
 }
 
 /** Why a linked machine was left out (TER-985: the waiting reason names each one). */
-export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_guard' | 'no_claude' | 'not_allowed' | 'no_room';
+export type MachineVerdict = 'not_agent' | 'offline' | 'no_worktree' | 'no_guard' | 'no_claude' | 'not_allowed' | 'no_room' | 'no_checkout';
 /**
  * Why a Claude account of a usable machine was left out: not in the project's list ("Contas de IA e
  * modelo"), marked exhausted, at or above `AUTOMATIC_MAX_UTILIZATION`, already given a start this tick,
@@ -56,7 +57,8 @@ export interface PlaceDetail {
 }
 
 export type Placement =
-  | { machine: Machine; account: AiAccount; link: ProjectMachine }
+  /** `repoDir`: the run's repository on that machine (the link's folder, or its checkout under it: multi-repo R5) */
+  | { machine: Machine; account: AiAccount; link: ProjectMachine; repoDir: string }
   // `later`: every place is taken by a start of this tick; nothing to show, the next tick asks again
   | { waiting: WaitingReason | 'later'; detail?: PlaceDetail };
 
@@ -87,8 +89,12 @@ function machineVerdict(m: Machine): MachineVerdict | null {
  * falls back to a full account: the card waits instead, with `detail` naming each machine and account left
  * out and why (TER-985). The cheap checks come first, so a machine is only read (`hw.probe`) when an account
  * would otherwise be chosen on it.
+ *
+ * `repo` (multi-repo R5, outline Task 11): the run's repository. A machine whose folder has no present checkout
+ * of it is left out (`no_checkout`), and when that leaves no machine the card waits with `repo_not_on_machine`.
+ * Without it, the run works in the link's folder.
  */
-export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData, tick?: TickStarts): Promise<Placement> {
+export async function placeRun(deps: PlacementDeps, project: Project, setup: ProjectSetupData, tick?: TickStarts, repo?: RunRepo | null): Promise<Placement> {
   const { repos } = deps;
   const { ai } = setup;
   if (!project.owner_id) return { waiting: 'no_machine' };
@@ -100,15 +106,25 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
     if (machine && machine.owner_id === project.owner_id) linked.push({ machine, link });
   }
   const detail: PlaceDetail = { listed: ai.accounts.length, machines: [], accounts: [] };
+  const dirOf = new Map<string, string>();
   const ready: typeof linked = [];
+  let away = 0;
   for (const place of linked) {
+    const dir = repo ? checkoutDirOn(repo, place.machine.id) : '.';
+    if (dir === null) {
+      away++;
+      detail.machines.push({ id: place.machine.id, name: place.machine.name, why: 'no_checkout' });
+      continue;
+    }
+    dirOf.set(place.machine.id, dir);
     const why = machineVerdict(place.machine);
     if (why) detail.machines.push({ id: place.machine.id, name: place.machine.name, why });
     else ready.push(place);
   }
   // ssh and local machines are never chosen (D10)
-  const capable = linked.filter(({ machine }) => machine.type === 'agent' && capableNow(machine) && machine.capabilities.includes('claude'));
-  if (capable.length === 0) return { waiting: linked.some(({ machine }) => machine.type === 'agent' && capableButOffline(machine)) ? 'machine_offline' : 'no_machine', detail };
+  const capable = linked.filter(({ machine }) => dirOf.has(machine.id) && machine.type === 'agent' && capableNow(machine) && machine.capabilities.includes('claude'));
+  if (capable.length === 0 && away > 0 && dirOf.size === 0) return { waiting: 'repo_not_on_machine', detail };
+  if (capable.length === 0) return { waiting: linked.some(({ machine }) => dirOf.has(machine.id) && machine.type === 'agent' && capableButOffline(machine)) ? 'machine_offline' : 'no_machine', detail };
   if (ready.length === 0) return { waiting: 'automation_not_allowed', detail };
 
   const [listed, exhausted] = await Promise.all([repos.aiAccounts.list(project.owner_id), repos.aiAccountExhaustions.activeIds(deps.now())]);
@@ -157,7 +173,7 @@ export async function placeRun(deps: PlacementDeps, project: Project, setup: Pro
         continue;
       }
     }
-    return { machine: place.machine, account, link: place.link };
+    return { machine: place.machine, account, link: place.link, repoDir: repoDirOf(place.link.cwd, dirOf.get(place.machine.id)!) };
   }
   return crowded ? { waiting: 'no_room', detail } : taken ? { waiting: 'later' } : { waiting: 'no_account', detail };
 }
@@ -169,6 +185,7 @@ export const WAITING_AS_REASON: Record<WaitingReason, IneligibleReason> = {
   machine_offline: 'machine_offline',
   no_room: 'no_room',
   automation_not_allowed: 'automation_not_allowed',
+  repo_not_on_machine: 'repo_not_on_machine',
 };
 
 /**

@@ -8,6 +8,9 @@ import { automationBus, dispatchTriggers } from './events.js';
 /** What every owner answers unless a test says otherwise: no version of the Terms pending (TER-742). */
 const DEFAULTS: Record<string, Record<string, (...args: never[]) => unknown>> = {
   legal: { statusFor: async () => ({ pending: [], upcoming: [] }) },
+  // multi-repo Task 11: nothing discovered, no run repository rows (a single-repo project read from `setup.repo`)
+  projectRepositories: { listByProject: async () => [] },
+  automationRunRepos: { listByRun: async () => [], add: async () => {}, copy: async () => 0 },
 };
 
 /** Repositories that record every call and answer only what `impl` (or DEFAULTS) defines (anything else throws). */

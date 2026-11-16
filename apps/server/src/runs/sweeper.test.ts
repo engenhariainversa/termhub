@@ -53,6 +53,12 @@ describe('sweepRuns', () => {
     expect(apiRuns.setStatus).toHaveBeenCalledWith('r', { workspace: { kind: 'worktree', path: '/w/p1/run-r', branch: 'termhub/run-r', removed_at: NOW.toISOString() } });
   });
 
+  it('TER-1066: removes the worktree from the checkout it was cut from (repo_dir)', async () => {
+    const { d, remove } = deps({ worktrees: [run({ workspace: { kind: 'worktree', path: '/w/p1/run-r', branch: 'termhub/run-r', repo_dir: '/home/u/proj/frontend' } })] });
+    await sweepRuns(d);
+    expect(remove).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1' }), { repoDir: '/home/u/proj/frontend', root: '~/.termhub/worktrees', path: '/w/p1/run-r' });
+  });
+
   it('keeps a dirty worktree for the next sweep, and an offline machine too', async () => {
     const dirty = deps({ worktrees: [run({})], remove: vi.fn(async () => ({ removed: false, dirty: true })) });
     expect((await sweepRuns(dirty.d)).worktrees).toBe(0);

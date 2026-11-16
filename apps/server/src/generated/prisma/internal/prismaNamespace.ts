@@ -420,6 +420,7 @@ export const ModelName = {
   AutomationEvent: 'AutomationEvent',
   TabGcArchive: 'TabGcArchive',
   AutomationRun: 'AutomationRun',
+  AutomationRunRepo: 'AutomationRunRepo',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
   AiMemoryPage: 'AiMemoryPage',
@@ -493,7 +494,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "apiRun" | "apiRunEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "automationRunRepo" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "apiRun" | "apiRunEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2196,6 +2197,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.AutomationRunCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.AutomationRunCountAggregateOutputType> | number
+        }
+      }
+    }
+    AutomationRunRepo: {
+      payload: Prisma.$AutomationRunRepoPayload<ExtArgs>
+      fields: Prisma.AutomationRunRepoFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.AutomationRunRepoFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.AutomationRunRepoFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        findFirst: {
+          args: Prisma.AutomationRunRepoFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.AutomationRunRepoFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        findMany: {
+          args: Prisma.AutomationRunRepoFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>[]
+        }
+        create: {
+          args: Prisma.AutomationRunRepoCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        createMany: {
+          args: Prisma.AutomationRunRepoCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.AutomationRunRepoCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>[]
+        }
+        delete: {
+          args: Prisma.AutomationRunRepoDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        update: {
+          args: Prisma.AutomationRunRepoUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        deleteMany: {
+          args: Prisma.AutomationRunRepoDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.AutomationRunRepoUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.AutomationRunRepoUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>[]
+        }
+        upsert: {
+          args: Prisma.AutomationRunRepoUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$AutomationRunRepoPayload>
+        }
+        aggregate: {
+          args: Prisma.AutomationRunRepoAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateAutomationRunRepo>
+        }
+        groupBy: {
+          args: Prisma.AutomationRunRepoGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunRepoGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.AutomationRunRepoCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AutomationRunRepoCountAggregateOutputType> | number
         }
       }
     }
@@ -6961,6 +7036,19 @@ export const AutomationRunScalarFieldEnum = {
 export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
 
 
+export const AutomationRunRepoScalarFieldEnum = {
+  runId: 'runId',
+  repositoryId: 'repositoryId',
+  branch: 'branch',
+  base: 'base',
+  worktreePath: 'worktreePath',
+  state: 'state',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationRunRepoScalarFieldEnum = (typeof AutomationRunRepoScalarFieldEnum)[keyof typeof AutomationRunRepoScalarFieldEnum]
+
+
 export const TabUsageScalarFieldEnum = {
   tabId: 'tabId',
   sessionId: 'sessionId',
@@ -8385,6 +8473,7 @@ export type GlobalOmitConfig = {
   automationEvent?: Prisma.AutomationEventOmit
   tabGcArchive?: Prisma.TabGcArchiveOmit
   automationRun?: Prisma.AutomationRunOmit
+  automationRunRepo?: Prisma.AutomationRunRepoOmit
   tabUsage?: Prisma.TabUsageOmit
   tabUsageDay?: Prisma.TabUsageDayOmit
   aiMemoryPage?: Prisma.AiMemoryPageOmit

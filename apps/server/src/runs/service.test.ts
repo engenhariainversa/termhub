@@ -7,6 +7,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, Machine, User } from '../db/repositories/types.js';
 import type { Candidate, RouteResult } from './routing.js';
 import { RunService, type CreateRunInput, type RunAgents } from './service.js';
+import { toRunView } from './view.js';
 
 const NOW = new Date('2026-11-12T12:00:00.000Z');
 const user = { id: 'u1', email: 'a@b.c', locale: 'en' } as unknown as User;
@@ -118,16 +119,18 @@ const account = (id: string, machineId: string, provider: AiAccount['provider'] 
   ({ id, label: `L-${id}`, provider, machine_id: machineId, config_dir: `~/.claude-${id}`, exclusive_project: null, login_expires_at: null, created_at: '' }) as AiAccount;
 const cand = (a: AiAccount, m: Machine): Candidate => ({ account: a, machine: m, provider: a.provider === 'chatgpt' ? 'codex' : 'claude', cwd: '/p' });
 
-function setup(opts: { candidates?: Candidate[]; refuse?: string[] } = {}) {
+function setup(opts: { candidates?: Candidate[]; refuse?: string[]; discovered?: unknown[]; repo?: Record<string, unknown> } = {}) {
   const mem = memoryRuns();
   const agents = fakeAgents({ refuse: opts.refuse });
   const marked: string[] = [];
   const worktrees: Array<{ path: string; branch: string }> = [];
+  const cut: Array<{ repoDir: string; base: string }> = [];
   const repos = {
     apiRuns: mem.repo,
     users: { chatBlockedModels: async () => [] },
     projects: { findById: async (id: string) => (id === 'p1' ? { id: 'p1', key: 'TER', name: 'termhub', owner_id: 'u1' } : undefined), findByKey: async () => undefined },
-    projectSetup: { get: async () => ({ data: { ai: { accounts: [], models: { claude: null, chatgpt: null } }, repo: { base_branch: 'main' }, automation: { worktrees_dir: '~/.termhub/worktrees' } } }) },
+    projectSetup: { get: async () => ({ data: { ai: { accounts: [], models: { claude: null, chatgpt: null } }, repo: opts.repo ?? { base_branch: 'main' }, automation: { worktrees_dir: '~/.termhub/worktrees' } } }) },
+    ...(opts.discovered ? { projectRepositories: { listByProject: async () => opts.discovered } } : {}),
   } as unknown as Repositories;
   const candidates = opts.candidates ?? [cand(account('a1', 'm1'), machine('m1')), cand(account('a2', 'm2'), machine('m2'))];
   const route = vi.fn(async (): Promise<RouteResult> => ({ candidates, skipped: [], ai: { accounts: [], models: { claude: null, chatgpt: 'gpt-5.5' } } as unknown as RouteResult['ai'] }));
@@ -139,6 +142,7 @@ function setup(opts: { candidates?: Candidate[]; refuse?: string[] } = {}) {
     ensureWorktree: async (_m, i) => {
       const path = `/home/u/.termhub/worktrees/${i.projectId}/${i.ref}`;
       worktrees.push({ path, branch: i.branch });
+      cut.push({ repoDir: i.repoDir, base: i.base });
       return { path };
     },
     markExhausted: async (a) => {
@@ -148,7 +152,7 @@ function setup(opts: { candidates?: Candidate[]; refuse?: string[] } = {}) {
     offlineCheckMs: 50,
     pollMs: 20,
   });
-  return { service, mem, agents, marked, worktrees, route };
+  return { service, mem, agents, marked, worktrees, cut, route };
 }
 
 const input = (over: Partial<CreateRunInput> = {}): CreateRunInput => ({ project: 'p1', prompt: 'leia o README', capabilities: ['read'], timeout_s: 600, ...over });
@@ -294,6 +298,26 @@ describe('RunService', () => {
     expect(ch.params).toMatchObject({ cwd: path, tools: ['Read', 'Grep', 'Glob', 'Edit', 'Write'], guard: { branch: `termhub/run-${run.id}`, worktree: path } });
     ch.handlers.onExit(0);
     await vi.waitFor(() => expect(mem.runs.get(run.id)!.workspace).toMatchObject({ kind: 'worktree', path }));
+  });
+
+  it("TER-1066: an edit run cuts its worktree in the run repository's checkout under the project folder, kept off the API", async () => {
+    const co = { machine_id: 'm1', dir: 'frontend', default_branch: 'develop', has_commits: true, seen_at: '', missing_at: null };
+    const discovered = [{ id: 'r1', project_id: 'p1', full_name: 'acme/app', key: 'frontend', description: null, status: 'ok', discovered_at: '', updated_at: '', checkouts: [co] }];
+    const { service, mem, agents, worktrees, cut } = setup({ discovered, repo: { integration_id: 'i', full_name: 'acme/app', base_branch: 'release' } });
+    const { run } = await service.create({ user, token }, input({ capabilities: ['read', 'edit'] }));
+    const ch = await channel(agents, 0);
+    expect(cut).toEqual([{ repoDir: '/p/frontend', base: 'release' }]);
+    ch.handlers.onExit(0);
+    await vi.waitFor(() => expect(mem.runs.get(run.id)!.workspace).toEqual({ kind: 'worktree', path: worktrees[0]!.path, branch: `termhub/run-${run.id}`, repo_dir: '/p/frontend' }));
+    expect(toRunView(mem.runs.get(run.id)!).workspace).toEqual({ kind: 'worktree', path: worktrees[0]!.path, branch: `termhub/run-${run.id}` });
+  });
+
+  it('TER-1066: a single-repo project cuts the worktree in the link folder, with no repo_dir stored', async () => {
+    const { service, mem, agents, cut } = setup();
+    const { run } = await service.create({ user, token }, input({ capabilities: ['read', 'edit'] }));
+    (await channel(agents, 0)).handlers.onExit(0);
+    expect(cut).toEqual([{ repoDir: '/p', base: 'main' }]);
+    await vi.waitFor(() => expect(mem.runs.get(run.id)!.workspace).not.toHaveProperty('repo_dir'));
   });
 
   it('a Codex run gets the sandbox and the Setup model, no tools nor guard', async () => {

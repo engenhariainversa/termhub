@@ -994,6 +994,72 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       expect(await repos.automationEvents.insertOnce({ project_id: projectId, task_id: c.id, kind: 'repo_unknown', payload: { ref: c.ref } })).toBeNull();
     });
 
+    describe('runs in the card repository (Task 11)', () => {
+      const promptOf = (startAgent: ReturnType<typeof makeDeps>['startAgent'], n = 0) => (startAgent.mock.calls[n]![1] as unknown as { prompt: string }).prompt;
+
+      it("cuts the worktree in the repository's checkout of each machine, whatever its layout, and records the run's repository", async () => {
+        reg.caps.set(machineId, ['worktree', 'repo_scan']);
+        await twoRepos({ apiIntegration: true });
+        // a second machine whose folder holds the same repository at another path
+        const m2 = newId();
+        await db.machine.create({ data: { id: m2, name: 'm2', type: 'agent', ownerId, capabilities: ['claude'], agentVersion: '0.36.0' } });
+        try {
+          await repos.projectMachines.link({ project_id: projectId, machine_id: m2, cwd: '/srv/code' });
+          const account2 = (await repos.aiAccounts.create({ provider: 'claude', label: 'second', machine_id: m2 })).id;
+          reg.online.add(m2);
+          reg.caps.set(m2, ['worktree', 'repo_scan']);
+          await repos.projectRepositories.upsertDiscovered(projectId, m2, [{ full_name: 'acme/app', dir: 'src/app', default_branch: 'main', has_commits: true }]);
+          const { data } = await repos.projectSetup.get(projectId);
+          await repos.projectSetup.save(projectId, { ...data, ai: { ...data.ai, accounts: [account2, accountId] } });
+
+          const app = await repoCard('no app', ['app']);
+          const api = await repoCard('na api', ['api']);
+          const { deps, startAgent, ensureWorkspace } = makeDeps();
+          await tickOnce(deps);
+          // one start per machine per tick (R6): app on m2 (first account), api on m1, the only one with it
+          const byRef = new Map(ensureWorkspace.mock.calls.map((c) => [(c[1] as { ref: string }).ref, c]));
+          expect(byRef.get(app.ref)![0]).toMatchObject({ id: m2 });
+          expect(byRef.get(app.ref)![1]).toEqual({ repoDir: '/srv/code/src/app', root: '~/.termhub/worktrees', projectId, ref: app.ref, branch: `${app.ref}-no-app`, base: 'main' });
+          expect(byRef.get(api.ref)![0]).toMatchObject({ id: machineId });
+          expect(byRef.get(api.ref)![1]).toMatchObject({ repoDir: '/home/u/app/api', ref: api.ref });
+          const prompts = [promptOf(startAgent, 0), promptOf(startAgent, 1)];
+          expect(prompts.some((p) => p.includes(`Trabalhe no repositório acme/app, na branch ${app.ref}-no-app (base main).`))).toBe(true);
+          expect(prompts.some((p) => p.includes(`Trabalhe no repositório acme/api, na branch ${api.ref}-na-api (base main).`))).toBe(true);
+
+          const discovered = new Map((await repos.projectRepositories.listByProject(projectId)).map((r) => [r.key, r.id]));
+          const runs = new Map((await runsOf()).map((r) => [r.taskId, r]));
+          expect(await repos.automationRunRepos.listByRun(runs.get(api.id)!.id)).toEqual([
+            expect.objectContaining({ repository_id: discovered.get('api'), branch: `${api.ref}-na-api`, base: 'main', worktree_path: `/home/u/.termhub/worktrees/${projectId}/${api.ref}`, state: 'ready' }),
+          ]);
+
+          // the cleanup removes the worktree from the same checkout
+          await repos.tasks.delete(api.id);
+          const { deps: next, removeWorkspace } = makeDeps();
+          await tickOnce(next);
+          expect(removeWorkspace).toHaveBeenCalledWith(expect.objectContaining({ id: machineId }), {
+            repoDir: '/home/u/app/api',
+            root: '~/.termhub/worktrees',
+            path: `/home/u/.termhub/worktrees/${projectId}/${api.ref}`,
+          });
+        } finally {
+          await db.machine.deleteMany({ where: { id: m2 } });
+        }
+      });
+
+      it('a checkout gone from the only machine that had it: no start, and the queue says why', async () => {
+        reg.caps.set(machineId, ['worktree', 'repo_scan']);
+        await twoRepos({ apiIntegration: true });
+        const appRepo = (await repos.projectRepositories.listByProject(projectId)).find((r) => r.key === 'app')!;
+        await repos.projectRepositories.markMissing(projectId, machineId, [appRepo.id]);
+        const c = await repoCard('na api', ['api']);
+        const { deps, startAgent } = makeDeps();
+        await tickOnce(deps);
+        expect(startAgent).not.toHaveBeenCalled();
+        expect(await runsOf()).toEqual([]);
+        expect(await reasonOf(c.id)).toBe('repo_not_on_machine');
+      });
+    });
+
     it('gives the claim back when the wake did not start', async () => {
       reg.caps.set(machineId, ['worktree', 'repo_scan']);
       await twoRepos({ apiIntegration: true });
@@ -1002,6 +1068,29 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       await tickOnce(deps);
       expect((await eventsOf()).filter((e) => e.kind === 'repo_unknown')).toHaveLength(0);
     });
+  });
+
+  it('Task 11: a single-repo project keeps the worktree path, prompt and allow list byte for byte once its repository is discovered', async () => {
+    reg.caps.set(machineId, ['worktree', 'repo_scan']);
+    const before = await card();
+    const first = makeDeps();
+    await tickOnce(first.deps);
+    await repos.projectRepositories.upsertDiscovered(projectId, machineId, [{ full_name: 'acme/app', dir: '.', default_branch: 'main', has_commits: true }]);
+    const after = await card();
+    const second = makeDeps();
+    await tickOnce(second.deps);
+    const same = (x: unknown) => JSON.stringify(x, (_k, v: unknown) => (typeof v === 'function' ? 'fn' : v)).replaceAll(before.ref, 'REF').replaceAll(before.id, 'ID');
+    const sameAfter = (x: unknown) => JSON.stringify(x, (_k, v: unknown) => (typeof v === 'function' ? 'fn' : v)).replaceAll(after.ref, 'REF').replaceAll(after.id, 'ID');
+    expect(second.ensureWorkspace.mock.calls[0]![1]).toEqual({ repoDir: '/home/u/app', root: '~/.termhub/worktrees', projectId, ref: after.ref, branch: `${after.ref}-card`, base: 'main' });
+    expect(sameAfter(second.ensureWorkspace.mock.calls[0]![1])).toBe(same(first.ensureWorkspace.mock.calls[0]![1]));
+    // the prompt (with the allow list and the guard it starts with) is the one of before
+    const startOf = (d: ReturnType<typeof makeDeps>) => d.startAgent.mock.calls[0]!.slice(1);
+    expect(sameAfter(startOf(second))).toBe(same(startOf(first)));
+    expect((startOf(second)[0] as { prompt: string }).prompt).toContain(`Trabalhe na branch ${after.ref}-card (base main).`);
+    // the discovered repository gets its row; the one read from setup.repo alone had none to point at
+    const runs = new Map((await runsOf()).map((r) => [r.taskId, r.id]));
+    expect(await repos.automationRunRepos.listByRun(runs.get(before.id)!)).toEqual([]);
+    expect(await repos.automationRunRepos.listByRun(runs.get(after.id)!)).toHaveLength(1);
   });
 
   it('a single-repo project gets no repo reason and no wake (TER-1068)', async () => {
