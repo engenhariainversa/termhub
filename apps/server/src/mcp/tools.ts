@@ -27,6 +27,7 @@ import { runEntry } from '../automation/repo-entry.js';
 import { needsPrCiWarning, NO_PR_CI_TEXT, projectPrCi } from '../automation/pr-ci.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
+import { addRunRepo } from '../automation/add-repo.js';
 import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
@@ -598,7 +599,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'report_card',
     description:
-      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
+      "Only in a tab running automatic work (agentic board): end your run. status done with pr_url once the pull request is open (pr_urls, one per repository, when your run has several: it ends done only when every repository with commits ahead of its base has an open PR, and is refused naming the ones missing) — the card stays where it is and termhub follows the PR; status blocked with reason (pt-BR, one or two sentences) when you cannot go on without the person — the run stops and the person is told. A GitHub error that persists after a retry or two (git push or gh pr create with HTTP 5xx, \"commit_refs\", \"Something went wrong\", \"Internal Server Error\"): status blocked with code github_transient — the run waits and termhub resumes it once GitHub works again, without calling the person. decisions: every product or technical decision you took alone (question, options, choice, reason; pt-BR, short) — they go to the feed, the daily summary and the memory for the person to review. Call it once, at the end. If your run already ended blocked and you then finished the work by hand in this tab, status done with pr_url still hands the PR over: termhub follows it once it is linked to the card.",
     // Preflight F-8: scope `read` and no grant check — a documented exception, not a widening: `allowedIf`
     // admits only a tab token whose own tab has an active run, or whose latest run ended blocked and may still
     // be adopted (spike TER-1031 §5.4), and the tool writes that run's status only.
@@ -609,6 +610,7 @@ export const TOOLS: ToolDef[] = [
     input: {
       status: z.enum(['done', 'blocked']),
       pr_url: z.string().trim().url().max(500).optional(),
+      pr_urls: z.array(z.string().trim().url().max(500)).min(1).max(10).optional(),
       reason: z.string().trim().min(1).max(500).optional(),
       code: z.enum(['github_transient']).optional(),
       decisions: z
@@ -640,6 +642,19 @@ export const TOOLS: ToolDef[] = [
     scope: 'tasks', resource: 'projects', action: 'update',
     input: { run_id: id },
     run: (ctx, a) => resumeAutomationRun(ctx, a as { run_id: string }),
+  },
+  {
+    name: 'add_repo',
+    description:
+      "Only in a tab running automatic work on several repositories (agentic board, multi-repo): add another repository of the project to your run when the work turns out to need it. key is the repository's key (list_project_repos / get_card repo_keys name them). termhub checks it is enabled and checked out on your machine, creates its worktree at <your workspace>/<key> on your branch, and adds it to the card. Answers the path and base; cd <key> in its own call, then work there and open its PR. A run in one repository cannot take another (report blocked saying which one is missing).",
+    // Same exception as report_card (preflight F-8): only a tab token whose own tab has an active run, acting on that run
+    scope: 'read', resource: 'tasks', action: 'read',
+    allowedIf: tabHasActiveRun,
+    grantText: 'de uma aba com trabalho automático em andamento',
+    strict: true,
+    // checked against the project's own keys (and the folder charset in ensureWorkspace)
+    input: { key: z.string().trim().min(1).max(64) },
+    run: (ctx, a) => addRunRepo(ctx, a as { key: string }),
   },
   {
     name: 'get_card',

@@ -15,6 +15,7 @@ import { automationBus } from './events.js';
 import { chatBus, type ChatEvent } from '../chat/bus.js';
 import { RESUME_TEXT, serverMessage } from './prompts.js';
 import { DECIDE_NUDGES_MAX, DECIDE_TEXT } from './decision.js';
+import type { GithubWriteClient } from '../integrations/github-write.js';
 
 const ME = 'instance-me';
 let seq = 0;
@@ -1527,5 +1528,117 @@ describe('adopting the PR of a blocked run (TER-1049, spike TER-1031 §5.1–5.3
     const warn = vi.fn();
     expect(await adoptBlockedRuns(w.repos, 'p1', { info: () => {}, warn }, NOW)).toBe(0);
     expect(warn).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }), 'automation: blocked runs not adopted');
+  });
+});
+
+describe('a run with several repositories ends done only with a PR in every one ahead of its base (multi-repo R14, TER-1064)', () => {
+  const FRONT = { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/front/pull/7', number: 7, repo: 'acme/front' };
+  const API = { state: 'open', head_ref: 'TER-1-card', url: 'https://github.com/acme/api/pull/3', number: 3, repo: 'acme/api' };
+  /** `world` plus two repositories in the run (`front`, `api`) and GitHub: how far `api`'s branch is ahead, and whether it has an open PR. */
+  function multi(o: Parameters<typeof world>[0] & { apiAhead?: number; apiOpenPr?: boolean } = {}) {
+    const w = world(o);
+    const states: Array<[string, string]> = [];
+    const row = (id: string, key: string) => ({ run_id: w.run.id, repository_id: id, branch: 'TER-1-card', base: 'main', worktree_path: `/w/TER-1/${key}`, state: 'ready', created_at: new Date() });
+    Object.assign(w.repos, {
+      automationRunRepos: {
+        listByRun: vi.fn(async () => [row('r-front', 'front'), row('r-api', 'api')]),
+        setState: vi.fn(async (_run: string, id: string, state: string) => void states.push([id, state])),
+      },
+      projectRepositories: {
+        listByProject: vi.fn(async () => [
+          { id: 'r-front', project_id: 'p1', key: 'front', full_name: 'acme/front', status: 'ok', description: null, checkouts: [] },
+          { id: 'r-api', project_id: 'p1', key: 'api', full_name: 'acme/api', status: 'ok', description: null, checkouts: [] },
+        ]),
+      },
+      integrations: { findById: vi.fn(async () => ({ id: 'i1', provider: 'github', owner_id: 'u1' })), getSecret: vi.fn(async () => 'tok') },
+    });
+    const setup = { repo: { full_name: 'acme/front', integration_id: 'i1', base_branch: 'main', branch_pattern: '{ref}-{slug}', require_ticket: false }, automation: { enabled: true, resume_max: 3, allowed_tools: null, daily_budget_usd: null, card_budget_usd: null, stop_on_decisions: false } };
+    (w.repos.projectSetup.get as ReturnType<typeof vi.fn>).mockImplementation(async () => ({ data: setup }));
+    const gh = {
+      findOpenPull: vi.fn(async (_t: string, repo: string) => (repo === 'acme/api' && o.apiOpenPr ? { number: 3, url: API.url } : null)),
+      compare: vi.fn(async (_t: string, repo: string) => ({ ahead_by: repo === 'acme/api' ? (o.apiAhead ?? 0) : 1, behind_by: 0 })),
+    } as unknown as GithubWriteClient;
+    w.deps.gh = gh;
+    return { ...w, gh, states };
+  }
+
+  it('the D17 fallback: one of two repositories ahead with no PR keeps the run going', async () => {
+    const w = multi({ prs: [FRONT], apiAhead: 2 });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('running');
+    expect(w.kinds()).not.toContain('run_done');
+    expect(w.states).toEqual([]);
+  });
+
+  it('the D17 fallback: a repository with no commits ahead needs no PR, and the run ends with one pr_opened', async () => {
+    const w = multi({ prs: [FRONT], apiAhead: 0 });
+    await followRun(w.deps, w.run.id);
+    expect(w.run.status).toBe('done');
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened']);
+    expect(w.states).toEqual([['r-front', 'pr_open'], ['r-api', 'no_changes']]);
+  });
+
+  it('a run with no PR linked asks GitHub nothing', async () => {
+    const w = multi({ prs: [], apiAhead: 2 });
+    await followRun(w.deps, w.run.id);
+    expect(w.gh.compare).not.toHaveBeenCalled();
+    expect(w.gh.findOpenPull).not.toHaveBeenCalled();
+  });
+
+  it('adopting a blocked run takes both PRs: one run_done counting them and two pr_opened', async () => {
+    const NOW = new Date('2026-10-08T12:00:00.000Z');
+    const w = multi({ prs: [FRONT, API], run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date('2026-10-07T12:00:00.000Z'), created_at: new Date('2026-10-07T10:00:00.000Z'), trigger_sha: null } });
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW, w.gh)).toBe(1);
+    expect(w.run.status).toBe('done');
+    expect(w.events).toEqual([
+      expect.objectContaining({ kind: 'run_done', payload: { via: ADOPTED_VIA, tab_id: 'tab1', pr_url: FRONT.url, pr_count: 2 } }),
+      expect.objectContaining({ kind: 'pr_opened', payload: expect.objectContaining({ repo: 'acme/front', number: 7 }) }),
+      expect.objectContaining({ kind: 'pr_opened', payload: expect.objectContaining({ repo: 'acme/api', number: 3 }) }),
+    ]);
+    expect(w.states).toEqual([['r-front', 'pr_open'], ['r-api', 'pr_open']]);
+  });
+
+  it('adoption with one PR of two repositories ahead waits', async () => {
+    const NOW = new Date('2026-10-08T12:00:00.000Z');
+    const w = multi({ prs: [FRONT], apiAhead: 4, run: { status: 'blocked', waiting_reason: 'reported_blocked', ended_at: new Date('2026-10-07T12:00:00.000Z'), created_at: new Date('2026-10-07T10:00:00.000Z'), trigger_sha: null } });
+    expect(await adoptBlockedRuns(w.repos, 'p1', undefined, NOW, w.gh)).toBe(0);
+    expect(w.run.status).toBe('blocked');
+  });
+
+  it('report_card done is refused while a repository ahead has no PR, naming it; accepted once its PR is open', async () => {
+    const w = multi({ prs: [FRONT], apiAhead: 2 });
+    await expect(reportCard(tabCtx(w.repos), { status: 'done', pr_urls: [FRONT.url] }, w.gh)).rejects.toMatchObject({ code: 'PRS_MISSING', message: expect.stringContaining('api') });
+    expect(w.run.status).toBe('running');
+    expect(w.kinds()).toEqual([]);
+    // the agent opens the second PR; the sync has not linked it yet, GitHub has it
+    (w.gh.findOpenPull as ReturnType<typeof vi.fn>).mockImplementation(async (_t: string, repo: string) => (repo === 'acme/api' ? { number: 3, url: API.url } : null));
+    expect(await reportCard(tabCtx(w.repos), { status: 'done', pr_urls: [FRONT.url, API.url] }, w.gh)).toEqual({ ok: true });
+    expect(w.run.status).toBe('done');
+    expect(w.kinds()).toEqual(['run_done', 'pr_opened', 'pr_opened']);
+  });
+
+  it('report_card done with every repository unchanged ends the run with no PR', async () => {
+    const w = multi({ prs: [], apiAhead: 0 });
+    (w.gh.compare as ReturnType<typeof vi.fn>).mockImplementation(async () => ({ ahead_by: 0, behind_by: 0 }));
+    expect(await reportCard(tabCtx(w.repos), { status: 'done' }, w.gh)).toEqual({ ok: true });
+    expect(w.kinds()).toEqual(['run_done']);
+    expect(w.states).toEqual([['r-front', 'no_changes'], ['r-api', 'no_changes']]);
+  });
+
+  it('report_card done from a blocked tab adopts only with every PR open', async () => {
+    const blocked = { status: 'blocked' as const, waiting_reason: 'reported_blocked', ended_at: new Date(Date.now() - 3600_000), created_at: new Date(Date.now() - 7200_000), trigger_sha: null };
+    const one = multi({ prs: [FRONT], apiAhead: 1, run: blocked });
+    const ctx = (repos: Repositories) => ({ ...tabCtx(repos), scope: { user: { locale: 'pt-BR' } } }) as unknown as ControlContext;
+    expect(await reportCard(ctx(one.repos), { status: 'done', pr_urls: [FRONT.url] }, one.gh)).toMatchObject({ ok: true, pending: true });
+    expect(one.run.status).toBe('blocked');
+    const both = multi({ prs: [FRONT, API], run: blocked });
+    expect(await reportCard(ctx(both.repos), { status: 'done', pr_urls: [FRONT.url, API.url] }, both.gh)).toEqual({ ok: true });
+    expect(both.run.status).toBe('done');
+  });
+
+  it('a single-repo run never reads its rows nor GitHub on report_card (cards of one repository end as today)', async () => {
+    const w = world();
+    expect(await reportCard(tabCtx(w.repos), { status: 'done', pr_urls: ['https://github.com/o/r/pull/3'] })).toEqual({ ok: true });
+    expect(w.events[0]!.payload).toEqual({ via: 'report_card', tab_id: 'tab1', pr_url: 'https://github.com/o/r/pull/3' });
   });
 });

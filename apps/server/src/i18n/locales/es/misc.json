@@ -262,5 +262,11 @@
   "Repositório desligado ou removido no Setup": "Repositorio desactivado o eliminado en Setup",
   "A integração do GitHub não vê o repositório": "La integración de GitHub no ve el repositorio",
   "Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo": "Ninguna máquina del proyecto busca repositorios; actualiza el agente a 0.29 o más nuevo",
-  "O repositório não está em nenhuma máquina do projeto": "El repositorio no está en ninguna máquina del proyecto"
+  "O repositório não está em nenhuma máquina do projeto": "El repositorio no está en ninguna máquina del proyecto",
+  "Falta PR em {{repos}}: a branch {{branch}} tem commits à frente da base. Abra um PR em cada repositório com mudanças e chame report_card de novo": "Falta un PR en {{repos}}: la rama {{branch}} tiene commits por delante de la base. Abre un PR en cada repositorio con cambios y llama a report_card de nuevo",
+  "Não deu para conferir no GitHub os repositórios {{repos}}; chame report_card de novo em alguns minutos": "No se pudieron revisar en GitHub los repositorios {{repos}}; llama a report_card de nuevo en unos minutos",
+  "Esta execução trabalha num repositório só e não recebe outro; chame report_card com status blocked dizendo qual repositório falta, para o card rodar com os dois": "Esta ejecución trabaja en un solo repositorio y no recibe otro; llama a report_card con status blocked diciendo qué repositorio falta, para que la tarjeta corra con ambos",
+  "O repositório {{key}} não existe neste projeto": "El repositorio {{key}} no existe en este proyecto",
+  "O repositório {{key}} não está na máquina desta execução": "El repositorio {{key}} no está en la máquina de esta ejecución",
+  "A integração do GitHub não acessa o repositório {{key}}": "La integración de GitHub no accede al repositorio {{key}}"
 }

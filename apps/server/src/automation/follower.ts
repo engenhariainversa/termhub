@@ -30,6 +30,8 @@ import { ACCOUNT_EXCLUSIVE, AGENT_NOT_STARTED, AGENT_OUTDATED, ANSWER_CAP, ANSWE
 import { budgetReached, cardOverBudget } from './budget.js';
 import { postAutomationLine } from './chat-line.js';
 import { inRunRepo, runRepoOf } from './run-pr.js';
+import type { GithubWriteClient } from '../integrations/github-write.js';
+import { githubClient, liveRunRepos, multiRepoVerdict, prOfRun, reposIn, settleRunRepos, type DoneVerdict, type RunPr } from './run-done.js';
 import { endedRunOfTab, wakeForPostRunBlock } from './post-run.js';
 export { NEEDS_PERSON, TRUST_PROMPT, AGENT_NOT_STARTED, AGENT_OUTDATED, QUESTION_UNANSWERED, QUESTION_EXPIRED, ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, RESUME_CAP, CARD_BUDGET, START_FAILED, AGENT_EXITED, REPORTED_BLOCKED, DECISION_EXCEPTION, DECISION_NEEDED, ESCALATION_TEXT, ESCALATION_FALLBACK, escalationText, escalationReasonText, SLOT_FREE_REASONS } from './escalation-text.js';
 
@@ -117,6 +119,8 @@ export interface FollowerDeps {
    *  answer was sent. `acceptTrustQuestion` (trust.ts), wired in app.ts; left out, it is never answered
    *  and the run is parked for the person after TRUST_WAIT_MS, as before. */
   acceptTrust?: (run: AutomationRun, tab: Tab) => Promise<boolean>;
+  /** GitHub, for the done rule of a run with several repositories (multi-repo R14). Default: the real client. */
+  gh?: GithubWriteClient;
   /** The clock (tests). */
   now?: () => Date;
   /** How long a change settles before the tab is read (default SETTLE_MS). */
@@ -353,9 +357,9 @@ async function placeDoneCard(repos: Repositories, run: AutomationRun, log: Log):
 
 /** Ends the run `done` (a report, a PR from its branch, or its card's PR merged) and places its card (not
  *  after a merge: the merge already moved it to done). False when another instance wrote it first. */
-async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: { url: string; number?: number; merged?: boolean } | null, log: Log): Promise<boolean> {
+async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<RunDoneVia, typeof ADOPTED_VIA>, pr: DonePr | null, log: Log, verdict?: DoneVerdict): Promise<boolean> {
   if (!(await writeRun(repos, run, { status: 'done', waiting_reason: null, ended_at: new Date() }))) return false;
-  await recordDone(repos, run, via, pr, log);
+  await recordDone(repos, run, via, pr, log, verdict);
   return true;
 }
 
@@ -365,14 +369,25 @@ const repoOfPrUrl = (url: string): { repo?: string } => {
   return m ? { repo: m[1]! } : {};
 };
 
-/** What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and `pr_opened`. */
-async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number; merged?: boolean } | null, log: Log): Promise<void> {
+/** The PR a run ended `done` with; a run with several repositories also lists every one of its PRs (multi-repo R14). */
+type DonePr = { url: string; number?: number; merged?: boolean; prs?: RunPr[] };
+
+/**
+ * What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and one
+ * `pr_opened` per PR. A run with several repositories also gets their final states (`verdict`, R14).
+ */
+async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: DonePr | null, log: Log, verdict?: DoneVerdict): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
+  if (verdict) await settleRunRepos(repos, run.id, verdict);
   const base = { project_id: run.project_id, task_id: run.task_id, run_id: run.id };
-  await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
+  const all = pr?.prs?.length ? pr.prs : pr ? [pr] : [];
+  // events are flat: a run with several PRs counts them, and each has its own `pr_opened`
+  const urls: AutomationEventPayload = all.length > 1 ? { pr_count: all.length } : {};
+  await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null, ...urls } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
   // a PR already merged when the run ends was not opened now: the `merged` line tells it (TER-974)
-  if (pr && via !== 'merged' && !pr.merged) {
-    await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { ...repoOfPrUrl(pr.url), pr_url: pr.url, ...(pr.number !== undefined ? { number: pr.number } : {}), branch: run.branch } }).catch((e: unknown) =>
+  for (const p of via === 'merged' ? [] : all) {
+    if (p.merged) continue;
+    await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { ...repoOfPrUrl(p.url), pr_url: p.url, ...(p.number !== undefined ? { number: p.number } : {}), branch: run.branch } }).catch((e: unknown) =>
       log.warn({ runId: run.id, code: errorCode(e) }, 'automation: pr_opened not recorded'),
     );
   }
@@ -398,12 +413,12 @@ export const ADOPT_WINDOW_MS = 7 * 24 * 3600_000;
  * too). Run by the CI sync right after it links the PRs, on either colour: one conditional write decides
  * which. Returns how many runs this call adopted. Never throws.
  */
-export async function adoptBlockedRuns(repos: Repositories, projectId: string, log: Log = noopLog, now: Date = new Date()): Promise<number> {
+export async function adoptBlockedRuns(repos: Repositories, projectId: string, log: Log = noopLog, now: Date = new Date(), gh: GithubWriteClient = githubClient()): Promise<number> {
   let adopted = 0;
   try {
     for (const run of await repos.automationRuns.blockedSince(projectId, new Date(now.getTime() - ADOPT_WINDOW_MS))) {
       const task = await adoptableTask(repos, run, now);
-      if (task && (await adoptBlockedRun(repos, run, task, log))) adopted++;
+      if (task && (await adoptBlockedRun(repos, run, task, log, gh))) adopted++;
     }
   } catch (e) {
     log.warn({ projectId, code: errorCode(e) }, 'automation: blocked runs not adopted');
@@ -426,10 +441,10 @@ async function adoptableTask(repos: Repositories, run: AutomationRun, now: Date)
 
 /** Adopts one blocked run whose card `adoptableTask` returned: true when a PR from its branch is linked and
  *  this call won the `blocked → done` write. */
-async function adoptBlockedRun(repos: Repositories, run: AutomationRun, task: Task, log: Log): Promise<boolean> {
-  const pr = await openPrOfRun(repos, run);
+async function adoptBlockedRun(repos: Repositories, run: AutomationRun, task: Task, log: Log, gh: GithubWriteClient): Promise<boolean> {
+  const pr = await openPrOfRun(repos, run, gh);
   if (!pr || !(await repos.automationRuns.finishBlockedAsDone(run.id))) return false;
-  await recordDone(repos, run, ADOPTED_VIA, pr, log);
+  await recordDone(repos, run, ADOPTED_VIA, pr, log, pr.verdict);
   await postAutomationLine(repos, run.project_id, (locale) => t(locale, 'PR #{{n}} do {{ref}} aberto depois do bloqueio; o automático acompanha até o merge', { n: pr.number, ref: task.ref }), log);
   return true;
 }
@@ -450,13 +465,21 @@ async function finishBlocked(repos: Repositories, run: AutomationRun, code: stri
  *  Not for an integrator or a fixer: their PR existed before the run started (the server opened the epic PR;
  *  a fixer answers a conflict or a red CI on an open PR), so it says nothing about the run.
  *  The PR is matched by repository and branch (spec 2026-10-07 multi-repo R14): another repository can have
- *  a branch of the same name, and a PR from it linked to the card is not the run's. */
-async function openPrOfRun(repos: Repositories, run: AutomationRun): Promise<{ url: string; number: number; merged: boolean } | null> {
+ *  a branch of the same name, and a PR from it linked to the card is not the run's. A run with several
+ *  repositories (outline Task 13) needs a PR in every one whose branch is ahead of its base (`multiRepoVerdict`);
+ *  GitHub is asked only once one PR from the branch is linked, so a run with none costs what it did. */
+async function openPrOfRun(repos: Repositories, run: AutomationRun, gh: GithubWriteClient): Promise<(DonePr & { number: number; merged: boolean; verdict?: DoneVerdict }) | null> {
   if (!run.task_id || !run.branch || run.role === 'integrator' || run.role === 'fixer') return null;
-  const ofRun = (p: { state: string; merged_at: Date | null }) => p.state === 'open' || (p.state === 'merged' && p.merged_at !== null && p.merged_at.getTime() >= run.created_at.getTime());
-  const fromBranch = (await repos.taskPullRequests.listByTasks([run.task_id])).filter((p) => p.head_ref === run.branch && ofRun(p));
+  const fromBranch = (await repos.taskPullRequests.listByTasks([run.task_id])).filter((p) => p.head_ref === run.branch && prOfRun(run, p));
   // Setup is read only once a PR from the branch exists: a look with none costs what it did
   if (fromBranch.length === 0) return null;
+  // multi-repo R14: a run with several repositories is done only with a PR in every one ahead of its base
+  const rows = await liveRunRepos(repos, run.id);
+  if (rows.length > 1) {
+    const verdict = await multiRepoVerdict(repos, run, rows, fromBranch, gh);
+    const first = verdict.prs[0];
+    return verdict.done && first ? { ...first, prs: verdict.prs, verdict } : null;
+  }
   const repo = runRepoOf((await repos.projectSetup.get(run.project_id)).data);
   const pr = fromBranch.find((p) => inRunRepo(repo, p.repo));
   return pr ? { url: pr.url, number: pr.number, merged: pr.state === 'merged' } : null;
@@ -605,9 +628,9 @@ async function onStopped(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: 
   }
   // a question card waits for its own answer (spec §9.1, Task 21)
   if (await repos.tabQuestions.hasOpenQuestion(tab.id)) return false;
-  const pr = await openPrOfRun(repos, run);
+  const pr = await openPrOfRun(repos, run, deps.gh ?? githubClient());
   if (pr) {
-    await finishDone(repos, run, 'pull_request', pr, log);
+    await finishDone(repos, run, 'pull_request', pr, log, pr.verdict);
     return false;
   }
   if (inGrace(deps, tab)) return false;
@@ -709,9 +732,9 @@ export async function holdForBudget(deps: Pick<FollowerDeps, 'repos' | 'now'>, r
  *  Returns true when the restart line was typed. */
 async function onExited(deps: FollowerDeps, run: AutomationRun, tab: Tab, log: Log): Promise<boolean> {
   const { repos } = deps;
-  const pr = await openPrOfRun(repos, run);
+  const pr = await openPrOfRun(repos, run, deps.gh ?? githubClient());
   if (pr) {
-    await finishDone(repos, run, 'pull_request', pr, log);
+    await finishDone(repos, run, 'pull_request', pr, log, pr.verdict);
     return false;
   }
   if (inGrace(deps, tab)) return false;
@@ -890,8 +913,8 @@ export function followRun(deps: FollowerDeps, runId: string, opts: { settle?: bo
       if (tab.state === 'working' || tab.state === 'waiting_background') return;
       if (run.status === 'waiting') {
         // D17 in the other order: the PR was linked after the run was parked
-        const pr = await openPrOfRun(deps.repos, run);
-        if (pr) await finishDone(deps.repos, run, 'pull_request', pr, log);
+        const pr = await openPrOfRun(deps.repos, run, deps.gh ?? githubClient());
+        if (pr) await finishDone(deps.repos, run, 'pull_request', pr, log, pr.verdict);
         // TER-1025: a run that waits for GitHub is resumed by itself once GitHub works again
         else if (run.waiting_reason === GITHUB_TRANSIENT && (await resumeAfterGithub(deps, run, tab, log))) await deps.repos.automationRuns.noteTyped(run.id, deps.now?.() ?? new Date());
         return;
@@ -952,7 +975,7 @@ export function startFollower(deps: FollowerDeps, opts: { sweepMs?: number } = {
 }
 
 /** The active run of the calling tab token's tab, or null (another tab's token, no run). */
-async function runOfTabToken(ctx: ControlContext): Promise<AutomationRun | null> {
+export async function runOfTabToken(ctx: ControlContext): Promise<AutomationRun | null> {
   const tab = ctx.token?.tab;
   if (!tab) return null;
   const run = await ctx.repos.automationRuns.activeByTab(tab.id);
@@ -1003,15 +1026,17 @@ export async function tabMayReport(ctx: ControlContext): Promise<boolean> {
  */
 export async function reportCard(
   ctx: ControlContext,
-  i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; code?: 'github_transient'; decisions?: TakenDecision[] },
+  i: { status: 'done' | 'blocked'; pr_url?: string; pr_urls?: string[]; reason?: string; code?: 'github_transient'; decisions?: TakenDecision[] },
+  gh: GithubWriteClient = githubClient(),
 ): Promise<{ ok: true; pending?: true; message?: string }> {
   const run = await runOfTabToken(ctx);
-  if (!run) return reportAfterBlocked(ctx, i);
+  if (!run) return reportAfterBlocked(ctx, i, gh);
   if (i.status === 'blocked' && !i.reason?.trim()) throw new ControlError('REASON_REQUIRED', msg('Diga em reason por que o trabalho travou'));
   const log = ctx.log ?? noopLog;
+  const given = i.pr_url ?? i.pr_urls?.[0];
   const ended =
     i.status === 'done'
-      ? await finishDone(ctx.repos, run, 'report_card', i.pr_url ? { url: i.pr_url } : null, log)
+      ? await reportDone(ctx, run, given ? { url: given } : null, gh, log)
       : i.code === GITHUB_TRANSIENT
         ? await waitForGithub(ctx.repos, run, i.reason ?? null, log)
         : await finishBlocked(ctx.repos, run, REPORTED_BLOCKED, i.reason ?? null, log);
@@ -1022,17 +1047,43 @@ export async function reportCard(
   return { ok: true };
 }
 
+/**
+ * `report_card` done from a tab with an active run. A run with several repositories is done only under the rule
+ * of R14 (multi-repo): every repository whose branch is ahead of its base has an open PR from it, read from the
+ * card's linked PRs and from GitHub; the URLs the agent gave are not trusted for it. Not done, the call is
+ * refused, naming the repositories, and the run goes on. A run in one repository ends as before.
+ */
+async function reportDone(ctx: ControlContext, run: AutomationRun, given: DonePr | null, gh: GithubWriteClient, log: Log): Promise<boolean> {
+  const rows = run.branch ? await liveRunRepos(ctx.repos, run.id) : [];
+  if (rows.length < 2) return finishDone(ctx.repos, run, 'report_card', given, log);
+  const linked = run.task_id ? (await ctx.repos.taskPullRequests.listByTasks([run.task_id])).filter((p) => p.head_ref === run.branch && prOfRun(run, p)) : [];
+  const verdict = await multiRepoVerdict(ctx.repos, run, rows, linked, gh);
+  if (!verdict.done) {
+    const missing = reposIn(verdict, 'missing');
+    if (missing.length)
+      throw new ControlError('PRS_MISSING', msg('Falta PR em {{repos}}: a branch {{branch}} tem commits à frente da base. Abra um PR em cada repositório com mudanças e chame report_card de novo', { repos: missing.join(', '), branch: run.branch ?? '' }));
+    throw new ControlError('PRS_UNKNOWN', msg('Não deu para conferir no GitHub os repositórios {{repos}}; chame report_card de novo em alguns minutos', { repos: reposIn(verdict, 'unknown').join(', ') }));
+  }
+  const first = verdict.prs[0];
+  // every repository without commits ahead: done with no PR, as a run in one repository may end
+  return finishDone(ctx.repos, run, 'report_card', first ? { ...first, prs: verdict.prs } : null, log, verdict);
+}
+
 /** `report_card` from a tab whose latest run ended `blocked` (spike TER-1031 §5.4), or ended at all (TER-1112). */
-async function reportAfterBlocked(ctx: ControlContext, i: { status: 'done' | 'blocked'; pr_url?: string; reason?: string; decisions?: TakenDecision[] }): Promise<{ ok: true; pending?: true; message?: string }> {
+async function reportAfterBlocked(
+  ctx: ControlContext,
+  i: { status: 'done' | 'blocked'; pr_url?: string; pr_urls?: string[]; reason?: string; decisions?: TakenDecision[] },
+  gh: GithubWriteClient,
+): Promise<{ ok: true; pending?: true; message?: string }> {
   const adoptable = await adoptableRunOfTabToken(ctx).catch(() => null);
   if (!adoptable || (i.status === 'blocked' && (await promptedAfterRun(ctx, adoptable.run)))) return reportAfterRun(ctx, i);
   const { run, task } = adoptable;
   if (i.status === 'blocked') throw new ControlError('RUN_BLOCKED', msg('O trabalho automático desta aba já está bloqueado e a pessoa já foi avisada; não há o que reportar'));
-  if (!i.pr_url) throw new ControlError('PR_URL_REQUIRED', msg('O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele'));
+  if (!i.pr_url && !i.pr_urls?.length) throw new ControlError('PR_URL_REQUIRED', msg('O trabalho automático desta aba terminou bloqueado; mande status done com o pr_url do PR aberto do branch dele'));
   const log = ctx.log ?? noopLog;
   // TER-1043: the decisions taken alone while finishing by hand still go to the person for review
   if (i.decisions?.length) await recordTakenDecisions(ctx.repos, run, i.decisions, { log });
-  if (await adoptBlockedRun(ctx.repos, run, task, log)) return { ok: true };
+  if (await adoptBlockedRun(ctx.repos, run, task, log, gh)) return { ok: true };
   // adopted by the CI sync (or another colour) between the read and the write: nothing left to do
   if ((await ctx.repos.automationRuns.findById(run.id))?.status === 'done') return { ok: true };
   const minutes = Math.ceil(PR_GRACE_MS / 60_000);
