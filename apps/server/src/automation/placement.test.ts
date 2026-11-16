@@ -4,6 +4,7 @@ import type { AiAccount, Machine, Project, ProjectMachine } from '../db/reposito
 import { normalizeSetup } from '../setup/schema.js';
 import { noteWaiting, placeRun, resetWaiting, WAITING_TTL_MS, waitingOf, waitingReasonOf } from './placement.js';
 import { placeDetailText } from './waiting-text.js';
+import { pickRunRepo } from './run-repo.js';
 
 const reg = vi.hoisted(() => ({ online: new Map<string, string[]>() }));
 vi.mock('../agent/registry.js', async (importOriginal) => {
@@ -162,6 +163,49 @@ describe('placeRun', () => {
       accounts: [account('a1', 's'), account('a2', 'o'), account('a3', 'n')],
     });
     expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, setup(['a1', 'a2', 'a3']))).toMatchObject({ waiting: 'no_machine' });
+  });
+});
+
+describe('placeRun with the card repository (multi-repo R5, Task 11)', () => {
+  beforeEach(() => {
+    reg.online.clear();
+  });
+  const co = (machine_id: string, dir: string, missing = false) => ({ machine_id, dir, default_branch: 'main', has_commits: true, seen_at: '', missing_at: missing ? 'x' : null });
+  const repoRow = (id: string, full_name: string, key: string, checkouts: ReturnType<typeof co>[]) => ({ id, project_id: 'p1', full_name, key, description: null, status: 'ok' as const, discovered_at: '', updated_at: '', checkouts });
+  const rows = [repoRow('r-app', 'acme/app', 'app', [co('m1', 'app'), co('m2', 'src/app')]), repoRow('r-api', 'acme/api', 'api', [co('m2', 'api', true)])];
+  const withRepo = (accounts: string[]) => normalizeSetup({ ai: { accounts, models: {} }, repo: { integration_id: 'i', full_name: 'acme/app' } }, 2);
+
+  it("works in the repository's checkout under each machine's folder, whatever its layout", async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const app = pickRunRepo(withRepo(['a1', 'a2']), rows, ['app']);
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1', 'a2']), undefined, app)).toMatchObject({ machine: { id: 'm1' }, repoDir: '/code/m1/app' });
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a2', 'a1']), undefined, app)).toMatchObject({ machine: { id: 'm2' }, repoDir: '/code/m2/src/app' });
+  });
+
+  it('leaves out a machine without a present checkout, and waits with repo_not_on_machine when none has one', async () => {
+    reg.online.set('m1', ['worktree']).set('m2', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1'), machine('m2')], accounts: [account('a1', 'm1'), account('a2', 'm2')] });
+    const api = pickRunRepo(withRepo(['a1', 'a2']), rows, ['api']);
+    const p = await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1', 'a2']), undefined, api);
+    expect(p).toMatchObject({ waiting: 'repo_not_on_machine' });
+    const detail = (p as { detail: Parameters<typeof placeDetailText>[1] }).detail;
+    expect(detail.machines.map((m) => [m.id, m.why])).toEqual([
+      ['m1', 'no_checkout'],
+      ['m2', 'no_checkout'],
+    ]);
+    expect(placeDetailText('en', detail)).toContain('repository not found in the project folder on this machine');
+    // one machine has it: the other one is never chosen, even first in the account order
+    const app = pickRunRepo(withRepo(['a1']), [repoRow('r-app', 'acme/app', 'app', [co('m2', 'app')]), rows[1]!], ['app']);
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1', 'a2']), undefined, app)).toMatchObject({ machine: { id: 'm2' }, repoDir: '/code/m2/app' });
+  });
+
+  it("a single-repo project keeps the link's folder as is", async () => {
+    reg.online.set('m1', ['worktree']);
+    const repos = fakeRepos({ machines: [machine('m1')], accounts: [account('a1', 'm1')] });
+    const single = pickRunRepo(withRepo(['a1']), [repoRow('r-app', 'acme/app', 'main', [co('m1', '.')])], []);
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1']), undefined, single)).toMatchObject({ repoDir: '/code/m1' });
+    expect(await placeRun({ repos, now: () => new Date(), usage: async () => 0 }, project, withRepo(['a1']))).toMatchObject({ repoDir: '/code/m1' });
   });
 });
 

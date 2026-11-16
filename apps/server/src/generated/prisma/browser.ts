@@ -149,6 +149,13 @@ export type TabGcArchive = Prisma.TabGcArchiveModel
  */
 export type AutomationRun = Prisma.AutomationRunModel
 /**
+ * Model AutomationRunRepo
+ * The repositories a run works on (spec 2026-10-07 multi-repo R11, §4): one row per repository, with its
+ * branch, base and worktree. A run of a single-repo project read from `setup.repo` alone (nothing discovered
+ * yet) has no row.
+ */
+export type AutomationRunRepo = Prisma.AutomationRunRepoModel
+/**
  * Model TabUsage
  * Token metering of a Claude tab (agentic board, spec D23, preflight F-29): which transcript session was
  * read and up to which byte. One row per tab, gone with the tab (TER-974); the counts live in

@@ -19,6 +19,8 @@ export interface ApiRunWorkspace {
   branch: string | null;
   /** A worktree the sweeper removed (24 h after the run ended); absent while it is still on the machine. */
   removed_at?: string;
+  /** The checkout the worktree was cut from (multi-repo R5, TER-1066); absent = the link's folder. Kept off the API. */
+  repo_dir?: string;
 }
 
 export interface ApiRunUsage {

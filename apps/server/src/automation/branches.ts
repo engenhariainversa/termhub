@@ -130,13 +130,20 @@ export function namingRule(card: { ref: string; external_ref: unknown }, repo: P
   return cite ? `${cite} ${never}` : never;
 }
 
-/** Where a card's PR goes: the epic's branch when its epic is automatic (D8), else the repo's base branch. */
-export function targetOf(card: { epic: { auto: boolean; ref: string; title: string } | null }, setup: ProjectSetupData): { base: string; epicBranch: string | null } {
+/**
+ * Where a card's PR goes: the epic's branch when its epic is automatic (D8), else the base branch of the card's
+ * repository (`repo`, multi-repo Task 11; one repository per epic for now), else `setup.repo`'s.
+ */
+export function targetOf(
+  card: { epic: { auto: boolean; ref: string; title: string } | null },
+  setup: ProjectSetupData,
+  repo?: { base_branch: string } | null,
+): { base: string; epicBranch: string | null } {
   if (card.epic?.auto) {
     const epicBranch = epicBranchName(setup.automation.epic_branch_pattern, card.epic);
     return { base: epicBranch, epicBranch };
   }
-  return { base: setup.repo?.base_branch ?? 'main', epicBranch: null };
+  return { base: repo?.base_branch ?? setup.repo?.base_branch ?? 'main', epicBranch: null };
 }
 
 /** Creates the epic branch from the base branch's head; a branch that already exists is fine. */

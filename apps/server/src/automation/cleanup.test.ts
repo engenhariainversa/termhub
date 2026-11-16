@@ -34,6 +34,36 @@ function world(runs: Array<Partial<AutomationRun>>, tabState: string | null = 'i
 }
 
 describe('cleanupRuns', () => {
+  it("multi-repo Task 11: removes the worktree from the checkout of the run's repository on its machine", async () => {
+    const w = world([{}, { id: 'old' }]);
+    const co = (machine_id: string, dir: string) => ({ machine_id, dir, default_branch: 'main', has_commits: true, seen_at: '', missing_at: null });
+    const discovered = [
+      { id: 'r-app', full_name: 'acme/app', key: 'app', status: 'ok', checkouts: [co('m1', 'app'), co('m2', 'x/app')] },
+      { id: 'r-api', full_name: 'acme/api', key: 'api', status: 'ok', checkouts: [co('m1', 'services/api')] },
+    ];
+    Object.assign(w.repos, {
+      projectRepositories: { listByProject: vi.fn(async () => discovered) },
+      automationRunRepos: { listByRun: vi.fn(async (id: string) => (id === 'r0' ? [{ run_id: 'r0', repository_id: 'r-api' }] : [])) },
+    });
+    await cleanupRuns(w.deps, project, setup, w.rows);
+    expect(w.removeWorkspace).toHaveBeenCalledWith({ id: 'm1' }, { repoDir: '/repo/services/api', root: setup.automation.worktrees_dir, path: '/wt/a' });
+  });
+
+  it("a run with no repository row falls back to the project's run repository on that machine, else the link's folder", async () => {
+    const co = (dir: string) => ({ machine_id: 'm1', dir, default_branch: 'main', has_commits: true, seen_at: '', missing_at: null });
+    const withRepo = setupSchema.parse({ automation: { enabled: true }, repo: { integration_id: 'i', full_name: 'acme/app' } });
+    const w = world([{}]);
+    Object.assign(w.repos, {
+      projectRepositories: { listByProject: vi.fn(async () => [{ id: 'r-app', full_name: 'acme/app', key: 'app', status: 'ok', checkouts: [co('frontend')] }]) },
+      automationRunRepos: { listByRun: vi.fn(async () => []) },
+    });
+    await cleanupRuns(w.deps, project, withRepo, w.rows);
+    expect(w.removeWorkspace).toHaveBeenCalledWith({ id: 'm1' }, expect.objectContaining({ repoDir: '/repo/frontend' }));
+    const plain = world([{}]);
+    await cleanupRuns(plain.deps, project, setup, plain.rows);
+    expect(plain.removeWorkspace).toHaveBeenCalledWith({ id: 'm1' }, expect.objectContaining({ repoDir: '/repo' }));
+  });
+
   it('a machine that was offline is retried on the next pass, then settles', async () => {
     const w = world([{}]);
     w.removeWorkspace.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'MACHINE_OFFLINE' }));

@@ -126,8 +126,11 @@ export function runPolicyRepos(entries: RepoEntry[], run: RepoEntry | null): Pol
   return isMultiRepo(entries) && run ? [run] : undefined;
 }
 
-/** `runPolicyRepos` for the repository the project's runs work on (the implementer's prompt). */
-export async function runPromptRepos(repos: Repositories, projectId: string, setup: ProjectSetupData): Promise<PolicyRepo[] | undefined> {
+/**
+ * `runPolicyRepos` for the implementer's prompt: the card's repository (`run`, multi-repo Task 11), else the
+ * one the project's runs work on.
+ */
+export async function runPromptRepos(repos: Repositories, projectId: string, setup: ProjectSetupData, run?: Pick<RepoEntry, 'full_name'> | null): Promise<PolicyRepo[] | undefined> {
   const entries = await loadRepoEntries(repos, projectId, setup);
-  return runPolicyRepos(entries, runEntry(entries, setup));
+  return runPolicyRepos(entries, (run ? entries.find((e) => sameRepo(e.full_name, run.full_name)) : null) ?? runEntry(entries, setup));
 }

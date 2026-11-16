@@ -209,6 +209,7 @@ export type ProjectRepositoryWhereInput = {
   updatedAt?: Prisma.DateTimeFilter<"ProjectRepository"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   checkouts?: Prisma.ProjectRepositoryCheckoutListRelationFilter
+  runRepos?: Prisma.AutomationRunRepoListRelationFilter
 }
 
 export type ProjectRepositoryOrderByWithRelationInput = {
@@ -222,6 +223,7 @@ export type ProjectRepositoryOrderByWithRelationInput = {
   updatedAt?: Prisma.SortOrder
   project?: Prisma.ProjectOrderByWithRelationInput
   checkouts?: Prisma.ProjectRepositoryCheckoutOrderByRelationAggregateInput
+  runRepos?: Prisma.AutomationRunRepoOrderByRelationAggregateInput
 }
 
 export type ProjectRepositoryWhereUniqueInput = Prisma.AtLeast<{
@@ -240,6 +242,7 @@ export type ProjectRepositoryWhereUniqueInput = Prisma.AtLeast<{
   updatedAt?: Prisma.DateTimeFilter<"ProjectRepository"> | Date | string
   project?: Prisma.XOR<Prisma.ProjectScalarRelationFilter, Prisma.ProjectWhereInput>
   checkouts?: Prisma.ProjectRepositoryCheckoutListRelationFilter
+  runRepos?: Prisma.AutomationRunRepoListRelationFilter
 }, "id" | "projectId_fullName" | "projectId_key">
 
 export type ProjectRepositoryOrderByWithAggregationInput = {
@@ -280,6 +283,7 @@ export type ProjectRepositoryCreateInput = {
   updatedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutRepositoriesInput
   checkouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutRepositoryInput
+  runRepos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryUncheckedCreateInput = {
@@ -292,6 +296,7 @@ export type ProjectRepositoryUncheckedCreateInput = {
   discoveredAt?: Date | string
   updatedAt?: Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutRepositoryInput
+  runRepos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryUpdateInput = {
@@ -304,6 +309,7 @@ export type ProjectRepositoryUpdateInput = {
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutRepositoriesNestedInput
   checkouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutRepositoryNestedInput
+  runRepos?: Prisma.AutomationRunRepoUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryUncheckedUpdateInput = {
@@ -316,6 +322,7 @@ export type ProjectRepositoryUncheckedUpdateInput = {
   discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutRepositoryNestedInput
+  runRepos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryCreateManyInput = {
@@ -464,6 +471,20 @@ export type ProjectRepositoryUpdateOneRequiredWithoutCheckoutsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectRepositoryUpdateToOneWithWhereWithoutCheckoutsInput, Prisma.ProjectRepositoryUpdateWithoutCheckoutsInput>, Prisma.ProjectRepositoryUncheckedUpdateWithoutCheckoutsInput>
 }
 
+export type ProjectRepositoryCreateNestedOneWithoutRunReposInput = {
+  create?: Prisma.XOR<Prisma.ProjectRepositoryCreateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedCreateWithoutRunReposInput>
+  connectOrCreate?: Prisma.ProjectRepositoryCreateOrConnectWithoutRunReposInput
+  connect?: Prisma.ProjectRepositoryWhereUniqueInput
+}
+
+export type ProjectRepositoryUpdateOneRequiredWithoutRunReposNestedInput = {
+  create?: Prisma.XOR<Prisma.ProjectRepositoryCreateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedCreateWithoutRunReposInput>
+  connectOrCreate?: Prisma.ProjectRepositoryCreateOrConnectWithoutRunReposInput
+  upsert?: Prisma.ProjectRepositoryUpsertWithoutRunReposInput
+  connect?: Prisma.ProjectRepositoryWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.ProjectRepositoryUpdateToOneWithWhereWithoutRunReposInput, Prisma.ProjectRepositoryUpdateWithoutRunReposInput>, Prisma.ProjectRepositoryUncheckedUpdateWithoutRunReposInput>
+}
+
 export type ProjectRepositoryCreateWithoutProjectInput = {
   id: string
   fullName: string
@@ -473,6 +494,7 @@ export type ProjectRepositoryCreateWithoutProjectInput = {
   discoveredAt?: Date | string
   updatedAt?: Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutRepositoryInput
+  runRepos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryUncheckedCreateWithoutProjectInput = {
@@ -484,6 +506,7 @@ export type ProjectRepositoryUncheckedCreateWithoutProjectInput = {
   discoveredAt?: Date | string
   updatedAt?: Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutRepositoryInput
+  runRepos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryCreateOrConnectWithoutProjectInput = {
@@ -535,6 +558,7 @@ export type ProjectRepositoryCreateWithoutCheckoutsInput = {
   discoveredAt?: Date | string
   updatedAt?: Date | string
   project: Prisma.ProjectCreateNestedOneWithoutRepositoriesInput
+  runRepos?: Prisma.AutomationRunRepoCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryUncheckedCreateWithoutCheckoutsInput = {
@@ -546,6 +570,7 @@ export type ProjectRepositoryUncheckedCreateWithoutCheckoutsInput = {
   status?: string
   discoveredAt?: Date | string
   updatedAt?: Date | string
+  runRepos?: Prisma.AutomationRunRepoUncheckedCreateNestedManyWithoutRepositoryInput
 }
 
 export type ProjectRepositoryCreateOrConnectWithoutCheckoutsInput = {
@@ -573,6 +598,7 @@ export type ProjectRepositoryUpdateWithoutCheckoutsInput = {
   discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   project?: Prisma.ProjectUpdateOneRequiredWithoutRepositoriesNestedInput
+  runRepos?: Prisma.AutomationRunRepoUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryUncheckedUpdateWithoutCheckoutsInput = {
@@ -584,6 +610,71 @@ export type ProjectRepositoryUncheckedUpdateWithoutCheckoutsInput = {
   status?: Prisma.StringFieldUpdateOperationsInput | string
   discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  runRepos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRepositoryNestedInput
+}
+
+export type ProjectRepositoryCreateWithoutRunReposInput = {
+  id: string
+  fullName: string
+  key: string
+  description?: string | null
+  status?: string
+  discoveredAt?: Date | string
+  updatedAt?: Date | string
+  project: Prisma.ProjectCreateNestedOneWithoutRepositoriesInput
+  checkouts?: Prisma.ProjectRepositoryCheckoutCreateNestedManyWithoutRepositoryInput
+}
+
+export type ProjectRepositoryUncheckedCreateWithoutRunReposInput = {
+  id: string
+  projectId: string
+  fullName: string
+  key: string
+  description?: string | null
+  status?: string
+  discoveredAt?: Date | string
+  updatedAt?: Date | string
+  checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedCreateNestedManyWithoutRepositoryInput
+}
+
+export type ProjectRepositoryCreateOrConnectWithoutRunReposInput = {
+  where: Prisma.ProjectRepositoryWhereUniqueInput
+  create: Prisma.XOR<Prisma.ProjectRepositoryCreateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedCreateWithoutRunReposInput>
+}
+
+export type ProjectRepositoryUpsertWithoutRunReposInput = {
+  update: Prisma.XOR<Prisma.ProjectRepositoryUpdateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedUpdateWithoutRunReposInput>
+  create: Prisma.XOR<Prisma.ProjectRepositoryCreateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedCreateWithoutRunReposInput>
+  where?: Prisma.ProjectRepositoryWhereInput
+}
+
+export type ProjectRepositoryUpdateToOneWithWhereWithoutRunReposInput = {
+  where?: Prisma.ProjectRepositoryWhereInput
+  data: Prisma.XOR<Prisma.ProjectRepositoryUpdateWithoutRunReposInput, Prisma.ProjectRepositoryUncheckedUpdateWithoutRunReposInput>
+}
+
+export type ProjectRepositoryUpdateWithoutRunReposInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  project?: Prisma.ProjectUpdateOneRequiredWithoutRepositoriesNestedInput
+  checkouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutRepositoryNestedInput
+}
+
+export type ProjectRepositoryUncheckedUpdateWithoutRunReposInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  projectId?: Prisma.StringFieldUpdateOperationsInput | string
+  fullName?: Prisma.StringFieldUpdateOperationsInput | string
+  key?: Prisma.StringFieldUpdateOperationsInput | string
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  status?: Prisma.StringFieldUpdateOperationsInput | string
+  discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryCreateManyProjectInput = {
@@ -605,6 +696,7 @@ export type ProjectRepositoryUpdateWithoutProjectInput = {
   discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutUpdateManyWithoutRepositoryNestedInput
+  runRepos?: Prisma.AutomationRunRepoUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryUncheckedUpdateWithoutProjectInput = {
@@ -616,6 +708,7 @@ export type ProjectRepositoryUncheckedUpdateWithoutProjectInput = {
   discoveredAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   checkouts?: Prisma.ProjectRepositoryCheckoutUncheckedUpdateManyWithoutRepositoryNestedInput
+  runRepos?: Prisma.AutomationRunRepoUncheckedUpdateManyWithoutRepositoryNestedInput
 }
 
 export type ProjectRepositoryUncheckedUpdateManyWithoutProjectInput = {
@@ -635,10 +728,12 @@ export type ProjectRepositoryUncheckedUpdateManyWithoutProjectInput = {
 
 export type ProjectRepositoryCountOutputType = {
   checkouts: number
+  runRepos: number
 }
 
 export type ProjectRepositoryCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   checkouts?: boolean | ProjectRepositoryCountOutputTypeCountCheckoutsArgs
+  runRepos?: boolean | ProjectRepositoryCountOutputTypeCountRunReposArgs
 }
 
 /**
@@ -658,6 +753,13 @@ export type ProjectRepositoryCountOutputTypeCountCheckoutsArgs<ExtArgs extends r
   where?: Prisma.ProjectRepositoryCheckoutWhereInput
 }
 
+/**
+ * ProjectRepositoryCountOutputType without action
+ */
+export type ProjectRepositoryCountOutputTypeCountRunReposArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.AutomationRunRepoWhereInput
+}
+
 
 export type ProjectRepositorySelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -670,6 +772,7 @@ export type ProjectRepositorySelect<ExtArgs extends runtime.Types.Extensions.Int
   updatedAt?: boolean
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   checkouts?: boolean | Prisma.ProjectRepository$checkoutsArgs<ExtArgs>
+  runRepos?: boolean | Prisma.ProjectRepository$runReposArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectRepositoryCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["projectRepository"]>
 
@@ -712,6 +815,7 @@ export type ProjectRepositoryOmit<ExtArgs extends runtime.Types.Extensions.Inter
 export type ProjectRepositoryInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   project?: boolean | Prisma.ProjectDefaultArgs<ExtArgs>
   checkouts?: boolean | Prisma.ProjectRepository$checkoutsArgs<ExtArgs>
+  runRepos?: boolean | Prisma.ProjectRepository$runReposArgs<ExtArgs>
   _count?: boolean | Prisma.ProjectRepositoryCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type ProjectRepositoryIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -726,6 +830,7 @@ export type $ProjectRepositoryPayload<ExtArgs extends runtime.Types.Extensions.I
   objects: {
     project: Prisma.$ProjectPayload<ExtArgs>
     checkouts: Prisma.$ProjectRepositoryCheckoutPayload<ExtArgs>[]
+    runRepos: Prisma.$AutomationRunRepoPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1144,6 +1249,7 @@ export interface Prisma__ProjectRepositoryClient<T, Null = never, ExtArgs extend
   readonly [Symbol.toStringTag]: "PrismaPromise"
   project<T extends Prisma.ProjectDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ProjectDefaultArgs<ExtArgs>>): Prisma.Prisma__ProjectClient<runtime.Types.Result.GetResult<Prisma.$ProjectPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   checkouts<T extends Prisma.ProjectRepository$checkoutsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ProjectRepository$checkoutsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ProjectRepositoryCheckoutPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  runRepos<T extends Prisma.ProjectRepository$runReposArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.ProjectRepository$runReposArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AutomationRunRepoPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1603,6 +1709,30 @@ export type ProjectRepository$checkoutsArgs<ExtArgs extends runtime.Types.Extens
   take?: number
   skip?: number
   distinct?: Prisma.ProjectRepositoryCheckoutScalarFieldEnum | Prisma.ProjectRepositoryCheckoutScalarFieldEnum[]
+}
+
+/**
+ * ProjectRepository.runRepos
+ */
+export type ProjectRepository$runReposArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the AutomationRunRepo
+   */
+  select?: Prisma.AutomationRunRepoSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the AutomationRunRepo
+   */
+  omit?: Prisma.AutomationRunRepoOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.AutomationRunRepoInclude<ExtArgs> | null
+  where?: Prisma.AutomationRunRepoWhereInput
+  orderBy?: Prisma.AutomationRunRepoOrderByWithRelationInput | Prisma.AutomationRunRepoOrderByWithRelationInput[]
+  cursor?: Prisma.AutomationRunRepoWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.AutomationRunRepoScalarFieldEnum | Prisma.AutomationRunRepoScalarFieldEnum[]
 }
 
 /**

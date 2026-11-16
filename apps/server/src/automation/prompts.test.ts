@@ -48,6 +48,18 @@ describe('prompts', () => {
     expect(implementerPrompt({ card, branch: 'b', base: 'main', policy, custom: null })).not.toContain('Nunca use a ref');
   });
 
+  it('multi-repo Task 11: names the card repository only when given, and stays under the cap at the maximum of everything', () => {
+    const naming = 'Este card vem do ticket APPS-337: cite APPS-337 nos commits e no título do PR. Nunca use a ref DRH-21 do termhub em branch, commit, título ou descrição de PR, nem em nada no GitHub.';
+    const repo = `${'o'.repeat(99)}/${'r'.repeat(100)}`;
+    const big = rulesBlock(Array.from({ length: 20 }, (_, i) => ({ ref: `note:n${i}`, title: `t${i}`, decision: 'x'.repeat(200), project_id: 'p1' })))!;
+    const named = implementerPrompt({ card, branch: 'b', base: 'main', repo, naming, policy: 'p'.repeat(5000), custom, description: 'd'.repeat(5000), rules: big });
+    expect(named).toContain(`Trabalhe no repositório ${repo}, na branch b (base main).`);
+    expect(named.length + ORIGIN_REMINDER.length + 2).toBeLessThanOrEqual(PROMPT_MAX_CHARS);
+    // a single-repo project: the same text as before, byte for byte
+    const plain = { card, branch: 'b', base: 'main', policy, custom: null, description: 'faça isto' };
+    expect(implementerPrompt({ ...plain, repo: null })).toBe(implementerPrompt(plain));
+    expect(implementerPrompt(plain)).toContain('Trabalhe na branch b (base main).');
+  });
   it('never forbid merging absolutely', () => {
     for (const p of [...all(null), ...all(custom)]) expect(p).not.toMatch(/não faça merge|do not merge/i);
   });

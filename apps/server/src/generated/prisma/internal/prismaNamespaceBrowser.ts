@@ -74,6 +74,7 @@ export const ModelName = {
   AutomationEvent: 'AutomationEvent',
   TabGcArchive: 'TabGcArchive',
   AutomationRun: 'AutomationRun',
+  AutomationRunRepo: 'AutomationRunRepo',
   TabUsage: 'TabUsage',
   TabUsageDay: 'TabUsageDay',
   AiMemoryPage: 'AiMemoryPage',
@@ -579,6 +580,19 @@ export const AutomationRunScalarFieldEnum = {
 } as const
 
 export type AutomationRunScalarFieldEnum = (typeof AutomationRunScalarFieldEnum)[keyof typeof AutomationRunScalarFieldEnum]
+
+
+export const AutomationRunRepoScalarFieldEnum = {
+  runId: 'runId',
+  repositoryId: 'repositoryId',
+  branch: 'branch',
+  base: 'base',
+  worktreePath: 'worktreePath',
+  state: 'state',
+  createdAt: 'createdAt'
+} as const
+
+export type AutomationRunRepoScalarFieldEnum = (typeof AutomationRunRepoScalarFieldEnum)[keyof typeof AutomationRunRepoScalarFieldEnum]
 
 
 export const TabUsageScalarFieldEnum = {
