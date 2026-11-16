@@ -369,9 +369,12 @@ export const RPC = {
    * Removes a worktree made by `git.worktree.ensure` (the branch stays). A worktree with uncommitted
    * or untracked changes is kept: `{ removed: false, dirty: true }`. A `path` that no longer exists
    * answers `{ removed: false, dirty: false }`. Same path guard as `ensure` (since agent 0.18.0).
+   * `remove_empty_parent` (since agent 0.39.0, multi-repo Task 12): a workspace run's worktree sits at
+   * `<root>/<project>/<ref>/<key>`; once it is gone (or was already), the folder holding it is removed too when
+   * it is empty and strictly under `root` (`rmdir`, never recursive). An older agent drops the field.
    */
   'git.worktree.remove': def(
-    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath }),
+    z.object({ repo_dir: machinePath, root: machinePath, path: machinePath, remove_empty_parent: z.boolean().optional() }),
     z.object({ removed: z.boolean(), dirty: z.boolean() }),
     30_000,
   ),

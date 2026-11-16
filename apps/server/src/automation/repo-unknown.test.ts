@@ -63,7 +63,7 @@ describe('askForRepos (TER-1068, multi-repo R9 b)', () => {
       { id: '2', ref: 'TER-2', title: 'b', created_at: new Date(NOW.getTime() - 30_000).toISOString() },
     ]);
     const wake = vi.fn(async () => true);
-    await askForRepos({ repos, now: () => NOW, graceMs: 2 * 60_000, wake, log }, project, [item('1', 'repo_multi_soon'), item('2')]);
+    await askForRepos({ repos, now: () => NOW, graceMs: 2 * 60_000, wake, log }, project, [item('1', 'repo_disabled'), item('2')]);
     expect(wake).not.toHaveBeenCalled();
   });
 

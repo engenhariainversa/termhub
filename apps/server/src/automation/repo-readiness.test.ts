@@ -33,8 +33,22 @@ describe('cardRepoBlock (TER-1068, multi-repo §9)', () => {
     expect(cardRepoBlock([], repos, linked, true)).toEqual({ reason: 'repo_unknown' });
   });
 
-  it('a card with several repositories waits for workspace runs', () => {
-    expect(cardRepoBlock(['api', 'web'], repos, linked, true)).toEqual({ reason: 'repo_multi_soon' });
+  it('a card with several ready repositories on one machine is no block (workspace run, Task 12)', () => {
+    expect(cardRepoBlock(['api', 'web'], repos, linked, true)).toBeNull();
+  });
+
+  it('a card with several repositories reports the first one that is not ready', () => {
+    expect(cardRepoBlock(['api', 'gone'], repos, linked, true)).toEqual({ reason: 'repo_disabled', repo: 'gone' });
+    expect(cardRepoBlock(['api', 'web'], [repo('api'), repo('web', { status: 'no_access' })], linked, true)).toEqual({ reason: 'repo_no_access', repo: 'web' });
+    expect(cardRepoBlock(['api', 'web'], repos, linked, false)).toEqual({ reason: 'agent_no_repo_scan' });
+  });
+
+  it('every repository of the card must sit on the same linked machine', () => {
+    const on = (key: string, machine_id: string) => repo(key, { checkouts: [{ ...repo(key).checkouts[0]!, machine_id }] });
+    const split = [on('api', 'm1'), on('web', 'm2')];
+    expect(cardRepoBlock(['api', 'web'], split, new Set(['m1', 'm2']), true)).toEqual({ reason: 'repo_not_on_machine', repo: 'web' });
+    expect(cardRepoBlock(['api', 'web'], split, new Set(['m1']), true)).toEqual({ reason: 'repo_not_on_machine', repo: 'web' });
+    expect(cardRepoBlock(['api', 'web'], [on('api', 'm2'), on('web', 'm2')], new Set(['m1', 'm2']), true)).toBeNull();
   });
 
   it('a key gone from the project or turned off in Setup is repo_disabled', () => {

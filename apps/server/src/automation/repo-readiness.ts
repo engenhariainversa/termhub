@@ -4,8 +4,6 @@ import type { EffectiveRepo } from '../setup/repos.js';
 export type RepoReason =
   /** the card names no repository: the chat is woken to pick them (R9 b) */
   | 'repo_unknown'
-  /** several repositories: workspace runs come later (outline Task 12 lifts it) */
-  | 'repo_multi_soon'
   /** the key is gone from the project, or the person turned it off in Setup */
   | 'repo_disabled'
   /** the project's GitHub integration cannot read it, or it is not on GitHub */
@@ -32,13 +30,18 @@ export interface RepoBlock {
  */
 export function cardRepoBlock(keys: readonly string[], repos: readonly EffectiveRepo[], linkedMachines: ReadonlySet<string>, repoScan: boolean): RepoBlock | null {
   if (keys.length === 0) return { reason: 'repo_unknown' };
-  if (keys.length > 1) return { reason: 'repo_multi_soon' };
-  const key = keys[0]!;
-  const repo = repos.find((r) => r.key === key);
-  if (!repo || !repo.enabled) return { reason: 'repo_disabled', repo: key };
-  if (repo.status !== 'ok') return { reason: 'repo_no_access', repo: key };
-  if (!repo.integration_id) return { reason: 'repo_missing', repo: key };
+  const cardRepos: EffectiveRepo[] = [];
+  for (const key of new Set(keys)) {
+    const repo = repos.find((r) => r.key === key);
+    if (!repo || !repo.enabled) return { reason: 'repo_disabled', repo: key };
+    if (repo.status !== 'ok') return { reason: 'repo_no_access', repo: key };
+    if (!repo.integration_id) return { reason: 'repo_missing', repo: key };
+    cardRepos.push(repo);
+  }
   if (!repoScan) return { reason: 'agent_no_repo_scan' };
-  if (!repo.checkouts.some((c) => c.missing_at === null && linkedMachines.has(c.machine_id))) return { reason: 'repo_not_on_machine', repo: key };
-  return null;
+  // a workspace run (outline Task 12) works on one machine: some linked machine must hold every repository
+  const holds = (machineId: string, repo: EffectiveRepo) => repo.checkouts.some((c) => c.machine_id === machineId && c.missing_at === null);
+  if ([...linkedMachines].some((m) => cardRepos.every((r) => holds(m, r)))) return null;
+  const missing = cardRepos.find((r) => ![...linkedMachines].some((m) => holds(m, r))) ?? cardRepos[cardRepos.length - 1]!;
+  return { reason: 'repo_not_on_machine', repo: missing.key! };
 }

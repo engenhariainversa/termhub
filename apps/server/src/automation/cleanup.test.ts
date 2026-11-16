@@ -43,10 +43,55 @@ describe('cleanupRuns', () => {
     ];
     Object.assign(w.repos, {
       projectRepositories: { listByProject: vi.fn(async () => discovered) },
-      automationRunRepos: { listByRun: vi.fn(async (id: string) => (id === 'r0' ? [{ run_id: 'r0', repository_id: 'r-api' }] : [])) },
+      automationRunRepos: { listByRun: vi.fn(async (id: string) => (id === 'r0' ? [{ run_id: 'r0', repository_id: 'r-api', worktree_path: '/wt/a' }] : [])) },
     });
     await cleanupRuns(w.deps, project, setup, w.rows);
     expect(w.removeWorkspace).toHaveBeenCalledWith({ id: 'm1' }, { repoDir: '/repo/services/api', root: setup.automation.worktrees_dir, path: '/wt/a' });
+  });
+
+  it('multi-repo Task 12: a workspace run removes each worktree from its own checkout, asking for the empty folder to go', async () => {
+    // the run and the fixer that took over its tab share the workspace /wt/a and its rows
+    const w = world([{}, { id: 'fix' }]);
+    const co = (dir: string) => ({ machine_id: 'm1', dir, default_branch: 'main', has_commits: true, seen_at: '', missing_at: null });
+    const discovered = [
+      { id: 'r-app', full_name: 'acme/app', key: 'app', status: 'ok', checkouts: [co('app')] },
+      { id: 'r-api', full_name: 'acme/api', key: 'api', status: 'ok', checkouts: [co('services/api')] },
+    ];
+    const rowsOf = (run_id: string) => [
+      { run_id, repository_id: 'r-api', worktree_path: '/wt/a/api' },
+      { run_id, repository_id: 'r-app', worktree_path: '/wt/a/app' },
+    ];
+    Object.assign(w.repos, {
+      projectRepositories: { listByProject: vi.fn(async () => discovered) },
+      automationRunRepos: { listByRun: vi.fn(async (id: string) => rowsOf(id)) },
+    });
+    const r = await cleanupRuns(w.deps, project, setup, w.rows);
+    const root = setup.automation.worktrees_dir;
+    expect(w.removeWorkspace.mock.calls).toEqual([
+      [{ id: 'm1' }, { repoDir: '/repo/services/api', root, path: '/wt/a/api', removeEmptyParent: true }],
+      [{ id: 'm1' }, { repoDir: '/repo/app', root, path: '/wt/a/app', removeEmptyParent: true }],
+    ]);
+    expect(r).toMatchObject({ removed: 1, kept: 0 });
+    expect(w.rows.map((x) => x.cleanup_state)).toEqual(['done', 'done']);
+  });
+
+  it('multi-repo Task 12: a dirty worktree of a workspace keeps the runs kept', async () => {
+    const w = world([{}]);
+    const co = (dir: string) => ({ machine_id: 'm1', dir, default_branch: 'main', has_commits: true, seen_at: '', missing_at: null });
+    Object.assign(w.repos, {
+      projectRepositories: { listByProject: vi.fn(async () => [{ id: 'r-app', checkouts: [co('app')] }, { id: 'r-api', checkouts: [co('api')] }]) },
+      automationRunRepos: {
+        listByRun: vi.fn(async () => [
+          { run_id: 'r0', repository_id: 'r-api', worktree_path: '/wt/a/api' },
+          { run_id: 'r0', repository_id: 'r-app', worktree_path: '/wt/a/app' },
+        ]),
+      },
+    });
+    w.removeWorkspace.mockResolvedValueOnce({ removed: false, dirty: true });
+    const r = await cleanupRuns(w.deps, project, setup, w.rows);
+    expect(w.removeWorkspace).toHaveBeenCalledTimes(2);
+    expect(r).toMatchObject({ kept: 1 });
+    expect(w.rows[0]!.cleanup_state).toBe('kept');
   });
 
   it("a run with no repository row falls back to the project's run repository on that machine, else the link's folder", async () => {

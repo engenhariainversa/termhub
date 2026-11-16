@@ -15,12 +15,12 @@ describe('eligibilityOf', () => {
   // TER-1068: in a multi-repo project, the card's own repositories decide at the repo_missing slot
   it("a multi-repo card's repo block stands where repo_missing stands", () => {
     expect(reason(input({ repo_block: 'repo_unknown' }))).toBe('repo_unknown');
-    expect(reason(input({ repo_block: 'repo_multi_soon', just_created: true }))).toBe('repo_multi_soon');
+    expect(reason(input({ repo_block: 'repo_disabled', just_created: true }))).toBe('repo_disabled');
     expect(reason(input({ repo_block: 'repo_not_on_machine' }, { require_ticket: true }))).toBe('repo_not_on_machine');
     expect(reason(input({ repo_block: 'repo_unknown' }, { capable_machines: 0 }))).toBe('no_capable_machine');
     expect(reason(input({ repo_block: 'repo_unknown', tab_alive: true }))).toBe('has_agent');
     expect(eligibilityOf(input({ repo_block: null }))).toEqual({ eligible: true });
-    for (const r of ['repo_unknown', 'repo_multi_soon', 'repo_disabled', 'repo_no_access', 'agent_no_repo_scan', 'repo_not_on_machine'] as const) expect(REASON_TEXT[r]).toBeTruthy();
+    for (const r of ['repo_unknown', 'repo_disabled', 'repo_no_access', 'agent_no_repo_scan', 'repo_not_on_machine'] as const) expect(REASON_TEXT[r]).toBeTruthy();
   });
   it('a card in a waiting column is never taken, whatever the column category (TER-1134)', () => {
     expect(reason(input({ column_waiting: true }))).toBe('not_in_todo');

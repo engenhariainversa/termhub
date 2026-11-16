@@ -99,7 +99,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
 
   function makeDeps(over: Partial<DispatcherDeps> = {}) {
     const startAgent = vi.fn(async (_ctx: unknown, input: { task_id?: string }) => ({ tab_id: `tab-${input.task_id}` }) as never);
-    const ensureWorkspace = vi.fn(async (_m: unknown, i: { projectId: string; ref: string }) => ({ path: `/home/u/.termhub/worktrees/${i.projectId}/${i.ref}`, created: true }));
+    const ensureWorkspace = vi.fn(async (_m: unknown, i: { projectId: string; ref: string; key?: string }) => ({ path: `/home/u/.termhub/worktrees/${i.projectId}/${i.ref}${i.key ? `/${i.key}` : ''}`, created: true }));
     const ensureEpicBranch = vi.fn(async () => {});
     const removeWorkspace = vi.fn(async () => ({ removed: true, dirty: false }));
     const closeTab = vi.fn(async (_ctx: unknown, _tabId: string) => {});
@@ -960,7 +960,8 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       const app = await repoCard('app', ['app']);
       const items = new Map((await automationQueue(ctx(), projectId)).map((i) => [i.task_id, i]));
       expect(items.get(none.id)).toMatchObject({ reason: 'repo_unknown', reason_text: 'Sem repositório: o chat vai escolher', repo_keys: [] });
-      expect(items.get(both.id)).toMatchObject({ reason: 'repo_multi_soon', repo_keys: ['api', 'app'] });
+      // several repositories run as a workspace (Task 12): the first one not ready is named
+      expect(items.get(both.id)).toMatchObject({ reason: 'repo_missing', reason_text: 'Repositório não configurado no Setup: api', repo_keys: ['api', 'app'] });
       expect(items.get(api.id)).toMatchObject({ reason: 'repo_missing', reason_text: 'Repositório não configurado no Setup: api' });
       // every repository check passed: only the new-card grace (the queue's default, after them) is left
       expect(items.get(app.id)).toMatchObject({ reason: 'just_created', repo_keys: ['app'] });
@@ -1044,6 +1045,58 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
         } finally {
           await db.machine.deleteMany({ where: { id: m2 } });
         }
+      });
+
+      it('Task 12: a card with two repositories runs in a workspace: two worktrees, one run, one guard at its root', async () => {
+        reg.caps.set(machineId, ['worktree', 'repo_scan']);
+        await twoRepos({ apiIntegration: true });
+        const both = await repoCard('nos dois', ['app', 'api']);
+        expect(await reasonOf(both.id)).toBe('just_created'); // past every repo check
+        const { deps, startAgent, ensureWorkspace } = makeDeps();
+        await tickOnce(deps);
+        const branch = `${both.ref}-nos-dois`;
+        const root = `/home/u/.termhub/worktrees/${projectId}/${both.ref}`;
+        // one worktree per repository at <ref>/<key>, from its own checkout, on the same branch
+        expect(ensureWorkspace.mock.calls.map((c) => c[1])).toEqual([
+          { repoDir: '/home/u/app/api', root: '~/.termhub/worktrees', projectId, ref: both.ref, branch, base: 'main', key: 'api' },
+          { repoDir: '/home/u/app/app', root: '~/.termhub/worktrees', projectId, ref: both.ref, branch, base: 'main', key: 'app' },
+        ]);
+        expect(startAgent).toHaveBeenCalledTimes(1);
+        const [, input, opts] = startAgent.mock.calls[0]! as unknown as [unknown, { prompt: string }, { cwd: string; permission: { worktree: string; repoKeys: string[]; branch: string } }];
+        // the tab opens at the workspace root, which the guard confines writes to; both keys get their rules
+        expect(opts.cwd).toBe(root);
+        expect(opts.permission).toMatchObject({ worktree: root, repoKeys: ['api', 'app'], branch });
+        expect(input.prompt).toContain('- api: acme/api (base main)');
+        expect(input.prompt).toContain('- app: acme/app (base main)');
+        expect(input.prompt).toContain(`git -C ${root}/<key> push -u origin ${branch}`);
+        const [run] = await runsOf();
+        expect(run).toMatchObject({ worktreePath: root, branch, status: 'running' });
+        const discovered = new Map((await repos.projectRepositories.listByProject(projectId)).map((r) => [r.key, r.id]));
+        expect(await repos.automationRunRepos.listByRun(run!.id)).toEqual([
+          expect.objectContaining({ repository_id: discovered.get('api'), branch, base: 'main', worktree_path: `${root}/api` }),
+          expect.objectContaining({ repository_id: discovered.get('app'), branch, base: 'main', worktree_path: `${root}/app` }),
+        ]);
+
+        // the cleanup removes each worktree from its checkout and asks for the empty folder to go
+        await repos.tasks.delete(both.id);
+        const { deps: next, removeWorkspace } = makeDeps();
+        await tickOnce(next);
+        expect(removeWorkspace.mock.calls.map((c) => c[1])).toEqual([
+          { repoDir: '/home/u/app/api', root: '~/.termhub/worktrees', path: `${root}/api`, removeEmptyParent: true },
+          { repoDir: '/home/u/app/app', root: '~/.termhub/worktrees', path: `${root}/app`, removeEmptyParent: true },
+        ]);
+      });
+
+      it('Task 12: a workspace card waits when no machine holds all its repositories', async () => {
+        reg.caps.set(machineId, ['worktree', 'repo_scan']);
+        await twoRepos({ apiIntegration: true });
+        const apiRepo = (await repos.projectRepositories.listByProject(projectId)).find((r) => r.key === 'api')!;
+        await repos.projectRepositories.markMissing(projectId, machineId, [apiRepo.id]);
+        const c = await repoCard('nos dois', ['app', 'api']);
+        const { deps, startAgent } = makeDeps();
+        await tickOnce(deps);
+        expect(startAgent).not.toHaveBeenCalled();
+        expect(await reasonOf(c.id)).toBe('repo_not_on_machine');
       });
 
       it('a checkout gone from the only machine that had it: no start, and the queue says why', async () => {

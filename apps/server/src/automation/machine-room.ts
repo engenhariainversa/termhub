@@ -53,14 +53,18 @@ function diskOf(snap: HardwareSnapshot, path: string) {
   return best ?? snap.disks.find((d) => d.mount === '/System/Volumes/Data') ?? null;
 }
 
-/** What a reading says about room for a run whose worktrees live under `worktreesPath`. Missing data = no room. */
-export function roomReading(snap: HardwareSnapshot, worktreesPath: string, at: Date = new Date()): RoomReading {
+/**
+ * What a reading says about room for a run whose worktrees live under `worktreesPath`. Missing data = no room.
+ * `repos`: how many worktrees the run cuts (a workspace run has one per repository, multi-repo Task 12): the
+ * free disk asked for is `MIN_FREE_DISK_KB` for each.
+ */
+export function roomReading(snap: HardwareSnapshot, worktreesPath: string, at: Date = new Date(), repos = 1): RoomReading {
   const mem = snap.mem_total_kb === null || snap.mem_used_kb === null ? null : snap.mem_total_kb - snap.mem_used_kb;
   const disk = diskOf(snap, worktreesPath);
   const load1 = snap.load ? snap.load[0] : null;
   const ncpu = snap.ncpu !== null && snap.ncpu > 0 ? snap.ncpu : null;
   const limit: RoomLimit | null =
-    mem === null || mem < MIN_AVAILABLE_MEMORY_KB ? 'memory' : !disk || disk.avail_kb < MIN_FREE_DISK_KB ? 'disk' : load1 === null || ncpu === null || load1 >= ncpu ? 'load' : null;
+    mem === null || mem < MIN_AVAILABLE_MEMORY_KB ? 'memory' : !disk || disk.avail_kb < MIN_FREE_DISK_KB * Math.max(1, repos) ? 'disk' : load1 === null || ncpu === null || load1 >= ncpu ? 'load' : null;
   return { ok: limit === null, limit, mem_available_kb: mem, disk_free_kb: disk?.avail_kb ?? null, disk_mount: disk?.mount ?? null, load1, ncpu, at: at.toISOString() };
 }
 
@@ -89,8 +93,8 @@ export function resetLastRooms(): void {
 }
 
 export interface MachineRoom {
-  /** `worktreesDir` as set in the project's setup, `repoDir` the project's folder on this machine. */
-  check(machine: Machine, worktreesDir: string, repoDir: string): Promise<RoomReading>;
+  /** `worktreesDir` as set in the project's setup, `repoDir` the project's folder on this machine, `repos` the worktrees the run cuts. */
+  check(machine: Machine, worktreesDir: string, repoDir: string, repos?: number): Promise<RoomReading>;
   /** Forgets the reading: the next check reads again (after a start, so it includes that run). */
   invalidate(machineId: string): void;
 }
@@ -123,9 +127,9 @@ export function createMachineRoom(o: { probe?: Probe; now?: () => number; log?: 
   }
 
   return {
-    async check(machine, worktreesDir, repoDir) {
+    async check(machine, worktreesDir, repoDir, repos = 1) {
       const snap = await read(machine);
-      const reading = snap ? roomReading(snap, expandHome(worktreesDir, repoDir), readAt(machine.id)) : failedReading(readAt(machine.id));
+      const reading = snap ? roomReading(snap, expandHome(worktreesDir, repoDir), readAt(machine.id), repos) : failedReading(readAt(machine.id));
       lastRooms.set(machine.id, reading);
       return reading;
     },

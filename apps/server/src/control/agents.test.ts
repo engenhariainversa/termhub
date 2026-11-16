@@ -1097,6 +1097,22 @@ describe('automation launch: permission flags, cwd and setup command (TER-870)',
     expect(plain).not.toContain('--no-pager');
   });
 
+  it('a workspace run (multi-repo Task 12): each repository folder gets its git -C forms and the branch push, by exact path', () => {
+    const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, branch: 'TER-1-x', worktree: '/w/TER-1', repoKeys: ['api', 'web'] });
+    for (const r of [
+      'Bash(git -C /w/TER-1/api status:*)',
+      'Bash(git -C api status:*)',
+      'Bash(git -C web status:*)',
+      'Bash(git -C /w/TER-1/web push -u origin TER-1-x)',
+      'Bash(git push -u origin TER-1-x)',
+    ])
+      expect(line).toContain(`'${r}'`);
+    // a single-repo run: no subfolder form
+    const one = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, branch: 'TER-1-x', worktree: '/w/TER-1' });
+    expect(one).not.toContain('git -C api');
+    expect(one).not.toContain('/w/TER-1/api');
+  });
+
   it('an automatic run starts in Claude Code\'s auto mode (TER-993); a bypass mode is refused', () => {
     const line = launchLine('claude', '/c', 'do it', null, null, { ...PERMISSION, mode: 'auto' });
     expect(line).toBe(`CLAUDE_CONFIG_DIR='/c' claude --permission-mode auto --allowedTools ${TOOLS} ${DENY} -- 'do it'`);

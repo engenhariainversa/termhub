@@ -169,6 +169,30 @@ describe('git.worktree.remove', () => {
     expect(existsSync(path.join(wt, 'untracked.txt'))).toBe(true);
   });
 
+  it('a workspace run (multi-repo Task 12): worktrees at <ref>/<key>, the folder removed with the last one when asked', async () => {
+    // a second repository of the same origin stands in for another repo of the card
+    const repo2 = path.join(tmp, 'repo2');
+    execFileSync('git', [...ID, 'clone', '-q', origin, repo2], { stdio: 'ignore' });
+    const ws = path.join(root, 'p1', 'TER-1');
+    const api = await ensure(params({ path: path.join(ws, 'api') }));
+    const web = await ensure(params({ repo_dir: repo2, path: path.join(ws, 'web') }));
+    expect([api.path, web.path]).toEqual([path.join(ws, 'api'), path.join(ws, 'web')]);
+    expect(git(web.path, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('TER-1-x');
+    // a dirty one keeps the folder; the clean one goes, and the folder stays while not empty
+    writeFileSync(path.join(web.path, 'untracked.txt'), 'x');
+    expect(await remove({ repo_dir: repo, root, path: api.path, remove_empty_parent: true })).toEqual({ removed: true, dirty: false });
+    expect(await remove({ repo_dir: repo2, root, path: web.path, remove_empty_parent: true })).toEqual({ removed: false, dirty: true });
+    expect(existsSync(ws)).toBe(true);
+    rmSync(path.join(web.path, 'untracked.txt'));
+    expect(await remove({ repo_dir: repo2, root, path: web.path, remove_empty_parent: true })).toEqual({ removed: true, dirty: false });
+    expect(existsSync(ws)).toBe(false);
+    // never the project's folder of worktrees, nor root
+    expect(existsSync(path.join(root, 'p1'))).toBe(true);
+    mkdirSync(path.join(root, 'p2'), { recursive: true });
+    expect(await remove({ repo_dir: repo, root, path: path.join(root, 'p2', 'gone'), remove_empty_parent: true })).toEqual({ removed: false, dirty: false });
+    expect(existsSync(path.join(root, 'p2'))).toBe(true);
+  });
+
   it('answers removed: false for a path that is gone', async () => {
     expect(await remove({ repo_dir: repo, root, path: path.join(root, 'p1', 'gone') })).toEqual({ removed: false, dirty: false });
   });

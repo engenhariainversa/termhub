@@ -154,10 +154,16 @@ export async function ensureEpicBranch(deps: { gh: GithubWriteClient; token: str
   await gh.createBranch(token, repo, epicBranch, sha); // 'created' and 'exists' are both success
 }
 
-/** A card's worktree on the machine: `<root>/<projectId>/<ref>`, on `branch` (started from `base`). */
+/** A repository key that can be a folder name as is (the guard's charset: no `/`, no `..`). */
+const REPO_KEY = /^(?!.*\.\.)[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+/**
+ * A card's worktree on the machine: `<root>/<projectId>/<ref>`, on `branch` (started from `base`). With `key`,
+ * one repository of a workspace run (spec 2026-10-07 multi-repo R11): `<root>/<projectId>/<ref>/<key>`.
+ */
 export async function ensureWorkspace(
   machine: Machine,
-  i: { repoDir: string; root: string; projectId: string; ref: string; branch: string; base: string },
+  i: { repoDir: string; root: string; projectId: string; ref: string; branch: string; base: string; key?: string },
 ): Promise<{ path: string; created: boolean }> {
   if (!(agents.capabilities(machine.id) ?? []).includes(CAPABILITY_WORKTREE)) {
     // An offline agent has no capabilities: the RPC below would say 503, but the version is the more useful answer only when connected.
@@ -165,7 +171,8 @@ export async function ensureWorkspace(
       throw new ControlError('AGENT_OUTDATED', msg('Atualize o agente desta máquina (npm i -g @termhub/agent, versão {{version}} ou mais nova)', { version: WORKTREE_MIN_AGENT_VERSION }));
     }
   }
-  const target = path.posix.join(i.root, i.projectId, i.ref);
+  if (i.key !== undefined && !REPO_KEY.test(i.key)) throw new ControlError('INVALID_REPO_KEY', msg('Repositório inválido'));
+  const target = i.key === undefined ? path.posix.join(i.root, i.projectId, i.ref) : path.posix.join(i.root, i.projectId, i.ref, i.key);
   const r = await agentRpc(machine, 'git.worktree.ensure', { repo_dir: i.repoDir, root: i.root, path: target, branch: i.branch, base: i.base });
   return { path: r.path, created: r.created };
 }
@@ -173,11 +180,13 @@ export async function ensureWorkspace(
 /**
  * Removes a card's worktree when it is clean (spec §7 cleanup); the branch stays. `dirty: true` = kept
  * because it has uncommitted or untracked changes. A path the agent refuses as not one of its worktrees
- * (`invalid`), or that is gone, is nothing to remove.
+ * (`invalid`), or that is gone, is nothing to remove. `removeEmptyParent`: one worktree of a workspace run, whose
+ * folder (`<ref>/`) the agent also removes once it is left empty.
  */
-export async function removeWorkspace(machine: Machine, i: { repoDir: string; root: string; path: string }): Promise<{ removed: boolean; dirty: boolean }> {
+export async function removeWorkspace(machine: Machine, i: { repoDir: string; root: string; path: string; removeEmptyParent?: boolean }): Promise<{ removed: boolean; dirty: boolean }> {
   try {
-    return await agentRpc(machine, 'git.worktree.remove', { repo_dir: i.repoDir, root: i.root, path: i.path });
+    // `remove_empty_parent` (a workspace run's worktree, multi-repo Task 12): an agent before 0.39 ignores it and leaves the empty folder
+    return await agentRpc(machine, 'git.worktree.remove', { repo_dir: i.repoDir, root: i.root, path: i.path, ...(i.removeEmptyParent ? { remove_empty_parent: true } : {}) });
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === 'MACHINE_INVALID' || code === 'MACHINE_NOT_FOUND') return { removed: false, dirty: false };
