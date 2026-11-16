@@ -96,6 +96,7 @@ import { TabChatHub } from './tab-chat/hub.js';
 import { revokeDevice } from './mobile/revocation.js';
 import { purgeMobile } from './mobile/purge.js';
 import { purgeRetention } from './retention/purge.js';
+import { startApiTokenPurge } from './retention/api-tokens.js';
 import { actionForMethod, type Resource } from './auth/permissions.js';
 import { startTicketSyncScheduler } from './setup/tickets-sync.js';
 import { startCiSyncScheduler } from './ci/scheduler.js';
@@ -457,6 +458,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
   // TER-1171: the agent tab GC, per owner behind the tab_gc flag (dry run until tab_gc_live)
   const stopTabGc = startTabGc(repos, fastify.log);
+  // TER-1191: revoked or expired system tokens after 30 days, a person's own revoked after 90, once a day
+  const stopApiTokenPurge = startApiTokenPurge(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
@@ -588,6 +591,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopStaleWorking();
     stopStuckTabQuestions();
     stopIdleTabs();
+    stopApiTokenPurge();
     stopTabGc();
     stopDecisionSweeper();
     stopMemorySweeper();

@@ -418,10 +418,16 @@ describe('startAgent', () => {
       openTab.mockResolvedValue({ tab_id: 'abc', name: 'pedrogoiania', project_id: 'p1', tmux_session: 'termhub-p1-abc', created: true });
     });
 
+    it('mints the tab token of an automatic run (the dispatcher\'s `internal`) with origin automation (TER-1191)', async () => {
+      const { c, repos } = ctx();
+      await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' }, { cwd: '/wt/TER-1' });
+      expect(repos.apiTokens.create).toHaveBeenCalledWith('u1', expect.objectContaining({ tabId: 'abc', origin: 'automation', scopes: ['read', 'memory'] }), expect.any(String));
+    });
+
     it('mints a tab token, installs the config with it and types the line that points claude at it', async () => {
       const { c, repos, log } = ctx();
       const r = await startAgent(c, { project_id: 'p1', account_id: 'a1', prompt: 'write a spec' });
-      expect(repos.apiTokens.create).toHaveBeenCalledWith('u1', expect.objectContaining({ tabId: 'abc', gated: false, scopes: ['read', 'memory'] }), expect.any(String));
+      expect(repos.apiTokens.create).toHaveBeenCalledWith('u1', expect.objectContaining({ tabId: 'abc', gated: false, scopes: ['read', 'memory'], origin: 'tab', projectId: 'p1', machineId: 'm1' }), expect.any(String));
       await expect(repos.apiTokens.create.mock.results[0].value).resolves.toMatchObject({ tab_id: 'abc' });
       expect(installTabMcp).toHaveBeenCalledTimes(1);
       const [m, tabId, file, body] = installTabMcp.mock.calls[0];

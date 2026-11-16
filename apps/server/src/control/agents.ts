@@ -623,7 +623,8 @@ export async function startAgent(
   let mcp: Awaited<ReturnType<typeof tabMcp>>;
   try {
     await internal?.onTabOpened?.(tab.tab_id);
-    mcp = await tabMcp(ctx, machine, account.provider, tab, aiMemory?.mcpUrl ?? null);
+    // An automatic run (`internal`, the dispatcher's) gets a token of origin `automation` (TER-1191).
+    mcp = await tabMcp(ctx, machine, account.provider, tab, { projectId: project.id, automatic: internal !== undefined }, aiMemory?.mcpUrl ?? null);
     // The hard-lock guard (TER-993): written to the machine before the line is typed; a failure here
     // is a failed start. Manual and start_agent tabs (no worktree) skip it.
     const guardTabId = await installRunGuard(machine, tab.tab_id, permission);
@@ -802,7 +803,7 @@ export async function startTabAgent(ctx: ControlContext, tab: Tab, project: Proj
   }
   // the tab's earlier MCP token (an agent that exited) dies before a new one is minted; best effort
   if (target.tab_id === tab.id) await ctx.repos.apiTokens.revokeForTab(tab.id).catch(() => undefined);
-  const mcp = await tabMcp(ctx, machine, account.provider, target);
+  const mcp = await tabMcp(ctx, machine, account.provider, target, { projectId: project.id, automatic: false });
   const line = mcp.installed ? launchLine(account.provider, account.config_dir, null, { tabId: target.tab_id, url: mcp.url }, choice.model) : launchLine(account.provider, account.config_dir, null, null, choice.model);
   if (account.provider === 'claude') {
     const where = target.tab_id === tab.id ? tab : { id: target.tab_id, cwd: null, project_id: project.id, machine_id: machine.id };
@@ -832,7 +833,14 @@ type TabMcpOutcome = { installed: true; url: string; note: string } | { installe
  * an extra, `start_agent` must not fail over it: any failure after the mint revokes what was minted and the
  * tab starts with the plain line. Logs `{ tabId, machineId, installed, reason }` only, never the token.
  */
-async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvider, tab: { tab_id: string; name: string }, aiMemoryMcpUrl: string | null = null): Promise<TabMcpOutcome> {
+async function tabMcp(
+  ctx: ControlContext,
+  machine: Machine,
+  provider: AiProvider,
+  tab: { tab_id: string; name: string },
+  where: { projectId: string; automatic: boolean },
+  aiMemoryMcpUrl: string | null = null,
+): Promise<TabMcpOutcome> {
   const url = config.mcpUrl;
   let reason: keyof typeof MCP_SKIPPED | null = null;
   if (!url) reason = 'no_mcp_url';
@@ -842,7 +850,7 @@ async function tabMcp(ctx: ControlContext, machine: Machine, provider: AiProvide
   else if (!tabMcpSupported(machine)) reason = 'agent_outdated';
   else {
     try {
-      const { token } = await mintTabToken(ctx.repos, ctx.scope.user.id, { id: tab.tab_id, name: tab.name });
+      const { token } = await mintTabToken(ctx.repos, ctx.scope.user.id, { id: tab.tab_id, name: tab.name, project_id: where.projectId, machine_id: machine.id }, { automatic: where.automatic });
       const config = mcpConfig(url, token, TAB_MCP_SERVER);
       const [file, body] = provider === 'claude' ? (['mcp.json', aiMemoryMcpUrl ? withAiMemoryServer(config, aiMemoryMcpUrl) : config] as const) : (['token', token] as const);
       await installTabMcp(machine, tab.tab_id, file, body);

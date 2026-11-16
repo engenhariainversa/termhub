@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useFeatureFlag } from '../lib/feature-flags';
-import type { ApiToken, ApiTokenEvent, ApiTokenScope, CreatedApiToken } from '../lib/types';
+import type { ApiToken, ApiTokenEvent, ApiTokenFacets, ApiTokenFilter, ApiTokenOrigin, ApiTokenScope, ApiTokensPage, CreatedApiToken } from '../lib/types';
 import { ConfirmDialog, Modal } from './Modal';
 import { formatDate, formatDateTime, formatNumber } from '../lib/format';
 import { tk, useTranslation } from '../i18n';
+import { dayStart } from './SecurityEventsView';
 
 const SCOPES: { key: ApiTokenScope; label: string; short: string; hint: string }[] = [
   { key: 'read', label: tk('Ler'), short: tk('ler'), hint: tk('máquinas, projetos, abas, contas de IA e a tela dos terminais') },
@@ -24,6 +25,30 @@ const EXPIRY: { value: string; label: string }[] = [
   { value: '', label: tk('Sem validade') },
 ];
 
+/** Where each token came from (TER-1191), as the table and the origin filter name it. */
+export const ORIGIN_LABELS: Record<ApiTokenOrigin, string> = {
+  person: tk('Criado por você'),
+  concierge: tk('Chat (concierge)'),
+  tab: tk('Aba de agente'),
+  automation: tk('Automação'),
+};
+
+const ORIGIN_OPTIONS: { value: string; label: string }[] = [
+  { value: 'person', label: tk('Criados por mim') },
+  { value: 'system', label: tk('Gerados pelo sistema') },
+  { value: 'concierge', label: tk('Chat (concierge)') },
+  { value: 'tab', label: tk('Aba de agente') },
+  { value: 'automation', label: tk('Automação') },
+  { value: '', label: tk('Todas as origens') },
+];
+
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'active', label: tk('Ativos') },
+  { value: 'expired', label: tk('Expirados') },
+  { value: 'revoked', label: tk('Revogados') },
+  { value: '', label: tk('Todos os estados') },
+];
+
 export type TokenStatus = 'active' | 'expired' | 'revoked';
 
 export function tokenStatus(t: ApiToken, now = new Date()): TokenStatus {
@@ -38,29 +63,131 @@ export function mcpAddCommand(url: string, token: string): string {
 
 const fmtDate = (iso: string | null, empty: string) => (iso ? formatDate(iso) : empty);
 
-/** Settings → Tokens de API: the signed-in user's own tokens for the MCP endpoint. */
+/** The filter form as typed: dates are local calendar days (`2026-11-16`), empty strings mean "any". */
+export interface TokenDraft {
+  origin: string;
+  status: string;
+  project_id: string;
+  machine_id: string;
+  scope: string;
+  created_from: string;
+  created_to: string;
+  used_from: string;
+  used_to: string;
+  q: string;
+}
+
+/** The screen opens on "criados por mim · ativos" (TER-1191). */
+export const DEFAULT_DRAFT: TokenDraft = { origin: 'person', status: 'active', project_id: '', machine_id: '', scope: '', created_from: '', created_to: '', used_from: '', used_to: '', q: '' };
+
+/** The query the server gets for a draft: a day's end is the start of the next one (exclusive). */
+export function filterOfDraft(d: TokenDraft): ApiTokenFilter {
+  return {
+    origin: (d.origin || undefined) as ApiTokenFilter['origin'],
+    status: (d.status || undefined) as ApiTokenFilter['status'],
+    project_id: d.project_id || undefined,
+    machine_id: d.machine_id || undefined,
+    scope: (d.scope || undefined) as ApiTokenScope | undefined,
+    created_from: dayStart(d.created_from),
+    created_to: dayStart(d.created_to, 1),
+    used_from: dayStart(d.used_from),
+    used_to: dayStart(d.used_to, 1),
+    q: d.q.trim() || undefined,
+  };
+}
+
+/** Where a token acts, by name when the server still knows it, else by id; empty for a person's own. */
+export function tokenPlace(tok: ApiToken): string {
+  return [tok.project_name ?? tok.project_id, tok.machine_name ?? tok.machine_id].filter(Boolean).join(' · ');
+}
+
+/** One server-paged list of tokens: the first page for a filter, then "Carregar mais" (TER-1191). */
+function useTokenPages(filter: ApiTokenFilter | null, onError: (message: string) => void) {
+  const { t } = useTranslation();
+  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [next, setNext] = useState<string | null>(null);
+  const [meta, setMeta] = useState<Pick<ApiTokensPage, 'system' | 'retention'> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  // a slow answer for an older filter never overwrites the current one
+  const seq = useRef(0);
+
+  const load = useCallback(
+    async (f: ApiTokenFilter, before: string | null) => {
+      const mine = before ? seq.current : ++seq.current;
+      try {
+        const page = await api.apiTokens.list(f, before);
+        if (mine !== seq.current) return;
+        setTokens((cur) => (before ? [...(cur ?? []), ...page.tokens] : page.tokens));
+        setNext(page.next);
+        setMeta({ system: page.system, retention: page.retention });
+      } catch (e) {
+        if (mine === seq.current) onError(e instanceof ApiError ? e.message : t('Erro ao carregar tokens'));
+      }
+    },
+    [onError],
+  );
+
+  useEffect(() => {
+    if (!filter) return;
+    setTokens(null);
+    setNext(null);
+    void load(filter, null);
+  }, [filter, load]);
+
+  const more = async () => {
+    if (!filter || !next) return;
+    setLoadingMore(true);
+    await load(filter, next);
+    setLoadingMore(false);
+  };
+  const reload = () => filter && void load(filter, null);
+  const replace = (tok: ApiToken) => setTokens((list) => (list ?? []).map((x) => (x.id === tok.id ? { ...x, ...tok } : x)));
+  const prepend = (tok: ApiToken) => setTokens((list) => [tok, ...(list ?? [])]);
+  return { tokens, next, meta, loadingMore, more, reload, replace, prepend };
+}
+
+/** Settings → Tokens de API: the signed-in user's tokens for the MCP endpoint, paged and filtered on the server (TER-1191). */
 export function ApiTokensView() {
   const { t } = useTranslation();
   const { can } = useAuth();
-  const [tokens, setTokens] = useState<ApiToken[] | null>(null);
+  const [draft, setDraft] = useState<TokenDraft>(DEFAULT_DRAFT);
+  const [filter, setFilter] = useState<ApiTokenFilter>(() => filterOfDraft(DEFAULT_DRAFT));
+  const [facets, setFacets] = useState<ApiTokenFacets>({ projects: [], machines: [] });
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
   const [revoking, setRevoking] = useState<ApiToken | null>(null);
   const [activity, setActivity] = useState<ApiToken | null>(null);
+  const [systemOpen, setSystemOpen] = useState(false);
+  const [confirmIdle, setConfirmIdle] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    try {
-      setTokens((await api.apiTokens.list()).tokens);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : t('Erro ao carregar tokens'));
-    }
-  }, []);
+  const onError = useCallback((message: string) => setError(message), []);
+  const main = useTokenPages(filter, onError);
+  // The system group: its own list, loaded only once someone opens it, so the default screen stays light.
+  const systemFilter = useRef<ApiTokenFilter>({ origin: 'system', status: 'active' });
+  const system = useTokenPages(systemOpen ? systemFilter.current : null, onError);
+  const summary = main.meta?.system ?? null;
+  const retention = main.meta?.retention ?? null;
+  const ownView = filter.origin === 'person';
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void api.apiTokens
+      .facets()
+      .then(setFacets)
+      .catch(() => {});
+  }, []);
+
+  const apply = (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setFilter(filterOfDraft(draft));
+  };
+
+  const clear = () => {
+    setDraft(DEFAULT_DRAFT);
+    setFilter(filterOfDraft(DEFAULT_DRAFT));
+  };
 
   const revoke = async () => {
     const tok = revoking;
@@ -69,11 +196,28 @@ export function ApiTokensView() {
     setError(null);
     try {
       const r = await api.apiTokens.revoke(tok.id);
-      setTokens((list) => (list ?? []).map((x) => (x.id === tok.id ? r.api_token : x)));
+      main.replace(r.api_token);
+      system.replace(r.api_token);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t('Erro ao revogar token'));
     }
   };
+
+  const revokeIdle = async () => {
+    setConfirmIdle(false);
+    setError(null);
+    try {
+      const { revoked } = await api.apiTokens.revokeIdle();
+      setNotice(t('{{count}} tokens do sistema revogados.', { count: revoked }));
+      main.reload();
+      if (systemOpen) system.reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : t('Erro ao revogar token'));
+    }
+  };
+
+  const field = (key: keyof TokenDraft) => ({ value: draft[key], onChange: (e: { target: { value: string } }) => setDraft({ ...draft, [key]: e.target.value }) });
+  const facetName = (x: { id: string; name: string | null }) => x.name ?? x.id;
 
   return (
     <div className="space-y-4">
@@ -87,52 +231,148 @@ export function ApiTokensView() {
           </button>
         )}
       </div>
-      {error && <p className="text-sm text-danger">{error}</p>}
-      {tokens === null ? (
-        <p className="text-sm text-fg-dim">{t('Carregando…')}</p>
-      ) : tokens.length === 0 ? (
-        <p className="text-sm text-fg-dim">{t('Nenhum token ainda.')}</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="text-left text-xs text-fg-dim">
-              <tr>
-                <th className="py-1 pr-3 font-normal">{t('Nome')}</th>
-                <th className="py-1 pr-3 font-normal">{t('Escopos')}</th>
-                <th className="py-1 pr-3 font-normal">{t('Criado')}</th>
-                <th className="py-1 pr-3 font-normal">{t('Último uso')}</th>
-                <th className="py-1 pr-3 font-normal">{t('Validade')}</th>
-                <th className="py-1 font-normal" />
-              </tr>
-            </thead>
-            <tbody>
-              {tokens.map((tok) => {
-                const status = tokenStatus(tok);
-                return (
-                  <tr key={tok.id} className={`border-t border-line ${status === 'active' ? '' : 'text-fg-dim'}`}>
-                    <td className="py-1.5 pr-3">{tok.name}</td>
-                    <td className="py-1.5 pr-3">{tok.scopes.map((s) => { const short = SCOPES.find((x) => x.key === s)?.short; return short ? t(short) : s; }).join(', ')}</td>
-                    <td className="py-1.5 pr-3">{fmtDate(tok.created_at, '—')}</td>
-                    <td className="py-1.5 pr-3">{fmtDate(tok.last_used_at, t('nunca'))}</td>
-                    <td className="py-1.5 pr-3">
-                      {status === 'revoked' ? t('revogado') : status === 'expired' ? t('expirado') : fmtDate(tok.expires_at, t('sem validade'))}
-                    </td>
-                    <td className="whitespace-nowrap py-1.5 text-right">
-                      <button className="btn-ghost px-2 py-0.5 text-xs" aria-label={t('Atividade de {{name}}', { name: tok.name })} onClick={() => setActivity(tok)}>
-                        {t('Atividade')}
-                      </button>
-                      {status !== 'revoked' && can('api_tokens', 'delete') && (
-                        <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={t('Revogar {{name}}', { name: tok.name })} onClick={() => setRevoking(tok)}>
-                          {t('Revogar')}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+
+      <form onSubmit={apply} className="flex flex-wrap items-end gap-3" aria-label={t('Filtros de tokens')}>
+        <div>
+          <label className="label" htmlFor="tokens-origin">
+            {t('Origem')}
+          </label>
+          <select id="tokens-origin" className="input w-auto py-1 text-sm" {...field('origin')}>
+            {ORIGIN_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {t(o.label)}
+              </option>
+            ))}
+          </select>
         </div>
+        <div>
+          <label className="label" htmlFor="tokens-status">
+            {t('Estado')}
+          </label>
+          <select id="tokens-status" className="input w-auto py-1 text-sm" {...field('status')}>
+            {STATUS_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {t(o.label)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="tokens-project">
+            {t('Projeto')}
+          </label>
+          <select id="tokens-project" className="input w-auto max-w-48 py-1 text-sm" {...field('project_id')}>
+            <option value="">{t('Todos')}</option>
+            {facets.projects.map((p) => (
+              <option key={p.id} value={p.id}>
+                {facetName(p)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="tokens-machine">
+            {t('Máquina')}
+          </label>
+          <select id="tokens-machine" className="input w-auto max-w-48 py-1 text-sm" {...field('machine_id')}>
+            <option value="">{t('Todas')}</option>
+            {facets.machines.map((m) => (
+              <option key={m.id} value={m.id}>
+                {facetName(m)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="label" htmlFor="tokens-scope">
+            {t('Escopo')}
+          </label>
+          <select id="tokens-scope" className="input w-auto py-1 text-sm" {...field('scope')}>
+            <option value="">{t('Todos')}</option>
+            {SCOPES.map((s) => (
+              <option key={s.key} value={s.key}>
+                {t(s.label)}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className="label">{t('Criado')}</span>
+          <div className="flex gap-1">
+            <input type="date" className="input py-1 text-sm" aria-label={t('Criado de')} {...field('created_from')} />
+            <input type="date" className="input py-1 text-sm" aria-label={t('Criado até')} {...field('created_to')} />
+          </div>
+        </div>
+        <div>
+          <span className="label">{t('Último uso')}</span>
+          <div className="flex gap-1">
+            <input type="date" className="input py-1 text-sm" aria-label={t('Último uso de')} {...field('used_from')} />
+            <input type="date" className="input py-1 text-sm" aria-label={t('Último uso até')} {...field('used_to')} />
+          </div>
+        </div>
+        <div className="min-w-48 flex-1">
+          <label className="label" htmlFor="tokens-q">
+            {t('Buscar pelo nome')}
+          </label>
+          <input id="tokens-q" className="input py-1 text-sm" maxLength={80} {...field('q')} />
+        </div>
+        <button type="submit" className="btn-primary py-1">
+          {t('Filtrar')}
+        </button>
+        <button type="button" className="btn-ghost border border-line py-1" onClick={clear}>
+          {t('Limpar')}
+        </button>
+      </form>
+
+      {error && <p className="text-sm text-danger">{error}</p>}
+      {notice && <p className="text-sm text-fg-muted">{notice}</p>}
+
+      <TokenTable
+        tokens={main.tokens}
+        empty={ownView && filter.status === 'active' ? t('Nenhum token seu ativo.') : t('Nenhum token com esses filtros.')}
+        showOrigin={!ownView}
+        onActivity={setActivity}
+        onRevoke={can('api_tokens', 'delete') ? setRevoking : undefined}
+      />
+      {main.next && (
+        <button className="btn-ghost border border-line py-1 text-sm" disabled={main.loadingMore} onClick={() => void main.more()}>
+          {main.loadingMore ? t('Carregando…') : t('Carregar mais')}
+        </button>
+      )}
+
+      {ownView && summary && (
+        <section className="rounded border border-line">
+          <div className="flex flex-wrap items-center gap-3 px-3 py-2">
+            <button type="button" className="flex-1 text-left text-sm" aria-expanded={systemOpen} onClick={() => setSystemOpen((o) => !o)}>
+              <span aria-hidden className="mr-1 inline-block w-3">{systemOpen ? '▾' : '▸'}</span>
+              {t('Gerados pelo sistema')} <span className="text-fg-dim">· {t('{{count}} ativos', { count: summary.active })}</span>
+            </button>
+            {can('api_tokens', 'delete') && summary.idle > 0 && (
+              <button className="btn-ghost px-2 py-0.5 text-xs text-danger" onClick={() => setConfirmIdle(true)}>
+                {t('Revogar inativos ({{count}})', { count: summary.idle })}
+              </button>
+            )}
+          </div>
+          {systemOpen && (
+            <div className="space-y-3 border-t border-line px-3 py-2">
+              <p className="text-xs text-fg-dim">
+                {t('O termhub gera um token para cada execução do chat e para cada aba de agente, com escopo mínimo e vida curta, e revoga quando a conversa ou a aba acaba.')}
+                {retention && <> {t('Revogados e expirados somem depois de {{days}} dias.', { days: retention.system_days })}</>}
+                {' '}
+                {t('Use a origem "Gerados pelo sistema" nos filtros para ver também os revogados.')}
+              </p>
+              <TokenTable tokens={system.tokens} empty={t('Nenhum token do sistema ativo.')} showOrigin onActivity={setActivity} onRevoke={can('api_tokens', 'delete') ? setRevoking : undefined} />
+              {system.next && (
+                <button className="btn-ghost border border-line py-1 text-sm" disabled={system.loadingMore} onClick={() => void system.more()}>
+                  {system.loadingMore ? t('Carregando…') : t('Carregar mais')}
+                </button>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+      {retention && (
+        <p className="text-xs text-fg-dim">{t('Os tokens que você revoga somem da lista depois de {{days}} dias.', { days: retention.person_revoked_days })}</p>
       )}
 
       {creating && (
@@ -141,7 +381,7 @@ export function ApiTokensView() {
           onCreated={(c) => {
             setCreating(false);
             setCreated(c);
-            setTokens((list) => [c.api_token, ...(list ?? [])]);
+            if (ownView) main.prepend(c.api_token);
           }}
         />
       )}
@@ -156,6 +396,80 @@ export function ApiTokensView() {
         onConfirm={revoke}
         onCancel={() => setRevoking(null)}
       />
+      <ConfirmDialog
+        open={confirmIdle}
+        title={t('Revogar inativos')}
+        message={t('Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados.', {
+          count: summary?.idle ?? 0,
+          days: retention?.idle_days ?? 7,
+        })}
+        confirmLabel={t('Revogar')}
+        danger
+        onConfirm={revokeIdle}
+        onCancel={() => setConfirmIdle(false)}
+      />
+    </div>
+  );
+}
+
+function TokenTable({
+  tokens,
+  empty,
+  showOrigin,
+  onActivity,
+  onRevoke,
+}: {
+  tokens: ApiToken[] | null;
+  empty: string;
+  showOrigin: boolean;
+  onActivity: (tok: ApiToken) => void;
+  onRevoke?: (tok: ApiToken) => void;
+}) {
+  const { t } = useTranslation();
+  if (tokens === null) return <p className="text-sm text-fg-dim">{t('Carregando…')}</p>;
+  if (tokens.length === 0) return <p className="text-sm text-fg-dim">{empty}</p>;
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs text-fg-dim">
+          <tr>
+            <th className="py-1 pr-3 font-normal">{t('Nome')}</th>
+            {showOrigin && <th className="py-1 pr-3 font-normal">{t('Origem')}</th>}
+            {showOrigin && <th className="py-1 pr-3 font-normal">{t('Projeto · máquina')}</th>}
+            <th className="py-1 pr-3 font-normal">{t('Escopos')}</th>
+            <th className="py-1 pr-3 font-normal">{t('Criado')}</th>
+            <th className="py-1 pr-3 font-normal">{t('Último uso')}</th>
+            <th className="py-1 pr-3 font-normal">{t('Validade')}</th>
+            <th className="py-1 font-normal" />
+          </tr>
+        </thead>
+        <tbody>
+          {tokens.map((tok) => {
+            const status = tokenStatus(tok);
+            return (
+              <tr key={tok.id} className={`border-t border-line ${status === 'active' ? '' : 'text-fg-dim'}`}>
+                <td className="py-1.5 pr-3">{tok.name}</td>
+                {showOrigin && <td className="py-1.5 pr-3">{t(ORIGIN_LABELS[tok.origin] ?? tok.origin)}</td>}
+                {showOrigin && <td className="py-1.5 pr-3">{tokenPlace(tok) || '—'}</td>}
+                <td className="py-1.5 pr-3">{tok.scopes.map((s) => { const short = SCOPES.find((x) => x.key === s)?.short; return short ? t(short) : s; }).join(', ')}</td>
+                <td className="py-1.5 pr-3">{fmtDate(tok.created_at, '—')}</td>
+                <td className="py-1.5 pr-3">{fmtDate(tok.last_used_at, t('nunca'))}</td>
+                <td className="py-1.5 pr-3">{status === 'revoked' ? t('revogado') : status === 'expired' ? t('expirado') : fmtDate(tok.expires_at, t('sem validade'))}</td>
+                <td className="whitespace-nowrap py-1.5 text-right">
+                  <button className="btn-ghost px-2 py-0.5 text-xs" aria-label={t('Atividade de {{name}}', { name: tok.name })} onClick={() => onActivity(tok)}>
+                    {t('Atividade')}
+                  </button>
+                  {status !== 'revoked' && onRevoke && (
+                    <button className="btn-ghost px-2 py-0.5 text-xs text-danger" aria-label={t('Revogar {{name}}', { name: tok.name })} onClick={() => onRevoke(tok)}>
+                      {t('Revogar')}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

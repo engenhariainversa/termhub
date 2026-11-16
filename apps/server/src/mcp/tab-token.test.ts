@@ -102,16 +102,22 @@ describe('mintTabToken', () => {
     const create = vi.fn(async () => ({ id: 'tok9' }));
     const repos = { apiTokens: { create } } as unknown as Repositories;
     const before = Date.now();
-    const out = await mintTabToken(repos, 'u1', { id: 'tab1', name: 'claude' });
+    const out = await mintTabToken(repos, 'u1', { id: 'tab1', name: 'claude', project_id: 'p1', machine_id: 'm1' });
     expect(out.id).toBe('tok9');
     expect(out.token).toMatch(API_TOKEN_RE);
     expect(create).toHaveBeenCalledTimes(1);
     const [userId, input, hash] = create.mock.calls[0] as unknown as [string, { name: string; scopes: string[]; expiresAt: Date; gated: boolean; tabId: string }, string];
     expect(userId).toBe('u1');
     expect(hash).toBe(hashApiToken(out.token));
-    expect(input).toMatchObject({ name: 'aba «claude» (automático)', scopes: ['read', 'memory'], gated: false, tabId: 'tab1' });
+    expect(input).toMatchObject({ name: 'aba «claude» (automático)', scopes: ['read', 'memory'], gated: false, tabId: 'tab1', origin: 'tab', projectId: 'p1', machineId: 'm1' });
     expect(input.expiresAt.getTime()).toBeGreaterThanOrEqual(before + TAB_TOKEN_TTL_MS);
     expect(input.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + TAB_TOKEN_TTL_MS);
+  });
+
+  it('marks the token of a tab an automatic run opened as automation (TER-1191), with the same narrow scopes', async () => {
+    const create = vi.fn(async () => ({ id: 'tok9' }));
+    await mintTabToken({ apiTokens: { create } } as unknown as Repositories, 'u1', { id: 'tab1', name: 'claude', project_id: 'p1', machine_id: 'm1' }, { automatic: true });
+    expect((create.mock.calls[0] as unknown[])[1]).toMatchObject({ origin: 'automation', gated: false, tabId: 'tab1', scopes: ['read', 'memory'] });
   });
 });
 

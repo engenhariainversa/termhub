@@ -1065,8 +1065,18 @@ model ApiToken {
   /// cascade would delete the audit rows in api_token_events, and SET NULL would turn a tab token
   /// into an unrestricted one. Revoked in the same transaction that deletes the tab (D6).
   tabId              String?           @map("tab_id")
+  /// Where the token came from (TER-1191): person | concierge | tab | automation. Null on a row the release
+  /// before this one minted during a deploy; read it through `ApiTokensRepository`, which falls back to
+  /// gated / chatConversationId / tabId for those.
+  origin             String?
+  /// The project and machine the token acts for (TER-1191), for the screen's filters. Plain text, no FK:
+  /// a tab token outlives its tab, and the filter must still find it.
+  projectId          String?           @map("project_id")
+  machineId          String?           @map("machine_id")
 
   @@index([userId])
+  @@index([userId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([userId, origin])
   @@index([chatConversationId])
   @@index([tabId])
   @@map("api_tokens")

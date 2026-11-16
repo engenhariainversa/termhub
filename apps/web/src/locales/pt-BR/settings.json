@@ -39,5 +39,17 @@
   "{{count}} min_one": "{{count}} min",
   "{{count}} min_other": "{{count}} min",
   "{{headline}} (+{{count}} avisos)_one": "{{headline}} (+{{count}} aviso)",
-  "{{headline}} (+{{count}} avisos)_other": "{{headline}} (+{{count}} avisos)"
+  "{{headline}} (+{{count}} avisos)_other": "{{headline}} (+{{count}} avisos)",
+  "{{count}} ativos_zero": "{{count}} ativos",
+  "{{count}} ativos_one": "{{count}} ativo",
+  "{{count}} ativos_other": "{{count}} ativos",
+  "{{count}} tokens do sistema revogados._zero": "{{count}} tokens do sistema revogados.",
+  "{{count}} tokens do sistema revogados._one": "{{count}} token do sistema revogado.",
+  "{{count}} tokens do sistema revogados._other": "{{count}} tokens do sistema revogados.",
+  "Revogar inativos ({{count}})_zero": "Revogar inativos ({{count}})",
+  "Revogar inativos ({{count}})_one": "Revogar inativos ({{count}})",
+  "Revogar inativos ({{count}})_other": "Revogar inativos ({{count}})",
+  "Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados._zero": "Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados.",
+  "Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados._one": "Revoga o {{count}} token do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados.",
+  "Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados._other": "Revoga os {{count}} tokens do sistema sem uso há {{days}} dias. Uma aba de agente ainda aberta perde o acesso à memória até o agente ser reiniciado. Os seus tokens não são tocados."
 }

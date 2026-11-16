@@ -289,7 +289,7 @@ function build(lines: string[] | (() => AsyncIterable<string>), opts: { chatActi
     chatLiveRuns,
     projectGroups,
     users: { findById: vi.fn(async (id: string) => (id === user.id ? user : undefined)), chatBlockedModels: vi.fn(async (): Promise<string[]> => []) },
-    apiTokens: { listByUser: vi.fn(async () => []), create: vi.fn(async () => ({})), revoke: vi.fn(async () => undefined), revokeForConversation: vi.fn(async () => 0) },
+    apiTokens: { listByUser: vi.fn(async () => []), revokeLiveConcierge: vi.fn(async () => 0), create: vi.fn(async () => ({})), revoke: vi.fn(async () => undefined), revokeForConversation: vi.fn(async () => 0) },
     chatActions,
     tabQuestions,
     tabs: { findByIdsForOwner: ownedBy(tab) },

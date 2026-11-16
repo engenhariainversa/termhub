@@ -32,6 +32,25 @@ export function assertScopesFor(token: { gated?: boolean; tabId?: string | null 
 export const MAX_ACTIVE_TOKENS_PER_USER = 20;
 export const API_TOKEN_EVENT_RETENTION_DAYS = 30;
 
+/**
+ * Where a token came from (TER-1191). `person`: made on Settings → Tokens de API. `concierge`: the chat's
+ * own, one per run (chat/token.ts). `tab`: the one `start_agent` gives an agent tab (mcp/tab-token.ts);
+ * `automation` is the same for a tab an automatic run opened. Machine hooks keep their own token in
+ * `machine_hooks` and are not API tokens.
+ */
+export const API_TOKEN_ORIGINS = ['person', 'concierge', 'tab', 'automation'] as const;
+export type ApiTokenOrigin = (typeof API_TOKEN_ORIGINS)[number];
+/** The origins termhub mints by itself. */
+export const SYSTEM_TOKEN_ORIGINS: readonly ApiTokenOrigin[] = ['concierge', 'tab', 'automation'];
+
+/** A system token, once revoked or expired, is deleted after this (TER-1191). Its events are already gone
+ *  by then (API_TOKEN_EVENT_RETENTION_DAYS), so nothing of the audit trail is lost with it. */
+export const SYSTEM_TOKEN_RETENTION_DAYS = 30;
+/** A person's own revoked token is deleted after this (TER-1191). An expired one stays: it is theirs. */
+export const PERSON_REVOKED_TOKEN_RETENTION_DAYS = 90;
+/** "Revogar inativos" takes a live system token unused (or never used) for this long. */
+export const SYSTEM_TOKEN_IDLE_DAYS = 7;
+
 export function newApiToken(): { token: string; hash: string } {
   const token = API_TOKEN_PREFIX + randomBytes(32).toString('base64url');
   return { token, hash: hashApiToken(token) };

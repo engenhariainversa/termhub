@@ -14,6 +14,13 @@ const token = (over: Partial<ApiToken> & { id: string }): ApiToken => ({
   revoked_at: null,
   created_at: '2026-09-19T00:00:00.000Z',
   gated: false,
+  chat_conversation_id: null,
+  tab_id: null,
+  origin: 'person',
+  project_id: null,
+  project_name: null,
+  machine_id: null,
+  machine_name: null,
   ...over,
 });
 
@@ -27,7 +34,10 @@ function buildApp(opts: { active?: number; viewAs?: string; runsApi?: boolean } 
     request.scope = { user: { id: 'u1' } as never, viewAs: opts.viewAs ? { kind: 'user', user: { id: owner } as never } : { kind: 'self' }, ownerId: owner, createAs: owner };
   });
   const apiTokens = {
-    listByUser: vi.fn(async (userId: string) => [token({ id: 't1', user_id: userId })]),
+    list: vi.fn(async (userId: string, _filter: unknown, limit: number) => [token({ id: 't1', user_id: userId }), token({ id: 't0', user_id: userId, created_at: '2026-09-18T00:00:00.000Z' })].slice(0, limit)),
+    systemSummary: vi.fn(async () => ({ active: 3, idle: 2 })),
+    facets: vi.fn(async () => ({ projects: [{ id: 'p1', name: 'termhub' }], machines: [] })),
+    revokeIdleSystem: vi.fn(async () => 2),
     countActive: vi.fn(async () => opts.active ?? 0),
     create: vi.fn(async (userId: string, input: { name: string; scopes: ApiToken['scopes']; expiresAt: Date | null; gated?: boolean }, hash: string) => {
       void hash;
@@ -69,6 +79,7 @@ describe('api token routes', () => {
     expect(r.statusCode).toBe(201);
     expect(r.json().api_token.gated).toBe(false);
     expect(apiTokens.create.mock.calls[0][1]).not.toHaveProperty('gated');
+    expect(apiTokens.create.mock.calls[0][1]).toMatchObject({ origin: 'person' });
   });
 
   it('refuses the runs scope while the runs_api flag is off for the person (TER-1176)', async () => {
@@ -127,14 +138,66 @@ describe('api token routes', () => {
     const { app } = buildApp();
     const r = await app.inject({ method: 'GET', url: '/api-tokens' });
     expect(r.statusCode).toBe(200);
-    expect(r.json().tokens).toHaveLength(1);
+    expect(r.json().tokens).toHaveLength(2);
+    expect(r.json()).toMatchObject({ next: null, system: { active: 3, idle: 2 }, retention: { system_days: 30, person_revoked_days: 90, idle_days: 7 } });
     expect(r.body).not.toMatch(/hash/i);
+  });
+
+  it('pages on the server: asks one row more than the page and hands back a keyset cursor (TER-1191)', async () => {
+    const { app, apiTokens } = buildApp();
+    const first = await app.inject({ url: '/api-tokens?limit=1' });
+    expect(first.json().tokens.map((t: ApiToken) => t.id)).toEqual(['t1']);
+    expect(first.json().next).toBe('2026-09-19T00:00:00.000Z_t1');
+    expect(apiTokens.list.mock.calls[0][2]).toBe(2);
+    await app.inject({ url: `/api-tokens?limit=1&before=${encodeURIComponent(first.json().next)}` });
+    expect(apiTokens.list.mock.calls[1][1]).toMatchObject({ before: { created_at: new Date('2026-09-19T00:00:00.000Z'), id: 't1' } });
+    expect((await app.inject({ url: '/api-tokens?before=nonsense' })).statusCode).toBe(400);
+    expect((await app.inject({ url: '/api-tokens?limit=101' })).statusCode).toBe(400);
+  });
+
+  it('passes every filter to the repository, and refuses an unknown origin, status or scope (TER-1191)', async () => {
+    const { app, apiTokens } = buildApp();
+    const q = 'origin=concierge,tab&status=revoked&project_id=p1&machine_id=m1&scope=read&created_from=2026-11-01&created_to=2026-11-02&used_from=2026-11-03&used_to=2026-11-04&q=%20aba%20';
+    expect((await app.inject({ url: `/api-tokens?${q}` })).statusCode).toBe(200);
+    expect(apiTokens.list.mock.calls[0][1]).toEqual({
+      origins: ['concierge', 'tab'],
+      status: 'revoked',
+      project_id: 'p1',
+      machine_id: 'm1',
+      scope: 'read',
+      created_from: new Date('2026-11-01'),
+      created_to: new Date('2026-11-02'),
+      used_from: new Date('2026-11-03'),
+      used_to: new Date('2026-11-04'),
+      q: 'aba',
+      before: undefined,
+    });
+    await app.inject({ url: '/api-tokens?origin=system' });
+    expect(apiTokens.list.mock.calls[1][1].origins).toEqual(['concierge', 'tab', 'automation']);
+    for (const bad of ['origin=hooks', 'status=gone', 'scope=admin', 'project_id=..%2F']) expect((await app.inject({ url: `/api-tokens?${bad}` })).statusCode).toBe(400);
+  });
+
+  it('lists the projects and machines the tokens name, for the filters', async () => {
+    const { app, apiTokens } = buildApp({ viewAs: 'u2' });
+    const r = await app.inject({ url: '/api-tokens/facets' });
+    expect(r.json()).toEqual({ projects: [{ id: 'p1', name: 'termhub' }], machines: [] });
+    expect(apiTokens.facets).toHaveBeenCalledWith('u1');
+  });
+
+  it('revokes the caller\'s idle system tokens in one call and puts it on the security trail (TER-1191)', async () => {
+    const { app, apiTokens, securityEvents } = buildApp({ viewAs: 'u2' });
+    const r = await app.inject({ method: 'DELETE', url: '/api-tokens/idle' });
+    expect(r.json()).toEqual({ revoked: 2 });
+    expect(apiTokens.revokeIdleSystem).toHaveBeenCalledWith('u1');
+    expect(apiTokens.revoke).not.toHaveBeenCalled();
+    const [event] = securityEvents.record.mock.calls.map((c) => (c as unknown[])[0] as { action: string; meta: unknown });
+    expect(event).toMatchObject({ action: 'api_token.revoke', meta: { idle_system_tokens: 2 } });
   });
 
   it('an admin viewing as another user still manages only their own tokens', async () => {
     const { app, apiTokens } = buildApp({ viewAs: 'u2' });
     await app.inject({ method: 'GET', url: '/api-tokens' });
-    expect(apiTokens.listByUser).toHaveBeenCalledWith('u1');
+    expect(apiTokens.list.mock.calls[0][0]).toBe('u1');
     await app.inject({ method: 'POST', url: '/api-tokens', payload: { name: 'a', scopes: ['read'] } });
     expect(apiTokens.countActive).toHaveBeenCalledWith('u1');
     expect(apiTokens.create.mock.calls[0][0]).toBe('u1');
