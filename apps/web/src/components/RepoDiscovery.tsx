@@ -6,7 +6,7 @@ import type { ProjectRepo, ProjectRepoScan, ProjectRepoScanMachine, ProjectRepos
 import { tk, useTranslation } from '../i18n';
 
 /** pt-BR keys, shown with `t(…)`. */
-const STATUS_LABEL: Record<ProjectRepo['status'], string> = {
+export const STATUS_LABEL: Record<ProjectRepo['status'], string> = {
   ok: tk('ok'),
   unsupported: tk('fora do GitHub'),
   no_access: tk('sem acesso pela integração'),
@@ -32,8 +32,11 @@ const SKIP_LABEL: Record<NonNullable<ProjectRepoScan['skipped']>, string> = {
  * TER-1071 (spec 2026-10-07 multi-repo R3, R5): the repositories termhub found in the project's folder, where
  * each one sits on every linked machine, when each machine was last scanned, and "Procurar agora". Read-only:
  * levels and the per-repository policy are edited elsewhere in the Setup.
+ *
+ * `embedded` (TER-1072): inside the "Repositório" card above the editable table, so it shows the machines
+ * and "Procurar agora" without a frame or a table of its own. `onScanned` lets the Setup reload its list.
  */
-export function RepoDiscovery({ projectId }: { projectId: string }) {
+export function RepoDiscovery({ projectId, embedded = false, onScanned }: { projectId: string; embedded?: boolean; onScanned?: () => void }) {
   const { t } = useTranslation();
   const [view, setView] = useState<ProjectReposView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -60,6 +63,7 @@ export function RepoDiscovery({ projectId }: { projectId: string }) {
       const r = await api.setup.scanRepos(projectId);
       setView(r);
       setScans(r.scans);
+      onScanned?.();
       const created = r.scans.reduce((n, s) => n + s.created.length, 0);
       const missing = r.scans.reduce((n, s) => n + s.missing.length, 0);
       const scanned = r.scans.filter((s) => s.scanned).length;
@@ -78,7 +82,7 @@ export function RepoDiscovery({ projectId }: { projectId: string }) {
   if (!view) return null;
 
   return (
-    <section className="rounded-lg border border-line bg-bg-2 p-4">
+    <section className={embedded ? '' : 'rounded-lg border border-line bg-bg-2 p-4'}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold">{t('Repositórios na pasta')}</h3>
@@ -116,7 +120,7 @@ export function RepoDiscovery({ projectId }: { projectId: string }) {
         ))}
       </ul>
 
-      {view.repos.length === 0 ? (
+      {embedded ? null : view.repos.length === 0 ? (
         <p className="mt-3 text-xs text-fg-dim">{t('Nenhum repositório encontrado ainda.')}</p>
       ) : (
         <div className="mt-3 overflow-x-auto">

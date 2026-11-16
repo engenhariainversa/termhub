@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Integration, Project, ProjectSetupData } from '../lib/types';
+import type { EffectiveRepo, Integration, Project, ProjectSetupData } from '../lib/types';
 
 const getMock = vi.fn();
 const saveMock = vi.fn();
@@ -196,5 +196,68 @@ describe('SetupForm — ai-memory (TER-1019)', () => {
     mount();
     await screen.findByRole('button', { name: 'Adicionar fonte' });
     expect(screen.queryByRole('checkbox', { name: 'Publicar regras vigentes no ai-memory' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SetupForm — repositories table (TER-1072)', () => {
+  const repoBlock = { integration_id: 'g', full_name: 'acme/web', base_branch: 'main', branch_pattern: '{ticket}-{slug}', require_ticket: false, draft_pr: true, deploy_workflow: 'deploy.yml' };
+  const effective = (full_name: string, key: string, over: Partial<EffectiveRepo> = {}): EffectiveRepo => ({
+    full_name,
+    key,
+    discovered: true,
+    has_override: false,
+    status: 'ok',
+    enabled: true,
+    integration_id: 'g',
+    description: null,
+    base_branch: 'main',
+    branch_pattern: '{ticket}-{slug}',
+    draft_pr: true,
+    deploy_workflow: null,
+    autonomy: 'pr',
+    required_checks: [],
+    release_workflows: [],
+    release_paths: [],
+    store_paths: [],
+    merge_order: 0,
+    checkouts: [],
+    ...over,
+  });
+
+  it('keeps the single-repo block when the list holds only the main entry', async () => {
+    getMock.mockResolvedValue({
+      setup: { project_id: 'p1', version: 2, data: setupData({ repo: repoBlock, repo_defaults: { integration_id: null, scan_depth: 1 }, repos: [] }), updated_at: null },
+      effective_repos: [effective('acme/web', 'main', { deploy_workflow: 'deploy.yml', autonomy: 'merge' })],
+    });
+    mount();
+    await screen.findByText('Onde o agente cria branch e abre PR.');
+    expect(screen.queryByText('Integração padrão')).toBeNull();
+    expect(screen.getByDisplayValue('deploy.yml')).toBeInTheDocument();
+  });
+
+  it('shows the table with more than one repository, and an edit saves as an override', async () => {
+    getMock.mockResolvedValue({
+      setup: { project_id: 'p1', version: 2, data: setupData({ repo: repoBlock, repo_defaults: { integration_id: null, scan_depth: 1 }, repos: [] }), updated_at: null },
+      effective_repos: [effective('acme/web', 'main', { deploy_workflow: 'deploy.yml', autonomy: 'merge', checkouts: [] }), effective('acme/api', 'api')],
+    });
+    saveMock.mockImplementation((_id: string, data: ProjectSetupData) => Promise.resolve({ setup: { project_id: 'p1', version: 2, data, updated_at: 'now' }, effective_repos: [] }));
+    mount();
+    await screen.findByText('Integração padrão');
+    expect(screen.getByRole('button', { name: /acme\/api/ })).toBeInTheDocument();
+    // the single-repo owner/repo field gives way to the table
+    expect(screen.queryByRole('combobox', { name: 'Repositório (owner/repo)' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Ligar acme/api no trabalho automático' }));
+    fireEvent.click(screen.getByRole('button', { name: /acme\/web/ }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Nível de acme/web' }), { target: { value: 'pr' } });
+    fireEvent.change(screen.getByDisplayValue('1'), { target: { value: '2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar setup' }));
+    await waitFor(() => expect(saveMock).toHaveBeenCalled());
+    const sent = saveMock.mock.calls[0][1] as ProjectSetupData;
+    expect(sent.repo_defaults).toEqual({ integration_id: null, scan_depth: 2 });
+    expect(sent.repos).toHaveLength(2);
+    expect(sent.repos!.find((r) => r.full_name === 'acme/api')).toMatchObject({ enabled: false, autonomy: 'pr' });
+    // the repo the setup already had keeps what it did, except the level that was changed
+    expect(sent.repos!.find((r) => r.full_name === 'acme/web')).toMatchObject({ enabled: true, autonomy: 'pr', deploy_workflow: 'deploy.yml', base_branch: null });
   });
 });

@@ -239,13 +239,14 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 }
 
 /** One entry per line. Keeps the raw text while typing so a trailing newline is not eaten. */
-function ListInput({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string }) {
+export function ListInput({ value, onChange, placeholder, 'aria-label': ariaLabel }: { value: string[]; onChange: (v: string[]) => void; placeholder?: string; 'aria-label'?: string }) {
   const [text, setText] = useState(value.join('\n'));
   return (
     <textarea
       className="input min-h-[60px] font-mono text-xs"
       value={text}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       onChange={(e) => {
         setText(e.target.value);
         onChange(e.target.value.split('\n').map((s) => s.trim()).filter(Boolean));
