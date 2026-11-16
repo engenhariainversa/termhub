@@ -54,7 +54,7 @@ describe('followMerged: deploy', () => {
     const w = world({ byCommit: { m1: [run({})] } });
     await followMerged(w.deps, w.ctx, pr({ changed_level: 'deploy' }));
     expect(kinds(w.events)).toEqual(['deploy_ok']);
-    expect(w.events[0].payload).toEqual({ pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/1', workflow: 'deploy.yml' });
+    expect(w.events[0].payload).toEqual({ repo: 'acme/app', pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/1', workflow: 'deploy.yml' });
     expect(w.updateCi).toHaveBeenCalledWith('p1', 'acme/app', 7, { deploy_state: 'passed', deploy_url: 'https://github.com/acme/app/actions/runs/1' });
     expect(pauseAutomation).not.toHaveBeenCalled();
   });
@@ -183,7 +183,7 @@ describe('followMerged: release workflows', () => {
     const byFile = world({ byCommit: { m1: [run({}), publish()] } });
     await followMerged(byFile.deps, byFile.ctx, pr({ deploy_state: 'passed' }));
     expect(kinds(byFile.events)).toEqual(['release_ok']);
-    expect(byFile.events[0].payload).toEqual({ pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/9', workflow: 'publish-agent.yml', version: '0.19.0' });
+    expect(byFile.events[0].payload).toEqual({ repo: 'acme/app', pr: 7, sha: 'm1', url: 'https://github.com/acme/app/actions/runs/9', workflow: 'publish-agent.yml', version: '0.19.0' });
     expect(byFile.github.fileAt).toHaveBeenCalledWith('tok', 'acme/app', 'package.json', 'm1');
     expect(byFile.messages).toEqual(['Publicado publish-agent.yml 0.19.0']);
 
@@ -367,5 +367,20 @@ describe('followMerged: a deploy that failed on GitHub\'s side (TER-1025)', () =
     await followMerged(w.deps, w.ctx, pr());
     expect(w.rerunRun).not.toHaveBeenCalled();
     expect(pauseAutomation).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Spec 2026-10-07 multi-repo R7: a merged PR's delivery reads its repository's entry, not setup.repo.
+describe('followMerged: the repository entry', () => {
+  it('follows the entry\'s deploy and release workflows and globs', async () => {
+    const api = run({ id: 3, name: 'API deploy', path: '.github/workflows/api-deploy.yml', html_url: 'https://github.com/acme/api/actions/runs/3' });
+    const w = world({ projectRepo: 'acme/app', runBranches: ['h'], byCommit: { m1: [run({}), api] }, files: ['apps/agent/package.json'] });
+    vi.mocked(w.deps.repos.tasks.findById).mockResolvedValue({ id: 't1', ref: 'TER-1', auto: true, project_id: 'p1', repo_keys: ['api'] } as never);
+    Object.assign(w.deps.repos, { projectRepositories: { listByProject: vi.fn(async () => [{ id: 'api', project_id: 'p1', full_name: 'acme/api', key: 'api', description: null, status: 'ok', discovered_at: '', updated_at: '', checkouts: [] }]) } });
+    const entry = { deploy_workflow: 'api-deploy.yml', release_workflows: [], release_paths: [] };
+    await followMerged(w.deps, { ...w.ctx, repo: 'acme/api', entry }, pr({ repo: 'acme/api', changed_level: 'deploy' }));
+    expect(w.events.map((e) => [e.kind, e.payload])).toEqual([['deploy_ok', { repo: 'acme/api', pr: 7, sha: 'm1', url: 'https://github.com/acme/api/actions/runs/3', workflow: 'api-deploy.yml' }]]);
+    expect(deliveryPending(w.setup, pr({ deploy_state: 'none' }), entry)).toBe(true);
+    expect(deliveryPending(w.setup, pr({ deploy_state: 'passed', changed_level: 'release' }), entry)).toBe(false);
   });
 });

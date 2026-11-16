@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { automationSchema } from '../setup/schema.js';
-import { allows, globMatches, policyText, requiredLevel } from './policy.js';
+import { effectiveRepos } from '../setup/repos.js';
+import { setupSchema } from '../setup/schema.js';
+import { allows, globMatches, policyRepos, policyText, requiredLevel, runPolicyRepos } from './policy.js';
+import { runEntry } from './repo-entry.js';
 
 const base = { base: 'main', epicBranch: null, baseBranch: 'main', deployWorkflow: null, files: ['apps/server/a.ts'], releasePaths: [], storePaths: [] };
 
@@ -77,5 +80,41 @@ describe('policyText', () => {
     expect(policyText({ ...a, autonomy: 'pr' }, null)).not.toContain('PR sem CI');
     expect(policyText({ ...a, autonomy: 'merge' }, null)).toContain('PR sem CI: o termhub não mescla sozinho');
     expect(policyText({ ...a, autonomy: 'merge', no_ci_merge: 'merge' }, null)).toContain('o termhub mescla o PR 2 minutos depois do último push');
+  });
+});
+
+// Spec 2026-10-07 multi-repo §9: the repositories and their levels, the run's first, kept by the prompt's clip.
+describe('policyText with several repositories', () => {
+  const row = (full_name: string, key: string) => ({ id: key, project_id: 'p1', full_name, key, description: null, status: 'ok' as const, discovered_at: '', updated_at: '', checkouts: [] });
+  const setup = setupSchema.parse({
+    repo: { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: 'deploy-prod.yml' },
+    repos: [{ full_name: 'acme/bff', autonomy: 'merge', release_paths: ['package.json'] }, { full_name: 'acme/old', enabled: false }],
+    automation: { enabled: true, autonomy: 'deploy' },
+  });
+  const entries = effectiveRepos(setup, [row('acme/app', 'app'), row('acme/bff', 'bff'), row('acme/old', 'old')]);
+
+  it('lists each active repository with its level and deploy, the run\'s first, and leaves a disabled one out', () => {
+    const t = policyText(setup.automation, 'deploy-prod.yml', policyRepos(entries, ['acme/bff']));
+    const lines = t.split('\n');
+    expect(lines[0]).toContain('Autonomia do projeto: deploy');
+    expect(lines.slice(1, 4)).toEqual([
+      'Repositórios (o nível de cada um nunca passa o do projeto):',
+      '- bff (acme/bff): merge; release em package.json',
+      '- app (acme/app): deploy; deploy "deploy-prod.yml"',
+    ]);
+    expect(t).not.toContain('acme/old');
+  });
+
+  it('the run\'s prompt lists the run\'s repository only', () => {
+    const repos = runPolicyRepos(entries, runEntry(entries, setup));
+    expect(repos?.map((r) => r.full_name)).toEqual(['acme/app']);
+    expect(policyText(setup.automation, 'deploy-prod.yml', repos)).not.toContain('acme/bff');
+  });
+
+  it('a single-repo project reads the text as before', () => {
+    const one = effectiveRepos(setup, [row('acme/app', 'app')]).filter((e) => e.full_name === 'acme/app');
+    expect(policyRepos(one)).toBeUndefined();
+    expect(runPolicyRepos(one, one[0]!)).toBeUndefined();
+    expect(policyText(setup.automation, 'deploy-prod.yml', policyRepos(one))).toBe(policyText(setup.automation, 'deploy-prod.yml'));
   });
 });

@@ -3,7 +3,7 @@ import type { Repositories } from '../db/repositories/index.js';
 import type { GithubCiClient, GithubPull } from '../integrations/github-ci.js';
 import { GithubCiError } from '../integrations/github-ci.js';
 import { ciErrorOf } from './status.js';
-import { syncProjectCi } from './sync.js';
+import { ciEtagKey, syncProjectCi } from './sync.js';
 
 const pull = (over: Partial<GithubPull> = {}): GithubPull => ({
   number: 7, html_url: 'https://github.com/acme/app/pull/7', title: 'Painel TER-2', body: 'Also TER-3 and TER-1 and TER-99', state: 'open', draft: false,
@@ -47,7 +47,8 @@ describe('syncProjectCi', () => {
     const { deps, replaceLinks, etags } = setup();
     expect(await syncProjectCi(deps, 'p1')).toEqual({ pulls: 1, checked: 0 });
     expect(replaceLinks).toHaveBeenCalledWith('p1', expect.objectContaining({ repo: 'acme/app', number: 7, state: 'open', head_sha: 'abc' }), ['card2'], []);
-    expect(etags.get('p1')).toBe('e2');
+    // one ETag per (project, repo): multi-repo R17
+    expect(etags.get(ciEtagKey('p1', 'acme/app'))).toBe('e2');
   });
 
   it('stores the PR base branch', async () => {
@@ -286,3 +287,82 @@ describe('syncProjectCi', () => {
     expect(merge).not.toHaveBeenCalled();
   });
 });
+
+// Spec 2026-10-07 multi-repo R17: one ETag per repository, and only the repositories in play are listed.
+describe('syncProjectCi with several repositories', () => {
+  const row = (full_name: string, key: string) => ({ id: key, project_id: 'p1', full_name, key, description: null, status: 'ok' as const, discovered_at: '', updated_at: '', checkouts: [] });
+
+  function multi(o: { overrides?: object[]; keys?: string[]; unscoped?: boolean; active?: number; watched?: Record<string, number> } = {}) {
+    const w = setup({ automation: { enabled: true } });
+    const listWatched = vi.fn(async (_p: string, opts: { repo: string }) => Array.from({ length: o.watched?.[opts.repo] ?? 0 }, (_, i) => ({ repo: opts.repo, number: 100 + i, state: 'open', head_sha: `s${i}`, merge_commit_sha: null })));
+    Object.assign(w.deps.repos, {
+      projectSetup: {
+        get: vi.fn(async () => ({
+          data: {
+            repo: { integration_id: 'i1', full_name: 'acme/app', deploy_workflow: null },
+            repos: o.overrides ?? [],
+            automation: { enabled: true, release_workflows: [] },
+          },
+        })),
+      },
+      projectRepositories: { listByProject: vi.fn(async () => [row('acme/app', 'app'), row('acme/api', 'api'), row('acme/docs', 'docs')]) },
+      tasks: { findByRef: vi.fn(async () => undefined), repoKeysInPlay: vi.fn(async () => ({ keys: o.keys ?? [], unscoped: o.unscoped ?? false })) },
+      automationRuns: { taskOfBranch: vi.fn(async () => null), activeByProject: vi.fn(async () => Array.from({ length: o.active ?? 0 }, () => ({}))), adoptable: vi.fn(async () => []) },
+      taskPullRequests: { replaceLinks: w.replaceLinks, updateCi: w.updateCi, listWatched },
+    });
+    vi.mocked(w.github.listPulls).mockImplementation(async (_t: string, repo: string) => ({ notModified: false as const, etag: `etag-${repo}`, pulls: [] }));
+    return { ...w, listWatched };
+  }
+  const listed = (github: GithubCiClient) => vi.mocked(github.listPulls).mock.calls.map((c) => c[1]).sort();
+
+  it('lists each repository in play with its own ETag', async () => {
+    const { deps, github, etags } = multi({ keys: ['api'], unscoped: true });
+    await syncProjectCi({ ...deps, merge: vi.fn(async () => {}) }, 'p1');
+    // api: a card names it; app: a card with no repo_keys works on the run's repository
+    expect(listed(github)).toEqual(['acme/api', 'acme/app']);
+    expect(etags.get(ciEtagKey('p1', 'acme/api'))).toBe('etag-acme/api');
+    expect(etags.get(ciEtagKey('p1', 'acme/app'))).toBe('etag-acme/app');
+    await syncProjectCi(deps, 'p1');
+    expect(vi.mocked(github.listPulls)).toHaveBeenLastCalledWith('tok', 'acme/app', 'etag-acme/app');
+  });
+
+  it('never lists a repository with nothing in play, and lists one with a watched PR', async () => {
+    const { deps, github } = multi({ watched: { 'acme/docs': 1 } });
+    await syncProjectCi(deps, 'p1');
+    expect(listed(github)).toEqual(['acme/docs']);
+  });
+
+  it('an active run puts the run\'s repository in play', async () => {
+    const { deps, github } = multi({ active: 1 });
+    await syncProjectCi(deps, 'p1');
+    expect(listed(github)).toEqual(['acme/app']);
+  });
+
+  it('skips a disabled repository even when a card names it', async () => {
+    const { deps, github, listWatched } = multi({ keys: ['api', 'docs'], overrides: [{ full_name: 'acme/docs', enabled: false }] });
+    await syncProjectCi(deps, 'p1');
+    expect(listed(github)).toEqual(['acme/api']);
+    expect(listWatched.mock.calls.some((c) => c[1].repo === 'acme/docs')).toBe(false);
+  });
+
+  it('a GitHub error in one repository does not hold the others, and the merge pass still runs', async () => {
+    const { deps, github, updateCi } = multi({ keys: ['api', 'docs'], watched: { 'acme/docs': 1 } });
+    vi.mocked(github.listPulls).mockImplementation(async (_t: string, repo: string) => {
+      if (repo === 'acme/api') throw new GithubCiError('not_found', 404);
+      return { notModified: false as const, etag: null, pulls: [] };
+    });
+    const merge = vi.fn(async () => {});
+    await syncProjectCi({ ...deps, merge }, 'p1');
+    expect(updateCi).toHaveBeenCalledWith('p1', 'acme/docs', 100, expect.anything());
+    expect(merge).toHaveBeenCalledWith('p1');
+    expect(ciErrorOf('p1')).toBe('GitHub: repositório não encontrado');
+  });
+
+  it('a rate limit stops the pass', async () => {
+    const { deps, github } = multi({ keys: ['api', 'docs'] });
+    vi.mocked(github.listPulls).mockRejectedValue(new GithubCiError('rate_limited', 403));
+    await expect(syncProjectCi(deps, 'p1')).rejects.toBeInstanceOf(GithubCiError);
+    expect(vi.mocked(github.listPulls)).toHaveBeenCalledTimes(1);
+  });
+});
+

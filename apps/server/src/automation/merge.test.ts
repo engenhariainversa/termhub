@@ -1622,3 +1622,77 @@ describe('runs and fixes that must not stall (final review I2, I3)', () => {
     expect(escalations(w)).toEqual([]);
   });
 });
+
+// Spec 2026-10-07 multi-repo R7, §8: each PR reads its repository's entry, and a red base holds its repository only.
+describe('runMergeExecutor with several repositories', () => {
+  const API_CARD = { id: 'c4', ref: 'TER-8', title: 'API do board', auto: true, type: 'story', epic_id: 'e1', project_id: 'p1', repo_keys: ['api'] };
+  const repoRow = (full_name: string, key: string) => ({ id: key, project_id: 'p1', full_name, key, description: null, status: 'ok', discovered_at: '', updated_at: '', checkouts: [] });
+
+  function twoRepos(o: { apiLevel?: string; base?: string; redBase?: string } = {}) {
+    const setup = setupSchema.parse({
+      repo: { integration_id: 'i1', full_name: 'acme/app', base_branch: 'main', deploy_workflow: null },
+      repos: o.apiLevel ? [{ full_name: 'acme/api', autonomy: o.apiLevel }] : [],
+      automation: { enabled: true, autonomy: 'merge' },
+    });
+    const base = o.base ?? EPIC_BRANCH;
+    const prs = [
+      pr({ base_ref: base }),
+      pr({ id: 'pr2', task_id: 'c4', repo: 'acme/api', number: 8, url: 'https://github.com/acme/api/pull/8', title: 'API: board', head_ref: 'TER-8-api-do-board', head_sha: 'h8', base_ref: base }),
+    ];
+    const w = world({ setup, prs });
+    Object.assign(w.repos, { projectRepositories: { listByProject: vi.fn(async () => [repoRow('acme/api', 'api'), repoRow('acme/app', 'app')]) } });
+    const findTask = w.repos.tasks.findById as unknown as ReturnType<typeof vi.fn>;
+    const own = findTask.getMockImplementation()!;
+    findTask.mockImplementation(async (id: string) => (id === 'c4' ? API_CARD : own(id)));
+    vi.mocked(w.repos.automationRuns.branchesOfTask).mockImplementation(async (id: string) => (id === 'c4' ? ['TER-8-api-do-board'] : [BRANCH[id]!]));
+    vi.mocked(w.repos.taskPullRequests.listWatched).mockImplementation(async (_p: string, opts: { repo: string }) => w.state.prs.filter((r) => r.repo === opts.repo));
+    w.gh.pull.mockImplementation(async (_t: string, repo: string) => {
+      const row = w.state.prs.find((r) => r.repo === repo)!;
+      return w.pullFor({ head_sha: row.head_sha, head_ref: row.head_ref, head_repo: repo, base_ref: row.base_ref });
+    });
+    w.gh.branchSha.mockImplementation(async (_t: string, repo: string) => `base-${repo}`);
+    w.ci.listRuns.mockImplementation(async (_t: string, _r: string, sha: string) => [run('ci', 'completed', sha === o.redBase ? 'failure' : 'success')]);
+    w.seen.set('p1:acme/api#8', 'h8');
+    return w;
+  }
+
+  it('reads each repository\'s level: the run\'s repository merges, a discovered one at pr asks the person', async () => {
+    const w = twoRepos();
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, expect.anything());
+    expect(w.state.actions).toHaveLength(1);
+    expect(w.state.actions[0]!.args).toMatchObject({ repo: 'acme/api', number: 8, needed: 'merge' });
+    expect(w.state.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'merged', task_id: 'c1', payload: expect.objectContaining({ repo: 'acme/app', pr: 7 }) }),
+        expect.objectContaining({ kind: 'merge_needs_approval', task_id: 'c4', payload: expect.objectContaining({ repo: 'acme/api', pr: 8 }) }),
+      ]),
+    );
+  });
+
+  it('a repository raised to the project\'s level merges by itself', async () => {
+    const w = twoRepos({ apiLevel: 'merge' });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(2);
+    expect(w.state.actions).toHaveLength(0);
+  });
+
+  it('a red base in one repository holds its PRs only, never the other repository\'s', async () => {
+    const w = twoRepos({ apiLevel: 'merge', base: 'main', redBase: 'base-acme/api' });
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, expect.anything());
+    expect(mergeWaitOf('c4', new Date('2026-10-05T12:00:00Z'))).toBe('merge_base_red');
+  });
+
+  it('a PR of a repository the card does not name is still not the card\'s', async () => {
+    const w = twoRepos({ apiLevel: 'merge' });
+    const findTask = w.repos.tasks.findById as unknown as ReturnType<typeof vi.fn>;
+    const own = findTask.getMockImplementation()!;
+    findTask.mockImplementation(async (id: string) => (id === 'c4' ? { ...API_CARD, repo_keys: [] } : own(id)));
+    await runMergeExecutor(w.deps, 'p1');
+    expect(w.gh.merge).toHaveBeenCalledTimes(1);
+    expect(w.gh.merge).toHaveBeenCalledWith('tok', 'acme/app', 7, expect.anything());
+  });
+});

@@ -1,5 +1,6 @@
 import { matchesWorkflow, type WorkflowRun } from '../ci/rules.js';
 import type { ProjectSetupData } from '../setup/schema.js';
+import type { RepoEntry } from './repo-entry.js';
 
 /** A workflow as the Setup names it: its display name and its file. */
 export interface WorkflowRef {
@@ -30,16 +31,24 @@ export function pushOnlyOf(baseRuns: WorkflowRun[], headRuns: WorkflowRun[]): Wo
   return baseRuns.filter((r) => (r.event === undefined || r.event === 'push') && !onHead.has(r.path)).map((r) => ({ name: r.name, path: r.path }));
 }
 
-/** Whether the Setup already names the workflow: the deploy, a release workflow or a required check. */
-export function listedInSetup(w: WorkflowRef, setup: ProjectSetupData): boolean {
-  const names = [setup.repo?.deploy_workflow ?? null, ...setup.automation.release_workflows, ...setup.automation.required_checks].filter((n): n is string => !!n);
+/** The workflows a repository entry names (multi-repo R7). */
+type NamedWorkflows = Pick<RepoEntry, 'deploy_workflow' | 'release_workflows' | 'required_checks'>;
+
+/** Whether the Setup already names the workflow: the deploy, a release workflow or a required check, of the project or of any of its repositories. */
+export function listedInSetup(w: WorkflowRef, setup: ProjectSetupData, entries: NamedWorkflows[] = []): boolean {
+  const names = [
+    setup.repo?.deploy_workflow ?? null,
+    ...setup.automation.release_workflows,
+    ...setup.automation.required_checks,
+    ...entries.flatMap((e) => [e.deploy_workflow, ...e.release_workflows, ...e.required_checks]),
+  ].filter((n): n is string => !!n);
   const asRun = { name: w.name, path: w.path } as WorkflowRun;
   return names.some((n) => matchesWorkflow(asRun, n));
 }
 
 /** The push-only workflows of the project's base head the Setup does not name: the Setup's warning. */
-export function unlistedWorkflows(projectId: string, setup: ProjectSetupData): WorkflowRef[] {
-  return (seen.get(projectId)?.workflows ?? []).filter((w) => !listedInSetup(w, setup));
+export function unlistedWorkflows(projectId: string, setup: ProjectSetupData, entries: NamedWorkflows[] = []): WorkflowRef[] {
+  return (seen.get(projectId)?.workflows ?? []).filter((w) => !listedInSetup(w, setup, entries));
 }
 
 /** Tests only. */

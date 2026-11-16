@@ -7,6 +7,7 @@ import { epicMayDie, epicPullsOf } from './epic-phase.js';
 import { recordEvent } from './events.js';
 import { endRunsOfMergedCard } from './follower.js';
 import { githubAccess } from './merge.js';
+import { loadRepoEntries, runEntry, type RepoEntry } from './repo-entry.js';
 import { runBranchOf } from './release.js';
 
 /* TER-1150: what termhub does at an automatic epic's birth and death (where it is: `epic-phase.ts`), and the
@@ -87,15 +88,17 @@ export async function settleEpic(deps: LifecycleDeps, project: Project, setup: P
  * fine; a failure is logged, never thrown) and `epic_done` recorded. The merge executor calls it when the
  * epic PR's merge has nothing to deliver; `settleEpic` once the delivery is through.
  */
-export async function epicDied(deps: LifecycleDeps, project: Project, setup: ProjectSetupData, epic: Task, pr: { number: number; url: string } | null): Promise<void> {
+export async function epicDied(deps: LifecycleDeps, project: Project, setup: ProjectSetupData, epic: Task, pr: { number: number; url: string } | null, repoEntry?: RepoEntry | null): Promise<void> {
   const { repos } = deps;
   const log = deps.log ?? noopLog;
   const branch = branchOf(setup, epic);
   let deleted = false;
-  const base = setup.repo?.base_branch ?? 'main';
+  // the epic PR's repository, else the one the runs work on (one repository per epic for now, multi-repo R16)
+  const entry = repoEntry !== undefined ? repoEntry : runEntry(await loadRepoEntries(repos, project.id, setup), setup);
+  const base = entry?.base_branch ?? setup.repo?.base_branch ?? 'main';
   if (branch && branch !== base) {
     try {
-      const access = await githubAccess(repos, project, setup);
+      const access = await githubAccess(repos, project, setup, entry);
       if (access) {
         await deps.gh.deleteBranch(access.token, access.repo, branch);
         deleted = true;

@@ -22,7 +22,8 @@ import { addSubtasks, createColumn, createTask, deleteTask, listTasks, moveTask,
 import { getTicket, importTickets, listTickets, pushTicketStatus, syncTickets, TICKET_IMPORT_MAX, TICKET_LIST_MAX } from '../control/tickets.js';
 import { automationQueue } from '../automation/queue.js';
 import { projectHealth } from '../health/view.js';
-import { policyText } from '../automation/policy.js';
+import { policyRepos, policyText } from '../automation/policy.js';
+import { runEntry } from '../automation/repo-entry.js';
 import { needsPrCiWarning, NO_PR_CI_TEXT, projectPrCi } from '../automation/pr-ci.js';
 import { listAutomationEvents } from '../automation/events.js';
 import { escalateAutomationRun, getRunCard, reportCard, resumeAutomationRun, tabHasActiveRun, tabMayReport } from '../automation/follower.js';
@@ -494,9 +495,10 @@ export const TOOLS: ToolDef[] = [
     scope: 'read', resource: 'tasks', action: 'read',
     input: { project_id: id },
     run: async (ctx, a) => {
-      const { automation, repo } = await getProjectSetup(ctx, a as { project_id: string });
+      const { automation, repo, repos } = await getProjectSetup(ctx, a as { project_id: string });
       const prCi = await projectPrCi(ctx, (a as { project_id: string }).project_id);
-      const text = policyText(automation, repo?.deploy_workflow ?? null);
+      // multi-repo §9: every repository with its level, the one the runs work on first
+      const text = policyText(automation, repo?.deploy_workflow ?? null, policyRepos(repos, [runEntry(repos, { repo })?.full_name]));
       // TER-1114: at merge level or above, a repository with no CI on PRs never gets a PR merged
       return { enabled: automation.enabled, autonomy: automation.autonomy, pr_ci: prCi, no_ci_merge: automation.no_ci_merge, text: needsPrCiWarning(automation, prCi) ? `${text}\nAviso: ${NO_PR_CI_TEXT}` : text };
     },

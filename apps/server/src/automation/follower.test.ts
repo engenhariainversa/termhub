@@ -1463,7 +1463,7 @@ describe('adopting the PR of a blocked run (TER-1049, spike TER-1031 §5.1–5.3
     expect(w.run.waiting_reason).toBe('reported_blocked');
     expect(w.events).toEqual([
       expect.objectContaining({ kind: 'run_done', run_id: w.run.id, task_id: 't1', payload: { via: ADOPTED_VIA, tab_id: 'tab1', pr_url: PR.url } }),
-      expect.objectContaining({ kind: 'pr_opened', run_id: w.run.id, payload: { pr_url: PR.url, number: 9, branch: 'TER-1-card' } }),
+      expect.objectContaining({ kind: 'pr_opened', run_id: w.run.id, payload: { repo: 'acme/app', pr_url: PR.url, number: 9, branch: 'TER-1-card' } }),
     ]);
     expect(published).toEqual(['run_done', 'pr_opened']);
     expect(lines(w)).toEqual(['PR #9 do TER-1 aberto depois do bloqueio; o automático acompanha até o merge']);

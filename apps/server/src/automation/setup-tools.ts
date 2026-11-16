@@ -5,7 +5,8 @@ import { msg } from '../i18n/index.js';
 import { automationInputSchema, type ProjectAutomation } from '../setup/schema.js';
 import { AUTOMATION_PATCH_FIELDS, automationChangeWidens, automationPatchOf, changedFields, type AutomationPatch, type AutomationPatchField } from './setup-patch.js';
 import { dispatchTriggers, recordEvent } from './events.js';
-import { policyText } from './policy.js';
+import { policyRepos, policyText } from './policy.js';
+import { loadRepoEntries, runEntry } from './repo-entry.js';
 
 /**
  * The automation Setup and the machine switch through MCP (TER-975): what the concierge can change, and
@@ -99,7 +100,9 @@ export async function setAutomationPolicy(ctx: ControlContext, input: { project_
     if (saved.enabled) dispatchTriggers.poke('setup_saved');
   }
   const automation = Object.fromEntries(AUTOMATION_PATCH_FIELDS.map((f) => [f, saved[f]])) as AutomationPolicyOut['automation'];
-  return { project_id: project.id, automation, text: policyText(saved, setup.data.repo?.deploy_workflow ?? null), changed };
+  const entries = await loadRepoEntries(ctx.repos, project.id, { ...setup.data, automation: saved });
+  const text = policyText(saved, setup.data.repo?.deploy_workflow ?? null, policyRepos(entries, [runEntry(entries, setup.data)?.full_name]));
+  return { project_id: project.id, automation, text, changed };
 }
 
 /**

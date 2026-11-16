@@ -509,6 +509,25 @@ export class TasksRepository {
   }
 
   /**
+   * The repositories the project's work in progress touches (spec 2026-10-07 multi-repo R17): the
+   * `repo_keys` of its cards in doing and of its automatic cards in todo. `unscoped` when one of them has none
+   * (the single repository, or one the chat has not picked yet).
+   */
+  async repoKeysInPlay(projectId: string): Promise<{ keys: string[]; unscoped: boolean }> {
+    const rows = await this.db.task.findMany({
+      where: { projectId, ...WORK, OR: [{ status: 'doing' }, { status: 'todo', auto: true }] },
+      select: { repoKeys: true },
+    });
+    const keys = new Set<string>();
+    let unscoped = false;
+    for (const r of rows) {
+      if (r.repoKeys.length === 0) unscoped = true;
+      for (const k of r.repoKeys) keys.add(k);
+    }
+    return { keys: [...keys], unscoped };
+  }
+
+  /**
    * What the office floor shows of the board: per project, how many top-level tasks sit in
    * todo/doing/done (the backlog is not work in progress); per tab, the `doing` task bound to it
    * with its subtask counts. Two `doing` tasks on one tab: the first by position wins.

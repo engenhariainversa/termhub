@@ -359,6 +359,12 @@ async function finishDone(repos: Repositories, run: AutomationRun, via: Exclude<
   return true;
 }
 
+/** `{ repo: 'owner/repo' }` of a GitHub PR URL (multi-repo §4: every PR event names its repository), else nothing. */
+const repoOfPrUrl = (url: string): { repo?: string } => {
+  const m = /^https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+/.exec(url);
+  return m ? { repo: m[1]! } : {};
+};
+
 /** What follows the write that ended a run `done`: its card placed (not after a merge), `run_done` and `pr_opened`. */
 async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneVia, pr: { url: string; number?: number; merged?: boolean } | null, log: Log): Promise<void> {
   if (via !== 'merged') await placeDoneCard(repos, run, log);
@@ -366,7 +372,7 @@ async function recordDone(repos: Repositories, run: AutomationRun, via: RunDoneV
   await recordEvent(repos, { ...base, kind: 'run_done', payload: { via, tab_id: run.tab_id, pr_url: pr?.url ?? null } }).catch((e: unknown) => log.warn({ runId: run.id, code: errorCode(e) }, 'automation: run_done not recorded'));
   // a PR already merged when the run ends was not opened now: the `merged` line tells it (TER-974)
   if (pr && via !== 'merged' && !pr.merged) {
-    await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { pr_url: pr.url, ...(pr.number !== undefined ? { number: pr.number } : {}), branch: run.branch } }).catch((e: unknown) =>
+    await recordEvent(repos, { ...base, kind: 'pr_opened', payload: { ...repoOfPrUrl(pr.url), pr_url: pr.url, ...(pr.number !== undefined ? { number: pr.number } : {}), branch: run.branch } }).catch((e: unknown) =>
       log.warn({ runId: run.id, code: errorCode(e) }, 'automation: pr_opened not recorded'),
     );
   }

@@ -33,6 +33,7 @@ import { fixerPrompt, serverMessage } from './prompts.js';
 import { repoPrCi } from './pr-ci.js';
 import { deliveryPending, runBranchOf } from './release.js';
 import { epicDied } from './epic-lifecycle.js';
+import { activeEntries, entryFor, loadRepoEntries, type RepoEntry } from './repo-entry.js';
 import { notePushOnlyWorkflows, pushOnlyKnown, pushOnlyOf } from './unlisted-workflows.js';
 
 /** The chat card's tool: a merge above the project's level waits for the person (spec D7). */
@@ -158,20 +159,31 @@ const codeOf = (e: unknown): string => {
   return code.slice(0, 64);
 };
 
-/** The project's GitHub token, under the CI sync's rule: a GitHub integration of the project's owner. */
-export async function githubAccess(repos: Repositories, project: Project, setup: ProjectSetupData): Promise<{ token: string; repo: string } | null> {
-  const repo = setup.repo;
-  if (!repo?.integration_id || !repo.full_name) return null;
-  const integration = await repos.integrations.findById(repo.integration_id);
+/**
+ * A repository's GitHub token, under the CI sync's rule: a GitHub integration of the project's owner. The
+ * integration is the repository entry's (spec 2026-10-07 multi-repo R7), else the project's `setup.repo`
+ * one (TER-1071: discovered repositories of the same owner read with it).
+ */
+export async function githubAccess(
+  repos: Repositories,
+  project: Project,
+  setup: ProjectSetupData,
+  entry: Pick<RepoEntry, 'full_name' | 'integration_id'> | null,
+): Promise<{ token: string; repo: string } | null> {
+  const integrationId = entry?.integration_id ?? setup.repo?.integration_id ?? null;
+  if (!entry?.full_name || !integrationId) return null;
+  const integration = await repos.integrations.findById(integrationId);
   if (!integration || integration.provider !== 'github' || project.owner_id === null || integration.owner_id !== project.owner_id) return null;
   const token = await repos.integrations.getSecret(integration.id);
-  return token ? { token, repo: repo.full_name } : null;
+  return token ? { token, repo: entry.full_name } : null;
 }
 
 interface PullCtx {
   deps: MergeDeps;
   project: Project & { owner_id: string };
   setup: ProjectSetupData;
+  /** the PR's repository in the project's list: its base, deploy, level, checks and globs (multi-repo R7) */
+  entry: RepoEntry;
   token: string;
   repo: string;
   /** the PR's rows (one per card it cites) */
@@ -186,6 +198,8 @@ interface PullCtx {
 }
 
 const now = (deps: MergeDeps) => deps.now?.() ?? new Date();
+/** A red base is one repository's (multi-repo §8): it holds and escalates that repository's PRs only. */
+const redKey = (c: Pick<PullCtx, 'project' | 'repo'>) => `${c.project.id}:${c.repo.toLowerCase()}`;
 const waitOn = (c: PullCtx, wait: MergeWait, sha: string | null = null, detail: string | null = null) => noteMergeWait(c.tasks.map((t) => t.id), wait, now(c.deps), sha, detail);
 
 /** A PR of an automatic card that termhub leaves to a person (TER-1004): it also cites a person's card that is not done. */
@@ -222,7 +236,7 @@ async function candidateOf(
     }
   }
   if (!primary) return null;
-  const baseBranch = base.setup.repo?.base_branch ?? 'main';
+  const baseBranch = base.entry.base_branch;
   if (primary.type === 'epic') return epicCandidate(deps, base, rows, tasks, primary, baseBranch);
   const epic = primary.epic_id ? await repos.tasks.findById(primary.epic_id) : undefined;
   const { epicBranch } = targetOf({ epic: epic ? { auto: epic.auto, ref: epic.ref, title: epic.title } : null }, base.setup);
@@ -311,7 +325,22 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
   if (!project?.owner_id) return;
   const owned = project as Project & { owner_id: string };
   if (await isPaused(repos, owned.owner_id, projectId)) return;
-  const access = await githubAccess(repos, owned, setup);
+
+  // one pass per repository (spec 2026-10-07 multi-repo §8): each one's token, PRs, base and level
+  const entries = activeEntries(await loadRepoEntries(repos, projectId, setup));
+  for (const entry of entries) {
+    if (deps.lifecycle.draining) return;
+    // a single repository fails the pass as before; with several, one that fails never holds the others
+    if (entries.length === 1) await mergeRepo(deps, owned, setup, entry);
+    else await mergeRepo(deps, owned, setup, entry).catch((e: unknown) => log.warn({ projectId, code: codeOf(e) }, 'automation: merge pass failed for a repository'));
+  }
+}
+
+async function mergeRepo(deps: MergeDeps, owned: Project & { owner_id: string }, setup: ProjectSetupData, entry: RepoEntry): Promise<void> {
+  const { repos } = deps;
+  const log = deps.log ?? noopLog;
+  const projectId = owned.id;
+  const access = await githubAccess(repos, owned, setup, entry);
   if (!access) return;
 
   const watched = await repos.taskPullRequests.listWatched(projectId, { repo: access.repo, includeMerged: false }, now(deps));
@@ -320,7 +349,7 @@ export async function runMergeExecutor(deps: MergeDeps, projectId: string): Prom
 
   for (const rows of byNumber.values()) {
     if (deps.lifecycle.draining) return;
-    const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
+    const c = await candidateOf(deps, { deps, project: owned, setup, entry, ...access }, rows);
     if (!c) continue;
     if (isHeld(c)) {
       await onHeld(deps, owned, c.held).catch((e: unknown) => log.warn({ projectId, pr: rows[0]!.number, code: codeOf(e) }, 'automation: held PR not reported'));
@@ -353,7 +382,7 @@ function noWrite(c: PullCtx): void {
 }
 
 async function handlePull(c: PullCtx): Promise<void> {
-  const { deps, setup, token, repo } = c;
+  const { deps, token, repo } = c;
   const { repos } = deps;
   const row = c.rows[0]!;
   const seen = deps.seen ?? defaultSeen;
@@ -398,7 +427,7 @@ async function handlePull(c: PullCtx): Promise<void> {
 
   const { needed, complete } = await readNeeded(c, row, pull.base_ref);
 
-  if (complete && allows(setup.automation.autonomy, needed)) {
+  if (complete && allows(c.entry.autonomy, needed)) {
     // D24 / Review Focus 4: the last check before the merge
     if (await stopped(c)) return;
     const outcome = await mergePull(c, row, needed, 'policy');
@@ -418,10 +447,10 @@ async function readNeeded(c: PullCtx, row: TaskPullRequest, base: string): Promi
     base,
     epicBranch: c.epicBranch,
     baseBranch: c.baseBranch,
-    deployWorkflow: c.setup.repo?.deploy_workflow ?? null,
+    deployWorkflow: c.entry.deploy_workflow,
     files: paths,
-    releasePaths: c.setup.automation.release_paths,
-    storePaths: c.setup.automation.store_paths,
+    releasePaths: c.entry.release_paths,
+    storePaths: c.entry.store_paths,
   });
   await c.deps.repos.taskPullRequests.setChangedLevel(c.project.id, c.repo, row.number, complete ? needed : 'files_incomplete');
   return { needed, complete };
@@ -443,7 +472,7 @@ async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: 
   }
   const base = await baseState(c, c.baseBranch, pull.head_sha, noCi);
   if (base.state !== 'red') {
-    (c.deps.redSince ?? defaultRedSince).delete(c.project.id);
+    (c.deps.redSince ?? defaultRedSince).delete(redKey(c));
     return { wait: base.state === 'green' ? 'ok' : 'merge_base_pending', detail: null };
   }
   await onBaseRed(c, row, base).catch((e: unknown) => (c.deps.log ?? noopLog).warn({ projectId: c.project.id, pr: row.number, code: codeOf(e) }, 'automation: red base not escalated'));
@@ -458,7 +487,7 @@ async function deliveryGate(c: PullCtx, row: TaskPullRequest, pull: { head_sha: 
  */
 async function checksGreen(c: PullCtx, row: TaskPullRequest, seen: Map<string, string> | null, seenKey: string): Promise<boolean> {
   if (row.ci_state === 'failed' || row.ci_state === 'none') return false;
-  const required = c.setup.automation.required_checks;
+  const required = c.entry.required_checks;
   if (required.length > 0) {
     const runs = latestPerWorkflow(await c.deps.ci.listRuns(c.token, c.repo, row.head_sha));
     const ok = required.every((w) => runs.some((r) => matchesWorkflow(r, w) && r.status === 'completed' && r.conclusion === 'success'));
@@ -494,13 +523,13 @@ async function baseState(c: PullCtx, baseBranch: string, headSha: string, noCi =
   const sha = await c.deps.gh.branchSha(c.token, c.repo, baseBranch);
   // TER-1121: every reading is kept for the health watcher, with the workflows behind it
   const noted = (b: BaseReading, behind: WorkflowRun[] = []): BaseReading => {
-    noteBaseReading(c.project.id, { state: b.state, sha: b.sha, failing: behind.map((r) => r.name) });
+    noteBaseReading(c.project.id, { state: b.state, sha: b.sha, failing: behind.map((r) => r.name), repo: c.repo });
     return b;
   };
   if (!sha) return noted({ state: 'red', sha: null, red: null });
   const runs = latestPerWorkflow(await c.deps.ci.listRuns(c.token, c.repo, sha));
   await readPushOnly(c, sha, runs, headSha);
-  const delivery = [c.setup.repo?.deploy_workflow ?? null, ...c.setup.automation.release_workflows].filter((w): w is string => !!w);
+  const delivery = [c.entry.deploy_workflow, ...c.entry.release_workflows].filter((w): w is string => !!w);
   const isDelivery = (r: WorkflowRun) => delivery.some((w) => matchesWorkflow(r, w));
   // TER-1188: a repository with no CI has no run on its base head either; with no deploy or release to wait
   // for, that base is not "pending", it simply has nothing that could be red
@@ -571,8 +600,8 @@ async function onBaseRed(c: PullCtx, row: TaskPullRequest, base: BaseReading): P
   const log = c.deps.log ?? noopLog;
   const redSince = c.deps.redSince ?? defaultRedSince;
   const at = now(c.deps).getTime();
-  const held = redSince.get(c.project.id);
-  if (held?.sha !== base.sha) return void redSince.set(c.project.id, { sha: base.sha, since: at });
+  const held = redSince.get(redKey(c));
+  if (held?.sha !== base.sha) return void redSince.set(redKey(c), { sha: base.sha, since: at });
   if (held.told || at - held.since < BASE_RED_ESCALATE_MS) return;
   const payload = { reason: MERGE_BASE_RED, base: c.baseBranch, base_sha: base.sha, workflow: base.red?.name ?? null, run_url: base.red?.html_url ?? null, pr: row.number, url: row.url };
   const ev = await repos.automationEvents.insertOnce({ project_id: c.project.id, task_id: c.primary.id, run_id: null, kind: 'escalated', payload });
@@ -672,7 +701,7 @@ async function mergeWithoutCi(c: PullCtx, row: TaskPullRequest, pull: PullState)
   const { wait, detail } = await deliveryGate(c, row, pull, true);
   if (wait !== 'ok') return waitOn(c, wait, null, detail);
   const { needed, complete } = await readNeeded(c, row, pull.base_ref);
-  if (complete && allows(c.setup.automation.autonomy, needed)) {
+  if (complete && allows(c.entry.autonomy, needed)) {
     if (await stopped(c)) return;
     const outcome = await mergePull(c, row, needed, 'policy', MERGED_NO_CI);
     if (outcome === 'no_write') noWrite(c);
@@ -927,7 +956,7 @@ async function askApproval(c: PullCtx, row: TaskPullRequest, base: string, neede
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merge_needs_approval',
-      payload: { pr: row.number, url: row.url, sha: row.head_sha, needed, action_id: card.id, ...(noCi ? { no_ci: true } : {}), ...(needed === 'store' ? { text: REASON_TEXT.merge_store } : {}) },
+      payload: { repo: c.repo, pr: row.number, url: row.url, sha: row.head_sha, needed, action_id: card.id, ...(noCi ? { no_ci: true } : {}), ...(needed === 'store' ? { text: REASON_TEXT.merge_store } : {}) },
     });
   }
 }
@@ -954,7 +983,7 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
     let moved = false;
     // TER-1150: an epic whose merge has a deploy or release to follow stays in Fazendo ("entregando") until
     // the delivery is through; `settleEpic` then finishes it
-    const delivering = task.type === 'epic' && deliveryPending(c.setup, { ...row, changed_level: needed, deploy_state: 'none', release_runs: [] });
+    const delivering = task.type === 'epic' && deliveryPending(c.setup, { ...row, changed_level: needed, deploy_state: 'none', release_runs: [] }, c.entry);
     try {
       if (!delivering) moved = (await repos.tasks.move(task.id, { status: 'done' }, 0)) !== undefined;
     } catch (e) {
@@ -968,9 +997,9 @@ async function mergePull(c: PullCtx, row: TaskPullRequest, needed: string, by: '
       project_id: c.project.id,
       task_id: task.id,
       kind: 'merged',
-      payload: { pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(reason ? { reason } : {}), ...(kept ? { worktree_kept: true } : {}) },
+      payload: { repo: c.repo, pr: row.number, url: row.url, sha: result.sha, base: row.base_ref, level: needed, by, moved_to_done: moved, ...(reason ? { reason } : {}), ...(kept ? { worktree_kept: true } : {}) },
     });
-    if (task.type === 'epic' && moved) await epicDied({ repos, gh: c.deps.gh, log }, c.project, c.setup, task, { number: row.number, url: row.url });
+    if (task.type === 'epic' && moved) await epicDied({ repos, gh: c.deps.gh, log }, c.project, c.setup, task, { number: row.number, url: row.url }, c.entry);
   }
   log.info({ projectId: c.project.id, pr: row.number, by, reason }, 'automation: PR merged');
   await postMergeLine(c, row, reason).catch((e: unknown) => log.warn({ pr: row.number, code: codeOf(e) }, 'automation: merge line not posted'));
@@ -1051,12 +1080,14 @@ export async function mergeApproved(deps: MergeDeps, actionId: string): Promise<
   const close = async (code: string) => {
     if (await repos.chatActions.claimApproved(action.id)) await finish(repos, action, owned.owner_id, false, code, Date.now());
   };
-  const access = await githubAccess(repos, owned, setup);
-  if (!access || access.repo !== args.repo) return void (await close('GITHUB_NO_ACCESS'));
+  // the PR's repository, read fresh: one taken out of the automation (or gone) since the card was asked has no access
+  const entry = entryFor(activeEntries(await loadRepoEntries(repos, project.id, setup)), args.repo);
+  const access = entry ? await githubAccess(repos, owned, setup, entry) : null;
+  if (!entry || !access || access.repo !== args.repo) return void (await close('GITHUB_NO_ACCESS'));
   const rows = (await repos.taskPullRequests.listWatched(project.id, { repo: args.repo, includeMerged: false }, now(deps))).filter((r) => r.number === args.number && r.state === 'open');
   const row = rows[0];
   if (!row || row.head_sha !== args.head_sha) return void (await close('HEAD_MOVED'));
-  const c = await candidateOf(deps, { deps, project: owned, setup, ...access }, rows);
+  const c = await candidateOf(deps, { deps, project: owned, setup, entry, ...access }, rows);
   if (!c || isHeld(c)) return void (await close('NOT_CANDIDATE'));
   // the approval was for this base: a PR retargeted since (say from the epic branch to the deploying base) is a new question
   if (row.base_ref !== args.base) return void (await close('BASE_CHANGED'));

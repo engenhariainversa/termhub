@@ -3,6 +3,7 @@ import { tk } from '../i18n/index.js';
 import { createGithubCiClient, type GithubCiClient } from '../integrations/github-ci.js';
 import type { ProjectAutomation } from '../setup/schema.js';
 import { githubAccess } from './merge.js';
+import { activeEntries, entryFor, loadRepoEntries, runEntry } from './repo-entry.js';
 
 /**
  * Whether the project's repository runs CI on pull requests (TER-1114): termhub merges only a green CI, so
@@ -23,10 +24,13 @@ const TTL_MS = 10 * 60_000;
 const cache = new Map<string, { state: 'present' | 'absent'; at: number }>();
 let client: Pick<GithubCiClient, 'hasRunsFor'> | null = null;
 
-export async function projectPrCi(ctx: ControlContext, projectId: string, gh?: Pick<GithubCiClient, 'hasRunsFor'>, now = Date.now()): Promise<PrCiState> {
+/** The reading for one repository of the project (`repo`), or for the one its runs work on (multi-repo R14). */
+export async function projectPrCi(ctx: ControlContext, projectId: string, gh?: Pick<GithubCiClient, 'hasRunsFor'>, now = Date.now(), repo?: string): Promise<PrCiState> {
   const { project } = await ctx.scoped.project(projectId);
   const setup = (await ctx.repos.projectSetup.get(project.id)).data;
-  const access = await githubAccess(ctx.repos, project, setup);
+  const entries = await loadRepoEntries(ctx.repos, project.id, setup);
+  const entry = repo ? entryFor(activeEntries(entries), repo) : runEntry(entries, setup);
+  const access = await githubAccess(ctx.repos, project, setup, entry);
   if (!access) return 'unknown';
   return repoPrCi(access.token, access.repo, gh ?? (client ??= createGithubCiClient()), now);
 }
