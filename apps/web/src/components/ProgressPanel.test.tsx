@@ -178,6 +178,23 @@ describe('ProgressPanel', () => {
     expect(items[1]).toHaveTextContent('#123456');
   });
 
+  // TER-1068: a card of a multi-repo project shows its repositories; a single-repo card ([]) shows none
+  it("shows a chip per repository of a card, none for a single-repo project's card", async () => {
+    const r = response();
+    r.epics[0].cards[0].repo_keys = ['api', 'web'];
+    progressMock.mockResolvedValue({ ...r, feed: [] });
+    mount();
+    const chips = await screen.findByRole('list', { name: 'Repositórios' });
+    expect(within(chips).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['api', 'web']);
+  });
+
+  it('shows no repository chips for a card with none', async () => {
+    progressMock.mockResolvedValue({ ...response(), feed: [] });
+    mount();
+    await screen.findByText('Visão gerencial');
+    expect(screen.queryByRole('list', { name: 'Repositórios' })).toBeNull();
+  });
+
   it('shows no feed section for someone with no automatic work', async () => {
     progressMock.mockResolvedValue({ ...response(), feed: [] });
     mount();

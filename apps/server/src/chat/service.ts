@@ -1374,7 +1374,16 @@ export class ChatService {
     const open = (await openPermissionsOn(this.deps.repos, user.id))
       ? (await effectiveBlocks(this.deps.repos, user.id)).filter((b) => b.project_id === null || b.project_id === project.id).map((b) => describeBlock(b, b.project_id ? project.name : null))
       : null;
-    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules, rules, open);
+    // TER-1068: a project with several repositories gets one line pointing at list_project_repos
+    // (best effort: the prompt never fails over it)
+    let repoCount = 0;
+    try {
+      const setup = await this.deps.repos.projectSetup.get(project.id);
+      repoCount = (await this.deps.repos.projectRepositories.effective(project.id, setup.data)).filter((r) => r.enabled).length;
+    } catch {
+      repoCount = 0;
+    }
+    return projectSystemPrompt(project, links.filter((l) => nameOf.has(l.machine_id)).map((l) => ({ machine: nameOf.get(l.machine_id)!, cwd: l.cwd })), standing, groups, defaults, commandRules, rules, open, repoCount);
   }
 
   /** The tabs' answered questions this conversation's model was not told yet, as the lines to prepend,

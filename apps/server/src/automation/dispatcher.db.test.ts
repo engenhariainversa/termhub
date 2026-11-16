@@ -16,6 +16,7 @@ import { followRun, TAB_CLOSED, UNTAGGED } from './follower.js';
 import { pauseAutomation } from './pause.js';
 import { resetWaiting } from './placement.js';
 import { automationQueue } from './queue.js';
+import { resetRepoUnknownState } from './repo-unknown.js';
 
 // The agent registry, as the dispatcher, the queue and the placement read it: which machines are online
 // with the worktree capability.
@@ -934,5 +935,83 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('automation dispatcher (Po
       expect(closeTab).toHaveBeenCalledWith(expect.anything(), `tab-${c.id}`);
       expect((await runsOf())[0]).toMatchObject({ status: 'failed', waitingReason: 'RUN_NOT_RECORDED', tabId: `tab-${c.id}` });
     });
+  });
+  // TER-1068 (spec 2026-10-07 multi-repo R9 b, §9): a multi-repo project's cards wait for their repositories
+  describe('a project with several repositories', () => {
+    async function twoRepos(opts: { apiIntegration?: boolean } = {}) {
+      await repos.projectRepositories.upsertDiscovered(projectId, machineId, [
+        { full_name: 'acme/app', dir: 'app', default_branch: 'main', has_commits: true },
+        { full_name: 'acme/api', dir: 'api', default_branch: 'main', has_commits: true },
+      ]);
+      if (opts.apiIntegration) {
+        const { data } = await repos.projectSetup.get(projectId);
+        await repos.projectSetup.save(projectId, { ...data, repo_defaults: { ...data.repo_defaults, integration_id: 'int-1' } });
+      }
+    }
+    const repoCard = (title: string, repo_keys: string[]) => repos.tasks.create(projectId, { title, column_id: todoId, auto: true, description: 'faça isto', repo_keys });
+    beforeEach(() => resetRepoUnknownState());
+
+    it('reads each card against its own repositories, naming the one a reason is about', async () => {
+      reg.caps.set(machineId, ['worktree', 'repo_scan']);
+      await twoRepos();
+      const none = await repoCard('none', []);
+      const both = await repoCard('both', ['app', 'api']);
+      const api = await repoCard('api', ['api']);
+      const app = await repoCard('app', ['app']);
+      const items = new Map((await automationQueue(ctx(), projectId)).map((i) => [i.task_id, i]));
+      expect(items.get(none.id)).toMatchObject({ reason: 'repo_unknown', reason_text: 'Sem repositório: o chat vai escolher', repo_keys: [] });
+      expect(items.get(both.id)).toMatchObject({ reason: 'repo_multi_soon', repo_keys: ['api', 'app'] });
+      expect(items.get(api.id)).toMatchObject({ reason: 'repo_missing', reason_text: 'Repositório não configurado no Setup: api' });
+      expect(items.get(app.id)).toMatchObject({ eligible: true, reason: null, repo_keys: ['app'] });
+      // an agent that does not scan for repositories cannot say where they sit
+      reg.caps.set(machineId, ['worktree']);
+      expect(await reasonOf(app.id)).toBe('agent_no_repo_scan');
+      // the folder gone from the machine
+      reg.caps.set(machineId, ['worktree', 'repo_scan']);
+      const apiRepo = (await repos.projectRepositories.listByProject(projectId)).find((r) => r.key === 'api')!;
+      await repos.projectRepositories.markMissing(projectId, machineId, [apiRepo.id]);
+      expect(await reasonOf(app.id)).toBe('repo_not_on_machine');
+    });
+
+    it("wakes the project's chat once per card without a repository, across two colours, and starts nothing for it", async () => {
+      reg.caps.set(machineId, ['worktree', 'repo_scan']);
+      await twoRepos({ apiIntegration: true });
+      const c = await repoCard('sem repo', []);
+      const wake = vi.fn(async () => true);
+      const blue = makeDeps({ wakeRepoUnknown: wake });
+      const green = makeDeps({ wakeRepoUnknown: wake });
+      await tickOnce(blue.deps);
+      resetRepoUnknownState(); // the other colour is another process
+      await tickOnce(green.deps);
+      await tickOnce(blue.deps);
+      expect(wake).toHaveBeenCalledTimes(1);
+      expect(wake).toHaveBeenCalledWith({ ownerId, projectId, cards: [{ id: c.id, ref: c.ref, title: 'sem repo' }] });
+      expect(blue.startAgent).not.toHaveBeenCalled();
+      expect(green.startAgent).not.toHaveBeenCalled();
+      expect((await eventsOf()).filter((e) => e.kind === 'repo_unknown')).toHaveLength(1);
+      // the index itself refuses a second claim
+      expect(await repos.automationEvents.insertOnce({ project_id: projectId, task_id: c.id, kind: 'repo_unknown', payload: { ref: c.ref } })).toBeNull();
+    });
+
+    it('gives the claim back when the wake did not start', async () => {
+      reg.caps.set(machineId, ['worktree', 'repo_scan']);
+      await twoRepos({ apiIntegration: true });
+      await repoCard('sem repo', []);
+      const { deps } = makeDeps({ wakeRepoUnknown: vi.fn(async () => false) });
+      await tickOnce(deps);
+      expect((await eventsOf()).filter((e) => e.kind === 'repo_unknown')).toHaveLength(0);
+    });
+  });
+
+  it('a single-repo project gets no repo reason and no wake (TER-1068)', async () => {
+    reg.caps.set(machineId, ['worktree', 'repo_scan']);
+    await repos.projectRepositories.upsertDiscovered(projectId, machineId, [{ full_name: 'acme/app', dir: '.', default_branch: 'main', has_commits: true }]);
+    const c = await card();
+    expect(await reasonOf(c.id)).toBeNull();
+    const wake = vi.fn(async () => true);
+    const { deps, startAgent } = makeDeps({ wakeRepoUnknown: wake });
+    await tickOnce(deps);
+    expect(wake).not.toHaveBeenCalled();
+    expect(startAgent).toHaveBeenCalledTimes(1);
   });
 });

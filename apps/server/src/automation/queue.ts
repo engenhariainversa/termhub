@@ -1,4 +1,4 @@
-import { CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
+import { CAPABILITY_REPO_SCAN, CAPABILITY_WORKTREE } from '@termhub/agent-protocol';
 import { versionAtLeast } from '../agent/errors.js';
 import { agents } from '../agent/registry.js';
 import type { ControlContext } from '../control/context.js';
@@ -12,6 +12,8 @@ import { isPaused } from './pause.js';
 import { WAITING_AS_REASON, waitingOf } from './placement.js';
 import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { placeDetailText } from './waiting-text.js';
+import { cardRepoBlock, type RepoBlock } from './repo-readiness.js';
+import { isMultiRepo } from '../setup/repo-keys.js';
 import { GUARD_MIN_AGENT_VERSION } from '../terminal/tab-mcp.js';
 
 export interface QueueItem {
@@ -21,6 +23,8 @@ export interface QueueItem {
   eligible: boolean;
   reason: IneligibleReason | null;
   reason_text: string | null;
+  /** TER-1068: the repositories the card touches (chips); [] = the project's single repository */
+  repo_keys: string[];
 }
 
 /**
@@ -101,6 +105,9 @@ export async function eligibilityQueue(
   ]);
   const running = new Set(runs.map((r) => r.task_id));
   const { automation, repo } = setup.data;
+  // TER-1068 (multi-repo §9): with more than one enabled repository, each card says which it runs on
+  const effective = await repos.projectRepositories.effective(projectId, setup.data);
+  const multi = isMultiRepo(effective);
   const column = new Map(columns.map((c) => [c.id, c]));
   const tagged = cards.filter((c) => c.auto);
   if (tagged.length === 0) return [];
@@ -108,15 +115,21 @@ export async function eligibilityQueue(
   const waitsOn = await sequenceHeads(repos, cards, column);
 
   let capable = 0;
+  let repoScan = false;
   for (const l of links) {
     // worktrees and the hard-lock guard (agent 0.19.0, TER-1005): a run never starts without the guard
     const version = agents.info(l.machine_id)?.agent_version;
-    if ((agents.capabilities(l.machine_id) ?? []).includes(CAPABILITY_WORKTREE) && !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION)) capable++;
+    const caps = agents.capabilities(l.machine_id) ?? [];
+    if (caps.includes(CAPABILITY_WORKTREE) && !!version && versionAtLeast(version, GUARD_MIN_AGENT_VERSION)) {
+      capable++;
+      if (caps.includes(CAPABILITY_REPO_SCAN)) repoScan = true;
+    }
   }
+  const linked = new Set(links.map((l) => l.machine_id));
   const project = {
     automation,
     paused: await isPaused(repos, row.owner_id, projectId),
-    repo_ready: Boolean(repo?.full_name && repo.integration_id),
+    repo_ready: multi || Boolean(repo?.full_name && repo.integration_id),
     capable_machines: capable,
     require_ticket: repo?.require_ticket ?? false,
   };
@@ -125,6 +138,7 @@ export async function eligibilityQueue(
   for (const c of tagged) {
     const col = c.column_id ? column.get(c.column_id) : undefined;
     const tab = c.tab_id ? await repos.tabs.findById(c.tab_id) : undefined;
+    const block = multi ? cardRepoBlock(c.repo_keys, effective, linked, repoScan) : null;
     const verdict = eligibilityOf({
       card: {
         type: c.type,
@@ -140,6 +154,7 @@ export async function eligibilityQueue(
         just_created: now - new Date(c.created_at).getTime() < graceMs,
         sequence_waits_on: waitsOn.get(c.id) ?? null,
         epic_settling: c.epic_id !== null && now - new Date(c.created_at).getTime() < settleCapMs && now - (newestInEpic.get(c.epic_id) ?? 0) < graceMs,
+        repo_block: block?.reason ?? null,
       },
       project,
     });
@@ -151,13 +166,23 @@ export async function eligibilityQueue(
       title: c.title,
       eligible: verdict.eligible,
       reason,
-      reason_text: reason === 'epic_sequence' ? `${t(locale, REASON_TEXT[reason])}: ${waitsOn.get(c.id)}` : reason ? t(locale, REASON_TEXT[reason]) : null,
+      reason_text: reasonText(locale, reason, waitsOn.get(c.id), block),
+      repo_keys: c.repo_keys,
       col: col?.position ?? Number.MAX_SAFE_INTEGER,
       pos: c.position,
     });
   }
   items.sort((a, b) => a.col - b.col || a.pos - b.pos);
   return items.map(({ col: _c, pos: _p, ...item }) => item);
+}
+
+/** A queue reason's text: the card an epic in order waits on, or the repository a repo reason is about. */
+function reasonText(locale: Locale, reason: IneligibleReason | null, waitsOn: string | undefined, block: RepoBlock | null): string | null {
+  if (!reason) return null;
+  const text = t(locale, REASON_TEXT[reason]);
+  if (reason === 'epic_sequence' && waitsOn) return `${text}: ${waitsOn}`;
+  if (block && block.reason === reason && block.repo) return `${text}: ${block.repo}`;
+  return text;
 }
 
 /**

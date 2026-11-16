@@ -65,7 +65,10 @@ export const WAITING_STATES = ['waiting_input', 'waiting_permission', 'trust_pro
 export const CLI_DIALOG_ALERT_MS = 2 * 60_000;
 
 /** Queue reasons that no wait ends: such a card never starts, so it does not make the queue stalled. */
-export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed'];
+export const STRUCTURAL_REASONS: readonly string[] = ['automation_off', 'paused', 'type_not_allowed', 'repo_multi_soon'];
+
+/** Queue reasons the chat was already woken about (TER-1068: a card with no repository): no stalled queue either. */
+export const TOLD_REASONS: readonly string[] = ['repo_unknown'];
 
 /** Queue reasons that end on their own in a minute or two: the card is about to start (TER-1110's wait). */
 export const TRANSIENT_REASONS: readonly string[] = ['just_created', 'epic_settling'];
@@ -253,7 +256,9 @@ export function observe(s: HealthSnapshot, config: ProjectHealth): Observation[]
   // never starts, however long it waits: it is not a stalled queue (TER-1143); a new card in its first minutes
   // is about to start. The sign lasts since the oldest card waits, or since the last start when that is newer:
   // a card put in A fazer a minute ago is no queue stalled for hours (TER-1146).
-  const waiting = s.queued.filter((q) => !STRUCTURAL_REASONS.includes(q.reason ?? '') && !TRANSIENT_REASONS.includes(q.reason ?? ''));
+  // TER-1068: a card with no repository in a multi-repo project waits for the chat, which the dispatcher woke
+  // about it; several repositories wait for workspace runs: neither is a stalled queue.
+  const waiting = s.queued.filter((q) => ![...STRUCTURAL_REASONS, ...TRANSIENT_REASONS, ...TOLD_REASONS].includes(q.reason ?? ''));
   if (waiting.length > 0 && s.active_runs === 0) {
     const oldest = waiting.reduce((a, q) => (q.since < a ? q.since : a), waiting[0].since);
     add('queue_stalled', 'queue', s.last_run_at && s.last_run_at > oldest ? s.last_run_at : oldest, {

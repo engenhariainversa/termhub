@@ -27,6 +27,8 @@ import { MAX_START_FAILURES, startRetryBackoffMs } from './start-retry.js';
 import { integrateEpic } from './integrator.js';
 import { epicBorn, followExternalMerges, settleEpic } from './epic-lifecycle.js';
 import { eligibilityQueue } from './queue.js';
+import { askForRepos, type RepoUnknownWake } from './repo-unknown.js';
+import { NEW_CARD_GRACE_MS } from './eligibility.js';
 import { existingWorkText, findExistingWork, type ExistingWork } from './existing-work.js';
 
 /** Spec D11: a tick every 15 s, plus one shortly after a relevant event. */
@@ -72,6 +74,9 @@ export interface DispatcherDeps {
   /** Types a fixer's prompt into the card's open tab it takes over (TER-1051), as the project's owner.
    *  Default: the follower's `defaultType`. */
   type?: (ctx: ControlContext, tabId: string, text: string) => Promise<void>;
+  /** TER-1068 (multi-repo R9 b): wakes the project's chat about automatic cards with no repository, once per
+   *  card; false when nothing was started (the hourly budget). Absent = no wake. */
+  wakeRepoUnknown?: (i: RepoUnknownWake) => Promise<boolean>;
   /** Told of each running run this instance took over from a silent one: the follower looks at its tab now
    *  (a stop that happened while nobody followed the run would otherwise wait for the next state change). */
   onTakeOver?: (run: AutomationRun) => void;
@@ -412,7 +417,12 @@ export function startDispatcher(deps: DispatcherDeps, opts: { tickMs?: number; h
     if (await budgetReached(repos, projectId, enabledSetup.automation, deps.now(), log)) return;
     // D12: automation acts as the project's owner.
     const ctx = controlContextFor(repos, owner);
-    const queue = (await eligibilityQueue(ctx, projectId, undefined, { now: deps.now(), graceMs: deps.newCardGraceMs })).filter((i) => i.eligible);
+    const all = await eligibilityQueue(ctx, projectId, undefined, { now: deps.now(), graceMs: deps.newCardGraceMs });
+    // TER-1068: a card that names no repository in a multi-repo project waits for the chat to pick them
+    await askForRepos({ repos, now: deps.now, graceMs: deps.newCardGraceMs ?? NEW_CARD_GRACE_MS, wake: deps.wakeRepoUnknown, log }, { id: project.id, owner_id: project.owner_id }, all).catch((e: unknown) =>
+      log.warn({ projectId, code: errorCode(e) }, 'automation: chat not woken for cards without a repository'),
+    );
+    const queue = all.filter((i) => i.eligible);
     const max = enabledSetup.automation.max_parallel;
 
     for (let i = 0; i < queue.length; i++) {

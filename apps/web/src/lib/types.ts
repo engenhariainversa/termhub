@@ -433,6 +433,8 @@ export interface CardProgress {
   pull_requests: PullRequestBadge[];
   /** what the card's automatic tabs cost (spec D23); null/absent = nothing metered */
   usage?: ProgressUsage | null;
+  /** multi-repo R8 (TER-1069): the repositories the card touches; [] = the project's single repository */
+  repo_keys?: string[];
 }
 /** Tokens and the API-equivalent cost estimate (US$; null = nothing priced, shown as "—"). */
 export interface ProgressUsage {
@@ -638,6 +640,8 @@ export interface AutomationQueueItem {
   eligible: boolean;
   reason: string | null;
   reason_text: string | null;
+  /** TER-1068: the repositories the card touches; [] = the project's single repository; absent from an older server */
+  repo_keys?: string[];
 }
 
 /** Tokens and the API-equivalent cost estimate (US$) of automatic tabs; `cost_usd` null = no priced model. */
