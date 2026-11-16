@@ -26,5 +26,13 @@
   "Épico não encontrado": "Épica no encontrada",
   "Cada tipo precisa de ao menos uma coluna que não seja de espera": "Cada tipo necesita al menos una columna que no sea de espera",
   "A coluna do agente não pode ser uma coluna de espera": "La columna del agente no puede ser una columna de espera",
-  "Só um épico executa os cards em ordem": "Solo una épica ejecuta sus tarjetas en orden"
+  "Só um épico executa os cards em ordem": "Solo una épica ejecuta sus tarjetas en orden",
+  "Épicos e subtarefas não levam repositórios; marque os cards": "Las épicas y subtareas no llevan repositorios; márcalos en las tarjetas",
+  "No máximo 10 repositórios por card": "Como máximo 10 repositorios por tarjeta",
+  "Repositório não encontrado neste projeto": "Repositorio no encontrado en este proyecto",
+  "Repositório desligado no Setup do projeto": "Repositorio desactivado en el Setup del proyecto",
+  "Repositório ainda sem key": "El repositorio aún no tiene key",
+  "Repositório {{repo}} não encontrado neste projeto; veja os repositórios no Setup do projeto": "Repositorio {{repo}} no encontrado en este proyecto; mira los repositorios en el Setup del proyecto",
+  "O repositório {{repo}} está desligado no Setup do projeto": "El repositorio {{repo}} está desactivado en el Setup del proyecto",
+  "O repositório {{repo}} ainda não tem key: espere a descoberta de repositórios do projeto encontrá-lo numa máquina": "El repositorio {{repo}} aún no tiene key: espera a que el descubrimiento de repositorios del proyecto lo encuentre en una máquina"
 }

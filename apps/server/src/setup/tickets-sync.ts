@@ -3,6 +3,9 @@ import { getProvider, type IntegrationProvider } from '../integrations/index.js'
 import { providerIdOf, ticketLinkJson } from '../integrations/ticket-link.js';
 import { sourceIdentity, type TicketSource } from './schema.js';
 import { tk } from '../i18n/index.js';
+import { isMultiRepo } from './repo-keys.js';
+import type { EffectiveRepo } from './repos.js';
+import { sameRepo } from './schema.js';
 
 export interface SourceSyncResult {
   provider: IntegrationProvider;
@@ -28,6 +31,18 @@ const lastByProject = new Map<string, SyncResult>();
 export const lastSync = (projectId: string): SyncResult | null => lastByProject.get(projectId) ?? null;
 /** Drops the project's last sync (setup saved: its sources may have changed), so the next sync is not throttled. */
 export const forgetSync = (projectId: string): void => void lastByProject.delete(projectId);
+
+/**
+ * The `repo_keys` a card imported from a ticket is born with (spec 2026-10-07 multi-repo §6): a GitHub
+ * source's scope is `owner/repo`, and when that is an enabled repository of a multi-repo project with a key,
+ * the card gets it. Anything else (Linear, Jira, a repository outside the project, a single-repo project)
+ * gets `[]`, and the concierge fills the rest.
+ */
+export function ticketRepoKeys(ticket: { provider: string; scope: string | null }, repos: EffectiveRepo[]): string[] {
+  if (ticket.provider !== 'github' || !ticket.scope || !isMultiRepo(repos)) return [];
+  const repo = repos.find((r) => sameRepo(r.full_name, ticket.scope));
+  return repo?.enabled && repo.key ? [repo.key] : [];
+}
 
 /** At most this many imported tickets that left their source are looked up per source and run; the rest wait for the next one. */
 export const LEFT_LOOKUPS_PER_SYNC = 50;

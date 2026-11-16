@@ -42,6 +42,8 @@ export interface TaskOut {
   auto: boolean;
   /** epics only (TER-1170): the automatic work takes its cards one at a time, in board order */
   sequential?: boolean;
+  /** top-level work cards only (spec 2026-10-07 multi-repo R8): keys of the repositories it touches; [] = the project's single repository */
+  repo_keys?: string[];
   /** the external ticket this card came from (Linear/Jira/GitHub), or null */
   ticket: { key: string; url: string; state: string; provider: string } | null;
   created_at: string;
@@ -81,6 +83,7 @@ export const taskOut = (t: Task): TaskOut => ({
   id: t.id, project_id: t.project_id, type: t.type, ref: t.ref, url: cardUrl(t.ref), title: t.title, description: t.description, status: t.status,
   position: t.position, parent_id: t.parent_id, epic_id: t.epic_id, column_id: t.column_id, tab_id: t.tab_id, auto: t.auto,
   ...(t.type === 'epic' ? { sequential: t.sequential } : {}),
+  ...(t.type !== 'epic' && !t.parent_id ? { repo_keys: t.repo_keys } : {}),
   ticket: (() => { const l = readTicketLink(t.external_ref); return l ? { key: l.key, url: l.url, state: l.state, provider: l.provider } : null; })(),
   created_at: t.created_at, updated_at: t.updated_at,
 });
@@ -118,11 +121,15 @@ export async function listTasks(
 
 export async function createTask(
   ctx: ControlContext,
-  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; subtasks?: SubtaskIn[] },
+  input: { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; repos?: string[]; subtasks?: SubtaskIn[] },
 ): Promise<{ task: TaskTreeOut; board_url: string }> {
   await ctx.scoped.project(input.project_id);
   const task = await rules(() =>
-    ctx.repos.tasks.createWithSubtasks(input.project_id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto, position: input.position }, input.subtasks ?? []),
+    ctx.repos.tasks.createWithSubtasks(
+      input.project_id,
+      { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, auto: input.auto, position: input.position, repo_keys: input.repos },
+      input.subtasks ?? [],
+    ),
   );
   if (task.auto) {
     await recordTagChange(ctx.repos, task, true, 1, viaOf(ctx));
@@ -151,18 +158,18 @@ async function confirmDoneWithOpenPr(ctx: ControlContext, task: Task, toDone: bo
 
 export async function updateTask(
   ctx: ControlContext,
-  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean; sequential?: boolean; confirm?: boolean },
+  input: { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; repos?: string[]; auto?: boolean; sequential?: boolean; confirm?: boolean },
 ): Promise<{ task: TaskOut; board_url: string }> {
   const { task } = await ctx.scoped.task(input.task_id);
-  const fields = [input.title, input.description, input.status, input.type, input.epic_id];
+  const fields = [input.title, input.description, input.status, input.type, input.epic_id, input.repos];
   if (fields.every((v) => v === undefined) && input.auto === undefined && input.sequential === undefined) {
-    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, auto ou sequential');
+    throw new ControlError('BAD_REQUEST', 'Informe title, description, status, type, epic_id, repos, auto ou sequential');
   }
   await confirmDoneWithOpenPr(ctx, task, input.status === 'done', input.confirm);
   let updated: Task | undefined = task;
   if (fields.some((v) => v !== undefined)) {
     updated = await rules(() =>
-      ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id }),
+      ctx.repos.tasks.update(task.id, { title: input.title, description: input.description, status: input.status, type: input.type, epic_id: input.epic_id, repo_keys: input.repos }),
     );
   }
   if (updated && input.auto !== undefined) {

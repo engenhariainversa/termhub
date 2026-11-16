@@ -30,6 +30,7 @@ import { DECISIONS_MAX } from '../automation/decisions-taken.js';
 import { pauseAutomation, resumeAutomation } from '../automation/pause.js';
 import { setAutomationPolicy, setMachineAutomation } from '../automation/setup-tools.js';
 import { AUTONOMY_LEVELS, NO_CI_MERGE_MODES } from '../setup/schema.js';
+import { REPO_KEYS_MAX, REPO_REF_MAX } from '../setup/repo-keys.js';
 import { AUTOMATION_EVENTS_PAGE_MAX } from '../db/repositories/automation-events.js';
 import { DECISION_SCOPES, type DecisionScope } from '../db/repositories/decision-scope.js';
 import { linkTabTask, PROMPT_MAX_CHARS, startAgent } from '../control/agents.js';
@@ -89,6 +90,8 @@ const creatableType = z.enum(['epic', 'story', 'task', 'bug', 'spike']);
 const workType = z.enum(['story', 'task', 'bug', 'spike']);
 const taskTitle = z.string().trim().min(1).max(TASK_TITLE_MAX);
 const taskDescription = z.string().trim().max(TASK_DESCRIPTION_MAX).nullable();
+/** A card's repositories (spec 2026-10-07 multi-repo R8): keys or owner/repo, checked against the project by the tasks repository. */
+const repoRefs = z.array(z.string().trim().min(1).max(REPO_REF_MAX)).max(REPO_KEYS_MAX);
 const subtaskItems = z.array(z.object({ title: taskTitle, description: taskDescription.optional() })).min(1).max(MAX_SUBTASKS_PER_CALL);
 /** TER-641: what send_input/send_key take when the call follows a precedent from memory — the refs (as
  * answer_tab_question's) and the reason. Optional: the send is the same; the chat card shows "Decisão
@@ -462,7 +465,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'list_tasks',
     description:
-      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category, waiting } — the board shows columns by the user's names, the category todo/doing/done is what they mean, waiting marks an \"aguardando\" column whose cards wait on a person or a third party; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
+      "List a project's cards as the board and backlog show them. Epics group the work; stories, tasks, bugs and spikes are the work; subtasks come nested as a checklist. Each card has a type, a ref (TER-12), its url, its epic_id, its board column ({ id, name, category, waiting } — the board shows columns by the user's names, the category todo/doing/done is what they mean, waiting marks an \"aguardando\" column whose cards wait on a person or a third party; backlog cards have no column) and its ticket ({ key, url, state, provider } when it came from Linear/Jira/GitHub). Work cards carry repo_keys, the keys of the repositories they touch ([] = the project's single repository). The result also lists the project's columns in order. status, type and epic_id filter the top-level cards.",
     scope: 'tasks', resource: 'tasks', action: 'read',
     input: { project_id: id, status: taskStatus.optional(), type: taskType.optional(), epic_id: id.optional() },
     run: (ctx, a) => listTasks(ctx, a as { project_id: string; status?: TaskStatus; type?: TaskType; epic_id?: string }),
@@ -638,7 +641,7 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'get_card',
     description:
-      "Only in a tab running automatic work (agentic board): read your run's card — ref, title, description, status, its subtasks and the branch you work on. Read-only; no arguments.",
+      "Only in a tab running automatic work (agentic board): read your run's card — ref, title, description, status, repo_keys (the keys of the repositories it touches; [] = the project's single repository), its subtasks and the branch you work on. Read-only; no arguments.",
     scope: 'read', resource: 'tasks', action: 'read',
     allowedIf: tabHasActiveRun,
     grantText: 'de uma aba com trabalho automático em andamento',
@@ -896,11 +899,11 @@ export const TOOLS: ToolDef[] = [
   },
   {
     name: 'create_task',
-    description: `Create a card in a column (default the first todo column; an epic defaults to the backlog), at the top unless position says otherwise (0 = top; ${TASK_POSITION_MAX} or any number past the last card = the end, so a batch created in its natural order with position ${TASK_POSITION_MAX} keeps that order), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. Returns the card with its ref and url, and the board URL.`,
+    description: `Create a card in a column (default the first todo column; an epic defaults to the backlog), at the top unless position says otherwise (0 = top; ${TASK_POSITION_MAX} or any number past the last card = the end, so a batch created in its natural order with position ${TASK_POSITION_MAX} keeps that order), optionally with its subtasks (max ${MAX_SUBTASKS_PER_CALL}) in one transaction. type: epic, story, task (default), bug or spike — only stories and tasks take subtasks. epic_id: the epic it belongs to (default: the project's default epic). auto: true tags it for automatic work (\"automático\"); a card created in an automatic epic is tagged anyway. repos: the repositories the card touches, as keys or owner/repo (max 10); in a project with several repositories, fill repos; infer them from the text and from the descriptions in list_project_repos; ask (question card) only when there is real doubt. In a project with one repository leave it out: empty means that repository. Epics take no repos. Returns the card with its ref and url, and the board URL.`,
     scope: 'tasks', resource: 'tasks', action: 'create',
-    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional(), subtasks: subtaskItems.optional() },
+    input: { project_id: id, title: taskTitle, description: taskDescription.optional(), status: taskStatus.optional(), type: creatableType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), position: z.number().int().min(0).max(TASK_POSITION_MAX).optional(), repos: repoRefs.optional(), subtasks: subtaskItems.optional() },
     run: (ctx, a) =>
-      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; subtasks?: { title: string; description?: string | null }[] }),
+      createTask(ctx, a as { project_id: string; title: string; description?: string | null; status?: TaskStatus; type?: CreatableType; epic_id?: string; auto?: boolean; position?: number; repos?: string[]; subtasks?: { title: string; description?: string | null }[] }),
   },
   {
     name: 'add_subtasks',
@@ -912,10 +915,10 @@ export const TOOLS: ToolDef[] = [
   {
     name: 'update_task',
     description:
-      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. auto: true marks the card for automatic work (tag "automático"); on an epic it marks or clears every card of the epic. Subtasks never carry the tag. sequential (epics only): true makes the automatic work take the cards of the epic one at a time, in board order (column, then position; backlog cards left out), a card of the epic in progress (in a doing column, blocked, escalated or waiting on a person, or in done with its PR still open) holds every to-do card of the epic, and otherwise only the first to-do card in board order runs; false lets them run in parallel again. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog). status done on a card whose own PR is still open (not merged) is refused with CONFIRM_REQUIRED, naming the PR and its CI: show the person, and repeat with confirm: true only if they still want it in Feito.',
+      'Change the title, description (null clears it), status, type (story, task, bug or spike; a card with subtasks stays a story or task) or epic_id of a card, or the title/description/status of a subtask. repos replaces the repositories the card touches ([] clears them), as keys or owner/repo (max 10); in a project with several repositories, fill repos; infer them from the text and from the descriptions in list_project_repos; ask (question card) only when there is real doubt. In a project with one repository leave it out: empty means that repository. auto: true marks the card for automatic work (tag "automático"); on an epic it marks or clears every card of the epic. Subtasks never carry the tag. sequential (epics only): true makes the automatic work take the cards of the epic one at a time, in board order (column, then position; backlog cards left out), a card of the epic in progress (in a doing column, blocked, escalated or waiting on a person, or in done with its PR still open) holds every to-do card of the epic, and otherwise only the first to-do card in board order runs; false lets them run in parallel again. Changing the status of a top-level card moves it to the top of the first column of that category (backlog: of its epic backlog). status done on a card whose own PR is still open (not merged) is refused with CONFIRM_REQUIRED, naming the PR and its CI: show the person, and repeat with confirm: true only if they still want it in Feito.',
     scope: 'tasks', resource: 'tasks', action: 'update',
-    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional(), auto: z.boolean().optional(), sequential: z.boolean().optional(), confirm: z.boolean().optional() },
-    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; auto?: boolean; sequential?: boolean; confirm?: boolean }),
+    input: { task_id: id, title: taskTitle.optional(), description: taskDescription.optional(), status: taskStatus.optional(), type: workType.optional(), epic_id: id.optional(), repos: repoRefs.optional(), auto: z.boolean().optional(), sequential: z.boolean().optional(), confirm: z.boolean().optional() },
+    run: (ctx, a) => updateTask(ctx, a as { task_id: string; title?: string; description?: string | null; status?: TaskStatus; type?: WorkType; epic_id?: string; repos?: string[]; auto?: boolean; sequential?: boolean; confirm?: boolean }),
   },
   {
     name: 'move_task',

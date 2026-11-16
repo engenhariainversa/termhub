@@ -1,7 +1,7 @@
 import type { PrismaClient } from '../prisma.js';
 import { newId } from '../../lib/ids.js';
 import { effectiveRepos, repoKeyFor, uniqueRepoKey, type EffectiveRepo } from '../../setup/repos.js';
-import { sameRepo, type ProjectSetupData } from '../../setup/schema.js';
+import { normalizeSetup, sameRepo, SETUP_VERSION, type ProjectSetupData } from '../../setup/schema.js';
 import { lockProject, type Tx } from './task-board.js';
 import { mapProjectRepository, type ProjectRepository, type RepoStatus } from './types.js';
 
@@ -22,6 +22,12 @@ const WITH_CHECKOUTS = { checkouts: { orderBy: { machineId: 'asc' as const } } }
 /** A project's discovered repositories with their checkouts, in key order. */
 export async function loadProjectRepositories(db: PrismaClient | Tx, projectId: string): Promise<ProjectRepository[]> {
   return (await db.projectRepository.findMany({ where: { projectId }, include: WITH_CHECKOUTS, orderBy: { key: 'asc' } })).map(mapProjectRepository);
+}
+
+/** A project's effective repositories read inside a transaction (the card writes check `repo_keys` against them). */
+export async function loadEffectiveRepos(db: PrismaClient | Tx, projectId: string): Promise<EffectiveRepo[]> {
+  const row = await db.projectSetup.findUnique({ where: { projectId } });
+  return effectiveRepos(normalizeSetup(row?.data, row?.version ?? SETUP_VERSION), await loadProjectRepositories(db, projectId));
 }
 
 /**

@@ -280,6 +280,8 @@ export interface Task {
   auto: boolean;
   /** Epics only (TER-1170): the automatic work takes the epic's cards one at a time, in board order. */
   sequential: boolean;
+  /** Keys of the repositories the card touches (spec 2026-10-07 multi-repo R8); [] = the project's single repository. */
+  repo_keys: string[];
   created_at: string;
   updated_at: string;
 }
@@ -516,6 +518,7 @@ export const mapTask = (t: PrismaTask, key: string): Task => ({
   column_id: t.columnId,
   auto: t.auto,
   sequential: t.sequential,
+  repo_keys: t.repoKeys ?? [],
   created_at: t.createdAt.toISOString(),
   updated_at: t.updatedAt.toISOString(),
 });

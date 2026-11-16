@@ -651,6 +651,9 @@ model Task {
   /// Epics only (TER-1170): the automatic work takes its cards one at a time, in board order, and waits for
   /// each one to be done (its PR merged) before the next.
   sequential    Boolean    @default(false)
+  /// Keys (`project_repositories.key`) of the repositories the card touches (spec 2026-10-07 multi-repo R8).
+  /// Empty = the project's single repository; always empty on epics and subtasks, and in single-repo projects.
+  repoKeys      String[]   @default([]) @map("repo_keys")
   project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   /// chave estável do ticket externo ("linear:<id>", "jira:<key>") para upsert no sync

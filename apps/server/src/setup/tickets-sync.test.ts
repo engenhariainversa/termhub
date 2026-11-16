@@ -6,7 +6,9 @@ const listTickets = vi.fn();
 const getTicket = vi.fn();
 vi.mock('../integrations/index.js', () => ({ getProvider: () => ({ listTickets, getTicket }) }));
 
-const { forgetSync, lastSync, startTicketSyncScheduler, syncProjectTickets } = await import('./tickets-sync.js');
+const { forgetSync, lastSync, startTicketSyncScheduler, syncProjectTickets, ticketRepoKeys } = await import('./tickets-sync.js');
+const { effectiveRepos } = await import('./repos.js');
+const { normalizeSetup, SETUP_VERSION } = await import('./schema.js');
 
 const ext = (scope: string, n: number): ExternalTicket => ({
   sync_key: `github:${scope}#${n}`, provider: 'github', provider_id: String(n), key: `${scope}#${n}`, title: 't', description: null,
@@ -154,5 +156,27 @@ describe('startTicketSyncScheduler', () => {
     expect(sched.sources.map((s) => [s.scope, s.truncated])).toEqual([['acme/api', false], ['acme/web', true]]);
     // a project only the scheduler syncs gets a last sync too, so list_tickets shows truncated
     expect(lastSync('p-fresh')?.sources.map((s) => [s.scope, s.truncated])).toEqual([['acme/web', true]]);
+  });
+});
+
+describe('ticketRepoKeys (spec 2026-10-07 multi-repo §6)', () => {
+  const row = (full_name: string, key: string) => ({ id: `r-${key}`, project_id: 'p1', full_name, key, description: null, status: 'ok' as const, discovered_at: '', updated_at: '', checkouts: [] });
+  const multi = effectiveRepos(normalizeSetup({ repos: [{ full_name: 'acme/off', enabled: false }] }, SETUP_VERSION), [row('acme/api', 'api'), row('acme/web', 'web'), row('acme/off', 'off')]);
+
+  it("a GitHub ticket whose owner/repo is a repository of the project gets that repository's key", () => {
+    expect(ticketRepoKeys({ provider: 'github', scope: 'acme/web' }, multi)).toEqual(['web']);
+    expect(ticketRepoKeys({ provider: 'github', scope: 'ACME/API' }, multi)).toEqual(['api']);
+  });
+
+  it('anything else is born with no repository', () => {
+    expect(ticketRepoKeys({ provider: 'github', scope: 'other/repo' }, multi)).toEqual([]);
+    expect(ticketRepoKeys({ provider: 'github', scope: 'acme/off' }, multi)).toEqual([]);
+    expect(ticketRepoKeys({ provider: 'github', scope: null }, multi)).toEqual([]);
+    expect(ticketRepoKeys({ provider: 'linear', scope: 'acme/api' }, multi)).toEqual([]);
+  });
+
+  it('a single-repo project keeps the empty list', () => {
+    const single = effectiveRepos(normalizeSetup({ repo: { full_name: 'acme/api' } }, SETUP_VERSION), []);
+    expect(ticketRepoKeys({ provider: 'github', scope: 'acme/api' }, single)).toEqual([]);
   });
 });
