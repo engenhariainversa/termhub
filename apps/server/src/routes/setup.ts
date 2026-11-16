@@ -10,6 +10,8 @@ import { setupInputSchema, sourceIdentity, withSourcesFromLegacy } from '../setu
 import { forgetSync } from '../setup/tickets-sync.js';
 import { recordSetupChange } from '../automation/setup-tools.js';
 import { nudgeAiMemoryRules } from '../memory/ai-memory-sync.js';
+import { listProjectRepos, scanProjectRepos } from '../control/repos.js';
+import { scanOnSetupOpen } from '../repos/discovery.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
 
@@ -19,7 +21,21 @@ export async function setupRoutes(app: FastifyInstance, repos: Repositories) {
     const { id } = idParam.parse(request.params);
     await scoped(repos, request).project(id);
     const setup = await repos.projectSetup.get(id);
+    // TER-1071 (spec 2026-10-07 multi-repo R3): opening the Setup looks at the folder again, throttled, in the background
+    scanOnSetupOpen(repos, id);
     return { setup, effective_repos: await repos.projectRepositories.effective(id, setup.data) };
+  });
+
+  // TER-1071: the repositories found in the project's folder, and when each machine was last scanned
+  app.get('/:id/repos', async (request) => {
+    const { id } = idParam.parse(request.params);
+    return listProjectRepos(controlContextForRequest(repos, request), { project_id: id });
+  });
+
+  // "Procurar agora": scans every linked machine now. It only reads the folders, like opening the screen does.
+  app.post('/:id/repos/scan', { config: { action: 'read' } }, async (request) => {
+    const { id } = idParam.parse(request.params);
+    return scanProjectRepos(controlContextForRequest(repos, request), { project_id: id });
   });
 
   app.put('/:id/setup', async (request) => {

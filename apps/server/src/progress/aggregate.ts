@@ -277,6 +277,8 @@ export const FEED_KINDS = [
   'tab_gc_warned', 'tab_gc_kept', 'tab_collected',
   // TER-1150: an automatic epic's birth and death
   'epic_started', 'epic_done',
+  // TER-1071: repositories found in, or gone from, the project's folder (the app's feed skips them until it has a line)
+  'repo_discovered', 'repo_missing',
 ] as const satisfies readonly AutomationEvent['kind'][];
 
 /** Why a run was cancelled (`run_cancelled.reason`, follower's UNTAGGED / TAB_CLOSED), as the feed says it. */
@@ -327,6 +329,16 @@ function tabGcTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Loc
   return p.dry_run === true ? t(locale, 'Teste do coletor de abas, nada foi fechado: {{line}}', { line }) : line;
 }
 
+/** TER-1071: discovery's lines. Names and counts only. */
+function repoTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string {
+  const machine = str(p.machine) ?? '—';
+  if (e.kind === 'repo_missing') return t(locale, 'Repositório {{repo}} sumiu da pasta do projeto em {{machine}}', { repo: str(p.full_name) ?? '—', machine });
+  if (p.first_scan === true) return t(locale, '{{n}} repositórios encontrados na pasta do projeto em {{machine}}: {{names}}', { n: num(p.count) ?? 0, machine, names: str(p.names) ?? '—' });
+  const repo = str(p.full_name) ?? '—';
+  if (p.status === 'unsupported') return t(locale, 'Novo repositório na pasta do projeto: {{repo}} (fora do GitHub, fica de fora do automático).', { repo });
+  return t(locale, 'Novo repositório na pasta do projeto: {{repo}} (nível {{level}}).', { repo, level: str(p.autonomy) ?? 'pr' });
+}
+
 /** The `reason_text` of a line: an escalation's reason, a failed start's (TER-987), a blocked run a PR took
  *  over (TER-1049), a cancel's (TER-974) or a card untagged because its ticket already had work (TER-1110). */
 function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Locale): string | null {
@@ -336,6 +348,7 @@ function reasonTextOf(e: AutomationEvent, p: Record<string, unknown>, locale: Lo
   if (e.kind === 'run_done') return adoptedOf(p, locale);
   if (e.kind === 'tab_auto_closed') return tabClosedTextOf(p, locale);
   if (e.kind === 'tab_gc_warned' || e.kind === 'tab_gc_kept' || e.kind === 'tab_collected') return tabGcTextOf(e, p, locale);
+  if (e.kind === 'repo_discovered' || e.kind === 'repo_missing') return repoTextOf(e, p, locale);
   if (e.kind === 'untagged' && p.via === 'existing_work') return (locale === 'pt-BR' ? null : str(p[`message_${locale}`])) ?? str(p.message);
   // TER-1117: the dialog answered in the project's own folder, outside any run: the line names the tab
   if (e.kind === 'trust_auto_accepted' && p.folder === 'project') return t(locale, 'Aba {{tab}}: pasta do projeto confiada sozinha', { tab: str(p.tab_name) ?? '—' });

@@ -250,5 +250,10 @@
   "não deu para ler os checks do PR": "no se pudieron leer los checks del PR",
   "a branch base tem regra de proteção exigindo checks ou revisão": "la rama base tiene una regla de protección que exige checks o revisión",
   "não deu para ler as regras de proteção da branch base": "no se pudieron leer las reglas de protección de la rama base",
-  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Pestaña {{label}} esperando trabajo en segundo plano sin ningún evento desde hace {{duration}}"
+  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Pestaña {{label}} esperando trabajo en segundo plano sin ningún evento desde hace {{duration}}",
+  "Repositório {{repo}} sumiu da pasta do projeto em {{machine}}": "El repositorio {{repo}} desapareció de la carpeta del proyecto en {{machine}}",
+  "{{n}} repositórios encontrados na pasta do projeto em {{machine}}: {{names}}": "{{n}} repositorios encontrados en la carpeta del proyecto en {{machine}}: {{names}}",
+  "Novo repositório na pasta do projeto: {{repo}} (nível {{level}}).": "Nuevo repositorio en la carpeta del proyecto: {{repo}} (nivel {{level}}).",
+  "Novo repositório na pasta do projeto: {{repo}} (fora do GitHub, fica de fora do automático).": "Nuevo repositorio en la carpeta del proyecto: {{repo}} (fuera de GitHub, queda fuera del trabajo automático).",
+  "{{n}} repositórios encontrados na pasta do projeto: {{names}}. Cada um começa no nível pr; ajuste em Setup.": "{{n}} repositorios encontrados en la carpeta del proyecto: {{names}}. Cada uno empieza en el nivel pr; ajústalo en Setup."
 }

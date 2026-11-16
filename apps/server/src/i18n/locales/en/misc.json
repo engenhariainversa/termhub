@@ -250,5 +250,10 @@
   "não deu para ler os checks do PR": "could not read the PR's checks",
   "a branch base tem regra de proteção exigindo checks ou revisão": "the base branch has a protection rule requiring checks or review",
   "não deu para ler as regras de proteção da branch base": "could not read the base branch's protection rules",
-  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Tab {{label}} waiting on background work with no event for {{duration}}"
+  "Aba {{label}} esperando trabalho em segundo plano sem nenhum evento há {{duration}}": "Tab {{label}} waiting on background work with no event for {{duration}}",
+  "Repositório {{repo}} sumiu da pasta do projeto em {{machine}}": "Repository {{repo}} is gone from the project folder on {{machine}}",
+  "{{n}} repositórios encontrados na pasta do projeto em {{machine}}: {{names}}": "{{n}} repositories found in the project folder on {{machine}}: {{names}}",
+  "Novo repositório na pasta do projeto: {{repo}} (nível {{level}}).": "New repository in the project folder: {{repo}} (level {{level}}).",
+  "Novo repositório na pasta do projeto: {{repo}} (fora do GitHub, fica de fora do automático).": "New repository in the project folder: {{repo}} (not on GitHub, left out of automatic work).",
+  "{{n}} repositórios encontrados na pasta do projeto: {{names}}. Cada um começa no nível pr; ajuste em Setup.": "{{n}} repositories found in the project folder: {{names}}. Each one starts at level pr; change it in Setup."
 }

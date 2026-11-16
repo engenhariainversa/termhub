@@ -55,6 +55,9 @@ const readTools = new Set([
   'search_memory',
   'list_integrations',
   'get_project_setup',
+  // TER-1071: the repositories in the project's folder; the scan only reads the folders and adds rows nobody acts on
+  'list_project_repos',
+  'scan_project_repos',
   // TER-627: lists the tabs' question cards and their answers; nothing is sent or changed.
   'list_tab_questions',
   // TER-1023: the hooks' state on a machine; nothing on the machine is written.

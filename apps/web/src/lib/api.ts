@@ -1,7 +1,7 @@
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
 import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
-import type { DataExportStatus } from './types';
+import type { DataExportStatus, ProjectRepoScan, ProjectReposView } from './types';
 import type { ApiRun, ApiTokenEvent, ApiTokenFacets, ApiTokenFilter, ApiTokensPage, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
@@ -567,6 +567,10 @@ export const api = {
     },
     syncTickets: (projectId: string) =>
       request<{ ok: true; sources: SourceSync[]; synced_at: string; cached: boolean }>('POST', `/projects/${projectId}/tickets/sync`, {}),
+    /** TER-1071: the repositories found in the project's folder, and the last scan per machine. */
+    repos: (projectId: string) => request<ProjectReposView>('GET', `/projects/${projectId}/repos`),
+    /** TER-1071: "Procurar agora". */
+    scanRepos: (projectId: string) => request<ProjectReposView & { scans: ProjectRepoScan[] }>('POST', `/projects/${projectId}/repos/scan`, {}),
   },
   aiAccounts: {
     list: () => request<{ accounts: AiAccount[] }>('GET', '/ai-accounts'),

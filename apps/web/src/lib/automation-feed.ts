@@ -78,6 +78,9 @@ export function feedLine(e: AutomationFeedEvent): string | null {
     case 'tab_gc_warned':
     case 'tab_gc_kept':
     case 'tab_collected':
+    // TER-1071: a repository found in, or gone from, the project's folder (the server's line names it)
+    case 'repo_discovered':
+    case 'repo_missing':
       return e.reason_text;
     case 'release_ok':
       return e.version ? t('Publicado {{package}} {{version}}', { package: package_, version: e.version }) : t('Publicado {{package}}', { package: package_ });

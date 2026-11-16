@@ -46,6 +46,7 @@ import { monitorRoutes } from './routes/monitor.js';
 import { startStaleWorkingSweeper } from './monitor/stale-working.js';
 import { startIdleTabsSweeper } from './monitor/idle-tabs.js';
 import { startTabGc } from './monitor/tab-gc/sweep.js';
+import { startRepoDiscovery } from './repos/discovery.js';
 import { registerMonitorWs } from './monitor/ws.js';
 import { chatRoutes } from './routes/chat.js';
 import { chatAttachmentRoutes, type ChatAttachmentDeps } from './routes/chat-attachments.js';
@@ -458,6 +459,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopIdleTabs = startIdleTabsSweeper(repos, fastify.log);
   // TER-1171: the agent tab GC, per owner behind the tab_gc flag (dry run until tab_gc_live)
   const stopTabGc = startTabGc(repos, fastify.log);
+  // TER-1071: the repositories in each project's folder, on agent connect and every 10 min (spec 2026-10-07 multi-repo R3)
+  const stopRepoDiscovery = startRepoDiscovery(repos, fastify.log, () => !lifecycle.draining);
   // TER-1191: revoked or expired system tokens after 30 days, a person's own revoked after 90, once a day
   const stopApiTokenPurge = startApiTokenPurge(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
@@ -593,6 +596,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     stopIdleTabs();
     stopApiTokenPurge();
     stopTabGc();
+    stopRepoDiscovery();
     stopDecisionSweeper();
     stopMemorySweeper();
     stopMemoryQueue();
