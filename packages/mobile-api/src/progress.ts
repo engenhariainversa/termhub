@@ -89,6 +89,8 @@ export const cardProgress = z.object({
   pull_requests: z.array(pullRequestBadge).default([]),
   /** tagged for automatic work (spec 2026-10-04); false from a server that predates it */
   auto: z.boolean().default(false),
+  /** TER-1069 (multi-repo R8): keys of the repositories the card touches; [] = the project's single repository (or an older server) */
+  repo_keys: z.array(z.string()).default([]),
   /** what the card's automatic tabs cost; null when none was metered (or from a server that predates it) */
   usage: progressUsage.nullable().default(null),
 });

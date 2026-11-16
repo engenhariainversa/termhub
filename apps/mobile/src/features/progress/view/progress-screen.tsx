@@ -42,6 +42,21 @@ function AutoBadge() {
   );
 }
 
+/** TER-1069: the repositories the card touches, read-only. Nothing for `[]` (a single-repo project's cards). */
+function RepoChips({ keys }: { keys: string[] }) {
+  const { t } = useTranslation();
+  if (keys.length === 0) return null;
+  return (
+    <View accessibilityLabel={t('Repositórios: {{keys}}', { keys: keys.join(', ') })} className="flex-row flex-wrap gap-1">
+      {keys.map((key) => (
+        <Text key={key} className="rounded bg-zinc-800 px-1 font-mono text-[10px] text-zinc-300">
+          {key}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 /** The automatic work's feed (spec D25): what the agents did, newest first. Absent when there is nothing to show. */
 function Feed({ feed }: { feed: TAutomationFeedEvent[] }) {
   const { t } = useTranslation();
@@ -125,6 +140,7 @@ function Epic({ epic }: { epic: TEpicProgress }) {
               <Text className="flex-1 text-sm text-white">{`${c.ref} ${c.title}`}</Text>
               {c.auto ? <AutoBadge /> : null}
             </Pressable>
+            <RepoChips keys={c.repo_keys} />
             <Bar percent={c.percent} />
             <Text className="text-xs text-zinc-400">{`${c.units.done}/${c.units.total} · ${formatEstimate(c.estimate)}`}</Text>
             {usageLine(c.usage) && <Text className="text-xs text-zinc-400">{usageLine(c.usage)}</Text>}

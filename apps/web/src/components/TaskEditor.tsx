@@ -10,6 +10,7 @@ import { SubtaskList } from './SubtaskList';
 import { formatDate, formatDateTime } from '../lib/format';
 import { useTranslation } from '../i18n';
 import { FeatureGate } from '../lib/feature-flags';
+import { NO_CARD_REPOS, type CardRepos } from '../lib/project-repos';
 
 /** Where the column select sends a card. */
 export type PlaceTarget = { column_id: string } | { status: 'backlog' };
@@ -27,6 +28,8 @@ export interface TaskEditorProps {
   columns: TaskColumn[];
   /** the project's epics, default first */
   epics: Task[];
+  /** TER-1069: the project's selectable repositories; the "Repositórios" choice shows only when `multi` */
+  repos?: CardRepos;
   terminalHref: string | null;
   /** the project's open terminal tabs the card can be linked to (an agent started by hand) */
   linkableTabs: LinkableTab[];
@@ -50,6 +53,7 @@ export function TaskEditor({
   task,
   columns,
   epics,
+  repos = NO_CARD_REPOS,
   terminalHref,
   linkableTabs,
   onClose,
@@ -75,8 +79,17 @@ export function TaskEditor({
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   const [tabToLink, setTabToLink] = useState('');
   const [confirmAuto, setConfirmAuto] = useState(false);
+  const [repoKeys, setRepoKeys] = useState<string[]>(task.repo_keys ?? []);
   const ref = task.external_ref;
   const types = typeOptions(task);
+  // epics and subtasks carry no repositories (the server refuses them); the editor only opens top-level cards
+  const pickRepos = repos.multi && task.type !== 'epic' && task.type !== 'subtask';
+  // a key the card holds that is no longer offered (turned off, renamed) stays listed, so it is never dropped unseen
+  const repoOptions = [
+    ...repos.repos.map((r) => ({ key: r.key, hint: r.full_name, offered: true })),
+    ...(task.repo_keys ?? []).filter((k) => !repos.repos.some((r) => r.key === k)).map((k) => ({ key: k, hint: null, offered: false })),
+  ];
+  const toggleRepo = (key: string, on: boolean) => setRepoKeys((cur) => (on ? [...cur, key] : cur.filter((k) => k !== key)));
 
   const save = () => {
     const patch: TaskPatchInput = {};
@@ -84,6 +97,7 @@ export function TaskEditor({
     if ((description.trim() || null) !== (task.description ?? null)) patch.description = description.trim() || null;
     if (type !== task.type) patch.type = type;
     if (task.type !== 'epic' && epicId && epicId !== task.epic_id) patch.epic_id = epicId;
+    if (pickRepos && !sameKeys(repoKeys, task.repo_keys ?? [])) patch.repo_keys = repoOptions.map((o) => o.key).filter((k) => repoKeys.includes(k));
     if (Object.keys(patch).length) onSave(patch);
     onClose();
   };
@@ -164,6 +178,21 @@ export function TaskEditor({
             placeholder={t('Detalhes, links, contexto…')}
           />
         </div>
+        {pickRepos && (
+          <fieldset>
+            <legend className="label">{t('Repositórios')}</legend>
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {repoOptions.map((o) => (
+                <label key={o.key} className="flex items-center gap-2 text-sm" title={o.hint ?? undefined}>
+                  <input type="checkbox" className="accent-accent" checked={repoKeys.includes(o.key)} onChange={(e) => toggleRepo(o.key, e.target.checked)} />
+                  <span className="font-mono text-xs">{o.key}</span>
+                  {!o.offered && <span className="text-xs text-warn">{t('desligado ou removido no Setup')}</span>}
+                </label>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-fg-dim">{t('Os repositórios em que este card mexe. O trabalho automático usa esta lista.')}</p>
+          </fieldset>
+        )}
         {task.type !== 'subtask' && (
           <div>
             <label className="flex items-center gap-2 text-sm">
@@ -300,4 +329,9 @@ export function TaskEditor({
       </div>
     </Modal>
   );
+}
+
+/** The same keys, whatever the order. */
+function sameKeys(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((k) => b.includes(k));
 }

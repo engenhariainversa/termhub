@@ -158,4 +158,40 @@ describe('TaskEditor: linking an open tab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Desligar a aba deste card' }));
     expect(props.onDetachTerminal).toHaveBeenCalled();
   });
+
+  // TER-1069
+  describe('repositories', () => {
+    const multi = { multi: true, repos: [{ key: 'web', full_name: 'acme/web', description: null }, { key: 'api', full_name: 'acme/api', description: null }] };
+
+    it('offers no choice in a single-repo project, nor on an epic', () => {
+      mount(task({ id: 'Pagar' }));
+      expect(screen.queryByRole('group', { name: 'Repositórios' })).not.toBeInTheDocument();
+      cleanup();
+      mount(task({ id: 'E', type: 'epic', epic_id: null, column_id: null, status: 'backlog' }), { repos: multi, epicUntagged: 0, onSetAuto: vi.fn() });
+      expect(screen.queryByRole('group', { name: 'Repositórios' })).not.toBeInTheDocument();
+    });
+
+    it('saves the picked repositories in the project order, and nothing when they did not change', () => {
+      const props = mount(task({ id: 'Pagar', repo_keys: [] }), { repos: multi });
+      expect(screen.getByRole('group', { name: 'Repositórios' })).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText('api'));
+      fireEvent.click(screen.getByLabelText('web'));
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+      expect(props.onSave).toHaveBeenCalledWith({ repo_keys: ['web', 'api'] });
+      cleanup();
+      const same = mount(task({ id: 'Pagar', repo_keys: ['api'] }), { repos: multi });
+      expect(screen.getByLabelText('api')).toBeChecked();
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+      expect(same.onSave).not.toHaveBeenCalled();
+    });
+
+    it('keeps a key no longer offered listed and checked', () => {
+      const props = mount(task({ id: 'Pagar', repo_keys: ['old'] }), { repos: multi });
+      expect(screen.getByLabelText(/old/)).toBeChecked();
+      expect(screen.getByText('desligado ou removido no Setup')).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText(/old/));
+      fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+      expect(props.onSave).toHaveBeenCalledWith({ repo_keys: [] });
+    });
+  });
 });

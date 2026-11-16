@@ -13,6 +13,7 @@ const pullRequestsMock = vi.fn();
 const linkTabMock = vi.fn();
 const detachTerminalMock = vi.fn();
 const updateMock = vi.fn();
+const reposMock = vi.fn(async (_projectId: string) => ({ project_id: 'p1', repos: [], machines: [] }));
 vi.mock('../lib/api', () => {
   class ApiError extends Error {}
   return {
@@ -28,6 +29,7 @@ vi.mock('../lib/api', () => {
         detachTerminal: (...a: unknown[]) => detachTerminalMock(...a),
         update: (...a: unknown[]) => updateMock(...a),
       },
+      setup: { repos: (id: string) => reposMock(id) },
     },
   };
 });
@@ -110,6 +112,16 @@ describe('TasksBoard — columns, cards and filter', () => {
     expect(screen.getByText('P1-a')).toBeInTheDocument();
     expect(screen.getAllByText('Geral')).toHaveLength(2);
     expect(within(screen.getByRole('region', { name: 'A fazer' })).getByRole('img', { name: 'Tarefa' })).toBeInTheDocument();
+  });
+
+  // TER-1069
+  it('shows a chip per repository a card touches, and none on a single-repo card', async () => {
+    listMock.mockResolvedValue(board([epic('e1', 'Geral', 1), task({ id: 'a', repo_keys: ['api', 'web'] }), task({ id: 'b' })]));
+    mount();
+    await screen.findByText('a');
+    const chips = screen.getAllByRole('list', { name: 'Repositórios' });
+    expect(chips).toHaveLength(1);
+    expect(within(chips[0]!).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['api', 'web']);
   });
 
   it('hides epics by default; the Épico chip shows them and is remembered', async () => {

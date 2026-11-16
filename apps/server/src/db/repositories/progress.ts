@@ -116,6 +116,7 @@ export class ProgressRepository {
           position: c.position,
           column_name: c.column?.name ?? null,
           auto: c.auto,
+          repo_keys: c.repoKeys,
           started_at: c.startedAt,
           done_at: c.doneAt,
           active_seconds: c.activeSeconds,
