@@ -19,12 +19,14 @@ or team machine, not even for an admin.
   the project with a folder.
 
 ```bash
-export TERMHUB=https://app.termhub.dev   # or your own server
+export TERMHUB=https://termhub.dev   # or your own server
 export TOKEN=thb_pat_...
 ```
 
-> `app.termhub.dev` sits behind Cloudflare Access: from a script, add a service token
-> (`-H "CF-Access-Client-Id: …" -H "CF-Access-Client-Secret: …"`) or call your own server.
+> On termhub Cloud, call `https://termhub.dev`: it forwards only `/api/v1/*` to the app, outside Cloudflare
+> Access, so a script needs no Access service token, only the personal token. `app.termhub.dev` stays
+> behind Access (a script there gets a redirect to the Access login). The proxy also limits each client
+> IP to 5 requests per second (burst 20) and answers `429` beyond that.
 
 ## Create a run
 
