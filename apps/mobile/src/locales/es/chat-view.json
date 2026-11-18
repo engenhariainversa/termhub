@@ -412,5 +412,8 @@
   "Mensagem pronta": "Mensaje listo",
   "Copiar mensagem": "Copiar mensaje",
   "Mensagem copiada": "Mensaje copiado",
-  "Não foi possível copiar a mensagem": "No se pudo copiar el mensaje"
+  "Não foi possível copiar a mensagem": "No se pudo copiar el mensaje",
+  "expirou: o card já foi criado por outro pedido": "expiró: la tarjeta ya se creó por otra solicitud",
+  "expirou: o subagente que pediu terminou e ninguém respondeu": "expiró: el subagente que la pidió terminó y nadie respondió",
+  "Pediu confirmação porque o limite por hora do modo liberado acabou.": "Pidió confirmación porque se agotó el límite por hora del modo liberado."
 }

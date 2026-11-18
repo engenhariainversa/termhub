@@ -28,6 +28,7 @@ import { resurfaceCards } from './resurface.js';
 import { ACTION_TTL_MS, scrubSecretArgs } from './service.js';
 import { standingProjectOf } from './standing-project.js';
 import { subagentOrigins } from './subagent-origin.js';
+import { duplicatePendingCreateTask, expireRedoneCreateTask } from './pending-redundancy.js';
 
 /** What the gate did: the tool's own value, or a pt-BR error for the caller to answer with. The
  * error's `code` is what the existing per-call audit row records; the gate writes no audit row. */
@@ -50,6 +51,18 @@ export interface GatedCall {
 
 const PENDING = (tool: string) =>
   `Ação pendente de confirmação: o usuário precisa aprovar a ferramenta ${tool} no chat e nada foi executado. Não repita a chamada nem tente outro caminho. Se o mesmo pedido do usuário precisa de outras ações independentes desta, proponha todas agora, nesta mesma resposta: elas aparecem juntas numa só confirmação. Depois diga a ele que está aguardando a confirmação e pare. Quando ele decidir, você será avisado e poderá repetir as chamadas autorizadas.`;
+
+/** The card says why it asked (TER-1192): the open model's hourly budget for its kind ran out. */
+export const OPEN_BUDGET_CODE = 'OPEN_BUDGET';
+const BUDGET_SPENT = (kind: BlockKind) =>
+  `Pediu confirmação porque o limite do modo liberado para este tipo de ação (${OPEN_BUDGETS[kind]} por hora, somando os chats da pessoa) acabou. Diga isso a ela; o limite volta sozinho em até uma hora.`;
+
+const DUPLICATE_CARD: GateOutcome = {
+  ok: false,
+  code: 'CONFIRMATION_WAITING',
+  message:
+    'Já existe um pedido pendente para criar um card com este título neste projeto, e ele voltou para o fim do chat: nada foi executado. Não peça de novo nem crie por outro caminho; diga à pessoa que o pedido está esperando a confirmação dela.',
+};
 
 const WAITING: GateOutcome = {
   ok: false,
@@ -355,6 +368,8 @@ async function execute(ctx: ControlContext, call: GatedCall, row: ChatAction): P
     await ctx.repos.chatActions.markExecuted(row.id, true, null, Date.now() - started);
     await scrubSecretArgs(ctx.repos, [row]);
     publishStatus(ctx, row, 'executed', null);
+    // TER-1192: the card exists now; a card still pending for the same project and title would add it twice.
+    if (call.tool === 'create_task') await expireRedoneCreateTask(ctx.repos, ctx.scope.user.id, call.args);
     return { ok: true, value };
   } catch (err) {
     const code = err instanceof ControlError || err instanceof HttpError ? (err.code ?? 'ERROR') : 'INTERNAL';
@@ -381,12 +396,31 @@ function actionNotRecorded(): never {
 }
 
 /** Records the proposal and puts the question in the chat. */
-async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass): Promise<GateOutcome> {
+async function ask(ctx: ControlContext, call: GatedCall, conversationId: string, key: string, cls: ChatActionClass, budget: BlockKind | null = null): Promise<GateOutcome> {
+  // TER-1192: the same card asked again (a subagent and then the concierge, two subagents) is one card.
+  const duplicate = await duplicatePendingCreateTask(ctx.repos, ctx.scope.user.id, call.tool, call.args);
+  if (duplicate) {
+    try {
+      await resurfaceCards(ctx.repos, ctx.scope.user.id, duplicate.conversation_id, { actionIds: [duplicate.id], questions: false });
+    } catch {
+      // the card stays where it was
+    }
+    return DUPLICATE_CARD;
+  }
   const target = await withTabSnapshot(ctx, targetOf(call.args), call.tool);
   let row: ChatAction;
   try {
     // `args` is the proposal exactly as the concierge made it — the command, the prompt, the target.
-    row = await ctx.repos.chatActions.insertPending({ conversation_id: conversationId, tool: call.tool, args: call.args, class: cls, idempotency_key: key, ...target, ...originFor(call, conversationId) });
+    row = await ctx.repos.chatActions.insertPending({
+      conversation_id: conversationId,
+      tool: call.tool,
+      args: call.args,
+      class: cls,
+      idempotency_key: key,
+      ...target,
+      ...originFor(call, conversationId),
+      ...(budget ? { error_code: OPEN_BUDGET_CODE } : {}),
+    });
   } catch {
     // Two calls of the same proposal can both read "no open row" before either inserts; the partial
     // unique index then refuses the loser. The winner's question is already in the chat, so this call
@@ -397,7 +431,7 @@ async function ask(ctx: ControlContext, call: GatedCall, conversationId: string,
   }
   row = await bindLateOrigin(ctx, call, conversationId, row);
   await publishCard(ctx.repos, ctx.scope.user.id, row);
-  return { ok: false, code: 'CONFIRMATION_PENDING', message: PENDING(call.tool) };
+  return { ok: false, code: 'CONFIRMATION_PENDING', message: budget ? `${PENDING(call.tool)} ${BUDGET_SPENT(budget)}` : PENDING(call.tool) };
 }
 
 /**
@@ -785,7 +819,7 @@ async function quotedAnswer(ctx: ControlContext, call: GatedCall, tab: Tab): Pro
   });
 }
 
-type OpenOutcome = { grantId: string } | { refused: GateOutcome } | null;
+type OpenOutcome = { grantId: string } | { refused: GateOutcome } | { budget: BlockKind } | null;
 
 /**
  * The open model (TER-1164, flag `chat_open_permissions`): what lets a call through without a card, or
@@ -866,7 +900,7 @@ async function openGrantCovering(ctx: ControlContext, call: GatedCall): Promise<
 
   const grantId = quoted ? quotedAnswerGrantId(userId) : openGrantId(userId, kind);
   const used = await ctx.repos.chatActions.countByGrantSince(grantId, new Date(Date.now() - STANDING_BUDGET_WINDOW_MS));
-  if (used >= OPEN_BUDGETS[quoted ? 'terminal' : kind]) return null;
+  if (used >= OPEN_BUDGETS[quoted ? 'terminal' : kind]) return { budget: quoted ? 'terminal' : kind };
 
   // Last, the screen: a dialog the hooks have not reported yet, or the wrong kind of prompt for the text.
   if (screen !== 'none') {
@@ -939,10 +973,12 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
   if (!row || decision === 'ask') {
     // TER-1164: with the open model on, it alone decides; the grants and defaults below are the old model.
     const open = !row && (await openPermissionsOn(ctx.repos, ctx.scope.user.id));
+    let budget: BlockKind | null = null;
     if (open) {
       const outcome = await openGrantCovering(ctx, call);
       if (outcome && 'refused' in outcome) return outcome.refused;
-      if (outcome) return executeGranted(ctx, call, conversationId, key, cls, outcome.grantId);
+      if (outcome && 'budget' in outcome) budget = outcome.budget;
+      else if (outcome) return executeGranted(ctx, call, conversationId, key, cls, outcome.grantId);
     }
     // Only where the gate would otherwise ask: an open row or a "no" still in force decided above.
     if (!row && !open && grantable(call.tool, call.args) && !textOutsideGrant(call.args)) {
@@ -986,7 +1022,7 @@ export async function applyGate(ctx: ControlContext, call: GatedCall): Promise<G
       const trimmed = trimmedCommand(call);
       if (trimmed) return trimmed;
     }
-    return ask(ctx, call, conversationId, key, cls);
+    return ask(ctx, call, conversationId, key, cls, budget);
   }
   if (decision === 'waiting') {
     // Asked again while the card still waits (TER-477): bring it back where the person is reading.

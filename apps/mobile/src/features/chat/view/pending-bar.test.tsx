@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, within } from '@testing-library/react-native';
 import { chatTimeline } from '../model/timeline';
 import type { ChatAction, TabQuestion, TabSuggestion } from '../model/types';
 import { PendingBar } from './pending-bar';
@@ -76,9 +76,12 @@ describe('PendingBar (spec 2026-09-30 §2.1)', () => {
     expect(screen.queryByRole('button', { name: /Aprovar as reversíveis/ })).toBeNull();
   });
 
-  it('approves every pending write at once, 50 of them too (TER-1192)', async () => {
+  it('approves every pending write at once, 50 of them too, the list scrolling above the button (TER-1192)', async () => {
     const { onApprove } = await renderBar(Array.from({ length: 50 }, (_, i) => action(`a${i}`)));
     await fireEvent.press(screen.getByRole('button', { name: /50 pendentes$/ }));
+    const list = screen.getByTestId('pending-bar-list');
+    expect(list.props.className).toContain('max-h-64');
+    expect(within(list).queryByRole('button', { name: 'Aprovar as reversíveis (50)' })).toBeNull();
     await fireEvent.press(screen.getByRole('button', { name: 'Aprovar as reversíveis (50)' }));
     expect(onApprove.mock.calls[0]![0]).toHaveLength(50);
   });

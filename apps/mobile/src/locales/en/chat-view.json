@@ -412,5 +412,8 @@
   "Mensagem pronta": "Ready to send",
   "Copiar mensagem": "Copy message",
   "Mensagem copiada": "Message copied",
-  "Não foi possível copiar a mensagem": "Could not copy the message"
+  "Não foi possível copiar a mensagem": "Could not copy the message",
+  "expirou: o card já foi criado por outro pedido": "expired: the card was already created by another request",
+  "expirou: o subagente que pediu terminou e ninguém respondeu": "expired: the subagent that asked ended and nobody answered",
+  "Pediu confirmação porque o limite por hora do modo liberado acabou.": "Asked for confirmation because the hourly limit of the open mode ran out."
 }

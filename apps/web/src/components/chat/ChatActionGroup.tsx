@@ -1,6 +1,7 @@
 import { useTranslation } from '../../i18n';
 import { useState } from 'react';
 import type { ChatAction } from '../../lib/types';
+import { OPEN_BUDGET_CODE, OPEN_BUDGET_NOTE } from './ChatActionCard';
 
 export type BatchDecision = { id: string; decision: 'approve' | 'deny' };
 
@@ -31,7 +32,9 @@ export function ChatActionGroup({ actions, deciding, onDecide, onShowSeparately 
     // Every id, space-separated: the pending bar finds any one of them with `[data-chat-card~="<id>"]` (TER-477).
     <li data-chat-card={actions.map((a) => a.id).join(' ')} className="rounded-xl border border-attention/40 bg-bg-2 px-4 py-3 text-sm">
       <p className="font-medium text-fg">{t('{{count}} ações aguardando sua confirmação', { count: actions.length })}</p>
-      <ul className="mt-2 space-y-1">
+      {actions.some((a) => a.error_code === OPEN_BUDGET_CODE) && <p className="text-xs text-fg-dim">{t(OPEN_BUDGET_NOTE)}</p>}
+      {/* TER-1192: a long group scrolls inside the card, so its buttons stay right below the list. */}
+      <ul data-testid="action-group-list" className="mt-2 max-h-80 space-y-1 overflow-y-auto pr-1">
         {actions.map((a) => (
           <li key={a.id}>
             <label className="flex items-start gap-2">

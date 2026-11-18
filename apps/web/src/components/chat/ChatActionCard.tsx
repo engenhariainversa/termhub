@@ -24,9 +24,19 @@ const STALE_REASON: Record<string, string> = {
   PROMPT_CHANGED: tk('Expirou: a aba está pedindo outra permissão'),
 };
 
+/** Why an `expired` card expired, when the server says (TER-1192); any other reads "Expirou sem resposta". */
+const EXPIRED_REASON: Record<string, string> = {
+  REDONE: tk('Expirou: o card já foi criado por outro pedido'),
+  SUBAGENT_ENDED: tk('Expirou: o subagente que pediu terminou e ninguém respondeu'),
+};
+
+/** A pending card asked because the open model's hourly budget for its kind ran out (TER-1192). */
+export const OPEN_BUDGET_CODE = 'OPEN_BUDGET';
+export const OPEN_BUDGET_NOTE = tk('Pediu confirmação porque o limite por hora do modo liberado acabou.');
+
 /** The line an expired or stale card reads, or null for any other card (TER-477). */
 export function staleLabel(action: ChatAction): string | null {
-  if (action.status === 'expired') return i18n.t(ACTION_STATUS_LABEL.expired);
+  if (action.status === 'expired') return i18n.t(EXPIRED_REASON[action.error_code ?? ''] ?? ACTION_STATUS_LABEL.expired);
   if (action.status === 'failed') {
     const reason = STALE_REASON[action.error_code ?? ''];
     return reason ? i18n.t(reason) : null;
@@ -171,6 +181,7 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
       </div>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
       {action.subagent && <p className="text-xs text-fg-dim">{t('Pedido pelo subagente «{{name}}»', { name: action.subagent.description })}</p>}
+      {action.status === 'pending' && action.error_code === OPEN_BUDGET_CODE && <p className="text-xs text-fg-dim">{t(OPEN_BUDGET_NOTE)}</p>}
       {action.status === 'pending' ? (
         <div className="mt-2 flex flex-wrap gap-2">
           <button type="button" className="btn-primary" disabled={deciding} onClick={() => onDecide(action.id, 'approve')}>
@@ -224,7 +235,8 @@ export const ChatActionCard = memo(function ChatActionCard({ action, deciding, n
       ) : stale ? (
         <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-dim">
           <span>{stale}</span>
-          {onRepropose && (
+          {/* A card created since by another request: asking again would only put it on the board twice. */}
+          {onRepropose && action.error_code !== 'REDONE' && (
             <button type="button" className="btn-ghost text-xs" onClick={() => onRepropose(action)}>
               {t('Propor de novo')}
             </button>

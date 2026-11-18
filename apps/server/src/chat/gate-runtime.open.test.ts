@@ -18,7 +18,7 @@ function fakeActions() {
   const make = (input: InsertPendingInput, status: ChatAction['status'], extra: Partial<ChatAction> = {}): ChatAction => ({
     id: `a${rows.length + 1}`, conversation_id: input.conversation_id, message_id: null, tool: input.tool, args: input.args, class: input.class, status,
     idempotency_key: input.idempotency_key ?? null, machine_id: input.machine_id ?? null, project_id: input.project_id ?? null, tab_id: input.tab_id ?? null,
-    grant_id: null, error_code: null, duration_ms: null, decided_by: null, decided_at: null, injected_at: null, created_at: new Date().toISOString(), ...extra,
+    grant_id: null, error_code: input.error_code ?? null, duration_ms: null, decided_by: null, decided_at: null, injected_at: null, created_at: new Date().toISOString(), ...extra,
   });
   return {
     rows,
@@ -32,6 +32,9 @@ function fakeActions() {
     markExecuted: vi.fn(async (id: string, ok: boolean, code?: string | null) => { const r = rows.find((x) => x.id === id)!; r.status = ok ? 'executed' : 'failed'; r.error_code = code ?? null; }),
     countForGrantSince: vi.fn(async () => 0),
     countByGrantSince: vi.fn(async (g: string, since: Date) => rows.filter((r) => r.grant_id === g && Date.parse(r.created_at) > since.getTime()).length),
+    listPendingCreateTasks: vi.fn(async (_u: string, p: string) => rows.filter((r) => r.tool === 'create_task' && r.status === 'pending' && (r.args as { project_id?: string }).project_id === p)),
+    expirePending: vi.fn(async (ids: string[], code: string) =>
+      rows.filter((r) => ids.includes(r.id) && r.status === 'pending').map((r) => { r.status = 'expired'; r.error_code = code; return { action: r, user_id: 'u1' }; })),
   };
 }
 
@@ -273,6 +276,45 @@ describe('open permissions (TER-1164): the chat acts without a card unless the c
     for (let i = 0; i < 10; i++) await call('start_agent', { project_id: 'p1', prompt: `x${i}` });
     run.mockClear();
     await expectAsks('start_agent', { project_id: 'p1', prompt: 'one more' });
+  });
+
+  it('past the hourly budget, the card says why, and so does the answer to the model (TER-1192)', async () => {
+    for (let i = 0; i < 10; i++) await call('start_agent', { project_id: 'p1', prompt: `x${i}` });
+    const r = await call('start_agent', { project_id: 'p1', prompt: 'one more' });
+    expect(r).toMatchObject({ ok: false, code: 'CONFIRMATION_PENDING', message: expect.stringContaining('10 por hora') });
+    expect(actions.rows.at(-1)).toMatchObject({ tool: 'start_agent', status: 'pending', error_code: 'OPEN_BUDGET' });
+  });
+
+  it('a plan of 60 cards in an hour runs with no card; the budget for the board is 200 (TER-1192)', async () => {
+    for (let i = 0; i < 60; i++) expect(await call('create_task', { project_id: 'p1', title: `Card ${i}` })).toMatchObject({ ok: true });
+    expect(actions.insertPending).not.toHaveBeenCalled();
+    for (let i = 60; i < 200; i++) await call('create_task', { project_id: 'p1', title: `Card ${i}` });
+    run.mockClear();
+    await expectAsks('create_task', { project_id: 'p1', title: 'Card 200' });
+    expect(actions.rows.at(-1)).toMatchObject({ error_code: 'OPEN_BUDGET' });
+  });
+
+  it('a card asked a second time (same project and title) is no second card: the first comes back (TER-1192)', async () => {
+    // The old model, with its board default turned off: every create_task asks.
+    flagOn = false;
+    restricted.add('board');
+    await expectAsks('create_task', { project_id: 'p1', title: 'Revisar o login' });
+    const again = await call('create_task', { project_id: 'p1', title: '  revisar  o Login ', description: 'outra forma' });
+    expect(again).toMatchObject({ ok: false, code: 'CONFIRMATION_WAITING', message: expect.stringContaining('Já existe um pedido pendente') });
+    expect(actions.rows.filter((r) => r.status === 'pending')).toHaveLength(1);
+    // Another project is another card.
+    await expectAsks('create_task', { project_id: 'p2', title: 'Revisar o login' });
+  });
+
+  it('a card created by another path expires the pending card for the same project and title (TER-1192)', async () => {
+    // A subagent's earlier card, still pending (it was asked past the budget, or under the old model).
+    const pending = await actions.insertPending({ conversation_id: C, tool: 'create_task', args: { project_id: 'p1', title: 'Revisar o login', description: 'pedido pelo subagente' }, class: 'write', idempotency_key: 'k-old' });
+    const other = await actions.insertPending({ conversation_id: C, tool: 'create_task', args: { project_id: 'p1', title: 'Outro card' }, class: 'write', idempotency_key: 'k-other' });
+    // The concierge redoes it under the open model: it runs, and the pending card would add it twice.
+    await expectRuns('create_task', { project_id: 'p1', title: 'revisar o login' }, O('board'));
+    expect(pending).toMatchObject({ status: 'expired', error_code: 'REDONE' });
+    expect(other.status).toBe('pending');
+    expect(chatBus.publish).toHaveBeenCalledWith(expect.objectContaining({ type: 'action_status', action_id: pending.id, status: 'expired', error_code: 'REDONE' }));
   });
 
   it('a tab that is not the person\'s asks (the tool then 404s)', async () => {
