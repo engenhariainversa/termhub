@@ -1,5 +1,5 @@
 import { memo, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { t, useTranslation } from '@/i18n';
 import { AppText, Button, Icon } from '@/ui';
 import { permissionTitle, tabLabel } from '../model/tab-question-text';
@@ -59,6 +59,8 @@ export const PendingBar = memo(function PendingBar({ entries, deciding, onJump, 
       </Pressable>
       {open ? (
         <View className="gap-1">
+          {/* TER-1192: dozens of lines scroll here, and the button below stays in reach. */}
+          <ScrollView testID="pending-bar-list" className="max-h-64" nestedScrollEnabled keyboardShouldPersistTaps="handled">
           {items.map((item) => (
             <Pressable
               key={item.id}
@@ -74,6 +76,7 @@ export const PendingBar = memo(function PendingBar({ entries, deciding, onJump, 
               </AppText>
             </Pressable>
           ))}
+          </ScrollView>
           {writes.length >= 2 ? <Button label={t('Aprovar as reversíveis ({{n}})', { n: writes.length })} variant="secondary" onPress={() => onApprove(writes.map((w) => w.id))} disabled={deciding} /> : null}
         </View>
       ) : null}

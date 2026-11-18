@@ -25,9 +25,22 @@ const STALE_REASON: Record<string, string> = {
   PROMPT_CHANGED: tk('expirou: a aba está pedindo outra permissão'),
 };
 
+/** Why an `expired` card expired, when the server says (TER-1192) — the web's `EXPIRED_REASON`. */
+const EXPIRED_REASON: Record<string, string> = {
+  REDONE: tk('expirou: o card já foi criado por outro pedido'),
+  SUBAGENT_ENDED: tk('expirou: o subagente que pediu terminou e ninguém respondeu'),
+};
+
+/** A pending card asked because the open model's hourly budget for its kind ran out (TER-1192). */
+export const OPEN_BUDGET_CODE = 'OPEN_BUDGET';
+export const OPEN_BUDGET_NOTE = tk('Pediu confirmação porque o limite por hora do modo liberado acabou.');
+
 /** The line an expired or stale card reads, or null for any other card (TER-477). */
 export function staleLabel(action: ChatAction): string | null {
-  if (action.status === 'expired') return t('expirou sem resposta');
+  if (action.status === 'expired') {
+    const reason = EXPIRED_REASON[action.error_code ?? ''];
+    return reason ? t(reason) : t('expirou sem resposta');
+  }
   if (action.status === 'failed') {
     const reason = STALE_REASON[action.error_code ?? ''];
     return reason ? t(reason) : null;
@@ -134,6 +147,7 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
       <AppText>{action.summary}</AppText>
       {/* The subagent whose turn proposed this action (spec 2026-09-26 §4), when there is one. */}
       {action.subagent ? <AppText variant="muted">{t('Pedido pelo subagente «{{description}}»', { description: action.subagent.description })}</AppText> : null}
+      {action.status === 'pending' && action.error_code === OPEN_BUDGET_CODE ? <AppText variant="muted">{t(OPEN_BUDGET_NOTE)}</AppText> : null}
       {action.status === 'pending' ? (
         <View className="gap-2">
           <View className="flex-row gap-2">
@@ -169,7 +183,7 @@ export const ActionCard = memo(function ActionCard({ action, busy, onDecide, gra
           <AppText variant="muted" className="flex-1">
             {stale}
           </AppText>
-          {onRepropose ? <Button label={t('Propor de novo')} variant="ghost" onPress={() => onRepropose(action)} /> : null}
+          {onRepropose && action.error_code !== 'REDONE' ? <Button label={t('Propor de novo')} variant="ghost" onPress={() => onRepropose(action)} /> : null}
         </View>
       ) : (
         <AppText variant="muted">{statusLine}</AppText>

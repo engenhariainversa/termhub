@@ -1,8 +1,9 @@
 import { memo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { useTranslation } from '@/i18n';
 import { AppText, Button, Icon } from '@/ui';
 import type { ChatAction } from '../model/types';
+import { OPEN_BUDGET_CODE, OPEN_BUDGET_NOTE } from './action-card';
 
 type Decision = { id: string; decision: 'approve' | 'deny' };
 type Props = { actions: ChatAction[]; busy: boolean; onDecide(d: Decision[]): void; onShowSeparately(): void };
@@ -28,6 +29,9 @@ export const ActionGroupCard = memo(function ActionGroupCard({ actions, busy, on
   return (
     <View className="gap-3 rounded-2xl border border-app-accent bg-app-surface2 p-4">
       <AppText variant="label">{t('{{count}} ações aguardando sua confirmação', { count: actions.length })}</AppText>
+      {actions.some((a) => a.error_code === OPEN_BUDGET_CODE) ? <AppText variant="muted">{t(OPEN_BUDGET_NOTE)}</AppText> : null}
+      {/* TER-1192: a long group scrolls inside the card, so its buttons stay right below the list. */}
+      <ScrollView testID="action-group-list" className="max-h-80" nestedScrollEnabled contentContainerClassName="gap-3">
       {actions.map((a) => (
         <Pressable
           key={a.id}
@@ -47,6 +51,7 @@ export const ActionGroupCard = memo(function ActionGroupCard({ actions, busy, on
           {a.class === 'irreversible' ? <AppText variant="muted">{t('irreversível')}</AppText> : null}
         </Pressable>
       ))}
+      </ScrollView>
       {count < actions.length ? <AppText variant="muted">{t('As desmarcadas serão recusadas.')}</AppText> : null}
       <Button label={t('Aprovar selecionadas ({{n}})', { n: count })} onPress={() => onDecide(actions.map((a) => ({ id: a.id, decision: isChecked(a) ? 'approve' : 'deny' })))} disabled={busy || count === 0} />
       <Button label={t('Recusar todas')} variant="secondary" onPress={() => onDecide(actions.map((a) => ({ id: a.id, decision: 'deny' })))} disabled={busy} />

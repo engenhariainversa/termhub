@@ -75,6 +75,7 @@ import { agentRunner } from './chat/agent-runner.js';
 import { expireOrphanTabQuestions, startTabQuestionExpiry } from './chat/tab-questions.js';
 import { startStuckTabQuestionSweeper } from './chat/stuck-tab-questions.js';
 import { expireOrphanTabActions, startTabGoneActionExpiry } from './chat/tab-gone-actions.js';
+import { expireAbandonedSubagentCards } from './chat/pending-redundancy.js';
 import { stopTabSuggestions } from './chat/tab-suggestions.js';
 import { registerChatWs } from './chat/ws.js';
 import { registerTabChatWs } from './tab-chat/ws.js';
@@ -428,6 +429,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     void expireOrphanTabQuestions(repos, fastify.log);
     // Pending chat cards whose tab vanished the same way (TER-986).
     void expireOrphanTabActions(repos, fastify.log);
+    void expireAbandonedSubagentCards(repos, fastify.log);
     // Accounts whose 30-day deletion window is over go for good (TER-720); both colors may run it, the row lock picks one.
     void deletion.runDue().catch((err: unknown) => fastify.log.warn({ err: failureLabel(err) }, 'account deletion: job failed'));
     // Data exports: build what waits (or a deploy cut short), drop archives past their 7 days (TER-741).
@@ -465,6 +467,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
   const stopApiTokenPurge = startApiTokenPurge(repos, fastify.log);
   void expireOrphanTabQuestions(repos, fastify.log);
   void expireOrphanTabActions(repos, fastify.log);
+  void expireAbandonedSubagentCards(repos, fastify.log);
   const stopDecisionSweeper = startDecisionSweeper(repos, fastify.log);
   const stopMemorySweeper = startMemorySweeper(repos, fastify.log);
   // TER-1137: memory writes over their hourly quota, written once their window has room

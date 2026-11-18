@@ -166,6 +166,7 @@ describe('ActionCard: expired or stale (TER-477)', () => {
     [{ status: 'failed' as const, error_code: 'TAB_GONE' }, 'expirou: a aba foi fechada'],
     [{ status: 'failed' as const, error_code: 'WAITING_PERMISSION' }, 'expirou: a aba passou a pedir uma permissão'],
     [{ status: 'failed' as const, error_code: 'PROMPT_CHANGED' }, 'expirou: a aba está pedindo outra permissão'],
+    [{ status: 'expired' as const, error_code: 'SUBAGENT_ENDED' }, 'expirou: o subagente que pediu terminou e ninguém respondeu'],
   ])('%o reads "%s" with a muted border and "Propor de novo"', async (patch, label) => {
     const onRepropose = jest.fn();
     await renderCard(patch, onRepropose);
@@ -173,6 +174,17 @@ describe('ActionCard: expired or stale (TER-477)', () => {
     expect(screen.getByTestId('action-card-a1').props.className).toContain('border-app-border');
     await fireEvent.press(screen.getByRole('button', { name: 'Propor de novo' }));
     expect(onRepropose).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', summary: BASE_ACTION.summary }));
+  });
+
+  it('a card created since by another request says so and offers nothing to ask again (TER-1192)', async () => {
+    await renderCard({ status: 'expired', error_code: 'REDONE' });
+    expect(screen.getByText('expirou: o card já foi criado por outro pedido')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Propor de novo' })).toBeNull();
+  });
+
+  it('a pending card asked past the open mode\'s hourly limit says why (TER-1192)', async () => {
+    await renderCard({ status: 'pending', error_code: 'OPEN_BUDGET' });
+    expect(screen.getByText('Pediu confirmação porque o limite por hora do modo liberado acabou.')).toBeTruthy();
   });
 
   it('a send_input card whose tab was closed offers no grant at all, only "Propor de novo" (TER-986)', async () => {

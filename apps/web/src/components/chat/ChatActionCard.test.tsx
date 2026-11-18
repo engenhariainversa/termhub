@@ -185,6 +185,7 @@ describe('an expired or stale card (TER-477)', () => {
     [{ status: 'failed' as const, error_code: 'TAB_GONE' }, 'Expirou: a aba foi fechada'],
     [{ status: 'failed' as const, error_code: 'WAITING_PERMISSION' }, 'Expirou: a aba passou a pedir uma permissão'],
     [{ status: 'failed' as const, error_code: 'PROMPT_CHANGED' }, 'Expirou: a aba está pedindo outra permissão'],
+    [{ status: 'expired' as const, error_code: 'SUBAGENT_ENDED' }, 'Expirou: o subagente que pediu terminou e ninguém respondeu'],
   ])('%o reads %s and offers Propor de novo', (over, label) => {
     const onRepropose = vi.fn();
     render(<ChatActionCard action={card(over)} deciding={false} onDecide={vi.fn()} onRepropose={onRepropose} />);
@@ -192,6 +193,18 @@ describe('an expired or stale card (TER-477)', () => {
     expect(screen.getByRole('listitem')).not.toHaveClass('border-attention/40');
     fireEvent.click(screen.getByRole('button', { name: 'Propor de novo' }));
     expect(onRepropose).toHaveBeenCalledWith(expect.objectContaining({ id: 'a1', summary: base.summary }));
+  });
+
+  it('a card created since by another request says so and offers nothing to ask again (TER-1192)', () => {
+    render(<ChatActionCard action={card({ status: 'expired', error_code: 'REDONE' })} deciding={false} onDecide={vi.fn()} onRepropose={vi.fn()} />);
+    expect(screen.getByText('Expirou: o card já foi criado por outro pedido')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Propor de novo' })).toBeNull();
+  });
+
+  it('a pending card asked past the open mode\'s hourly limit says why (TER-1192)', () => {
+    render(<ChatActionCard action={card({ status: 'pending', error_code: 'OPEN_BUDGET' })} deciding={false} onDecide={vi.fn()} />);
+    expect(screen.getByText('Pediu confirmação porque o limite por hora do modo liberado acabou.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Autorizar' })).toBeEnabled();
   });
 
   it('a send_input card whose tab was closed offers no grant at all, only "Propor de novo" (TER-986)', () => {

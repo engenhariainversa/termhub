@@ -54,6 +54,9 @@ export interface InsertPendingInput {
   /** Born injected: a card the server asks itself (`automation_merge`), never a concierge proposal the
    *  model must be told about — its decision is acted on by the server, not re-injected. */
   injected?: boolean;
+  /** Why a pending card was asked, when the card says it (TER-1192: `OPEN_BUDGET`, the open model's hourly
+   *  budget for this kind ran out). Not an error: the card is still pending. */
+  error_code?: string | null;
 }
 
 export interface InsertApprovedInput extends InsertPendingInput {
@@ -200,6 +203,7 @@ export class ChatActionsRepository {
         toolUseId: input.tool_use_id ?? null,
         subagentId: input.subagent_id ?? null,
         injectedAt: input.injected ? new Date() : null,
+        errorCode: input.error_code ?? null,
       },
     });
     return mapAction(row);
@@ -479,6 +483,44 @@ export class ChatActionsRepository {
       UPDATE "chat_actions" AS a SET "status" = 'failed', "error_code" = 'TAB_GONE'
        WHERE a."status" = 'pending' AND a."tab_id" IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM "tabs" t WHERE t."id" = a."tab_id")
+      RETURNING a."id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /**
+   * The person's pending `create_task` cards for one project, in any of their live chats (TER-1192): how
+   * the gate spots the same card asked twice, and which cards a card created since makes redundant. The
+   * title is compared by the caller (`sameTaskTitle`).
+   */
+  async listPendingCreateTasks(userId: string, projectId: string): Promise<ChatAction[]> {
+    const rows = await this.db.chatAction.findMany({
+      where: { tool: 'create_task', status: 'pending' satisfies ChatActionStatus, args: { path: ['project_id'], equals: projectId }, conversation: { userId, archivedAt: null } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(mapAction);
+  }
+
+  /** Expires these rows if they are still pending, with the reason in `error_code` (TER-1192: `REDONE`).
+   * Resolves the rows it moved, with their owners. */
+  async expirePending(ids: string[], errorCode: string): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    if (ids.length === 0) return [];
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" SET "status" = 'expired', "error_code" = ${errorCode}
+       WHERE "id" = ANY(${ids}::text[]) AND "status" = 'pending'
+      RETURNING "id"`;
+    return this.withOwners(moved.map((r) => r.id));
+  }
+
+  /**
+   * TER-1192: a card a subagent asked for that nobody answered by `cutoff`, while that subagent already
+   * ended, expires with `SUBAGENT_ENDED`. The concierge would carry an approval, so such a card is not
+   * dead the moment its subagent ends; one left unanswered for hours only invites a duplicate later.
+   */
+  async expireAbandonedSubagentPending(cutoff: Date): Promise<Array<{ action: ChatAction; user_id: string }>> {
+    const moved = await this.db.$queryRaw<{ id: string }[]>`
+      UPDATE "chat_actions" AS a SET "status" = 'expired', "error_code" = 'SUBAGENT_ENDED'
+       WHERE a."status" = 'pending' AND a."subagent_id" IS NOT NULL AND a."created_at" < ${cutoff}
+         AND NOT EXISTS (SELECT 1 FROM "chat_subagents" s WHERE s."id" = a."subagent_id" AND s."status" IN ('running', 'stopping'))
       RETURNING a."id"`;
     return this.withOwners(moved.map((r) => r.id));
   }

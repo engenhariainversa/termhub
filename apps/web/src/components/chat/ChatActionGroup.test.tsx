@@ -77,3 +77,23 @@ it('keeps the ticks across a remount, so a retry never turns ticked irreversible
     { id: 'r4', decision: 'approve' },
   ]);
 });
+
+it('50 cards scroll inside the card, with the buttons outside the list, and approve or deny all 50 (TER-1192)', () => {
+  const onDecide = vi.fn();
+  const many = Array.from({ length: 50 }, (_, i) => action(`big${i}`, { tool: 'create_task', summary: `criar o card ${i}` }));
+  render(<ChatActionGroup actions={many} deciding={false} onDecide={onDecide} onShowSeparately={vi.fn()} />);
+  const list = screen.getByTestId('action-group-list');
+  expect(list).toHaveClass('overflow-y-auto');
+  expect(list).toHaveClass('max-h-80');
+  const approve = screen.getByRole('button', { name: 'Aprovar selecionadas (50)' });
+  expect(list).not.toContainElement(approve);
+  fireEvent.click(approve);
+  expect(onDecide.mock.calls[0][0]).toHaveLength(50);
+  fireEvent.click(screen.getByRole('button', { name: 'Recusar todas' }));
+  expect(onDecide.mock.calls[1][0].every((d: { decision: string }) => d.decision === 'deny')).toBe(true);
+});
+
+it('says once why the cards were asked when the open mode ran out of its hourly limit (TER-1192)', () => {
+  render(<ChatActionGroup actions={[action('a1', { error_code: 'OPEN_BUDGET' }), action('a2', { error_code: 'OPEN_BUDGET' })]} deciding={false} onDecide={vi.fn()} onShowSeparately={vi.fn()} />);
+  expect(screen.getAllByText('Pediu confirmação porque o limite por hora do modo liberado acabou.')).toHaveLength(1);
+});

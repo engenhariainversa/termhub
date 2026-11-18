@@ -59,12 +59,15 @@ export function openKindOf(tool: string, args: Record<string, unknown>): BlockKi
 }
 
 /** Calls the open model covers per user, kind and rolling hour: a brake against an injected prompt, not a
- *  quota. Past it, the call is asked. */
+ *  quota. Past it, the call is asked, and the card says why (`OPEN_BUDGET`). `board` was 30 until TER-1192:
+ *  a chat breaking a plan into cards with subagents spends 30 card writes in minutes, and every chat of the
+ *  person shares the budget, so the rest of the plan turned into dozens of cards. A board write is undone
+ *  on the board itself; the brake stays, sized for a whole plan instead of half of one. */
 export const OPEN_BUDGETS: Record<BlockKind, number> = {
   open_tab: 30,
   close_tab: 30,
   start_agent: 10,
-  board: 30,
+  board: 200,
   link_tab_task: 30,
   terminal: 120,
   run_command: 60,
