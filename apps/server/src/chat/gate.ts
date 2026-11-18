@@ -27,7 +27,9 @@ export type ActionClass = 'read' | 'self_mediated' | 'write' | 'irreversible';
 // block_action (TER-1164) only narrows what the chat may do: the person said what it must not do, and
 // the block shows in the chat and in Permissões do chat, where they lift it. Lifting one (unblock_action)
 // is a write no grant or default covers.
-const selfMediatedTools = new Set(['block_action', 'record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'set_chat_account', 'unstick_project_chat']);
+// deny_pending_action (TER-1192) is a brake: it only refuses the person's own pending cards, never approves
+// one, and every refusal is written to the security trail. Asking before refusing would be one more card.
+const selfMediatedTools = new Set(['deny_pending_action', 'block_action', 'record_decision', 'answer_tab_question', 'record_lesson', 'recap_pending_cards', 'escalate_automation_run', 'watch', 'cancel_watch', 'schedule_wakeup', 'notify', 'set_chat_account', 'unstick_project_chat']);
 
 // Tools classified by reversibility
 const readTools = new Set([
@@ -58,6 +60,8 @@ const readTools = new Set([
   // TER-1071: the repositories in the project's folder; the scan only reads the folders and adds rows nobody acts on
   'list_project_repos',
   'scan_project_repos',
+  // TER-1192: the person's own pending confirmation cards, across their chats; nothing is decided
+  'list_pending_actions',
   // TER-627: lists the tabs' question cards and their answers; nothing is sent or changed.
   'list_tab_questions',
   // TER-1023: the hooks' state on a machine; nothing on the machine is written.

@@ -9,7 +9,7 @@ export type BatchItem = { id: string; decision: 'approve' | 'deny' };
 export type Skipped = { id: string; reason: 'not_found' | 'already_decided' };
 
 /**
- * The rows of a batch that can still be decided, read owner-scoped one by one (a batch is ≤ 20). A
+ * The rows of a batch that can still be decided, read owner-scoped one by one (a batch is ≤ `CHAT_DECISION_BATCH_MAX`). A
  * batch belongs to one conversation — its decisions are injected there in one sentence — so ids of
  * two conversations are refused before anything is decided.
  */

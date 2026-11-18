@@ -7,6 +7,7 @@ import { b64url, utf8 } from '../crypto/encoding';
 import type { DeviceKey } from '../key/types';
 import {
   ACCOUNT_PENDING_DELETION,
+  decisionBatches,
   pushSettings,
   pushTestResponse,
   type PushSettings,
@@ -340,7 +341,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
     compact: (a: Auth, projectId: string | null) => empty('POST', '/api/m/v1/chat/compact', { token: a.accessToken, body: { project_id: projectId } }),
     decide: (a: Auth, actionId: string, body: TMobileDecisionBody) =>
       empty('POST', `/api/m/v1/chat/actions/${actionId}/decision`, { token: a.accessToken, body }),
-    decideMany: (a: Auth, body: TMobileBatchDecisionBody) => empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body }),
+    // TER-1192: a list longer than the server's cap goes in runs, one after the other.
+    decideMany: async (a: Auth, body: TMobileBatchDecisionBody) => {
+      for (const decisions of decisionBatches(body.decisions)) await empty('POST', '/api/m/v1/chat/actions/decisions', { token: a.accessToken, body: { decisions } });
+    },
     decisionChallenges: (a: Auth, body: TDecisionChallengesBody) => call('POST', '/api/m/v1/chat/actions/challenges', decisionChallengesResponse, { token: a.accessToken, body }),
     revokeGrant: (a: Auth, grantId: string) => empty('DELETE', `/api/m/v1/chat/grants/${encodeURIComponent(grantId)}`, { token: a.accessToken }),
     // `kinds=all_standing` unconditionally: "Permissões do chat" always wants tab, project and standing

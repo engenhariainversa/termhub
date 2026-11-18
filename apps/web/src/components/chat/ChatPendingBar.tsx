@@ -7,8 +7,6 @@ import { permissionTitle, tabLabel } from './tab-question-text';
 /** How long a card found from the bar keeps its ring. */
 const HIGHLIGHT_MS = 1500;
 const HIGHLIGHT = ['ring-2', 'ring-attention'];
-/** What `POST /chat/actions/decisions` takes in one call (the server refuses more). */
-const BATCH_MAX = 20;
 
 interface PendingItem {
   id: string;
@@ -65,7 +63,7 @@ export const ChatPendingBar = memo(function ChatPendingBar({ entries, batchDecid
 
   const items = pendingItems(entries);
   if (items.length === 0) return null;
-  const writes = items.filter((i) => i.write).slice(0, BATCH_MAX);
+  const writes = items.filter((i) => i.write);
 
   const locate = (id: string) => {
     // Ids are the server's own (uuids), but a quote in one must not break the selector.

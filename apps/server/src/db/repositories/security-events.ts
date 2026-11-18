@@ -40,6 +40,7 @@ export const SECURITY_EVENT_ACTIONS = [
   'support.troubleshoot',
   'api_run.create',
   'api_run.cancel',
+  'chat_action.deny',
 ] as const;
 
 export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];

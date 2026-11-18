@@ -617,6 +617,8 @@
   "Criou uma run pela API": "Created a run through the API",
   "Cancelou uma run da API": "Cancelled an API run",
   "Runs da API": "API runs",
+  "Recusou pedidos pendentes do chat pelo MCP": "Refused pending chat requests through MCP",
+  "Pedidos do chat": "Chat requests",
   "Runs": "Runs",
   "runs": "runs",
   "Executar prompts nas suas contas e máquinas": "Run prompts on your own accounts and machines",

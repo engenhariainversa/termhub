@@ -76,11 +76,11 @@ describe('PendingBar (spec 2026-09-30 §2.1)', () => {
     expect(screen.queryByRole('button', { name: /Aprovar as reversíveis/ })).toBeNull();
   });
 
-  it('caps the batch at 20 writes', async () => {
-    const { onApprove } = await renderBar(Array.from({ length: 22 }, (_, i) => action(`a${i}`)));
-    await fireEvent.press(screen.getByRole('button', { name: /22 pendentes$/ }));
-    await fireEvent.press(screen.getByRole('button', { name: 'Aprovar as reversíveis (20)' }));
-    expect(onApprove.mock.calls[0]![0]).toHaveLength(20);
+  it('approves every pending write at once, 50 of them too (TER-1192)', async () => {
+    const { onApprove } = await renderBar(Array.from({ length: 50 }, (_, i) => action(`a${i}`)));
+    await fireEvent.press(screen.getByRole('button', { name: /50 pendentes$/ }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Aprovar as reversíveis (50)' }));
+    expect(onApprove.mock.calls[0]![0]).toHaveLength(50);
   });
 
   it('disables the batch while a decision is in flight', async () => {

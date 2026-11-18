@@ -1,3 +1,4 @@
+import { decisionBatches } from '@termhub/mobile-api/decision-batch';
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
 import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
@@ -389,8 +390,19 @@ export const api = {
     request<{ action: { id: string; status: ChatActionStatus }; queued?: true; note?: string; grant?: ChatGrant; project_grant?: ChatProjectGrant; standing_grant?: ChatStandingGrant; command_rule?: ChatCommandRule }>('POST', `/chat/actions/${id}/decision`, { decision }),
   /** A grouped confirmation: every decision of the batch in one request, injected as one sentence.
    *  Answers once that run has started, like `decideChatAction`; the answer arrives over `/ws/chat`. */
-  decideChatActions: (decisions: { id: string; decision: 'approve' | 'deny' }[]) =>
-    request<{ actions: { id: string; status: ChatActionStatus }[]; skipped: { id: string; reason: string }[]; queued?: true; note?: string }>('POST', '/chat/actions/decisions', { decisions }),
+  decideChatActions: async (decisions: { id: string; decision: 'approve' | 'deny' }[]) => {
+    // TER-1192: a list longer than the server's cap goes in runs, one after the other, answered as one.
+    type Res = { actions: { id: string; status: ChatActionStatus }[]; skipped: { id: string; reason: string }[]; queued?: true; note?: string };
+    const merged: Res = { actions: [], skipped: [] };
+    for (const run of decisionBatches(decisions)) {
+      const res = await request<Res>('POST', '/chat/actions/decisions', { decisions: run });
+      merged.actions.push(...res.actions);
+      merged.skipped.push(...res.skipped);
+      if (res.queued) merged.queued = true;
+      if (res.note) merged.note ??= res.note;
+    }
+    return merged;
+  },
   /** "Revogar": 404 unknown/not yours, 409 already revoked. */
   revokeChatGrant: (id: string) => request<{ grant: ChatGrant }>('DELETE', `/chat/grants/${encodeURIComponent(id)}`),
   /** "Cancelar" on a watch (TER-1099): 404 unknown, not yours or already closed. */
