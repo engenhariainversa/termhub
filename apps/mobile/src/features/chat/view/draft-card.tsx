@@ -13,13 +13,29 @@ const OUTCOME = {
 } as const;
 
 /**
+ * HTML that reads the same whatever charset its reader assumes (TER-1193): it declares UTF-8 and writes
+ * every character beyond ASCII as a numeric reference (one per code point, so an emoji is one
+ * `&#x1f44b;`, not two surrogates). On iOS, expo-clipboard turns the HTML into rich text from its UTF-8
+ * bytes without naming the encoding, and WebKit then reads them as Windows-1252: "👋" pasted as "ðŸ‘‹"
+ * and "ç" as "Ã§" in Teams and WhatsApp, rich text and plain alike. Android keeps the string as is.
+ */
+export function pasteboardHtml(html: string): string {
+  let ascii = '';
+  for (const char of html) {
+    const code = char.codePointAt(0) ?? 0;
+    ascii += code > 0x7f ? `&#x${code.toString(16)};` : char;
+  }
+  return `<meta charset="utf-8">${ascii}`;
+}
+
+/**
  * Puts a draft on the clipboard: as HTML where the system takes it (iOS and Android keep a plain
  * version next to it, which Teams and Slack fall back to), else as plain text in Slack's typed Markdown
  * (`draftPlainText`). Throws only when neither worked.
  */
 export async function copyDraft(source: string, markdownit: MarkdownIt): Promise<void> {
   try {
-    await Clipboard.setStringAsync(markdownit.render(source), { inputFormat: Clipboard.StringFormat.HTML });
+    await Clipboard.setStringAsync(pasteboardHtml(markdownit.render(source)), { inputFormat: Clipboard.StringFormat.HTML });
   } catch {
     await Clipboard.setStringAsync(draftPlainText(source));
   }
