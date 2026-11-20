@@ -92,3 +92,22 @@ describe('MessageBubble attachments', () => {
     expect(screen.queryByText(/parou no meio/)).toBeNull();
   });
 });
+
+// TER-1194: an answer laid out to its content (`self-start` + `max-w-[92%]`) let Yoga (RN's errata
+// "All") size the bubble from the markdown's headings while its lists (`flex: 1` content) wrapped at
+// another width: a bubble shorter than its text, drawn over the rows after it. The answer's width is
+// fixed, so every line of it is measured at the width it is drawn at.
+describe('MessageBubble layout (TER-1194)', () => {
+  const bubbleClass = () => screen.getByTestId('assistant-bubble').props.className as string;
+
+  it('gives an answer a fixed width, never one sized to its content', async () => {
+    await render(<MessageBubble message={answer({ text: '## Today\n\n- a long item that wraps\n\n```draft\n## Status\n- merged\n```' })} streamed={undefined} started />);
+    expect(bubbleClass().split(/\s+/)).toContain('w-[92%]');
+    expect(bubbleClass()).not.toMatch(/max-w-/);
+  });
+
+  it('keeps that width while the answer streams', async () => {
+    await render(<MessageBubble message={answer({ text: '' })} streamed={'- one\n\n- two'} started />);
+    expect(bubbleClass().split(/\s+/)).toContain('w-[92%]');
+  });
+});
