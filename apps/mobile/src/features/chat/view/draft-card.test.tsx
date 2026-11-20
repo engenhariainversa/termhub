@@ -59,6 +59,22 @@ describe('DraftCard', () => {
     expect(screen.getByText('Copiar')).toBeTruthy();
   });
 
+  // TER-1193: iOS parses the HTML into rich text from its UTF-8 bytes with no charset, which WebKit reads
+  // as Windows-1252, so "👋" pasted as "ðŸ‘‹" and "ç" as "Ã§" (rich text and plain alike). The HTML
+  // handed over must declare UTF-8 and carry no byte beyond ASCII.
+  it('hands over ASCII-only HTML that declares UTF-8, so accents and emoji survive', async () => {
+    await show('```draft\nOlá @Ana 👋, a peça do botão está pronta ✅ 🔄 🙏 — ç ã é ó\n```\n');
+    await press();
+    const [html] = setString.mock.calls[0];
+    expect(html.startsWith('<meta charset="utf-8">')).toBe(true);
+    expect(html).toMatch(/^[\x00-\x7f]*$/);
+    expect(html).toContain('Ol&#xe1;');
+    expect(html).toContain('&#x1f44b;');
+    expect(html).toContain('&#x2705;');
+    expect(html).toContain('&#x1f64f;');
+    expect(html).not.toContain('&#xd83d;');
+  });
+
   it('falls back to Slack-flavoured plain text when HTML is refused', async () => {
     setString.mockRejectedValueOnce(new Error('no html'));
     await show(`\`\`\`draft\n${DRAFT}\n\`\`\`\n`);
