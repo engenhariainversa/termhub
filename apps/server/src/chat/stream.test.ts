@@ -223,6 +223,16 @@ describe('failures the CLI reports in the stream', () => {
     expect(recorded('stream-not-logged-in').find((f) => f!.type === 'api_error')).toEqual({ type: 'api_error', reason: 'auth_failed' });
   });
 
+  // TER-1195: recorded on Claude Code 2.1.330 with an account whose subscription Anthropic refused (payment
+  // past due). Exit 1, empty stderr, a 403 on the result: before this it read "Claude stopped in the middle".
+  it('names a subscription the account can no longer use', () => {
+    const frames = recorded('stream-subscription-blocked');
+    expect(frames.find((f) => f!.type === 'api_error')).toEqual({ type: 'api_error', reason: 'subscription_blocked' });
+    expect(frames.at(-1)).toMatchObject({ type: 'error', turn_ended: true, session_id: '953eec74-cb68-4068-a535-714ec2445242' });
+    expect(frames.some((f) => f!.type === 'text')).toBe(false);
+    expect(parseFrame(JSON.stringify({ type: 'assistant', error: 'billing_error', message: { content: [{ type: 'text', text: 'x' }] } }))).toEqual({ type: 'api_error', reason: 'subscription_blocked' });
+  });
+
   it('falls back to the status code of the result when no assistant frame said why', () => {
     expect(parseFrame(JSON.stringify({ type: 'result', is_error: true, api_error_status: 429, session_id: 's' }))).toMatchObject({ reason: 'usage_limit' });
     expect(parseFrame(JSON.stringify({ type: 'result', is_error: true, api_error_status: 401, session_id: 's' }))).toMatchObject({ reason: 'auth_failed' });
@@ -241,5 +251,6 @@ describe('failures the CLI reports in the stream', () => {
     expect(codeForReason('usage_limit')).toBe('USAGE_LIMIT');
     expect(codeForReason('model_unavailable')).toBe('MODEL_UNAVAILABLE');
     expect(codeForReason('auth_failed')).toBe('AUTH_FAILED');
+    expect(codeForReason('subscription_blocked')).toBe('SUBSCRIPTION_BLOCKED');
   });
 });

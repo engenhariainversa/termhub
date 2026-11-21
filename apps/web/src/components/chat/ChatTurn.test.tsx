@@ -553,15 +553,18 @@ describe('ChatTurn', () => {
       expect(screen.queryByText(/parou no meio/)).toBeNull();
     });
 
-    it('names the two other failures the CLI reports', () => {
+    it('names the other failures the CLI reports', () => {
       render(
         <ol>
           <ChatTurn message={answer({ id: 'm1', text: '', error_code: 'MODEL_UNAVAILABLE' })} waiting={false} failed />
           <ChatTurn message={answer({ id: 'm2', text: '', error_code: 'AUTH_FAILED' })} waiting={false} failed />
+          <ChatTurn message={answer({ id: 'm3', text: '', error_code: 'SUBSCRIPTION_BLOCKED' })} waiting={false} failed />
         </ol>,
       );
       expect(screen.getByText(/não reconhece o modelo/)).toBeTruthy();
       expect(screen.getByText(/não está logada/)).toBeTruthy();
+      expect(screen.getByText(/assinatura do Claude da conta deste chat foi recusada/)).toBeTruthy();
+      expect(screen.queryByText(/parou no meio/)).toBeNull();
     });
 
     it('says which account took over above an answer another account gave', () => {

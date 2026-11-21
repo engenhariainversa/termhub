@@ -6,6 +6,7 @@
   "A conta de IA que você escolheu não serve mais para essa máquina. Use “Trocar máquina ou conta” para escolher outra.": "La cuenta de IA que elegiste ya no sirve para esta máquina. Usa “Cambiar máquina o cuenta” para elegir otra.",
   "A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.": "La cuenta de Claude de este chat alcanzó su límite de uso. Espera a que se restablezca el límite y envía el mensaje de nuevo.",
   "A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.": "La cuenta de Claude de este chat no tiene sesión iniciada en esta máquina. Inicia sesión allí (claude, luego /login) y envía el mensaje de nuevo.",
+  "A assinatura do Claude da conta deste chat foi recusada, em geral por pagamento pendente. Regularize em claude.ai/settings/billing ou troque a conta do chat e mande a mensagem de novo.": "La suscripción de Claude de la cuenta de este chat fue rechazada, por lo general por un pago pendiente. Regularízala en claude.ai/settings/billing o cambia la cuenta del chat y envía el mensaje de nuevo.",
   "A conta padrão do Claude desta máquina": "La cuenta predeterminada de Claude de esta máquina",
   "A conta {{label}}": "La cuenta {{label}}",
   "A contagem só corre com o termhub em foco.": "La cuenta atrás solo corre con termhub en primer plano.",

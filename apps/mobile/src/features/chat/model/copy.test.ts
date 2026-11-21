@@ -1,7 +1,7 @@
 import type { ChatErrorCode, ChatHostState } from './types';
 import { accountFromProject, errorSentence, failureSentence, hostAccountLine, hostLine, isChatErrorCode } from './copy';
 
-const KNOWN_CODES: ChatErrorCode[] = ['RUNNER_FAILED', 'TOKEN_FAILED', 'CLI_MISSING', 'CLI_REJECTED', 'MISSING_SESSION', 'RUN_FAILED', 'KILLED', 'HOST_GONE', 'AGENT_TOO_OLD', 'HOST_BUSY', 'USAGE_LIMIT', 'MODEL_UNAVAILABLE', 'AUTH_FAILED'];
+const KNOWN_CODES: ChatErrorCode[] = ['RUNNER_FAILED', 'TOKEN_FAILED', 'CLI_MISSING', 'CLI_REJECTED', 'MISSING_SESSION', 'RUN_FAILED', 'KILLED', 'HOST_GONE', 'AGENT_TOO_OLD', 'HOST_BUSY', 'USAGE_LIMIT', 'MODEL_UNAVAILABLE', 'AUTH_FAILED', 'SUBSCRIPTION_BLOCKED'];
 
 describe('errorSentence', () => {
   it('returns a non-empty sentence for every known code', () => {
