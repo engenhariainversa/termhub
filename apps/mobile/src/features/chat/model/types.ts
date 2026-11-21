@@ -94,6 +94,8 @@ export type ChatErrorCode =
   /** the CLI does not know the model the chat asked for */
   | 'MODEL_UNAVAILABLE'
   /** the Claude account is not logged in on the host machine */
-  | 'AUTH_FAILED';
+  | 'AUTH_FAILED'
+  /** Anthropic refused the Claude account's subscription (usually a payment past due) */
+  | 'SUBSCRIPTION_BLOCKED';
 
 export type { ChatEntry } from './timeline';

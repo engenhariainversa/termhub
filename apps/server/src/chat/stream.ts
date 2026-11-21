@@ -60,10 +60,11 @@ export type ChatFrame =
 // `reset` (a tcp channel's local socket reset) is included only to keep this list covering the
 // protocol's whole `closedReason` set per PROTOCOL_REASONS_COVERED below — a chat run's pty/claude
 // channel never actually reports it.
-// `usage_limit`, `model_unavailable` and `auth_failed` are read from the CLI's stream by `parseFrame`
-// (TER-588): the CLI reports them on stdout with an empty stderr, so no runner can name them.
+// `usage_limit`, `model_unavailable`, `auth_failed` and `subscription_blocked` are read from the CLI's
+// stream by `parseFrame` (TER-588, TER-1195): the CLI reports them on stdout with an empty stderr, so no
+// runner can name them.
 // `timeout` is a headless `run` channel's (TER-1178), like `reset` listed only to cover the protocol's set.
-const REASONS = ['missing_session', 'cli_rejected', 'run_failed', 'cli_missing', 'killed', 'host_gone', 'agent_too_old', 'host_busy', 'reset', 'usage_limit', 'model_unavailable', 'auth_failed', 'timeout'] as const;
+const REASONS = ['missing_session', 'cli_rejected', 'run_failed', 'cli_missing', 'killed', 'host_gone', 'agent_too_old', 'host_busy', 'reset', 'usage_limit', 'model_unavailable', 'auth_failed', 'subscription_blocked', 'timeout'] as const;
 
 /** Written exactly once: the type and the runtime check below are both derived from `REASONS`, so a
  *  label added to the list cannot be accepted by one and dropped by the other — the silent drift this
@@ -144,8 +145,17 @@ const positive = (v: unknown): number | undefined => (count(v) > 0 ? (v as numbe
 const toReason = (raw: unknown): ChatFailureReason | undefined => (typeof raw === 'string' && KNOWN.has(raw) ? (raw as ChatFailureReason) : undefined);
 
 /** The CLI's `error` on a synthetic assistant message (Claude Code 2.1.285) → the reason stored for the
- *  turn. Anything else (`server_error`, `invalid_request`, `billing_error`, …) stays `run_failed`. */
-const API_ERRORS: Record<string, ChatFailureReason> = { rate_limit: 'usage_limit', model_not_found: 'model_unavailable', authentication_failed: 'auth_failed' };
+ *  turn. `oauth_org_not_allowed` (2.1.330, TER-1195) is the subscription refused — usually a payment past
+ *  due — and `billing_error` the same trouble on the billing side: both answer with a 403 the status
+ *  fallback cannot tell from any other, and retrying never helps. Anything else (`server_error`,
+ *  `invalid_request`, …) stays `run_failed`. */
+const API_ERRORS: Record<string, ChatFailureReason> = {
+  rate_limit: 'usage_limit',
+  model_not_found: 'model_unavailable',
+  authentication_failed: 'auth_failed',
+  oauth_org_not_allowed: 'subscription_blocked',
+  billing_error: 'subscription_blocked',
+};
 /** A `result` with no assistant frame before it: its HTTP status is all there is. */
 const STATUS_REASONS: Record<number, ChatFailureReason> = { 429: 'usage_limit', 401: 'auth_failed' };
 

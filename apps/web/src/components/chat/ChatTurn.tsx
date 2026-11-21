@@ -53,6 +53,8 @@ const FAILURE_LINE: Record<ChatErrorCode, string> = {
   USAGE_LIMIT: tk('A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.'),
   MODEL_UNAVAILABLE: tk('O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.'),
   AUTH_FAILED: tk('A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.'),
+  // TER-1195: the CLI's `oauth_org_not_allowed` / `billing_error`. Sending again never helps.
+  SUBSCRIPTION_BLOCKED: tk('A assinatura do Claude da conta deste chat foi recusada, em geral por pagamento pendente. Regularize em claude.ai/settings/billing ou troque a conta do chat e mande a mensagem de novo.'),
 };
 
 /** The sentence under a stopped answer: the limit's own, with its reset time, or the code's. */

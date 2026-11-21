@@ -38,6 +38,7 @@
   "A conta do Claude deste chat atingiu o limite de uso. Espere o limite voltar e mande a mensagem de novo.": "La cuenta de Claude de este chat alcanzó su límite de uso. Espera a que se restablezca el límite y envía el mensaje de nuevo.",
   "O Claude Code dessa máquina não reconhece o modelo escolhido para o chat. Escolha outro modelo ou atualize o claude nela.": "Claude Code en esta máquina no reconoce el modelo elegido para el chat. Elige otro modelo o actualiza claude en ella.",
   "A conta do Claude deste chat não está logada nessa máquina. Faça o login nela (claude, depois /login) e mande a mensagem de novo.": "La cuenta de Claude de este chat no tiene sesión iniciada en esta máquina. Inicia sesión en ella (claude, luego /login) y envía el mensaje de nuevo.",
+  "A assinatura do Claude da conta deste chat foi recusada, em geral por pagamento pendente. Regularize em claude.ai/settings/billing ou troque a conta do chat e mande a mensagem de novo.": "La suscripción de Claude de la cuenta de este chat fue rechazada, por lo general por un pago pendiente. Regularízala en claude.ai/settings/billing o cambia la cuenta del chat y envía el mensaje de nuevo.",
   "na conta {{label}}, definida pelo projeto": "con la cuenta {{label}}, definida por el proyecto",
   "na conta {{label}}": "con la cuenta {{label}}",
   "na conta padrão do Claude dela": "con su cuenta predeterminada de Claude",
