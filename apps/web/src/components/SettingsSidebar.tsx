@@ -15,7 +15,7 @@ const GROUP_LABEL = 'px-3 pb-1 pt-2 text-[10px] uppercase tracking-wide text-fg-
  */
 export function SettingsSidebar({ onBack, onCollapse }: { onBack: () => void; onCollapse?: () => void }) {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   return (
     <aside aria-label={t('Configurações')} className="chrome-slide-in flex h-full w-64 shrink-0 flex-col border-r border-line bg-bg-2">
       <div className="flex h-11 shrink-0 items-center justify-between border-b border-line px-2">
@@ -37,7 +37,7 @@ export function SettingsSidebar({ onBack, onCollapse }: { onBack: () => void; on
         )}
       </div>
       <nav aria-label={t('Seções de Configurações')} className="min-h-0 flex-1 overflow-y-auto px-2 py-1">
-        {settingsGroups(can).map((g) => (
+        {settingsGroups(can, user?.features).map((g) => (
           <div key={g.id} role="group" aria-labelledby={`settings-group-${g.id}`} className="mb-2">
             <p id={`settings-group-${g.id}`} className={GROUP_LABEL}>
               {t(g.label)}

@@ -66,6 +66,8 @@ import { startWatchEngine } from './chat/watches/engine.js';
 import { startTrustWake } from './chat/trust-wake.js';
 import { startHealthWatcher } from './health/watcher.js';
 import { startNoticeDispatcher } from './chat/notices/dispatcher.js';
+import { whatsappNotice } from './whatsapp/service.js';
+import { whatsappRoutes } from './routes/whatsapp.js';
 import { monitorBus } from './monitor/bus.js';
 import { createWatchProbe } from './chat/watches/probe.js';
 import { startMemorySweeper } from './memory/sweeper.js';
@@ -343,6 +345,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
       await guarded('tasks', (a) => progressRoutes(a, repos), '/progress');
       await guarded('projects', (a) => officeRoutes(a, repos, { simulators, agents }), '/office');
       await guarded('integrations', (a) => integrationRoutes(a, repos), '/integrations');
+      await guarded('integrations', (a) => whatsappRoutes(a, repos), '/whatsapp');
       await guarded('projects', (a) => setupRoutes(a, repos), '/projects');
       await guarded('projects', (a) => projectAiRoutes(a, repos), '/projects');
       await guarded('tickets', (a) => projectTicketRoutes(a, repos), '/projects');
@@ -539,6 +542,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<App> {
     active: () => !lifecycle.draining,
     send: async (n) => {
       chatBus.publish({ type: 'concierge_notice', user_id: n.userId, conversation_id: n.conversationId, project_id: n.projectId, message_id: n.messageId, level: n.level, headline: n.headline, count: n.count });
+      // TER-1201: the same notice on the person's WhatsApp, when they set it up (never blocks the push).
+      void whatsappNotice({ repos, log: fastify.log }, n);
       if (mobile) await mobile.push.conciergeNotice(n);
     },
     onAnswerDone: (listener) =>

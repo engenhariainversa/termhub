@@ -43,7 +43,7 @@ export interface User {
 }
 
 /** Feature flags the server knows (apps/server/src/features/flags.ts, docs/feature-flags.md). */
-export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live' | 'sequential_epics' | 'runs_api';
+export type FeatureFlagKey = 'subscriptions' | 'chat_open_permissions' | 'tab_gc' | 'tab_gc_live' | 'sequential_epics' | 'runs_api' | 'whatsapp';
 
 /** One person's own value for a flag (Configurações → Recursos em teste). */
 export interface FeatureFlagOverride {
@@ -2505,3 +2505,32 @@ export interface ConciergePushSettings {
   /** Notices within this many minutes of a push leave as one; 0 = off. */
   group_minutes: number;
 }
+
+/** TER-1201: Configurações → WhatsApp, as `GET /api/whatsapp` answers it. The API key never comes back. */
+export interface WhatsAppSettings {
+  configured: boolean;
+  server_url: string | null;
+  instance: string | null;
+  number: string | null;
+  enabled: boolean;
+  notify_needs_you: boolean;
+  notify_done: boolean;
+  has_api_key: boolean;
+  last_sent_at: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
+}
+
+export interface WhatsAppSettingsInput {
+  server_url: string;
+  instance: string;
+  number: string;
+  /** Left out keeps the saved key. */
+  api_key?: string;
+  enabled: boolean;
+  notify_needs_you: boolean;
+  notify_done: boolean;
+}
+
+/** "Testar conexão" and "Enviar mensagem de teste". */
+export type WhatsAppProbe = { ok: true; state?: string } | { ok: false; code: string; reason?: string };

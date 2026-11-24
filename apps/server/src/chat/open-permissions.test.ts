@@ -12,7 +12,7 @@ describe('openKindOf (TER-1164)', () => {
     expect(openKindOf('unlink_project_machine', {})).toBe('machines');
     expect(openKindOf('unlink_project_machine', { confirm: true })).toBeNull();
     expect(openKindOf('set_machine_automation', { accept: true })).toBe('automation');
-    for (const tool of ['delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge', 'start_ai_login', 'submit_ai_login_code', 'set_ai_account_exclusive', 'set_project_ai_setup', 'set_automation_policy', 'admin_user_troubleshoot', 'propose_command_rule', 'unblock_action', 'brand_new_tool']) {
+    for (const tool of ['delete_task', 'push_ticket_status', 'create_integration', 'set_project_repo', 'automation_merge', 'start_ai_login', 'submit_ai_login_code', 'set_ai_account_exclusive', 'set_project_ai_setup', 'set_automation_policy', 'admin_user_troubleshoot', 'propose_command_rule', 'unblock_action', 'send_whatsapp', 'brand_new_tool']) {
       expect(openKindOf(tool, { confirm: true })).toBeNull();
     }
   });

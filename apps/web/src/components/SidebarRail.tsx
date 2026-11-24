@@ -81,14 +81,14 @@ function MainRail() {
 
 function SettingsRail({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   return (
     <>
       <button type="button" className={`mt-1 ${SQUARE} ${IDLE}`} onClick={onBack} title={t('Voltar (Esc)')} aria-label={t('Voltar de Configurações')} data-chrome-focus="settings-back">
         <ArrowLeft size={18} aria-hidden="true" />
       </button>
       <nav aria-label={t('Seções de Configurações')} className="mt-1 flex min-h-0 w-full flex-1 flex-col items-center gap-1 overflow-y-auto border-t border-line py-2">
-        {visibleSettingsSections(can).map((s) => {
+        {visibleSettingsSections(can, user?.features).map((s) => {
           const Icon = SETTINGS_ICONS[s.key];
           return (
             <NavLink key={s.key} to={`/settings/${s.key}`} aria-label={t(s.label)} title={t(s.label)} className={({ isActive }) => `${SQUARE} ${isActive ? 'bg-bg-4 text-fg' : IDLE}`}>

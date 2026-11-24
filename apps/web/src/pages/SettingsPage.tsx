@@ -10,6 +10,7 @@ import { UploadsView } from '../components/UploadsView';
 import { ApiTokensView } from '../components/ApiTokensView';
 import { DevicesView } from '../components/DevicesView';
 import { ConciergeNoticesView } from '../components/ConciergeNoticesView';
+import { WhatsAppView } from '../components/WhatsAppView';
 import { ReviewAccountPanel } from '../components/ReviewAccountPanel';
 import { MyCityView } from '../components/MyCityView';
 import { ProfileView } from '../components/ProfileView';
@@ -40,8 +41,8 @@ const ACTIONS: PermissionAction[] = ['create', 'read', 'update', 'delete'];
 export function SettingsPage() {
   const { t } = useTranslation();
   const { section } = useParams<{ section?: string }>();
-  const { can } = useAuth();
-  const current = visibleSettingsSections(can).find((s) => s.key === section);
+  const { can, user } = useAuth();
+  const current = visibleSettingsSections(can, user?.features).find((s) => s.key === section);
   // `/settings`, an unknown address or a section this role cannot see: Perfil, which everyone sees
   if (!current) return <Navigate to={`/settings/${DEFAULT_SETTINGS_SECTION}`} replace />;
 
@@ -74,6 +75,12 @@ export function SettingsPage() {
       return (
         <PageFrame title={t(current.label)}>
           <ConciergeNoticesView />
+        </PageFrame>
+      );
+    case 'whatsapp':
+      return (
+        <PageFrame title={t(current.label)}>
+          <WhatsAppView />
         </PageFrame>
       );
     case 'chat-grants':

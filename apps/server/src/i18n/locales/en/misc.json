@@ -262,5 +262,7 @@
   "Repositório desligado ou removido no Setup": "Repository turned off or removed in Setup",
   "A integração do GitHub não vê o repositório": "The GitHub integration cannot see the repository",
   "Nenhuma máquina do projeto procura repositórios; atualize o agente para 0.29 ou mais novo": "No machine of the project looks for repositories; update the agent to 0.29 or newer",
-  "O repositório não está em nenhuma máquina do projeto": "The repository is not on any machine of the project"
+  "O repositório não está em nenhuma máquina do projeto": "The repository is not on any machine of the project",
+  "WhatsApp": "WhatsApp",
+  "Mostra Configurações → WhatsApp para ligar o seu servidor Evolution API: os avisos do concierge (Precisa de você e Concluído) também chegam no seu WhatsApp, e o chat ganha as ferramentas whatsapp_status e send_whatsapp (sempre com confirmação). Desligado, a tela e as rotas não existem e nada é enviado.": "Shows Settings → WhatsApp to connect your own Evolution API server: the concierge's notices (Needs you and Done) also reach your WhatsApp, and the chat gets the whatsapp_status and send_whatsapp tools (always confirmed). Off, the screen and the routes do not exist and nothing is sent."
 }

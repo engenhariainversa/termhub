@@ -427,6 +427,7 @@ export const ModelName = {
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
+  WhatsappSettings: 'WhatsappSettings',
   ProjectSetup: 'ProjectSetup',
   AiAccount: 'AiAccount',
   WaitlistEntry: 'WaitlistEntry',
@@ -494,7 +495,7 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
     omit: GlobalOmitOptions
   }
   meta: {
-    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "automationRunRepo" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "apiRun" | "apiRunEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
+    modelProps: "user" | "role" | "permission" | "session" | "loginCode" | "accountDeletionLink" | "loginAttempt" | "machine" | "project" | "projectMachine" | "projectRepository" | "projectRepositoryCheckout" | "tab" | "tabEvent" | "tabLastAnswer" | "machineHook" | "ticket" | "taskColumn" | "task" | "taskPullRequest" | "automationEvent" | "tabGcArchive" | "automationRun" | "automationRunRepo" | "tabUsage" | "tabUsageDay" | "aiMemoryPage" | "aiAccountExhaustion" | "note" | "integration" | "whatsappSettings" | "projectSetup" | "aiAccount" | "waitlistEntry" | "upload" | "apiToken" | "apiTokenEvent" | "apiRun" | "apiRunEvent" | "chatConversation" | "chatMessage" | "chatAttachment" | "chatAction" | "chatSubagent" | "chatLiveRun" | "chatGrant" | "chatProjectGrant" | "chatStandingGrant" | "chatFileGrant" | "chatDefaultRestriction" | "chatBlock" | "chatCommandRule" | "chatWatch" | "chatWatchFire" | "conciergeNotice" | "tabLimitNotice" | "tabQuestion" | "chatAutoSample" | "chatFocus" | "chatDecision" | "memoryItem" | "memoryWriteQueue" | "memoryRule" | "instanceSecret" | "projectGroup" | "projectGroupItem" | "deviceRequest" | "device" | "deviceToken" | "deviceChallenge" | "accessLog" | "deviceEvent" | "pushTicket" | "userNotification" | "automationSummary" | "projectHealthAlert" | "legalDocumentVersion" | "legalAcceptance" | "dataExport" | "viewAsAudit" | "securityEvent" | "featureFlag" | "featureFlagOverride"
     txIsolationLevel: TransactionIsolationLevel
   }
   model: {
@@ -2715,6 +2716,80 @@ export type TypeMap<ExtArgs extends runtime.Types.Extensions.InternalArgs = runt
         count: {
           args: Prisma.IntegrationCountArgs<ExtArgs>
           result: runtime.Types.Utils.Optional<Prisma.IntegrationCountAggregateOutputType> | number
+        }
+      }
+    }
+    WhatsappSettings: {
+      payload: Prisma.$WhatsappSettingsPayload<ExtArgs>
+      fields: Prisma.WhatsappSettingsFieldRefs
+      operations: {
+        findUnique: {
+          args: Prisma.WhatsappSettingsFindUniqueArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload> | null
+        }
+        findUniqueOrThrow: {
+          args: Prisma.WhatsappSettingsFindUniqueOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        findFirst: {
+          args: Prisma.WhatsappSettingsFindFirstArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload> | null
+        }
+        findFirstOrThrow: {
+          args: Prisma.WhatsappSettingsFindFirstOrThrowArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        findMany: {
+          args: Prisma.WhatsappSettingsFindManyArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>[]
+        }
+        create: {
+          args: Prisma.WhatsappSettingsCreateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        createMany: {
+          args: Prisma.WhatsappSettingsCreateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        createManyAndReturn: {
+          args: Prisma.WhatsappSettingsCreateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>[]
+        }
+        delete: {
+          args: Prisma.WhatsappSettingsDeleteArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        update: {
+          args: Prisma.WhatsappSettingsUpdateArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        deleteMany: {
+          args: Prisma.WhatsappSettingsDeleteManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateMany: {
+          args: Prisma.WhatsappSettingsUpdateManyArgs<ExtArgs>
+          result: BatchPayload
+        }
+        updateManyAndReturn: {
+          args: Prisma.WhatsappSettingsUpdateManyAndReturnArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>[]
+        }
+        upsert: {
+          args: Prisma.WhatsappSettingsUpsertArgs<ExtArgs>
+          result: runtime.Types.Utils.PayloadToResult<Prisma.$WhatsappSettingsPayload>
+        }
+        aggregate: {
+          args: Prisma.WhatsappSettingsAggregateArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.AggregateWhatsappSettings>
+        }
+        groupBy: {
+          args: Prisma.WhatsappSettingsGroupByArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WhatsappSettingsGroupByOutputType>[]
+        }
+        count: {
+          args: Prisma.WhatsappSettingsCountArgs<ExtArgs>
+          result: runtime.Types.Utils.Optional<Prisma.WhatsappSettingsCountAggregateOutputType> | number
         }
       }
     }
@@ -7123,6 +7198,25 @@ export const IntegrationScalarFieldEnum = {
 export type IntegrationScalarFieldEnum = (typeof IntegrationScalarFieldEnum)[keyof typeof IntegrationScalarFieldEnum]
 
 
+export const WhatsappSettingsScalarFieldEnum = {
+  userId: 'userId',
+  serverUrl: 'serverUrl',
+  instance: 'instance',
+  number: 'number',
+  apiKey: 'apiKey',
+  enabled: 'enabled',
+  notifyNeedsYou: 'notifyNeedsYou',
+  notifyDone: 'notifyDone',
+  lastSentAt: 'lastSentAt',
+  lastError: 'lastError',
+  lastErrorAt: 'lastErrorAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WhatsappSettingsScalarFieldEnum = (typeof WhatsappSettingsScalarFieldEnum)[keyof typeof WhatsappSettingsScalarFieldEnum]
+
+
 export const ProjectSetupScalarFieldEnum = {
   projectId: 'projectId',
   version: 'version',
@@ -8480,6 +8574,7 @@ export type GlobalOmitConfig = {
   aiAccountExhaustion?: Prisma.AiAccountExhaustionOmit
   note?: Prisma.NoteOmit
   integration?: Prisma.IntegrationOmit
+  whatsappSettings?: Prisma.WhatsappSettingsOmit
   projectSetup?: Prisma.ProjectSetupOmit
   aiAccount?: Prisma.AiAccountOmit
   waitlistEntry?: Prisma.WaitlistEntryOmit

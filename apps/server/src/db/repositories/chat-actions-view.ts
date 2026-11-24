@@ -287,6 +287,9 @@ function verbPhrase(
         ? `mudar o ${link.key} no ${PROVIDER_NAME[link.provider]} para "${STATUS_LABEL[task.status] ?? task.status}" (como a tarefa ${named(task)})`
         : `atualizar o ticket da tarefa ${named(task)}`;
     }
+    // TER-1201: the card shows the very text that leaves (to the person's own saved number).
+    case 'send_whatsapp':
+      return `enviar no seu WhatsApp: "${asString(args.text)}"`;
     case 'create_integration':
       return `criar a integração do GitHub "${asString(args.name)}" com o login do gh (\`gh auth token\`)`;
     // TER-1047: the card never shows the pasted code, only what is being done.

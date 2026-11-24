@@ -1,4 +1,4 @@
-import { Bell, Bot, ClipboardList, Cpu, FlaskConical, Folder, KeyRound, ScrollText, ListChecks, LockKeyhole, Map as MapIcon, Plug, Shield, ShieldCheck, Smartphone, User as UserIcon, Users, type LucideIcon } from 'lucide-react';
+import { Bell, Bot, ClipboardList, Cpu, FlaskConical, Folder, KeyRound, ScrollText, ListChecks, LockKeyhole, Map as MapIcon, MessageCircle, Plug, Shield, ShieldCheck, Smartphone, User as UserIcon, Users, type LucideIcon } from 'lucide-react';
 import type { SettingsSection } from '../lib/settings-sections';
 
 /** Each settings section's line icon (spec 2026-09-23 app chrome §2), for the settings sidebar and the rail. */
@@ -10,6 +10,7 @@ export const SETTINGS_ICONS: Record<SettingsSection, LucideIcon> = {
   'api-tokens': KeyRound,
   devices: Smartphone,
   notifications: Bell,
+  whatsapp: MessageCircle,
   'chat-grants': ShieldCheck,
   ai: Bot,
   hardware: Cpu,
