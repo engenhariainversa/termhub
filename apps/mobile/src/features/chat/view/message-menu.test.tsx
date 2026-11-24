@@ -58,6 +58,15 @@ describe('MessageMenu (TER-1090)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Copiar' })).toBeNull();
   });
 
+  // TER-1200: an answer's accents, emoji and typographic quotes reach the clipboard as the very string shown.
+  it('"Copiar" keeps accents, emoji and typographic quotes as they are', async () => {
+    const text = 'Oi time 👋 → “pronto” — ação, peça, é 🙏';
+    await render(<MessageMenu message={{ role: 'assistant', text }}><Text>bolha</Text></MessageMenu>);
+    await hold();
+    await choose('Copiar');
+    expect(copyToClipboard).toHaveBeenCalledWith(text);
+  });
+
   it('"Responder" quotes the row', async () => {
     const onReply = jest.fn();
     await render(<MessageMenu message={answer} onReply={onReply}><Text>bolha</Text></MessageMenu>);

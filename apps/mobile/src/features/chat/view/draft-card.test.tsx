@@ -75,6 +75,23 @@ describe('DraftCard', () => {
     expect(html).not.toContain('&#xd83d;');
   });
 
+  // TER-1200: what iOS does with the HTML, end to end: read its bytes as Windows-1252, then resolve the
+  // references. The text that comes out must be the draft as shown, never "ðŸ‘‹", "â†’" or "â€œ".
+  it('pastes back exactly what was shown when the HTML is read as Windows-1252', async () => {
+    const source = 'Oi time 👋 → “pronto” — ação, peça, é, ó 🙏 ✅';
+    await show(`\`\`\`draft\n${source}\n\`\`\`\n`);
+    await press();
+    const [html] = setString.mock.calls[0] as [string];
+    type Codecs = { TextEncoder: new () => { encode(s: string): Uint8Array }; TextDecoder: new (label: string) => { decode(b: Uint8Array): string } };
+    const { TextEncoder, TextDecoder } = jest.requireActual<Codecs>('util');
+    const asIosReadsIt = new TextDecoder('windows-1252').decode(new TextEncoder().encode(html));
+    expect(asIosReadsIt).toBe(html);
+    const pasted = asIosReadsIt.replace(/&#x([0-9a-f]+);/g, (_: string, hex: string) => String.fromCodePoint(parseInt(hex, 16)));
+    expect(pasted).toBe(`<meta charset="utf-8">${chatMarkdownIt.render(source)}`);
+    expect(pasted).toContain(source);
+    expect(pasted).not.toMatch(/ð|â|Ã/);
+  });
+
   it('falls back to Slack-flavoured plain text when HTML is refused', async () => {
     setString.mockRejectedValueOnce(new Error('no html'));
     await show(`\`\`\`draft\n${DRAFT}\n\`\`\`\n`);
