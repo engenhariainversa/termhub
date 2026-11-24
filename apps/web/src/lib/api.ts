@@ -2,7 +2,7 @@ import { decisionBatches } from '@termhub/mobile-api/decision-batch';
 import { currentLocale, i18n, type Locale } from '../i18n';
 import type { AccessStatus, AutoThresholdPair, ApiToken, PushTestKind, PushTestResult, ApiTokenScope, ChatAction, ChatActionStatus, ChatAttachment, ChatCommandRule, ChatConversation, ChatDecision, ChatDecisionWord, ChatDefault, ChatFileGrant, ChatGrant, ChatGrantListItem, ChatWatch, ChatHostState, ChatMemory, ChatMessage, ChatProjectGrant, ChatStandingGrant, CityLink, ConciergeNote, CreatedApiToken, InviteResult, ViewAs, LessonItem, OfficeCity, PermissionAction, ProgressResponse, ProgressScope, PullRequestBadge, ResourcePermissions, Role, WaitlistEntry, HardwareSnapshot, AiAccount, AiAccountUsage, AiLoginStart, AiLoginStatusRow, AiLoginSubmitResult, AiProvider, AuthConfig, ConnectionInfo, DashboardItem, FsListing, Integration, IntegrationProvider, Machine, MachineHooks, MachineType, MonitorItem, Note, Project, ProjectGroup, ProjectInput, ProjectMachineLink, ProjectChatStatus, ReplyCardKind, ProjectSetup, ProjectSetupData, ProjectAi, ProjectAiView, TabLimit, Simulator, SourceSync, Tab, TabEvent, TabKind, Task, TabQuestion, TabQuestionAnswer, TabSuggestion, Transcription, BoardData, ColumnCategory, MoveTarget, TaskColumn, TaskCreateInput, TaskPatchInput, UploadEntry, UploadMachineStatus, Ticket, User, WdaSetupState, WaitlistInviteResult, Device, DeviceEventView, DeviceRequestView, DevicesSummary, SubagentView, AccountDeletionStatus, FilePreview, AutomationQueueItem, AutomationUsage, AutomationPauseState, HealthItem, HealthWaitingCard } from './types';
 import type { AutomationFeedEvent, ChatBlock, ChatBlockKind, FileRecentResponse, MachineNetworkInfo, NetworkCheck, WakeResult, StartTabAgentResult, TabAgentOptions, TabChatAction, TabChatPage, TabQuestionScreen } from './types';
-import type { DataExportStatus, EffectiveRepo, ProjectRepoScan, ProjectReposView } from './types';
+import type { DataExportStatus, EffectiveRepo, ProjectRepoScan, ProjectReposView, WhatsAppProbe, WhatsAppSettings, WhatsAppSettingsInput } from './types';
 import type { ApiRun, ApiTokenEvent, ApiTokenFacets, ApiTokenFilter, ApiTokensPage, SecurityEventFilter, SecurityEventsPage } from './types';
 import type { FeatureFlagInfo, FeatureFlagKey, FeatureFlagOverride } from './types';
 import type { MemoryReplacement, MemoryRule, MemoryStatus, AiMemoryState } from './types';
@@ -549,6 +549,14 @@ export const api = {
     remove: (id: string) => request<{ ok: true }>('DELETE', `/integrations/${id}`),
     test: (input: { provider: IntegrationProvider; config: Record<string, unknown>; secret?: string; integration_id?: string }) =>
       request<ConnectionInfo>('POST', '/integrations/test', input),
+  },
+  /** TER-1201: Configurações → WhatsApp (the person's own Evolution API server). The key is write-only. */
+  whatsapp: {
+    get: () => request<{ whatsapp: WhatsAppSettings }>('GET', '/whatsapp'),
+    save: (input: WhatsAppSettingsInput) => request<{ whatsapp: WhatsAppSettings }>('PUT', '/whatsapp', input),
+    remove: () => request<{ ok: true }>('DELETE', '/whatsapp'),
+    test: (input: { server_url?: string; instance?: string; api_key?: string }) => request<WhatsAppProbe>('POST', '/whatsapp/test', input),
+    testMessage: () => request<WhatsAppProbe>('POST', '/whatsapp/test-message', {}),
   },
   automation: {
     queue: (projectId: string) => request<{ items: AutomationQueueItem[] }>('GET', `/projects/${projectId}/automation/queue`),

@@ -191,6 +191,12 @@ export type Note = Prisma.NoteModel
  */
 export type Integration = Prisma.IntegrationModel
 /**
+ * Model WhatsappSettings
+ * TER-1201: the person's own Evolution API setup (Configurações → WhatsApp). One per user; the API key is
+ * AES-256-GCM (lib/crypto.ts) and never leaves the repository in clear except through `apiKey()`.
+ */
+export type WhatsappSettings = Prisma.WhatsappSettingsModel
+/**
  * Model ProjectSetup
  * Setup do projeto: repositório, fonte de tickets, runner, agente, verificação, aprovações.
  * Guardado como JSON versionado e validado no servidor (zod) — evita uma migration por campo.

@@ -189,5 +189,10 @@
   "Este recurso em teste não pode ser trocado pelo chat. Veja os que podem com list_feature_flags.": "Esta función en prueba no se puede cambiar desde el chat. Mira las que sí con list_feature_flags.",
   "Só a pessoa e o chat dela podem listar ou recusar os pedidos pendentes do chat; uma aba de agente não pode.": "Solo la persona y su chat pueden listar o rechazar las solicitudes pendientes del chat; una pestaña de agente no puede.",
   "Passe action_ids ou orphans_of_conversation, um dos dois.": "Pasa action_ids u orphans_of_conversation, uno de los dos.",
-  "Conversa não encontrada.": "Conversación no encontrada."
+  "Conversa não encontrada.": "Conversación no encontrada.",
+  "O WhatsApp está desligado (recurso em teste \"WhatsApp\" em Configurações → Recursos em teste)": "WhatsApp está apagado (la función en prueba \"WhatsApp\", en Configuración → Funciones en prueba)",
+  "Configure em Configurações → WhatsApp: servidor, API key, instância e número.": "Configúralo en Configuración → WhatsApp: servidor, API key, instancia y número.",
+  "O WhatsApp não está configurado: Configurações → WhatsApp": "WhatsApp no está configurado: Configuración → WhatsApp",
+  "O WhatsApp está pausado em Configurações → WhatsApp": "WhatsApp está en pausa en Configuración → WhatsApp",
+  "O envio pelo WhatsApp falhou ({{code}}); nada foi enviado": "El envío por WhatsApp falló ({{code}}); no se envió nada"
 }

@@ -119,5 +119,11 @@
   "A máquina não abriu a run": "The machine did not open the run",
   "Limite de runs atingido; tente de novo mais tarde": "Run limit reached; try again later",
   "O projeto não tem contas de Claude Code ou Codex suas no Setup": "The project has none of your Claude Code or Codex accounts in its Setup",
-  "Nenhuma conta disponível para a run": "No account available for the run"
+  "Nenhuma conta disponível para a run": "No account available for the run",
+  "Número inválido: use só dígitos com o código do país e o DDD (ex.: 5562999998888)": "Invalid number: use digits only, with the country and area codes (e.g. 5562999998888)",
+  "Informe a API key do servidor Evolution": "Enter the Evolution server's API key",
+  "Preencha o servidor, a instância e a API key": "Fill in the server, the instance and the API key",
+  "termhub: mensagem de teste do WhatsApp ✅": "termhub: WhatsApp test message ✅",
+  "Configure o WhatsApp antes de enviar o teste": "Set up WhatsApp before sending the test",
+  "Falha ao enviar pelo WhatsApp": "Sending through WhatsApp failed"
 }

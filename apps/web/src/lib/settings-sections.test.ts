@@ -13,6 +13,7 @@ describe('settings sections', () => {
       'account:api-tokens',
       'account:devices',
       'account:notifications',
+      'account:whatsapp',
       'account:chat-grants',
       'account:ai',
       'account:hardware',
@@ -52,6 +53,14 @@ describe('settings sections', () => {
     expect(SETTINGS_SECTIONS.find((s) => s.key === 'integrations')).toEqual({ key: 'integrations', label: 'Integrações', resource: 'integrations', group: 'account' });
     expect(visibleSettingsSections((r) => r === 'api_tokens').map((s) => s.key)).toEqual(['profile', 'city', 'account-security', 'api-tokens']);
     expect(visibleSettingsSections((r) => r === 'integrations').map((s) => s.key)).toEqual(['profile', 'city', 'account-security', 'integrations']);
+  });
+
+  it('shows WhatsApp only with the whatsapp flag on and the integrations resource (TER-1201)', () => {
+    const integrations = (r: string) => r === 'integrations';
+    expect(visibleSettingsSections(integrations).map((s) => s.key)).not.toContain('whatsapp');
+    expect(visibleSettingsSections(integrations, { whatsapp: false }).map((s) => s.key)).not.toContain('whatsapp');
+    expect(visibleSettingsSections(integrations, { whatsapp: true }).map((s) => s.key)).toEqual(['profile', 'city', 'account-security', 'integrations', 'whatsapp']);
+    expect(visibleSettingsSections(() => false, { whatsapp: true }).map((s) => s.key)).not.toContain('whatsapp');
   });
 
   it('keeps the admin sections under their current resources', () => {

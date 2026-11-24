@@ -13,6 +13,7 @@ import { TaskColumnsRepository } from './task-columns.js';
 import { ProgressRepository } from './progress.js';
 import { NotesRepository } from './notes.js';
 import { IntegrationsRepository } from './integrations.js';
+import { WhatsappSettingsRepository } from './whatsapp-settings.js';
 import { ProjectSetupRepository } from './project-setup.js';
 import { TicketsRepository } from './tickets.js';
 import { AiAccountsRepository } from './ai-accounts.js';
@@ -87,6 +88,7 @@ export interface Repositories {
   progress: ProgressRepository;
   notes: NotesRepository;
   integrations: IntegrationsRepository;
+  whatsapp: WhatsappSettingsRepository;
   projectSetup: ProjectSetupRepository;
   tickets: TicketsRepository;
   aiAccounts: AiAccountsRepository;
@@ -166,6 +168,7 @@ export function createRepositories(db: PrismaClient): Repositories {
     progress: new ProgressRepository(db),
     notes: new NotesRepository(db),
     integrations: new IntegrationsRepository(db),
+    whatsapp: new WhatsappSettingsRepository(db),
     projectSetup: new ProjectSetupRepository(db),
     tickets: new TicketsRepository(db),
     aiAccounts: new AiAccountsRepository(db),

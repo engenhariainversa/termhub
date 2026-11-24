@@ -28,7 +28,7 @@ export const defaultsLine = (defaults: DefaultAllowKind[]): string => {
   const kinds = DEFAULT_ALLOW_KINDS.filter((k) => on.has(k));
   if (!kinds.length) return '';
   const labels = kinds.map((k) => DEFAULT_KIND_LABEL[k]).join(', ');
-  return `\nLiberado sem confirmação por padrão (o usuário pode restringir em Permissões do chat): ${labels}; leituras nunca pedem. Continuam pedindo confirmação: delete_task, run_command fora dos comandos só de leitura e das regras de comando (list_command_rules), responder permissões, texto com "!" ou caracteres de controle, as teclas C-c e Escape, fechar aba trabalhando, integrações, push_ticket_status, set_project_repo, ligar máquinas ao projeto e refazer o login de uma conta de IA (start_ai_login, submit_ai_login_code).`;
+  return `\nLiberado sem confirmação por padrão (o usuário pode restringir em Permissões do chat): ${labels}; leituras nunca pedem. Continuam pedindo confirmação: delete_task, run_command fora dos comandos só de leitura e das regras de comando (list_command_rules), responder permissões, texto com "!" ou caracteres de controle, as teclas C-c e Escape, fechar aba trabalhando, integrações, push_ticket_status, send_whatsapp, set_project_repo, ligar máquinas ao projeto e refazer o login de uma conta de IA (start_ai_login, submit_ai_login_code).`;
 };
 
 /**

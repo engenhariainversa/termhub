@@ -18,6 +18,7 @@ export const AUTOMATION_MCP_DENIED_TOOLS: readonly string[] = [
   'start_agent', 'open_tab', 'close_tab', 'send_input', 'send_key', 'run_command', 'answer_tab_question',
   'create_project', 'link_project_machine', 'unlink_project_machine', 'set_project_machine_cwd', 'set_project_repo',
   'create_integration', 'push_ticket_status', 'delete_task', 'admin_user_troubleshoot', 'run_gc', 'set_feature_flag',
+  'send_whatsapp',
 ].map((t) => `mcp__termhub__${t}`);
 
 /**

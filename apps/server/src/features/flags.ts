@@ -64,6 +64,13 @@ export const FEATURE_FLAGS = {
     description: tk('Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.'),
     card: 'TER-1176',
   },
+  /** TER-1201: Configurações → WhatsApp, the concierge's notices on WhatsApp and the whatsapp_* MCP tools. */
+  whatsapp: {
+    default: false,
+    title: tk('WhatsApp'),
+    description: tk('Mostra Configurações → WhatsApp para ligar o seu servidor Evolution API: os avisos do concierge (Precisa de você e Concluído) também chegam no seu WhatsApp, e o chat ganha as ferramentas whatsapp_status e send_whatsapp (sempre com confirmação). Desligado, a tela e as rotas não existem e nada é enviado.'),
+    card: 'TER-1201',
+  },
 } as const satisfies Record<string, FlagDefinition>;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;
@@ -103,6 +110,10 @@ export const FEATURE_FLAG_COPY: Record<FeatureFlag, { label: string; description
   runs_api: {
     label: 'API de runs',
     description: 'Permite criar tokens com o escopo runs e rodar prompts pela API (/api/v1/runs) nas suas próprias contas de IA e máquinas, e mostra as runs da API no Progresso. Desligado, as rotas não existem e o escopo não aparece.',
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    description: 'Configurações → WhatsApp: os avisos do concierge também chegam no seu WhatsApp, pelo seu servidor Evolution API, e o chat ganha whatsapp_status e send_whatsapp (sempre com confirmação).',
   },
 };
 

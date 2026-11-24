@@ -81,6 +81,7 @@ export const ModelName = {
   AiAccountExhaustion: 'AiAccountExhaustion',
   Note: 'Note',
   Integration: 'Integration',
+  WhatsappSettings: 'WhatsappSettings',
   ProjectSetup: 'ProjectSetup',
   AiAccount: 'AiAccount',
   WaitlistEntry: 'WaitlistEntry',
@@ -667,6 +668,25 @@ export const IntegrationScalarFieldEnum = {
 } as const
 
 export type IntegrationScalarFieldEnum = (typeof IntegrationScalarFieldEnum)[keyof typeof IntegrationScalarFieldEnum]
+
+
+export const WhatsappSettingsScalarFieldEnum = {
+  userId: 'userId',
+  serverUrl: 'serverUrl',
+  instance: 'instance',
+  number: 'number',
+  apiKey: 'apiKey',
+  enabled: 'enabled',
+  notifyNeedsYou: 'notifyNeedsYou',
+  notifyDone: 'notifyDone',
+  lastSentAt: 'lastSentAt',
+  lastError: 'lastError',
+  lastErrorAt: 'lastErrorAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type WhatsappSettingsScalarFieldEnum = (typeof WhatsappSettingsScalarFieldEnum)[keyof typeof WhatsappSettingsScalarFieldEnum]
 
 
 export const ProjectSetupScalarFieldEnum = {

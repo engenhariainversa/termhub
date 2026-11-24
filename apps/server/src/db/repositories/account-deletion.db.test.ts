@@ -121,6 +121,7 @@ describe.skipIf(process.env.TERMHUB_DB_TESTS !== '1')('AccountDeletionRepository
     });
     await db.automationSummary.create({ data: { userId, day: new Date('2026-10-05') } });
     await db.userNotification.create({ data: { id: newId(), userId, kind: 'answer', title: 't', body: 'b' } });
+    await db.whatsappSettings.create({ data: { userId, serverUrl: 'https://wpp.example.com', instance: 'i', number: '5562999998888', apiKey: 'enc' } });
     await db.featureFlagOverride.create({ data: { flag: 'subscriptions', userId, enabled: true } });
     // An export request (TER-741): the row cascades with the user; its file is swept by the export job.
     await db.dataExport.create({ data: { id: newId(), userId } });

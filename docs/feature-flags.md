@@ -110,3 +110,13 @@ runs its cards one at a time for everyone. A card of the epic in progress (a doi
 included, or done with its PR still open) holds every to-do card of the epic; with none, only the first to-do
 card in board order is eligible, and the others show `epic_sequence` with the ref they wait on
 (`sequenceHeads` in `apps/server/src/automation/queue.ts`). No epic is sequential unless someone marks it.
+
+## WhatsApp (`whatsapp`, TER-1201)
+
+`whatsapp` shows **Configurações → WhatsApp** for a person, where they connect their own Evolution API
+server (public https URL, API key stored encrypted and never returned, instance, their number). The
+concierge's notices that leave as a push (Configurações → Avisos rules) then also go to that number, for
+the levels ticked there. The MCP gets `whatsapp_status` (a read) and `send_whatsapp` (always a confirmation
+card in the chat, never in automatic tabs). Off: `/api/whatsapp` answers 404, the tools answer
+`WHATSAPP_OFF` and the dispatcher sends nothing to WhatsApp. Server: `apps/server/src/whatsapp/`. Spec:
+`docs/superpowers/specs/2026-11-23-whatsapp-evolution-design.md`.

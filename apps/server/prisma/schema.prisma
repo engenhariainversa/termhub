@@ -59,6 +59,7 @@ model User {
   machines                Machine[]                @relation("MachineOwner")
   projects                Project[]                @relation("ProjectOwner")
   integrations            Integration[]            @relation("IntegrationOwner")
+  whatsappSettings        WhatsappSettings?
   uploads                 Upload[]
   apiTokens               ApiToken[]
   apiRuns                 ApiRun[]
@@ -960,6 +961,30 @@ model Integration {
 
   @@index([ownerId])
   @@map("integrations")
+}
+
+/// TER-1201: the person's own Evolution API setup (Configurações → WhatsApp). One per user; the API key is
+/// AES-256-GCM (lib/crypto.ts) and never leaves the repository in clear except through `apiKey()`.
+model WhatsappSettings {
+  userId         String    @id @map("user_id")
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Public https base URL of the Evolution server (checkPublicUrl on save and before every request).
+  serverUrl      String    @map("server_url")
+  instance       String
+  /// Destination, digits only with the country code (5562999999999).
+  number         String
+  apiKey         String    @map("api_key")
+  enabled        Boolean   @default(true)
+  notifyNeedsYou Boolean   @default(true) @map("notify_needs_you")
+  notifyDone     Boolean   @default(true) @map("notify_done")
+  /// The last delivery attempt: when one went out, and the error code of the last failure (null = ok).
+  lastSentAt     DateTime? @map("last_sent_at") @db.Timestamptz
+  lastError      String?   @map("last_error")
+  lastErrorAt    DateTime? @map("last_error_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  @@map("whatsapp_settings")
 }
 
 /// Setup do projeto: repositório, fonte de tickets, runner, agente, verificação, aprovações.

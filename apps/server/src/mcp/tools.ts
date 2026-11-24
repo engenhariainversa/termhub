@@ -50,6 +50,7 @@ import { BLOCK_EFFECTS, BLOCK_KINDS, type BlockEffect, type BlockKind } from '..
 import { getClientContext } from '../control/client-context.js';
 import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
 import { notify, type NotifyArgs } from '../control/notices.js';
+import { sendWhatsapp, whatsappStatus, WHATSAPP_TOOL_TEXT_MAX } from '../control/whatsapp.js';
 import { NOTICE_LEVELS, NOTICE_LIMITS } from '../chat/notices/rules.js';
 import { REMINDER_LIMITS, WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
@@ -904,6 +905,26 @@ export const TOOLS: ToolDef[] = [
       watch_id: id.optional(),
     },
     run: (ctx, a) => notify(ctx, a as unknown as NotifyArgs),
+  },
+  {
+    name: 'whatsapp_status',
+    description:
+      "The person's WhatsApp integration (Configurações → WhatsApp, their own Evolution API server): configured, enabled (paused or not), server host, instance, the destination number masked, which notice levels also go to WhatsApp, the instance's live connection state (connection.ok false with error AUTH, INSTANCE_NOT_FOUND, NOT_CONNECTED — WhatsApp not paired —, UNREACHABLE…), and the last delivery. The API key and the full number are never returned. WHATSAPP_OFF = the \"WhatsApp\" feature in test is off for them.",
+    scope: 'read',
+    resource: 'integrations',
+    action: 'read',
+    input: {},
+    run: (ctx) => whatsappStatus(ctx),
+  },
+  {
+    name: 'send_whatsapp',
+    description: `Send a WhatsApp message to the person's own number, the one saved on Configurações → WhatsApp (there is no other destination). text: plain text in the person's language (max ${WHATSAPP_TOOL_TEXT_MAX} chars; *bold* and _italic_ work), never secrets, tokens or terminal output. It writes to a third-party system: in the chat the person always confirms it, seeing the text. For the concierge's own notices use notify: they already reach WhatsApp by the person's rules.`,
+    scope: 'terminals',
+    resource: 'integrations',
+    action: 'update',
+    strict: true,
+    input: { text: z.string().trim().min(1).max(WHATSAPP_TOOL_TEXT_MAX) },
+    run: (ctx, a) => sendWhatsapp(ctx, a as { text: string }),
   },
   {
     name: 'get_client_context',

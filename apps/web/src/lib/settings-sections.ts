@@ -1,11 +1,12 @@
 import { tk } from '../i18n';
+import type { FeatureFlagKey } from './types';
 
 /**
  * Configurações' sections in the settings sidebar's order, the resource that unlocks each and the
  * heading each sits under (spec 2026-09-23 app chrome §4). `resource: null` is a section every
  * signed-in user sees; Perfil is one, so `/settings` always has somewhere to land.
  */
-export type SettingsSection = 'profile' | 'city' | 'account-security' | 'integrations' | 'api-tokens' | 'devices' | 'notifications' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
+export type SettingsSection = 'profile' | 'city' | 'account-security' | 'integrations' | 'api-tokens' | 'devices' | 'notifications' | 'whatsapp' | 'chat-grants' | 'ai' | 'hardware' | 'users' | 'waitlist' | 'roles' | 'permissions' | 'uploads' | 'security' | 'feature-flags';
 export type SettingsGroupId = 'account' | 'admin';
 
 export interface SettingsSectionInfo {
@@ -14,7 +15,12 @@ export interface SettingsSectionInfo {
   label: string;
   resource: string | null;
   group: SettingsGroupId;
+  /** A section of a feature in test: hidden while the flag is off for the person. */
+  flag?: FeatureFlagKey;
 }
+
+/** The person's resolved flags (`user.features` from /auth/me); missing = off. */
+export type SettingsFeatures = Partial<Record<FeatureFlagKey, boolean>> | undefined;
 
 export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'profile', label: tk('Perfil'), resource: null, group: 'account' },
@@ -24,6 +30,7 @@ export const SETTINGS_SECTIONS: SettingsSectionInfo[] = [
   { key: 'api-tokens', label: tk('Tokens de API'), resource: 'api_tokens', group: 'account' },
   { key: 'devices', label: tk('Aparelhos'), resource: 'devices', group: 'account' },
   { key: 'notifications', label: tk('Avisos'), resource: 'chat', group: 'account' },
+  { key: 'whatsapp', label: tk('WhatsApp'), resource: 'integrations', group: 'account', flag: 'whatsapp' },
   { key: 'chat-grants', label: tk('Permissões do chat'), resource: 'chat', group: 'account' },
   { key: 'ai', label: tk('Contas de IA'), resource: 'ai_accounts', group: 'account' },
   { key: 'hardware', label: tk('Hardware'), resource: 'hardware', group: 'account' },
@@ -41,13 +48,13 @@ export const DEFAULT_SETTINGS_SECTION: SettingsSection = 'profile';
 
 const GROUP_LABEL: Record<SettingsGroupId, string> = { account: tk('Conta'), admin: tk('Administração') };
 
-export function visibleSettingsSections(can: (resource: string) => boolean): SettingsSectionInfo[] {
-  return SETTINGS_SECTIONS.filter((s) => s.resource === null || can(s.resource));
+export function visibleSettingsSections(can: (resource: string) => boolean, features?: SettingsFeatures): SettingsSectionInfo[] {
+  return SETTINGS_SECTIONS.filter((s) => (s.resource === null || can(s.resource)) && (!s.flag || features?.[s.flag] === true));
 }
 
 /** The visible sections under their headings; a heading with nothing visible under it is left out. */
-export function settingsGroups(can: (resource: string) => boolean): { id: SettingsGroupId; label: string; sections: SettingsSectionInfo[] }[] {
-  const visible = visibleSettingsSections(can);
+export function settingsGroups(can: (resource: string) => boolean, features?: SettingsFeatures): { id: SettingsGroupId; label: string; sections: SettingsSectionInfo[] }[] {
+  const visible = visibleSettingsSections(can, features);
   return (Object.keys(GROUP_LABEL) as SettingsGroupId[])
     .map((id) => ({ id, label: GROUP_LABEL[id], sections: visible.filter((s) => s.group === id) }))
     .filter((g) => g.sections.length > 0);
