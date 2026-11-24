@@ -898,3 +898,21 @@ describe('target_gone', () => {
     expect(decided).not.toHaveProperty('target_gone');
   });
 });
+
+it('shows where a WhatsApp message goes (TER-1201): own number, a group or a contact, with the text', async () => {
+  const repos = fakeRepos();
+  const summaries = await describeActions(
+    repos,
+    [
+      action({ tool: 'send_whatsapp', args: { text: 'oi' } }),
+      action({ tool: 'send_whatsapp', args: { text: 'reunião às 10h', group: 'CustomEasy Gestão' } }),
+      action({ tool: 'send_whatsapp', args: { text: 'oi', number: '5511988887777' } }),
+    ],
+    OWNER,
+  );
+  expect(summaries.map((c) => c.summary)).toEqual([
+    'enviar no seu WhatsApp: "oi"',
+    'enviar no WhatsApp para o grupo "CustomEasy Gestão": "reunião às 10h"',
+    'enviar no WhatsApp para o número 5511988887777: "oi"',
+  ]);
+});

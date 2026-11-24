@@ -58,6 +58,7 @@ const readTools = new Set([
   'list_integrations',
   // TER-1201: reads the person's own setup and asks their Evolution server for the instance's state.
   'whatsapp_status',
+  'list_whatsapp_groups',
   'get_project_setup',
   // TER-1071: the repositories in the project's folder; the scan only reads the folders and adds rows nobody acts on
   'list_project_repos',
@@ -147,7 +148,8 @@ const irreversibleTools = new Set([
   'set_ai_account_exclusive',
   'start_ai_login',
   'submit_ai_login_code',
-  // TER-1201: a WhatsApp message leaves for a third-party system: always the person's card, with the text.
+  // TER-1201: a WhatsApp message leaves for a third-party system: always the person's card, with the
+  // destination (own number, a group or a contact) and the text, under any permission mode.
   'send_whatsapp',
 ]);
 

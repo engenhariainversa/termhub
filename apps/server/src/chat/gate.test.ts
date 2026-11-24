@@ -142,7 +142,10 @@ it('classifies the ticket tools', () => {
 
 it('classifies the WhatsApp tools (TER-1201): the status is a read, a message always asks', () => {
   expect(actionClass('whatsapp_status', {})).toBe('read');
+  expect(actionClass('list_whatsapp_groups', {})).toBe('read');
   expect(actionClass('send_whatsapp', { text: 'oi' })).toBe('irreversible');
+  expect(actionClass('send_whatsapp', { text: 'oi', group: 'CustomEasy Gestão' })).toBe('irreversible');
+  expect(actionClass('send_whatsapp', { text: 'oi', number: '5511988887777' })).toBe('irreversible');
 });
 
 it('classifies search_memory as read', () => {

@@ -1,8 +1,8 @@
 /**
  * TER-1201 (spec docs/superpowers/specs/2026-11-23-whatsapp-evolution-design.md): the person's WhatsApp
- * through their own Evolution API server. Messages only ever go to the number saved in their setup;
- * nothing here takes a destination. Logs carry user ids and error codes only — never a number, a key or
- * a message's text.
+ * through their own Evolution API server. Notices only ever go to the number saved in their setup;
+ * `send_whatsapp` may also name a group or a contact (always on the person's card). Logs carry user ids
+ * and error codes only — never a number, a key or a message's text.
  */
 import type { FastifyBaseLogger } from 'fastify';
 import { config } from '../config.js';
@@ -89,14 +89,14 @@ export async function probe(target: EvolutionTarget, fetchImpl: typeof fetch = f
 }
 
 /**
- * Sends `text` to the person's own number and records the outcome. Throws an `EvolutionError` (or
- * `WHATSAPP_NOT_CONFIGURED`) for the caller to report.
+ * Sends `text` to the person's own number — or to `to` (a group JID or a contact's digits) — and
+ * records the outcome. Throws an `EvolutionError` (or `WHATSAPP_NOT_CONFIGURED`) for the caller to report.
  */
-export async function sendToOwner(repos: WhatsappRepos, userId: string, text: string, fetchImpl: typeof fetch = fetch): Promise<void> {
+export async function sendToOwner(repos: WhatsappRepos, userId: string, text: string, fetchImpl: typeof fetch = fetch, to?: string): Promise<void> {
   const saved = await savedTarget(repos, userId);
   if (!saved) throw new Error('WHATSAPP_NOT_CONFIGURED');
   try {
-    await sendText(saved.target, saved.settings.number, text.slice(0, WHATSAPP_TEXT_MAX), fetchImpl);
+    await sendText(saved.target, to ?? saved.settings.number, text.slice(0, WHATSAPP_TEXT_MAX), fetchImpl);
   } catch (err) {
     await repos.whatsapp.noteDelivery(userId, failureCode(err));
     throw err;

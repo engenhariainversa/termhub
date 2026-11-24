@@ -63,3 +63,14 @@ message leaves until the person saves a server, key, instance and number. Opt-in
 
 Claude Code ✅ · Codex ✅ · Cursor ✅ · Gemini ✅ — the feature does not touch a tab's agent; the two MCP
 tools are served by the termhub MCP to every client the same way.
+
+## Follow-up (2026-11-24): groups and other destinations
+
+Approved by the maintainer after the first release.
+
+- `list_whatsapp_groups` (read, `integrations:read`): `GET /group/fetchAllGroups/{instance}?getParticipants=false`, returning id (JID), name and size, sorted by name, capped at 200, with an optional `query` (accents and case ignored). It sends nothing.
+- `send_whatsapp` takes an optional destination: `group` (exact name, accents and case ignored, or the `…@g.us` id) or `number` (a contact, normalized like the screen's). At most one. Without one it still goes to the saved number. A name that matches no group or more than one is refused (`WHATSAPP_GROUP_NOT_FOUND` / `WHATSAPP_GROUP_AMBIGUOUS`) before anything is sent.
+- Confirmation is unchanged: `send_whatsapp` stays in `irreversibleTools`, so every call is the person's card under any permission mode, and the card now names the destination with the text. Automatic tabs still cannot call it.
+- Notices still go only to the saved number.
+
+**Impact on other users:** none unless they have the `whatsapp` flag on and ask the chat to message a group or contact; every such message is a card they confirm.

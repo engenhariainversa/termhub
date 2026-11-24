@@ -194,5 +194,9 @@
   "Configure em Configurações → WhatsApp: servidor, API key, instância e número.": "Configúralo en Configuración → WhatsApp: servidor, API key, instancia y número.",
   "O WhatsApp não está configurado: Configurações → WhatsApp": "WhatsApp no está configurado: Configuración → WhatsApp",
   "O WhatsApp está pausado em Configurações → WhatsApp": "WhatsApp está en pausa en Configuración → WhatsApp",
-  "O envio pelo WhatsApp falhou ({{code}}); nada foi enviado": "El envío por WhatsApp falló ({{code}}); no se envió nada"
+  "O envio pelo WhatsApp falhou ({{code}}); nada foi enviado": "El envío por WhatsApp falló ({{code}}); no se envió nada",
+  "Não consegui listar os grupos do WhatsApp ({{code}})": "No pude listar los grupos de WhatsApp ({{code}})",
+  "Informe só um destino: group ou number": "Indica un solo destino: group o number",
+  "Nenhum grupo do WhatsApp com \"{{group}}\"; veja list_whatsapp_groups": "Ningún grupo de WhatsApp llamado \"{{group}}\"; mira list_whatsapp_groups",
+  "Há {{count}} grupos chamados \"{{group}}\"; use o id (list_whatsapp_groups)": "Hay {{count}} grupos llamados \"{{group}}\"; usa el id (list_whatsapp_groups)"
 }
