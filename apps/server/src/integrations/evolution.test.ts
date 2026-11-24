@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { connectionState, EvolutionError, sendText } from './evolution.js';
+import { connectionState, EvolutionError, fetchGroups, sendText } from './evolution.js';
 
 const dns = vi.hoisted(() => ({
   lookup: vi.fn(async (host: string) => {
@@ -30,6 +30,20 @@ describe('evolution client', () => {
     expect(url).toBe('https://wpp.example.com/message/sendText/my%20inst');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual({ number: '5562999998888', text: 'oi' });
+  });
+
+  it('lists the groups (id, name, size), skipping anything that is not a group JID', async () => {
+    const fetchImpl = vi.fn(async () =>
+      answer(200, [
+        { id: '120363028290126547@g.us', subject: 'CustomEasy Gestão', size: 5, desc: 'x' },
+        { id: '5562999998888@s.whatsapp.net', subject: 'not a group' },
+        { subject: 'no id' },
+      ]),
+    );
+    await expect(fetchGroups(target, fetchImpl as unknown as typeof fetch)).resolves.toEqual([{ id: '120363028290126547@g.us', name: 'CustomEasy Gestão', size: 5 }]);
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://wpp.example.com/group/fetchAllGroups/my%20inst?getParticipants=false');
+    expect(init.method).toBe('GET');
   });
 
   it.each([

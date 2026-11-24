@@ -2,7 +2,7 @@ import { checkPublicUrl } from './public-url.js';
 
 /**
  * TER-1201: the two calls termhub makes to a person's own Evolution API server (v2,
- * https://doc.evolution-api.com): the instance's connection state and a text message.
+ * https://doc.evolution-api.com): the instance's connection state, its groups and a text message.
  *
  * The base URL is the person's, so it goes through `checkPublicUrl` (TER-578) before every request —
  * DNS included — and redirects are never followed: a server cannot bounce termhub into its own network.
@@ -72,4 +72,24 @@ export async function sendText(target: EvolutionTarget, number: string, text: st
   // Evolution answers 400 when the number is not on WhatsApp (`exists: false`) or malformed.
   if (res.status === 400) throw new EvolutionError('BAD_NUMBER');
   throw new EvolutionError(`HTTP_${res.status}`);
+}
+
+export interface EvolutionGroup {
+  /** The group's JID (`…@g.us`), what `sendText` takes as the number. */
+  id: string;
+  name: string;
+  size: number | null;
+}
+
+/** `GET /group/fetchAllGroups/{instance}`: the groups the paired WhatsApp is in (without participants). */
+export async function fetchGroups(target: EvolutionTarget, fetchImpl: typeof fetch = fetch): Promise<EvolutionGroup[]> {
+  const res = await call(target, `/group/fetchAllGroups/${instancePath(target)}?getParticipants=false`, { method: 'GET' }, fetchImpl);
+  if (!res.ok) throw new EvolutionError(`HTTP_${res.status}`);
+  const body = (await res.json().catch(() => null)) as unknown;
+  if (!Array.isArray(body)) return [];
+  return body.flatMap((g: { id?: unknown; subject?: unknown; size?: unknown }) =>
+    typeof g?.id === 'string' && g.id.endsWith('@g.us')
+      ? [{ id: g.id, name: typeof g.subject === 'string' ? g.subject : '', size: typeof g.size === 'number' ? g.size : null }]
+      : [],
+  );
 }

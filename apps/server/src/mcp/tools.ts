@@ -50,7 +50,7 @@ import { BLOCK_EFFECTS, BLOCK_KINDS, type BlockEffect, type BlockKind } from '..
 import { getClientContext } from '../control/client-context.js';
 import { cancelWatch, listWatches, scheduleWakeup, watch, type ScheduleWakeupArgs, type WatchArgs } from '../control/watches.js';
 import { notify, type NotifyArgs } from '../control/notices.js';
-import { sendWhatsapp, whatsappStatus, WHATSAPP_TOOL_TEXT_MAX } from '../control/whatsapp.js';
+import { listWhatsappGroups, sendWhatsapp, whatsappStatus, WHATSAPP_GROUPS_MAX, WHATSAPP_TOOL_TEXT_MAX } from '../control/whatsapp.js';
 import { NOTICE_LEVELS, NOTICE_LIMITS } from '../chat/notices/rules.js';
 import { REMINDER_LIMITS, WATCH_KINDS, WATCH_LIMITS } from '../chat/watches/kinds.js';
 import { getMachineHooks, HOOK_TOOLS, installMachineHooks, type HookTool } from '../control/machine-hooks.js';
@@ -917,14 +917,27 @@ export const TOOLS: ToolDef[] = [
     run: (ctx) => whatsappStatus(ctx),
   },
   {
+    name: 'list_whatsapp_groups',
+    description: `The WhatsApp groups of the person's Evolution instance (Configurações → WhatsApp): id (the group's JID, …@g.us), name and size, sorted by name, at most ${WHATSAPP_GROUPS_MAX} (truncated true when there are more). query: part of the name, accents and case ignored. Read only: it sends nothing. Use an id from here for send_whatsapp's group when two groups share a name.`,
+    scope: 'read',
+    resource: 'integrations',
+    action: 'read',
+    input: { query: z.string().trim().min(1).max(100).optional() },
+    run: (ctx, a) => listWhatsappGroups(ctx, a as { query?: string }),
+  },
+  {
     name: 'send_whatsapp',
-    description: `Send a WhatsApp message to the person's own number, the one saved on Configurações → WhatsApp (there is no other destination). text: plain text in the person's language (max ${WHATSAPP_TOOL_TEXT_MAX} chars; *bold* and _italic_ work), never secrets, tokens or terminal output. It writes to a third-party system: in the chat the person always confirms it, seeing the text. For the concierge's own notices use notify: they already reach WhatsApp by the person's rules.`,
+    description: `Send a WhatsApp message through the person's own Evolution instance. Without group or number it goes to the person's own number (Configurações → WhatsApp). group: a group's exact name or its id (…@g.us, from list_whatsapp_groups); number: a contact's number with country code and area code (5562999998888). At most one of them. text: plain text in the person's language (max ${WHATSAPP_TOOL_TEXT_MAX} chars; *bold* and _italic_ work), never secrets, tokens or terminal output. It writes to a third-party system: in the chat the person always confirms it on a card showing the destination and the text, whatever the permission mode. For the concierge's own notices use notify: they reach WhatsApp by the person's rules.`,
     scope: 'terminals',
     resource: 'integrations',
     action: 'update',
     strict: true,
-    input: { text: z.string().trim().min(1).max(WHATSAPP_TOOL_TEXT_MAX) },
-    run: (ctx, a) => sendWhatsapp(ctx, a as { text: string }),
+    input: {
+      text: z.string().trim().min(1).max(WHATSAPP_TOOL_TEXT_MAX),
+      group: z.string().trim().min(1).max(200).optional(),
+      number: z.string().trim().min(1).max(40).optional(),
+    },
+    run: (ctx, a) => sendWhatsapp(ctx, a as { text: string; group?: string; number?: string }),
   },
   {
     name: 'get_client_context',
