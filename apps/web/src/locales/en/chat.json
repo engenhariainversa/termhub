@@ -707,5 +707,6 @@
   "Num projeto com pouco histórico, o concierge e os agentes também consultam suas decisões, notas e lições dos outros projetos, sempre dizendo de onde vieram. Elas servem para sugerir, nunca para responder sozinho no lugar de uma decisão deste projeto. Os agentes das abas sempre veem as lições que você verificou.": "In a project with little history, the concierge and the agents also look up your decisions, notes and lessons from your other projects, always saying where they came from. They are used to suggest, never to answer on their own in place of a decision of this project. Agents in tabs always see the lessons you verified.",
   "Expirou: o card já foi criado por outro pedido": "Expired: the card was already created by another request",
   "Expirou: o subagente que pediu terminou e ninguém respondeu": "Expired: the subagent that asked ended and nobody answered",
-  "Pediu confirmação porque o limite por hora do modo liberado acabou.": "Asked for confirmation because the hourly limit of the open mode ran out."
+  "Pediu confirmação porque o limite por hora do modo liberado acabou.": "Asked for confirmation because the hourly limit of the open mode ran out.",
+  "Aprovada no auto mode: passou pela trava dura e pelos seus bloqueios": "Approved in auto mode: it passed the hard lock and your blocks"
 }

@@ -19,6 +19,7 @@ First written for TER-1122 (2026-10-27) from a read of the code on `main` plus t
 | Tab conversation / history | ✅ | ✅ | ❌ screen only | ❌ and it reads as a Claude tab with no session | `tab-chat/reader.ts` `transcriptToolOf` | TER-1130 (Cursor), TER-1124 (Gemini) |
 | State and "pensando…" | ✅ state, activity, verb | ⚠️ state and activity, no verb; only with its hooks trusted | ⚠️ state from hooks, no activity | ❌ | `monitor/state.ts` | |
 | Question and permission cards | ✅ | ✅ (hooks trusted) | ❌ Cursor has no approval hook | ❌ | `monitor/state.ts`, `chat/tab-question-keys.ts` | |
+| Auto mode dialog of a manual tab answered under the hard lock, for a person on "liberado por padrão" (TER-1210) | ✅ Bash dialogs with the auto mode countdown | ❌ no auto mode, so no unattended dialog to tell apart; approvals stay cards | ❌ no approval hook | ❌ | `chat/auto-mode-permission.ts`, `chat/auto-mode-answer.ts` | TER-1211 (Codex) |
 | Hooks install / status | ✅ every account's config dir | ⚠️ only `~/.codex`, not an account's own `CODEX_HOME` | ✅ `~/.cursor/hooks.json` | ❌ | `monitor/machine-hooks.ts`, `packages/machine-ops/src/hooks.ts` | TER-1127 (Codex), TER-1124 (Gemini) |
 | Login expiring warning (TER-1079) | ✅ | ❌ | ❌ | ❌ | `ai/login-expiry.ts` | TER-1128 (Codex) |
 | Login again from the screen (TER-1047/1078) | ✅ | ✅ | ❌ | ❌ | `ai/login.ts` `AI_LOGIN_PROVIDERS` | |

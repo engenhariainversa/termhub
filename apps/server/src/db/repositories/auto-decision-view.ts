@@ -20,8 +20,9 @@ export interface AutoDecisionView {
   /** Who decided, on a question card's countdown (`AutoAnswer.by`): `'automation'` is the option the agent
    *  recommended in a tab with an automatic run — screens show its reason in the reader's language
    *  ("Opção recomendada pelo agente") and no sources. `'automation_permission'` (TER-974): a permission the
-   *  automatic run allowed by the project's rules, shown the same way. Absent on an action card. */
-  by?: AutoAnswerBy | typeof PERMISSION_BY_AUTOMATION;
+   *  automatic run allowed by the project's rules, shown the same way. `'auto_mode_permission'` (TER-1210):
+   *  a manual tab's auto mode dialog the server allowed under the hard lock. Absent on an action card. */
+  by?: AutoAnswerBy | typeof PERMISSION_BY_AUTOMATION | typeof PERMISSION_BY_AUTO_MODE;
   /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
    *  thresholds at that moment. Absent on an action card and on anything from before. */
   score?: number;
@@ -30,6 +31,8 @@ export interface AutoDecisionView {
 
 /** `AutoDecisionView.by` of a permission the automatic run allowed by the project's rules (TER-974). */
 export const PERMISSION_BY_AUTOMATION = 'automation_permission';
+/** `AutoDecisionView.by` of a manual tab's Claude Code auto mode dialog allowed under the hard lock (TER-1210). */
+export const PERMISSION_BY_AUTO_MODE = 'auto_mode_permission';
 
 /** What a caller knows before resolving: the reason and the cited refs (`kind:id`), or null for no badge. */
 export interface AutoDecisionInput {

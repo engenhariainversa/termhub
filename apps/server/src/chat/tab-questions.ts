@@ -14,7 +14,7 @@ import { defaultThresholds, thresholdsFor } from './auto-thresholds.js';
 import { recallFor } from './decision-memory.js';
 import { defaultEmbedder, type Embedder } from './embeddings.js';
 import { failureLabel } from './service.js';
-import type { ChoicePayload, TabQuestionInput } from './tab-question-payload.js';
+import type { ChoicePayload, PermissionPayload, TabQuestionInput } from './tab-question-payload.js';
 import type { Waker } from './wake.js';
 
 /** Never fails to open a card over a logging concern: the default when a caller has none of its own. */
@@ -115,7 +115,9 @@ export async function closeTabQuestions(repos: Repositories, tabId: string, stat
  * a wake turn, and `deps.waker`'s own contract (`createWaker`) never throws. In a tab with a live
  * automatic run (`automaticRunOfTab`) the card goes to `automationAnswer` instead (agentic board spec
  * D18: repeat, recommended option, wake, escalate), fire-and-forget too; a `permission` card there goes to
- * `answerPermissionAutomatically` (§9.2: "allow" by the project's rules, or escalate).
+ * `answerPermissionAutomatically` (§9.2: "allow" by the project's rules, or escalate). A Claude Bash
+ * `permission` card in any other tab goes to `answerAutoModePermission` (TER-1210): "Yes" to an auto mode
+ * dialog under the hard lock for a person on "liberado por padrão", else the card stays the person's.
  */
 export async function openTabQuestion(
   repos: Repositories,
@@ -180,7 +182,10 @@ export async function openTabQuestion(
     // for a running run the card's own push waits for automatic work's verdict (`expectVerdict`, D25) and
     // goes out unless automatic work took the card over.
     const run = shown.kind === 'choice' || shown.kind === 'permission' ? await automaticRunOfTab(repos, tab.id).catch(() => null) : null;
-    if (run?.status === 'running') expectVerdict(shown.id);
+    // A Claude Bash permission in a tab with no run may be an auto mode dialog the server answers (TER-1210):
+    // its push waits for that verdict too, so an approved one never wakes the phone.
+    const autoMode = shown.kind === 'permission' && !run && isAutoModeCandidate(shown);
+    if (run?.status === 'running' || autoMode) expectVerdict(shown.id);
     await publishTabQuestions(repos, 'tab_question', [shown]);
     const log = deps?.log ?? silentLog;
     const card = shown;
@@ -196,6 +201,16 @@ export async function openTabQuestion(
             log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'automation: question not handled');
           });
       } else if (!shown.auto_answer && deps?.waker) void deps.waker.wake(shown, tab.name);
+    } else if (autoMode) {
+      // TER-1210: "Yes" under the hard lock for a person on "liberado por padrão"; anything else stays the
+      // person's card, as before. Loaded lazily, like the automation paths.
+      void import('./auto-mode-answer.js')
+        .then(({ answerAutoModePermission }) => answerAutoModePermission({ repos, log }, card))
+        .then((outcome) => settle(outcome === 'allowed'))
+        .catch((err) => {
+          settle(false);
+          log.warn({ tabQuestionId: card.id, code: failureLabel(err) }, 'auto mode permission not handled');
+        });
     } else if (shown.kind === 'permission' && run) {
       // "allow" when the project's rules allow it, or escalate (agentic board spec §9.2); in any other tab the
       // card waits for the person, as before. Loaded lazily, like automationAnswer above.
@@ -209,6 +224,12 @@ export async function openTabQuestion(
     }
   }
   return shown;
+}
+
+/** A Claude Code Bash permission: the one dialog the auto mode answer reads (TER-1210). */
+function isAutoModeCandidate(q: TabQuestion): boolean {
+  const payload = q.payload as Partial<PermissionPayload> | null;
+  return payload?.tool_name === 'Bash' && payload.agent !== 'codex';
 }
 
 /**

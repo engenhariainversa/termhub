@@ -33,7 +33,7 @@ export const FEATURE_FLAGS = {
   chat_open_permissions: {
     default: false,
     title: tk('Chat: liberado por padrão'),
-    description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.'),
+    description: tk('O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Nas abas com o Claude Code em auto mode, o termhub também aprova sozinho o pedido que o auto mode não conseguiu checar, salvo a trava dura (rm recursivo, push forçado, merge, publicar, remover containers, sudo, segredos) e seus bloqueios. Desligado, vale o modelo atual de liberações.'),
     card: 'TER-1164',
   },
   /** TER-1171: the agent tab GC runs for the person, in dry run (records what it would close, closes nothing). */
@@ -93,7 +93,7 @@ export const FEATURE_FLAG_COPY: Record<FeatureFlag, { label: string; description
   subscriptions: { label: 'Assinaturas', description: 'Planos, checkout, paywall e limites do período de teste.' },
   chat_open_permissions: {
     label: 'Chat: liberado por padrão',
-    description: 'O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Desligado, vale o modelo atual de liberações.',
+    description: 'O chat age sem pedir confirmação e você diz o que ele não pode fazer (bloqueios por projeto ou para todos). Um núcleo fixo continua pedindo: apagar, push forçado, merge, integrações, segredos e contas de IA. Nas abas com o Claude Code em auto mode, o termhub também aprova sozinho o pedido que o auto mode não conseguiu checar, salvo a trava dura (rm recursivo, push forçado, merge, publicar, remover containers, sudo, segredos) e seus bloqueios. Desligado, vale o modelo atual de liberações.',
   },
   tab_gc: {
     label: 'Coletor de abas (teste)',

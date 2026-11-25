@@ -92,6 +92,8 @@ export function autoAnswerReason(auto: { by?: string; reason: string | null }): 
   if (auto.by === 'automation') return t('Opção recomendada pelo agente');
   // a permission the automatic run allowed by the project's rules (TER-974): a badge only, no countdown
   if (auto.by === 'automation_permission') return t('Liberada pelas regras do trabalho automático');
+  // a manual tab's Claude Code auto mode dialog the server allowed under the hard lock (TER-1210)
+  if (auto.by === 'auto_mode_permission') return t('Aprovada no auto mode: passou pela trava dura e pelos seus bloqueios');
   return auto.reason ?? '';
 }
 
