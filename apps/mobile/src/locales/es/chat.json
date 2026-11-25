@@ -207,5 +207,6 @@
   "Nenhuma outra conta do projeto tem limite livre agora.": "Ninguna otra cuenta del proyecto tiene límite disponible ahora.",
   "Coloque outra conta do Claude no Setup do projeto (Contas de IA e modelo) para o chat trocar sozinho.": "Agrega otra cuenta de Claude en el Setup del proyecto (Cuentas de IA y modelo) para que el chat cambie solo.",
   "Ainda no mesmo limite de uso (volta {{reset}}).": "Sigue en el mismo límite de uso (vuelve {{reset}}).",
-  "Ainda no mesmo limite de uso.": "Sigue en el mismo límite de uso."
+  "Ainda no mesmo limite de uso.": "Sigue en el mismo límite de uso.",
+  "Aprovada no auto mode: passou pela trava dura e pelos seus bloqueios": "Aprobada en auto mode: pasó el bloqueo fijo y tus bloqueos"
 }

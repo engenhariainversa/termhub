@@ -101,7 +101,10 @@ export interface AnswerDeps {
   /** How this answer is sent (spec 2026-09-26 concierge memory §6): a click (`'card'`, the default),
    *  or the countdown's sender (`'auto'`, `sendDueAutoAnswers` only) — stored as `answered_via`, and
    *  never recorded as a decision (D11): the memory must not feed on itself. */
-  via?: 'card' | 'auto' | 'automation';
+  via?: 'card' | 'auto' | 'automation' | 'auto_mode';
+  /** An automatic allow's own check of the screen it is about to answer (TER-1210, `via: 'auto_mode'`):
+   *  run on the same read as every other check; false leaves the card alone (409), nothing sent. */
+  screenCheck?: (screen: string) => boolean;
 }
 
 /**
@@ -153,12 +156,14 @@ export async function answerTabQuestion(ctx: ControlContext, id: string, raw: un
   // An automatic allow (agentic board spec §9.2, review I1) goes only into the very dialog the card names,
   // identified on this screen read: never into an unknown-title one (another tool's, a subagent's, one
   // swapped in since the card opened, or one behind a forged hook). The card stays open for the person.
-  if (via === 'automation') {
-    if (row.kind !== 'permission' || (answer as PermissionAnswer).allow !== true) throw promptNotSeen();
+  // The auto mode answer of a manual tab (TER-1210) is held to the same, plus its own verdict on this read.
+  if (via === 'automation' || via === 'auto_mode') {
+    if (row.kind !== 'permission' || (answer as PermissionAnswer).allow !== true || (answer as PermissionAnswer).option) throw promptNotSeen();
     if (!permissionToolOnScreen(screen, row)) {
       deps.log.warn({ tabQuestionId: row.id, tabId: tab.id, kind: row.kind }, 'automatic answer: dialog tool not identified on screen');
       throw promptNotSeen();
     }
+    if (via === 'auto_mode' && deps.screenCheck?.(screen) !== true) throw promptNotSeen();
   }
   // An option of the dialog (TER-995): the same number must still show the same text on this very read.
   // What is stored is the screen's own option, so `allow` follows it, not the request.

@@ -15,6 +15,7 @@ import { recordEvent } from './events.js';
 import { ANSWER_CAP, ANSWER_CYCLE, ANSWER_RUN_CAP, PERMISSION_NEEDED, QUESTION_UNANSWERED, wakeOrEscalate } from './follower.js';
 import { automaticRunOfTab } from './pause.js';
 import { runPermission } from './permission.js';
+import { SECRET_PATH } from './secret-paths.js';
 import { answerWhy, permissionWhy } from './why.js';
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void };
@@ -390,13 +391,6 @@ const FILE_TOOLS = new Set(['Read', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit'
  * program's path reduced to its name). A path rule (`Read(~/.ssh/**)`) cannot be checked without the path,
  * which the request does not carry: every file tool request is then taken as covered, the safe direction.
  */
-/**
- * The paths the deny list's `Read`/`Edit` rules protect, as they show up in a shell command: a Bash read
- * rule (`Bash(cat:*)`, `Bash(grep:*)`, TER-989) must not let `cat .env` or `grep -r x ~/.ssh` through here,
- * where the path rules cannot be matched. Claude Code applies the Read rules to those commands itself.
- */
-const SECRET_PATH = /(^|[\/'"=])\.env|\.ssh(\/|$)|\.config\/gh(\/|$)|\.credentials\.json|\.aws(\/|$)|\.termhub\/(config\.json|hook\.env|tabs(\/|$))|\.npmrc|\.netrc|\.git-credentials|\.docker\/config\.json/;
-
 function deniedByList(tool: string, command: string | null): boolean {
   if (tool === 'Bash' && command !== null && command.split(' ').some((t) => SECRET_PATH.test(t))) return true;
   return automationDenyList(true).some((raw) => {

@@ -1,6 +1,6 @@
 import type { TabQuestionSuggestion } from '../../chat/decision-text.js';
 import type { SuggestionPayload, TabRowKind } from '../../chat/tab-question-payload.js';
-import { describeAutoDecisions, PERMISSION_BY_AUTOMATION, type AutoDecisionInput, type AutoDecisionView } from './auto-decision-view.js';
+import { describeAutoDecisions, PERMISSION_BY_AUTO_MODE, PERMISSION_BY_AUTOMATION, type AutoDecisionInput, type AutoDecisionView } from './auto-decision-view.js';
 import type { Repositories } from './index.js';
 import { PERMISSION_QUEUED, type AnsweredVia, type AutoAnswer, type TabQuestion, type TabQuestionStatus, type TabRowAnswer, type TabRowPayload } from './tab-questions.js';
 
@@ -26,9 +26,9 @@ export interface TabQuestionView {
    * only when it was `sent` or `failed`, so the card can say so. */
   auto_answer: AutoAnswer | null;
   /** How `answer` was obtained: `'auto'` when the countdown sent it; null on rows from before. */
-  /** `'automation'` goes out as null: the apps' contract knows `card` and `auto` only, and an installed
-   *  app with the older enum would drop the card (the run's `question_answered` event says what happened). */
-  answered_via: Exclude<AnsweredVia, 'automation'> | null;
+  /** `'automation'` and `'auto_mode'` go out as null: the apps' contract knows `card` and `auto` only, and an
+   *  installed app with the older enum would drop the card (`auto_decision.by` says what happened). */
+  answered_via: Exclude<AnsweredVia, 'automation' | 'auto_mode'> | null;
   /** When the card was last brought back to the end of the chat (TER-477): screens order by it, else `created_at`. */
   surfaced_at: string | null;
   /** TER-641: "Decisão automática" — set while the countdown runs or sends (`scheduled`/`sent`, which
@@ -93,7 +93,7 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null, autoDe
     closed_at: r.closed_at,
     suggestion: r.status === 'open' ? r.suggestion : null,
     auto_answer: r.auto_answer && (r.status === 'open' || r.auto_answer.status === 'sent' || r.auto_answer.status === 'failed') ? r.auto_answer : null,
-    answered_via: r.answered_via === 'automation' ? null : (r.answered_via ?? null),
+    answered_via: r.answered_via === 'automation' || r.answered_via === 'auto_mode' ? null : (r.answered_via ?? null),
     surfaced_at: r.surfaced_at ?? null,
     auto_decision: autoDecision ?? permissionByAutomation(r),
   };
@@ -104,7 +104,11 @@ export function toTabQuestionView(r: TabQuestion, tabName: string | null, autoDe
  *  say why from `by`. It travels in `auto_decision`, which installed apps already parse with `by` as a plain
  *  string, so `answered_via` keeps the enum they know. */
 function permissionByAutomation(r: TabQuestion): AutoDecisionView | null {
-  return r.kind === 'permission' && r.status === 'answered' && r.answered_via === 'automation' ? { reason: null, sources: [], by: PERMISSION_BY_AUTOMATION } : null;
+  if (r.kind !== 'permission' || r.status !== 'answered') return null;
+  if (r.answered_via === 'automation') return { reason: null, sources: [], by: PERMISSION_BY_AUTOMATION };
+  // TER-1210: a manual tab's auto mode dialog the server allowed under the hard lock, said the same way.
+  if (r.answered_via === 'auto_mode') return { reason: null, sources: [], by: PERMISSION_BY_AUTO_MODE };
+  return null;
 }
 
 /**

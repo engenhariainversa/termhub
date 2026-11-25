@@ -55,7 +55,8 @@ export const autoDecisionSchema = z.object({
   reason: z.string().nullable(),
   sources: z.array(z.object({ ref: z.string(), question: z.string().nullable(), answer: z.string().nullable() })),
   /** `'automation'` on a question card answered by automatic board work (the agent's recommended option),
-   *  `'automation_permission'` on a permission it allowed by the project's rules (TER-974): the reason is
+   *  `'automation_permission'` on a permission it allowed by the project's rules (TER-974),
+   *  `'auto_mode_permission'` on a manual tab's auto mode dialog allowed under the hard lock (TER-1210): the reason is
    *  shown translated. Plain string, optional: absent from an older server. */
   by: z.string().optional(),
   /** TER-642, on a question card answered from memory: the similarity that decided it and the person's
