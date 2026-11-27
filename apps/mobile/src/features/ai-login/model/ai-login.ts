@@ -14,8 +14,13 @@ export const providerLabel = (provider: string): string => PROVIDER_NAMES[provid
 /** The app can run this provider's login flow (the machine may still refuse it: `supported`). */
 export const redoesLogin = (provider: string): boolean => (LOGIN_PROVIDERS as readonly string[]).includes(provider);
 
-/** The accounts whose login expired, in the server's order: the red banner names each. */
-export const needsLogin = (rows: readonly AiLoginStatusRow[]): AiLoginStatusRow[] => rows.filter((r) => r.state === 'login_required');
+/**
+ * The accounts whose login expired, in the server's order: the red banner names each — except one the
+ * person dismissed, and one nothing uses any more (no project's Setup lists it, the chat does not run on
+ * it: TER-1212).
+ */
+export const needsLogin = (rows: readonly AiLoginStatusRow[]): AiLoginStatusRow[] =>
+  rows.filter((r) => r.state === 'login_required' && r.in_use !== false && r.dismissed !== true);
 
 /** The route of an account's "Refazer login" modal (the banner, a tapped push, a history row). */
 export const aiLoginRoute = (accountId: string): string => `/ai-login/${encodeURIComponent(accountId)}`;
@@ -26,6 +31,11 @@ export const machineLabel = (row: Pick<AiLoginStatusRow, 'machine_name'>): strin
 /** Every line of the feature: getters, read in the language the app shows at that moment. */
 export const AI_LOGIN_MSG = {
   get title() { return t('Refazer login'); },
+  get dismiss() { return t('Dispensar'); },
+  get remove() { return t('Remover conta'); },
+  get removeTitle() { return t('Remover esta conta do termhub?'); },
+  get removeBody() { return t('Ela sai de Contas de IA e o aviso some. O login na máquina continua como está.'); },
+  get cancel() { return t('Cancelar'); },
   get network() { return t('Não foi possível falar com o servidor. Tente de novo.'); },
   get notFound() { return t('Conta de IA não encontrada.'); },
   get starting() { return t('Abrindo o login na máquina…'); },

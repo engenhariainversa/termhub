@@ -167,6 +167,19 @@ export class ChatRepository {
     return row ? mapConversation(row) : undefined;
   }
 
+  /**
+   * TER-1212: the host of each user's account-wide conversation (the machine and the account it names), for
+   * telling an AI account the chat runs on from one nobody uses. Reads only: a user who never chatted has none.
+   */
+  async generalHosts(userIds: readonly string[]): Promise<{ user_id: string; machine_id: string | null; ai_account_id: string | null }[]> {
+    if (userIds.length === 0) return [];
+    const rows = await this.db.chatConversation.findMany({
+      where: { userId: { in: [...userIds] }, projectId: null, tabId: null, archivedAt: null },
+      select: { userId: true, machineId: true, aiAccountId: true },
+    });
+    return rows.map((r) => ({ user_id: r.userId, machine_id: r.machineId, ai_account_id: r.aiAccountId }));
+  }
+
   async findByIdForUser(id: string, userId: string): Promise<ChatConversation | undefined> {
     const row = await this.db.chatConversation.findFirst({ where: { id, userId } });
     return row ? mapConversation(row) : undefined;

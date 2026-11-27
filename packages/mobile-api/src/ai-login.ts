@@ -8,6 +8,8 @@ import { z } from 'zod';
  * - `POST /api/m/v1/ai-accounts/:id/login/:loginId/submit` (`aiLoginSubmitBody`) → `aiLoginSubmitResponse`
  * - `DELETE /api/m/v1/ai-accounts/:id/login/:loginId` → `{ cancelled: true }`
  * - `POST /api/m/v1/ai-accounts/:id/login/resume` (`aiLoginResumeBody`) → `aiLoginResumeResponse`
+ * - `POST /api/m/v1/ai-accounts/:id/login/dismiss` → `aiLoginDismissResponse` (TER-1212: hides the banner)
+ * - `DELETE /api/m/v1/ai-accounts/:id` → `aiAccountRemoveResponse` (TER-1212: "Remover conta", the record only)
  *
  * Read loosely (`z.string()` for provider and state) so a value a newer server adds never breaks the app.
  */
@@ -28,6 +30,13 @@ export const aiLoginStatusRow = z.object({
   checked_at: z.string().nullable(),
   /** the "Refazer login" button works here: an online agent with `ai_login`, a Claude or Codex account */
   supported: z.boolean(),
+  /**
+   * TER-1212: a project's Setup lists the account, or the chat runs on it. An account nobody uses gets no
+   * banner. Absent from an older server: in use.
+   */
+  in_use: z.boolean().default(true),
+  /** TER-1212: the person dismissed its banner and the login was not seen working since. Absent: not dismissed. */
+  dismissed: z.boolean().default(false),
 });
 export type AiLoginStatusRow = z.infer<typeof aiLoginStatusRow>;
 
@@ -77,3 +86,6 @@ export const aiLoginResumeResponse = z.object({ resumed: z.array(z.string()) });
 export type AiLoginResumeResponse = z.infer<typeof aiLoginResumeResponse>;
 
 export const aiLoginCancelResponse = z.object({ cancelled: z.literal(true) });
+
+export const aiLoginDismissResponse = z.object({ dismissed: z.literal(true) });
+export const aiAccountRemoveResponse = z.object({ ok: z.literal(true) });

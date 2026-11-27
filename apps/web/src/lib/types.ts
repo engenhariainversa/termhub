@@ -1287,6 +1287,10 @@ export interface AiLoginStatusRow {
   expires_soon?: boolean;
   /** whole days left, rounded up */
   expires_in_days?: number | null;
+  /** TER-1212: a project's Setup lists the account, or the chat runs on it. Absent from an older server: in use. */
+  in_use?: boolean;
+  /** TER-1212: the person dismissed its "login expired" warning, and the login was not seen working since. */
+  dismissed?: boolean;
 }
 
 /** POST /ai-accounts/:id/login */

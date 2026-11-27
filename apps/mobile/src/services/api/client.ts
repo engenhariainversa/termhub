@@ -15,6 +15,8 @@ import {
   accountDeletionStatus,
   legalStatusResponse,
   aiLoginCancelResponse,
+  aiLoginDismissResponse,
+  aiAccountRemoveResponse,
   aiLoginResumeResponse,
   aiLoginStartResponse,
   aiLoginStatusResponse,
@@ -389,6 +391,10 @@ export function createHttpMobileApi(o: CreateHttpMobileApiOptions): MobileApi & 
       call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}/submit`, aiLoginSubmitResponse, { token: a.accessToken, body: { code } }),
     cancelAiLogin: (a: Auth, accountId: string, loginId: string) =>
       call('DELETE', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/${encodeURIComponent(loginId)}`, aiLoginCancelResponse, { token: a.accessToken }).then(() => undefined),
+    dismissAiLogin: (a: Auth, accountId: string) =>
+      call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/dismiss`, aiLoginDismissResponse, { token: a.accessToken, body: {} }).then(() => undefined),
+    removeAiAccount: (a: Auth, accountId: string) =>
+      call('DELETE', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}`, aiAccountRemoveResponse, { token: a.accessToken }).then(() => undefined),
     resumeAiLoginTabs: (a: Auth, accountId: string, tabIds: string[]) =>
       call('POST', `/api/m/v1/ai-accounts/${encodeURIComponent(accountId)}/login/resume`, aiLoginResumeResponse, { token: a.accessToken, body: { tab_ids: tabIds } }),
     cancelSubagent: (a: Auth, id: string) =>

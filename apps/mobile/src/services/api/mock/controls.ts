@@ -28,6 +28,8 @@ export interface MockControls {
   seedLegalPending(versions: TLegalVersion[]): void;
   /** "Refazer login" (TER-1047): an AI account's login state (`ok`, `login_required`, `unknown`). */
   setAiLoginState(accountId: string, loginState: string): void;
+  /** TER-1212: whether a project's Setup or the chat still uses the account (default: yes). */
+  setAiLoginInUse(accountId: string, inUse: boolean): void;
   /** The next login of this account finishes on the machine itself (its own browser), before any link. */
   finishAiLoginOnMachine(accountId: string): void;
 }
@@ -104,6 +106,13 @@ export function createMockControls(state: MockState, now: () => number): MockCon
 
     setAiLoginState(accountId, loginState) {
       state.aiLoginStates.set(accountId, loginState);
+      // a login seen working again re-arms a dismissed banner, as the server does
+      if (loginState === 'ok') state.aiLoginDismissed.delete(accountId);
+    },
+
+    setAiLoginInUse(accountId, inUse) {
+      if (inUse) state.aiLoginUnused.delete(accountId);
+      else state.aiLoginUnused.add(accountId);
     },
 
     finishAiLoginOnMachine(accountId) {

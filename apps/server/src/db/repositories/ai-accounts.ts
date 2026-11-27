@@ -78,6 +78,17 @@ export class AiAccountsRepository {
     await this.db.aiAccount.updateMany({ where: { id, loginExpiresAt: { not: null } }, data: { loginExpiresAt: null, loginExpiryWarnedAt: null } });
   }
 
+  /** TER-1212: the person dismissed this account's "login expired" banner. */
+  async dismissLoginWarning(id: string, now: Date): Promise<void> {
+    await this.db.aiAccount.updateMany({ where: { id }, data: { loginWarningDismissedAt: now } });
+  }
+
+  /** The login works again, or the account is back in a project's Setup: its banner may show again. */
+  async clearLoginWarningDismissal(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.db.aiAccount.updateMany({ where: { id: { in: [...ids] }, loginWarningDismissedAt: { not: null } }, data: { loginWarningDismissedAt: null } });
+  }
+
   async delete(id: string): Promise<boolean> {
     const r = await this.db.aiAccount.deleteMany({ where: { id } });
     return r.count > 0;

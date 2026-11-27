@@ -692,5 +692,7 @@
   "Último envio falhou em {{when}}: {{reason}}": "Last delivery failed on {{when}}: {{reason}}",
   "Último envio: {{when}}": "Last delivery: {{when}}",
   "WhatsApp": "WhatsApp",
-  "WhatsApp removido.": "WhatsApp removed."
+  "WhatsApp removido.": "WhatsApp removed.",
+  "Dispensar": "Dismiss",
+  "Dispensar o aviso de {{label}}": "Dismiss the warning for {{label}}"
 }

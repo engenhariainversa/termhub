@@ -1024,6 +1024,9 @@ model AiAccount {
   loginExpiresAt     DateTime?            @map("login_expires_at") @db.Timestamptz
   /// When the person was warned about `loginExpiresAt`: one warning per login. null = not yet.
   loginExpiryWarnedAt DateTime?           @map("login_expiry_warned_at") @db.Timestamptz
+  /// TER-1212: the person dismissed the "login expired" banner of this account. Cleared once the login is
+  /// seen working again or the account is added back to a project's Setup. null = not dismissed.
+  loginWarningDismissedAt DateTime?       @map("login_warning_dismissed_at") @db.Timestamptz
   createdAt          DateTime             @default(now()) @map("created_at")
   machine            Machine              @relation(fields: [machineId], references: [id], onDelete: Cascade)
   exclusiveProject   Project?             @relation(fields: [exclusiveProjectId], references: [id], onDelete: SetNull)

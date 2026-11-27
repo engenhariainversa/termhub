@@ -240,6 +240,8 @@ export class AiLoginService {
     forgetAccountUsage(account.id);
     try {
       await repos.aiAccounts.clearLoginExpiry(account.id);
+      // TER-1212: a dismissed "login expired" banner returns the next time this login expires.
+      await repos.aiAccounts.clearLoginWarningDismissal([account.id]);
     } catch {
       // the badge outlives the login by at most its own date
     }

@@ -1,5 +1,7 @@
 import { aiLogin, aiLoginSupported, mapBounded, type AiLoginState, type StartedLogin, type SubmittedLogin } from '../ai/login.js';
 import { daysLeft, expiresSoon, warnDaysOf } from '../ai/login-expiry.js';
+import { accountsInUse } from '../ai/account-use.js';
+import { forgetAccountUsage } from '../ai/index.js';
 import type { AiAccount, AiProvider, Machine } from '../db/repositories/types.js';
 import { HttpError } from '../lib/errors.js';
 import { msg } from '../i18n/index.js';
@@ -30,6 +32,13 @@ export interface AiLoginStatusRow {
   expires_soon: boolean;
   /** whole days left, rounded up; null when unknown */
   expires_in_days: number | null;
+  /**
+   * TER-1212: a project's Setup lists the account, or the chat runs on it (`accountsInUse`). The banners
+   * leave an account nobody uses aside; Contas de IA still shows its state.
+   */
+  in_use: boolean;
+  /** TER-1212: the person dismissed its "login expired" banner, and the login was not seen working since. */
+  dismissed: boolean;
 }
 
 /** What the screens and the tools show of an account's coming expiry. A login already gone is not "soon". */
@@ -53,11 +62,14 @@ export async function aiLoginStatus(ctx: ControlContext, refresh: boolean): Prom
   const byId = new Map(machines.map((m) => [m.id, m]));
   if (refresh) await mapBounded(accounts, CHECK_CONCURRENCY, (a) => aiLogin.checkAccountLogin(a, byId.get(a.machine_id), true));
   const now = new Date();
+  const [inUse, working] = await Promise.all([accountsInUse(ctx.repos, accounts, machines), settleDismissals(ctx, accounts)]);
   return {
     warn_days: warnDays,
     accounts: accounts.map((a) => {
       const machine = byId.get(a.machine_id);
       return {
+        in_use: inUse.has(a.id),
+        dismissed: !!a.login_warning_dismissed_at && !working.has(a.id),
         account_id: a.id,
         label: a.label,
         provider: a.provider,
@@ -69,6 +81,39 @@ export async function aiLoginStatus(ctx: ControlContext, refresh: boolean): Prom
       };
     }),
   };
+}
+
+/**
+ * A dismissed banner whose login is seen working again is re-armed (TER-1212): the next time that login
+ * expires, the warning shows. Answers the accounts it re-armed; a failed write only waits for the next read.
+ */
+async function settleDismissals(ctx: ControlContext, accounts: AiAccount[]): Promise<Set<string>> {
+  const working = accounts.filter((a) => a.login_warning_dismissed_at && aiLogin.loginStatusOf(a.id).state === 'ok').map((a) => a.id);
+  await ctx.repos.aiAccounts.clearLoginWarningDismissal(working).catch(() => undefined);
+  return new Set(working);
+}
+
+/** The person hides an account's "login expired" banner (TER-1212), on every screen, until the login works again. */
+export async function dismissAiLoginWarning(ctx: ControlContext, input: { account_id: string }): Promise<{ dismissed: true }> {
+  if (ctx.token?.tab) throw new ControlError('FORBIDDEN', msg('Só a pessoa dispensa o aviso de login de uma conta de IA, nunca um agente numa aba'));
+  const { account, machine } = await ctx.scoped.aiAccount(input.account_id);
+  await ctx.repos.aiAccounts.dismissLoginWarning(account.id, new Date());
+  ctx.log?.info({ accountId: account.id, machineId: machine.id }, 'ai login warning dismissed');
+  return { dismissed: true };
+}
+
+/**
+ * Removes an AI account from termhub (TER-1212, the app's "Remover conta"; the web's Contas de IA has its
+ * own route): only the record — the CLI's login on the machine stays as it is.
+ */
+export async function removeAiAccount(ctx: ControlContext, input: { account_id: string }): Promise<{ ok: true }> {
+  if (ctx.token?.tab) throw new ControlError('FORBIDDEN', msg('Só a pessoa remove uma conta de IA, nunca um agente numa aba'));
+  const { account, machine } = await ctx.scoped.aiAccount(input.account_id);
+  await ctx.repos.aiAccounts.delete(account.id);
+  forgetAccountUsage(account.id);
+  aiLogin.forget(account.id);
+  ctx.log?.info({ accountId: account.id, machineId: machine.id }, 'ai account removed');
+  return { ok: true };
 }
 
 /** The caller's own window (their setting or the default): what "soon" means on their screens and tools. */

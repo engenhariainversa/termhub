@@ -89,6 +89,49 @@ describe('Home (TER-541)', () => {
     await waitFor(() => expect(screen.queryByText('O login do Codex expirou em jarvis')).toBeNull());
   });
 
+  it('"Dispensar" hides the banner on the server; a login seen working again re-arms it (TER-1212)', async () => {
+    stores.controls.setAiLoginState('acc-3', 'login_required');
+    await render(<HomeScreen />);
+    expect(await screen.findByText('O login do Codex expirou em jarvis', undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Dispensar' }));
+    await waitFor(() => expect(screen.queryByText('O login do Codex expirou em jarvis')).toBeNull());
+    // still gone after a new read: the dismissal is the server's
+    await act(async () => mockFocus?.());
+    expect(screen.queryByText('O login do Codex expirou em jarvis')).toBeNull();
+    stores.controls.setAiLoginState('acc-3', 'ok');
+    stores.controls.setAiLoginState('acc-3', 'login_required');
+    await act(async () => mockFocus?.());
+    expect(await screen.findByText('O login do Codex expirou em jarvis', undefined, LOAD)).toBeTruthy();
+    stores.controls.setAiLoginState('acc-3', 'ok');
+  });
+
+  it('no banner for an account nothing uses any more (TER-1212)', async () => {
+    stores.controls.setAiLoginInUse('acc-2', false);
+    stores.controls.setAiLoginState('acc-2', 'login_required');
+    try {
+      await render(<HomeScreen />);
+      await screen.findByText('Nenhum projeto fixado', undefined, LOAD);
+      await act(async () => mockFocus?.());
+      expect(screen.queryByText('O login do Claude expirou em jarvis')).toBeNull();
+    } finally {
+      stores.controls.setAiLoginState('acc-2', 'ok');
+      stores.controls.setAiLoginInUse('acc-2', true);
+    }
+  });
+
+  it('"Remover conta" asks first, then removes the account and its banner (TER-1212)', async () => {
+    const { Alert } = require('react-native') as typeof import('react-native');
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.style === 'destructive')?.onPress?.());
+    const remove = jest.spyOn(stores.api, 'removeAiAccount');
+    stores.controls.setAiLoginState('acc-1', 'login_required');
+    await render(<HomeScreen />);
+    expect(await screen.findByText('O login do Claude expirou em jarvis', undefined, LOAD)).toBeTruthy();
+    await fireEvent.press(screen.getByRole('button', { name: 'Remover conta' }));
+    expect(alert).toHaveBeenCalledWith('Remover esta conta do termhub?', expect.any(String), expect.any(Array));
+    expect(remove).toHaveBeenCalledWith(expect.anything(), 'acc-1');
+    await waitFor(() => expect(screen.queryByText('O login do Claude expirou em jarvis')).toBeNull());
+  });
+
   it("opens a project's chat", async () => {
     await stores.api.setProjectFavorite(auth(), 'p-termhub', true);
     await render(<HomeScreen />);

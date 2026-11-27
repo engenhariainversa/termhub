@@ -119,7 +119,7 @@ describe('Refazer login', () => {
   it('a provider the app cannot log in shows the manual instruction and starts nothing', async () => {
     mockAccountId = 'acc-g';
     jest.spyOn(stores.api, 'aiLoginStatus').mockResolvedValue({
-      accounts: [{ account_id: 'acc-g', label: 'Gemini Pedro', provider: 'gemini', machine_id: 'm-jarvis', machine_name: 'jarvis', state: 'login_required', checked_at: null, supported: false }],
+      accounts: [{ account_id: 'acc-g', label: 'Gemini Pedro', provider: 'gemini', machine_id: 'm-jarvis', machine_name: 'jarvis', state: 'login_required', checked_at: null, supported: false, in_use: true, dismissed: false }],
     });
     const start = jest.spyOn(stores.api, 'startAiLogin');
     await render(<AiLoginScreen />);

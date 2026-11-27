@@ -582,6 +582,8 @@ export interface AiAccount {
   exclusive_project: { id: string; name: string } | null;
   /** TER-1079: when the CLI's login expires, as its own notice told; null = unknown. */
   login_expires_at: string | null;
+  /** TER-1212: when the person dismissed the "login expired" banner; null = not dismissed. */
+  login_warning_dismissed_at?: string | null;
   created_at: string;
 }
 
@@ -592,6 +594,7 @@ export function mapAiAccount(a: {
   machineId: string;
   configDir: string | null;
   loginExpiresAt?: Date | null;
+  loginWarningDismissedAt?: Date | null;
   createdAt: Date;
   exclusiveProject?: { id: string; name: string } | null;
 }): AiAccount {
@@ -603,6 +606,7 @@ export function mapAiAccount(a: {
     config_dir: a.configDir,
     exclusive_project: a.exclusiveProject ? { id: a.exclusiveProject.id, name: a.exclusiveProject.name } : null,
     login_expires_at: a.loginExpiresAt?.toISOString() ?? null,
+    login_warning_dismissed_at: a.loginWarningDismissedAt?.toISOString() ?? null,
     created_at: a.createdAt.toISOString(),
   };
 }

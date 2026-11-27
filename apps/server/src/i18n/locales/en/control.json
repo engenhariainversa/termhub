@@ -198,5 +198,7 @@
   "Não consegui listar os grupos do WhatsApp ({{code}})": "Could not list the WhatsApp groups ({{code}})",
   "Informe só um destino: group ou number": "Give only one destination: group or number",
   "Nenhum grupo do WhatsApp com \"{{group}}\"; veja list_whatsapp_groups": "No WhatsApp group named \"{{group}}\"; see list_whatsapp_groups",
-  "Há {{count}} grupos chamados \"{{group}}\"; use o id (list_whatsapp_groups)": "There are {{count}} groups named \"{{group}}\"; use the id (list_whatsapp_groups)"
+  "Há {{count}} grupos chamados \"{{group}}\"; use o id (list_whatsapp_groups)": "There are {{count}} groups named \"{{group}}\"; use the id (list_whatsapp_groups)",
+  "Só a pessoa dispensa o aviso de login de uma conta de IA, nunca um agente numa aba": "Only the person dismisses an AI account's login warning, never an agent in a tab",
+  "Só a pessoa remove uma conta de IA, nunca um agente numa aba": "Only the person removes an AI account, never an agent in a tab"
 }
