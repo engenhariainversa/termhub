@@ -15,22 +15,29 @@ const machines = [
   { id: 'm2', name: 'old', type: 'agent', owner_id: 'u2' },
   { id: 'ms', name: 'ssh', type: 'ssh', owner_id: 'u1' },
 ];
-const acc = (id: string, machine_id: string, provider = 'claude') => ({ id, label: id, provider, machine_id, config_dir: null, exclusive_project: null, created_at: '' });
-const accounts = [acc('a1', 'm1'), acc('g1', 'm1', 'gemini'), acc('a2', 'm2'), acc('s1', 'ms')];
+const acc = (id: string, machine_id: string, provider = 'claude', extra: Record<string, unknown> = {}) => ({ id, label: id, provider, machine_id, config_dir: null, exclusive_project: null, created_at: '', ...extra });
+let accounts = [acc('a1', 'm1'), acc('g1', 'm1', 'gemini'), acc('a2', 'm2'), acc('s1', 'ms')];
 
-function setup() {
+function setup(opts: { listed?: string[] } = {}) {
   let now = 1_000_000;
   const service = new AiLoginService(() => now);
   const push = vi.fn(async () => undefined);
   const log = { info: vi.fn(), warn: vi.fn() };
-  const repos = { machines: { list: vi.fn(async () => machines) }, aiAccounts: { list: vi.fn(async () => accounts) } };
+  const clearLoginWarningDismissal = vi.fn(async () => undefined);
+  const repos = {
+    machines: { list: vi.fn(async () => machines) },
+    aiAccounts: { list: vi.fn(async () => accounts), clearLoginWarningDismissal },
+    projectSetup: { listedAccountIds: vi.fn(async () => new Set(opts.listed ?? ['a1'])) },
+    chat: { generalHosts: vi.fn(async () => []) },
+  };
   const checker = new LoginChecker({ repos: repos as never, log, push, service });
-  return { checker, service, push, log, advance: (ms: number) => (now += ms) };
+  return { checker, service, push, log, clearLoginWarningDismissal, advance: (ms: number) => (now += ms) };
 }
 
 let loggedIn = true;
 beforeEach(() => {
   loggedIn = true;
+  accounts = [acc('a1', 'm1'), acc('g1', 'm1', 'gemini'), acc('a2', 'm2'), acc('s1', 'ms')];
   rpc.mockReset().mockImplementation(async () => ({ supported: true, logged_in: loggedIn }));
   caps.clear();
   caps.set('m1', ['ai_login']).set('m2', []);
@@ -84,5 +91,22 @@ describe('LoginChecker (TER-1047)', () => {
     t.advance(LOGIN_STATE_TTL_MS + 1);
     await t.checker.run();
     expect(t.push).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LoginChecker and accounts nobody uses (TER-1212)', () => {
+  it('never pushes about an account no project lists and the chat does not run on', async () => {
+    const t = setup({ listed: [] });
+    loggedIn = false;
+    await t.checker.run();
+    expect(t.service.loginStatusOf('a1').state).toBe('login_required');
+    expect(t.push).not.toHaveBeenCalled();
+  });
+
+  it('re-arms a dismissed banner once the login is seen working again', async () => {
+    accounts = [acc('a1', 'm1', 'claude', { login_warning_dismissed_at: '2026-11-27T00:00:00.000Z' })];
+    const t = setup();
+    await t.checker.run();
+    expect(t.clearLoginWarningDismissal).toHaveBeenCalledWith(['a1']);
   });
 });

@@ -23,6 +23,7 @@ First written for TER-1122 (2026-10-27) from a read of the code on `main` plus t
 | Hooks install / status | ✅ every account's config dir | ⚠️ only `~/.codex`, not an account's own `CODEX_HOME` | ✅ `~/.cursor/hooks.json` | ❌ | `monitor/machine-hooks.ts`, `packages/machine-ops/src/hooks.ts` | TER-1127 (Codex), TER-1124 (Gemini) |
 | Login expiring warning (TER-1079) | ✅ | ❌ | ❌ | ❌ | `ai/login-expiry.ts` | TER-1128 (Codex) |
 | Login again from the screen (TER-1047/1078) | ✅ | ✅ | ❌ | ❌ | `ai/login.ts` `AI_LOGIN_PROVIDERS` | |
+| Login warning dismissed per account, none for an account nothing uses (TER-1212) | ✅ | ✅ | — no account type | ⚠️ dismiss works; never left aside as unused (a Setup cannot list it, so nothing tells) | `ai/account-use.ts`, `control/ai-login.ts` | |
 | Model per project (TER-1097) | ✅ aliases and ids | ⚠️ free id only | ❌ | ❌ | `setup/schema.ts` `models` | |
 | ai-memory (TER-1020) | ✅ | ⚠️ MCP and hint, no run prep | ❌ | ❌ | `memory/ai-memory-runs.ts` | |
 | Command rules for `run_command` (TER-1081) | — | — | ⚠️ see the risk below | ⚠️ see the risk below | `chat/gate-runtime.ts` `commandRuleCovering` | TER-1123 |

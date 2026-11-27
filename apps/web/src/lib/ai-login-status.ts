@@ -42,6 +42,21 @@ export async function saveAiLoginWarnDays(days: number): Promise<void> {
   await refreshAiLoginStatus();
 }
 
+/**
+ * TER-1212: hides an account's "login expired" warning on every screen (the server keeps it until the
+ * login is seen working again). The warning goes at once; a failure brings it back and throws.
+ */
+export async function dismissAiLoginWarning(accountId: string): Promise<void> {
+  const before = state;
+  if (before) publish({ ...before, accounts: before.accounts.map((a) => (a.account_id === accountId ? { ...a, dismissed: true } : a)) });
+  try {
+    await api.aiAccounts.dismissLoginWarning(accountId);
+  } catch (e) {
+    if (before) publish(before);
+    throw e;
+  }
+}
+
 const onFocus = () => {
   if (document.visibilityState !== 'hidden') void refreshAiLoginStatus();
 };
@@ -71,14 +86,20 @@ export function resetAiLoginStatusForTests(): void {
   state = null;
 }
 
-/** The accounts whose login expired, in the server's order. Pure. */
+/** TER-1212: something still runs on the account (a project's Setup lists it, or the chat runs on it). */
+const inUse = (r: AiLoginStatusRow) => r.in_use !== false;
+
+/**
+ * The accounts whose login expired, in the server's order, that the warnings name: not one the person
+ * dismissed, nor one nothing uses any more (TER-1212). Pure.
+ */
 export function accountsNeedingLogin(rows: AiLoginStatusRow[] | null): AiLoginStatusRow[] {
-  return (rows ?? []).filter((r) => r.state === 'login_required');
+  return (rows ?? []).filter((r) => r.state === 'login_required' && inUse(r) && r.dismissed !== true);
 }
 
-/** The accounts still logged in whose login ends within the person's window (TER-1079). Pure. */
+/** The accounts still logged in whose login ends within the person's window (TER-1079), and still used (TER-1212). Pure. */
 export function accountsExpiringSoon(rows: AiLoginStatusRow[] | null): AiLoginStatusRow[] {
-  return (rows ?? []).filter((r) => r.expires_soon === true && r.state !== 'login_required');
+  return (rows ?? []).filter((r) => r.expires_soon === true && r.state !== 'login_required' && inUse(r));
 }
 
 export function useAiLoginStatus(): { accounts: AiLoginStatusRow[] | null; needsLogin: AiLoginStatusRow[]; expiringSoon: AiLoginStatusRow[]; warnDays: number; refresh: () => Promise<void> } {

@@ -183,8 +183,8 @@ export async function registerMobileApi(
         // A file an agent wrote, previewed from its path (spec 2026-10-04 file preview): the web's route.
         await guarded('terminals', (a) => filePreviewRoutes(a, deps.repos), '/file-preview');
         await guarded('terminals', (a) => fileRecentRoutes(a, deps.repos), '/file-recent');
-        // "Refazer login" of an AI account and the banner's states (TER-1047): the web's plugin.
-        await guarded('ai_accounts', (a) => aiLoginRoutes(a, deps.repos), '/ai-accounts');
+        // "Refazer login" of an AI account and the banner's states (TER-1047): the web's plugin, plus "Remover conta" (TER-1212).
+        await guarded('ai_accounts', (a) => aiLoginRoutes(a, deps.repos, { removal: true }), '/ai-accounts');
       }
 
       await mobileRoutes(guardedMobile);

@@ -26,12 +26,23 @@ export class ProjectSetupRepository {
   async save(projectId: string, data: ProjectSetupData): Promise<ProjectSetup> {
     // spec 2026-10-07 multi-repo R19: `repo` follows the first enabled repository once the project has several
     const withMirror = withRepoMirror(withLegacyMirror(data), await loadProjectRepositories(this.db, projectId));
+    const before = await this.db.projectSetup.findUnique({ where: { projectId } });
     const row = await this.db.projectSetup.upsert({
       where: { projectId },
       create: { projectId, version: SETUP_VERSION, data: withMirror as object },
       update: { version: SETUP_VERSION, data: withMirror as object },
     });
+    // TER-1212: an account added back to a project is in use again, and its dismissed login banner returns.
+    const had = new Set(before ? normalizeSetup(before.data, before.version).ai.accounts : []);
+    const added = data.ai.accounts.filter((id) => !had.has(id));
+    if (added.length > 0) await this.db.aiAccount.updateMany({ where: { id: { in: added }, loginWarningDismissedAt: { not: null } }, data: { loginWarningDismissedAt: null } });
     return { project_id: projectId, version: row.version, data: normalizeSetup(row.data, row.version), updated_at: row.updatedAt.toISOString() };
+  }
+
+  /** TER-1212: every AI account id some project's Setup lists ("AI accounts and model"). */
+  async listedAccountIds(): Promise<Set<string>> {
+    const rows = await this.db.projectSetup.findMany();
+    return new Set(rows.flatMap((r) => normalizeSetup(r.data, r.version).ai.accounts));
   }
 
   /** Projects with at least one source on automatic sync, and those sources. */

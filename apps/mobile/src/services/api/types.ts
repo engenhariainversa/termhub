@@ -227,6 +227,10 @@ export interface MobileApi {
   submitAiLogin(auth: Auth, accountId: string, loginId: string, code: string | null): Promise<AiLoginSubmitResponse>;
   /** Leaving before the end: the server kills the hidden session. */
   cancelAiLogin(auth: Auth, accountId: string, loginId: string): Promise<void>;
+  /** TER-1212: hides the account's banner on every screen until its login is seen working again. */
+  dismissAiLogin(auth: Auth, accountId: string): Promise<void>;
+  /** TER-1212: "Remover conta": removes the account's record from termhub (the CLI login on the machine stays). */
+  removeAiAccount(auth: Auth, accountId: string): Promise<void>;
   /** Types `continue` into each tab still stuck on this account's login error; answers the ones it did. */
   resumeAiLoginTabs(auth: Auth, accountId: string, tabIds: string[]): Promise<AiLoginResumeResponse>;
 

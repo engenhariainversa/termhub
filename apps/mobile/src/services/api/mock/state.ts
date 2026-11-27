@@ -324,6 +324,10 @@ export interface MockState {
   aiLoginFlows: Map<string, { accountId: string; needsCode: boolean }>;
   /** Accounts whose next login the machine's own browser finishes before any link shows (TER-1054). */
   aiLoginFinishOnMachine: Set<string>;
+  /** TER-1212: accounts whose banner was dismissed, removed, or that nothing uses. */
+  aiLoginDismissed: Set<string>;
+  aiLoginRemoved: Set<string>;
+  aiLoginUnused: Set<string>;
 }
 
 export function createMockState(): MockState {
@@ -378,6 +382,9 @@ export function createMockState(): MockState {
     aiLoginStates: new Map(),
     aiLoginFlows: new Map(),
     aiLoginFinishOnMachine: new Set(),
+    aiLoginDismissed: new Set(),
+    aiLoginRemoved: new Set(),
+    aiLoginUnused: new Set(),
   };
 }
 

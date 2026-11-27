@@ -4,7 +4,7 @@ import { aiLoginResumeBody, aiLoginStatusQuery, aiLoginSubmitBody } from '@termh
 import type { Repositories } from '../db/repositories/index.js';
 import { HttpError } from '../lib/errors.js';
 import { LOGIN_EXPIRY_MAX_DAYS } from '../ai/login-expiry.js';
-import { aiLoginStatus, cancelAiLogin, resumeAiLoginTabs, setLoginWarnDays, startAiLogin, submitAiLogin } from '../control/ai-login.js';
+import { aiLoginStatus, cancelAiLogin, dismissAiLoginWarning, removeAiAccount, resumeAiLoginTabs, setLoginWarnDays, startAiLogin, submitAiLogin } from '../control/ai-login.js';
 import { ControlError, controlContextForRequest, type ControlContext } from '../control/context.js';
 
 const idParam = z.object({ id: z.string().min(1).max(64) });
@@ -19,7 +19,7 @@ const UPDATE = { config: { action: 'update' } } as const;
  * app (`/api/m/v1/ai-accounts`), both under the `ai_accounts` resource. The code the person pastes is never
  * logged; the control layer logs ids only.
  */
-export async function aiLoginRoutes(app: FastifyInstance, repos: Repositories): Promise<void> {
+export async function aiLoginRoutes(app: FastifyInstance, repos: Repositories, opts: { removal?: boolean } = {}): Promise<void> {
   const ctxOf = (request: FastifyRequest): ControlContext => ({ ...controlContextForRequest(repos, request), log: request.log });
   const run = async <T>(p: Promise<T>): Promise<T> =>
     p.catch((e: unknown) => {
@@ -37,6 +37,20 @@ export async function aiLoginRoutes(app: FastifyInstance, repos: Repositories): 
     const { days } = warnBody.parse(request.body);
     return run(setLoginWarnDays(ctxOf(request), days));
   });
+
+  // TER-1212: hides the account's "login expired" banner until its login is seen working again.
+  app.post('/:id/login/dismiss', UPDATE, async (request) => {
+    const { id } = idParam.parse(request.params);
+    return run(dismissAiLoginWarning(ctxOf(request), { account_id: id }));
+  });
+
+  // TER-1212, the app only (`removal`): "Remover conta". The web removes it through `aiAccountRoutes`.
+  if (opts.removal) {
+    app.delete('/:id', async (request) => {
+      const { id } = idParam.parse(request.params);
+      return run(removeAiAccount(ctxOf(request), { account_id: id }));
+    });
+  }
 
   app.post('/:id/login', UPDATE, async (request) => {
     const { id } = idParam.parse(request.params);

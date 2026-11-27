@@ -30,5 +30,10 @@
   "Tentar de novo": "Reintentar",
   "uma máquina": "una máquina",
   "{{count}} abas retomadas._one": "{{count}} pestaña reanudada.",
-  "{{count}} abas retomadas._other": "{{count}} pestañas reanudadas."
+  "{{count}} abas retomadas._other": "{{count}} pestañas reanudadas.",
+  "Dispensar": "Descartar",
+  "Remover conta": "Eliminar cuenta",
+  "Remover esta conta do termhub?": "¿Eliminar esta cuenta de termhub?",
+  "Ela sai de Contas de IA e o aviso some. O login na máquina continua como está.": "Sale de Cuentas de IA y el aviso desaparece. El login en la máquina sigue como está.",
+  "Cancelar": "Cancelar"
 }

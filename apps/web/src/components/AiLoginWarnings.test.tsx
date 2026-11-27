@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const statusMock = vi.fn();
 const startMock = vi.fn();
+const dismissMock = vi.fn(async () => ({ dismissed: true }));
 vi.mock('../lib/api', () => ({
   ApiError: class extends Error {},
-  api: { aiAccounts: { loginStatus: (...a: unknown[]) => statusMock(...a), startLogin: (...a: unknown[]) => startMock(...a), cancelLogin: async () => ({ cancelled: true }) } },
+  api: { aiAccounts: { loginStatus: (...a: unknown[]) => statusMock(...a), startLogin: (...a: unknown[]) => startMock(...a), dismissLoginWarning: (...a: unknown[]) => dismissMock(...(a as [])), cancelLogin: async () => ({ cancelled: true }) } },
 }));
 
 import { resetAiLoginStatusForTests } from '../lib/ai-login-status';
@@ -80,5 +81,37 @@ describe('AiLoginWarnings (TER-1047)', () => {
     const { container } = render(<AiLoginWarnings />);
     await vi.waitFor(() => expect(statusMock).toHaveBeenCalled());
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('AiLoginWarnings: dismissed and unused accounts (TER-1212)', () => {
+  it('no line for an account nothing uses, nor for one already dismissed', async () => {
+    statusMock.mockResolvedValue({
+      accounts: [
+        { ...row('a', 'chatgpt', 'm1', 'hulk', 'login_required'), in_use: false },
+        { ...row('b', 'claude', 'm2', 'jarvis', 'login_required'), dismissed: true },
+        { ...row('c', 'claude', 'm1', 'gaviao', 'login_required'), in_use: true },
+        { ...row('d', 'claude', 'm1', 'hulk', 'ok'), expires_soon: true, expires_in_days: 2, in_use: false },
+      ],
+    });
+    render(<AiLoginWarnings />);
+    expect(await screen.findByText('O login do Claude expirou em gaviao')).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('"Dispensar" hides the line at once and saves it on the server', async () => {
+    render(<AiLoginWarnings machineId="m2" />);
+    expect(await screen.findByText('O login do Claude expirou em jarvis')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dispensar o aviso de b' }));
+    expect(screen.queryByText('O login do Claude expirou em jarvis')).not.toBeInTheDocument();
+    expect(dismissMock).toHaveBeenCalledWith('b');
+  });
+
+  it('a failed dismissal brings the line back', async () => {
+    dismissMock.mockRejectedValueOnce(new Error('offline'));
+    render(<AiLoginWarnings machineId="m2" />);
+    expect(await screen.findByText('O login do Claude expirou em jarvis')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dispensar o aviso de b' }));
+    expect(await screen.findByText('O login do Claude expirou em jarvis')).toBeInTheDocument();
   });
 });

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useTranslation } from '../i18n';
-import { useAiLoginStatus } from '../lib/ai-login-status';
+import { dismissAiLoginWarning, useAiLoginStatus } from '../lib/ai-login-status';
 import type { AiLoginStatusRow } from '../lib/types';
 import { AI_CLI_LABEL, AiLoginDialog } from './AiLoginDialog';
 
 /**
  * Red "the login of X expired on Y" lines (TER-1047) and, ahead of that, amber "the login of X on Y expires
  * in N days" ones (TER-1079), each with "Refazer login" opening the modal: in the sidebar (every account)
- * and on a machine's row in Máquinas (`machineId`). Nothing when all is well.
+ * and on a machine's row in Máquinas (`machineId`). Nothing when all is well. A red line also has
+ * "Dispensar" (TER-1212): hidden everywhere until that login is seen working again; an account nothing uses
+ * any more gets no line at all. Removing an account stays in Contas de IA.
  */
 export function AiLoginWarnings({ machineId, className = '' }: { machineId?: string; className?: string }) {
   const { t } = useTranslation();
@@ -29,6 +31,15 @@ export function AiLoginWarnings({ machineId, className = '' }: { machineId?: str
               </span>
               <button type="button" className="shrink-0 rounded px-1 font-medium underline hover:bg-danger/20" onClick={() => setOpen(r)}>
                 {t('Refazer login')}
+              </button>
+              <button
+                type="button"
+                className="shrink-0 rounded px-1 hover:bg-danger/20"
+                aria-label={t('Dispensar o aviso de {{label}}', { label: r.label })}
+                title={t('Dispensar')}
+                onClick={() => void dismissAiLoginWarning(r.account_id).catch(() => undefined)}
+              >
+                ×
               </button>
             </li>
           ))}

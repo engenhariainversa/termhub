@@ -708,6 +708,7 @@ export const AiAccountScalarFieldEnum = {
   exclusiveProjectId: 'exclusiveProjectId',
   loginExpiresAt: 'loginExpiresAt',
   loginExpiryWarnedAt: 'loginExpiryWarnedAt',
+  loginWarningDismissedAt: 'loginWarningDismissedAt',
   createdAt: 'createdAt'
 } as const
 

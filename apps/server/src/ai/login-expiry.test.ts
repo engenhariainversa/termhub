@@ -97,8 +97,9 @@ function world(opts: { warnDays?: number | null; listedIn?: string[] } = {}) {
     machines: { findById: async () => machine, list: async () => [machine] },
     users: { aiLoginWarnDays: async () => opts.warnDays ?? null, findById: async () => ({ id: 'u1', locale: 'pt-BR' }) },
     projects: { list: async () => [{ id: 'p1', owner_id: 'u1' }, { id: 'p2', owner_id: 'u1' }], findById: async (id: string) => ({ id, owner_id: 'u1' }) },
-    projectSetup: { get: async (id: string) => ({ data: { ai: { accounts: (opts.listedIn ?? []).includes(id) ? ['a1'] : [] } } }) },
+    projectSetup: { get: async (id: string) => ({ data: { ai: { accounts: (opts.listedIn ?? []).includes(id) ? ['a1'] : [] } } }), listedAccountIds: async () => new Set(['a1']) },
     chat: {
+      generalHosts: async () => [],
       findLatestActiveForProject: async (projectId: string) => ({ id: `c-${projectId}` }),
       getOrCreateForUser: async () => ({ id: 'c-account' }),
       addMessage: async (m: { conversation_id: string; text: string }) => (messages.push(m), { id: `msg${messages.length}`, ...m }),

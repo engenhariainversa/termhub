@@ -6,7 +6,7 @@ import { aiLoginResumeBody, aiLoginSubmitBody, type AiLoginStatusRow } from '../
 import type { MockRouter } from '../router';
 import { verifyAuth, WireError, type MockState } from '../state';
 
-const ACCOUNTS: Omit<AiLoginStatusRow, 'state' | 'checked_at'>[] = [
+const ACCOUNTS: Omit<AiLoginStatusRow, 'state' | 'checked_at' | 'in_use' | 'dismissed'>[] = [
   { account_id: 'acc-1', label: 'Claude Pedro', provider: 'claude', machine_id: 'm-jarvis', machine_name: 'jarvis', supported: true },
   { account_id: 'acc-2', label: 'Claude Trabalho', provider: 'claude', machine_id: 'm-jarvis', machine_name: 'jarvis', supported: true },
   { account_id: 'acc-3', label: 'Codex Pedro', provider: 'chatgpt', machine_id: 'm-jarvis', machine_name: 'jarvis', supported: true },
@@ -17,7 +17,7 @@ const STUCK_TAB = { id: 't-api', name: 'api', project_id: 'p-termhub' };
 export function registerAiLoginRoutes(router: MockRouter, state: MockState): void {
   let started = 0;
   const account = (id: string) => {
-    const row = ACCOUNTS.find((a) => a.account_id === id);
+    const row = ACCOUNTS.find((a) => a.account_id === id && !state.aiLoginRemoved.has(a.account_id));
     if (!row) throw new WireError(404, 'NOT_FOUND', 'Conta não encontrada');
     return row;
   };
@@ -30,7 +30,27 @@ export function registerAiLoginRoutes(router: MockRouter, state: MockState): voi
   router.route('GET', '/api/m/v1/ai-accounts/login-status', (ctx) => {
     verifyAuth(state, { headers: ctx.headers, htm: 'GET', htu: ctx.htu, now: ctx.now() });
     const checkedAt = new Date(ctx.now()).toISOString();
-    return { status: 200, body: { accounts: ACCOUNTS.map((a) => ({ ...a, state: state.aiLoginStates.get(a.account_id) ?? 'ok', checked_at: checkedAt })) } };
+    const rows = ACCOUNTS.filter((a) => !state.aiLoginRemoved.has(a.account_id)).map((a) => ({
+      ...a,
+      state: state.aiLoginStates.get(a.account_id) ?? 'ok',
+      checked_at: checkedAt,
+      in_use: !state.aiLoginUnused.has(a.account_id),
+      dismissed: state.aiLoginDismissed.has(a.account_id),
+    }));
+    return { status: 200, body: { accounts: rows } };
+  });
+
+  // TER-1212: dismissing the banner, and removing the account's record.
+  router.route('POST', '/api/m/v1/ai-accounts/:id/login/dismiss', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'POST', htu: ctx.htu, now: ctx.now() });
+    state.aiLoginDismissed.add(account(ctx.params.id!).account_id);
+    return { status: 200, body: { dismissed: true } };
+  });
+
+  router.route('DELETE', '/api/m/v1/ai-accounts/:id', (ctx) => {
+    verifyAuth(state, { headers: ctx.headers, htm: 'DELETE', htu: ctx.htu, now: ctx.now() });
+    state.aiLoginRemoved.add(account(ctx.params.id!).account_id);
+    return { status: 200, body: { ok: true } };
   });
 
   router.route('POST', '/api/m/v1/ai-accounts/:id/login', (ctx) => {

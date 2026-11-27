@@ -30,5 +30,10 @@
   "Tentar de novo": "Try again",
   "uma máquina": "a machine",
   "{{count}} abas retomadas._one": "{{count}} tab resumed.",
-  "{{count}} abas retomadas._other": "{{count}} tabs resumed."
+  "{{count}} abas retomadas._other": "{{count}} tabs resumed.",
+  "Dispensar": "Dismiss",
+  "Remover conta": "Remove account",
+  "Remover esta conta do termhub?": "Remove this account from termhub?",
+  "Ela sai de Contas de IA e o aviso some. O login na máquina continua como está.": "It leaves AI accounts and the warning goes away. The login on the machine stays as it is.",
+  "Cancelar": "Cancel"
 }

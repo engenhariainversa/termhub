@@ -38,9 +38,15 @@ const tab = (id: string, ai_account_id: string | null, machine_id = 'm1', kind =
 const tabs = [tab('t1', 'a1'), tab('t2', null), tab('t3', 'a2'), tab('t4', 'a1'), tab('t5', 'a1', 'm1', 'simulator')];
 /** users.ai_login_warn_days, by user (TER-1079). */
 const warnDays = new Map<string, number>();
+/** TER-1212: what the projects' Setups list, and the account-wide chat's host. */
+let listed = new Set<string>(['a1', 'a2', 'c1']);
+let hosts: { user_id: string; machine_id: string | null; ai_account_id: string | null }[] = [];
+const dismissLoginWarning = vi.fn(async () => undefined);
+const clearLoginWarningDismissal = vi.fn(async () => undefined);
+const deleteAccount = vi.fn(async () => true);
 
 /** `viewer`: the signed-in user; `ownerId`: the scope (an admin "viewing as" u1 has viewer admin). */
-function build(opts: { viewer?: string; prefix?: string } = {}) {
+function build(opts: { viewer?: string; prefix?: string; removal?: boolean } = {}) {
   const app = Fastify();
   applyErrorHandler(app);
   const viewer = opts.viewer ?? 'u1';
@@ -49,14 +55,16 @@ function build(opts: { viewer?: string; prefix?: string } = {}) {
   });
   const repos = {
     machines: { findById: vi.fn(async (id: string) => machines.find((m) => m.id === id)), list: vi.fn(async () => machines) },
-    aiAccounts: { findById: vi.fn(async (id: string) => accounts.find((a) => a.id === id)), list: vi.fn(async () => accounts) },
+    aiAccounts: { findById: vi.fn(async (id: string) => accounts.find((a) => a.id === id)), list: vi.fn(async () => accounts), dismissLoginWarning, clearLoginWarningDismissal, delete: deleteAccount },
+    projectSetup: { listedAccountIds: vi.fn(async () => listed) },
+    chat: { generalHosts: vi.fn(async () => hosts) },
     tabs: { listByMachine: vi.fn(async (id: string) => tabs.filter((t) => t.machine_id === id)) },
     users: {
       aiLoginWarnDays: vi.fn(async (id: string) => warnDays.get(id) ?? null),
       setAiLoginWarnDays: vi.fn(async (id: string, days: number) => void warnDays.set(id, days)),
     },
   };
-  app.register((a) => aiLoginRoutes(a, repos as never), { prefix: opts.prefix ?? '/ai-accounts' });
+  app.register((a) => aiLoginRoutes(a, repos as never, { removal: opts.removal }), { prefix: opts.prefix ?? '/ai-accounts' });
   return app;
 }
 
@@ -72,6 +80,11 @@ beforeEach(() => {
   caps.set('m1', ['ai_login']).set('m2', ['ai_login']);
   screens.clear();
   warnDays.clear();
+  listed = new Set(['a1', 'a2', 'c1']);
+  hosts = [];
+  dismissLoginWarning.mockClear();
+  clearLoginWarningDismissal.mockClear();
+  deleteAccount.mockClear();
 });
 afterEach(() => {
   aiLogin.stop();
@@ -338,5 +351,65 @@ describe('PUT /ai-accounts/login-warning (TER-1079)', () => {
       expect((await app.inject({ method: 'PUT', url: '/ai-accounts/login-warning', payload: { days } })).statusCode).toBe(400);
     }
     expect(warnDays.size).toBe(0);
+  });
+});
+
+describe('login banners of accounts nobody uses, dismissed or removed (TER-1212)', () => {
+  const status = async (app: ReturnType<typeof build>) =>
+    new Map(aiLoginStatusResponse.parse((await app.inject({ method: 'GET', url: '/ai-accounts/login-status' })).json()).accounts.map((a) => [a.account_id, a]));
+
+  it('in_use: listed in a Setup, the chat host\'s own login, or a CLI the Setup cannot list', async () => {
+    listed = new Set(['a2']);
+    hosts = [{ user_id: 'u1', machine_id: 'm1', ai_account_id: null }];
+    const rows = await status(build());
+    expect(rows.get('a1')?.in_use).toBe(true); // the chat host's own Claude login (no config dir)
+    expect(rows.get('a2')?.in_use).toBe(true); // a project lists it
+    expect(rows.get('c1')?.in_use).toBe(false); // nobody uses it
+    expect(rows.get('g1')?.in_use).toBe(true); // Gemini: the Setup cannot list it, so it counts
+  });
+
+  it('the account the chat names is in use, and the host machine\'s own login then is not', async () => {
+    listed = new Set();
+    hosts = [{ user_id: 'u1', machine_id: 'm1', ai_account_id: 'a2' }];
+    const rows = await status(build());
+    expect(rows.get('a2')?.in_use).toBe(true);
+    expect(rows.get('a1')?.in_use).toBe(false);
+  });
+
+  it('dismiss is saved on the account; the status says dismissed until the login is seen working again', async () => {
+    const app = build();
+    const res = await app.inject({ method: 'POST', url: '/ai-accounts/a1/login/dismiss' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ dismissed: true });
+    expect(dismissLoginWarning).toHaveBeenCalledWith('a1', expect.any(Date));
+    const original = accounts[0];
+    accounts[0] = { ...original, login_warning_dismissed_at: '2026-11-27T10:00:00.000Z' } as never;
+    try {
+      aiLogin.markLoginRequired('a1');
+      expect((await status(app)).get('a1')?.dismissed).toBe(true);
+      expect(clearLoginWarningDismissal).toHaveBeenLastCalledWith([]);
+      rpc.mockResolvedValue({ supported: true, logged_in: true });
+      await aiLogin.checkAccountLogin(accounts[0] as never, machines[0] as never, 'force');
+      expect((await status(app)).get('a1')?.dismissed).toBe(false);
+      expect(clearLoginWarningDismissal).toHaveBeenLastCalledWith(['a1']);
+    } finally {
+      accounts[0] = original;
+      aiLogin.forget('a1');
+    }
+  });
+
+  it('dismiss answers 404 for an account outside the scope', async () => {
+    expect((await build().inject({ method: 'POST', url: '/ai-accounts/nope/login/dismiss' })).statusCode).toBe(404);
+    expect(dismissLoginWarning).not.toHaveBeenCalled();
+  });
+
+  it('the app\'s DELETE removes the record only where removal is on', async () => {
+    const app = build({ prefix: '/api/m/v1/ai-accounts', removal: true });
+    const res = await app.inject({ method: 'DELETE', url: '/api/m/v1/ai-accounts/c1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ ok: true });
+    expect(deleteAccount).toHaveBeenCalledWith('c1');
+    expect((await build().inject({ method: 'DELETE', url: '/ai-accounts/c1' })).statusCode).toBe(404);
+    expect(deleteAccount).toHaveBeenCalledTimes(1);
   });
 });

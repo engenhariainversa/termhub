@@ -2,6 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import { agents } from '../agent/registry.js';
 import type { Repositories } from '../db/repositories/index.js';
 import type { AiAccount, AiProvider, Machine } from '../db/repositories/types.js';
+import { accountsInUse } from './account-use.js';
 import { aiLogin, aiLoginSupported, mapBounded, type AiLoginService } from './login.js';
 import { cancelLoginExpiryReads, setLoginExpiringPush, warnLoginExpiry, type LoginExpiringPush } from './login-expiry.js';
 
@@ -50,18 +51,23 @@ export class LoginChecker {
       const byId = new Map(machines.map((m) => [m.id, m]));
       const all = await this.deps.repos.aiAccounts.list(null);
       const accounts = all.filter((a) => aiLoginSupported(a, byId.get(a.machine_id)));
+      // TER-1212: an account no project lists and the chat does not run on is checked, never pushed about.
+      const inUse = await accountsInUse(this.deps.repos, all, machines);
       await mapBounded(accounts, CHECK_CONCURRENCY, async (account) => {
         const machine = byId.get(account.machine_id)!;
         const state = await this.service.checkAccountLogin(account, machine);
-        if (state === 'ok') this.notified.delete(account.id);
-        if (state !== 'login_required' || this.notified.has(account.id) || !machine.owner_id) return;
+        if (state === 'ok') {
+          this.notified.delete(account.id);
+          if (account.login_warning_dismissed_at) await this.deps.repos.aiAccounts.clearLoginWarningDismissal([account.id]);
+        }
+        if (state !== 'login_required' || this.notified.has(account.id) || !machine.owner_id || !inUse.has(account.id)) return;
         this.notified.add(account.id);
         this.deps.log.info({ accountId: account.id, machineId: machine.id }, 'ai login required');
         await this.deps.push?.(machine.owner_id, { accountId: account.id, machineName: machine.name, provider: account.provider }).catch((err: unknown) =>
           this.deps.log.warn({ accountId: account.id, code: (err as { code?: string }).code ?? 'ERROR' }, 'ai login push failed'),
         );
       });
-      await this.checkExpiries(all.filter((a) => a.login_expires_at && (!machineId || a.machine_id === machineId)), byId);
+      await this.checkExpiries(all.filter((a) => a.login_expires_at && (!machineId || a.machine_id === machineId)), byId, inUse);
     } catch (err) {
       this.deps.log.warn({ code: (err as { code?: string }).code ?? 'ERROR' }, 'ai login check failed');
     } finally {
@@ -74,12 +80,12 @@ export class LoginChecker {
    * expired, which the check above reports, or was redone on the machine); one inside its owner's window
    * warns them, once per login. This is what honours a window shorter than the CLI's own three days.
    */
-  private async checkExpiries(accounts: AiAccount[], machines: Map<string, Machine>): Promise<void> {
+  private async checkExpiries(accounts: AiAccount[], machines: Map<string, Machine>, inUse: Set<string>): Promise<void> {
     const now = this.deps.now?.() ?? new Date();
     for (const account of accounts) {
       const machine = machines.get(account.machine_id);
       if (Date.parse(account.login_expires_at!) <= now.getTime()) await this.deps.repos.aiAccounts.clearLoginExpiry(account.id);
-      else if (machine && this.service.loginStatusOf(account.id).state !== 'login_required') await warnLoginExpiry({ repos: this.deps.repos, log: this.deps.log, push: this.deps.pushExpiring, now: () => now }, account, machine);
+      else if (machine && inUse.has(account.id) && this.service.loginStatusOf(account.id).state !== 'login_required') await warnLoginExpiry({ repos: this.deps.repos, log: this.deps.log, push: this.deps.pushExpiring, now: () => now }, account, machine);
     }
   }
 }
