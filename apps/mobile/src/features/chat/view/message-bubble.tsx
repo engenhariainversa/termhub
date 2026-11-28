@@ -102,8 +102,12 @@ export const MessageBubble = memo(function MessageBubble({ message, streamed, st
   const split = streaming ? splitSettled(body) : { settled: '', tail: body };
   const settled = linking ? linkifyMarkdown(split.settled) : split.settled;
   const tail = linking ? linkifyMarkdown(split.tail) : split.tail;
+  // A fixed width, never one sized to the content (TER-1194): the markdown's list items are `flex: 1`
+  // rows, and in a bubble that shrinks to its content Yoga (RN's errata "All") took the width from the
+  // headings while the lists wrapped at another one — a bubble shorter than its text, drawn over the
+  // rows below it. At a fixed width every line is measured at the width it is drawn at.
   return (
-    <View className={`max-w-[92%] gap-1 self-start rounded-2xl border-2 bg-app-surface px-4 py-2.5 ${highlighted ? 'border-app-accent' : 'border-transparent'}`}>
+    <View testID="assistant-bubble" className={`w-[92%] gap-1 self-start rounded-2xl border-2 bg-app-surface px-4 py-2.5 ${highlighted ? 'border-app-accent' : 'border-transparent'}`}>
       {message.notice?.kind === 'account_swap' ? <AppText variant="muted">{swapSentence(message.notice)}</AppText> : null}
       {settled ? <SettledMarkdown text={settled} scheme={scheme} onLink={onLink} /> : null}
       {tail ? (
